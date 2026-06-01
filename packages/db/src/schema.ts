@@ -1,0 +1,116 @@
+import { relations, sql } from "drizzle-orm";
+import { boolean, integer, jsonb, numeric, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+
+export const worlds = pgTable("worlds", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  seed: text("seed").notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+  status: text("status").notNull().default("active"),
+});
+
+export const users = pgTable("users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+});
+
+export const players = pgTable("players", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  name: text("name").notNull(),
+  color: text("color").notNull(),
+});
+
+export const dynasties = pgTable("dynasties", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  name: text("name").notNull(),
+  prestige: integer("prestige").notNull().default(0),
+});
+
+export const characters = pgTable("characters", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  dynastyId: uuid("dynasty_id").references(() => dynasties.id).notNull(),
+  name: text("name").notNull(),
+  birthTick: integer("birth_tick").notNull(),
+  traits: jsonb("traits").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  relationships: jsonb("relationships").$type<Record<string, number>>().notNull().default(sql`'{}'::jsonb`),
+});
+
+export const regions = pgTable("regions", {
+  id: text("id").primaryKey(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  name: text("name").notNull(),
+});
+
+export const realms = pgTable("realms", {
+  id: text("id").primaryKey(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  name: text("name").notNull(),
+  color: text("color").notNull(),
+});
+
+export const factions = pgTable("factions", {
+  id: text("id").primaryKey(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  name: text("name").notNull(),
+  color: text("color").notNull(),
+});
+
+export const provinces = pgTable("provinces", {
+  id: text("id").primaryKey(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  name: text("name").notNull(),
+  regionId: text("region_id").references(() => regions.id).notNull(),
+  realmId: text("realm_id").references(() => realms.id).notNull(),
+  terrain: text("terrain").notNull(),
+  ownerPlayerId: uuid("owner_player_id").references(() => players.id),
+  factionId: text("faction_id").references(() => factions.id),
+  controlStatus: text("control_status").notNull().default("controlled"),
+  isCity: boolean("is_city").notNull().default(false),
+});
+
+export const buildings = pgTable("buildings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  provinceId: text("province_id").references(() => provinces.id).notNull(),
+  type: text("type").notNull(),
+  level: integer("level").notNull().default(1),
+  queuedCompletionAt: timestamp("queued_completion_at", { withTimezone: true }),
+});
+
+export const resources = pgTable("resources", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  scope: text("scope").notNull(),
+  scopeId: text("scope_id").notNull(),
+  type: text("type").notNull(),
+  amount: numeric("amount").notNull().default("0"),
+  ratePerSecond: numeric("rate_per_second").notNull().default("0"),
+  lastUpdatedAt: timestamp("last_updated_at", { withTimezone: true }).notNull(),
+});
+
+export const armies = pgTable("armies", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ownerPlayerId: uuid("owner_player_id").references(() => players.id).notNull(),
+  locationProvinceId: text("location_province_id").references(() => provinces.id).notNull(),
+  units: jsonb("units").$type<Record<string, number>>().notNull(),
+  movingTo: text("moving_to").references(() => provinces.id),
+  arrivalAt: timestamp("arrival_at", { withTimezone: true }),
+});
+
+export const eventsLog = pgTable("events_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  eventId: text("event_id").notNull(),
+  choiceId: text("choice_id").notNull(),
+  resultText: text("result_text").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const provinceRelations = relations(provinces, ({ one, many }) => ({
+  owner: one(players, { fields: [provinces.ownerPlayerId], references: [players.id] }),
+  faction: one(factions, { fields: [provinces.factionId], references: [factions.id] }),
+  buildings: many(buildings),
+}));

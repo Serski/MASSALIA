@@ -1,0 +1,19 @@
+{
+  "id": "harbor-dispute",
+  "weight": 10,
+  "scene": "Two merchant houses dispute docking rights at the old harbor. Both promise loyalty if the archon rules in their favor.",
+  "choices": [
+    {
+      "id": "favor-harbor",
+      "label": "Back the harbor guild",
+      "effects": [{ "type": "gain_resource", "scope": "province", "id": "massalia-harbor", "resource": "silver", "amount": 50 }],
+      "resultText": "The harbor guild pays promptly and remembers the favor."
+    },
+    {
+      "id": "give-old-port",
+      "label": "Grant Old Port to the rival league",
+      "effects": [{ "type": "set_province_owner", "provinceId": "old-port", "ownerPlayerId": "SECOND_PLAYER" }],
+      "resultText": "Old Port changes hands under a brittle but public settlement."
+    }
+  ]
+}

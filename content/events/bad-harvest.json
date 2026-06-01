@@ -1,0 +1,13 @@
+{
+  "id": "bad-harvest",
+  "weight": 8,
+  "scene": "Dry winds roll across Aix and the granaries look thin.",
+  "choices": [
+    {
+      "id": "open-stores",
+      "label": "Open the stores",
+      "effects": [{ "type": "gain_resource", "scope": "province", "id": "aix", "resource": "grain", "amount": -30 }],
+      "resultText": "The people eat, but the stores are lower."
+    }
+  ]
+}

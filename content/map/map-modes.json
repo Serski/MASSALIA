@@ -1,0 +1,25 @@
+{
+  "defaultMode": "political",
+  "modes": {
+    "political": { "label": "Political", "source": "politicalColor" },
+    "faction": { "label": "Faction", "source": "factionColor" },
+    "culture": { "label": "Culture", "source": "terrain" },
+    "religion": { "label": "Religion", "source": "realmId" },
+    "economy": { "label": "Economy", "source": "controlStatus" }
+  },
+  "fallbackColors": {
+    "plains": "#93c47d",
+    "coast": "#76a5af",
+    "farmland": "#b6d7a8",
+    "marsh": "#6aa84f",
+    "hills": "#a4a07a",
+    "mountain": "#999999",
+    "forest": "#38761d",
+    "controlled": "#7cb342",
+    "occupied": "#ef6c00",
+    "contested": "#d32f2f",
+    "realm-massalia": "#315c9c",
+    "realm-rhone": "#588157",
+    "realm-aurelian": "#9a3412"
+  }
+}

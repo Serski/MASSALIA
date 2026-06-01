@@ -1,0 +1,17 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    { "type": "Feature", "properties": { "id": "massalia-harbor", "name": "Massalia Harbor", "regionId": "coast", "realmId": "realm-massalia" }, "geometry": { "type": "Polygon", "coordinates": [[[60, 220], [190, 210], [190, 330], [60, 340], [60, 220]]] } },
+    { "type": "Feature", "properties": { "id": "old-port", "name": "Old Port", "regionId": "coast", "realmId": "realm-massalia" }, "geometry": { "type": "Polygon", "coordinates": [[[190, 210], [320, 220], [315, 335], [190, 330], [190, 210]]] } },
+    { "type": "Feature", "properties": { "id": "la-ciotat", "name": "La Ciotat", "regionId": "coast", "realmId": "realm-massalia" }, "geometry": { "type": "Polygon", "coordinates": [[[320, 220], [450, 230], [440, 350], [315, 335], [320, 220]]] } },
+    { "type": "Feature", "properties": { "id": "aix", "name": "Aix", "regionId": "hinterland", "realmId": "realm-massalia" }, "geometry": { "type": "Polygon", "coordinates": [[[105, 105], [245, 95], [250, 210], [190, 210], [60, 220], [105, 105]]] } },
+    { "type": "Feature", "properties": { "id": "arles", "name": "Arles", "regionId": "hinterland", "realmId": "realm-rhone" }, "geometry": { "type": "Polygon", "coordinates": [[[0, 120], [105, 105], [60, 220], [0, 235], [0, 120]]] } },
+    { "type": "Feature", "properties": { "id": "rhone-mouth", "name": "Rhone Mouth", "regionId": "hinterland", "realmId": "realm-rhone" }, "geometry": { "type": "Polygon", "coordinates": [[[0, 235], [60, 220], [60, 340], [0, 360], [0, 235]]] } },
+    { "type": "Feature", "properties": { "id": "cassis", "name": "Cassis", "regionId": "coast", "realmId": "realm-massalia" }, "geometry": { "type": "Polygon", "coordinates": [[[450, 230], [600, 240], [600, 365], [440, 350], [450, 230]]] } },
+    { "type": "Feature", "properties": { "id": "sainte-baume", "name": "Sainte-Baume", "regionId": "uplands", "realmId": "realm-aurelian" }, "geometry": { "type": "Polygon", "coordinates": [[[250, 90], [400, 80], [450, 230], [320, 220], [250, 210], [250, 90]]] } },
+    { "type": "Feature", "properties": { "id": "brignoles", "name": "Brignoles", "regionId": "uplands", "realmId": "realm-aurelian" }, "geometry": { "type": "Polygon", "coordinates": [[[400, 80], [600, 80], [600, 240], [450, 230], [400, 80]]] } },
+    { "type": "Feature", "properties": { "id": "toulon", "name": "Toulon", "regionId": "coast", "realmId": "realm-aurelian" }, "geometry": { "type": "Polygon", "coordinates": [[[600, 240], [760, 250], [760, 370], [600, 365], [600, 240]]] } },
+    { "type": "Feature", "properties": { "id": "durance", "name": "Durance Ford", "regionId": "hinterland", "realmId": "realm-rhone" }, "geometry": { "type": "Polygon", "coordinates": [[[0, 0], [250, 0], [245, 95], [105, 105], [0, 120], [0, 0]]] } },
+    { "type": "Feature", "properties": { "id": "luberon", "name": "Luberon", "regionId": "uplands", "realmId": "realm-rhone" }, "geometry": { "type": "Polygon", "coordinates": [[[250, 0], [600, 0], [600, 80], [400, 80], [250, 90], [245, 95], [250, 0]]] } }
+  ]
+}

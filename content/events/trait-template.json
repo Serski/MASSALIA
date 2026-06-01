@@ -1,0 +1,13 @@
+{
+  "id": "trait-template",
+  "weight": 1,
+  "scene": "A character faces a formative choice.",
+  "choices": [
+    {
+      "id": "gain-bold",
+      "label": "Act boldly",
+      "effects": [{ "type": "change_trait", "characterId": "CHARACTER_ID", "traitId": "bold", "operation": "add" }],
+      "resultText": "Their reputation sharpens."
+    }
+  ]
+}

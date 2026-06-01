@@ -1,0 +1,26 @@
+{
+  "provinces": [
+    { "provinceId": "massalia-harbor", "text": "Massalia Harbor", "position": [125, 280] },
+    { "provinceId": "old-port", "text": "Old Port", "position": [250, 278] },
+    { "provinceId": "la-ciotat", "text": "La Ciotat", "position": [382, 286] },
+    { "provinceId": "aix", "text": "Aix", "position": [160, 165] },
+    { "provinceId": "arles", "text": "Arles", "position": [48, 175] },
+    { "provinceId": "rhone-mouth", "text": "Rhone Mouth", "position": [30, 290] },
+    { "provinceId": "cassis", "text": "Cassis", "position": [520, 300] },
+    { "provinceId": "sainte-baume", "text": "Sainte-Baume", "position": [345, 155] },
+    { "provinceId": "brignoles", "text": "Brignoles", "position": [510, 150] },
+    { "provinceId": "toulon", "text": "Toulon", "position": [680, 306] },
+    { "provinceId": "durance", "text": "Durance Ford", "position": [120, 55] },
+    { "provinceId": "luberon", "text": "Luberon", "position": [410, 40] }
+  ],
+  "regions": [
+    { "regionId": "coast", "text": "Ligurian Coast", "position": [360, 382] },
+    { "regionId": "hinterland", "text": "Rhone Hinterland", "position": [100, 95] },
+    { "regionId": "uplands", "text": "Aurelian Uplands", "position": [520, 72] }
+  ],
+  "realms": [
+    { "realmId": "realm-massalia", "text": "MASSALIA", "position": [245, 250] },
+    { "realmId": "realm-rhone", "text": "RHONE MARCH", "position": [120, 30] },
+    { "realmId": "realm-aurelian", "text": "AURELIAN LEAGUE", "position": [555, 115] }
+  ]
+}

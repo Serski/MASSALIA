@@ -1,0 +1,5 @@
+[
+  { "id": "harbor", "name": "Harbor", "baseBuildSeconds": 900 },
+  { "id": "market", "name": "Market", "baseBuildSeconds": 600 },
+  { "id": "watchtower", "name": "Watchtower", "baseBuildSeconds": 450 }
+]

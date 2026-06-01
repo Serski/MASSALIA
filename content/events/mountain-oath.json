@@ -1,0 +1,13 @@
+{
+  "id": "mountain-oath",
+  "weight": 6,
+  "scene": "Clan elders from Sainte-Baume offer warriors if their rites are protected.",
+  "choices": [
+    {
+      "id": "accept-oath",
+      "label": "Accept their oath",
+      "effects": [{ "type": "spawn_army", "ownerPlayerId": "FIRST_PLAYER", "provinceId": "sainte-baume", "units": { "levy": 120 } }],
+      "resultText": "A mountain levy gathers beneath old stone shrines."
+    }
+  ]
+}
