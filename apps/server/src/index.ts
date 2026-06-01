@@ -8,7 +8,7 @@ import { eventRoutes } from "./routes/events.js";
 import { worldRoutes } from "./routes/world.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(__dirname, "../../../..");
+const repoRoot = path.resolve(__dirname, "../../..");
 
 const app = Fastify({ logger: true });
 
