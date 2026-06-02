@@ -44,7 +44,7 @@ body {
   background:
     radial-gradient(circle at 50% 42%, rgba(186, 114, 84, 0.26), transparent 34%),
     linear-gradient(90deg, rgba(19, 8, 8, 0.9), rgba(83, 38, 32, 0.78) 48%, rgba(17, 7, 7, 0.92)),
-    url("/assets/MASSALIA FRONT.png") center / cover no-repeat;
+    url("/assets/MASSALIA 01.jpg") center / cover no-repeat;
 }
 
 .landing-info::after {
@@ -59,7 +59,7 @@ body {
 }
 
 .landing-hero {
-  background: #160b0a url("/assets/MASSALIA FRONT.png") center / cover no-repeat;
+  background: #160b0a url("/assets/MASSALIA 01.jpg") center / cover no-repeat;
 }
 
 .landing-nav {
