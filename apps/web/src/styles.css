@@ -816,12 +816,14 @@ body {
 }
 
 .party-card {
+  position: relative;
+  overflow: hidden;
   display: block;
   padding: clamp(24px, 4vw, 38px);
   color: #ece0cc;
   text-decoration: none;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent),
+    linear-gradient(90deg, rgba(12, 8, 6, 0.96) 0%, rgba(20, 13, 9, 0.86) 48%, rgba(20, 13, 9, 0.58) 100%),
     rgba(31, 20, 15, 0.92);
   border: 1px solid rgba(205, 167, 88, 0.28);
   border-radius: 10px;
@@ -833,16 +835,71 @@ body {
 }
 
 .palaioi-card {
-  border-color: rgba(205, 167, 88, 0.48);
+  border-color: rgba(105, 151, 91, 0.62);
+  box-shadow:
+    inset 0 0 0 1px rgba(105, 151, 91, 0.12),
+    0 26px 68px rgba(0, 0, 0, 0.28);
 }
 
 .dynatoi-card {
   border-color: rgba(92, 139, 178, 0.56);
+  box-shadow:
+    inset 0 0 0 1px rgba(92, 139, 178, 0.12),
+    0 26px 68px rgba(0, 0, 0, 0.28);
 }
 
-.party-script {
+.party-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(12, 8, 6, 0.86) 0%, rgba(12, 8, 6, 0.62) 50%, rgba(12, 8, 6, 0.26) 100%),
+    radial-gradient(circle at 72% 48%, transparent 0%, rgba(12, 8, 6, 0.28) 52%, rgba(12, 8, 6, 0.78) 100%);
+}
+
+.party-watermark {
+  position: absolute;
+  top: 50%;
+  right: clamp(-54px, -5vw, -18px);
+  z-index: 0;
+  width: min(58%, 360px);
+  height: auto;
+  aspect-ratio: 1;
+  transform: translateY(-50%);
+  opacity: 0.3;
+  filter: saturate(0.92) contrast(1.08);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.party-watermark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.palaioi-card .party-watermark {
+  opacity: 0.34;
+  filter: saturate(0.86) contrast(1.05) sepia(0.22) hue-rotate(48deg);
+}
+
+.dynatoi-card .party-watermark {
+  opacity: 0.32;
+  filter: saturate(1.08) contrast(1.04);
+}
+
+.party-copy {
+  position: relative;
+  z-index: 2;
+  max-width: 72%;
+}
+
+.party-card .party-script {
   font-family: var(--font-display);
-  color: #cda758;
+  color: #9fc27b;
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.16em;
@@ -1766,6 +1823,16 @@ body {
   .city-list,
   .party-duel {
     grid-template-columns: 1fr;
+  }
+
+  .party-watermark {
+    right: -44px;
+    width: min(68%, 260px);
+    opacity: 0.22;
+  }
+
+  .party-copy {
+    max-width: 88%;
   }
 
   .vs-medallion {

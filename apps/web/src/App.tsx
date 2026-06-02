@@ -287,9 +287,9 @@ function navigateTo(path: string) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function Crest({ initial, image, label }: { initial: string; image?: string; label: string }) {
+function Crest({ initial, image, label, className = "" }: { initial: string; image?: string; label: string; className?: string }) {
   return (
-    <span className={`crest-medallion${image ? " crest-medallion-image" : ""}`} aria-label={label}>
+    <span className={`crest-medallion${image ? " crest-medallion-image" : ""}${className ? ` ${className}` : ""}`} aria-label={label}>
       {image ? <img src={image} alt="" /> : <span>{initial}</span>}
     </span>
   );
@@ -847,21 +847,25 @@ export function App() {
         <h2 id="parties-title">Tradition, or reform?</h2>
         <div className="party-duel">
           <DetailLink className="party-card palaioi-card" entry={palaioi}>
-            <Crest initial={palaioi.initial} image={palaioi.image} label="Palaioi emblem" />
-            <p className="party-script">{palaioi.script} · {palaioi.name}</p>
-            <h3>{palaioi.title}</h3>
-            <p className="party-motto">"{palaioi.motto}"</p>
-            <p>{palaioi.who}</p>
-            <p>{palaioi.wants}</p>
+            <Crest className="party-watermark" initial={palaioi.initial} image={palaioi.image} label="Palaioi emblem" />
+            <div className="party-copy">
+              <p className="party-script">{palaioi.script} · {palaioi.name}</p>
+              <h3>{palaioi.title}</h3>
+              <p className="party-motto">"{palaioi.motto}"</p>
+              <p>{palaioi.who}</p>
+              <p>{palaioi.wants}</p>
+            </div>
           </DetailLink>
           <span className="vs-medallion" aria-hidden="true">VS</span>
           <DetailLink className="party-card dynatoi-card" entry={dynatoi}>
-            <Crest initial={dynatoi.initial} image={dynatoi.image} label="Dynatoi emblem" />
-            <p className="party-script">{dynatoi.script} · {dynatoi.name}</p>
-            <h3>{dynatoi.title}</h3>
-            <p className="party-motto">"{dynatoi.motto}"</p>
-            <p>{dynatoi.who}</p>
-            <p>{dynatoi.wants}</p>
+            <Crest className="party-watermark" initial={dynatoi.initial} image={dynatoi.image} label="Dynatoi emblem" />
+            <div className="party-copy">
+              <p className="party-script">{dynatoi.script} · {dynatoi.name}</p>
+              <h3>{dynatoi.title}</h3>
+              <p className="party-motto">"{dynatoi.motto}"</p>
+              <p>{dynatoi.who}</p>
+              <p>{dynatoi.wants}</p>
+            </div>
           </DetailLink>
         </div>
       </section>
