@@ -35,6 +35,11 @@ export function App() {
             </span>
             <span>MASSALIA</span>
           </button>
+          <div className="nav-primary-links" aria-label="Landing sections">
+            <a href="#world">The World</a>
+            <a href="#factions">Factions</a>
+            <a href="#atlas">Atlas</a>
+          </div>
           <div className="nav-actions">
             <button className="nav-button nav-login" type="button">
               Login
@@ -84,7 +89,7 @@ export function App() {
         </section>
       </section>
 
-      <section className="landing-section pillars-section" aria-labelledby="pillars-title">
+      <section className="landing-section pillars-section" id="world" aria-labelledby="pillars-title">
         <p className="section-eyebrow">What You Do</p>
         <h2 id="pillars-title">Shape a colony into a Mediterranean power</h2>
         <div className="pillar-grid">
@@ -106,7 +111,7 @@ export function App() {
         </div>
       </section>
 
-      <section className="landing-section atlas-section" aria-labelledby="atlas-title">
+      <section className="landing-section atlas-section" id="atlas" aria-labelledby="atlas-title">
         <div className="atlas-copy">
           <p className="section-eyebrow">Atlas</p>
           <h2 id="atlas-title">A seasonal world built around the map</h2>
@@ -119,7 +124,7 @@ export function App() {
         </div>
       </section>
 
-      <section className="faction-strip" aria-label="Faction teaser">
+      <section className="faction-strip" id="factions" aria-label="Faction teaser">
         <span className="section-eyebrow">Factions</span>
         {factionPlaceholders.map((faction) => (
           <span className="faction-chip" key={faction}>
