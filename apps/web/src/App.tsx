@@ -27,6 +27,7 @@ type House = {
   kind: "house";
   slug: string;
   initial: string;
+  image: string;
   name: string;
   alignment: Alignment;
   stance: string;
@@ -42,6 +43,7 @@ type Party = {
   kind: "party";
   slug: string;
   initial: string;
+  image: string;
   name: string;
   script: string;
   title: string;
@@ -202,16 +204,16 @@ const leagueCities: City[] = [
 ];
 
 const nobleHouses: House[] = [
-  { kind: "house", slug: "kleitos", initial: "K", name: "Kleitos", alignment: "reformist", stance: "Reformist", motto: "Unity in diversity strengthens us.", patron: "Hestia", ancestor: "Agathon Kleitos, 580-517 BC", crest: "Dove with olive branch", history: "Pushed Gaulish integration and a broader League identity.", moment: "Brokered the Accord of Liris in 560 BC." },
-  { kind: "house", slug: "miltiades", initial: "M", name: "Miltiades", alignment: "reformist", stance: "Mod. Reformist", motto: "Understanding is the foundation of peace.", patron: "Asclepius", ancestor: "Cleisthenes Miltiades, 570-509 BC", crest: "Scroll with Greek and Gaulish symbols", history: "Built its name through diplomacy, interpreters, and patient civic education.", moment: "Founded the first bilingual school around 530 BC." },
-  { kind: "house", slug: "xanthippos", initial: "X", name: "Xanthippos", alignment: "centrist", stance: "Centrist", motto: "Harmony through balance.", patron: "Iris", ancestor: "Damon Xanthippos, 550-492 BC", crest: "Scale with helmet and torque", history: "Mediator family trusted by merchants, soldiers, Greeks, and Gauls.", moment: "Secured the Treaty of Metron in 490 BC." },
-  { kind: "house", slug: "iason", initial: "I", name: "Iason", alignment: "conservative", stance: "Centrist to Conservative", motto: "Navigate the old, embrace the new.", patron: "Proteus", ancestor: "Periander Iason, 530-475 BC", crest: "Galley with oars", history: "Sea-facing house that keeps old forms while testing foreign routes.", moment: "Led the Iberian trade expedition in 450 BC." },
-  { kind: "house", slug: "timon", initial: "T", name: "Timon", alignment: "conservative", stance: "Conservative", motto: "Preserve the arts, sustain the soul.", patron: "Erato", ancestor: "Theodorus Timon, 560-491 BC", crest: "Greek lyre", history: "Patrons of festivals, poetry, and old Hellenic rites.", moment: "Held the first festival to the Greek gods in 420 BC." },
-  { kind: "house", slug: "aristeides", initial: "A", name: "Aristeides", alignment: "centrist", stance: "Centrist", motto: "Defend and respect all borders.", patron: "Nike", ancestor: "Leon Aristeides, 540-478 BC", crest: "Shield and crossed spear", history: "Border defenders who value discipline more than factional purity.", moment: "Distinguished itself at the Battle of the Rhone in 460 BC." },
-  { kind: "house", slug: "herakleides", initial: "H", name: "Herakleides", alignment: "conservative", stance: "Mod. Conservative", motto: "Justice adapts, principles endure.", patron: "Themis", ancestor: "Myron Herakleides, 560-512 BC", crest: "Stone tablet and stylus", history: "Legalist house that guards old institutions while accepting measured reforms.", moment: "Revised the legal code in 480 BC." },
-  { kind: "house", slug: "nicanor", initial: "N", name: "Nicanor", alignment: "reformist", stance: "Mod. Reformist", motto: "Through the seas, we find our stars.", patron: "Tyche", ancestor: "Eumenes Nicanor, 520-481 BC", crest: "Celestial sphere", history: "Navigators, chance-takers, and long-distance traders.", moment: "Reached Britannia by the stars in 510 BC." },
-  { kind: "house", slug: "philon", initial: "P", name: "Philon", alignment: "reformist", stance: "Reformist to Centrist", motto: "Healing hands, merging wisdom.", patron: "Panacea", ancestor: "Chrysippus Philon, 550-492 BC", crest: "Serpent on staff", history: "Medical house blending Greek technique with Gaulish herbal knowledge.", moment: "Opened the first Greek and Gaulish clinic around 550 BC." },
-  { kind: "house", slug: "leonidas", initial: "L", name: "Leonidas", alignment: "conservative", stance: "Very Conservative", motto: "In tradition, we trust.", patron: "Aeolus", ancestor: "Alexandros Leonidas, 600-528 BC", crest: "Roaring lion", history: "Old aristocratic house committed to pure Hellenic continuity.", moment: "Built the temple of Apollo in 600 BC." },
+  { kind: "house", slug: "kleitos", initial: "K", image: "/assets/Kleitos.png", name: "Kleitos", alignment: "reformist", stance: "Reformist", motto: "Unity in diversity strengthens us.", patron: "Hestia", ancestor: "Agathon Kleitos, 580-517 BC", crest: "Dove with olive branch", history: "Pushed Gaulish integration and a broader League identity.", moment: "Brokered the Accord of Liris in 560 BC." },
+  { kind: "house", slug: "miltiades", initial: "M", image: "/assets/Mitliades.png", name: "Miltiades", alignment: "reformist", stance: "Mod. Reformist", motto: "Understanding is the foundation of peace.", patron: "Asclepius", ancestor: "Cleisthenes Miltiades, 570-509 BC", crest: "Scroll with Greek and Gaulish symbols", history: "Built its name through diplomacy, interpreters, and patient civic education.", moment: "Founded the first bilingual school around 530 BC." },
+  { kind: "house", slug: "xanthippos", initial: "X", image: "/assets/Xanthipos.png", name: "Xanthippos", alignment: "centrist", stance: "Centrist", motto: "Harmony through balance.", patron: "Iris", ancestor: "Damon Xanthippos, 550-492 BC", crest: "Scale with helmet and torque", history: "Mediator family trusted by merchants, soldiers, Greeks, and Gauls.", moment: "Secured the Treaty of Metron in 490 BC." },
+  { kind: "house", slug: "iason", initial: "I", image: "/assets/Iason.png", name: "Iason", alignment: "conservative", stance: "Centrist to Conservative", motto: "Navigate the old, embrace the new.", patron: "Proteus", ancestor: "Periander Iason, 530-475 BC", crest: "Galley with oars", history: "Sea-facing house that keeps old forms while testing foreign routes.", moment: "Led the Iberian trade expedition in 450 BC." },
+  { kind: "house", slug: "timon", initial: "T", image: "/assets/Timon.png", name: "Timon", alignment: "conservative", stance: "Conservative", motto: "Preserve the arts, sustain the soul.", patron: "Erato", ancestor: "Theodorus Timon, 560-491 BC", crest: "Greek lyre", history: "Patrons of festivals, poetry, and old Hellenic rites.", moment: "Held the first festival to the Greek gods in 420 BC." },
+  { kind: "house", slug: "aristeides", initial: "A", image: "/assets/Aristeides.png", name: "Aristeides", alignment: "centrist", stance: "Centrist", motto: "Defend and respect all borders.", patron: "Nike", ancestor: "Leon Aristeides, 540-478 BC", crest: "Shield and crossed spear", history: "Border defenders who value discipline more than factional purity.", moment: "Distinguished itself at the Battle of the Rhone in 460 BC." },
+  { kind: "house", slug: "herakleides", initial: "H", image: "/assets/Herakleides.png", name: "Herakleides", alignment: "conservative", stance: "Mod. Conservative", motto: "Justice adapts, principles endure.", patron: "Themis", ancestor: "Myron Herakleides, 560-512 BC", crest: "Stone tablet and stylus", history: "Legalist house that guards old institutions while accepting measured reforms.", moment: "Revised the legal code in 480 BC." },
+  { kind: "house", slug: "nicanor", initial: "N", image: "/assets/Nicanor.png", name: "Nicanor", alignment: "reformist", stance: "Mod. Reformist", motto: "Through the seas, we find our stars.", patron: "Tyche", ancestor: "Eumenes Nicanor, 520-481 BC", crest: "Celestial sphere", history: "Navigators, chance-takers, and long-distance traders.", moment: "Reached Britannia by the stars in 510 BC." },
+  { kind: "house", slug: "philon", initial: "P", image: "/assets/Philon.png", name: "Philon", alignment: "reformist", stance: "Reformist to Centrist", motto: "Healing hands, merging wisdom.", patron: "Panacea", ancestor: "Chrysippus Philon, 550-492 BC", crest: "Serpent on staff", history: "Medical house blending Greek technique with Gaulish herbal knowledge.", moment: "Opened the first Greek and Gaulish clinic around 550 BC." },
+  { kind: "house", slug: "leonidas", initial: "L", image: "/assets/Leonidas.png", name: "Leonidas", alignment: "conservative", stance: "Very Conservative", motto: "In tradition, we trust.", patron: "Aeolus", ancestor: "Alexandros Leonidas, 600-528 BC", crest: "Roaring lion", history: "Old aristocratic house committed to pure Hellenic continuity.", moment: "Built the temple of Apollo in 600 BC." },
 ];
 
 const parties: Party[] = [
@@ -219,6 +221,7 @@ const parties: Party[] = [
     kind: "party",
     slug: "palaioi",
     initial: "P",
+    image: "/assets/PALAIOI READY.png",
     name: "Palaioi",
     script: "PALAIOI",
     title: "The Conservatives",
@@ -234,6 +237,7 @@ const parties: Party[] = [
     kind: "party",
     slug: "dynatoi",
     initial: "D",
+    image: "/assets/DYNATOI READY.png",
     name: "Dynatoi",
     script: "DYNATOI",
     title: "The Reformists",
@@ -303,6 +307,7 @@ function DetailLink({ entry, children, className }: { entry: DetailEntry; childr
 }
 
 function DetailPage({ entry, onStart }: { entry: DetailEntry; onStart: () => void }) {
+  const emblem = "image" in entry ? entry.image : undefined;
   const ctaText =
     entry.kind === "house"
       ? `Pledge to ${entry.name}`
@@ -335,11 +340,11 @@ function DetailPage({ entry, onStart }: { entry: DetailEntry; onStart: () => voi
       <section className="detail-hero">
         <button className="back-link" type="button" onClick={() => navigateTo("/")}>Back to landing</button>
         <div className="detail-heading">
-          <Crest initial={entry.initial} label={`${entry.name} generic crest`} />
+          <Crest initial={entry.initial} image={emblem} label={`${entry.name} ${emblem ? "emblem" : "generic crest"}`} />
           <div>
             <p className="section-eyebrow">{entry.kind}</p>
             <h1>{entry.name}</h1>
-            <p className="placeholder-note">Generic crest — swap real logo.</p>
+            <p className="placeholder-note">{emblem ? "Official emblem." : "Generic crest — swap real logo."}</p>
           </div>
         </div>
         <DetailBody entry={entry} />
@@ -622,7 +627,7 @@ export function App() {
         <h2 id="parties-title">Tradition, or reform?</h2>
         <div className="party-duel">
           <DetailLink className="party-card palaioi-card" entry={palaioi}>
-            <Crest initial={palaioi.initial} label="Palaioi generic crest" />
+            <Crest initial={palaioi.initial} image={palaioi.image} label="Palaioi emblem" />
             <p className="party-script">{palaioi.script} · {palaioi.name}</p>
             <h3>{palaioi.title}</h3>
             <p className="party-motto">"{palaioi.motto}"</p>
@@ -631,7 +636,7 @@ export function App() {
           </DetailLink>
           <span className="vs-medallion" aria-hidden="true">VS</span>
           <DetailLink className="party-card dynatoi-card" entry={dynatoi}>
-            <Crest initial={dynatoi.initial} label="Dynatoi generic crest" />
+            <Crest initial={dynatoi.initial} image={dynatoi.image} label="Dynatoi emblem" />
             <p className="party-script">{dynatoi.script} · {dynatoi.name}</p>
             <h3>{dynatoi.title}</h3>
             <p className="party-motto">"{dynatoi.motto}"</p>
@@ -654,7 +659,7 @@ export function App() {
         <div className="house-tile-grid">
           {nobleHouses.map((house) => (
             <DetailLink className="house-tile" entry={house} key={house.name}>
-              <Crest initial={house.initial} label={`${house.name} generic crest`} />
+              <Crest initial={house.initial} image={house.image} label={`${house.name} emblem`} />
               <span className="house-align"><i className={`alignment-dot ${house.alignment}`} /> {house.stance}</span>
               <h3>{house.name}</h3>
               <p>{house.motto}</p>
