@@ -38,28 +38,9 @@ export function App() {
           </div>
         </nav>
 
-        <section className="start-panel ornate-banner" aria-label="Start campaign">
-          <div className="banner-rod rod-top" />
-          <div className="banner-rod rod-bottom" />
-          <div className="banner-border">
-            <div className="banner-strip banner-strip-top">
-              <span className="corner-square" aria-hidden="true" />
-              <h1>MASSALIA</h1>
-              <span className="corner-square" aria-hidden="true" />
-            </div>
-            <div className="banner-center">
-              <span className="massalia-emblem" aria-hidden="true">
-                M
-              </span>
-              <p className="season-copy">Season One · Autumn 815 · Mediterranean shard</p>
-            </div>
-            <div className="banner-strip banner-strip-bottom">
-              <button className="start-button" type="button" onClick={() => setView("map")}>
-                Start Game
-              </button>
-            </div>
-          </div>
-        </section>
+        <button className="hero-start-hotspot" type="button" onClick={() => setView("map")}>
+          Start Game
+        </button>
       </section>
 
       <section className="landing-info info-what">

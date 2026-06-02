@@ -47,7 +47,6 @@ body {
     url("/assets/MASSALIA FRONT.png") center / cover no-repeat;
 }
 
-.landing-hero::after,
 .landing-info::after {
   position: absolute;
   inset: 0;
@@ -57,6 +56,10 @@ body {
     linear-gradient(90deg, rgba(14, 6, 6, 0.68), transparent 22%, transparent 78%, rgba(14, 6, 6, 0.72)),
     linear-gradient(180deg, rgba(19, 7, 7, 0.82), transparent 24%, transparent 72%, rgba(19, 7, 7, 0.88)),
     repeating-linear-gradient(0deg, rgba(246, 211, 139, 0.035) 0, rgba(246, 211, 139, 0.035) 1px, transparent 1px, transparent 74px);
+}
+
+.landing-hero {
+  background: #160b0a url("/assets/MASSALIA FRONT.png") center / cover no-repeat;
 }
 
 .landing-nav {
@@ -117,149 +120,29 @@ body {
   cursor: pointer;
 }
 
-.nav-button:hover,
-.start-button:hover {
+.nav-button:hover {
   border-color: rgba(222, 177, 67, 0.72);
   box-shadow: 0 0 0 1px rgba(222, 177, 67, 0.18), 0 12px 34px rgba(0, 0, 0, 0.28);
 }
 
-.start-panel {
+.hero-start-hotspot {
   position: absolute;
-  z-index: 2;
+  z-index: 3;
   left: 50%;
-  top: 50%;
-  display: grid;
-  width: min(1080px, calc(100vw - 54px));
-  justify-items: center;
-  transform: translate(-50%, -50%);
-  text-align: center;
-}
-
-.ornate-banner {
-  filter: drop-shadow(0 32px 64px rgba(0, 0, 0, 0.58));
-}
-
-.banner-rod {
-  position: absolute;
-  left: -7%;
-  right: -7%;
-  height: 10px;
-  z-index: 0;
-  background: linear-gradient(90deg, #a66b32, #ffd58a 14%, #251b17 24%, #16110f 76%, #ffd58a 88%, #a66b32);
-  border-radius: 999px;
-}
-
-.rod-top {
-  top: -18px;
-}
-
-.rod-bottom {
-  bottom: -18px;
-}
-
-.banner-rod::before,
-.banner-rod::after {
-  position: absolute;
-  top: 50%;
-  width: 28px;
-  height: 28px;
-  content: "";
-  background: radial-gradient(circle at 35% 30%, #fff0b8, #c7893c 46%, #5b2d18);
-  border-radius: 50%;
-  transform: translateY(-50%);
-}
-
-.banner-rod::before {
-  left: 7%;
-}
-
-.banner-rod::after {
-  right: 7%;
-}
-
-.banner-border {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-rows: minmax(112px, auto) minmax(300px, 38vh) minmax(118px, auto);
-  width: 100%;
+  bottom: clamp(44px, 8vh, 92px);
+  width: min(420px, 58vw);
+  min-height: clamp(54px, 8vh, 88px);
   overflow: hidden;
-  background: #0c0c0c;
-  border: 12px solid #080908;
-  box-shadow: inset 0 0 0 4px #d6ab61, inset 0 0 0 8px #5b211d;
+  color: transparent;
+  background: transparent;
+  border: 0;
+  transform: translateX(-50%);
+  cursor: pointer;
 }
 
-.banner-border::before {
-  position: absolute;
-  inset: 18px;
-  z-index: 2;
-  content: "";
-  pointer-events: none;
-  border: 2px solid rgba(231, 190, 105, 0.82);
-  box-shadow: inset 0 0 0 10px rgba(78, 22, 20, 0.78);
-}
-
-.banner-strip {
-  position: relative;
-  z-index: 3;
-  display: grid;
-  align-items: center;
-  background:
-    linear-gradient(90deg, rgba(83, 22, 20, 0.52), transparent 16%, transparent 84%, rgba(83, 22, 20, 0.52)),
-    linear-gradient(180deg, #f0cf8b, #b8793f);
-}
-
-.banner-strip-top,
-.banner-strip-bottom {
-  grid-template-columns: 150px 1fr 150px;
-  padding: 20px 58px;
-  border-top: 6px double #1b1512;
-  border-bottom: 6px double #4d1e1a;
-}
-
-.banner-strip-bottom {
-  border-top: 6px double #4d1e1a;
-  border-bottom: 6px double #1b1512;
-}
-
-.corner-square {
-  width: 76px;
-  height: 76px;
-  justify-self: center;
-  background:
-    linear-gradient(#171717, #171717) center / 18px 18px no-repeat,
-    linear-gradient(#d8b067, #d8b067) center / 34px 34px no-repeat;
-  border: 5px solid #1b1712;
-  box-shadow: inset 0 0 0 8px #e4bd75, inset 0 0 0 13px #5a211d;
-}
-
-.banner-center {
-  position: relative;
-  z-index: 3;
-  display: grid;
-  place-items: center;
-  gap: 18px;
-  padding: 34px 26px;
-  background:
-    radial-gradient(circle at 50% 46%, rgba(215, 199, 162, 0.12), transparent 28%),
-    linear-gradient(180deg, #050505, #101010 55%, #050505);
-  border-top: 6px solid #5b211d;
-  border-bottom: 6px solid #5b211d;
-}
-
-.massalia-emblem {
-  position: absolute;
-  inset: auto;
-  display: grid;
-  width: min(250px, 42vw);
-  aspect-ratio: 1;
-  place-items: center;
-  color: rgba(235, 218, 178, 0.16);
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(108px, 17vw, 210px);
-  border: 2px solid rgba(218, 205, 174, 0.18);
-  border-radius: 50%;
-  box-shadow: inset 0 0 60px rgba(255, 230, 180, 0.06);
+.hero-start-hotspot:focus-visible {
+  outline: 2px solid rgba(240, 207, 135, 0.9);
+  outline-offset: 6px;
 }
 
 .eyebrow,
@@ -271,42 +154,6 @@ body {
   letter-spacing: 0.32em;
   text-transform: uppercase;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
-}
-
-.start-panel h1 {
-  position: relative;
-  z-index: 4;
-  margin: 0;
-  color: #0b0a08;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(40px, 5vw, 76px);
-  font-weight: 500;
-  letter-spacing: 0.28em;
-  text-shadow: 0 1px 0 rgba(255, 241, 191, 0.48);
-}
-
-.season-copy {
-  position: relative;
-  z-index: 4;
-  color: #ead9ae;
-  letter-spacing: 0.22em;
-  opacity: 0.9;
-}
-
-.start-button {
-  grid-column: 2;
-  width: min(430px, 74vw);
-  min-height: 68px;
-  color: #130e0b;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(20px, 2.8vw, 34px);
-  font-weight: 500;
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  text-shadow: 0 1px 0 rgba(255, 243, 196, 0.45);
 }
 
 .landing-info {
@@ -484,14 +331,6 @@ body {
     letter-spacing: 0.08em;
   }
 
-  .start-panel {
-    top: 50%;
-  }
-
-  .start-panel h1 {
-    letter-spacing: 0.16em;
-  }
-
   .season-copy {
     max-width: 320px;
     line-height: 1.5;
@@ -501,26 +340,9 @@ body {
     padding: 84px 22px;
   }
 
-  .banner-border {
-    grid-template-rows: minmax(86px, auto) minmax(280px, 42vh) minmax(96px, auto);
-    border-width: 8px;
-  }
-
-  .banner-strip-top,
-  .banner-strip-bottom {
-    grid-template-columns: 58px 1fr 58px;
-    padding: 14px 16px;
-  }
-
-  .corner-square {
-    width: 40px;
-    height: 40px;
-    border-width: 3px;
-  }
-
-  .start-button {
-    width: min(280px, 72vw);
-    letter-spacing: 0.16em;
+  .hero-start-hotspot {
+    bottom: 8vh;
+    width: min(300px, 70vw);
   }
 
   .scroll-card {
