@@ -3,7 +3,7 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url("/assets/fonts/cinzel-400.woff2") format("woff2");
+  src: url("../assets/fonts/cinzel-400.woff2") format("woff2");
 }
 
 @font-face {
@@ -11,7 +11,7 @@
   font-style: normal;
   font-weight: 500;
   font-display: swap;
-  src: url("/assets/fonts/cinzel-500.woff2") format("woff2");
+  src: url("../assets/fonts/cinzel-500.woff2") format("woff2");
 }
 
 @font-face {
@@ -19,7 +19,7 @@
   font-style: normal;
   font-weight: 600;
   font-display: swap;
-  src: url("/assets/fonts/cinzel-600.woff2") format("woff2");
+  src: url("../assets/fonts/cinzel-600.woff2") format("woff2");
 }
 
 @font-face {
@@ -27,7 +27,7 @@
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src: url("/assets/fonts/cinzel-700.woff2") format("woff2");
+  src: url("../assets/fonts/cinzel-700.woff2") format("woff2");
 }
 
 @font-face {
@@ -35,7 +35,7 @@
   font-style: normal;
   font-weight: 800;
   font-display: swap;
-  src: url("/assets/fonts/cinzel-800.woff2") format("woff2");
+  src: url("../assets/fonts/cinzel-800.woff2") format("woff2");
 }
 
 @font-face {
@@ -43,7 +43,7 @@
   font-style: normal;
   font-weight: 900;
   font-display: swap;
-  src: url("/assets/fonts/cinzel-900.woff2") format("woff2");
+  src: url("../assets/fonts/cinzel-900.woff2") format("woff2");
 }
 
 @font-face {
@@ -51,7 +51,7 @@
   font-style: normal;
   font-weight: 300;
   font-display: swap;
-  src: url("/assets/fonts/spectral-300.woff2") format("woff2");
+  src: url("../assets/fonts/spectral-300.woff2") format("woff2");
 }
 
 @font-face {
@@ -59,7 +59,7 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url("/assets/fonts/spectral-400.woff2") format("woff2");
+  src: url("../assets/fonts/spectral-400.woff2") format("woff2");
 }
 
 @font-face {
@@ -67,7 +67,7 @@
   font-style: normal;
   font-weight: 500;
   font-display: swap;
-  src: url("/assets/fonts/spectral-500.woff2") format("woff2");
+  src: url("../assets/fonts/spectral-500.woff2") format("woff2");
 }
 
 @font-face {
@@ -75,7 +75,7 @@
   font-style: normal;
   font-weight: 600;
   font-display: swap;
-  src: url("/assets/fonts/spectral-600.woff2") format("woff2");
+  src: url("../assets/fonts/spectral-600.woff2") format("woff2");
 }
 
 @font-face {
@@ -83,7 +83,7 @@
   font-style: italic;
   font-weight: 400;
   font-display: swap;
-  src: url("/assets/fonts/spectral-italic-400.woff2") format("woff2");
+  src: url("../assets/fonts/spectral-italic-400.woff2") format("woff2");
 }
 
 :root {
@@ -154,7 +154,7 @@ body {
   background:
     linear-gradient(90deg, rgba(13, 8, 6, 0.9) 0%, rgba(18, 11, 8, 0.78) 42%, rgba(17, 10, 8, 0.18) 72%, rgba(12, 7, 6, 0.76) 100%),
     linear-gradient(180deg, rgba(11, 7, 5, 0.62), transparent 34%, rgba(12, 7, 5, 0.8)),
-    url("/assets/MASSALIA FRONT.png") center / cover no-repeat;
+    url("../assets/MASSALIA FRONT.png") center / cover no-repeat;
 }
 
 .landing-hero::after {
@@ -1003,7 +1003,7 @@ body {
   padding: clamp(48px, 8vw, 96px) clamp(22px, 6vw, 96px);
   background:
     linear-gradient(90deg, rgba(13, 8, 6, 0.92), rgba(23, 14, 10, 0.78)),
-    url("/assets/MASSALIA FRONT.png") center / cover no-repeat;
+    url("../assets/MASSALIA FRONT.png") center / cover no-repeat;
 }
 
 .detail-heading {
@@ -1113,7 +1113,7 @@ body {
   padding: 18px;
   background:
     linear-gradient(rgba(12, 8, 6, 0.76), rgba(12, 8, 6, 0.84)),
-    url("/assets/MASSALIA FRONT.png") center / cover no-repeat;
+    url("../assets/MASSALIA FRONT.png") center / cover no-repeat;
 }
 
 .auth-modal-backdrop {
