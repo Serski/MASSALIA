@@ -1,4 +1,95 @@
-@import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Spectral:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap");
+@font-face {
+  font-family: "Cinzel";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/assets/fonts/cinzel-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Cinzel";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/assets/fonts/cinzel-500.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Cinzel";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/assets/fonts/cinzel-600.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Cinzel";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/assets/fonts/cinzel-700.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Cinzel";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("/assets/fonts/cinzel-800.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Cinzel";
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url("/assets/fonts/cinzel-900.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Spectral";
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url("/assets/fonts/spectral-300.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Spectral";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/assets/fonts/spectral-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Spectral";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/assets/fonts/spectral-500.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Spectral";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/assets/fonts/spectral-600.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Spectral";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/assets/fonts/spectral-italic-400.woff2") format("woff2");
+}
+
+:root {
+  --font-display: "Cinzel", "Trajan Pro", Georgia, serif;
+  --font-body: "Spectral", Georgia, "Times New Roman", serif;
+}
 
 html,
 body,
@@ -10,7 +101,7 @@ body,
 
 body {
   color: #ece0cc;
-  font-family: Spectral, Georgia, "Times New Roman", serif;
+  font-family: var(--font-body);
   background: #130d0a;
 }
 
@@ -97,9 +188,9 @@ body {
   align-items: center;
   gap: 14px;
   color: #e6c179;
-  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   font-size: clamp(22px, 2.1vw, 31px);
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.16em;
   background: transparent;
   border: 0;
@@ -116,7 +207,7 @@ body {
 
 .nav-primary-links a {
   color: rgba(236, 224, 204, 0.78);
-  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   font-size: clamp(14px, 1.25vw, 22px);
   font-weight: 600;
   letter-spacing: 0.26em;
@@ -154,7 +245,7 @@ body {
   min-height: 44px;
   padding: 0 clamp(18px, 2vw, 34px);
   color: #ece0cc;
-  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -206,7 +297,7 @@ body {
 .todo-note {
   margin: 0;
   color: #cda758;
-  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -222,7 +313,7 @@ body {
 .hero-lead {
   margin: 18px 0 0;
   color: rgba(236, 224, 204, 0.78);
-  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   font-size: clamp(15px, 1.4vw, 20px);
   font-weight: 600;
   letter-spacing: 0.18em;
@@ -232,9 +323,9 @@ body {
 .hero-copy h1 {
   margin: 12px 0 10px;
   color: #f2dfb6;
-  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   font-size: clamp(48px, 7vw, 104px);
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.08em;
   line-height: 0.96;
   text-shadow: 0 18px 54px rgba(0, 0, 0, 0.56);
@@ -271,7 +362,7 @@ body {
   padding: 0 34px;
   overflow: hidden;
   color: #160e0a;
-  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   font-size: clamp(16px, 1.7vw, 21px);
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -349,7 +440,7 @@ body {
 .stat-row dd {
   margin-top: 4px;
   color: #f2dfb6;
-  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   font-size: 24px;
   font-weight: 700;
 }
@@ -401,7 +492,7 @@ body {
 .closing-cta h2 {
   margin: 10px 0 0;
   color: #f1ddb1;
-  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   font-size: clamp(34px, 5vw, 70px);
   line-height: 1.04;
 }
@@ -436,7 +527,7 @@ body {
 
 .pillar-kicker {
   color: #cda758;
-  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.18em;
@@ -446,7 +537,7 @@ body {
 .pillar-card h3 {
   margin: 18px 0 10px;
   color: #ece0cc;
-  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   font-size: 26px;
 }
 
@@ -476,7 +567,7 @@ body {
   min-height: clamp(300px, 44vw, 540px);
   place-items: center;
   color: rgba(236, 224, 204, 0.52);
-  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   background:
@@ -492,7 +583,7 @@ body {
   right: clamp(18px, 4vw, 44px);
   bottom: clamp(18px, 4vw, 44px);
   color: rgba(205, 167, 88, 0.22);
-  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   font-size: clamp(22px, 4vw, 54px);
   letter-spacing: 0.18em;
 }
@@ -517,7 +608,7 @@ body {
 }
 
 .city-item span {
-  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: 0.05em;
 }
@@ -561,7 +652,7 @@ body {
 }
 
 .party-script {
-  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   color: #cda758;
   font-size: 13px;
   font-weight: 800;
@@ -576,7 +667,7 @@ body {
 .party-card h3 {
   margin: 12px 0 8px;
   color: #f1ddb1;
-  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   font-size: clamp(28px, 3vw, 42px);
 }
 
@@ -596,7 +687,7 @@ body {
   place-items: center;
   align-self: center;
   color: #160e0a;
-  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   font-weight: 800;
   background: linear-gradient(180deg, #e4c36d, #a87b3f);
   border-radius: 50%;
@@ -622,7 +713,7 @@ body {
 .houses-heading h2 {
   margin: 0;
   color: #f1ddb1;
-  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   font-size: clamp(28px, 4vw, 48px);
 }
 
@@ -676,7 +767,7 @@ body {
 }
 
 .house-chip strong {
-  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   font-size: 14px;
   letter-spacing: 0.08em;
 }
@@ -708,7 +799,7 @@ body {
 
 .footer-brand {
   color: #f0cf87;
-  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   font-size: 24px;
   letter-spacing: 0.18em;
 }
