@@ -44,7 +44,7 @@ body {
   background:
     radial-gradient(circle at 50% 42%, rgba(186, 114, 84, 0.26), transparent 34%),
     linear-gradient(90deg, rgba(19, 8, 8, 0.9), rgba(83, 38, 32, 0.78) 48%, rgba(17, 7, 7, 0.92)),
-    url("/assets/MASSALIA 01.jpg") center / cover no-repeat;
+    url("/assets/MASSALIA FRONT.png") center / cover no-repeat;
 }
 
 .landing-info::after {
@@ -59,7 +59,7 @@ body {
 }
 
 .landing-hero {
-  background: #160b0a url("/assets/MASSALIA 01.jpg") center / cover no-repeat;
+  background: #160b0a url("/assets/MASSALIA FRONT.png") center / cover no-repeat;
 }
 
 .landing-nav {
@@ -125,24 +125,51 @@ body {
   box-shadow: 0 0 0 1px rgba(222, 177, 67, 0.18), 0 12px 34px rgba(0, 0, 0, 0.28);
 }
 
-.hero-start-hotspot {
+.hero-start-panel {
   position: absolute;
   z-index: 3;
   left: 50%;
-  bottom: clamp(44px, 8vh, 92px);
-  width: min(420px, 58vw);
-  min-height: clamp(54px, 8vh, 88px);
-  overflow: hidden;
-  color: transparent;
-  background: transparent;
-  border: 0;
+  bottom: clamp(38px, 7vh, 82px);
+  display: grid;
+  width: min(520px, calc(100vw - 36px));
+  justify-items: center;
+  gap: 18px;
   transform: translateX(-50%);
+}
+
+.hero-lion {
+  width: min(260px, 38vw);
+  max-height: 32vh;
+  object-fit: contain;
+  filter: drop-shadow(0 20px 34px rgba(0, 0, 0, 0.55));
+}
+
+.start-banner-button {
+  width: min(460px, 86vw);
+  min-height: 72px;
+  padding: 0 28px;
+  color: #d8c7a2;
+  font: inherit;
+  font-size: clamp(16px, 2.1vw, 21px);
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  background: rgba(45, 36, 28, 0.9);
+  border: 1px solid rgba(199, 151, 53, 0.58);
+  border-radius: 4px;
+  box-shadow: 0 15px 44px rgba(0, 0, 0, 0.5);
   cursor: pointer;
 }
 
-.hero-start-hotspot:focus-visible {
+.start-banner-button:hover,
+.start-banner-button:focus-visible {
+  border-color: rgba(222, 177, 67, 0.82);
+  box-shadow: 0 0 0 1px rgba(222, 177, 67, 0.2), 0 15px 44px rgba(0, 0, 0, 0.55);
+}
+
+.start-banner-button:focus-visible {
   outline: 2px solid rgba(240, 207, 135, 0.9);
-  outline-offset: 6px;
+  outline-offset: 5px;
 }
 
 .eyebrow,
@@ -340,9 +367,19 @@ body {
     padding: 84px 22px;
   }
 
-  .hero-start-hotspot {
-    bottom: 8vh;
-    width: min(300px, 70vw);
+  .hero-start-panel {
+    bottom: 7vh;
+    gap: 12px;
+  }
+
+  .hero-lion {
+    width: min(180px, 48vw);
+    max-height: 26vh;
+  }
+
+  .start-banner-button {
+    min-height: 60px;
+    letter-spacing: 0.12em;
   }
 
   .scroll-card {

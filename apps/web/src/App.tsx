@@ -38,9 +38,12 @@ export function App() {
           </div>
         </nav>
 
-        <button className="hero-start-hotspot" type="button" onClick={() => setView("map")}>
-          Start Game
-        </button>
+        <section className="hero-start-panel" aria-label="Start campaign">
+          <img className="hero-lion" src="/assets/MASSALIA LION.png" alt="Massalia lion emblem" />
+          <button className="start-banner-button" type="button" onClick={() => setView("map")}>
+            Start The Game
+          </button>
+        </section>
       </section>
 
       <section className="landing-info info-what">
