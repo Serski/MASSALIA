@@ -284,7 +284,7 @@ function navigateTo(path: string) {
 
 function Crest({ initial, image, label }: { initial: string; image?: string; label: string }) {
   return (
-    <span className="crest-medallion" aria-label={label}>
+    <span className={`crest-medallion${image ? " crest-medallion-image" : ""}`} aria-label={label}>
       {image ? <img src={image} alt="" /> : <span>{initial}</span>}
     </span>
   );

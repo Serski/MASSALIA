@@ -674,6 +674,23 @@ body {
   object-fit: contain;
 }
 
+.crest-medallion-image {
+  background: rgba(10, 7, 6, 0.72);
+  border-color: rgba(205, 167, 88, 0.58);
+  box-shadow:
+    inset 0 0 0 5px rgba(21, 12, 8, 0.9),
+    0 16px 34px rgba(0, 0, 0, 0.34);
+}
+
+.crest-medallion-image::after {
+  display: none;
+}
+
+.crest-medallion-image img {
+  width: calc(100% - 6px);
+  height: calc(100% - 6px);
+}
+
 .atlas-section {
   display: grid;
   grid-template-columns: minmax(260px, 0.52fr) minmax(320px, 1fr);
