@@ -54,7 +54,7 @@ export function App() {
         <nav className="landing-nav" aria-label="Main">
           <button className="brand-lockup" type="button" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
             <span className="brand-mark" aria-hidden="true">
-              M
+              <img src="/assets/MASSALIA LION.png" alt="" />
             </span>
             <span>MASSALIA</span>
           </button>
@@ -77,10 +77,10 @@ export function App() {
           <div className="hero-copy">
             <p className="hero-eyebrow">
               <span className="live-pulse" aria-hidden="true" />
-              Free Browser Strategy · Season I now open
+              Free Browser Strategy Game
             </p>
-            <p className="hero-lead">320 BC · The Western Sea</p>
-            <h1>The League of Massalia</h1>
+            <p className="hero-lead">4th Century BC · The League Of</p>
+            <h1>Massalia</h1>
             <p className="hero-subline">Founded by Phocaean Greeks. Forged by ten cities. Ruled by whoever dares.</p>
             <p className="hero-logline">
               Claim one of ten cities, each with its own resource. Join a Noble House, take a side between the old guard
