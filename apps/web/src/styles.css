@@ -527,6 +527,28 @@ body {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.government-section {
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    linear-gradient(90deg, rgba(13, 8, 6, 0.94) 0%, rgba(20, 12, 8, 0.78) 44%, rgba(19, 11, 8, 0.58) 100%),
+    linear-gradient(180deg, rgba(12, 7, 5, 0.84), rgba(12, 7, 5, 0.3) 42%, rgba(12, 7, 5, 0.9)),
+    url("../assets/Politics.png") center / cover no-repeat,
+    #130d0a;
+}
+
+.government-section::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 70% 36%, rgba(205, 167, 88, 0.14), transparent 32%),
+    radial-gradient(circle at 50% 50%, transparent 52%, rgba(7, 4, 3, 0.72) 100%);
+  opacity: 0.9;
+}
+
 .house-tile-grid {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
