@@ -38,17 +38,32 @@ export function App() {
           </div>
         </nav>
 
-        <section className="start-panel" aria-label="Start campaign">
-          <h1>MASSALIA</h1>
-          <p className="season-copy">Season One · Autumn 815 · Mediterranean shard</p>
-          <button className="start-button" type="button" onClick={() => setView("map")}>
-            Start Game
-          </button>
+        <section className="start-panel ornate-banner" aria-label="Start campaign">
+          <div className="banner-rod rod-top" />
+          <div className="banner-rod rod-bottom" />
+          <div className="banner-border">
+            <div className="banner-strip banner-strip-top">
+              <span className="corner-square" aria-hidden="true" />
+              <h1>MASSALIA</h1>
+              <span className="corner-square" aria-hidden="true" />
+            </div>
+            <div className="banner-center">
+              <span className="massalia-emblem" aria-hidden="true">
+                M
+              </span>
+              <p className="season-copy">Season One · Autumn 815 · Mediterranean shard</p>
+            </div>
+            <div className="banner-strip banner-strip-bottom">
+              <button className="start-button" type="button" onClick={() => setView("map")}>
+                Start Game
+              </button>
+            </div>
+          </div>
         </section>
       </section>
 
       <section className="landing-info info-what">
-        <div className="info-copy">
+        <div className="info-copy scroll-card">
           <p className="eyebrow">What Is Massalia</p>
           <h2>A persistent Mediterranean strategy world</h2>
           <p>
@@ -59,7 +74,7 @@ export function App() {
       </section>
 
       <section className="landing-info info-mechanics">
-        <div className="info-copy">
+        <div className="info-copy scroll-card">
           <p className="eyebrow">Game Mechanics</p>
           <h2>Timestamp strategy, server authority, layered maps</h2>
           <p>
