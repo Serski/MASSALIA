@@ -213,13 +213,29 @@ body {
   text-transform: uppercase;
 }
 
+.hero-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.hero-lead {
+  margin: 18px 0 0;
+  color: rgba(236, 224, 204, 0.78);
+  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-size: clamp(15px, 1.4vw, 20px);
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
 .hero-copy h1 {
   margin: 12px 0 10px;
   color: #f2dfb6;
   font-family: Cinzel, Georgia, "Times New Roman", serif;
-  font-size: clamp(56px, 9vw, 128px);
+  font-size: clamp(48px, 7vw, 104px);
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   line-height: 0.96;
   text-shadow: 0 18px 54px rgba(0, 0, 0, 0.56);
 }
@@ -370,7 +386,6 @@ body {
 }
 
 .landing-section,
-.faction-strip,
 .closing-cta,
 .landing-footer {
   position: relative;
@@ -437,6 +452,7 @@ body {
 
 .pillar-card p,
 .atlas-copy p,
+.party-card p,
 .closing-cta p {
   margin: 0;
   color: rgba(236, 224, 204, 0.78);
@@ -455,6 +471,7 @@ body {
 }
 
 .map-frame {
+  position: relative;
   display: grid;
   min-height: clamp(300px, 44vw, 540px);
   place-items: center;
@@ -470,23 +487,202 @@ body {
   box-shadow: inset 0 0 0 1px rgba(236, 224, 204, 0.05), 0 28px 80px rgba(0, 0, 0, 0.34);
 }
 
-.faction-strip {
+.map-frame strong {
+  position: absolute;
+  right: clamp(18px, 4vw, 44px);
+  bottom: clamp(18px, 4vw, 44px);
+  color: rgba(205, 167, 88, 0.22);
+  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-size: clamp(22px, 4vw, 54px);
+  letter-spacing: 0.18em;
+}
+
+.city-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+  margin-top: 26px;
+}
+
+.city-item {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
   align-items: center;
-  padding: 28px clamp(22px, 6vw, 96px);
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  color: #ece0cc;
+  background: rgba(31, 20, 15, 0.82);
+  border: 1px solid rgba(205, 167, 88, 0.2);
+  border-radius: 6px;
+}
+
+.city-item span {
+  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.city-item strong {
+  color: #cda758;
+  font-weight: 600;
+}
+
+.parties-section {
+  background:
+    radial-gradient(circle at 50% 55%, rgba(205, 167, 88, 0.08), transparent 34%),
+    #130d0a;
+}
+
+.party-duel {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: clamp(18px, 3vw, 34px);
+  align-items: stretch;
+  margin-top: 34px;
+}
+
+.party-card {
+  padding: clamp(24px, 4vw, 38px);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent),
+    rgba(31, 20, 15, 0.92);
+  border: 1px solid rgba(205, 167, 88, 0.28);
+  border-radius: 10px;
+  box-shadow: 0 26px 68px rgba(0, 0, 0, 0.28);
+}
+
+.palaioi-card {
+  border-color: rgba(205, 167, 88, 0.48);
+}
+
+.dynatoi-card {
+  border-color: rgba(92, 139, 178, 0.56);
+}
+
+.party-script {
+  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  color: #cda758;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.dynatoi-card .party-script {
+  color: #8fb7dd;
+}
+
+.party-card h3 {
+  margin: 12px 0 8px;
+  color: #f1ddb1;
+  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-size: clamp(28px, 3vw, 42px);
+}
+
+.party-motto {
+  margin-bottom: 18px;
+  font-style: italic;
+}
+
+.party-card p + p {
+  margin-top: 14px;
+}
+
+.vs-medallion {
+  display: grid;
+  width: 66px;
+  height: 66px;
+  place-items: center;
+  align-self: center;
+  color: #160e0a;
+  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-weight: 800;
+  background: linear-gradient(180deg, #e4c36d, #a87b3f);
+  border-radius: 50%;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.36);
+}
+
+.houses-section {
+  position: relative;
+  z-index: 1;
+  padding: 42px clamp(22px, 6vw, 96px);
   background: #1b110d;
   border-block: 1px solid rgba(205, 167, 88, 0.2);
 }
 
-.faction-chip {
+.houses-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 22px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.houses-heading h2 {
+  margin: 0;
+  color: #f1ddb1;
+  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-size: clamp(28px, 4vw, 48px);
+}
+
+.alignment-legend,
+.house-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 18px;
+}
+
+.alignment-legend span {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  color: rgba(236, 224, 204, 0.72);
+  font-size: 14px;
+}
+
+.alignment-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.alignment-dot.conservative {
+  background: #cda758;
+}
+
+.alignment-dot.centrist {
+  background: #d8c7a2;
+}
+
+.alignment-dot.reformist {
+  background: #6fa7d6;
+}
+
+.house-chip {
+  display: inline-flex;
+  gap: 9px;
+  align-items: center;
   padding: 10px 14px;
   color: #ece0cc;
   font-size: 15px;
   background: rgba(31, 20, 15, 0.9);
   border: 1px solid rgba(205, 167, 88, 0.24);
   border-radius: 999px;
+}
+
+.house-chip strong {
+  font-family: Cinzel, Georgia, "Times New Roman", serif;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+}
+
+.house-chip small {
+  color: rgba(236, 224, 204, 0.64);
 }
 
 .closing-cta {
@@ -713,6 +909,15 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .city-list,
+  .party-duel {
+    grid-template-columns: 1fr;
+  }
+
+  .vs-medallion {
+    justify-self: center;
+  }
+
   .landing-section {
     padding: 72px 20px;
   }
@@ -721,8 +926,8 @@ body {
     min-height: 280px;
   }
 
-  .faction-strip {
-    padding: 24px 20px;
+  .houses-section {
+    padding: 36px 20px;
   }
 
   .closing-cta {
