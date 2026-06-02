@@ -520,7 +520,7 @@ body {
 }
 
 .tile-grid {
-  grid-template-columns: repeat(7, minmax(132px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .office-grid {
@@ -711,6 +711,16 @@ body {
 .crest-medallion-image img {
   width: calc(100% - 6px);
   height: calc(100% - 6px);
+}
+
+.profession-crest {
+  width: 78px;
+  height: 78px;
+}
+
+.profession-crest img {
+  width: calc(100% - 4px);
+  height: calc(100% - 4px);
 }
 
 .atlas-section {
@@ -1798,6 +1808,10 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .roles-section .tile-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .detail-heading {
     align-items: flex-start;
     flex-direction: column;
@@ -1870,6 +1884,10 @@ body {
 
   .nav-actions {
     width: 100%;
+  }
+
+  .roles-section .tile-grid {
+    grid-template-columns: 1fr;
   }
 
   .nav-button {

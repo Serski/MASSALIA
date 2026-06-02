@@ -20,6 +20,7 @@ type Profession = {
   kind: "profession";
   slug: string;
   initial: string;
+  image: string;
   name: string;
   rank: string;
   objective: string;
@@ -85,6 +86,7 @@ const professions: Profession[] = [
     kind: "profession",
     slug: "landowner",
     initial: "L",
+    image: assetPath("assets/LANDLORD copy.png"),
     name: "Landowner",
     rank: "@Georgos",
     objective: "Turn fields and estates into the grain engine of your city.",
@@ -101,6 +103,7 @@ const professions: Profession[] = [
     kind: "profession",
     slug: "trader",
     initial: "T",
+    image: assetPath("assets/TRADER copy.png"),
     name: "Trader",
     rank: "@Emporos",
     objective: "Move wine, rare resources, and influence across the Mediterranean routes.",
@@ -117,6 +120,7 @@ const professions: Profession[] = [
     kind: "profession",
     slug: "priest",
     initial: "P",
+    image: assetPath("assets/PRIEST copy.png"),
     name: "Priest",
     rank: "@Neokoros",
     objective: "Convert devotion, healing, and ritual authority into civic power.",
@@ -133,6 +137,7 @@ const professions: Profession[] = [
     kind: "profession",
     slug: "philosopher",
     initial: "F",
+    image: assetPath("assets/PHILOSOPHER copy.png"),
     name: "Philosopher",
     rank: "@Didaskalos",
     objective: "Build schools, prestige, and diplomatic leverage through learning.",
@@ -149,6 +154,7 @@ const professions: Profession[] = [
     kind: "profession",
     slug: "shipbuilder",
     initial: "S",
+    image: assetPath("assets/SHIP BUILDER copy.png"),
     name: "Shipbuilder",
     rank: "@Naupegos",
     objective: "Own the dockyards that decide who can trade, raid, and cross the sea.",
@@ -165,6 +171,7 @@ const professions: Profession[] = [
     kind: "profession",
     slug: "hetaira",
     initial: "H",
+    image: assetPath("assets/HETAIRA copy.png"),
     name: "Hetaira",
     rank: "@Hetaira",
     objective: "Turn salons, gossip, and dangerous favors into quiet political force.",
@@ -181,6 +188,7 @@ const professions: Profession[] = [
     kind: "profession",
     slug: "military-leader",
     initial: "M",
+    image: assetPath("assets/HOPLITE copy.png"),
     name: "Military Leader",
     rank: "@Dekarchos",
     objective: "Command citizen soldiers and grow from local captain to League warlord.",
@@ -798,7 +806,7 @@ export function App() {
         <div className="tile-grid">
           {professions.map((profession) => (
             <DetailLink className="landing-tile" entry={profession} key={profession.slug}>
-              <Crest initial={profession.initial} label={`${profession.name} generic crest`} />
+              <Crest className="profession-crest" initial={profession.initial} image={profession.image} label={`${profession.name} icon`} />
               <span className="tile-kicker">{profession.rank}</span>
               <h3>{profession.name}</h3>
               <p>{profession.income}</p>
