@@ -806,10 +806,15 @@ export function App() {
         <div className="tile-grid">
           {professions.map((profession) => (
             <DetailLink className="landing-tile" entry={profession} key={profession.slug}>
-              <Crest className="profession-crest" initial={profession.initial} image={profession.image} label={`${profession.name} icon`} />
-              <span className="tile-kicker">{profession.rank}</span>
-              <h3>{profession.name}</h3>
-              <p>{profession.income}</p>
+              <span className="profession-figure">
+                <img src={profession.image} alt={profession.name} width="260" height="380" loading="lazy" decoding="async" />
+              </span>
+              <span className="profession-copy">
+                <span className="tile-kicker">{profession.rank}</span>
+                <h3>{profession.name}</h3>
+                <span className="profession-stat">{profession.income}</span>
+                <span className="profession-prompt">View rank ladder →</span>
+              </span>
             </DetailLink>
           ))}
         </div>
