@@ -603,7 +603,6 @@ export function App() {
         </div>
         <div className="map-frame" role="img" aria-label="League of Massalia atlas map">
           <img src="/assets/MAP01.jpg" alt="" />
-          <strong>GULF OF GALATES</strong>
         </div>
       </section>
 
