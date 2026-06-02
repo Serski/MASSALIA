@@ -1,8 +1,9 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { MapCanvas } from "./map/MapCanvas.js";
 
 type Alignment = "conservative" | "centrist" | "reformist";
 type DetailKind = "profession" | "house" | "party" | "city";
+type AuthMode = "login" | "signup";
 
 type Tier = {
   building: string;
@@ -306,7 +307,210 @@ function DetailLink({ entry, children, className }: { entry: DetailEntry; childr
   );
 }
 
-function DetailPage({ entry, onStart }: { entry: DetailEntry; onStart: () => void }) {
+function AuthPanel({
+  mode,
+  onModeChange,
+  onClose,
+  isModal = false,
+}: {
+  mode: AuthMode;
+  onModeChange: (mode: AuthMode) => void;
+  onClose?: () => void;
+  isModal?: boolean;
+}) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [newsletter, setNewsletter] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [message, setMessage] = useState("");
+  const isSignup = mode === "signup";
+
+  useEffect(() => {
+    const firstField = panelRef.current?.querySelector<HTMLInputElement>("input");
+    firstField?.focus();
+  }, [mode]);
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage("");
+    if (isSignup && !termsAccepted) {
+      setMessage("Accept the Terms & Conditions and Privacy Policy to join the League.");
+      return;
+    }
+
+    // TODO: Replace placeholder handlers with real email/password auth endpoints and post-auth redirect.
+    setMessage(
+      isSignup
+        ? "TODO: registration endpoint is not connected yet. Post-signup destination still needs confirmation."
+        : "TODO: login endpoint is not connected yet.",
+    );
+  }
+
+  function handleSocial(provider: string) {
+    // TODO: Confirm final OAuth provider list and redirect/callback URLs before wiring OAuth.
+    setMessage(`TODO: ${provider} OAuth is not connected yet.`);
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (!isModal) {
+      return;
+    }
+    if (event.key === "Escape") {
+      onClose?.();
+      return;
+    }
+    if (event.key !== "Tab") {
+      return;
+    }
+
+    const focusable = panelRef.current?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    if (!focusable?.length) {
+      return;
+    }
+    const first = focusable[0]!;
+    const last = focusable[focusable.length - 1]!;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  return (
+    <div className="auth-scroll-frame" ref={panelRef} onKeyDown={handleKeyDown}>
+      <div className="auth-rod auth-rod-top" aria-hidden="true" />
+      <div className="auth-rod auth-rod-bottom" aria-hidden="true" />
+      <span className="auth-finial auth-finial-top-left" aria-hidden="true" />
+      <span className="auth-finial auth-finial-top-right" aria-hidden="true" />
+      <span className="auth-finial auth-finial-bottom-left" aria-hidden="true" />
+      <span className="auth-finial auth-finial-bottom-right" aria-hidden="true" />
+      <div className="auth-tab-toggle" role="tablist" aria-label="Auth mode">
+        <button className={mode === "login" ? "active" : ""} type="button" onClick={() => onModeChange("login")}>
+          Log In
+        </button>
+        <button className={mode === "signup" ? "active" : ""} type="button" onClick={() => onModeChange("signup")}>
+          Sign Up
+        </button>
+      </div>
+      <div className="auth-meander auth-meander-top" aria-hidden="true" />
+      <div className="auth-card">
+        <div className="auth-corner auth-corner-tl" aria-hidden="true" />
+        <div className="auth-corner auth-corner-tr" aria-hidden="true" />
+        <div className="auth-corner auth-corner-bl" aria-hidden="true" />
+        <div className="auth-corner auth-corner-br" aria-hidden="true" />
+        {onClose ? (
+          <button className="auth-close" type="button" onClick={onClose} aria-label="Close authentication panel">
+            ×
+          </button>
+        ) : null}
+        <div className="auth-card-inner" role={isModal ? "dialog" : undefined} aria-modal={isModal || undefined} aria-labelledby="auth-title">
+          <p className="auth-brandline">The League of Massalia</p>
+          <h1 id="auth-title">{isSignup ? "Join the League" : "Enter the League"}</h1>
+          <p className="auth-subtitle">
+            {isSignup ? "Choose a city. Pledge a House. Make your name." : "Your city awaits your return."}
+          </p>
+
+          <div className="auth-social-row" aria-label="Social sign in">
+            {["Discord", "Google", "Facebook"].map((provider) => (
+              <button key={provider} type="button" onClick={() => handleSocial(provider)}>
+                <span aria-hidden="true">{provider[0]}</span>
+                {provider}
+              </button>
+            ))}
+          </div>
+
+          <div className="auth-divider"><span>or</span></div>
+
+          <form className="auth-form" onSubmit={handleSubmit}>
+            <label>
+              <span>Email</span>
+              <input
+                type="email"
+                name="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                autoComplete="email"
+                placeholder="Email address"
+                required
+              />
+              <i aria-hidden="true">✉</i>
+            </label>
+            <label>
+              <span>Password</span>
+              <input
+                type="password"
+                name="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete={isSignup ? "new-password" : "current-password"}
+                placeholder="Password"
+                minLength={8}
+                required
+              />
+              <i aria-hidden="true">▣</i>
+            </label>
+
+            {isSignup ? (
+              <div className="auth-checks">
+                <label>
+                  <input type="checkbox" checked={newsletter} onChange={(event) => setNewsletter(event.target.checked)} />
+                  <span>Send me season updates and League dispatches.</span>
+                </label>
+                <label>
+                  <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} required />
+                  <span>
+                    I accept the <a href="/terms">Terms &amp; Conditions</a> and <a href="/privacy">Privacy Policy</a>.
+                  </span>
+                </label>
+              </div>
+            ) : null}
+
+            {message ? <p className="auth-message" role="status">{message}</p> : null}
+
+            <button className="primary-cta auth-submit" type="submit" disabled={isSignup && !termsAccepted}>
+              {isSignup ? "Sign up & play free" : "Log in"}
+            </button>
+          </form>
+
+          {!isSignup ? <a className="auth-forgot" href="/forgot-password">Forgot your password?</a> : null}
+
+          <p className="auth-switch">
+            {isSignup ? "Already a citizen?" : "New to the League?"}{" "}
+            <button type="button" onClick={() => onModeChange(isSignup ? "login" : "signup")}>
+              {isSignup ? "Enter the League" : "Found your legacy"} →
+            </button>
+          </p>
+        </div>
+      </div>
+      <div className="auth-meander auth-meander-bottom" aria-hidden="true" />
+    </div>
+  );
+}
+
+function AuthModal({ mode, onModeChange, onClose }: { mode: AuthMode; onModeChange: (mode: AuthMode) => void; onClose: () => void }) {
+  return (
+    <div className="auth-modal-backdrop" onMouseDown={onClose}>
+      <div className="auth-modal-shell" onMouseDown={(event) => event.stopPropagation()}>
+        <AuthPanel mode={mode} onModeChange={onModeChange} onClose={onClose} isModal />
+      </div>
+    </div>
+  );
+}
+
+function AuthRoutePage({ mode }: { mode: AuthMode }) {
+  return (
+    <main className="landing-shell auth-page-shell">
+      <AuthPanel mode={mode} onModeChange={(nextMode) => navigateTo(`/${nextMode}`)} />
+    </main>
+  );
+}
+
+function DetailPage({ entry, onStart, onOpenAuth }: { entry: DetailEntry; onStart: () => void; onOpenAuth: (mode: AuthMode) => void }) {
   const emblem = "image" in entry ? entry.image : undefined;
   const ctaText =
     entry.kind === "house"
@@ -332,8 +536,8 @@ function DetailPage({ entry, onStart }: { entry: DetailEntry; onStart: () => voi
           <a href="/#atlas">Atlas</a>
         </div>
         <div className="nav-actions">
-          <button className="nav-button nav-login" type="button">Login</button>
-          <button className="nav-button nav-signup" type="button">Sign Up</button>
+          <button className="nav-button nav-login" type="button" onClick={() => onOpenAuth("login")}>Login</button>
+          <button className="nav-button nav-signup" type="button" onClick={() => onOpenAuth("signup")}>Sign Up</button>
         </div>
       </nav>
 
@@ -465,7 +669,9 @@ function getDetailEntry(pathname: string): DetailEntry | undefined {
 export function App() {
   const [view, setView] = useState<"landing" | "map">("landing");
   const [pathname, setPathname] = useState(window.location.pathname);
+  const [authModalMode, setAuthModalMode] = useState<AuthMode | null>(null);
   const detailEntry = getDetailEntry(pathname);
+  const authRouteMode: AuthMode | undefined = pathname === "/login" ? "login" : pathname === "/signup" ? "signup" : undefined;
   const palaioi = parties[0]!;
   const dynatoi = parties[1]!;
 
@@ -475,7 +681,9 @@ export function App() {
     return () => window.removeEventListener("popstate", handleRoute);
   }, []);
 
-  const startGame = () => setView("map");
+  const openAuth = (mode: AuthMode) => setAuthModalMode(mode);
+  const closeAuth = () => setAuthModalMode(null);
+  const startGame = () => openAuth("signup");
 
   if (view === "map") {
     return (
@@ -491,8 +699,17 @@ export function App() {
     );
   }
 
+  if (authRouteMode) {
+    return <AuthRoutePage mode={authRouteMode} />;
+  }
+
   if (detailEntry) {
-    return <DetailPage entry={detailEntry} onStart={startGame} />;
+    return (
+      <>
+        <DetailPage entry={detailEntry} onStart={startGame} onOpenAuth={openAuth} />
+        {authModalMode ? <AuthModal mode={authModalMode} onModeChange={setAuthModalMode} onClose={closeAuth} /> : null}
+      </>
+    );
   }
 
   return (
@@ -512,8 +729,8 @@ export function App() {
             <a href="#factions">Factions</a>
           </div>
           <div className="nav-actions">
-            <button className="nav-button nav-login" type="button">Login</button>
-            <button className="nav-button nav-signup" type="button">Sign Up</button>
+            <button className="nav-button nav-login" type="button" onClick={() => openAuth("login")}>Login</button>
+            <button className="nav-button nav-signup" type="button" onClick={() => openAuth("signup")}>Sign Up</button>
           </div>
         </nav>
 
@@ -678,6 +895,7 @@ export function App() {
       </section>
 
       <LandingFooter />
+      {authModalMode ? <AuthModal mode={authModalMode} onModeChange={setAuthModalMode} onClose={closeAuth} /> : null}
     </main>
   );
 }
