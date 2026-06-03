@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { assetPath, nobleHouses, professions, type Alignment, type House, type Profession } from "./data/league.js";
-import { portraitPools, type PortraitClassSlug } from "./data/portraits.js";
+import { portraitPools, type PortraitClassSlug, type PortraitOption } from "./data/portraits.js";
 import "./characterCreation.css";
 
 type CreationPayload = {
@@ -240,19 +240,25 @@ function ChoiceCard({
 function SummaryCard({
   selectedClass,
   selectedHouse,
-  selectedFace,
+  selectedPortrait,
   name,
 }: {
   selectedClass?: Profession;
   selectedHouse?: House;
-  selectedFace: string;
+  selectedPortrait?: PortraitOption;
   name: string;
 }) {
   return (
     <aside className="creation-summary" aria-label="You, in the League">
       <p className="section-eyebrow">You, in the League</p>
       <div className="summary-portrait">
-        <span className="summary-ring" aria-hidden="true">{selectedFace || "—"}</span>
+        <span className={`summary-ring${selectedPortrait && !selectedPortrait.placeholder ? " has-portrait" : ""}`} aria-hidden="true">
+          {selectedPortrait && !selectedPortrait.placeholder ? (
+            <img src={selectedPortrait.image} alt="" width="160" height="160" />
+          ) : (
+            selectedPortrait?.label.split(" ").at(-1) || "—"
+          )}
+        </span>
       </div>
       <h2>{name.trim() || "Unnamed"}</h2>
       <p>{selectedClass ? `${selectedClass.rank} · ${selectedClass.name}` : "— · class"}</p>
@@ -284,6 +290,7 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
   const portraitOptions = selectedClass
     ? portraitPools[selectedClass.slug as PortraitClassSlug]
     : [];
+  const selectedPortrait = useMemo(() => portraitOptions.find((portrait) => portrait.id === selectedFace), [portraitOptions, selectedFace]);
 
   const canContinue =
     (step === 1 && Boolean(selectedClass)) ||
@@ -341,7 +348,7 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
         <button className="creation-ghost-button" type="button" onClick={onExit}>Exit</button>
       </nav>
       <section className="creation-layout" aria-labelledby="creation-title">
-        <SummaryCard selectedClass={selectedClass} selectedHouse={selectedHouse} selectedFace={selectedFace} name={name} />
+        <SummaryCard selectedClass={selectedClass} selectedHouse={selectedHouse} selectedPortrait={selectedPortrait} name={name} />
         <section className="creation-panel">
           <p className="section-eyebrow">Character Creation · Step {step} of 4</p>
           <h1 id="creation-title">{steps[step - 1]}</h1>
