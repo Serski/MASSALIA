@@ -12,7 +12,7 @@
     "db:migrate": "pnpm --filter @massalia/db db:migrate",
     "db:seed": "pnpm --filter @massalia/db db:seed",
     "start": "pnpm --filter @massalia/server start",
-    "dev:web": "pnpm --filter @massalia/web dev -- --host 127.0.0.1 --port 5174",
+    "dev:web": "pnpm --filter @massalia/web exec vite --host 127.0.0.1 --port 5174",
     "preview:web": "pnpm --filter @massalia/web build && pnpm --filter @massalia/web exec vite preview --host 127.0.0.1 --port 5175",
     "dev:api": "PORT=3001 pnpm --filter @massalia/server exec tsx src/index.ts",
     "railway:start": "pnpm --filter @massalia/server start"

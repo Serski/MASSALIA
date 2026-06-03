@@ -16,6 +16,11 @@ type Tier = {
   upkeep?: string;
 };
 
+type NarrativeMilestone = {
+  milestone: string;
+  advance: string;
+};
+
 type Profession = {
   kind: "profession";
   slug: string;
@@ -27,6 +32,11 @@ type Profession = {
   income: string;
   tiers: Tier[];
   note: string;
+  hardMode?: boolean;
+  narrativePath?: {
+    milestones: NarrativeMilestone[];
+    todo: string;
+  };
 };
 
 type House = {
@@ -200,6 +210,29 @@ const professions: Profession[] = [
       { building: "Citadel Command Center", rank: "@Xiliarchos", benefit: "60 gold/day; +25 Militia; leads 1000 troops" },
     ],
     note: "All professions cost 100 gold to start. Military Leaders craft military traits with wine and papyrus and can use the Forge.",
+  },
+  {
+    kind: "profession",
+    slug: "slave",
+    initial: "S",
+    image: assetPath("assets/SLAVE.png"),
+    name: "Slave",
+    rank: "@Doulos",
+    objective: "Hard mode. Begin at the very bottom of Massalian society with nothing to your name: no land, no coin, no House. Endure, scrape together a peculium, and earn your freedom through the story, then rise into any profession you choose.",
+    income: "0 gold/day · earn your freedom",
+    tiers: [],
+    note: "Solo hard-mode start. No other player commands this path; freedom is earned through narrative progression.",
+    hardMode: true,
+    narrativePath: {
+      milestones: [
+        { milestone: "Bound", advance: "Survive the opening story and learn who holds power around you." },
+        { milestone: "Laboring", advance: "Take low-status work, gather favors, and avoid debt traps." },
+        { milestone: "Peculium", advance: "Build permitted savings through story choices and small opportunities." },
+        { milestone: "Manumitted", advance: "Secure freedom through the narrative arc and become a freedman." },
+        { milestone: "Free Citizen", advance: "Choose any profession and begin a normal ladder from the bottom." },
+      ],
+      todo: "TODO: Final milestone requirements and numeric thresholds are not designed yet.",
+    },
   },
 ];
 
@@ -574,6 +607,31 @@ function DetailPage({ entry, onStart, onOpenAuth }: { entry: DetailEntry; onStar
 
 function DetailBody({ entry }: { entry: DetailEntry }) {
   if (entry.kind === "profession") {
+    if (entry.narrativePath) {
+      return (
+        <div className="detail-grid">
+          <article className="detail-panel">
+            <h2>Objective</h2>
+            <p>{entry.objective}</p>
+            <p><strong>Starting condition:</strong> {entry.income}</p>
+            <p>{entry.note}</p>
+            <p>{entry.narrativePath.todo}</p>
+          </article>
+          <article className="detail-panel">
+            <h2>Status path</h2>
+            <ol className="tier-list">
+              {entry.narrativePath.milestones.map((milestone) => (
+                <li key={milestone.milestone}>
+                  <strong>{milestone.milestone}</strong>
+                  <p>{milestone.advance}</p>
+                </li>
+              ))}
+            </ol>
+          </article>
+        </div>
+      );
+    }
+
     return (
       <div className="detail-grid">
         <article className="detail-panel">
@@ -790,7 +848,7 @@ export function App() {
           <article className="pillar-card">
             <span className="pillar-kicker">II · Master a Role</span>
             <h3>Choose a Profession</h3>
-            <p>Become a trader, landowner, shipbuilder, priest, philosopher, hetaira, or military leader.</p>
+            <p>Become a trader, landowner, shipbuilder, priest, philosopher, hetaira, military leader, or attempt the hard path from nothing.</p>
           </article>
           <article className="pillar-card">
             <span className="pillar-kicker">III · Scheme</span>
@@ -802,10 +860,11 @@ export function App() {
 
       <section className="landing-section roles-section" id="roles" aria-labelledby="roles-title">
         <p className="section-eyebrow">Professions</p>
-        <h2 id="roles-title">Seven paths to power</h2>
+        <h2 id="roles-title">Eight paths to power</h2>
         <div className="tile-grid">
           {professions.map((profession) => (
-            <DetailLink className="landing-tile" entry={profession} key={profession.slug}>
+            <DetailLink className={`landing-tile${profession.hardMode ? " profession-hard-mode" : ""}`} entry={profession} key={profession.slug}>
+              {profession.hardMode ? <span className="hard-mode-badge">Hard Mode</span> : null}
               <span className="profession-figure">
                 <img src={profession.image} alt={profession.name} width="260" height="380" loading="lazy" decoding="async" />
               </span>

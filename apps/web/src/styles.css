@@ -724,11 +724,11 @@ body {
 }
 
 .roles-section .tile-grid {
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   align-items: stretch;
   margin-inline: auto;
-  max-width: 1840px;
+  max-width: 1320px;
 }
 
 .roles-section .landing-tile {
@@ -774,6 +774,24 @@ body {
 .roles-section .landing-tile:focus-visible {
   outline: 2px solid rgba(241, 211, 132, 0.76);
   outline-offset: 4px;
+}
+
+.hard-mode-badge {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 3;
+  padding: 5px 8px;
+  color: #c6cbc5;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  text-transform: uppercase;
+  background: rgba(37, 40, 40, 0.84);
+  border: 1px solid rgba(154, 162, 158, 0.46);
+  border-radius: 3px;
 }
 
 .profession-figure {
@@ -1853,7 +1871,7 @@ body {
 
 @media (max-width: 900px) {
   .roles-section .tile-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
