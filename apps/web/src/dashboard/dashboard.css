@@ -5,9 +5,9 @@
   --dash-stone: #b8a890;
   --dash-stone-dim: #897b69;
   --dash-parchment: #ece0cc;
-  --dash-gold: #b58a45;
-  --dash-gold-bright: #d2a55c;
-  --dash-bronze: #8c6428;
+  --dash-gold: var(--gold);
+  --dash-gold-bright: var(--gold-bright);
+  --dash-bronze: var(--bronze);
   --dash-iron: #7d8794;
   --dash-good: #7ea36a;
   --dash-bad: #bb6a52;
@@ -59,7 +59,7 @@
   align-items: center;
   min-width: 0;
   padding: 0;
-  color: #e6c179;
+  color: var(--gold-bright);
   font-family: var(--font-display);
   font-size: clamp(19px, 2.1vw, 30px);
   font-weight: 900;
@@ -301,7 +301,7 @@
   place-items: center;
   color: #1b110d;
   font-size: 10px;
-  background: #e1bd69;
+  background: var(--gold-bright);
   border-radius: 999px;
 }
 
@@ -528,7 +528,7 @@
 
 .dashboard-shell .dashboard-primary-button{
   color: #160e0a;
-  background: linear-gradient(180deg, #d9b566, #9c743d);
+  background: linear-gradient(135deg, var(--gold-bright), var(--bronze));
   border: 1px solid rgba(236, 215, 160, 0.58);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
@@ -780,7 +780,7 @@
   color: #1b110d;
   font-family: var(--font-display);
   font-weight: 900;
-  background: linear-gradient(180deg, #d8b96d, #8f682f);
+  background: linear-gradient(180deg, var(--gold-bright), var(--bronze));
   border-radius: 50%;
 }
 
