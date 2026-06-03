@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { assetPath, nobleHouses, professions, type Alignment, type House, type Profession } from "./data/league.js";
+import { portraitPools, type PortraitClassSlug } from "./data/portraits.js";
 import "./characterCreation.css";
 
 type CreationPayload = {
@@ -22,8 +23,6 @@ const steps = [
   "Choose your face",
   "Save your character",
 ];
-
-const avatarSlots = ["I", "II", "III", "IV", "V", "VI"];
 
 function createAccountAndCharacter(payload: CreationPayload) {
   console.info("TODO: connect account and character creation endpoint", payload);
@@ -282,6 +281,9 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
 
   const selectedClass = useMemo(() => professions.find((profession) => profession.slug === selectedClassSlug), [selectedClassSlug]);
   const selectedHouse = useMemo(() => nobleHouses.find((house) => house.slug === selectedHouseSlug), [selectedHouseSlug]);
+  const portraitOptions = selectedClass
+    ? portraitPools[selectedClass.slug as PortraitClassSlug]
+    : [];
 
   const canContinue =
     (step === 1 && Boolean(selectedClass)) ||
@@ -398,17 +400,21 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
           {step === 3 ? (
             <div className="creation-avatar-step">
               <div className="creation-face-grid" aria-label="Choose your face">
-                {avatarSlots.map((slot) => {
-                  const id = `${selectedClass?.slug || "citizen"}-${slot.toLowerCase()}`;
+                {portraitOptions.map((portrait) => {
                   return (
                     <button
-                      className={`creation-face${selectedFace === id ? " selected" : ""}`}
+                      className={`creation-face${selectedFace === portrait.id ? " selected" : ""}${portrait.placeholder ? " placeholder" : ""}`}
                       type="button"
-                      key={id}
-                      onClick={() => setSelectedFace(id)}
-                      aria-pressed={selectedFace === id}
+                      key={portrait.id}
+                      onClick={() => setSelectedFace(portrait.id)}
+                      aria-pressed={selectedFace === portrait.id}
+                      aria-label={`Choose ${portrait.label}`}
                     >
-                      <span>{slot}</span>
+                      {portrait.placeholder ? (
+                        <span>{portrait.label.split(" ").at(-1)}</span>
+                      ) : (
+                        <img src={portrait.image} alt="" width="320" height="420" loading="lazy" decoding="async" />
+                      )}
                     </button>
                   );
                 })}

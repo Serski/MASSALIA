@@ -4,9 +4,10 @@ export type PortraitOption = {
   id: string;
   label: string;
   image: string;
+  placeholder?: boolean;
 };
 
-const portraitSlots = ["01", "02", "03", "04", "05", "06"] as const;
+const portraitSlots = ["1", "2", "3", "4", "5", "6"] as const;
 
 const portraitClassSlugs = [
   "landowner",
@@ -21,13 +22,33 @@ const portraitClassSlugs = [
 
 export type PortraitClassSlug = (typeof portraitClassSlugs)[number];
 
+const portraitPrefixes: Record<PortraitClassSlug, string> = {
+  landowner: "LA",
+  trader: "TR",
+  priest: "PR",
+  philosopher: "PH",
+  shipbuilder: "SB",
+  hetaira: "HE",
+  "military-leader": "ML",
+  slave: "SL",
+};
+
+const uploadedPortraits: Partial<Record<PortraitClassSlug, string>> = {
+  trader: "webp",
+};
+
 export const portraitPools: Record<PortraitClassSlug, PortraitOption[]> = Object.fromEntries(
-  portraitClassSlugs.map((classSlug) => [
-    classSlug,
-    portraitSlots.map((slot) => ({
-      id: `${classSlug}-${slot}`,
-      label: `${classSlug.replace("-", " ")} ${slot}`,
-      image: assetPath(`assets/portraits/${classSlug}/${slot}.png`),
-    })),
-  ]),
+  portraitClassSlugs.map((classSlug) => {
+    const prefix = portraitPrefixes[classSlug];
+    const extension = uploadedPortraits[classSlug] ?? "webp";
+    return [
+      classSlug,
+      portraitSlots.map((slot) => ({
+        id: `${classSlug}-${prefix}${slot}`,
+        label: `${classSlug.replace("-", " ")} ${slot}`,
+        image: assetPath(`assets/portraits/${classSlug}/${prefix}${slot}.${extension}`),
+        placeholder: !uploadedPortraits[classSlug],
+      })),
+    ];
+  }),
 ) as Record<PortraitClassSlug, PortraitOption[]>;
