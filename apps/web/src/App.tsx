@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { CharacterCreation } from "./CharacterCreation.js";
+import { Dashboard } from "./dashboard/Dashboard.js";
 import { assetPath, nobleHouses, professions, type Alignment, type House, type Profession } from "./data/league.js";
-import { MapCanvas } from "./map/MapCanvas.js";
 
 type DetailKind = "profession" | "house" | "party" | "city";
 type AuthMode = "login" | "signup";
@@ -530,7 +530,6 @@ function getDetailEntry(pathname: string): DetailEntry | undefined {
 }
 
 export function App() {
-  const [view, setView] = useState<"landing" | "map">("landing");
   const [pathname, setPathname] = useState(window.location.pathname);
   const [authModalMode, setAuthModalMode] = useState<AuthMode | null>(null);
   const detailEntry = getDetailEntry(pathname);
@@ -548,18 +547,8 @@ export function App() {
   const closeAuth = () => setAuthModalMode(null);
   const startGame = () => navigateTo("/create");
 
-  if (view === "map") {
-    return (
-      <main className="app-shell game-view">
-        <section className="topbar">
-          <strong>MASSALIA</strong>
-          <button className="nav-button compact" type="button" onClick={() => setView("landing")}>
-            Campaigns
-          </button>
-        </section>
-        <MapCanvas />
-      </main>
-    );
+  if (pathname === "/game") {
+    return <Dashboard onExit={() => navigateTo("/")} />;
   }
 
   if (authRouteMode) {
@@ -567,7 +556,7 @@ export function App() {
   }
 
   if (pathname === "/create") {
-    return <CharacterCreation onExit={() => navigateTo("/")} onComplete={() => setView("map")} />;
+    return <CharacterCreation onExit={() => navigateTo("/")} onComplete={() => navigateTo("/game")} />;
   }
 
   if (detailEntry) {
