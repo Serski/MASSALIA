@@ -1,5 +1,10 @@
-const defaultApiUrl = import.meta.env.GITHUB_PAGES ? "https://server-production-dd9e.up.railway.app" : "http://localhost:3001";
-const apiBaseUrl = (import.meta.env.VITE_API_URL ?? defaultApiUrl).replace(/\/$/, "");
+const configuredApiUrl = import.meta.env.VITE_API_URL;
+
+if (import.meta.env.PROD && !configuredApiUrl) {
+  throw new Error("VITE_API_URL is required for production builds. Refusing to use a localhost API URL.");
+}
+
+export const apiBaseUrl = (configuredApiUrl ?? "http://localhost:3001").replace(/\/$/, "");
 
 type RequestOptions = {
   method?: string;
@@ -15,13 +20,41 @@ export class ApiError extends Error {
   }
 }
 
+export function apiErrorMessage(error: unknown, context: "auth" | "creation" = "auth") {
+  if (error instanceof ApiError) {
+    if (error.status === 401) {
+      return context === "creation"
+        ? "Your session is missing or expired. Log in again, then save your character."
+        : "Invalid email or password, or your session expired. Please log in again.";
+    }
+    if (error.status === 400) {
+      return error.message;
+    }
+    if (error.status === 409) {
+      return context === "creation"
+        ? "That email is already registered. Log in with it, then return to character creation."
+        : "That email is already registered. Try logging in instead.";
+    }
+    if (error.status >= 500) {
+      return "The server hit a problem. Try again in a moment.";
+    }
+    return error.message;
+  }
+  return "Can't reach the server. Check your connection and try again.";
+}
+
 async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    method: options.method ?? "GET",
-    credentials: "include",
-    headers: options.body ? { "Content-Type": "application/json" } : undefined,
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl}${path}`, {
+      method: options.method ?? "GET",
+      credentials: "include",
+      headers: options.body ? { "Content-Type": "application/json" } : undefined,
+      body: options.body ? JSON.stringify(options.body) : undefined,
+    });
+  } catch (error) {
+    throw new Error("Network request failed", { cause: error });
+  }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new ApiError(data.error ?? "Request failed", response.status);
@@ -75,7 +108,8 @@ export type PlayerState = {
 };
 
 export const api = {
-  register: (email: string, password: string) => apiFetch<AuthResponse>("/auth/register", { method: "POST", body: { email, password } }),
+  register: (email: string, password: string, newsletterOptIn = false) =>
+    apiFetch<AuthResponse>("/auth/register", { method: "POST", body: { email, password, newsletterOptIn } }),
   login: (email: string, password: string) => apiFetch<AuthResponse>("/auth/login", { method: "POST", body: { email, password } }),
   logout: () => apiFetch<{ ok: true }>("/auth/logout", { method: "POST" }),
   me: () => apiFetch<AuthResponse>("/auth/me"),

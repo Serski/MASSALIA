@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
-import { api, ApiError } from "./api.js";
+import { api, apiErrorMessage } from "./api.js";
 import { CharacterCreation } from "./CharacterCreation.js";
 import { Dashboard } from "./dashboard/Dashboard.js";
 import { assetPath, nobleHouses, professions, type Alignment, type House, type Profession } from "./data/league.js";
@@ -181,11 +181,11 @@ function AuthPanel({
 
     setIsSubmitting(true);
     try {
-      const result = isSignup ? await api.register(email, password) : await api.login(email, password);
+      const result = isSignup ? await api.register(email, password, newsletter) : await api.login(email, password);
       onClose?.();
       navigateTo(result.hasCharacter ? "/game" : "/create");
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : "Unable to authenticate. Try again.");
+      setMessage(apiErrorMessage(error, "auth"));
     } finally {
       setIsSubmitting(false);
     }

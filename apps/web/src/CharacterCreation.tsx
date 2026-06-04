@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { api, ApiError } from "./api.js";
+import { api, apiErrorMessage } from "./api.js";
 import { assetPath, nobleHouses, professions, type Alignment, type House, type Profession } from "./data/league.js";
 import { portraitPools, type PortraitClassSlug, type PortraitOption } from "./data/portraits.js";
 import "./characterCreation.css";
@@ -278,6 +278,7 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [newsletter, setNewsletter] = useState(false);
   const [consent, setConsent] = useState(false);
   const [sheet, setSheet] = useState<SheetState>(null);
   const [message, setMessage] = useState("");
@@ -331,11 +332,11 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
     };
     setIsSubmitting(true);
     try {
-      await api.register(email, password);
+      await api.register(email, password, newsletter);
       await api.createCharacter(payload);
       onComplete(payload);
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : "Unable to save your character. Try again.");
+      setMessage(apiErrorMessage(error, "creation"));
     } finally {
       setIsSubmitting(false);
     }
@@ -458,6 +459,10 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
               <label>
                 <span>Password</span>
                 <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" minLength={8} required />
+              </label>
+              <label className="creation-consent">
+                <input type="checkbox" checked={newsletter} onChange={(event) => setNewsletter(event.target.checked)} />
+                <span>Send me season updates and League dispatches.</span>
               </label>
               <label className="creation-consent">
                 <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} required />

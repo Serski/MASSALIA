@@ -9,6 +9,7 @@ const db = createDb();
 type AuthPayload = {
   email?: string;
   password?: string;
+  newsletterOptIn?: boolean;
 };
 
 const authAttempts = new Map<string, { count: number; resetAt: number }>();
@@ -65,6 +66,7 @@ export async function authRoutes(app: FastifyInstance) {
   app.post("/register", async (request, reply) => {
     checkRateLimit(request);
     const { email, password } = assertAuthPayload(request.body as AuthPayload);
+    const newsletterOptIn = (request.body as AuthPayload).newsletterOptIn === true;
     const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
     if (existing[0]) {
       reply.code(409);
@@ -72,7 +74,10 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const created = await db.insert(users).values({ email, passwordHash }).returning({ id: users.id, email: users.email });
+    const created = await db
+      .insert(users)
+      .values({ email, passwordHash, newsletterOptIn })
+      .returning({ id: users.id, email: users.email });
     const user = created[0]!;
     await createSession(reply, user.id);
     return { user, hasCharacter: false };

@@ -1,8 +1,7 @@
 import type { MapGameState } from "@massalia/shared";
+import { apiBaseUrl } from "../api.js";
 import type { MapStaticData, ProvinceFeature } from "./mapTypes.js";
 import { mapConfig } from "./mapConfig.js";
-
-const apiBase = import.meta.env.VITE_API_BASE ?? "http://localhost:3000";
 
 interface ProvinceGeoJson {
   features: Array<{
@@ -37,11 +36,11 @@ export class MapDataProvider {
   }
 
   async loadGameState(): Promise<MapGameState> {
-    return fetch(`${apiBase}/api/world/state`).then((response) => response.json());
+    return fetch(`${apiBaseUrl}/api/world/state`).then((response) => response.json());
   }
 
   subscribeGameState(onState: (state: MapGameState) => void) {
-    this.eventSource = new EventSource(`${apiBase}/api/world/stream`);
+    this.eventSource = new EventSource(`${apiBaseUrl}/api/world/stream`);
     this.eventSource.addEventListener("state", (event) => {
       onState(JSON.parse((event as MessageEvent<string>).data));
     });
