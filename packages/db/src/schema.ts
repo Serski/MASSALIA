@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { boolean, integer, jsonb, numeric, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, integer, jsonb, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const worlds = pgTable("worlds", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -14,6 +14,47 @@ export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const sessions = pgTable("sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const houses = pgTable("houses", {
+  slug: text("slug").primaryKey(),
+  name: text("name").notNull(),
+  initial: text("initial").notNull(),
+  alignment: text("alignment").notNull(),
+  stance: text("stance").notNull(),
+  motto: text("motto").notNull(),
+  patron: text("patron").notNull(),
+  crest: text("crest").notNull(),
+  data: jsonb("data").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+});
+
+export const professions = pgTable("professions", {
+  slug: text("slug").primaryKey(),
+  name: text("name").notNull(),
+  initial: text("initial").notNull(),
+  rank: text("rank").notNull(),
+  income: text("income").notNull(),
+  hardMode: boolean("hard_mode").notNull().default(false),
+  data: jsonb("data").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+});
+
+export const professionLadders = pgTable("profession_ladders", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  professionSlug: text("profession_slug").references(() => professions.slug).notNull(),
+  position: integer("position").notNull(),
+  building: text("building").notNull(),
+  rank: text("rank").notNull(),
+  benefit: text("benefit").notNull(),
+  upkeep: text("upkeep"),
 });
 
 export const players = pgTable("players", {
@@ -22,7 +63,16 @@ export const players = pgTable("players", {
   userId: uuid("user_id").references(() => users.id).notNull(),
   name: text("name").notNull(),
   color: text("color").notNull(),
-});
+  professionSlug: text("profession_slug").references(() => professions.slug),
+  houseSlug: text("house_slug").references(() => houses.slug),
+  faceId: text("face_id"),
+  party: text("party").notNull().default("unaligned"),
+  origin: text("origin").notNull().default("Massalia"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  oneActivePlayerPerWorld: uniqueIndex("players_one_active_user_world_idx").on(table.worldId, table.userId),
+}));
 
 export const dynasties = pgTable("dynasties", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -34,7 +84,13 @@ export const dynasties = pgTable("dynasties", {
 export const characters = pgTable("characters", {
   id: uuid("id").primaryKey().defaultRandom(),
   dynastyId: uuid("dynasty_id").references(() => dynasties.id).notNull(),
+  playerId: uuid("player_id").references(() => players.id),
   name: text("name").notNull(),
+  professionSlug: text("profession_slug").references(() => professions.slug),
+  houseSlug: text("house_slug").references(() => houses.slug),
+  faceId: text("face_id"),
+  party: text("party").notNull().default("unaligned"),
+  origin: text("origin").notNull().default("Massalia"),
   birthTick: integer("birth_tick").notNull(),
   traits: jsonb("traits").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   relationships: jsonb("relationships").$type<Record<string, number>>().notNull().default(sql`'{}'::jsonb`),
