@@ -1,4 +1,5 @@
-const apiBaseUrl = (import.meta.env.VITE_API_URL ?? "http://localhost:3001").replace(/\/$/, "");
+const defaultApiUrl = import.meta.env.GITHUB_PAGES ? "https://server-production-dd9e.up.railway.app" : "http://localhost:3001";
+const apiBaseUrl = (import.meta.env.VITE_API_URL ?? defaultApiUrl).replace(/\/$/, "");
 
 type RequestOptions = {
   method?: string;
