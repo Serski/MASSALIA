@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - landing-v3-detail-pages
   workflow_dispatch:
 
 permissions:
@@ -44,6 +43,7 @@ jobs:
         run: pnpm --filter @massalia/web build
         env:
           GITHUB_PAGES: "true"
+          VITE_API_URL: "https://server-production-dd9e.up.railway.app"
 
       - name: Add SPA fallback
         run: cp apps/web/dist/index.html apps/web/dist/404.html
