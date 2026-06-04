@@ -4,7 +4,7 @@ if (import.meta.env.PROD && !configuredApiUrl) {
   throw new Error("VITE_API_URL is required for production builds. Refusing to use a localhost API URL.");
 }
 
-export const apiBaseUrl = (configuredApiUrl ?? "http://localhost:3001").replace(/\/$/, "");
+export const apiBaseUrl = (configuredApiUrl ?? (import.meta.env.DEV ? "http://localhost:3001" : "")).replace(/\/$/, "");
 
 type RequestOptions = {
   method?: string;
