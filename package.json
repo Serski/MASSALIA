@@ -15,7 +15,7 @@
     "dev:web": "pnpm --filter @massalia/web exec vite --host 127.0.0.1 --port 5174",
     "preview:web": "pnpm --filter @massalia/web build && pnpm --filter @massalia/web exec vite preview --host 127.0.0.1 --port 5175",
     "dev:api": "PORT=3001 pnpm --filter @massalia/server exec tsx src/index.ts",
-    "railway:start": "pnpm --filter @massalia/server start"
+    "railway:start": "pnpm db:migrate && pnpm --filter @massalia/server start"
   },
   "devDependencies": {
     "@eslint/js": "^9.28.0",

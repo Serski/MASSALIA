@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { api, ApiError } from "./api.js";
 import { assetPath, nobleHouses, professions, type Alignment, type House, type Profession } from "./data/league.js";
 import { portraitPools, type PortraitClassSlug, type PortraitOption } from "./data/portraits.js";
 import "./characterCreation.css";
@@ -23,10 +24,6 @@ const steps = [
   "Choose your face",
   "Save your character",
 ];
-
-function createAccountAndCharacter(payload: CreationPayload) {
-  console.info("TODO: connect account and character creation endpoint", payload);
-}
 
 function alignmentLabel(alignment: Alignment) {
   return alignment[0]!.toUpperCase() + alignment.slice(1);
@@ -284,6 +281,7 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
   const [consent, setConsent] = useState(false);
   const [sheet, setSheet] = useState<SheetState>(null);
   const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const selectedClass = useMemo(() => professions.find((profession) => profession.slug === selectedClassSlug), [selectedClassSlug]);
   const selectedHouse = useMemo(() => nobleHouses.find((house) => house.slug === selectedHouseSlug), [selectedHouseSlug]);
@@ -317,7 +315,7 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
     }
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
     if (!selectedClass || !selectedHouse || !selectedFace || !name.trim() || !consent) {
@@ -331,9 +329,16 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
       origin: "Massalia · the capital",
       email,
     };
-    createAccountAndCharacter(payload);
-    setMessage("TODO: account endpoint not connected yet. Character payload assembled locally.");
-    onComplete(payload);
+    setIsSubmitting(true);
+    try {
+      await api.register(email, password);
+      await api.createCharacter(payload);
+      onComplete(payload);
+    } catch (error) {
+      setMessage(error instanceof ApiError ? error.message : "Unable to save your character. Try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -467,8 +472,8 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
               Back
             </button>
             {step === 4 ? (
-              <button className="primary-cta" type="submit" form="creation-account-form" disabled={!canContinue}>
-                {continueLabel()}
+              <button className="primary-cta" type="submit" form="creation-account-form" disabled={!canContinue || isSubmitting}>
+                {isSubmitting ? "Saving..." : continueLabel()}
               </button>
             ) : (
               <button className="primary-cta" type="button" disabled={!canContinue} onClick={goNext}>

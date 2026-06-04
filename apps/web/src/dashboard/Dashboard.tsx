@@ -1,5 +1,7 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { api, ApiError, type PlayerState } from "../api.js";
 import { assetPath, nobleHouses, professions, type House, type Profession } from "../data/league.js";
+import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
 import "./dashboard.css";
 
@@ -28,6 +30,7 @@ type PlayerDashboardState = {
     amount: number;
   };
   party: "Palaioi" | "Dynatoi" | "Unaligned";
+  faceImage?: string;
 };
 
 type PlayerDashboardView = PlayerDashboardState & {
@@ -103,6 +106,14 @@ const dashboardNav: DashboardNavItem[] = [
   { id: "politics", label: "Politics", icon: "politics" },
   { id: "atlas", label: "Atlas", icon: "atlas" },
 ];
+
+const mobilePrimaryNav: DashboardNavItem[] = dashboardNav.filter((item) =>
+  ["court", "holdings", "market", "family"].includes(item.id),
+);
+
+const mobileMoreNav: DashboardNavItem[] = dashboardNav.filter((item) =>
+  ["politics", "atlas"].includes(item.id),
+);
 
 // TODO: Replace with authenticated player profile/session state once auth is connected.
 const placeholderPlayerState: PlayerDashboardState = {
@@ -213,6 +224,40 @@ function getPlaceholderPlayer(): PlayerDashboardView {
   return { ...placeholderPlayerState, profession, house };
 }
 
+function normalizeParty(party: string): PlayerDashboardState["party"] {
+  if (party.toLowerCase() === "palaioi") return "Palaioi";
+  if (party.toLowerCase() === "dynatoi") return "Dynatoi";
+  return "Unaligned";
+}
+
+function getFaceImage(professionSlug: string, faceId: string | null) {
+  const portraits = portraitPools[professionSlug as PortraitClassSlug] ?? [];
+  return portraits.find((portrait) => portrait.id === faceId && !portrait.placeholder)?.image;
+}
+
+function playerFromState(state: PlayerState): PlayerDashboardView {
+  const profession = professions.find((item) => item.slug === state.character.professionSlug) ?? professions[0]!;
+  const house = nobleHouses.find((item) => item.slug === state.character.houseSlug) ?? nobleHouses[0]!;
+  return {
+    name: state.character.name,
+    seasonDay: state.world.seasonDay,
+    seasonEndsIn: state.world.seasonEndsIn,
+    gold: state.resources.gold,
+    prestige: state.resources.prestige,
+    influence: state.resources.influence,
+    professionSlug: profession.slug,
+    houseSlug: house.slug,
+    classResource: {
+      label: state.resources.classResource.label,
+      amount: state.resources.classResource.amount,
+    },
+    party: normalizeParty(state.character.party),
+    faceImage: getFaceImage(profession.slug, state.character.faceId),
+    profession,
+    house,
+  };
+}
+
 function getEligibleMatches(playerHouseSlug: string) {
   return nobleHouses
     .filter((house) => house.slug !== playerHouseSlug)
@@ -291,6 +336,16 @@ function SvgIcon({ icon }: { icon: IconName }) {
   );
 }
 
+function MoreIcon() {
+  return (
+    <svg className="dashboard-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="19" cy="12" r="1.6" />
+    </svg>
+  );
+}
+
 function DashboardCard({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <article className={`dashboard-card${className ? ` ${className}` : ""}`}>{children}</article>;
 }
@@ -304,11 +359,12 @@ function ListRow({ children, action }: { children: ReactNode; action?: ReactNode
   );
 }
 
-function ResourcePill({ value, label }: { value: string | number; label: string }) {
+function ResourcePill({ value, label, delta }: { value: string | number; label: string; delta?: string }) {
   return (
     <span className="resource-pill">
       <strong>{value}</strong>
       <span>{label}</span>
+      {delta ? <em>{delta}</em> : null}
     </span>
   );
 }
@@ -366,8 +422,8 @@ function CourtPanel() {
       </div>
       <div className="court-grid">
         <div className="decision-column">
-          <div className="panel-subhead">
-            <span className="dashboard-label">Decision queue</span>
+          <div className="panel-subhead decision-subhead">
+            <span className="dashboard-label">Decisions awaiting you</span>
             <strong>{placeholderCourtEvents.length} waiting</strong>
           </div>
           <div className="dashboard-event-stack">
@@ -376,7 +432,7 @@ function CourtPanel() {
           <p className="dashboard-todo">TODO: Court events are placeholder cards until server event queue integration is connected.</p>
         </div>
         <aside className="court-rail" aria-label="Court summary">
-          <DashboardCard>
+          <DashboardCard className="digest-card">
             <h2>While you were away</h2>
             <div className="dashboard-list compact">
               {placeholderDigest.map((item) => (
@@ -388,7 +444,7 @@ function CourtPanel() {
             </div>
             <p className="dashboard-todo">TODO: digest is placeholder data until the away-summary service exists.</p>
           </DashboardCard>
-          <DashboardCard>
+          <DashboardCard className="offices-card">
             <h2>Offices in play</h2>
             <div className="office-stack">
               <span>Archon seats - 2 contested</span>
@@ -641,11 +697,44 @@ const panelComponents: Record<DashboardSection, (props: { player: PlayerDashboar
   atlas: AtlasPanel,
 };
 
-export function Dashboard({ onExit }: { onExit: () => void }) {
+export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onExit: () => void; onRequireLogin: () => void; onRequireCharacter: () => void }) {
   const [activeSection, setActiveSection] = useState<DashboardSection>("court");
-  const player = useMemo(getPlaceholderPlayer, []);
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [playerState, setPlayerState] = useState<PlayerState | null>(null);
+  const [loadError, setLoadError] = useState("");
+  const player = useMemo(() => playerState ? playerFromState(playerState) : getPlaceholderPlayer(), [playerState]);
   const ActivePanel = panelComponents[activeSection];
   const courtBadgeCount = placeholderCourtEvents.length;
+  const isMoreActive = mobileMoreNav.some((item) => item.id === activeSection);
+  const hiddenBadgeCount = mobileMoreNav.reduce((total, item) => total + (item.badge ?? 0), 0);
+
+  const selectMobileSection = (section: DashboardSection) => {
+    setActiveSection(section);
+    setIsMoreOpen(false);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    api.state()
+      .then((state) => {
+        if (!cancelled) setPlayerState(state);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        if (error instanceof ApiError && error.status === 401) {
+          onRequireLogin();
+          return;
+        }
+        if (error instanceof ApiError && error.status === 404) {
+          onRequireCharacter();
+          return;
+        }
+        setLoadError(error instanceof ApiError ? error.message : "Unable to load dashboard state.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [onRequireCharacter, onRequireLogin]);
 
   return (
     <main className="dashboard-shell">
@@ -657,24 +746,28 @@ export function Dashboard({ onExit }: { onExit: () => void }) {
           <span>MASSALIA</span>
         </button>
         <div className="season-strip">
-          <span className="season-pulse" aria-hidden="true" />
-          <span>Season I - Day {player.seasonDay}</span>
-          <strong>{player.seasonEndsIn} days left</strong>
+          <span className="season-live">
+            <span className="season-pulse" aria-hidden="true" />
+            <span>Season I · Day {player.seasonDay}</span>
+          </span>
+          <strong>Ends in {player.seasonEndsIn} days</strong>
         </div>
         <div className="resource-pill-row" aria-label="Player resources">
-          <ResourcePill value={player.gold} label="Gold" />
-          <ResourcePill value={player.classResource.amount} label={player.classResource.label} />
+          <ResourcePill value={player.gold} label="Gold" delta="+30/day" />
+          <ResourcePill value={player.classResource.amount} label={player.classResource.label} delta="+10/day" />
           <ResourcePill value={player.prestige} label="Prestige" />
           <ResourcePill value={player.influence} label="Influence" />
         </div>
         <div className="dashboard-player-chip">
           <span className="dashboard-avatar" aria-hidden="true">
-            {player.profession.image ? <img src={player.profession.image} alt="" loading="lazy" /> : player.name[0]}
+            {player.faceImage ? <img src={player.faceImage} alt="" loading="lazy" /> : player.profession.image ? <img src={player.profession.image} alt="" loading="lazy" /> : player.name[0]}
           </span>
           <div>
             <strong>{player.name}</strong>
-            <span>{player.profession.rank} - {player.profession.name}</span>
+            <span className="desktop-player-subline">{player.profession.rank} - {player.profession.name}</span>
+            <span className="mobile-player-subline">{player.profession.name} · {player.profession.rank} · leans {player.party}</span>
           </div>
+          <span className="house-mini-medal" aria-label={`House ${player.house.name}`}>{player.house.name[0]}</span>
         </div>
       </header>
 
@@ -711,17 +804,33 @@ export function Dashboard({ onExit }: { onExit: () => void }) {
         </aside>
 
         <section className="dashboard-content" aria-live="polite">
-          <ActivePanel player={player} />
+          {loadError ? (
+            <section className="dashboard-panel">
+              <DashboardCard>
+                <h2>Unable to load the game</h2>
+                <p>{loadError}</p>
+              </DashboardCard>
+            </section>
+          ) : playerState ? (
+            <ActivePanel player={player} />
+          ) : (
+            <section className="dashboard-panel">
+              <DashboardCard>
+                <h2>Loading your league state</h2>
+                <p>Fetching your character, resources, and active season.</p>
+              </DashboardCard>
+            </section>
+          )}
         </section>
       </div>
 
       <nav className="dashboard-mobile-tabs" aria-label="Dashboard tabs">
-        {dashboardNav.map((item) => (
+        {mobilePrimaryNav.map((item) => (
           <button
             className={activeSection === item.id ? "active" : ""}
             type="button"
             key={item.id}
-            onClick={() => setActiveSection(item.id)}
+            onClick={() => selectMobileSection(item.id)}
           >
             <SvgIcon icon={item.icon} />
             <span>{item.label}</span>
@@ -729,7 +838,38 @@ export function Dashboard({ onExit }: { onExit: () => void }) {
             {item.badge ? <strong className="nav-badge subtle">{item.badge}</strong> : null}
           </button>
         ))}
+        <button
+          className={isMoreActive || isMoreOpen ? "active" : ""}
+          type="button"
+          onClick={() => setIsMoreOpen((current) => !current)}
+          aria-expanded={isMoreOpen}
+          aria-controls="dashboard-mobile-more"
+        >
+          <MoreIcon />
+          <span>More</span>
+          {hiddenBadgeCount ? <strong className="nav-badge dot" aria-label={`${hiddenBadgeCount} hidden updates`} /> : null}
+        </button>
       </nav>
+      {isMoreOpen ? (
+        <div className="mobile-more-layer">
+          <button className="mobile-more-backdrop" type="button" aria-label="Close more menu" onClick={() => setIsMoreOpen(false)} />
+          <div className="mobile-more-sheet" id="dashboard-mobile-more">
+            {mobileMoreNav.map((item) => (
+              <button
+                className={activeSection === item.id ? "active" : ""}
+                type="button"
+                key={item.id}
+                onClick={() => selectMobileSection(item.id)}
+              >
+                <SvgIcon icon={item.icon} />
+                <span>{item.label}</span>
+                {item.badge ? <strong className="nav-badge subtle">{item.badge}</strong> : null}
+              </button>
+            ))}
+            <a className="discord-link" href="#discord" onClick={() => setIsMoreOpen(false)}>Discord</a>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

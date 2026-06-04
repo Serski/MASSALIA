@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import { api, ApiError } from "./api.js";
 import { CharacterCreation } from "./CharacterCreation.js";
 import { Dashboard } from "./dashboard/Dashboard.js";
 import { assetPath, nobleHouses, professions, type Alignment, type House, type Profession } from "./data/league.js";
@@ -162,6 +163,7 @@ function AuthPanel({
   const [newsletter, setNewsletter] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const isSignup = mode === "signup";
 
   useEffect(() => {
@@ -169,7 +171,7 @@ function AuthPanel({
     firstField?.focus();
   }, [mode]);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
     if (isSignup && !termsAccepted) {
@@ -177,12 +179,16 @@ function AuthPanel({
       return;
     }
 
-    // TODO: Replace placeholder handlers with real email/password auth endpoints and post-auth redirect.
-    setMessage(
-      isSignup
-        ? "TODO: registration endpoint is not connected yet. Post-signup destination still needs confirmation."
-        : "TODO: login endpoint is not connected yet.",
-    );
+    setIsSubmitting(true);
+    try {
+      const result = isSignup ? await api.register(email, password) : await api.login(email, password);
+      onClose?.();
+      navigateTo(result.hasCharacter ? "/game" : "/create");
+    } catch (error) {
+      setMessage(error instanceof ApiError ? error.message : "Unable to authenticate. Try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   function handleSocial(provider: string) {
@@ -310,8 +316,8 @@ function AuthPanel({
 
             {message ? <p className="auth-message" role="status">{message}</p> : null}
 
-            <button className="primary-cta auth-submit" type="submit" disabled={isSignup && !termsAccepted}>
-              {isSignup ? "Sign up & play free" : "Log in"}
+            <button className="primary-cta auth-submit" type="submit" disabled={isSubmitting || (isSignup && !termsAccepted)}>
+              {isSubmitting ? "Working..." : isSignup ? "Sign up & play free" : "Log in"}
             </button>
           </form>
 
@@ -548,7 +554,7 @@ export function App() {
   const startGame = () => navigateTo("/create");
 
   if (pathname === "/game") {
-    return <Dashboard onExit={() => navigateTo("/")} />;
+    return <Dashboard onExit={() => navigateTo("/")} onRequireLogin={() => navigateTo("/login")} onRequireCharacter={() => navigateTo("/create")} />;
   }
 
   if (authRouteMode) {
