@@ -122,7 +122,7 @@ body {
   background:
     linear-gradient(90deg, rgba(13, 8, 6, 0.9) 0%, rgba(18, 11, 8, 0.78) 42%, rgba(17, 10, 8, 0.18) 72%, rgba(12, 7, 6, 0.76) 100%),
     linear-gradient(180deg, rgba(11, 7, 5, 0.62), transparent 34%, rgba(12, 7, 5, 0.8)),
-    url("../assets/MASSALIA FRONT.png") center / cover no-repeat;
+    url("../assets/MASSALIA FRONT.jpg") center / cover no-repeat;
 }
 
 .landing-hero::after {
@@ -1241,7 +1241,7 @@ body {
   padding: clamp(48px, 8vw, 96px) clamp(22px, 6vw, 96px);
   background:
     linear-gradient(90deg, rgba(13, 8, 6, 0.92), rgba(23, 14, 10, 0.78)),
-    url("../assets/MASSALIA FRONT.png") center / cover no-repeat;
+    url("../assets/MASSALIA FRONT.jpg") center / cover no-repeat;
 }
 
 .detail-heading {
@@ -1353,7 +1353,7 @@ body {
   padding: max(18px, env(safe-area-inset-top)) 18px max(18px, env(safe-area-inset-bottom));
   background:
     linear-gradient(rgba(12, 8, 6, 0.76), rgba(12, 8, 6, 0.84)),
-    url("../assets/MASSALIA FRONT.png") center / cover no-repeat;
+    url("../assets/MASSALIA FRONT.jpg") center / cover no-repeat;
 }
 
 .auth-modal-backdrop {
