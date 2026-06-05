@@ -496,6 +496,34 @@ body {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+/* Office cards: faint, centered role icon behind the text (like party watermarks) */
+.office-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.office-card > :not(.office-watermark) {
+  position: relative;
+  z-index: 1;
+}
+
+.office-watermark {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.office-watermark img {
+  width: min(66%, 190px);
+  height: auto;
+  object-fit: contain;
+  opacity: 0.26;
+  filter: saturate(0.95);
+}
+
 .government-section {
   overflow: hidden;
   isolation: isolate;

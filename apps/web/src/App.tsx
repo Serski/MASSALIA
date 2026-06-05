@@ -92,10 +92,10 @@ const parties: Party[] = [
 ];
 
 const offices = [
-  { title: "Archons x2", type: "Elected", pay: "150 gold/day", description: "Heads of state and chief generals; one must be Palaioi, one Dynatoi." },
-  { title: "Ephors x2", type: "Appointed", pay: "60 gold/day", description: "Checks on the Archons; finances, laws, and calling or dissolving council." },
-  { title: "Strategoi x2", type: "Appointed", pay: "100 gold/day", description: "Command armies with or for the Archons." },
-  { title: "Council of Oligarchy", type: "Council", pay: "40 gold/day", description: "Senior family members who approve laws, treaties, war, and budgets." },
+  { title: "Archons x2", type: "Elected", pay: "150 gold/day", icon: "assets/offices/ARCHON.webp", description: "Heads of state and chief generals; one must be Palaioi, one Dynatoi." },
+  { title: "Ephors x2", type: "Appointed", pay: "60 gold/day", icon: "assets/offices/EPHOR.webp", description: "Checks on the Archons; finances, laws, and calling or dissolving council." },
+  { title: "Strategoi x2", type: "Appointed", pay: "100 gold/day", icon: "assets/offices/GENERAL.webp", description: "Command armies with or for the Archons." },
+  { title: "Council of Oligarchy", type: "Council", pay: "40 gold/day", icon: "assets/offices/OLIGARCH.webp", description: "Senior family members who approve laws, treaties, war, and budgets." },
 ];
 
 const detailCollections = {
@@ -695,6 +695,9 @@ export function App() {
         <div className="office-grid">
           {offices.map((office) => (
             <article className="office-card" key={office.title}>
+              <span className="office-watermark" aria-hidden="true">
+                <img src={assetPath(office.icon)} alt="" loading="lazy" />
+              </span>
               <span className="tile-kicker">{office.type}</span>
               <h3>{office.title}</h3>
               <p>{office.description}</p>
