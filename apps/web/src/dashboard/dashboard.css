@@ -16,6 +16,7 @@
 
   position: relative;
   min-height: 100vh;
+  min-height: 100dvh; /* dynamic viewport height: no gap under mobile browser chrome */
   color: var(--dash-parchment);
   background:
     radial-gradient(circle at 78% 4%, rgba(181, 138, 69, 0.16), transparent 28%),
@@ -996,7 +997,7 @@
     grid-template-columns: 1fr;
     gap: 0;
     min-height: 0;
-    padding: 16px 16px 12px;
+    padding: max(16px, env(safe-area-inset-top)) 16px 12px;
     background: linear-gradient(180deg, rgba(20, 15, 11, 0.96), rgba(20, 15, 11, 0.7));
     border-bottom: 1px solid var(--dash-line);
     backdrop-filter: blur(6px);
