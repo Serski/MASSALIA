@@ -1308,7 +1308,20 @@
   }
 
   .dashboard-shell .decision-subhead{
+    display: flex;
+    justify-content: flex-start;
+    align-items: baseline;
+    gap: 6px;
     margin-top: 0;
+  }
+
+  /* keep the "· 3 waiting" count right next to the label, no long gold rule */
+  .dashboard-shell .decision-subhead .dashboard-label{
+    margin: 0;
+  }
+
+  .dashboard-shell .decision-subhead .dashboard-label::after{
+    display: none;
   }
 
   .dashboard-shell .decision-subhead strong{
@@ -1348,12 +1361,10 @@
     background: repeating-linear-gradient(60deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 9px);
   }
 
+  /* Hide the redundant "Scene art" placeholder tag on mobile so it doesn't
+     collide with the decision kicker in the same corner. */
   .dashboard-shell .scene-art-tag{
-    top: 12px;
-    left: 14px;
-    padding: 4px 9px;
-    font-size: 9px;
-    letter-spacing: 0.16em;
+    display: none;
   }
 
   .dashboard-shell .scene-label{
