@@ -1,21 +1,27 @@
 # Massalia Game Fonts
 
-Upload or replace game font files in this folder:
+Web fonts live in `apps/web/public/assets/fonts/` and are loaded by the
+`@font-face` rules in `apps/web/src/styles.css`.
 
-`apps/web/public/assets/fonts/`
+## Cinzel (display / headings)
 
-The app currently expects these exact `.woff2` filenames:
+- `cinzel.woff2` — a single **variable** font covering the full weight axis
+  (`font-weight: 400 900`). Generated from
+  `Cinzel/Cinzel-VariableFont_wght.ttf`.
 
-## Cinzel
+To regenerate after replacing the source TTF:
 
-- `cinzel-400.woff2`
-- `cinzel-500.woff2`
-- `cinzel-600.woff2`
-- `cinzel-700.woff2`
-- `cinzel-800.woff2`
-- `cinzel-900.woff2`
+```bash
+python3 -m pip install fonttools brotli
+python3 - <<'PY'
+from fontTools.ttLib import TTFont
+f = TTFont("Cinzel/Cinzel-VariableFont_wght.ttf")
+f.flavor = "woff2"
+f.save("cinzel.woff2")
+PY
+```
 
-## Spectral
+## Spectral (body text)
 
 - `spectral-300.woff2`
 - `spectral-400.woff2`
@@ -23,8 +29,11 @@ The app currently expects these exact `.woff2` filenames:
 - `spectral-600.woff2`
 - `spectral-italic-400.woff2`
 
-## Missing Fonts
+## Source files & licenses
 
-None are currently missing from this branch. All filenames above are present and tracked.
+The upstream Google Fonts downloads (TTF + `OFL.txt`) are kept in the
+`Cinzel/` and `Spectral/` subfolders as source. The browser only loads the
+`.woff2` files above — the TTFs are not referenced at runtime.
 
-Keep the filenames lowercase and unchanged, because `apps/web/src/styles.css` references these exact paths.
+Both families are licensed under the SIL Open Font License (see each
+`OFL.txt`), so they are safe to commit and redistribute with the app.
