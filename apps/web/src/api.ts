@@ -20,6 +20,31 @@ export class ApiError extends Error {
   }
 }
 
+// Session token storage. We still send cookies (credentials: "include") for
+// same-site/cookie-friendly browsers, but cross-site cookies are blocked on iOS
+// Safari, so we also keep the token here and send it as an Authorization header.
+const TOKEN_STORAGE_KEY = "massalia_session_token";
+
+export function getStoredToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredToken(token: string | null) {
+  try {
+    if (token) {
+      localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    } else {
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+    }
+  } catch {
+    // localStorage may be unavailable (private mode); cookie path still applies.
+  }
+}
+
 export function apiErrorMessage(error: unknown, context: "auth" | "creation" = "auth") {
   if (error instanceof ApiError) {
     if (error.status === 401) {
@@ -45,11 +70,19 @@ export function apiErrorMessage(error: unknown, context: "auth" | "creation" = "
 
 async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
   let response: Response;
+  const headers: Record<string, string> = {};
+  if (options.body) {
+    headers["Content-Type"] = "application/json";
+  }
+  const token = getStoredToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
   try {
     response = await fetch(`${apiBaseUrl}${path}`, {
       method: options.method ?? "GET",
       credentials: "include",
-      headers: options.body ? { "Content-Type": "application/json" } : undefined,
+      headers,
       body: options.body ? JSON.stringify(options.body) : undefined,
     });
   } catch (error) {
@@ -65,6 +98,7 @@ async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<
 export type AuthResponse = {
   user: { id: string; email: string } | null;
   hasCharacter: boolean;
+  token?: string;
 };
 
 export type CreationRequest = {
@@ -107,11 +141,25 @@ export type PlayerState = {
   };
 };
 
+async function authenticate(path: string, body: Record<string, unknown>): Promise<AuthResponse> {
+  const result = await apiFetch<AuthResponse>(path, { method: "POST", body });
+  if (result.token) {
+    setStoredToken(result.token);
+  }
+  return result;
+}
+
 export const api = {
   register: (email: string, password: string, newsletterOptIn = false) =>
-    apiFetch<AuthResponse>("/auth/register", { method: "POST", body: { email, password, newsletterOptIn } }),
-  login: (email: string, password: string) => apiFetch<AuthResponse>("/auth/login", { method: "POST", body: { email, password } }),
-  logout: () => apiFetch<{ ok: true }>("/auth/logout", { method: "POST" }),
+    authenticate("/auth/register", { email, password, newsletterOptIn }),
+  login: (email: string, password: string) => authenticate("/auth/login", { email, password }),
+  logout: async () => {
+    try {
+      return await apiFetch<{ ok: true }>("/auth/logout", { method: "POST" });
+    } finally {
+      setStoredToken(null);
+    }
+  },
   me: () => apiFetch<AuthResponse>("/auth/me"),
   createCharacter: (payload: CreationRequest) => apiFetch("/characters", { method: "POST", body: payload }),
   state: () => apiFetch<PlayerState>("/me/state"),

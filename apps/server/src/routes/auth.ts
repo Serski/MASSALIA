@@ -79,8 +79,8 @@ export async function authRoutes(app: FastifyInstance) {
       .values({ email, passwordHash, newsletterOptIn })
       .returning({ id: users.id, email: users.email });
     const user = created[0]!;
-    await createSession(reply, user.id);
-    return { user, hasCharacter: false };
+    const token = await createSession(reply, user.id);
+    return { user, hasCharacter: false, token };
   });
 
   app.post("/login", async (request, reply) => {
@@ -93,8 +93,8 @@ export async function authRoutes(app: FastifyInstance) {
       return { error: "Invalid email or password." };
     }
 
-    await createSession(reply, user.id);
-    return { user: { id: user.id, email: user.email }, hasCharacter: await hasCharacter(user.id) };
+    const token = await createSession(reply, user.id);
+    return { user: { id: user.id, email: user.email }, hasCharacter: await hasCharacter(user.id), token };
   });
 
   app.post("/logout", async (request, reply) => {
