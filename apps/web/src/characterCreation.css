@@ -204,12 +204,8 @@
     0 20px 46px rgba(0, 0, 0, 0.3);
 }
 
-.creation-choice-card.hard-mode {
-  background:
-    linear-gradient(180deg, rgba(196, 202, 198, 0.105), rgba(96, 105, 106, 0.075)),
-    rgba(24, 26, 25, 0.56);
-  border-color: rgba(126, 132, 130, 0.46);
-}
+/* Slave (Hard Mode) card uses the same parchment styling as the rest; only the
+   "Hard Mode" badge sets it apart. */
 
 .creation-card-main {
   display: grid;
@@ -305,13 +301,20 @@
   width: 78px;
   height: 78px;
   place-items: center;
-  color: #25150e;
+  overflow: hidden;
+  color: #f1ddb1;
   font-family: var(--font-display);
   font-size: 32px;
   font-weight: 900;
   border-radius: 50%;
-  background: radial-gradient(circle, var(--gold-highlight), var(--bronze));
-  border: 2px solid rgba(236, 215, 160, 0.74);
+  background: rgba(10, 7, 6, 0.72);
+  border: 1px solid rgba(181, 138, 69, 0.58);
+}
+
+.creation-house-crest img {
+  width: calc(100% - 4px);
+  height: calc(100% - 4px);
+  object-fit: contain;
 }
 
 .creation-leaning {

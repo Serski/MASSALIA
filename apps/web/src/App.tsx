@@ -94,8 +94,8 @@ const parties: Party[] = [
 const offices = [
   { title: "Archons x2", type: "Elected", pay: "150 gold/day", description: "Heads of state and chief generals; one must be Palaioi, one Dynatoi." },
   { title: "Ephors x2", type: "Appointed", pay: "60 gold/day", description: "Checks on the Archons; finances, laws, and calling or dissolving council." },
-  { title: "Council of Oligarchy", type: "Council", pay: "40 gold/day", description: "Senior family members who approve laws, treaties, war, and budgets." },
   { title: "Strategoi x2", type: "Appointed", pay: "100 gold/day", description: "Command armies with or for the Archons." },
+  { title: "Council of Oligarchy", type: "Council", pay: "40 gold/day", description: "Senior family members who approve laws, treaties, war, and budgets." },
 ];
 
 const detailCollections = {
@@ -680,11 +680,9 @@ export function App() {
             {leagueCities.map((city) => (
               <DetailLink className="city-item" entry={city} key={city.name}>
                 <span>{city.capital ? "★ " : ""}{city.name}</span>
-                <strong>{city.resource}</strong>
               </DetailLink>
             ))}
           </div>
-          <p className="todo-note">TODO: confirm whether map-level competition exists, such as Houses or parties contesting cities, or League conflicts with rivals.</p>
         </div>
         <div className="map-frame" role="img" aria-label="League of Massalia atlas map">
           <img src={assetPath("assets/MAP01.jpg")} alt="" />
@@ -720,7 +718,6 @@ export function App() {
               <p>{palaioi.wants}</p>
             </div>
           </DetailLink>
-          <span className="vs-medallion" aria-hidden="true">VS</span>
           <DetailLink className="party-card dynatoi-card" entry={dynatoi}>
             <Crest className="party-watermark" initial={dynatoi.initial} image={dynatoi.image} label="Dynatoi emblem" />
             <div className="party-copy">
@@ -748,7 +745,7 @@ export function App() {
           {nobleHouses.map((house) => (
             <DetailLink className="house-tile" entry={house} key={house.name}>
               <Crest initial={house.initial} image={house.image} label={`${house.name} emblem`} />
-              <span className="house-align"><i className={`alignment-dot ${house.alignment}`} /> {house.stance}</span>
+              <span className={`house-align ${house.alignment}`}><i className={`alignment-dot ${house.alignment}`} /> {house.stance}</span>
               <h3>{house.name}</h3>
               <p>{house.motto}</p>
             </DetailLink>

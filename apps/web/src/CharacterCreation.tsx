@@ -398,7 +398,9 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
                     onClick={() => setSelectedHouseSlug(house.slug)}
                     onDetails={() => setSheet({ type: "house", item: house })}
                   >
-                    <span className="creation-house-crest" aria-hidden="true">{house.initial}</span>
+                    <span className="creation-house-crest" aria-hidden="true">
+                      {house.image ? <img src={house.image} alt="" loading="lazy" /> : house.initial}
+                    </span>
                     <span className="creation-card-copy">
                       <strong>{house.name}</strong>
                       <AlignmentTag alignment={house.alignment} />
