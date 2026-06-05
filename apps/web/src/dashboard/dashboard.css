@@ -130,20 +130,22 @@
 }
 
 .dashboard-shell .resource-pill{
-  display: grid;
-  gap: 2px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   min-width: 0;
-  padding: 7px 11px;
+  padding: 8px 14px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(0, 0, 0, 0.1)),
     rgba(28, 20, 16, 0.78);
   border: 1px solid rgba(181, 138, 69, 0.28);
-  border-radius: 5px;
+  border-radius: 999px;
 }
 
 .dashboard-shell .resource-pill strong{
+  flex: 0 0 auto;
   color: #f4d796;
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1;
 }
 
@@ -380,6 +382,19 @@
   letter-spacing: 0;
 }
 
+/* Polished view: keep the section eyebrow, but drop the large page title and
+   lede so Court opens straight on the decision queue (matches target design).
+   Visually hidden rather than removed so the section keeps its accessible name. */
+.dashboard-shell .dashboard-panel-heading h1,
+.dashboard-shell .dashboard-panel-heading p:not(.section-eyebrow){
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 .dashboard-shell .dashboard-panel-heading p:not(.section-eyebrow),
 .dashboard-shell .dashboard-card p,
 .dashboard-shell .dashboard-list-row p,
@@ -574,12 +589,7 @@
 }
 
 .dashboard-shell .dashboard-todo{
-  color: rgba(210, 165, 92, 0.72) !important;
-  font-family: var(--font-display);
-  font-size: 10px !important;
-  font-weight: 900;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  display: none;
 }
 
 .dashboard-shell .court-grid{
@@ -620,7 +630,6 @@
   position: relative;
   display: grid;
   min-height: 100%;
-  aspect-ratio: 4 / 3;
   place-items: end start;
   padding: 12px;
   background:
@@ -664,7 +673,14 @@
   gap: 8px;
   align-content: start;
   min-width: 0;
-  padding: 16px 18px;
+  padding: 18px 20px;
+}
+
+.dashboard-shell .event-body h3{
+  font-size: 23px;
+  line-height: 1.05;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .dashboard-shell .event-kicker{
@@ -1088,6 +1104,7 @@
   }
 
   .dashboard-shell .resource-pill{
+    display: grid;
     justify-items: center;
     gap: 0;
     min-width: 0;
@@ -1355,6 +1372,7 @@
     font-size: 18px;
     font-weight: 700;
     letter-spacing: 0.02em;
+    text-transform: none;
   }
 
   .dashboard-shell .event-body > p{
