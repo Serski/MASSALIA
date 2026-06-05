@@ -1310,18 +1310,31 @@
   .dashboard-shell .decision-subhead{
     display: flex;
     justify-content: flex-start;
-    align-items: baseline;
-    gap: 6px;
+    align-items: center;
+    gap: 8px;
     margin-top: 0;
   }
 
-  /* keep the "· 3 waiting" count right next to the label, no long gold rule */
+  /* keep the "· 3 waiting" count beside the label, then a divider fills the rest
+     (matches "DECISIONS AWAITING YOU · 2 ————" in the sample) */
   .dashboard-shell .decision-subhead .dashboard-label{
+    flex: 0 0 auto;
     margin: 0;
   }
 
   .dashboard-shell .decision-subhead .dashboard-label::after{
     display: none;
+  }
+
+  .dashboard-shell .decision-subhead strong{
+    flex: 0 0 auto;
+  }
+
+  .dashboard-shell .decision-subhead::after{
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--dash-line);
   }
 
   .dashboard-shell .decision-subhead strong{
@@ -1350,6 +1363,7 @@
     min-height: 120px;
     aspect-ratio: auto;
     padding: 12px 14px;
+    place-items: center; /* center the scene-art placeholder like the sample */
     border-right: 0;
     border-bottom: 1px solid rgba(181, 138, 69, 0.2);
   }
@@ -1370,9 +1384,16 @@
   .dashboard-shell .scene-label{
     position: relative;
     z-index: 1;
-    padding: 5px 9px;
+    padding: 6px 11px;
     font-size: 9px;
     letter-spacing: 0.18em;
+    text-align: center;
+  }
+
+  /* the separate "Scene art" tag is hidden on mobile, so fold the prefix into
+     the centered placeholder: "SCENE ART — QUAYSIDE PETITION" (matches sample) */
+  .dashboard-shell .scene-label::before{
+    content: "Scene art — ";
   }
 
   .dashboard-shell .event-body{
