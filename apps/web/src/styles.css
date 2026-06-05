@@ -502,7 +502,7 @@ body {
   background:
     linear-gradient(90deg, rgba(13, 8, 6, 0.94) 0%, rgba(20, 12, 8, 0.78) 44%, rgba(19, 11, 8, 0.58) 100%),
     linear-gradient(180deg, rgba(12, 7, 5, 0.84), rgba(12, 7, 5, 0.3) 42%, rgba(12, 7, 5, 0.9)),
-    url("../assets/Politics.png") center / cover no-repeat,
+    url("../assets/Politics.jpg") center / cover no-repeat,
     #130d0a;
 }
 
