@@ -117,6 +117,7 @@ body {
 .landing-hero {
   position: relative;
   min-height: 100vh;
+  min-height: 100dvh; /* avoid mobile address-bar gap/cutoff */
   isolation: isolate;
   background:
     linear-gradient(90deg, rgba(13, 8, 6, 0.9) 0%, rgba(18, 11, 8, 0.78) 42%, rgba(17, 10, 8, 0.18) 72%, rgba(12, 7, 6, 0.76) 100%),
@@ -258,6 +259,7 @@ body {
   gap: clamp(28px, 5vw, 78px);
   align-items: center;
   min-height: calc(100vh - 74px);
+  min-height: calc(100dvh - 74px);
   padding: clamp(42px, 6vw, 86px) clamp(22px, 6vw, 96px) clamp(58px, 7vw, 110px);
 }
 
@@ -1313,8 +1315,10 @@ body {
 .auth-page-shell {
   display: grid;
   min-height: 100%;
-  place-items: center;
-  padding: 18px;
+  min-height: 100dvh;
+  align-items: safe center;
+  justify-items: center;
+  padding: max(18px, env(safe-area-inset-top)) 18px max(18px, env(safe-area-inset-bottom));
   background:
     linear-gradient(rgba(12, 8, 6, 0.76), rgba(12, 8, 6, 0.84)),
     url("../assets/MASSALIA FRONT.png") center / cover no-repeat;
@@ -1325,9 +1329,11 @@ body {
   inset: 0;
   z-index: 20;
   display: grid;
-  place-items: center;
-  padding: 18px;
+  align-items: safe center; /* keep the top reachable if the form is taller than the screen */
+  justify-items: center;
+  padding: max(18px, env(safe-area-inset-top)) 18px max(18px, env(safe-area-inset-bottom));
   overflow: auto;
+  overscroll-behavior: contain;
   background: rgba(9, 6, 5, 0.72);
   backdrop-filter: blur(10px);
 }
@@ -1891,6 +1897,7 @@ body {
 
   .hero-content {
     min-height: calc(100vh - 64px);
+    min-height: calc(100dvh - 64px);
     padding: 38px 20px 62px;
   }
 
