@@ -28,7 +28,7 @@ const classResourceByProfession: Record<string, string> = {
   priest: "herbal",
   philosopher: "prestige",
   shipbuilder: "gold",
-  hetaira: "intrigue",
+  hetaira: "intelligence",
   "military-leader": "militia",
   slave: "freedom",
 };

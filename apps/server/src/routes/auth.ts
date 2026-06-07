@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { and, eq } from "drizzle-orm";
 import { createDb, players, users, worlds } from "@massalia/db";
-import { clearSession, createSession, getAuthUser, requireAuth } from "../services/auth.js";
+import { clearSession, createSession, getAuthUser } from "../services/auth.js";
 
 const db = createDb();
 

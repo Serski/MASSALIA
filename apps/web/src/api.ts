@@ -109,7 +109,7 @@ export type CreationRequest = {
 };
 
 export type PlayerState = {
-  user: { id: string; email: string };
+  user: { id: string; email: string; newsletterOptIn: boolean };
   world: {
     id: string;
     name: string;
@@ -127,6 +127,8 @@ export type PlayerState = {
     houseStance: string;
     faceId: string | null;
     party: string;
+    // -100..+100; negative = Reformist, positive = Conservative, 0 = centre.
+    alignment: number;
     origin: string;
   };
   resources: {
@@ -138,6 +140,15 @@ export type PlayerState = {
       label: string;
       amount: number;
     };
+    // Every per-type balance the player holds (type -> amount).
+    balances: Record<string, number>;
+  };
+  // The 4-stat model: real where a resource row exists, else 0.
+  stats: {
+    prestige: number;
+    devotion: number;
+    militia: number;
+    intelligence: number;
   };
 };
 
@@ -163,4 +174,6 @@ export const api = {
   me: () => apiFetch<AuthResponse>("/auth/me"),
   createCharacter: (payload: CreationRequest) => apiFetch("/characters", { method: "POST", body: payload }),
   state: () => apiFetch<PlayerState>("/me/state"),
+  setNewsletter: (optIn: boolean) =>
+    apiFetch<{ ok: true; newsletterOptIn: boolean }>("/me/newsletter", { method: "POST", body: { optIn } }),
 };

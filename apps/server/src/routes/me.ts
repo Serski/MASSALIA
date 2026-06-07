@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { and, eq } from "drizzle-orm";
-import { createDb, houses, players, professions, resources, worlds } from "@massalia/db";
+import { createDb, houses, players, professions, resources, users, worlds } from "@massalia/db";
 import { requireAuth } from "../services/auth.js";
 
 const db = createDb();
@@ -11,7 +11,7 @@ const classResourceByProfession: Record<string, string> = {
   priest: "herbal",
   philosopher: "prestige",
   shipbuilder: "gold",
-  hetaira: "intrigue",
+  hetaira: "intelligence",
   "military-leader": "militia",
   slave: "freedom",
 };
@@ -52,8 +52,24 @@ export async function meRoutes(app: FastifyInstance) {
     const resourceMap = new Map(resourceRows.map((resource) => [resource.type, numberAmount(resource.amount)]));
     const classResourceType = classResourceByProfession[state.profession.slug] ?? "favor";
 
+    // Full per-type balance map so the inventory sheet can show every good the
+    // player actually holds. Goods absent from the table render as 0 on the client.
+    const balances: Record<string, number> = {};
+    for (const resource of resourceRows) {
+      balances[resource.type] = numberAmount(resource.amount);
+    }
+
+    const userRows = await db
+      .select({ newsletterOptIn: users.newsletterOptIn })
+      .from(users)
+      .where(eq(users.id, user.id))
+      .limit(1);
+
     return {
-      user,
+      user: {
+        ...user,
+        newsletterOptIn: userRows[0]?.newsletterOptIn ?? false,
+      },
       world: {
         id: world.id,
         name: world.name,
@@ -71,6 +87,8 @@ export async function meRoutes(app: FastifyInstance) {
         houseStance: state.house.stance,
         faceId: state.player.faceId,
         party: state.player.party,
+        // -100..+100; negative = Reformist, positive = Conservative, 0 = centre.
+        alignment: state.player.alignment,
         origin: state.player.origin,
       },
       resources: {
@@ -82,7 +100,24 @@ export async function meRoutes(app: FastifyInstance) {
           label: classResourceType[0]!.toUpperCase() + classResourceType.slice(1),
           amount: resourceMap.get(classResourceType) ?? 0,
         },
+        balances,
+      },
+      // The 4-stat model. Real where a resource row exists, else 0. The event
+      // engine has not granted Devotion/Militia/Intelligence yet for most paths.
+      stats: {
+        prestige: resourceMap.get("prestige") ?? 0,
+        devotion: resourceMap.get("devotion") ?? 0,
+        militia: resourceMap.get("militia") ?? 0,
+        intelligence: resourceMap.get("intelligence") ?? 0,
       },
     };
+  });
+
+  // Wire the Settings newsletter toggle to the real users.newsletter_opt_in column.
+  app.post("/newsletter", async (request) => {
+    const user = await requireAuth(request);
+    const optIn = (request.body as { optIn?: boolean } | undefined)?.optIn === true;
+    await db.update(users).set({ newsletterOptIn: optIn }).where(eq(users.id, user.id));
+    return { ok: true, newsletterOptIn: optIn };
   });
 }

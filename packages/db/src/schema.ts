@@ -68,6 +68,8 @@ export const players = pgTable("players", {
   houseSlug: text("house_slug").references(() => houses.slug),
   faceId: text("face_id"),
   party: text("party").notNull().default("unaligned"),
+  // -100..+100 spectrum: negative = Reformist, positive = Conservative, 0 = centre.
+  alignment: integer("alignment").notNull().default(0),
   origin: text("origin").notNull().default("Massalia"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

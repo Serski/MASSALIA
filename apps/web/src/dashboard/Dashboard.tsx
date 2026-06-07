@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, type PlayerState } from "../api.js";
 import { assetPath, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
@@ -16,8 +16,17 @@ type DashboardNavItem = {
   badge?: number;
 };
 
+type FourStats = {
+  prestige: number;
+  devotion: number;
+  militia: number;
+  intelligence: number;
+};
+
 type PlayerDashboardState = {
   name: string;
+  email: string;
+  newsletterOptIn: boolean;
   seasonDay: number;
   seasonEndsIn: number;
   gold: number;
@@ -26,10 +35,15 @@ type PlayerDashboardState = {
   professionSlug: string;
   houseSlug: string;
   classResource: {
+    type: string;
     label: string;
     amount: number;
   };
   party: "Palaioi" | "Dynatoi" | "Unaligned";
+  // -100..+100; negative = Reformist, positive = Conservative, 0 = centre.
+  alignment: number;
+  stats: FourStats;
+  balances: Record<string, number>;
   faceImage?: string;
 };
 
@@ -118,6 +132,8 @@ const mobileMoreNav: DashboardNavItem[] = dashboardNav.filter((item) =>
 // TODO: Replace with authenticated player profile/session state once auth is connected.
 const placeholderPlayerState: PlayerDashboardState = {
   name: "Pytheas",
+  email: "pytheas@example.com",
+  newsletterOptIn: false,
   seasonDay: 18,
   seasonEndsIn: 11,
   gold: 420,
@@ -126,10 +142,14 @@ const placeholderPlayerState: PlayerDashboardState = {
   professionSlug: "trader",
   houseSlug: "leonidas",
   classResource: {
+    type: "wine",
     label: "Wine",
     amount: 36,
   },
   party: "Unaligned",
+  alignment: 0,
+  stats: { prestige: 12, devotion: 0, militia: 0, intelligence: 0 },
+  balances: { wine: 36, wheat: 130, tin: 60, iron: 40 },
 };
 
 // TODO: Replace with real away-summary records.
@@ -240,6 +260,8 @@ function playerFromState(state: PlayerState): PlayerDashboardView {
   const house = nobleHouses.find((item) => item.slug === state.character.houseSlug) ?? nobleHouses[0]!;
   return {
     name: state.character.name,
+    email: state.user.email,
+    newsletterOptIn: state.user.newsletterOptIn,
     seasonDay: state.world.seasonDay,
     seasonEndsIn: state.world.seasonEndsIn,
     gold: state.resources.gold,
@@ -248,10 +270,14 @@ function playerFromState(state: PlayerState): PlayerDashboardView {
     professionSlug: profession.slug,
     houseSlug: house.slug,
     classResource: {
+      type: state.resources.classResource.type,
       label: state.resources.classResource.label,
       amount: state.resources.classResource.amount,
     },
     party: normalizeParty(state.character.party),
+    alignment: state.character.alignment,
+    stats: state.stats,
+    balances: state.resources.balances,
     faceImage: getFaceImage(profession.slug, state.character.faceId),
     profession,
     house,
@@ -356,16 +382,6 @@ function ListRow({ children, action }: { children: ReactNode; action?: ReactNode
       <div>{children}</div>
       {action ? <div className="dashboard-row-action">{action}</div> : null}
     </div>
-  );
-}
-
-function ResourcePill({ value, label, delta }: { value: string | number; label: string; delta?: string }) {
-  return (
-    <span className="resource-pill">
-      <strong>{value}</strong>
-      <span>{label}</span>
-      {delta ? <em>{delta}</em> : null}
-    </span>
   );
 }
 
@@ -688,6 +704,644 @@ function AtlasPanel() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Top-bar + slide-up sheets (Inventory / Character) ported from the v8 mockup.
+// ---------------------------------------------------------------------------
+
+// Placeholder per-day production rates shown on the gold pill and store rows.
+// TODO: real rates land with the Phase 2 production tick; flagged until then.
+const PLACEHOLDER_GOLD_RATE = "+30 / day";
+const PLACEHOLDER_CLASS_RATE = "+10 / day";
+const PLACEHOLDER_RATE_TITLE = "Placeholder rate — real production lands in Phase 2.";
+// TODO: real "new items" badge once the items system exists. 0 = nothing to show.
+const PLACEHOLDER_NEW_ITEM_COUNT = 0;
+// Everyone starts at Tier 1; real tier tracking lands with profession progression.
+const BASE_TIER_LABEL = "Tier 1";
+
+// Emoji per resource type, used for the coin & class store rows and goods.
+const resourceIcons: Record<string, string> = {
+  gold: "🪙",
+  wine: "🍷",
+  wheat: "🌾",
+  herbal: "🌿",
+  prestige: "🏛️",
+  intelligence: "🧠",
+  militia: "⚔️",
+  freedom: "⛓️",
+  favor: "🤝",
+};
+
+// Goods catalog for the inventory Resources tab. Amounts come from the real
+// /me/state balances map; goods absent from it render as 0 (dimmed, not hidden).
+const goodsCatalog: { type: string; label: string; icon: string }[] = [
+  { type: "wheat", label: "Wheat", icon: "🌾" },
+  { type: "tin", label: "Tin", icon: "🪨" },
+  { type: "iron", label: "Iron", icon: "⚙️" },
+  { type: "salt", label: "Salt", icon: "🧂" },
+  { type: "marble", label: "Marble", icon: "🏛️" },
+  { type: "lead", label: "Lead", icon: "🔩" },
+  { type: "stone", label: "Stone", icon: "🧱" },
+  { type: "wood", label: "Wood", icon: "🪵" },
+  { type: "leather", label: "Leather", icon: "🥾" },
+  { type: "wool", label: "Wool", icon: "🧶" },
+  { type: "horse", label: "Horse", icon: "🐎" },
+];
+
+const statDefs: { key: keyof FourStats; label: string }[] = [
+  { key: "prestige", label: "Prestige" },
+  { key: "devotion", label: "Devotion" },
+  { key: "militia", label: "Militia" },
+  { key: "intelligence", label: "Intelligence" },
+];
+
+// Each profession's primary (highlighted) stat. Paths whose income grants no
+// stat fall back to Prestige (general standing).
+const primaryStatByProfession: Record<string, keyof FourStats> = {
+  philosopher: "prestige",
+  priest: "devotion",
+  hetaira: "intelligence",
+  "military-leader": "militia",
+};
+
+function primaryStatFor(slug: string): keyof FourStats {
+  return primaryStatByProfession[slug] ?? "prestige";
+}
+
+// TODO: placeholder items until the items system exists.
+const placeholderItems = [
+  { id: "tin-shipment", icon: "📦", name: "Recovered Tin Shipment", origin: 'Event reward · "The Missing Shipment" · sell or hold', action: "Sell" },
+  { id: "letter-credit", icon: "📜", name: "Letter of Credit", origin: "Redeem at any Agora for 100 gold", action: "Redeem" },
+];
+
+// TODO: placeholder units until the units system exists.
+const placeholderUnits = [
+  { id: "caravan", icon: "🛡️", name: "Caravan Guards × 2", line: "Protect your trade routes · upkeep −1g/day each", tag: "hired", dim: false },
+  { id: "militia", icon: "⚔️", name: "Militia × 0", line: "Trained and led by Military Leaders", tag: "—", dim: true },
+];
+
+// TODO: placeholder traits until the event engine grants real ones.
+const placeholderTraits = [
+  { id: "shrewd", icon: "🧠", name: "Shrewd", line: "+5% better prices at the Agora · earned: Season I", tag: "asset", tone: "asset" as const },
+  { id: "harbor-born", icon: "⚓", name: "Harbor-Born", line: "+Favor with shipmasters · from your origins in Massalia", tag: "asset", tone: "asset" as const },
+  { id: "unproven", icon: "🌱", name: "Unproven", line: "The Houses have not yet measured you · fades as standing grows", tag: "neutral", tone: "neutral" as const },
+];
+
+// TODO: placeholder achievements until the achievement system exists.
+const earnedAchievements = [
+  { id: "first-coin", icon: "🪙", name: "First Coin", detail: "Earn your first gold from a holding.", when: "Season I · Day 1" },
+  { id: "name-at-court", icon: "⚖️", name: "A Name at Court", detail: "Resolve your first decision.", when: "Season I · Day 2" },
+];
+const lockedAchievements = [
+  { id: "archon", icon: "🏛️", name: "Archon", detail: "Be elected Archon of the League." },
+  { id: "oikos", icon: "💍", name: "Oikos", detail: "Bind two Houses by marriage." },
+  { id: "manumitted", icon: "⛓️", name: "Manumitted", detail: "Earn freedom as a Doulos." },
+  { id: "season-survivor", icon: "🏆", name: "Season Survivor", detail: "Complete a full season." },
+];
+
+function maskEmail(email: string) {
+  const [local, domain] = email.split("@");
+  if (!local || !domain) return "•••";
+  const tld = domain.includes(".") ? domain.slice(domain.lastIndexOf(".")) : "";
+  return `${local[0]}•••@•••${tld}`;
+}
+
+function avatarContent(player: PlayerDashboardView) {
+  if (player.faceImage) return <img src={player.faceImage} alt="" loading="lazy" />;
+  if (player.profession.image) return <img src={player.profession.image} alt="" loading="lazy" />;
+  return <span>{player.name[0]}</span>;
+}
+
+function SheetLabel({ children }: { children: ReactNode }) {
+  return <div className="sheet-label">{children}</div>;
+}
+
+function SheetTabs<T extends string>({
+  tabs,
+  active,
+  onSelect,
+}: {
+  tabs: { id: T; label: string; badge?: number }[];
+  active: T;
+  onSelect: (id: T) => void;
+}) {
+  return (
+    <div className="cs-tabs" role="tablist">
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          role="tab"
+          aria-selected={active === tab.id}
+          className={`cs-tab${active === tab.id ? " on" : ""}`}
+          onClick={() => onSelect(tab.id)}
+        >
+          {tab.label}
+          {tab.badge ? <span className="cs-tab-badge">{tab.badge}</span> : null}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function DetailRow({
+  icon,
+  name,
+  sub,
+  tag,
+  tone = "neutral",
+  action,
+  dim = false,
+}: {
+  icon: string;
+  name: ReactNode;
+  sub?: ReactNode;
+  tag?: string;
+  tone?: "asset" | "neutral";
+  action?: ReactNode;
+  dim?: boolean;
+}) {
+  return (
+    <div className={`sheet-row${dim ? " dim" : ""}`}>
+      <span className="sheet-row-ic" aria-hidden="true">{icon}</span>
+      <div className="sheet-row-body">
+        <strong>{name}</strong>
+        {sub ? <span>{sub}</span> : null}
+      </div>
+      {action ? (
+        <div className="sheet-row-action">{action}</div>
+      ) : tag ? (
+        <span className={`sheet-row-tag tone-${tone}`}>{tag}</span>
+      ) : null}
+    </div>
+  );
+}
+
+function ResRow({
+  icon,
+  name,
+  sub,
+  amount,
+  rate,
+  rateTone = "zero",
+  rateTitle,
+  dim = false,
+}: {
+  icon: string;
+  name: string;
+  sub?: string;
+  amount: string;
+  rate: string;
+  rateTone?: "up" | "zero";
+  rateTitle?: string;
+  dim?: boolean;
+}) {
+  return (
+    <div className={`res-row${dim ? " dim" : ""}`}>
+      <span className="res-ic" aria-hidden="true">{icon}</span>
+      <div className="res-n">
+        {name}
+        {sub ? <span className="res-sub"> · {sub}</span> : null}
+      </div>
+      <span className="res-amt">{amount}</span>
+      <span className={`res-rate ${rateTone}${rateTitle ? " placeholder" : ""}`} title={rateTitle}>
+        {rate}
+      </span>
+    </div>
+  );
+}
+
+function AlignmentBar({ alignment }: { alignment: number }) {
+  const clamped = Math.max(-100, Math.min(100, alignment));
+  const markerPct = 50 + clamped / 2; // -100 -> 0%, 0 -> 50%, +100 -> 100%
+  const abs = Math.abs(clamped);
+  const side = clamped < 0 ? "Reformist" : clamped > 0 ? "Conservative" : "Centrist";
+  const readout = abs === 0 ? "Centrist (0%)" : `${abs}% ${side}`;
+  const eligibility =
+    clamped <= -10
+      ? "eligible for the Dynatoi"
+      : clamped >= 10
+        ? "eligible for the Palaioi"
+        : "centrist — not yet eligible for a party";
+  const readoutColor = clamped < 0 ? "var(--dash-ref)" : clamped > 0 ? "#c08a5e" : "var(--dash-parchment)";
+  return (
+    <div className="cs-align">
+      <div className="align-ends">
+        <span style={{ color: "var(--dash-ref)" }}>◀ Reformist</span>
+        <span style={{ color: "#c08a5e" }}>Conservative ▶</span>
+      </div>
+      <div className="align-bar" role="img" aria-label={`Alignment: ${readout}`}>
+        <span className="align-tick" style={{ left: "45%" }} />
+        <span className="align-center" />
+        <span className="align-tick" style={{ left: "55%" }} />
+        <span className="align-marker" style={{ left: `${markerPct}%` }} />
+      </div>
+      <p className="align-read">
+        <b style={{ color: readoutColor }}>{readout}</b> · {eligibility} · your decisions move this
+      </p>
+    </div>
+  );
+}
+
+function BottomSheet({
+  open,
+  onClose,
+  labelledBy,
+  title,
+  header,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  labelledBy: string;
+  title?: string;
+  header?: ReactNode;
+  children: ReactNode;
+}) {
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const opener = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeRef.current?.focus();
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = sheetRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable?.length) return;
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      document.body.style.overflow = previousOverflow;
+      opener?.focus?.();
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="sheet-overlay"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="sheet" role="dialog" aria-modal="true" aria-labelledby={labelledBy} ref={sheetRef}>
+        <span className="sheet-handle" aria-hidden="true" />
+        <button className="sheet-close" type="button" ref={closeRef} onClick={onClose}>
+          Close
+        </button>
+        <div className="sheet-body">
+          {title ? (
+            <h2 className="sheet-title" id={labelledBy}>
+              {title}
+            </h2>
+          ) : null}
+          {header}
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InventoryResources({ player }: { player: PlayerDashboardView }) {
+  const classType = player.classResource.type;
+  return (
+    <div role="tabpanel">
+      <div className="cap-banner">
+        <div>
+          <div className="cap-t">Warehouse</div>
+          <div className="cap-s">Storage capacity arrives with the warehouse system</div>
+        </div>
+        <div className="cap-right">
+          <div className="cap-s">— / — used</div>
+          <div className="capbar" aria-hidden="true">
+            <i style={{ width: "0%" }} />
+          </div>
+        </div>
+      </div>
+      <p className="sheet-todo">TODO: warehouse capacity is a placeholder until storage limits exist.</p>
+
+      <SheetLabel>Coin &amp; class stores</SheetLabel>
+      <ResRow
+        icon="🪙"
+        name="Gold"
+        amount={player.gold.toLocaleString()}
+        rate={PLACEHOLDER_GOLD_RATE}
+        rateTone="up"
+        rateTitle={PLACEHOLDER_RATE_TITLE}
+      />
+      {/* Some paths (e.g. Shipbuilder) earn gold as their class resource; skip the duplicate row. */}
+      {classType !== "gold" ? (
+        <ResRow
+          icon={resourceIcons[classType] ?? "🏺"}
+          name={player.classResource.label}
+          sub="your trade"
+          amount={player.classResource.amount.toLocaleString()}
+          rate={PLACEHOLDER_CLASS_RATE}
+          rateTone="up"
+          rateTitle={PLACEHOLDER_RATE_TITLE}
+        />
+      ) : null}
+      <p className="sheet-todo">TODO: per-day production rates are placeholders until the Phase 2 tick lands.</p>
+
+      <SheetLabel>Goods</SheetLabel>
+      {goodsCatalog
+        .filter((good) => good.type !== classType)
+        .map((good) => {
+          const amount = player.balances[good.type] ?? 0;
+          return (
+            <ResRow
+              key={good.type}
+              icon={good.icon}
+              name={good.label}
+              amount={amount.toLocaleString()}
+              rate="—"
+              rateTone="zero"
+              dim={amount === 0}
+            />
+          );
+        })}
+    </div>
+  );
+}
+
+function InventoryItems() {
+  return (
+    <div role="tabpanel">
+      <SheetLabel>Items · {placeholderItems.length}</SheetLabel>
+      {placeholderItems.map((item) => (
+        <DetailRow
+          key={item.id}
+          icon={item.icon}
+          name={item.name}
+          sub={item.origin}
+          action={
+            <button className="sheet-btn" type="button" disabled title="TODO: items system not wired yet">
+              {item.action}
+            </button>
+          }
+        />
+      ))}
+      <div className="slot-empty">Items come from events, trade, and rewards — they are kept here.</div>
+      <p className="sheet-todo">TODO: items are placeholder rows until the items system exists.</p>
+    </div>
+  );
+}
+
+function InventoryUnits() {
+  return (
+    <div role="tabpanel">
+      <SheetLabel>Your units</SheetLabel>
+      {placeholderUnits.map((unit) => (
+        <DetailRow key={unit.id} icon={unit.icon} name={unit.name} sub={unit.line} tag={unit.tag} dim={unit.dim} />
+      ))}
+      <div className="slot-empty">
+        Hire guards for protection — or befriend a Dekarchos. Armies are a Military Leader&apos;s trade.
+      </div>
+      <p className="sheet-todo">TODO: units are placeholder rows until the units system exists.</p>
+    </div>
+  );
+}
+
+type InventoryTab = "resources" | "items" | "units";
+
+function InventorySheet({
+  open,
+  onClose,
+  player,
+}: {
+  open: boolean;
+  onClose: () => void;
+  player: PlayerDashboardView;
+}) {
+  const [tab, setTab] = useState<InventoryTab>("resources");
+  return (
+    <BottomSheet open={open} onClose={onClose} labelledBy="inventory-sheet-title" title="Inventory">
+      <SheetTabs<InventoryTab>
+        active={tab}
+        onSelect={setTab}
+        tabs={[
+          { id: "resources", label: "Resources" },
+          { id: "items", label: "Items", badge: placeholderItems.length },
+          { id: "units", label: "Units" },
+        ]}
+      />
+      {tab === "resources" ? <InventoryResources player={player} /> : null}
+      {tab === "items" ? <InventoryItems /> : null}
+      {tab === "units" ? <InventoryUnits /> : null}
+    </BottomSheet>
+  );
+}
+
+function CharacterTab({ player }: { player: PlayerDashboardView }) {
+  const primary = primaryStatFor(player.professionSlug);
+  return (
+    <div role="tabpanel">
+      <SheetLabel>Stats</SheetLabel>
+      <div className="cs-stats">
+        {statDefs.map((stat) => (
+          <div key={stat.key} className={`cs-stat${stat.key === primary ? " primary" : ""}`}>
+            <div className="cs-stat-v">{player.stats[stat.key]}</div>
+            <div className="cs-stat-k">{stat.label}</div>
+          </div>
+        ))}
+      </div>
+      <p className="sheet-todo">TODO: Devotion, Militia, and Intelligence stay 0 until the event engine grants them.</p>
+
+      <SheetLabel>Alignment</SheetLabel>
+      <AlignmentBar alignment={player.alignment} />
+
+      <SheetLabel>Traits · {placeholderTraits.length}</SheetLabel>
+      {placeholderTraits.map((trait) => (
+        <DetailRow key={trait.id} icon={trait.icon} name={trait.name} sub={trait.line} tag={trait.tag} tone={trait.tone} />
+      ))}
+      <div className="slot-empty">Traits are earned through decisions, quests, and the life you lead — some help, some haunt.</div>
+      <p className="sheet-todo">TODO: traits are placeholder until the event engine grants real ones.</p>
+    </div>
+  );
+}
+
+function AchievementsTab() {
+  return (
+    <div role="tabpanel">
+      <SheetLabel>Earned · {earnedAchievements.length}</SheetLabel>
+      <div className="ach-grid">
+        {earnedAchievements.map((ach) => (
+          <div className="ach" key={ach.id}>
+            <span className="ach-ic" aria-hidden="true">{ach.icon}</span>
+            <div>
+              <div className="ach-t">{ach.name}</div>
+              <div className="ach-d">{ach.detail}</div>
+              <div className="ach-when">{ach.when}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <SheetLabel>Locked</SheetLabel>
+      <div className="ach-grid">
+        {lockedAchievements.map((ach) => (
+          <div className="ach locked" key={ach.id}>
+            <span className="ach-ic" aria-hidden="true">{ach.icon}</span>
+            <div>
+              <div className="ach-t">{ach.name}</div>
+              <div className="ach-d">{ach.detail}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="sheet-todo">TODO: achievements are placeholder until the achievement system exists.</p>
+    </div>
+  );
+}
+
+function SettingsTab({ player, onLogout }: { player: PlayerDashboardView; onLogout: () => void }) {
+  const [newsletter, setNewsletter] = useState(player.newsletterOptIn);
+  const [savingNewsletter, setSavingNewsletter] = useState(false);
+  const [note, setNote] = useState("");
+
+  const toggleNewsletter = async () => {
+    const next = !newsletter;
+    setNewsletter(next);
+    setSavingNewsletter(true);
+    setNote("");
+    try {
+      await api.setNewsletter(next);
+    } catch {
+      setNewsletter(!next);
+      setNote("Could not save your newsletter preference. Try again.");
+    } finally {
+      setSavingNewsletter(false);
+    }
+  };
+
+  const stub = (label: string) => () => setNote(`TODO: ${label} is not wired yet.`);
+
+  return (
+    <div role="tabpanel">
+      <SheetLabel>Account</SheetLabel>
+      <div className="settings-row">
+        <span className="set-l">Email</span>
+        <span className="set-r">
+          <span className="set-v">{maskEmail(player.email)}</span>
+          <button className="set-act" type="button" onClick={stub("changing your email")}>Change</button>
+        </span>
+      </div>
+      <div className="settings-row">
+        <span className="set-l">Password</span>
+        <button className="set-act" type="button" onClick={stub("changing your password")}>Change password</button>
+      </div>
+      <div className="settings-row">
+        <span className="set-l">Discord</span>
+        <button className="set-act" type="button" onClick={stub("Discord linking")}>Link account</button>
+      </div>
+
+      <SheetLabel>Preferences</SheetLabel>
+      <div className="settings-row">
+        <span className="set-l">Season updates newsletter</span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={newsletter}
+          aria-label="Season updates newsletter"
+          className={`toggle${newsletter ? " on" : ""}`}
+          onClick={toggleNewsletter}
+          disabled={savingNewsletter}
+        >
+          <span className="toggle-knob" aria-hidden="true" />
+        </button>
+      </div>
+      <div className="settings-row">
+        <span className="set-l">Event notifications via Discord</span>
+        <span className="set-v">requires linked account</span>
+      </div>
+
+      {note ? <p className="sheet-todo" role="status">{note}</p> : null}
+
+      <SheetLabel>Session</SheetLabel>
+      <div className="settings-row">
+        <span className="set-l">Signed in as {player.name}</span>
+        <button className="set-act danger" type="button" onClick={onLogout}>Log out</button>
+      </div>
+    </div>
+  );
+}
+
+type CharacterSheetTab = "character" | "achievements" | "settings";
+
+function CharacterSheet({
+  open,
+  onClose,
+  player,
+  onLogout,
+}: {
+  open: boolean;
+  onClose: () => void;
+  player: PlayerDashboardView;
+  onLogout: () => void;
+}) {
+  const [tab, setTab] = useState<CharacterSheetTab>("character");
+  const partyChip = player.party === "Unaligned" ? "Party — chosen in-game" : player.party;
+  return (
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      labelledBy="character-sheet-title"
+      header={
+        <div className="cs-head">
+          <span className="cs-av">{avatarContent(player)}</span>
+          <div className="cs-id">
+            <div className="cs-nm" id="character-sheet-title">
+              {player.name} <span className="cs-ep">· epithet earned later</span>
+            </div>
+            <div className="cs-rk">
+              {player.profession.rank} · {player.profession.name} · {BASE_TIER_LABEL}
+            </div>
+            <div className="cs-chips">
+              <span className="chip house">⬤ House {player.house.name} · {player.house.stance}</span>
+              <span className="chip">{partyChip}</span>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <SheetTabs<CharacterSheetTab>
+        active={tab}
+        onSelect={setTab}
+        tabs={[
+          { id: "character", label: "Character" },
+          { id: "achievements", label: "Achievements" },
+          { id: "settings", label: "Settings" },
+        ]}
+      />
+      {tab === "character" ? <CharacterTab player={player} /> : null}
+      {tab === "achievements" ? <AchievementsTab /> : null}
+      {tab === "settings" ? <SettingsTab player={player} onLogout={onLogout} /> : null}
+    </BottomSheet>
+  );
+}
+
 const panelComponents: Record<DashboardSection, (props: { player: PlayerDashboardView }) => ReactNode> = {
   court: CourtPanel,
   holdings: HoldingsPanel,
@@ -700,9 +1354,19 @@ const panelComponents: Record<DashboardSection, (props: { player: PlayerDashboar
 export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onExit: () => void; onRequireLogin: () => void; onRequireCharacter: () => void }) {
   const [activeSection, setActiveSection] = useState<DashboardSection>("court");
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [activeSheet, setActiveSheet] = useState<"inventory" | "character" | null>(null);
   const [playerState, setPlayerState] = useState<PlayerState | null>(null);
   const [loadError, setLoadError] = useState("");
   const player = useMemo(() => playerState ? playerFromState(playerState) : getPlaceholderPlayer(), [playerState]);
+  const closeSheet = useCallback(() => setActiveSheet(null), []);
+  const handleLogout = useCallback(async () => {
+    try {
+      await api.logout();
+    } finally {
+      // Clears the local session token (in api.logout) and routes back to login.
+      onRequireLogin();
+    }
+  }, [onRequireLogin]);
   const ActivePanel = panelComponents[activeSection];
   const courtBadgeCount = placeholderCourtEvents.length;
   const isMoreActive = mobileMoreNav.some((item) => item.id === activeSection);
@@ -750,24 +1414,51 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
             <span className="season-pulse" aria-hidden="true" />
             <span>Season I · Day {player.seasonDay}</span>
           </span>
-          <strong>Ends in {player.seasonEndsIn} days</strong>
+          <strong>· ends in {player.seasonEndsIn} days</strong>
         </div>
-        <div className="resource-pill-row" aria-label="Player resources">
-          <ResourcePill value={player.gold} label="Gold" delta="+30/day" />
-          <ResourcePill value={player.classResource.amount} label={player.classResource.label} delta="+10/day" />
-          <ResourcePill value={player.prestige} label="Prestige" />
-          <ResourcePill value={player.influence} label="Influence" />
-        </div>
-        <div className="dashboard-player-chip">
-          <span className="dashboard-avatar" aria-hidden="true">
-            {player.faceImage ? <img src={player.faceImage} alt="" loading="lazy" /> : player.profession.image ? <img src={player.profession.image} alt="" loading="lazy" /> : player.name[0]}
-          </span>
-          <div>
-            <strong>{player.name}</strong>
-            <span className="desktop-player-subline">{player.profession.rank} - {player.profession.name}</span>
-            <span className="mobile-player-subline">{player.profession.name} · {player.profession.rank} · leans {player.party}</span>
-          </div>
-          <span className="house-mini-medal" aria-label={`House ${player.house.name}`}>{player.house.name[0]}</span>
+        <div className="topbar-actions">
+          <button
+            className="topbar-vital"
+            type="button"
+            onClick={() => setActiveSheet("inventory")}
+            title="Open your inventory"
+          >
+            <span className="vital-ic" aria-hidden="true">🪙</span>
+            <span className="vital-v">{player.gold.toLocaleString()}</span>
+            <span className="vital-meta">
+              <span className="vital-k">Gold</span>
+              <span className="vital-d placeholder" title={PLACEHOLDER_RATE_TITLE}>{PLACEHOLDER_GOLD_RATE}</span>
+            </span>
+          </button>
+          <button
+            className="topbar-vital inventory-vital"
+            type="button"
+            onClick={() => setActiveSheet("inventory")}
+            title="Open your inventory"
+          >
+            <span className="vital-ic" aria-hidden="true">🏺</span>
+            <span className="vital-meta">
+              <span className="vital-k strong">Inventory</span>
+              <span className="vital-d dim">res · items · units</span>
+            </span>
+            {/* TODO: new-items badge placeholder until the items system exists. */}
+            {PLACEHOLDER_NEW_ITEM_COUNT > 0 ? <span className="vital-badge">{PLACEHOLDER_NEW_ITEM_COUNT}</span> : null}
+          </button>
+          <button className="topbar-logout" type="button" onClick={handleLogout}>
+            <span aria-hidden="true">⎋</span> Log out
+          </button>
+          <button
+            className="avatar-btn"
+            type="button"
+            onClick={() => setActiveSheet("character")}
+            title="Open your character"
+          >
+            <span className="avatar-av" aria-hidden="true">{avatarContent(player)}</span>
+            <span className="avatar-text">
+              <span className="avatar-nm">{player.name}</span>
+              <span className="avatar-sb">{player.profession.rank} · {player.profession.name}</span>
+            </span>
+          </button>
         </div>
       </header>
 
@@ -870,6 +1561,9 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
           </div>
         </div>
       ) : null}
+
+      <InventorySheet open={activeSheet === "inventory"} onClose={closeSheet} player={player} />
+      <CharacterSheet open={activeSheet === "character"} onClose={closeSheet} player={player} onLogout={handleLogout} />
     </main>
   );
 }
