@@ -31,6 +31,19 @@ export type Profession = {
   };
 };
 
+// A building the player can construct from the Holdings panel. Locked entries
+// carry a `requirement` string and are shown disabled until it is met.
+export type BuildableBuilding = {
+  slug: string;
+  name: string;
+  icon: string;
+  cost: number;
+  buildDays: number;
+  benefit: string;
+  // Present => locked until met. The Holdings panel renders the reason.
+  requirement?: string;
+};
+
 export type House = {
   kind: "house";
   slug: string;
@@ -190,6 +203,16 @@ export const professions: Profession[] = [
       todo: "TODO: Final milestone requirements and numeric thresholds are not designed yet.",
     },
   },
+];
+
+// TODO: TUNING — placeholder catalog of constructable buildings. Final costs,
+// durations, benefits, per-profession availability, and unlock requirements are
+// not designed yet. Locked entries (with `requirement`) render disabled.
+export const buildableBuildings: BuildableBuilding[] = [
+  { slug: "counting-house", name: "Counting House", icon: "💰", cost: 300, buildDays: 7, benefit: "+5% trade income" },
+  { slug: "tavern", name: "Tavern", icon: "🍺", cost: 250, buildDays: 5, benefit: "+Favor · hear the harbor's rumors" },
+  { slug: "shrine-hermes", name: "Shrine to Hermes", icon: "🏺", cost: 200, buildDays: 4, benefit: "+1 Devotion/day · patron of merchants" },
+  { slug: "large-trade-post", name: "Large Trade Post", icon: "🔒", cost: 600, buildDays: 10, benefit: "10 Wine/day; upkeep -10 gold", requirement: "Requires @Emporikos Presbeutes (Tier 2)" },
 ];
 
 export const nobleHouses: House[] = [

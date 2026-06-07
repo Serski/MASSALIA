@@ -70,6 +70,8 @@ export const players = pgTable("players", {
   party: text("party").notNull().default("unaligned"),
   // -100..+100 spectrum: negative = Reformist, positive = Conservative, 0 = centre.
   alignment: integer("alignment").notNull().default(0),
+  // When set, the player cannot rejoin a party until this time passes.
+  partyCooldownUntil: timestamp("party_cooldown_until", { withTimezone: true }),
   origin: text("origin").notNull().default("Massalia"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

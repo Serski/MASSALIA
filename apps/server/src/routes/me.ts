@@ -89,6 +89,8 @@ export async function meRoutes(app: FastifyInstance) {
         party: state.player.party,
         // -100..+100; negative = Reformist, positive = Conservative, 0 = centre.
         alignment: state.player.alignment,
+        // ISO timestamp until which the player cannot rejoin a party, else null.
+        partyCooldownUntil: state.player.partyCooldownUntil ? state.player.partyCooldownUntil.toISOString() : null,
         origin: state.player.origin,
       },
       resources: {

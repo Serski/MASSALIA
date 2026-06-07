@@ -5,8 +5,11 @@ import {
   type Profession,
 } from "@massalia/shared";
 
+export { buildableBuildings } from "@massalia/shared";
+
 export type {
   Alignment,
+  BuildableBuilding,
   House,
   NarrativeMilestone,
   Profession,

@@ -129,6 +129,8 @@ export type PlayerState = {
     party: string;
     // -100..+100; negative = Reformist, positive = Conservative, 0 = centre.
     alignment: number;
+    // ISO timestamp until which the player cannot rejoin a party, else null.
+    partyCooldownUntil: string | null;
     origin: string;
   };
   resources: {
@@ -176,4 +178,8 @@ export const api = {
   state: () => apiFetch<PlayerState>("/me/state"),
   setNewsletter: (optIn: boolean) =>
     apiFetch<{ ok: true; newsletterOptIn: boolean }>("/me/newsletter", { method: "POST", body: { optIn } }),
+  joinParty: (party: "dynatoi" | "palaioi") =>
+    apiFetch<{ party: string; partyCooldownUntil: string | null }>("/party/join", { method: "POST", body: { party } }),
+  leaveParty: () =>
+    apiFetch<{ party: string; partyCooldownUntil: string | null }>("/party/leave", { method: "POST" }),
 };

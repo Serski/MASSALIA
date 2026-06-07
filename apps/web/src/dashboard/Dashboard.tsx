@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, type PlayerState } from "../api.js";
-import { assetPath, nobleHouses, professions, type House, type Profession } from "../data/league.js";
+import { assetPath, buildableBuildings, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
 import "./dashboard.css";
@@ -42,6 +42,8 @@ type PlayerDashboardState = {
   party: "Palaioi" | "Dynatoi" | "Unaligned";
   // -100..+100; negative = Reformist, positive = Conservative, 0 = centre.
   alignment: number;
+  // ISO timestamp until which the player cannot rejoin a party, else null.
+  partyCooldownUntil: string | null;
   stats: FourStats;
   balances: Record<string, number>;
   faceImage?: string;
@@ -76,39 +78,9 @@ type CourtEvent = {
   choices: CourtChoice[];
 };
 
-type Holding = {
-  id: string;
-  title: string;
-  rank: string;
-  benefit: string;
-  status: string;
-};
-
-type MarketPrice = {
-  id: string;
-  good: string;
-  price: number;
-  trend: "up" | "down" | "flat";
-  stock: string;
-};
-
-type MarketOffer = {
-  id: string;
-  good: string;
-  side: "Buy" | "Sell";
-  amount: number;
-  price: number;
-};
-
-type HouseholdPerson = {
-  id: string;
-  name: string;
-  role: string;
-  age: number;
-  status: string;
-  traits: string[];
-  house?: House;
-};
+// Props shared by every panel. `onRefresh` re-pulls /me/state after a real
+// mutation (e.g. joining/leaving a party).
+type PanelProps = { player: PlayerDashboardView; onRefresh: () => void };
 
 const placeholderFamilyEventCount = 1;
 
@@ -148,6 +120,7 @@ const placeholderPlayerState: PlayerDashboardState = {
   },
   party: "Unaligned",
   alignment: 0,
+  partyCooldownUntil: null,
   stats: { prestige: 12, devotion: 0, militia: 0, intelligence: 0 },
   balances: { wine: 36, wheat: 130, tin: 60, iron: 40 },
 };
@@ -204,39 +177,6 @@ const placeholderCourtEvents: CourtEvent[] = [
   },
 ];
 
-// TODO: Replace with player-owned buildings/holdings from profession progression state.
-const placeholderHoldings: Holding[] = [
-  { id: "trade-post", title: "Trade Post", rank: "@Nautilos Emporos", benefit: "4 Wine/day", status: "Upgrade available" },
-  { id: "warehouse", title: "Harbor Warehouse", rank: "Storehouse", benefit: "+10 resource capacity", status: "Operational" },
-  { id: "ledger", title: "Account Ledger", rank: "Civic record", benefit: "+2 influence/day", status: "Pending clerk" },
-];
-
-// TODO: Replace with live market quotes and player order book.
-const placeholderMarketPrices: MarketPrice[] = [
-  { id: "tin", good: "Tin", price: 22, trend: "up", stock: "thin" },
-  { id: "wine", good: "Wine", price: 15, trend: "flat", stock: "steady" },
-  { id: "wheat", good: "Wheat", price: 10, trend: "down", stock: "ample" },
-  { id: "iron", good: "Iron", price: 28, trend: "up", stock: "tight" },
-  { id: "salt", good: "Salt", price: 13, trend: "flat", stock: "steady" },
-  { id: "marble", good: "Marble", price: 34, trend: "down", stock: "slow" },
-  { id: "lead", good: "Lead", price: 18, trend: "flat", stock: "steady" },
-  { id: "stone", good: "Stone", price: 8, trend: "down", stock: "full" },
-  { id: "wood", good: "Wood", price: 9, trend: "up", stock: "active" },
-  { id: "leather", good: "Leather", price: 16, trend: "flat", stock: "steady" },
-  { id: "horse", good: "Horse", price: 45, trend: "up", stock: "rare" },
-];
-
-const placeholderOpenOffers: MarketOffer[] = [
-  { id: "offer-wine", good: "Wine", side: "Sell", amount: 12, price: 17 },
-  { id: "offer-iron", good: "Iron", side: "Buy", amount: 6, price: 25 },
-];
-
-// TODO: Replace with household state and kinship records.
-const placeholderHousehold: HouseholdPerson[] = [
-  { id: "pytheas", name: "Pytheas", role: "Householder", age: 31, status: "Active", traits: ["Trader", "Cautious"], house: nobleHouses.find((house) => house.slug === "leonidas") },
-  { id: "kleio", name: "Kleio", role: "Younger cousin", age: 17, status: "Eligible later", traits: ["Literate", "Ambitious"], house: nobleHouses.find((house) => house.slug === "leonidas") },
-  { id: "menon", name: "Menon", role: "Ward", age: 9, status: "Needs tutor", traits: ["Curious", "Unproven"], house: nobleHouses.find((house) => house.slug === "leonidas") },
-];
 
 function getPlaceholderPlayer(): PlayerDashboardView {
   const profession = professions.find((item) => item.slug === placeholderPlayerState.professionSlug) ?? professions[0]!;
@@ -276,27 +216,13 @@ function playerFromState(state: PlayerState): PlayerDashboardView {
     },
     party: normalizeParty(state.character.party),
     alignment: state.character.alignment,
+    partyCooldownUntil: state.character.partyCooldownUntil,
     stats: state.stats,
     balances: state.resources.balances,
     faceImage: getFaceImage(profession.slug, state.character.faceId),
     profession,
     house,
   };
-}
-
-function getEligibleMatches(playerHouseSlug: string) {
-  return nobleHouses
-    .filter((house) => house.slug !== playerHouseSlug)
-    .slice(0, 4)
-    .map((house, index) => ({
-      id: `match-${house.slug}`,
-      name: index % 2 === 0 ? `Daughter of ${house.name}` : `Younger son of ${house.name}`,
-      role: `${house.stance} match`,
-      age: 18 + index,
-      status: "Introduction available",
-      traits: [house.patron, house.crest],
-      house,
-    }));
 }
 
 function iconPath(icon: IconName) {
@@ -428,6 +354,250 @@ function EventCard({ event }: { event: CourtEvent }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Reusable panel building blocks ported from the v8 mockup.
+// ---------------------------------------------------------------------------
+
+// Scene-art banner slot. Real art is swappable later via the `art` prop; until
+// then it renders the gradient placeholder + dashed "scene art" tag.
+function PanelBanner({ scene, art, className = "" }: { scene: string; art?: string; className?: string }) {
+  return (
+    <div
+      className={`panel-banner${className ? ` ${className}` : ""}`}
+      style={art ? { backgroundImage: `url(${art})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+    >
+      {art ? null : <span className="scene-tag">scene art — {scene}</span>}
+    </div>
+  );
+}
+
+type TraitTone = "good" | "warn" | "neutral";
+
+function Tchip({ label, tone = "neutral" }: { label: string; tone?: TraitTone }) {
+  return <span className={`tchip tone-${tone}`}>{label}</span>;
+}
+
+function PanelRow({
+  icon,
+  title,
+  sub,
+  action,
+  tag,
+  dim = false,
+}: {
+  icon: string;
+  title: ReactNode;
+  sub?: ReactNode;
+  action?: ReactNode;
+  tag?: string;
+  dim?: boolean;
+}) {
+  return (
+    <div className={`panel-row${dim ? " dim" : ""}`}>
+      <div className="pr-l">
+        <span className="pr-ic" aria-hidden="true">{icon}</span>
+        <div>
+          <div className="pr-t">{title}</div>
+          {sub ? <div className="pr-s">{sub}</div> : null}
+        </div>
+      </div>
+      {action ? action : tag ? <span className="pr-lvl">{tag}</span> : null}
+    </div>
+  );
+}
+
+function StubButton({
+  children,
+  ghost = false,
+  disabled = false,
+  message,
+  onStub,
+}: {
+  children: ReactNode;
+  ghost?: boolean;
+  disabled?: boolean;
+  message: string;
+  onStub: (message: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`panel-btn${ghost ? " ghost" : ""}`}
+      disabled={disabled}
+      onClick={() => onStub(message)}
+    >
+      {children}
+    </button>
+  );
+}
+
+function PersonFaceIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <circle cx="12" cy="9" r="4" />
+      <path d="M5 20c0-3.5 3.1-6 7-6s7 2.5 7 6" />
+    </svg>
+  );
+}
+
+function PersonRow({
+  name,
+  nameSuffix,
+  role,
+  traits,
+  right,
+}: {
+  name: string;
+  nameSuffix?: ReactNode;
+  role: string;
+  traits: { label: string; tone?: TraitTone }[];
+  right?: ReactNode;
+}) {
+  return (
+    <div className="person-row">
+      <span className="person-face">
+        <PersonFaceIcon />
+      </span>
+      <div className="person-meta">
+        <div className="person-name">
+          {name}
+          {nameSuffix}
+        </div>
+        <div className="person-role">{role}</div>
+        <div className="person-traits">
+          {traits.map((trait) => (
+            <Tchip key={trait.label} label={trait.label} tone={trait.tone} />
+          ))}
+        </div>
+      </div>
+      {right}
+    </div>
+  );
+}
+
+function DigestList({ items }: { items: { id: string; icon: string; text: ReactNode }[] }) {
+  return (
+    <div className="pol-aside">
+      {items.map((item) => (
+        <div className="news-row" key={item.id}>
+          <span className="news-ic" aria-hidden="true">{item.icon}</span>
+          <span>{item.text}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// --- Politics cooldown countdown -------------------------------------------
+function remainingSeconds(untilIso: string | null) {
+  if (!untilIso) return 0;
+  const ms = new Date(untilIso).getTime() - Date.now();
+  return ms > 0 ? Math.ceil(ms / 1000) : 0;
+}
+
+function useCountdownSeconds(untilIso: string | null) {
+  const [remaining, setRemaining] = useState(() => remainingSeconds(untilIso));
+  useEffect(() => {
+    setRemaining(remainingSeconds(untilIso));
+    if (!untilIso) return;
+    const id = window.setInterval(() => {
+      const next = remainingSeconds(untilIso);
+      setRemaining(next);
+      if (next <= 0) window.clearInterval(id);
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [untilIso]);
+  return remaining;
+}
+
+function alignmentReadout(alignment: number) {
+  const abs = Math.abs(alignment);
+  if (abs === 0) return "Centrist (0%)";
+  return `${abs}% ${alignment < 0 ? "Reformist" : "Conservative"}`;
+}
+
+// ---------------------------------------------------------------------------
+// Panel placeholder data (TODO: real services later).
+// ---------------------------------------------------------------------------
+
+// TODO: market listings are placeholder until the market service exists.
+type MarketCat = "res" | "item" | "people" | "special";
+const placeholderListings: {
+  id: string;
+  cat: MarketCat;
+  icon: string;
+  name: string;
+  price: string;
+  seller: string;
+  sellerIsGame: boolean;
+  action: string;
+}[] = [
+  { id: "tin", cat: "res", icon: "🪨", name: "Tin × 40", price: "11 g ea", seller: "Nikandros", sellerIsGame: false, action: "Buy" },
+  { id: "wine", cat: "res", icon: "🍷", name: "Wine × 20", price: "15 g ea", seller: "the Agora", sellerIsGame: true, action: "Buy" },
+  { id: "wheat", cat: "res", icon: "🌾", name: "Wheat × 100", price: "9 g ea", seller: "Philippa", sellerIsGame: false, action: "Buy" },
+  { id: "letter", cat: "item", icon: "📜", name: "Letter of Credit", price: "95 g", seller: "Dorieus", sellerIsGame: false, action: "Buy" },
+  { id: "amphora", cat: "item", icon: "🏺", name: "Bronze Amphora set", price: "60 g", seller: "the Agora", sellerIsGame: true, action: "Buy" },
+  { id: "guard", cat: "people", icon: "🛡️", name: "Caravan Guard · contract", price: "40 g", seller: "the Agora", sellerIsGame: true, action: "Hire" },
+  { id: "tutor", cat: "people", icon: "📖", name: "Tutor · for your children", price: "120 g", seller: "the Agora", sellerIsGame: true, action: "Hire" },
+  { id: "expedition", cat: "special", icon: "⛵", name: "Expedition share · a long voyage", price: "500 g", seller: "the Agora", sellerIsGame: true, action: "Buy" },
+  { id: "ring", cat: "special", icon: "💍", name: "Lion-seal ring · unique", price: "800 g", seller: "Kallias", sellerIsGame: false, action: "Buy" },
+];
+
+// TODO: buy orders are placeholder until the market service exists.
+const placeholderBuyOrders: { id: string; icon: string; title: string; sub: string; mine: boolean }[] = [
+  { id: "tin", icon: "🪨", title: "Seeking 60 Tin · 10g ea", sub: "Posted by you · partial · 22 filled", mine: true },
+  { id: "wheat", icon: "🌾", title: "Seeking 30 Wheat · 8g ea", sub: "Posted by Dorieus", mine: false },
+];
+
+const marketFilters: { id: "all" | MarketCat; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "res", label: "Resources" },
+  { id: "item", label: "Items" },
+  { id: "people", label: "People" },
+  { id: "special", label: "Special" },
+];
+
+// TODO: council content is placeholder until political state exists.
+const councilIssues = [
+  { id: "tariff", icon: "⚖️", title: "Tin tariff at the harbor", sub: "Proposed by House Leonidas · voting closes Day 6" },
+  { id: "fleet", icon: "🚢", title: "Fund a patrol fleet", sub: "Against Tyrrhenian piracy · costs the treasury 2,000g" },
+  { id: "dole", icon: "🏛️", title: "Temple grain dole", sub: "Expand the dole to non-citizens · contested" },
+];
+const councilElections = [
+  { id: "archon", icon: "🏺", title: "Archon seats · 2 contested", sub: "Voting open · 3 days remain", votable: true },
+  { id: "assembly", icon: "📜", title: "Next assembly", sub: "Day 21 · petitions close Day 19", votable: false },
+];
+const councilNews = [
+  { id: "seats", icon: "📯", text: <><b>Two Archon seats</b> open this season.</> },
+  { id: "tariff", icon: "⚔️", text: <><b>House Leonidas</b> pushed the tin tariff to a vote.</> },
+  { id: "pirates", icon: "🚢", text: <>Pirate raids near <b>Antipolis</b> — a patrol fleet is proposed.</> },
+];
+const partyMatters = [
+  { id: "champion", icon: "🗳️", title: "Back a champion for Archon", sub: "Internal vote · the party picks its candidate", votable: true },
+  { id: "whip", icon: "🤝", title: "Whip count: tin tariff", sub: "The party asks you to vote AGAINST · loyalty noted", votable: false },
+  { id: "recruit", icon: "🪶", title: "Recruit a fence-sitter", sub: "Bring an unaligned player to the cause · +party standing", votable: false },
+];
+const partyNews = [
+  { id: "champion", icon: "📣", text: <>A member seeks the party's backing for <b>Archon</b>.</> },
+  { id: "drift", icon: "⚠️", text: <>Members who drift to the other side are <b>expelled</b>.</> },
+];
+
+const partyOptions: {
+  slug: "dynatoi" | "palaioi";
+  greek: string;
+  name: "Dynatoi" | "Palaioi";
+  pitch: string;
+  side: "Reformist" | "Conservative";
+  consClass: boolean;
+}[] = [
+  { slug: "dynatoi", greek: "ΔΥΝΑΤΟΙ", name: "Dynatoi", pitch: "The reformers — new money, open ports, and a League remade. They court the bold.", side: "Reformist", consClass: false },
+  { slug: "palaioi", greek: "ΠΑΛΑΙΟΙ", name: "Palaioi", pitch: "The old guard — tradition, temples, and the founders' law. They reward loyalty.", side: "Conservative", consClass: true },
+];
+
+// ---------------------------------------------------------------------------
+// Panels
+// ---------------------------------------------------------------------------
+
 function CourtPanel() {
   return (
     <section className="dashboard-panel" aria-labelledby="court-title">
@@ -436,6 +606,7 @@ function CourtPanel() {
         <h1 id="court-title">Court</h1>
         <p>Messages, petitions, and decisions waiting for your return.</p>
       </div>
+      <PanelBanner scene="the court of Massalia" />
       <div className="court-grid">
         <div className="decision-column">
           <div className="panel-subhead decision-subhead">
@@ -475,216 +646,402 @@ function CourtPanel() {
   );
 }
 
-function HoldingsPanel({ player }: { player: PlayerDashboardView }) {
+function HoldingsPanel({ player }: PanelProps) {
+  const [note, setNote] = useState("");
+  const tier1 = player.profession.tiers[0];
   return (
     <section className="dashboard-panel" aria-labelledby="holdings-title">
       <div className="dashboard-panel-heading">
         <p className="section-eyebrow">{player.profession.name}</p>
-        <h1 id="holdings-title">Holdings</h1>
-        <p>Your profession buildings, upgrades, and daily production.</p>
+        <h1 id="holdings-title">Your Holdings</h1>
+        <p>Massalia · your trade operations and their income.</p>
       </div>
-      <DashboardCard>
-        <h2>Upgrade list</h2>
-        <div className="dashboard-list">
-          {placeholderHoldings.map((holding) => (
-            <ListRow
-              key={holding.id}
-              action={<button className="dashboard-primary-button" type="button">Upgrade</button>}
-            >
-              <strong>{holding.title}</strong>
-              <span>{holding.rank}</span>
-              <p>{holding.benefit} - {holding.status}</p>
-            </ListRow>
-          ))}
-        </div>
-        <p className="dashboard-todo">TODO: holdings are placeholder rows until profession building state exists.</p>
-      </DashboardCard>
+      <PanelBanner scene="your quarter of the city" />
+
+      <div className="panel-label">Your holdings</div>
+      <div className="panel-grid2">
+        {tier1 ? (
+          <PanelRow
+            icon="🏛️"
+            title={`${tier1.building} · ${BASE_TIER_LABEL}`}
+            sub={`${tier1.benefit}${tier1.upkeep ? ` · upkeep ${tier1.upkeep}` : ""}`}
+            action={<StubButton message="TODO: holding upgrades land in Phase 2." onStub={setNote}>Upgrade</StubButton>}
+          />
+        ) : (
+          <PanelRow icon="🛠️" title="No holdings yet" sub="This path builds standing through the story, not buildings." />
+        )}
+        <PanelRow
+          icon="⚓"
+          title={`Warehouse · ${BASE_TIER_LABEL}`}
+          sub="Storage capacity arrives with the warehouse system"
+          action={<StubButton message="TODO: warehouse upgrades land with the storage system." onStub={setNote}>Upgrade</StubButton>}
+        />
+      </div>
+      <p className="dashboard-todo">TODO: holdings are derived from your real profession; live production, capacity, and upgrades land in Phase 2 (buttons are stubs).</p>
+
+      <div className="panel-label">Available buildings</div>
+      <div className="panel-grid2">
+        {buildableBuildings.map((building) => {
+          const locked = Boolean(building.requirement);
+          return (
+            <PanelRow
+              key={building.slug}
+              icon={building.icon}
+              title={building.name}
+              sub={locked ? building.requirement : `${building.benefit} · ${building.cost}g · ${building.buildDays} days to build`}
+              dim={locked}
+              tag={locked ? "locked" : undefined}
+              action={
+                locked ? undefined : (
+                  <StubButton message={`TODO: building construction is a stub (${building.name}).`} onStub={setNote}>
+                    Build · {building.cost}g
+                  </StubButton>
+                )
+              }
+            />
+          );
+        })}
+      </div>
+      <p className="dashboard-todo">TODO: TUNING — buildable catalog is placeholder; build actions are stubs until construction exists.</p>
+      {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
     </section>
   );
 }
 
 function MarketPanel() {
-  const [note, setNote] = useState("TODO: market actions are local placeholders until exchange services exist.");
-  const placeOrder = (good: string, side: "Buy" | "Sell", price: number) => {
-    setNote(`TODO placeholder: ${side} order staged for ${good} at ${price} gold.`);
-  };
-  const cancelOrder = (offer: MarketOffer) => {
-    setNote(`TODO placeholder: cancel request staged for ${offer.side} ${offer.amount} ${offer.good}.`);
-  };
+  const [cat, setCat] = useState<"all" | MarketCat>("all");
+  const [query, setQuery] = useState("");
+  const [note, setNote] = useState("");
+  const q = query.trim().toLowerCase();
+  const visible = placeholderListings.filter(
+    (listing) => (cat === "all" || listing.cat === cat) && (!q || listing.name.toLowerCase().includes(q)),
+  );
 
   return (
     <section className="dashboard-panel" aria-labelledby="market-title">
-      <div className="dashboard-panel-heading">
-        <p className="section-eyebrow">Agora</p>
-        <h1 id="market-title">Market</h1>
-        <p>Prices, open offers, and placeholder buy/sell actions for the exchange.</p>
-      </div>
-      <div className="market-stat-row">
-        <DashboardCard><span className="dashboard-label">Volume</span><strong>184 lots</strong><p>TODO placeholder daily trade volume.</p></DashboardCard>
-        <DashboardCard><span className="dashboard-label">Spread</span><strong>3 gold</strong><p>TODO placeholder average bid/ask spread.</p></DashboardCard>
-        <DashboardCard><span className="dashboard-label">Tax</span><strong>6%</strong><p>TODO placeholder city market toll.</p></DashboardCard>
-      </div>
-      <DashboardCard>
-        <div className="panel-subhead">
-          <h2>Price board</h2>
-          <span className="dashboard-label">11 goods</span>
+      <div className="market-head">
+        <div className="dashboard-panel-heading">
+          <p className="section-eyebrow">Agora</p>
+          <h1 id="market-title">The Agora — Market</h1>
+          <p>Buy from players or the Agora itself · list your goods · post what you seek.</p>
         </div>
-        <div className="market-board" role="table" aria-label="Market price board">
-          {placeholderMarketPrices.map((item) => (
-            <div className="market-row" role="row" key={item.id}>
-              <div className="market-good" role="cell">
-                <span className="market-token" aria-hidden="true">{item.good[0]}</span>
-                <div>
-                  <strong>{item.good}</strong>
-                  <span>{item.stock} stock</span>
-                </div>
-              </div>
-              <span className={`market-trend trend-${item.trend}`} role="cell">{item.trend}</span>
-              <strong role="cell">{item.price}g</strong>
-              <div className="dashboard-action-row" role="cell">
-                <button className="dashboard-ghost-button" type="button" onClick={() => placeOrder(item.good, "Buy", item.price)}>Buy</button>
-                <button className="dashboard-primary-button" type="button" onClick={() => placeOrder(item.good, "Sell", item.price)}>Sell</button>
-              </div>
+        <div className="market-head-actions">
+          <StubButton message="TODO: listing items for sale is a stub until the market service exists." onStub={setNote}>+ List to sell</StubButton>
+          <StubButton ghost message="TODO: posting buy orders is a stub until the market service exists." onStub={setNote}>Post buy order</StubButton>
+        </div>
+      </div>
+      <PanelBanner scene="the agora at midday" />
+
+      <div className="market-filterbar">
+        <input
+          className="market-search"
+          placeholder="Search by name…"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          aria-label="Search listings"
+        />
+        {marketFilters.map((filter) => (
+          <button
+            key={filter.id}
+            type="button"
+            className={`fchip${cat === filter.id ? " on" : ""}`}
+            aria-pressed={cat === filter.id}
+            onClick={() => setCat(filter.id)}
+          >
+            {filter.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="panel-label">For sale</div>
+      <div className="mkt-table" role="table" aria-label="Listings for sale">
+        <div className="mkt-row mkt-h" role="row">
+          <span role="columnheader">Listing</span>
+          <span role="columnheader">Price</span>
+          <span role="columnheader">Seller</span>
+          <span role="columnheader" className="mkt-act-head">Action</span>
+        </div>
+        {visible.map((listing) => (
+          <div className="mkt-row" role="row" key={listing.id}>
+            <div className="mkt-good" role="cell">
+              <span className="mkt-gic" aria-hidden="true">{listing.icon}</span>
+              <span className="mkt-gn">{listing.name}</span>
             </div>
-          ))}
-        </div>
-        <p className="dashboard-todo">{note}</p>
-      </DashboardCard>
-      <DashboardCard>
-        <h2>Open offers</h2>
-        <div className="dashboard-list">
-          {placeholderOpenOffers.map((offer) => (
-            <ListRow
-              key={offer.id}
-              action={<button className="dashboard-ghost-button" type="button" onClick={() => cancelOrder(offer)}>Cancel</button>}
-            >
-              <strong>{offer.side} {offer.good}</strong>
-              <p>{offer.amount} lots at {offer.price} gold each.</p>
-            </ListRow>
-          ))}
-        </div>
-      </DashboardCard>
+            <span className="mkt-price" role="cell">{listing.price}</span>
+            <span className={`mkt-seller${listing.sellerIsGame ? " game" : ""}`} role="cell">{listing.seller}</span>
+            <div className="mkt-act" role="cell">
+              <StubButton message={`TODO: ${listing.action} is a stub until the market service exists.`} onStub={setNote}>
+                {listing.action}
+              </StubButton>
+            </div>
+          </div>
+        ))}
+        {visible.length === 0 ? <div className="mkt-empty">No listings match your search.</div> : null}
+      </div>
+      <p className="dashboard-todo">“People” are contract hires — guards, tutors, and other services. Never persons as property.</p>
+
+      <div className="panel-label">Seeking to buy</div>
+      <div className="panel-grid2">
+        {placeholderBuyOrders.map((order) => (
+          <PanelRow
+            key={order.id}
+            icon={order.icon}
+            title={order.title}
+            sub={order.sub}
+            action={
+              order.mine ? (
+                <StubButton ghost message="TODO: cancelling an order is a stub until the market service exists." onStub={setNote}>Cancel</StubButton>
+              ) : (
+                <StubButton message="TODO: fulfilling an order is a stub until the market service exists." onStub={setNote}>Fulfill</StubButton>
+              )
+            }
+          />
+        ))}
+      </div>
+      <p className="dashboard-todo">TODO: all market listings and orders are placeholders until the market service exists.</p>
+      {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
     </section>
   );
 }
 
-function PersonCard({ person, action }: { person: HouseholdPerson; action?: ReactNode }) {
-  return (
-    <article className="person-card">
-      <div className="person-avatar">
-        {person.house ? <img src={person.house.image} alt="" loading="lazy" /> : <span>{person.name[0]}</span>}
-      </div>
-      <div className="person-body">
-        <span className="dashboard-label">{person.role}</span>
-        <h3>{person.name}</h3>
-        <p>Age {person.age} - {person.status}</p>
-        <div className="trait-row">
-          {person.traits.map((trait) => <span key={trait}>{trait}</span>)}
-        </div>
-      </div>
-      {action ? <div className="person-action">{action}</div> : null}
-    </article>
-  );
-}
-
-function FamilyPanel({ player }: { player: PlayerDashboardView }) {
-  const [note, setNote] = useState("TODO: family actions are local placeholders until kinship backend exists.");
-  const matches = useMemo(() => getEligibleMatches(player.house.slug), [player.house.slug]);
+function FamilyPanel() {
+  const [note, setNote] = useState("");
+  const houseXanthippos = nobleHouses.find((house) => house.slug === "xanthippos");
+  const houseKleitos = nobleHouses.find((house) => house.slug === "kleitos");
 
   return (
     <section className="dashboard-panel" aria-labelledby="family-title">
       <div className="dashboard-panel-heading">
         <p className="section-eyebrow">Household</p>
-        <h1 id="family-title">Family</h1>
-        <p>Kin, heirs, and marriage ties. Family events use the same Court queue.</p>
+        <h1 id="family-title">House &amp; Family</h1>
+        <p>Your blood, your heirs, and the matches that bind the Houses.</p>
       </div>
-      <div className="family-action-row">
-        <button className="dashboard-primary-button" type="button" onClick={() => setNote("TODO placeholder: adoption inquiry staged for your household.")}>Adopt an heir</button>
-        <button className="dashboard-ghost-button" type="button" onClick={() => setNote("TODO placeholder: matchmaker inquiry staged for your household.")}>Seek a match</button>
-      </div>
-      <div className="dashboard-grid two">
-        <DashboardCard>
-          <div className="panel-subhead">
-            <h2>Your household</h2>
-            <span className="nav-badge">{placeholderFamilyEventCount}</span>
-          </div>
-          <div className="person-stack">
-            {placeholderHousehold.map((person) => (
-              <PersonCard
-                key={person.id}
-                person={person}
-                action={
-                  person.id === "menon"
-                    ? <button className="dashboard-ghost-button" type="button" onClick={() => setNote("TODO placeholder: tutor arrangement staged for Menon.")}>Tutor</button>
-                    : null
-                }
-              />
-            ))}
-          </div>
-        </DashboardCard>
-        <DashboardCard>
-          <h2>Eligible matches</h2>
-          <div className="person-stack">
-            {matches.map((person) => (
-              <PersonCard
-                key={person.id}
-                person={person}
-                action={<button className="dashboard-primary-button" type="button" onClick={() => setNote(`TODO placeholder: introduction proposed with ${person.house?.name}.`)}>Propose</button>}
-              />
-            ))}
-          </div>
-        </DashboardCard>
-      </div>
-      <p className="dashboard-todo">{note}</p>
+      <PanelBanner scene="the oikos" />
+
+      <div className="panel-label">Your household</div>
+      <PersonRow
+        name="Theano of House Philon"
+        nameSuffix={<span className="person-suffix"> · your wife</span>}
+        role="Married 4 years"
+        traits={[{ label: "Gregarious", tone: "good" }, { label: "Shrewd", tone: "good" }]}
+        right={<span className="pr-lvl">+46 opinion</span>}
+      />
+      <PersonRow
+        name="Damon"
+        nameSuffix={<span className="heir-tag">Heir</span>}
+        role="Son · age 14 · came of age"
+        traits={[{ label: "Ambitious", tone: "good" }]}
+        right={<StubButton message="TODO: betrothal arrangement is a stub until the family system exists." onStub={setNote}>Arrange betrothal</StubButton>}
+      />
+      <PersonRow
+        name="Myrrine"
+        role="Daughter · age 9"
+        traits={[{ label: "Gifted", tone: "good" }, { label: "Shy" }]}
+        right={<StubButton ghost message="TODO: choosing a tutor is a stub until the family system exists." onStub={setNote}>Choose tutor</StubButton>}
+      />
+
+      <div className="panel-label">Eligible brides</div>
+      <PersonRow
+        name="Aglaia of House Xanthippos"
+        role={`Age 22 · ${houseXanthippos?.stance ?? "Centrist"} family · dowry 400g`}
+        traits={[{ label: "Diplomat", tone: "good" }, { label: "Beautiful", tone: "good" }]}
+        right={<StubButton message="TODO: proposing a match is a stub until the family system exists." onStub={setNote}>Propose</StubButton>}
+      />
+      <PersonRow
+        name="Niobe of House Kleitos"
+        role={`Age 26 · ${houseKleitos?.stance ?? "Reformist"} family · widow · dowry 250g`}
+        traits={[{ label: "Shrewd", tone: "good" }, { label: "Proud", tone: "warn" }]}
+        right={<StubButton message="TODO: proposing a match is a stub until the family system exists." onStub={setNote}>Propose</StubButton>}
+      />
+
+      <div className="panel-label">Adoption</div>
+      <PersonRow
+        name="Lykos"
+        role="Orphan of the harbor · age 7 · fee 150g"
+        traits={[{ label: "Quick", tone: "good" }]}
+        right={<StubButton message="TODO: adoption is a stub until the family system exists." onStub={setNote}>Adopt · 150g</StubButton>}
+      />
+      <PersonRow
+        name="Chloe"
+        role="Ward of the temple · age 10 · fee 150g"
+        traits={[{ label: "Pious", tone: "good" }]}
+        right={<StubButton message="TODO: adoption is a stub until the family system exists." onStub={setNote}>Adopt · 150g</StubButton>}
+      />
+
+      <p className="dashboard-todo">TODO: household, brides, and adoption candidates are placeholders until the family system exists.</p>
+      {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
     </section>
   );
 }
 
-function PoliticsPanel({ player }: { player: PlayerDashboardView }) {
+function PoliticsPanel({ player, onRefresh }: PanelProps) {
+  const [tab, setTab] = useState<"council" | "party">("council");
+  const [note, setNote] = useState("");
+  const cooldown = useCountdownSeconds(player.partyCooldownUntil);
+  const joined = player.party !== "Unaligned";
+
+  const join = async (slug: "dynatoi" | "palaioi") => {
+    setNote("");
+    try {
+      await api.joinParty(slug);
+      onRefresh();
+    } catch (error) {
+      setNote(error instanceof ApiError ? error.message : "Could not join the party. Try again.");
+    }
+  };
+  const leave = async () => {
+    setNote("");
+    try {
+      await api.leaveParty();
+      onRefresh();
+    } catch (error) {
+      setNote(error instanceof ApiError ? error.message : "Could not leave the party. Try again.");
+    }
+  };
+
   return (
     <section className="dashboard-panel" aria-labelledby="politics-title">
       <div className="dashboard-panel-heading">
         <p className="section-eyebrow">Assembly</p>
         <h1 id="politics-title">Politics</h1>
-        <p>Party allegiance, House standing, and offices in play.</p>
+        <p>The Oligarchy Council rules the League — and two parties fight to steer it.</p>
       </div>
-      <div className="dashboard-grid two">
-        <DashboardCard>
-          <h2>Palaioi vs Dynatoi</h2>
-          <div className="party-duel">
-            <div className={`party-card${player.party === "Palaioi" ? " selected" : ""}`}>
-              <span className="dashboard-label">Old houses</span>
-              <strong>Palaioi</strong>
-              <p>Conservative families, temple patrons, and citizens who trust old order.</p>
+
+      <div className="cs-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={tab === "council"} className={`cs-tab${tab === "council" ? " on" : ""}`} onClick={() => setTab("council")}>
+          Oligarchy Council
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "party"} className={`cs-tab${tab === "party" ? " on" : ""}`} onClick={() => setTab("party")}>
+          Your Party {joined ? <span className="party-tab-tag">· {player.party}</span> : <span className="party-tab-lock" aria-label="locked">🔒</span>}
+        </button>
+      </div>
+
+      {tab === "council" ? (
+        <div className="pol-page">
+          <PanelBanner scene="the council chamber" />
+          <div className="court-grid">
+            <div>
+              <div className="panel-label">Issues before the council</div>
+              {councilIssues.map((issue) => (
+                <PanelRow
+                  key={issue.id}
+                  icon={issue.icon}
+                  title={issue.title}
+                  sub={issue.sub}
+                  action={<StubButton message="TODO: council voting is a stub until political state exists." onStub={setNote}>Vote</StubButton>}
+                />
+              ))}
+              <div className="panel-label panel-label-spaced">Elections</div>
+              {councilElections.map((election) => (
+                <PanelRow
+                  key={election.id}
+                  icon={election.icon}
+                  title={election.title}
+                  sub={election.sub}
+                  action={election.votable ? <StubButton message="TODO: election voting is a stub until political state exists." onStub={setNote}>Vote</StubButton> : undefined}
+                  tag={election.votable ? undefined : "—"}
+                />
+              ))}
             </div>
-            <div className={`party-card${player.party === "Dynatoi" ? " selected" : ""}`}>
-              <span className="dashboard-label">Rising powers</span>
-              <strong>Dynatoi</strong>
-              <p>Merchants, reformers, ambitious officers, and families hungry for motion.</p>
+            <div>
+              <div className="panel-label">Council news</div>
+              <DigestList items={councilNews} />
             </div>
           </div>
-          {player.party === "Unaligned" ? <p className="unaligned-note">Unaligned - chosen in-game through a narrated event.</p> : null}
-        </DashboardCard>
-        <DashboardCard>
-          <h2>House standing</h2>
-          <strong>{player.house.name}</strong>
-          <p>{player.house.stance}</p>
-          <p className="party-motto">"{player.house.motto}"</p>
-          <div className="house-meter" aria-label="House standing placeholder">
-            <span style={{ width: "62%" }} />
-          </div>
-          <p className="dashboard-todo">TODO: House standing score awaits backend state.</p>
-        </DashboardCard>
-      </div>
-      <DashboardCard>
-        <h2>Offices & elections</h2>
-        <div className="dashboard-list compact">
-          <ListRow><strong>Archon seats</strong><p>2 contested</p></ListRow>
-          <ListRow><strong>Council petitions</strong><p>3 awaiting support</p></ListRow>
-          <ListRow><strong>Next assembly</strong><p>Day 21</p></ListRow>
+          <p className="dashboard-todo">TODO: council issues, elections, and news are placeholder until political state exists.</p>
+          {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
         </div>
-        <p className="dashboard-todo">TODO: offices/elections are placeholder data until political state exists.</p>
-      </DashboardCard>
+      ) : joined ? (
+        <div className="pol-page">
+          <PanelBanner scene={`the ${player.party} hall`} className={player.party === "Dynatoi" ? "banner-reform" : "banner-cons"} />
+          <div className="court-grid">
+            <div>
+              <div className="panel-label">Party matters · {player.party}</div>
+              {partyMatters.map((matter) => (
+                <PanelRow
+                  key={matter.id}
+                  icon={matter.icon}
+                  title={matter.title}
+                  sub={matter.sub}
+                  action={matter.votable ? <StubButton message="TODO: party voting is a stub until political state exists." onStub={setNote}>Vote</StubButton> : undefined}
+                  tag={matter.votable ? undefined : "noted"}
+                />
+              ))}
+            </div>
+            <div>
+              <div className="panel-label">Party news</div>
+              <DigestList items={partyNews} />
+              <div className="panel-label">Membership</div>
+              <div className="pol-aside">
+                <div className="mini-office">
+                  <div>
+                    <div className="mo-t">Your standing</div>
+                    <div className="mo-s">Member of the {player.party}</div>
+                  </div>
+                  <span className="pr-lvl">—</span>
+                </div>
+                <div className="mini-office">
+                  <div>
+                    <div className="mo-t">Leave the {player.party}</div>
+                    <div className="mo-s">A rejoin cooldown applies after leaving</div>
+                  </div>
+                  <button type="button" className="panel-btn ghost" onClick={leave}>Leave</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p className="dashboard-todo">TODO: party matters and news are placeholder; joining and leaving are real (players.party).</p>
+          {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
+        </div>
+      ) : (
+        <div className="pol-page">
+          <div className="panel-label">Choose your side</div>
+          <p className="pol-intro">
+            Your alignment is <b>{alignmentReadout(player.alignment)}</b>. Joining a party requires at least 10% alignment toward its side — and drifting 10% toward the other side will see you expelled.
+          </p>
+          <div className="panel-grid2">
+            {partyOptions.map((option) => {
+              const qualifies = option.slug === "dynatoi" ? player.alignment <= -10 : player.alignment >= 10;
+              const canJoin = qualifies && cooldown <= 0;
+              const pct = option.slug === "dynatoi" ? Math.max(0, -player.alignment) : Math.max(0, player.alignment);
+              return (
+                <div className={`party-pick${option.consClass ? " cons" : ""}`} key={option.slug}>
+                  <div className="party-banner">
+                    <span className="scene-tag">scene art — {option.consClass ? "the old guard" : "the reformers"}</span>
+                  </div>
+                  <div className="party-body">
+                    <div className="party-greek">{option.greek}</div>
+                    <div className="party-name">{option.name}</div>
+                    <p className="party-pitch">{option.pitch}</p>
+                    <button
+                      type="button"
+                      className={`panel-btn${canJoin ? "" : " ghost"}`}
+                      disabled={!canJoin}
+                      onClick={() => join(option.slug)}
+                    >
+                      Join the {option.name}
+                    </button>
+                    <div className="party-req">
+                      {qualifies
+                        ? `You qualify — ${pct}% ${option.side} (needs 10%)`
+                        : `Requires 10% ${option.side} — you are ${alignmentReadout(player.alignment)}`}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {cooldown > 0 ? (
+            <div className="slot-empty pol-cooldown">
+              You left your party. You may apply to a party again in <b>{cooldown}</b>s.
+            </div>
+          ) : null}
+          <p className="dashboard-todo">
+            Join eligibility uses your real alignment. Expulsion-on-drift is not implemented yet (no system moves alignment).
+          </p>
+          {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
+        </div>
+      )}
     </section>
   );
 }
@@ -1342,7 +1699,7 @@ function CharacterSheet({
   );
 }
 
-const panelComponents: Record<DashboardSection, (props: { player: PlayerDashboardView }) => ReactNode> = {
+const panelComponents: Record<DashboardSection, (props: PanelProps) => ReactNode> = {
   court: CourtPanel,
   holdings: HoldingsPanel,
   market: MarketPanel,
@@ -1377,14 +1734,11 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
     setIsMoreOpen(false);
   };
 
-  useEffect(() => {
-    let cancelled = false;
+  // Re-pull /me/state. Used on mount and after real mutations (party join/leave).
+  const refreshState = useCallback(() => {
     api.state()
-      .then((state) => {
-        if (!cancelled) setPlayerState(state);
-      })
+      .then((state) => setPlayerState(state))
       .catch((error) => {
-        if (cancelled) return;
         if (error instanceof ApiError && error.status === 401) {
           onRequireLogin();
           return;
@@ -1395,10 +1749,11 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
         }
         setLoadError(error instanceof ApiError ? error.message : "Unable to load dashboard state.");
       });
-    return () => {
-      cancelled = true;
-    };
   }, [onRequireCharacter, onRequireLogin]);
+
+  useEffect(() => {
+    refreshState();
+  }, [refreshState]);
 
   return (
     <main className="dashboard-shell">
@@ -1503,7 +1858,7 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
               </DashboardCard>
             </section>
           ) : playerState ? (
-            <ActivePanel player={player} />
+            <ActivePanel player={player} onRefresh={refreshState} />
           ) : (
             <section className="dashboard-panel">
               <DashboardCard>

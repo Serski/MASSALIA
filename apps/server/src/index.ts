@@ -8,6 +8,7 @@ import { authRoutes } from "./routes/auth.js";
 import { characterRoutes } from "./routes/characters.js";
 import { eventRoutes } from "./routes/events.js";
 import { meRoutes } from "./routes/me.js";
+import { partyRoutes } from "./routes/party.js";
 import { worldRoutes } from "./routes/world.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -33,6 +34,7 @@ app.get("/health", async () => ({ ok: true }));
 await app.register(authRoutes, { prefix: "/auth" });
 await app.register(characterRoutes, { prefix: "/characters" });
 await app.register(meRoutes, { prefix: "/me" });
+await app.register(partyRoutes, { prefix: "/party" });
 await app.register(worldRoutes, { prefix: "/api/world" });
 await app.register(eventRoutes, { prefix: "/api/events" });
 
