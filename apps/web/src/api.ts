@@ -194,8 +194,28 @@ export const api = {
   leaveParty: () => apiFetch<{ party: string }>("/api/party/leave", { method: "POST" }),
   character: () => apiFetch<{ character: CharacterSheet }>("/api/character"),
   events: () => apiFetch<GameEvent[]>("/api/events"),
+  dailyEvents: () => apiFetch<DailySet>("/api/events/daily"),
   resolveEvent: (eventId: string, choiceId: string) =>
     apiFetch<EventResolution>(`/api/events/${eventId}/choices/${choiceId}`, { method: "POST" }),
+};
+
+export type DailyCard = {
+  arena: string;
+  resolved: boolean;
+  resolvedChoiceId: string | null;
+  resolvedResult: string | null;
+  event: GameEvent;
+};
+
+export type DailySet = {
+  withdrawn: boolean;
+  remaining: number;
+  cards: DailyCard[];
+};
+
+export type ChoiceCost = {
+  label: string;
+  tone: "positive" | "negative" | "neutral";
 };
 
 export type EventChoicePreview = {
@@ -206,6 +226,8 @@ export type EventChoicePreview = {
   // Precomputed composure cost/gain for the current character (preview).
   composureDelta: number;
   composureReason: string;
+  // Up-front mechanical effects (stats, drachmae, favor, ideology, resources).
+  costs: ChoiceCost[];
 };
 
 export type GameEvent = {

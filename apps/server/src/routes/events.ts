@@ -1,18 +1,23 @@
 import type { FastifyInstance } from "fastify";
 import {
+  choiceComposureEffectDelta,
   choiceIdeologyDelta,
+  describeChoiceCosts,
   describeComposureDelta,
-  drawEvent,
   isEventEligible,
+  isWithdrawn,
+  type ComposureConfig,
   type EligibilityContext,
   type EventChoice,
   type EventDefinition,
+  type Trait,
 } from "@massalia/shared";
-import { applyChoiceEffects, findChoice, listEvents, recentEventIds, recordDraw } from "../services/eventEngine.js";
+import { applyChoiceEffects, findChoice, listEvents } from "../services/eventEngine.js";
 import { requireAuth } from "../services/auth.js";
-import { beginAction, ensureCharacterRow, getActivePlayer, getActiveWorldId, type CharacterRow } from "../services/character.js";
+import { ensureCharacterRow, getActivePlayer, getActiveWorldId, type CharacterRow } from "../services/character.js";
 import { getHeldTraits } from "../services/traits.js";
 import { applyComposureDelta, getComposureConfig, recoverComposure } from "../services/composure.js";
+import { ensureDailySet, findDailyCard, getDailySet, markCardResolved } from "../services/dailyDecisions.js";
 
 async function actingCharacter(userId: string): Promise<{ row: CharacterRow } | { error: string; code: number }> {
   const worldId = await getActiveWorldId();
@@ -32,19 +37,30 @@ function contextFor(row: CharacterRow, traitIds: string[]): EligibilityContext {
   };
 }
 
-function withPreviews(event: EventDefinition, traits: Awaited<ReturnType<typeof getHeldTraits>>) {
+// Net composure change for a choice = the trait/ideology-driven layer PLUS any
+// explicit change_composure effects. Combined so the preview equals what resolving
+// actually applies — never a hidden composure cost.
+function composurePreview(choice: EventChoice, traits: Trait[], config: ComposureConfig): { delta: number; reason: string } {
+  const tag = describeComposureDelta(traits, choice.tags ?? [], choiceIdeologyDelta(choice), config);
+  const explicit = choiceComposureEffectDelta(choice);
+  const delta = tag.delta + explicit;
+  const reason = tag.delta !== 0 ? tag.reason : explicit !== 0 ? "the toll of the act itself" : tag.reason;
+  return { delta, reason };
+}
+
+function withPreviews(event: EventDefinition, traits: Trait[]) {
   const config = getComposureConfig();
   return {
     ...event,
     choices: event.choices.map((choice: EventChoice) => {
-      const { delta, reason } = describeComposureDelta(traits, choice.tags ?? [], choiceIdeologyDelta(choice), config);
-      return { ...choice, composureDelta: delta, composureReason: reason };
+      const { delta, reason } = composurePreview(choice, traits, config);
+      return { ...choice, composureDelta: delta, composureReason: reason, costs: describeChoiceCosts(choice) };
     }),
   };
 }
 
 export async function eventRoutes(app: FastifyInstance) {
-  // Eligible events for this character, each choice with a composure preview.
+  // Full eligible list (debug / future use).
   app.get("/", async (request, reply) => {
     const user = await requireAuth(request);
     const acting = await actingCharacter(user.id);
@@ -54,29 +70,46 @@ export async function eventRoutes(app: FastifyInstance) {
     }
     const traits = await getHeldTraits(acting.row.id);
     const ctx = contextFor(acting.row, traits.map((t) => t.id));
-    const events = (await listEvents()).filter((event) => isEventEligible(event, ctx));
-    return events.map((event) => withPreviews(event, traits));
+    return (await listEvents()).filter((event) => isEventEligible(event, ctx)).map((event) => withPreviews(event, traits));
   });
 
-  // Daily draw: one eligible event weighted by `weight`, excluding the last 5 seen.
-  app.get("/draw", async (request, reply) => {
+  // The curated daily decision set: one card per arena (class/general/council/party),
+  // stable for the UTC day, each resolvable once.
+  app.get("/daily", async (request, reply) => {
     const user = await requireAuth(request);
     const acting = await actingCharacter(user.id);
     if ("error" in acting) {
       reply.code(acting.code);
       return { error: acting.error };
     }
+    const now = new Date();
     const traits = await getHeldTraits(acting.row.id);
     const ctx = contextFor(acting.row, traits.map((t) => t.id));
-    const eligible = (await listEvents()).filter((event) => isEventEligible(event, ctx));
-    const recent = await recentEventIds(acting.row.id, 5);
-    const drawn = drawEvent(eligible, recent);
-    if (!drawn) {
-      reply.code(204);
-      return null;
-    }
-    await recordDraw(acting.row.id, drawn.id);
-    return withPreviews(drawn, traits);
+    const set = await ensureDailySet(acting.row.id, ctx, now);
+    const events = await listEvents();
+
+    const cards = set
+      .map((card) => {
+        const event = events.find((e) => e.id === card.eventId);
+        if (!event) return null;
+        const resolvedChoice = card.resolvedChoiceId
+          ? event.choices.find((c) => c.id === card.resolvedChoiceId)
+          : undefined;
+        return {
+          arena: card.arena,
+          resolved: card.resolved,
+          resolvedChoiceId: card.resolvedChoiceId,
+          resolvedResult: resolvedChoice?.resultText ?? null,
+          event: withPreviews(event, traits),
+        };
+      })
+      .filter((card): card is NonNullable<typeof card> => card !== null);
+
+    return {
+      withdrawn: isWithdrawn(acting.row.breakUntil, now),
+      remaining: cards.filter((c) => !c.resolved).length,
+      cards,
+    };
   });
 
   app.post("/:eventId/choices/:choiceId", async (request, reply) => {
@@ -87,6 +120,7 @@ export async function eventRoutes(app: FastifyInstance) {
       return { error: acting.error };
     }
     const { eventId, choiceId } = request.params as { eventId: string; choiceId: string };
+    const now = new Date();
 
     let found;
     try {
@@ -96,29 +130,46 @@ export async function eventRoutes(app: FastifyInstance) {
       return { error: "Unknown event or choice." };
     }
 
-    // Action gate (respects break/withdrawn + the daily action cap).
-    const gate = await beginAction(acting.row.id);
-    if (!gate.ok) {
-      reply.code(gate.code);
-      return { error: gate.error };
+    // Gate: a composure break locks the day; otherwise the card must be one of
+    // today's unresolved decisions.
+    if (isWithdrawn(acting.row.breakUntil, now)) {
+      reply.code(423);
+      return { error: "You have withdrawn from public life and cannot act today." };
+    }
+    // Make sure today's set exists (so direct resolves are validated against it).
+    const traits = await getHeldTraits(acting.row.id);
+    const ctx = contextFor(acting.row, traits.map((t) => t.id));
+    await ensureDailySet(acting.row.id, ctx, now);
+    const card = await findDailyCard(acting.row.id, eventId, now);
+    if (!card) {
+      reply.code(409);
+      return { error: "That decision is not part of today's set." };
+    }
+    if (card.resolved) {
+      reply.code(409);
+      return { error: "You have already resolved that decision today." };
     }
 
-    // Tag-driven composure cost for THIS character, then apply it.
+    // Combined composure cost for THIS character (trait/ideology layer + explicit
+    // change_composure effects), applied once so it matches the preview exactly.
     await recoverComposure(acting.row.id);
-    const traits = await getHeldTraits(acting.row.id);
-    const { delta, reason } = describeComposureDelta(traits, found.choice.tags ?? [], choiceIdeologyDelta(found.choice), getComposureConfig());
+    const { delta, reason } = composurePreview(found.choice, traits, getComposureConfig());
     const composure = await applyComposureDelta(acting.row.id, delta, reason);
 
-    // Gameplay effects (atomic), then drift hook + SSE broadcast (inside).
+    // Gameplay effects (atomic), then mark the card resolved.
     const result = await applyChoiceEffects(acting.row.id, eventId, found.choice);
+    await markCardResolved(card.id, choiceId);
 
+    const remaining = (await getDailySet(acting.row.id, now)).filter((c) => !c.resolved).length;
     return {
       ...result,
+      arena: card.arena,
       composureDelta: delta,
       composureReason: reason,
       composure: composure.composure,
       broke: composure.broke,
       grantedTrait: composure.grantedTrait,
+      remaining,
     };
   });
 }

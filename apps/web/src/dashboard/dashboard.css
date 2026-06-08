@@ -816,6 +816,40 @@
   color: var(--dash-bad);
 }
 
+/* Up-front cost/effect chips on each choice (no hidden costs). */
+.dashboard-shell .choice-costs{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: flex-end;
+  max-width: 62%;
+  white-space: normal;
+}
+
+.dashboard-shell .choice-costs .cost-chip{
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  border: 1px solid rgba(181, 138, 69, 0.28);
+  background: rgba(12, 8, 7, 0.5);
+}
+
+.dashboard-shell .choice-costs .cost-positive{
+  color: var(--dash-good);
+  border-color: rgba(120, 170, 110, 0.4);
+}
+
+.dashboard-shell .choice-costs .cost-negative{
+  color: var(--dash-bad);
+  border-color: rgba(190, 110, 90, 0.4);
+}
+
+.dashboard-shell .choice-costs .cost-neutral{
+  color: rgba(214, 198, 170, 0.92);
+}
+
 .dashboard-shell .event-outcome{
   display: grid;
   gap: 6px;

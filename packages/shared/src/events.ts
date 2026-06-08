@@ -138,6 +138,26 @@ export function isEventEligible(event: EventDefinition, ctx: EligibilityContext)
   return true;
 }
 
+// Which daily "arena" an event belongs to, inferred from its gating.
+export type EventArena = "class" | "council" | "party" | "general";
+
+export function eventArena(event: EventDefinition): EventArena {
+  const req = event.requires;
+  if (req?.class) return "class";
+  if (req?.office === "councilor") return "council";
+  if (req?.party) return "party";
+  return "general";
+}
+
+// The arenas a character draws a daily card from: class + general always,
+// council if a councilor, party if aligned.
+export function dailyArenasFor(ctx: { isCouncilor: boolean; party: string }): EventArena[] {
+  const arenas: EventArena[] = ["class", "general"];
+  if (ctx.isCouncilor) arenas.push("council");
+  if (ctx.party && ctx.party !== "none") arenas.push("party");
+  return arenas;
+}
+
 // Weighted draw over eligible events, excluding recently-seen ids. If every
 // eligible event was recently seen, fall back to the full eligible set.
 export function drawEvent<T extends { id: string; weight: number }>(
@@ -172,4 +192,61 @@ export function choiceIdeologyDelta(choice: EventChoice): number {
   return choice.effects
     .filter((effect): effect is Extract<EventEffect, { type: "change_ideology" }> => effect.type === "change_ideology")
     .reduce((sum, effect) => sum + effect.amount, 0);
+}
+
+// Sum of explicit change_composure effects on a choice. Composure also moves from
+// the tag/ideology-driven layer (describeComposureDelta); the preview combines both
+// so a player never pays a hidden composure cost.
+export function choiceComposureEffectDelta(choice: EventChoice): number {
+  return choice.effects
+    .filter((effect): effect is Extract<EventEffect, { type: "change_composure" }> => effect.type === "change_composure")
+    .reduce((sum, effect) => sum + effect.amount, 0);
+}
+
+// One mechanical effect of a choice, rendered for the up-front cost preview.
+export type ChoiceCost = { label: string; tone: "positive" | "negative" | "neutral" };
+
+const STAT_COST_LABELS: Record<keyof CharacterStats, string> = {
+  prestige: "Prestige",
+  devotion: "Devotion",
+  militia: "Militia",
+  intelligence: "Intelligence",
+};
+
+function signedAmount(amount: number): string {
+  return amount > 0 ? `+${amount}` : `${amount}`;
+}
+
+// Human-readable mechanical effects shown BEFORE a player commits (stats, drachmae,
+// party favor, ideology lean, resources). Composure is surfaced separately (combined
+// tag + explicit). Trait/army/province effects stay as post-decision reveals.
+export function describeChoiceCosts(choice: EventChoice): ChoiceCost[] {
+  const costs: ChoiceCost[] = [];
+  for (const effect of choice.effects) {
+    switch (effect.type) {
+      case "change_stat":
+        costs.push({ label: `${signedAmount(effect.amount)} ${STAT_COST_LABELS[effect.stat]}`, tone: effect.amount >= 0 ? "positive" : "negative" });
+        break;
+      case "change_drachmae":
+        costs.push({ label: `${signedAmount(effect.amount)} drachmae`, tone: effect.amount >= 0 ? "positive" : "negative" });
+        break;
+      case "change_party_favor":
+        costs.push({
+          label: `${signedAmount(effect.amount)} ${effect.party === "palaioi" ? "Palaioi" : "Dynatoi"} favor`,
+          tone: effect.amount >= 0 ? "positive" : "negative",
+        });
+        break;
+      case "change_ideology":
+        // Only the acting character's own lean is a visible self-cost.
+        if (effect.characterId || effect.amount === 0) break;
+        costs.push({ label: `+${Math.abs(effect.amount)} ${effect.amount > 0 ? "Reformist" : "Traditionalist"}`, tone: "neutral" });
+        break;
+      case "gain_resource":
+        costs.push({ label: `+${effect.amount} ${effect.resource}`, tone: "positive" });
+        break;
+      default:
+        break;
+    }
+  }
+  return costs;
 }

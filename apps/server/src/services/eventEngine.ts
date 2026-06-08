@@ -12,7 +12,6 @@ import {
 import { createDb, effectLog, eventHistory, partyFavor, playerCharacters } from "@massalia/db";
 import { broadcastState, resolveOwnerToken, setProvinceOwner } from "./worldState.js";
 import { applyChangeTrait, TraitRuleError } from "./traits.js";
-import { applyComposureDelta } from "./composure.js";
 import { onIdeologyChanged } from "./politics.js";
 
 const db = createDb();
@@ -51,9 +50,11 @@ export async function findChoice(eventId: string, choiceId: string): Promise<{ e
 // effect log + event_history are committed in one transaction; the rule-enforcing
 // trait service and the break-aware composure service run alongside. The ideology
 // drift/censure hook and the SSE broadcast fire after the work is done.
+// NOTE: composure (the trait/ideology layer + explicit change_composure effects) is
+// applied by the events route as a single combined delta, so it is intentionally NOT
+// handled here — that keeps the up-front preview equal to what resolving applies.
 export async function applyChoiceEffects(actingCharacterId: string, eventId: string, choice: EventChoice) {
   let ideologyTouched = false;
-  const composureEffects = choice.effects.filter((e) => e.type === "change_composure");
   const traitEffects = choice.effects.filter((e) => e.type === "change_trait");
 
   await db.transaction(async (tx) => {
@@ -128,12 +129,6 @@ export async function applyChoiceEffects(actingCharacterId: string, eventId: str
       if (!(error instanceof TraitRuleError)) throw error;
       console.warn(`change_trait skipped (${error.reason}): ${error.message}`);
     }
-  }
-
-  // Direct composure adjustments (rare) — clamps, logs, and can trigger a break.
-  for (const effect of composureEffects) {
-    if (effect.type !== "change_composure") continue;
-    await applyComposureDelta(actingCharacterId, effect.amount, "event effect");
   }
 
   if (ideologyTouched) await onIdeologyChanged(actingCharacterId);

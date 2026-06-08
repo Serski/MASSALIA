@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api, ApiError, type PlayerState, type CharacterSheet as CharacterSheetData, type GameEvent, type EventResolution } from "../api.js";
+import { api, ApiError, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet } from "../api.js";
 import { assetPath, buildableBuildings, nobleHouses, professions, type House, type Profession } from "../data/league.js";
-import { ACTIONS_PER_DAY } from "@massalia/shared";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
 import "./dashboard.css";
@@ -65,24 +64,6 @@ type DigestItem = {
   text: string;
 };
 
-type CourtChoice = {
-  id: string;
-  label: string;
-  hint: string;
-  outcome: string;
-};
-
-type CourtEvent = {
-  id: string;
-  title: string;
-  kicker: string;
-  sceneLabel: string;
-  body: string;
-  urgency: "low" | "medium" | "high";
-  kind?: "court" | "family" | "market";
-  choices: CourtChoice[];
-};
-
 // Props shared by every panel. `onRefresh` re-pulls /me/state after a real
 // mutation (e.g. joining/leaving a party).
 type PanelProps = { player: PlayerDashboardView; onRefresh: () => void };
@@ -140,52 +121,6 @@ const placeholderDigest: DigestItem[] = [
   { id: "house", title: "House Leonidas", text: "Your House gained standing among conservative citizens." },
   { id: "season", title: "Season clock", text: "Season I advanced by one day. The assembly meets soon." },
 ];
-
-// TODO: Replace with real Court decision/event queue from the server event system.
-const placeholderCourtEvents: CourtEvent[] = [
-  {
-    id: "harbor-dispute",
-    title: "Harbor Dispute",
-    kicker: "Decision",
-    sceneLabel: "Quayside petition",
-    body: "Merchants crowd the quay after a rival house blocks three wine carts at the customs shed. They want your name on a petition before the council clerk closes the ledger.",
-    urgency: "medium",
-    kind: "market",
-    choices: [
-      { id: "sponsor", label: "Sponsor the petition", hint: "+Influence, costs gold", outcome: "Your clerk files the petition. Traders remember the favor, but the customs faction marks your name." },
-      { id: "mediate", label: "Mediate quietly", hint: "Safer standing", outcome: "You send a quiet message through the harbor scribes. No one cheers, but fewer doors close." },
-      { id: "ignore", label: "Let it pass", hint: "No cost", outcome: "The ledger shuts without your seal. The harbor solves the quarrel without you." },
-    ],
-  },
-  {
-    id: "house-summons",
-    title: "House Summons",
-    kicker: "House",
-    sceneLabel: "Private atrium",
-    body: "A senior kinsman asks you to appear at sunset. The matter is small enough to hide and large enough to become a grievance if ignored.",
-    urgency: "low",
-    kind: "court",
-    choices: [
-      { id: "attend", label: "Attend in person", hint: "+House standing", outcome: "You arrive before sunset. The family ledger records a modest favor in your name." },
-      { id: "send-gift", label: "Send wine", hint: "Costs class resource", outcome: "The amphorae arrive before you do. It is not presence, but it is noticed." },
-    ],
-  },
-  {
-    id: "suitor-calls",
-    title: "A Suitor Calls",
-    kicker: "Family",
-    sceneLabel: "Marriage inquiry",
-    body: "A cousin from House Timon asks whether your household would hear an introduction. No pledge is made, but refusal also speaks.",
-    urgency: "high",
-    kind: "family",
-    choices: [
-      { id: "receive", label: "Receive the envoy", hint: "Opens match talks", outcome: "The envoy is seated and served. The household begins weighing names and dowries." },
-      { id: "delay", label: "Delay politely", hint: "Keeps options open", outcome: "Your reply is gracious and slow. The offer remains warm for now." },
-      { id: "decline", label: "Decline", hint: "Ends this thread", outcome: "The message returns unopened by any promise. House Timon will remember the courtesy, if not the answer." },
-    ],
-  },
-];
-
 
 function getPlaceholderPlayer(): PlayerDashboardView {
   const profession = professions.find((item) => item.slug === placeholderPlayerState.professionSlug) ?? professions[0]!;
@@ -583,21 +518,35 @@ const partyOptions: {
 // Panels
 // ---------------------------------------------------------------------------
 
-// Live court decisions from the event engine, each choice showing its precomputed
-// composure cost/gain for this character (never a hidden cost).
-function CourtDecisions({ player, onRefresh }: PanelProps) {
-  const [events, setEvents] = useState<GameEvent[] | null>(null);
+const ARENA_LABELS: Record<string, string> = {
+  class: "Your Calling",
+  general: "Massalia",
+  council: "Oligarchy Council",
+  party: "Your Party",
+};
+
+// The curated daily decision set: one card per arena, each resolvable once, with
+// composure previews on every choice (never a hidden cost).
+function CourtDecisions({ onRefresh }: PanelProps) {
+  const [daily, setDaily] = useState<DailySet | null>(null);
   const [error, setError] = useState("");
-  const [resolved, setResolved] = useState<Record<string, EventResolution>>({});
+  const [outcomes, setOutcomes] = useState<Record<string, EventResolution>>({});
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
+
+  const load = useCallback(() => {
+    api
+      .dailyEvents()
+      .then(setDaily)
+      .catch((err) => setError(err instanceof ApiError ? err.message : "Unable to load decisions."));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     api
-      .events()
-      .then((list) => {
-        if (!cancelled) setEvents(list);
+      .dailyEvents()
+      .then((set) => {
+        if (!cancelled) setDaily(set);
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof ApiError ? err.message : "Unable to load decisions.");
@@ -612,7 +561,8 @@ function CourtDecisions({ player, onRefresh }: PanelProps) {
     setNote("");
     try {
       const result = await api.resolveEvent(eventId, choiceId);
-      setResolved((prev) => ({ ...prev, [eventId]: result }));
+      setOutcomes((prev) => ({ ...prev, [eventId]: result }));
+      load();
       onRefresh();
     } catch (err) {
       setNote(err instanceof ApiError ? err.message : "Could not resolve that decision.");
@@ -622,44 +572,44 @@ function CourtDecisions({ player, onRefresh }: PanelProps) {
   };
 
   if (error) return <p className="dashboard-todo">{error}</p>;
-  if (!events) return <p className="dashboard-todo">Loading decisions…</p>;
-  if (!events.length) return <p className="dashboard-todo">No decisions await you.</p>;
-
-  const canAct = !player.withdrawn && player.actionsRemaining > 0;
+  if (!daily) return <p className="dashboard-todo">Loading decisions…</p>;
+  if (!daily.cards.length) return <p className="dashboard-todo">No decisions await you today.</p>;
 
   return (
     <div className="dashboard-event-stack">
-      {player.withdrawn ? (
+      {daily.withdrawn ? (
         <div className="court-status withdrawn" role="status">
-          ⚠️ You have withdrawn from public life. Decisions reopen tomorrow.
+          ⚠️ You have withdrawn from public life. Today's decisions are closed; new ones arrive tomorrow.
         </div>
-      ) : player.actionsRemaining <= 0 ? (
+      ) : daily.remaining === 0 ? (
         <div className="court-status spent" role="status">
-          No actions left today. Decisions reopen tomorrow.
+          You have settled today's decisions. New ones arrive tomorrow.
         </div>
       ) : (
         <div className="court-status open">
-          {player.actionsRemaining} of {ACTIONS_PER_DAY} actions left today
+          {daily.remaining} of {daily.cards.length} decisions awaiting you today
         </div>
       )}
-      {events.map((event) => {
-        const outcome = resolved[event.id];
+      {daily.cards.map((card) => {
+        const event = card.event;
+        const liveOutcome = outcomes[event.id];
+        const isResolved = card.resolved || Boolean(liveOutcome);
         return (
           <DashboardCard className="event-card" key={event.id}>
             <div className="event-body">
-              <span className="dashboard-label event-kicker">Decision</span>
+              <span className="dashboard-label event-kicker">{ARENA_LABELS[card.arena] ?? "Decision"}</span>
               <h3>{event.scene}</h3>
-              {outcome ? (
+              {isResolved ? (
                 <div className="event-outcome" role="status">
-                  <p>{outcome.resultText}</p>
-                  {outcome.composureDelta !== 0 ? (
-                    <p className={`composure-note ${outcome.composureDelta < 0 ? "neg" : "pos"}`}>
-                      {outcome.composureDelta > 0 ? "+" : ""}{outcome.composureDelta} Composure — {outcome.composureReason}
+                  <p>{liveOutcome?.resultText ?? card.resolvedResult}</p>
+                  {liveOutcome && liveOutcome.composureDelta !== 0 ? (
+                    <p className={`composure-note ${liveOutcome.composureDelta < 0 ? "neg" : "pos"}`}>
+                      {liveOutcome.composureDelta > 0 ? "+" : ""}{liveOutcome.composureDelta} Composure — {liveOutcome.composureReason}
                     </p>
                   ) : null}
-                  {outcome.broke ? (
+                  {liveOutcome?.broke ? (
                     <p className="composure-note neg">
-                      You broke down{outcome.grantedTrait ? ` and learned to cope (${outcome.grantedTrait})` : ""} — withdrawn until tomorrow.
+                      You broke down{liveOutcome.grantedTrait ? ` and learned to cope (${liveOutcome.grantedTrait})` : ""} — withdrawn until tomorrow.
                     </p>
                   ) : null}
                 </div>
@@ -670,13 +620,23 @@ function CourtDecisions({ player, onRefresh }: PanelProps) {
                       className="event-choice-button"
                       type="button"
                       key={choice.id}
-                      disabled={busy || !canAct}
+                      disabled={busy || daily.withdrawn}
                       onClick={() => resolve(event.id, choice.id)}
                     >
                       <strong>{choice.label}</strong>
-                      {choice.composureDelta !== 0 ? (
-                        <span className={`choice-hint ${choice.composureDelta < 0 ? "hint-negative" : "hint-positive"}`}>
-                          ({choice.composureDelta > 0 ? "+" : ""}{choice.composureDelta} Composure: {choice.composureReason})
+                      {choice.costs.length > 0 || choice.composureDelta !== 0 ? (
+                        <span className="choice-costs">
+                          {choice.costs.map((cost, i) => (
+                            <span key={i} className={`cost-chip cost-${cost.tone}`}>{cost.label}</span>
+                          ))}
+                          {choice.composureDelta !== 0 ? (
+                            <span
+                              className={`cost-chip ${choice.composureDelta < 0 ? "cost-negative" : "cost-positive"}`}
+                              title={choice.composureReason}
+                            >
+                              {choice.composureDelta > 0 ? "+" : ""}{choice.composureDelta} Composure
+                            </span>
+                          ) : null}
                         </span>
                       ) : null}
                     </button>
@@ -1892,6 +1852,7 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [activeSheet, setActiveSheet] = useState<"inventory" | "character" | null>(null);
   const [playerState, setPlayerState] = useState<PlayerState | null>(null);
+  const [courtRemaining, setCourtRemaining] = useState(0);
   const [loadError, setLoadError] = useState("");
   const player = useMemo(() => playerState ? playerFromState(playerState) : getPlaceholderPlayer(), [playerState]);
   const closeSheet = useCallback(() => setActiveSheet(null), []);
@@ -1904,7 +1865,7 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
     }
   }, [onRequireLogin]);
   const ActivePanel = panelComponents[activeSection];
-  const courtBadgeCount = placeholderCourtEvents.length;
+  const courtBadgeCount = courtRemaining;
   const isMoreActive = mobileMoreNav.some((item) => item.id === activeSection);
   const hiddenBadgeCount = mobileMoreNav.reduce((total, item) => total + (item.badge ?? 0), 0);
 
@@ -1928,6 +1889,10 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
         }
         setLoadError(error instanceof ApiError ? error.message : "Unable to load dashboard state.");
       });
+    // Court nav badge = unresolved decisions in today's curated set.
+    api.dailyEvents()
+      .then((set) => setCourtRemaining(set.remaining))
+      .catch(() => setCourtRemaining(0));
   }, [onRequireCharacter, onRequireLogin]);
 
   useEffect(() => {

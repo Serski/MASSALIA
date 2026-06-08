@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { boolean, integer, jsonb, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, date, integer, jsonb, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const worlds = pgTable("worlds", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -155,6 +155,20 @@ export const partyFavor = pgTable("party_favor", {
   favor: integer("favor").notNull().default(0),
 }, (table) => ({
   oneFavorPerCharacterParty: uniqueIndex("party_favor_character_party_idx").on(table.characterId, table.party),
+}));
+
+// The curated daily decision set: one card per arena per character per UTC day.
+export const dailyDecisions = pgTable("daily_decisions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  characterId: uuid("character_id").references(() => playerCharacters.id).notNull(),
+  utcDay: date("utc_day").notNull(),
+  arena: text("arena").notNull(),
+  eventId: text("event_id").notNull(),
+  resolved: boolean("resolved").notNull().default(false),
+  resolvedChoiceId: text("resolved_choice_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  oneCardPerArenaPerDay: uniqueIndex("daily_decisions_char_day_arena_idx").on(table.characterId, table.utcDay, table.arena),
 }));
 
 // Events drawn for a character (for the "exclude last 5 draws" rule).
