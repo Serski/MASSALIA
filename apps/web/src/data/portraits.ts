@@ -36,6 +36,9 @@ const portraitPrefixes: Record<PortraitClassSlug, string> = {
 const uploadedPortraits: Partial<Record<PortraitClassSlug, string>> = {
   trader: "webp",
   "military-leader": "webp",
+  priest: "webp",
+  shipbuilder: "webp",
+  landowner: "webp",
 };
 
 export const portraitPools: Record<PortraitClassSlug, PortraitOption[]> = Object.fromEntries(
