@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, type PlayerState, type CharacterSheet as CharacterSheetData, type GameEvent, type EventResolution } from "../api.js";
 import { assetPath, buildableBuildings, nobleHouses, professions, type House, type Profession } from "../data/league.js";
+import { ACTIONS_PER_DAY } from "@massalia/shared";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
 import "./dashboard.css";
@@ -47,6 +48,7 @@ type PlayerDashboardState = {
   censureExpiresAt: string | null;
   composure: number;
   withdrawn: boolean;
+  actionsRemaining: number;
   stats: FourStats;
   balances: Record<string, number>;
   faceImage?: string;
@@ -127,6 +129,7 @@ const placeholderPlayerState: PlayerDashboardState = {
   censureExpiresAt: null,
   composure: 70,
   withdrawn: false,
+  actionsRemaining: 2,
   stats: { prestige: 12, devotion: 0, militia: 0, intelligence: 0 },
   balances: { wine: 36, wheat: 130, tin: 60, iron: 40 },
 };
@@ -228,6 +231,7 @@ function playerFromState(state: PlayerState): PlayerDashboardView {
     censureExpiresAt: state.character.censureExpiresAt,
     composure: state.character.composure,
     withdrawn: state.character.withdrawn,
+    actionsRemaining: state.character.actionsRemaining,
     stats: state.stats,
     balances: state.resources.balances,
     faceImage: getFaceImage(profession.slug, state.character.faceId),
@@ -621,8 +625,23 @@ function CourtDecisions({ player, onRefresh }: PanelProps) {
   if (!events) return <p className="dashboard-todo">Loading decisions…</p>;
   if (!events.length) return <p className="dashboard-todo">No decisions await you.</p>;
 
+  const canAct = !player.withdrawn && player.actionsRemaining > 0;
+
   return (
     <div className="dashboard-event-stack">
+      {player.withdrawn ? (
+        <div className="court-status withdrawn" role="status">
+          ⚠️ You have withdrawn from public life. Decisions reopen tomorrow.
+        </div>
+      ) : player.actionsRemaining <= 0 ? (
+        <div className="court-status spent" role="status">
+          No actions left today. Decisions reopen tomorrow.
+        </div>
+      ) : (
+        <div className="court-status open">
+          {player.actionsRemaining} of {ACTIONS_PER_DAY} actions left today
+        </div>
+      )}
       {events.map((event) => {
         const outcome = resolved[event.id];
         return (
@@ -651,7 +670,7 @@ function CourtDecisions({ player, onRefresh }: PanelProps) {
                       className="event-choice-button"
                       type="button"
                       key={choice.id}
-                      disabled={busy || player.withdrawn}
+                      disabled={busy || !canAct}
                       onClick={() => resolve(event.id, choice.id)}
                     >
                       <strong>{choice.label}</strong>
@@ -668,9 +687,6 @@ function CourtDecisions({ player, onRefresh }: PanelProps) {
           </DashboardCard>
         );
       })}
-      {player.withdrawn ? (
-        <p className="dashboard-todo">You are withdrawn from public life and cannot act until tomorrow.</p>
-      ) : null}
       {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
     </div>
   );
