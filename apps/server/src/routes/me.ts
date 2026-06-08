@@ -5,6 +5,8 @@ import { remainingActions } from "@massalia/shared";
 import { requireAuth } from "../services/auth.js";
 import { ensureCharacterRow, findCharacterRow, withDailyReset } from "../services/character.js";
 import { activeCensure } from "../services/politics.js";
+import { recoverComposure } from "../services/composure.js";
+import { isWithdrawn } from "@massalia/shared";
 
 const db = createDb();
 
@@ -55,6 +57,7 @@ export async function meRoutes(app: FastifyInstance) {
     const ensured = await ensureCharacterRow(state.player, world.id);
     // Resolve any expired censure first (it may flip party), then read the row.
     const censure = await activeCensure(ensured.id);
+    await recoverComposure(ensured.id);
     const character = await withDailyReset((await findCharacterRow(ensured.playerId, ensured.worldId)) ?? ensured, new Date());
 
     const resourceRows = await db.select().from(resources).where(and(eq(resources.scope, "player"), eq(resources.scopeId, state.player.id)));
@@ -102,6 +105,8 @@ export async function meRoutes(app: FastifyInstance) {
         composure: character.composure,
         drachmae: character.drachmae,
         actionsRemaining: remainingActions(character.actionsSpentToday),
+        // Composure break: withdrawn from public life until breakUntil.
+        withdrawn: isWithdrawn(character.breakUntil, new Date()),
         // Active party censure (ideology drift) for the HUD warning + countdown.
         censured: censure !== null,
         censureExpiresAt: censure ? censure.expiresAt.toISOString() : null,

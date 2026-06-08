@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { eq } from "drizzle-orm";
-import { clampIdeology, type EventDefinition, type EventEffect } from "@massalia/shared";
+import { clampIdeology, parseEventDefinition, type EventChoice, type EventDefinition, type EventEffect } from "@massalia/shared";
 import { createDb, playerCharacters } from "@massalia/db";
 import { resolveOwnerToken, setProvinceOwner } from "./worldState.js";
 import { applyChangeTrait, TraitRuleError } from "./traits.js";
@@ -16,7 +16,20 @@ const eventsDir = path.join(repoRoot, "content/events");
 
 export async function listEvents(): Promise<EventDefinition[]> {
   const files = (await fs.readdir(eventsDir)).filter((file) => file.endsWith(".json"));
-  return Promise.all(files.map((file) => fs.readFile(path.join(eventsDir, file), "utf8").then((content) => JSON.parse(content))));
+  return Promise.all(
+    files.map((file) =>
+      fs.readFile(path.join(eventsDir, file), "utf8").then((content) => parseEventDefinition(JSON.parse(content))),
+    ),
+  );
+}
+
+export async function findChoice(eventId: string, choiceId: string): Promise<{ event: EventDefinition; choice: EventChoice }> {
+  const events = await listEvents();
+  const event = events.find((candidate) => candidate.id === eventId);
+  if (!event) throw new Error(`Unknown event ${eventId}`);
+  const choice = event.choices.find((candidate) => candidate.id === choiceId);
+  if (!choice) throw new Error(`Unknown choice ${choiceId}`);
+  return { event, choice };
 }
 
 export async function applyEventChoice(eventId: string, choiceId: string) {

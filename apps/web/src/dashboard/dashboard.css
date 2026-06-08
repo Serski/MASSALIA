@@ -2849,3 +2849,34 @@
 }
 
 .dashboard-shell .censure-banner b{ color: var(--dash-parchment); }
+
+/* Composure bar (character panel) + event composure notes */
+.dashboard-shell .composure-track{
+  height: 10px;
+  overflow: hidden;
+  background: rgba(181, 138, 69, 0.15);
+  border: 1px solid var(--dash-line);
+  border-radius: 6px;
+}
+.dashboard-shell .composure-fill{
+  display: block;
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+.dashboard-shell .composure-fill.tone-high{ background: linear-gradient(90deg, var(--dash-good), #9ec487); }
+.dashboard-shell .composure-fill.tone-mid{ background: linear-gradient(90deg, var(--dash-bronze), var(--dash-gold-bright)); }
+.dashboard-shell .composure-fill.tone-low{ background: linear-gradient(90deg, #8a3f2e, var(--dash-bad)); }
+.dashboard-shell .composure-read{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  color: var(--dash-stone);
+  font-size: 11px;
+}
+.dashboard-shell .composure-withdrawn{ color: #d49a86; font-weight: 600; }
+
+.dashboard-shell .composure-note{ margin-top: 6px; font-size: 11.5px; font-style: italic; }
+.dashboard-shell .composure-note.neg{ color: #d49a86; }
+.dashboard-shell .composure-note.pos{ color: #9ec487; }

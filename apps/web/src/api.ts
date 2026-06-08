@@ -135,6 +135,8 @@ export type PlayerState = {
     // -100 Traditionalist .. +100 Reformist, 0 = centre.
     ideology: number;
     composure: number;
+    // Composure break — withdrawn from public life (actions locked).
+    withdrawn: boolean;
     drachmae: number;
     actionsRemaining: number;
     // Active party censure (ideology drift): flag + ISO expiry for the countdown.
@@ -191,4 +193,32 @@ export const api = {
     apiFetch<{ party: string }>("/api/party/join", { method: "POST", body: { party } }),
   leaveParty: () => apiFetch<{ party: string }>("/api/party/leave", { method: "POST" }),
   character: () => apiFetch<{ character: CharacterSheet }>("/api/character"),
+  events: () => apiFetch<GameEvent[]>("/api/events"),
+  resolveEvent: (eventId: string, choiceId: string) =>
+    apiFetch<EventResolution>(`/api/events/${eventId}/choices/${choiceId}`, { method: "POST" }),
+};
+
+export type EventChoicePreview = {
+  id: string;
+  label: string;
+  resultText: string;
+  tags?: string[];
+  // Precomputed composure cost/gain for the current character (preview).
+  composureDelta: number;
+  composureReason: string;
+};
+
+export type GameEvent = {
+  id: string;
+  scene: string;
+  choices: EventChoicePreview[];
+};
+
+export type EventResolution = {
+  resultText: string;
+  composureDelta: number;
+  composureReason: string;
+  composure: number;
+  broke: boolean;
+  grantedTrait: string | null;
 };

@@ -121,6 +121,10 @@ export const playerCharacters = pgTable("player_characters", {
   ideology: integer("ideology").notNull().default(0),
   party: text("party").notNull().default("none"),
   composure: integer("composure").notNull().default(70),
+  // Lazy composure recovery bookkeeping + break (withdrawn) state.
+  lastComposureUpdate: timestamp("last_composure_update", { withTimezone: true }),
+  breakUntil: timestamp("break_until", { withTimezone: true }),
+  breaksCount: integer("breaks_count").notNull().default(0),
   growthMultiplier: numeric("growth_multiplier").notNull().default("1.0"),
   actionsSpentToday: integer("actions_spent_today").notNull().default(0),
   lastActionReset: timestamp("last_action_reset", { withTimezone: true }),
@@ -140,6 +144,15 @@ export const characterTraits = pgTable("character_traits", {
 }, (table) => ({
   oneTraitPerCharacter: uniqueIndex("character_traits_character_trait_idx").on(table.characterId, table.traitId),
 }));
+
+// Audit log of every composure change (action delta, break, etc.).
+export const composureLog = pgTable("composure_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  characterId: uuid("character_id").references(() => playerCharacters.id).notNull(),
+  delta: integer("delta").notNull(),
+  reason: text("reason").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 // A censure window opened when a member's ideology drifts out of their party's
 // range. Resolved at expiresAt (worker job + lazy-on-read). One per character.

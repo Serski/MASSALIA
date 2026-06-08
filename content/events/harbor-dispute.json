@@ -6,12 +6,14 @@
     {
       "id": "favor-harbor",
       "label": "Back the harbor guild",
+      "tags": ["ritual", "commerce"],
       "effects": [{ "type": "gain_resource", "scope": "province", "id": "massalia-harbor", "resource": "silver", "amount": 50 }],
       "resultText": "The harbor guild pays promptly and remembers the favor."
     },
     {
       "id": "give-old-port",
       "label": "Grant Old Port to the rival league",
+      "tags": ["foreign-rites", "reform"],
       "effects": [{ "type": "set_province_owner", "provinceId": "old-port", "ownerPlayerId": "SECOND_PLAYER" }],
       "resultText": "Old Port changes hands under a brittle but public settlement."
     }

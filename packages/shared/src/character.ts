@@ -173,6 +173,8 @@ export type CharacterSheet = {
   ideology: number;
   party: Party;
   composure: number;
+  // True while under a break (withdrawn from public life until breakUntil).
+  withdrawn: boolean;
   growthMultiplier: number;
   actionsSpentToday: number;
   remainingActions: number;

@@ -5,7 +5,9 @@ import {
   CLASS_START,
   effectiveStats,
   HOUSE_START,
+  isWithdrawn,
   remainingActions,
+  spendAction,
   startingCharacter,
   type CharacterSheet,
   type CharacterStats,
@@ -103,10 +105,35 @@ export async function withDailyReset(row: CharacterRow, now: Date): Promise<Char
   return updated[0]!;
 }
 
+export type ActionGate = { ok: true } | { ok: false; code: number; error: string };
+
+// The action gate: rejects while withdrawn (under a break), else spends one of
+// the day's actions (lazy daily reset included). Used by event-choice resolution.
+export async function beginAction(characterId: string, now: Date = new Date()): Promise<ActionGate> {
+  const rows = await db.select().from(playerCharacters).where(eq(playerCharacters.id, characterId)).limit(1);
+  const row = rows[0];
+  if (!row) return { ok: false, code: 404, error: "No active character found." };
+
+  if (isWithdrawn(row.breakUntil, now)) {
+    return { ok: false, code: 423, error: "You have withdrawn from public life and cannot act today." };
+  }
+
+  const result = spendAction({ actionsSpentToday: row.actionsSpentToday, lastActionReset: row.lastActionReset }, now);
+  if (!result.ok) {
+    return { ok: false, code: 429, error: "No actions remaining today." };
+  }
+  await db
+    .update(playerCharacters)
+    .set({ actionsSpentToday: result.state.actionsSpentToday, lastActionReset: result.state.lastActionReset })
+    .where(eq(playerCharacters.id, characterId));
+  return { ok: true };
+}
+
 export function toCharacterSheet(
   row: CharacterRow,
   traits: HeldTrait[] = [],
   censureExpiresAt: string | null = null,
+  now: Date = new Date(),
 ): CharacterSheet {
   const base: CharacterStats = {
     prestige: row.prestige,
@@ -127,6 +154,7 @@ export function toCharacterSheet(
     ideology: row.ideology,
     party: row.party as Party,
     composure: row.composure,
+    withdrawn: isWithdrawn(row.breakUntil, now),
     growthMultiplier: Number(row.growthMultiplier),
     actionsSpentToday: row.actionsSpentToday,
     remainingActions: remainingActions(row.actionsSpentToday),

@@ -27,10 +27,15 @@
 
   { "id": "stoic", "name": "Stoic", "description": "Endures loss and insult without breaking.", "category": "coping", "recoveryBonus": 2, "opposes": ["humiliation"] },
   { "id": "resilient", "name": "Resilient", "description": "Recovers quickly from setbacks.", "category": "coping", "recoveryBonus": 1 },
+  { "id": "philosophical", "name": "Philosophical", "description": "Finds reason in misfortune; the mind steadies the heart.", "category": "coping", "recoveryBonus": 2 },
+  { "id": "hardened", "name": "Hardened", "description": "Years of hardship leave little that can shake you.", "category": "coping", "recoveryBonus": 3 },
 
   { "id": "unproven", "name": "Unproven", "description": "The Houses have not yet measured you; fades as your standing grows.", "category": "reputation" },
   { "id": "renowned", "name": "Renowned", "description": "Your name carries weight in the assembly.", "category": "reputation", "statMod": { "prestige": 2 } },
   { "id": "feared", "name": "Feared", "description": "Rivals step carefully around you.", "category": "reputation", "statMod": { "militia": 1, "prestige": 1 } },
   { "id": "disgraced", "name": "Disgraced", "description": "A public failure clings to your name.", "category": "reputation", "statMod": { "prestige": -2 } },
-  { "id": "turncoat", "name": "Turncoat", "description": "Abandoned a party once; allies remember, and trust comes dearer.", "category": "reputation", "statMod": { "prestige": -1 } }
+  { "id": "turncoat", "name": "Turncoat", "description": "Abandoned a party once; allies remember, and trust comes dearer.", "category": "reputation", "statMod": { "prestige": -1 } },
+
+  { "id": "traditionalist", "name": "Traditionalist", "description": "Holds to the old ways; reform unsettles you.", "category": "personality", "opposite": "syncretist", "statMod": { "devotion": 1 }, "opposes": ["reform", "foreign-rites"] },
+  { "id": "syncretist", "name": "Syncretist", "description": "Welcomes new gods and customs; rigid tradition chafes.", "category": "personality", "opposite": "traditionalist", "statMod": { "intelligence": 1 }, "opposes": ["purity"], "embraces": ["reform"] }
 ]

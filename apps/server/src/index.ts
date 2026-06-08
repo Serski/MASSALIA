@@ -12,6 +12,7 @@ import { meRoutes } from "./routes/me.js";
 import { partyRoutes } from "./routes/party.js";
 import { worldRoutes } from "./routes/world.js";
 import { loadTraitDefs } from "./services/traits.js";
+import { loadComposureConfig } from "./services/composure.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../..");
@@ -32,8 +33,9 @@ await app.register(fastifyStatic, {
   root: path.join(repoRoot, "content"),
   prefix: "/content/",
 });
-// Validate content/traits/traits.json at boot — fail fast on a malformed file.
+// Validate content JSON at boot — fail fast on a malformed file.
 await loadTraitDefs();
+await loadComposureConfig();
 
 app.get("/health", async () => ({ ok: true }));
 await app.register(authRoutes, { prefix: "/auth" });

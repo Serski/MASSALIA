@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api, ApiError, type PlayerState, type CharacterSheet as CharacterSheetData } from "../api.js";
+import { api, ApiError, type PlayerState, type CharacterSheet as CharacterSheetData, type GameEvent, type EventResolution } from "../api.js";
 import { assetPath, buildableBuildings, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
@@ -45,6 +45,8 @@ type PlayerDashboardState = {
   // Active party censure (ideology drift): flag + ISO expiry for the countdown.
   censured: boolean;
   censureExpiresAt: string | null;
+  composure: number;
+  withdrawn: boolean;
   stats: FourStats;
   balances: Record<string, number>;
   faceImage?: string;
@@ -123,6 +125,8 @@ const placeholderPlayerState: PlayerDashboardState = {
   ideology: 0,
   censured: false,
   censureExpiresAt: null,
+  composure: 70,
+  withdrawn: false,
   stats: { prestige: 12, devotion: 0, militia: 0, intelligence: 0 },
   balances: { wine: 36, wheat: 130, tin: 60, iron: 40 },
 };
@@ -222,6 +226,8 @@ function playerFromState(state: PlayerState): PlayerDashboardView {
     ideology: state.character.ideology ?? 0,
     censured: state.character.censured,
     censureExpiresAt: state.character.censureExpiresAt,
+    composure: state.character.composure,
+    withdrawn: state.character.withdrawn,
     stats: state.stats,
     balances: state.resources.balances,
     faceImage: getFaceImage(profession.slug, state.character.faceId),
@@ -316,48 +322,6 @@ function ListRow({ children, action }: { children: ReactNode; action?: ReactNode
   );
 }
 
-function getChoiceHintTone(hint: string) {
-  if (hint.trim().startsWith("+")) {
-    return "positive";
-  }
-  if (hint.trim().startsWith("-")) {
-    return "negative";
-  }
-  return "neutral";
-}
-
-function EventCard({ event }: { event: CourtEvent }) {
-  const [resolvedChoice, setResolvedChoice] = useState<CourtChoice | null>(null);
-
-  return (
-    <DashboardCard className={`event-card urgency-${event.urgency}`}>
-      <div className="event-banner" aria-hidden="true">
-        <span className="scene-art-tag">Scene art</span>
-        <span className="scene-label">{event.sceneLabel}</span>
-      </div>
-      <div className="event-body">
-        <span className="dashboard-label event-kicker">{event.kicker}</span>
-        <h3>{event.title}</h3>
-        <p>{event.body}</p>
-        {resolvedChoice ? (
-          <div className="event-outcome" role="status">
-            <strong>{resolvedChoice.label}</strong>
-            <p>{resolvedChoice.outcome}</p>
-          </div>
-        ) : (
-          <div className="event-choice-stack">
-            {event.choices.map((choice) => (
-              <button className="event-choice-button" type="button" key={choice.id} onClick={() => setResolvedChoice(choice)}>
-                <strong>{choice.label}</strong>
-                <span className={`choice-hint hint-${getChoiceHintTone(choice.hint)}`}>{choice.hint}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </DashboardCard>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Reusable panel building blocks ported from the v8 mockup.
@@ -615,7 +579,104 @@ const partyOptions: {
 // Panels
 // ---------------------------------------------------------------------------
 
-function CourtPanel() {
+// Live court decisions from the event engine, each choice showing its precomputed
+// composure cost/gain for this character (never a hidden cost).
+function CourtDecisions({ player, onRefresh }: PanelProps) {
+  const [events, setEvents] = useState<GameEvent[] | null>(null);
+  const [error, setError] = useState("");
+  const [resolved, setResolved] = useState<Record<string, EventResolution>>({});
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .events()
+      .then((list) => {
+        if (!cancelled) setEvents(list);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof ApiError ? err.message : "Unable to load decisions.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const resolve = async (eventId: string, choiceId: string) => {
+    setBusy(true);
+    setNote("");
+    try {
+      const result = await api.resolveEvent(eventId, choiceId);
+      setResolved((prev) => ({ ...prev, [eventId]: result }));
+      onRefresh();
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "Could not resolve that decision.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (error) return <p className="dashboard-todo">{error}</p>;
+  if (!events) return <p className="dashboard-todo">Loading decisions…</p>;
+  if (!events.length) return <p className="dashboard-todo">No decisions await you.</p>;
+
+  return (
+    <div className="dashboard-event-stack">
+      {events.map((event) => {
+        const outcome = resolved[event.id];
+        return (
+          <DashboardCard className="event-card" key={event.id}>
+            <div className="event-body">
+              <span className="dashboard-label event-kicker">Decision</span>
+              <h3>{event.scene}</h3>
+              {outcome ? (
+                <div className="event-outcome" role="status">
+                  <p>{outcome.resultText}</p>
+                  {outcome.composureDelta !== 0 ? (
+                    <p className={`composure-note ${outcome.composureDelta < 0 ? "neg" : "pos"}`}>
+                      {outcome.composureDelta > 0 ? "+" : ""}{outcome.composureDelta} Composure — {outcome.composureReason}
+                    </p>
+                  ) : null}
+                  {outcome.broke ? (
+                    <p className="composure-note neg">
+                      You broke down{outcome.grantedTrait ? ` and learned to cope (${outcome.grantedTrait})` : ""} — withdrawn until tomorrow.
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="event-choice-stack">
+                  {event.choices.map((choice) => (
+                    <button
+                      className="event-choice-button"
+                      type="button"
+                      key={choice.id}
+                      disabled={busy || player.withdrawn}
+                      onClick={() => resolve(event.id, choice.id)}
+                    >
+                      <strong>{choice.label}</strong>
+                      {choice.composureDelta !== 0 ? (
+                        <span className={`choice-hint ${choice.composureDelta < 0 ? "hint-negative" : "hint-positive"}`}>
+                          ({choice.composureDelta > 0 ? "+" : ""}{choice.composureDelta} Composure: {choice.composureReason})
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </DashboardCard>
+        );
+      })}
+      {player.withdrawn ? (
+        <p className="dashboard-todo">You are withdrawn from public life and cannot act until tomorrow.</p>
+      ) : null}
+      {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
+    </div>
+  );
+}
+
+function CourtPanel({ player, onRefresh }: PanelProps) {
   return (
     <section className="dashboard-panel" aria-labelledby="court-title">
       <div className="dashboard-panel-heading">
@@ -628,12 +689,8 @@ function CourtPanel() {
         <div className="decision-column">
           <div className="panel-subhead decision-subhead">
             <span className="dashboard-label">Decisions awaiting you</span>
-            <strong>{placeholderCourtEvents.length} waiting</strong>
           </div>
-          <div className="dashboard-event-stack">
-            {placeholderCourtEvents.map((event) => <EventCard event={event} key={event.id} />)}
-          </div>
-          <p className="dashboard-todo">TODO: Court events are placeholder cards until server event queue integration is connected.</p>
+          <CourtDecisions player={player} onRefresh={onRefresh} />
         </div>
         <aside className="court-rail" aria-label="Court summary">
           <DashboardCard className="digest-card">
@@ -1568,6 +1625,22 @@ function TraitRows({ traits }: { traits: CharacterSheetData["traits"] }) {
   );
 }
 
+function ComposureBar({ composure, withdrawn }: { composure: number; withdrawn: boolean }) {
+  const pct = Math.max(0, Math.min(100, composure));
+  const tone = pct <= 20 ? "low" : pct <= 50 ? "mid" : "high";
+  return (
+    <div className="composure">
+      <div className="composure-track">
+        <span className={`composure-fill tone-${tone}`} style={{ width: `${pct}%` }} />
+      </div>
+      <div className="composure-read">
+        <span>{pct} / 100</span>
+        {withdrawn ? <span className="composure-withdrawn">⚠️ Withdrawn from public life</span> : null}
+      </div>
+    </div>
+  );
+}
+
 function CharacterTab({ player, sheet }: { player: PlayerDashboardView; sheet: CharacterSheetData | null }) {
   const primary = primaryStatFor(player.professionSlug);
   // Effective stats (base + trait mods) from the canonical sheet; base from the
@@ -1597,6 +1670,9 @@ function CharacterTab({ player, sheet }: { player: PlayerDashboardView; sheet: C
         })}
       </div>
       <p className="sheet-todo">Effective stats = base + trait bonuses. Base stays 0 until the event engine grants stats.</p>
+
+      <SheetLabel>Composure</SheetLabel>
+      <ComposureBar composure={sheet?.composure ?? player.composure} withdrawn={sheet?.withdrawn ?? player.withdrawn} />
 
       <SheetLabel>Alignment</SheetLabel>
       <AlignmentBar ideology={player.ideology} />

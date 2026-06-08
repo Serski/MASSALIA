@@ -1,0 +1,10 @@
+{
+  "costPerConflict": 15,
+  "gainPerEmbrace": 8,
+  "driftCostFactor": 0.5,
+  "maxGainPerAction": 20,
+  "baseRecoveryPerDay": 10,
+  "breakResetValue": 40,
+  "maxCopingTraits": 3,
+  "copingPool": ["stoic", "resilient", "philosophical", "hardened"]
+}
