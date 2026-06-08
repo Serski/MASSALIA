@@ -179,4 +179,7 @@ export type CharacterSheet = {
   lastActionReset: string | null;
   createdAt: string;
   traits: HeldTrait[];
+  // Active party censure (ideology drift). null when not censured.
+  censured: boolean;
+  censureExpiresAt: string | null;
 };

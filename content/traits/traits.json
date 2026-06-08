@@ -31,5 +31,6 @@
   { "id": "unproven", "name": "Unproven", "description": "The Houses have not yet measured you; fades as your standing grows.", "category": "reputation" },
   { "id": "renowned", "name": "Renowned", "description": "Your name carries weight in the assembly.", "category": "reputation", "statMod": { "prestige": 2 } },
   { "id": "feared", "name": "Feared", "description": "Rivals step carefully around you.", "category": "reputation", "statMod": { "militia": 1, "prestige": 1 } },
-  { "id": "disgraced", "name": "Disgraced", "description": "A public failure clings to your name.", "category": "reputation", "statMod": { "prestige": -2 } }
+  { "id": "disgraced", "name": "Disgraced", "description": "A public failure clings to your name.", "category": "reputation", "statMod": { "prestige": -2 } },
+  { "id": "turncoat", "name": "Turncoat", "description": "Abandoned a party once; allies remember, and trust comes dearer.", "category": "reputation", "statMod": { "prestige": -1 } }
 ]

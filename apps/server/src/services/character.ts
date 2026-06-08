@@ -103,7 +103,11 @@ export async function withDailyReset(row: CharacterRow, now: Date): Promise<Char
   return updated[0]!;
 }
 
-export function toCharacterSheet(row: CharacterRow, traits: HeldTrait[] = []): CharacterSheet {
+export function toCharacterSheet(
+  row: CharacterRow,
+  traits: HeldTrait[] = [],
+  censureExpiresAt: string | null = null,
+): CharacterSheet {
   const base: CharacterStats = {
     prestige: row.prestige,
     devotion: row.devotion,
@@ -129,5 +133,7 @@ export function toCharacterSheet(row: CharacterRow, traits: HeldTrait[] = []): C
     lastActionReset: row.lastActionReset ? row.lastActionReset.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
     traits,
+    censured: censureExpiresAt !== null,
+    censureExpiresAt,
   };
 }

@@ -42,8 +42,9 @@ type PlayerDashboardState = {
   party: "Palaioi" | "Dynatoi" | "Unaligned";
   // -100 Traditionalist .. +100 Reformist, 0 = centre.
   ideology: number;
-  // ISO timestamp until which the player cannot rejoin a party, else null.
-  partyCooldownUntil: string | null;
+  // Active party censure (ideology drift): flag + ISO expiry for the countdown.
+  censured: boolean;
+  censureExpiresAt: string | null;
   stats: FourStats;
   balances: Record<string, number>;
   faceImage?: string;
@@ -120,7 +121,8 @@ const placeholderPlayerState: PlayerDashboardState = {
   },
   party: "Unaligned",
   ideology: 0,
-  partyCooldownUntil: null,
+  censured: false,
+  censureExpiresAt: null,
   stats: { prestige: 12, devotion: 0, militia: 0, intelligence: 0 },
   balances: { wine: 36, wheat: 130, tin: 60, iron: 40 },
 };
@@ -218,7 +220,8 @@ function playerFromState(state: PlayerState): PlayerDashboardView {
     // Guard against a missing value (e.g. a frontend/backend deploy-window skew)
     // so the bar degrades to "Centrist (0%)" instead of rendering "NaN%".
     ideology: state.character.ideology ?? 0,
-    partyCooldownUntil: state.character.partyCooldownUntil,
+    censured: state.character.censured,
+    censureExpiresAt: state.character.censureExpiresAt,
     stats: state.stats,
     balances: state.resources.balances,
     faceImage: getFaceImage(profession.slug, state.character.faceId),
@@ -490,11 +493,23 @@ function DigestList({ items }: { items: { id: string; icon: string; text: ReactN
   );
 }
 
-// --- Politics cooldown countdown -------------------------------------------
+// --- Politics countdown (censure expiry) -----------------------------------
 function remainingSeconds(untilIso: string | null) {
   if (!untilIso) return 0;
   const ms = new Date(untilIso).getTime() - Date.now();
   return ms > 0 ? Math.ceil(ms / 1000) : 0;
+}
+
+function formatDuration(totalSeconds: number) {
+  if (totalSeconds <= 0) return "0s";
+  const d = Math.floor(totalSeconds / 86400);
+  const h = Math.floor((totalSeconds % 86400) / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
 }
 
 function useCountdownSeconds(untilIso: string | null) {
@@ -879,7 +894,7 @@ function FamilyPanel() {
 function PoliticsPanel({ player, onRefresh }: PanelProps) {
   const [tab, setTab] = useState<"council" | "party">("council");
   const [note, setNote] = useState("");
-  const cooldown = useCountdownSeconds(player.partyCooldownUntil);
+  const censureSeconds = useCountdownSeconds(player.censured ? player.censureExpiresAt : null);
   const joined = player.party !== "Unaligned";
 
   const join = async (slug: "dynatoi" | "palaioi") => {
@@ -956,6 +971,18 @@ function PoliticsPanel({ player, onRefresh }: PanelProps) {
       ) : joined ? (
         <div className="pol-page">
           <PanelBanner scene={`the ${player.party} hall`} className={player.party === "Dynatoi" ? "banner-reform" : "banner-cons"} />
+          {player.censured ? (
+            <div className="censure-banner" role="alert">
+              <span className="censure-ic" aria-hidden="true">⚠️</span>
+              <div>
+                <strong>Under censure</strong>
+                <p>
+                  Your ideology has drifted from the {player.party}. Return to at least 10% {player.party === "Dynatoi" ? "Reformist" : "Traditionalist"} within{" "}
+                  <b>{formatDuration(censureSeconds)}</b> or you will be expelled (and branded a turncoat).
+                </p>
+              </div>
+            </div>
+          ) : null}
           <div className="court-grid">
             <div>
               <div className="panel-label">Party matters · {player.party}</div>
@@ -985,9 +1012,9 @@ function PoliticsPanel({ player, onRefresh }: PanelProps) {
                 <div className="mini-office">
                   <div>
                     <div className="mo-t">Leave the {player.party}</div>
-                    <div className="mo-s">A rejoin cooldown applies after leaving</div>
+                    <div className="mo-s">{player.censured ? "Blocked while under censure" : "Defecting brands you a turncoat"}</div>
                   </div>
-                  <button type="button" className="panel-btn ghost" onClick={leave}>Leave</button>
+                  <button type="button" className="panel-btn ghost" onClick={leave} disabled={player.censured}>Leave</button>
                 </div>
               </div>
             </div>
@@ -1004,7 +1031,7 @@ function PoliticsPanel({ player, onRefresh }: PanelProps) {
           <div className="panel-grid2">
             {partyOptions.map((option) => {
               const qualifies = option.slug === "dynatoi" ? player.ideology >= 10 : player.ideology <= -10;
-              const canJoin = qualifies && cooldown <= 0;
+              const canJoin = qualifies && !player.censured;
               const pct = option.slug === "dynatoi" ? Math.max(0, player.ideology) : Math.max(0, -player.ideology);
               return (
                 <div className={`party-pick${option.consClass ? " cons" : ""}`} key={option.slug}>
@@ -1033,13 +1060,8 @@ function PoliticsPanel({ player, onRefresh }: PanelProps) {
               );
             })}
           </div>
-          {cooldown > 0 ? (
-            <div className="slot-empty pol-cooldown">
-              You left your party. You may apply to a party again in <b>{cooldown}</b>s.
-            </div>
-          ) : null}
           <p className="dashboard-todo">
-            Join eligibility uses your real ideology. Expulsion-on-drift is not implemented yet (no system moves ideology).
+            Join eligibility uses your real ideology. Drift out of range while a member and you are censured for 3 days, then expelled if you do not return.
           </p>
           {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
         </div>

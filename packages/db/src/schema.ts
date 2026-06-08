@@ -141,6 +141,18 @@ export const characterTraits = pgTable("character_traits", {
   oneTraitPerCharacter: uniqueIndex("character_traits_character_trait_idx").on(table.characterId, table.traitId),
 }));
 
+// A censure window opened when a member's ideology drifts out of their party's
+// range. Resolved at expiresAt (worker job + lazy-on-read). One per character.
+export const censures = pgTable("censures", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  characterId: uuid("character_id").references(() => playerCharacters.id).notNull(),
+  party: text("party").notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+}, (table) => ({
+  oneCensurePerCharacter: uniqueIndex("censures_character_idx").on(table.characterId),
+}));
+
 export const regions = pgTable("regions", {
   id: text("id").primaryKey(),
   worldId: uuid("world_id").references(() => worlds.id).notNull(),

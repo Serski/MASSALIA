@@ -137,8 +137,9 @@ export type PlayerState = {
     composure: number;
     drachmae: number;
     actionsRemaining: number;
-    // ISO timestamp until which the player cannot rejoin a party, else null.
-    partyCooldownUntil: string | null;
+    // Active party censure (ideology drift): flag + ISO expiry for the countdown.
+    censured: boolean;
+    censureExpiresAt: string | null;
     origin: string;
   };
   resources: {
@@ -187,8 +188,7 @@ export const api = {
   setNewsletter: (optIn: boolean) =>
     apiFetch<{ ok: true; newsletterOptIn: boolean }>("/me/newsletter", { method: "POST", body: { optIn } }),
   joinParty: (party: "dynatoi" | "palaioi") =>
-    apiFetch<{ party: string; partyCooldownUntil: string | null }>("/party/join", { method: "POST", body: { party } }),
-  leaveParty: () =>
-    apiFetch<{ party: string; partyCooldownUntil: string | null }>("/party/leave", { method: "POST" }),
+    apiFetch<{ party: string }>("/api/party/join", { method: "POST", body: { party } }),
+  leaveParty: () => apiFetch<{ party: string }>("/api/party/leave", { method: "POST" }),
   character: () => apiFetch<{ character: CharacterSheet }>("/api/character"),
 };

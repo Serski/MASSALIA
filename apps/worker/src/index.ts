@@ -1,5 +1,6 @@
 import { Queue, Worker } from "bullmq";
 import { completionDelayMs } from "@massalia/shared";
+import { resolveCensureIfExpired } from "@massalia/db";
 
 const redisUrl = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
 const connection = {
@@ -30,6 +31,11 @@ new Worker(
     if (job.name === "building-complete") {
       // TODO: Mark the queued building complete in Postgres inside a transaction.
       console.log(`Resolved building completion for ${job.data.buildingId}`);
+      return;
+    }
+    if (job.name === "censure-resolve") {
+      const outcome = await resolveCensureIfExpired(job.data.characterId as string);
+      console.log(`Resolved censure for ${job.data.characterId}: ${outcome}`);
     }
   },
   { connection },

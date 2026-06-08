@@ -40,7 +40,7 @@ await app.register(authRoutes, { prefix: "/auth" });
 await app.register(characterRoutes, { prefix: "/characters" });
 await app.register(characterSheetRoutes, { prefix: "/api/character" });
 await app.register(meRoutes, { prefix: "/me" });
-await app.register(partyRoutes, { prefix: "/party" });
+await app.register(partyRoutes, { prefix: "/api/party" });
 await app.register(worldRoutes, { prefix: "/api/world" });
 await app.register(eventRoutes, { prefix: "/api/events" });
 

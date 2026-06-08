@@ -6,6 +6,7 @@ export type EventEffect =
   | { type: "gain_resource"; scope: "player" | "province"; id: string; resource: string; amount: number }
   | { type: "set_province_owner"; provinceId: string; ownerPlayerId: string }
   | { type: "change_trait"; characterId: string; traitId: string; operation: "add" | "remove" }
+  | { type: "change_ideology"; characterId: string; amount: number }
   | { type: "spawn_army"; ownerPlayerId: string; provinceId: string; units: Record<string, number> };
 
 export interface EventChoice {

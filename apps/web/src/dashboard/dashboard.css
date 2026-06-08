@@ -2816,3 +2816,36 @@
   font-size: 9px;
   vertical-align: super;
 }
+
+/* Censure warning banner (Politics → Your Party) */
+.dashboard-shell .censure-banner{
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 15px;
+  padding: 12px 14px;
+  background: rgba(187, 106, 82, 0.12);
+  border: 1px solid rgba(187, 106, 82, 0.5);
+  border-left-width: 3px;
+  border-radius: 10px;
+}
+
+.dashboard-shell .censure-ic{ font-size: 18px; line-height: 1.2; }
+
+.dashboard-shell .censure-banner strong{
+  display: block;
+  color: #d49a86;
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dashboard-shell .censure-banner p{
+  margin-top: 3px;
+  color: var(--dash-stone);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dashboard-shell .censure-banner b{ color: var(--dash-parchment); }
