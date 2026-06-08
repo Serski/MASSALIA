@@ -16,6 +16,10 @@ export const composureConfigSchema = z
     breakResetValue: z.number(),
     maxCopingTraits: z.number().int(),
     copingPool: z.array(z.string()),
+    // Optional tunables from the content pack (accepted; behaviour may use them later).
+    startingComposure: z.number().optional(),
+    breakLockoutDays: z.number().optional(),
+    escalation: z.object({ fromBreakNumber: z.number(), prestigePenalty: z.number() }).optional(),
   })
   .strict();
 
@@ -157,9 +161,13 @@ export function resolveBreak(args: {
     const pick = args.pick ?? ((candidates) => candidates[Math.floor(Math.random() * candidates.length)]!);
     grantedTrait = pick(available);
   }
+  // Lockout length from config (breakLockoutDays). 1 = until the next UTC day;
+  // each extra day pushes the boundary out by a further full day.
+  const lockoutDays = Math.max(1, Math.round(config.breakLockoutDays ?? 1));
+  const breakUntil = new Date(nextUtcDayBoundary(now).getTime() + (lockoutDays - 1) * 86_400_000);
   return {
     composure: config.breakResetValue,
-    breakUntil: nextUtcDayBoundary(now),
+    breakUntil,
     grantedTrait,
     breaksCount: breaksCount + 1,
   };

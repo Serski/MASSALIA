@@ -1,0 +1,52 @@
+[
+  { "id": "dyn-bilingual-school", "weight": 7, "requires": { "party": "dynatoi" }, "scene": "House Miltiades expands the bilingual school and seeks patrons for Gaulish-speaking tutors.",
+    "choices": [
+      { "id": "fund", "label": "Fund two tutors", "tags": ["reformist_act", "patronage"], "effects": [{ "type": "change_drachmae", "amount": -30 }, { "type": "change_ideology", "amount": 4 }, { "type": "change_stat", "stat": "prestige", "amount": 2 }], "resultText": "Children swap languages in the courtyard. The future sounds like both." },
+      { "id": "token", "label": "Give a token sum", "tags": ["gift"], "effects": [{ "type": "change_drachmae", "amount": -5 }, { "type": "change_party_favor", "party": "dynatoi", "amount": 1 }], "resultText": "Every drachma helps, they say, politely." }
+    ] },
+  { "id": "dyn-envoy-feast", "weight": 7, "requires": { "party": "dynatoi" }, "scene": "A Gaulish envoy from the Salyes arrives. The party needs a host with a good table.",
+    "choices": [
+      { "id": "host", "label": "Host the feast", "tags": ["reformist_act", "feast"], "effects": [{ "type": "change_drachmae", "amount": -25 }, { "type": "change_ideology", "amount": 3 }, { "type": "change_stat", "stat": "prestige", "amount": 2 }], "resultText": "Mead and Massaliote wine at one table. History smiles." },
+      { "id": "attend", "label": "Attend another's feast", "tags": ["feast"], "effects": [{ "type": "change_party_favor", "party": "dynatoi", "amount": 1 }], "resultText": "Good food, better contacts, no bill." }
+    ] },
+  { "id": "dyn-mixed-marriage", "weight": 6, "requires": { "party": "dynatoi" }, "scene": "A party family arranges a marriage with a Ligurian noble line and asks you to bless it publicly.",
+    "choices": [
+      { "id": "bless", "label": "Speak at the wedding", "tags": ["reformist_act", "festival"], "effects": [{ "type": "change_ideology", "amount": 5 }, { "type": "change_party_favor", "party": "dynatoi", "amount": 3 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "Protis and Gyptis are invoked. The old story still works." },
+      { "id": "gift-only", "label": "Send a gift, skip the speech", "tags": ["gift"], "effects": [{ "type": "change_drachmae", "amount": -15 }, { "type": "change_party_favor", "party": "dynatoi", "amount": 1 }], "resultText": "Present in silver, absent in person." }
+    ] },
+  { "id": "dyn-trade-charter", "weight": 7, "requires": { "party": "dynatoi" }, "scene": "The party drafts a charter opening two new river trading posts to mixed Greek-Gaulish partnerships.",
+    "choices": [
+      { "id": "invest", "label": "Invest early", "tags": ["reformist_act", "profit"], "effects": [{ "type": "change_drachmae", "amount": -20 }, { "type": "change_ideology", "amount": 3 }, { "type": "change_party_favor", "party": "dynatoi", "amount": 2 }], "resultText": "Your stake is registered. Upriver, posts are already rising." },
+      { "id": "study", "label": "Study the numbers first", "tags": ["study", "wait"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }], "resultText": "The margins look real. So does the risk." }
+    ] },
+  { "id": "dyn-translate-laws", "weight": 6, "requires": { "party": "dynatoi" }, "scene": "House Herakleides proposes posting key laws in both Greek and Gaulish script in the agora.",
+    "choices": [
+      { "id": "champion", "label": "Champion the proposal", "tags": ["reformist_act", "debate"], "effects": [{ "type": "change_ideology", "amount": 4 }, { "type": "change_stat", "stat": "intelligence", "amount": 1 }, { "type": "change_party_favor", "party": "dynatoi", "amount": 2 }], "resultText": "Law that can be read is law that can be trusted, you argue." },
+      { "id": "fund-stone", "label": "Pay for the stone itself", "tags": ["patronage"], "effects": [{ "type": "change_drachmae", "amount": -20 }, { "type": "change_stat", "stat": "prestige", "amount": 2 }], "resultText": "Your name, small but legible, at the base of the stele." }
+    ] },
+  { "id": "dyn-druid-guest", "weight": 5, "requires": { "party": "dynatoi" }, "scene": "A Gaulish wise-man - some say druid - asks to observe the rites of Artemis as a guest.",
+    "choices": [
+      { "id": "escort", "label": "Escort him yourself", "tags": ["reformist_act"], "effects": [{ "type": "change_ideology", "amount": 5 }, { "type": "change_trait", "traitId": "gaulish-rites", "operation": "add" }], "resultText": "He watches in silence, then shares grove-lore in return. Eyes follow you both." },
+      { "id": "arrange", "label": "Arrange it through intermediaries", "tags": ["scheme"], "effects": [{ "type": "change_ideology", "amount": 2 }, { "type": "change_party_favor", "party": "dynatoi", "amount": 1 }], "resultText": "It happens. Your fingerprints, mostly, do not." }
+    ] },
+  { "id": "dyn-joint-patrol", "weight": 6, "requires": { "party": "dynatoi" }, "scene": "The party proposes joint road patrols with friendly Ligurian warriors against bandits.",
+    "choices": [
+      { "id": "ride", "label": "Ride with the first patrol", "tags": ["reformist_act", "frontline"], "effects": [{ "type": "change_stat", "stat": "militia", "amount": 2 }, { "type": "change_ideology", "amount": 3 }], "resultText": "Shield beside shield-shape. Different songs, same road." },
+      { "id": "supply", "label": "Supply provisions instead", "tags": ["gift"], "effects": [{ "type": "change_drachmae", "amount": -15 }, { "type": "change_party_favor", "party": "dynatoi", "amount": 2 }], "resultText": "An army of two cultures still marches on its stomach." }
+    ] },
+  { "id": "dyn-reform-speech", "weight": 7, "requires": { "party": "dynatoi" }, "scene": "The party wants a stirring speech in the agora: Massalia as bridge between worlds.",
+    "choices": [
+      { "id": "speak", "label": "Give the speech", "tags": ["reformist_act", "boast"], "effects": [{ "type": "change_ideology", "amount": 4 }, { "type": "change_stat", "stat": "prestige", "amount": 2 }, { "type": "change_composure", "amount": -5 }], "resultText": "Bridge, not wall. The phrase outlives the afternoon." },
+      { "id": "write", "label": "Write it for another to deliver", "tags": ["study"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 2 }, { "type": "change_party_favor", "party": "dynatoi", "amount": 1 }], "resultText": "Your words, his voice, the party's gain." }
+    ] },
+  { "id": "dyn-apprentice", "weight": 6, "requires": { "party": "dynatoi" }, "scene": "A program places Gaulish youths as apprentices in Greek workshops. One is assigned to you.",
+    "choices": [
+      { "id": "teach", "label": "Teach him properly", "tags": ["reformist_act", "labor"], "effects": [{ "type": "change_ideology", "amount": 3 }, { "type": "change_stat", "stat": "intelligence", "amount": 1 }], "resultText": "Quick hands, quicker questions. The work improves, surprisingly." },
+      { "id": "errands", "label": "Use him for errands only", "tags": ["idle"], "effects": [{ "type": "change_party_favor", "party": "dynatoi", "amount": -2 }], "resultText": "He learns the streets, not the craft. Word gets back." }
+    ] },
+  { "id": "dyn-northern-map", "weight": 5, "requires": { "party": "dynatoi" }, "scene": "Followers of Pytheas seek backers for a coastal survey beyond the Pillars, updating his charts of the tin routes.",
+    "choices": [
+      { "id": "back", "label": "Back the expedition", "tags": ["reformist_act"], "effects": [{ "type": "change_drachmae", "amount": -35 }, { "type": "change_stat", "stat": "intelligence", "amount": 2 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "If they return, your name goes on the chart's dedication." },
+      { "id": "copy", "label": "Just buy a copy of the old charts", "tags": ["study"], "effects": [{ "type": "change_drachmae", "amount": -10 }, { "type": "change_stat", "stat": "intelligence", "amount": 1 }], "resultText": "On the Ocean, secondhand, sea-stained, priceless." }
+    ] }
+]

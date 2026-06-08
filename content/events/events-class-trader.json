@@ -1,0 +1,52 @@
+[
+  { "id": "tra-tin-run", "weight": 7, "requires": { "class": "trader" }, "scene": "A captain offers you a share in a tin run toward the northern routes Pytheas charted.",
+    "choices": [
+      { "id": "invest", "label": "Take the share", "tags": ["profit"], "effects": [{ "type": "change_drachmae", "amount": -25 }, { "type": "change_stat", "stat": "intelligence", "amount": 1 }, { "type": "change_trait", "traitId": "tin-route-pioneer", "operation": "add" }], "resultText": "Months later: tin, profit, and a route in your head worth more than both." },
+      { "id": "decline", "label": "Too far, too risky", "tags": ["back_down"], "effects": [{ "type": "change_drachmae", "amount": 5 }], "resultText": "The ship sails without you. You check the horizon more than you'd admit." }
+    ] },
+  { "id": "tra-pirate-toll", "weight": 6, "requires": { "class": "trader" }, "scene": "Ligurian coast pirates demand a 'toll' for safe passage past their headland.",
+    "choices": [
+      { "id": "pay", "label": "Pay the toll", "tags": ["back_down"], "effects": [{ "type": "change_drachmae", "amount": -15 }], "resultText": "Cheaper than a hull. Galling all the same." },
+      { "id": "convoy", "label": "Organize an armed convoy with other traders", "tags": ["frontline"], "effects": [{ "type": "change_drachmae", "amount": -5 }, { "type": "change_stat", "stat": "militia", "amount": 2 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "Twelve ships, bristling. The headland stays quiet." }
+    ] },
+  { "id": "tra-false-coin", "weight": 6, "requires": { "class": "trader" }, "scene": "A pouch of your incoming silver rings wrong. Counterfeit obols, well made.",
+    "choices": [
+      { "id": "report", "label": "Report to the mint magistrates", "tags": ["expose_secret"], "effects": [{ "type": "change_drachmae", "amount": -10 }, { "type": "change_stat", "stat": "prestige", "amount": 2 }], "resultText": "You eat the loss; the forger eats a trial." },
+      { "id": "pass-on", "label": "Pass them on in mixed payments", "tags": ["deception"], "effects": [{ "type": "change_drachmae", "amount": 10 }, { "type": "change_composure", "amount": -5 }], "resultText": "Someone else's problem now. Several someones." }
+    ] },
+  { "id": "tra-iberian-partner", "weight": 6, "requires": { "class": "trader" }, "scene": "An Iberian merchant proposes a standing partnership: your wine south, his silver north.",
+    "choices": [
+      { "id": "seal", "label": "Seal it with an oath at the temple", "tags": ["public_oath"], "effects": [{ "type": "change_drachmae", "amount": 20 }, { "type": "change_stat", "stat": "devotion", "amount": 1 }], "resultText": "Witnessed by Artemis and the harbor crowd both." },
+      { "id": "trial", "label": "One trial shipment first", "tags": ["wait"], "effects": [{ "type": "change_drachmae", "amount": 10 }, { "type": "change_stat", "stat": "intelligence", "amount": 1 }], "resultText": "Trust, like cargo, ships in installments." }
+    ] },
+  { "id": "tra-storm-cargo", "weight": 6, "requires": { "class": "trader" }, "scene": "Your ship limps in after a storm. Half the cargo went over the side to save the hull.",
+    "choices": [
+      { "id": "crew-bonus", "label": "Bonus the crew for saving the ship", "tags": ["gift"], "effects": [{ "type": "change_drachmae", "amount": -15 }, { "type": "change_stat", "stat": "prestige", "amount": 2 }], "resultText": "Sailors fight for a berth on your ships now." },
+      { "id": "dock-pay", "label": "Dock their pay for the lost cargo", "tags": ["extort", "cruelty"], "effects": [{ "type": "change_drachmae", "amount": 10 }, { "type": "change_stat", "stat": "prestige", "amount": -2 }], "resultText": "The ledger balances. The crew does not return." }
+    ] },
+  { "id": "tra-amber", "weight": 5, "requires": { "class": "trader" }, "scene": "A northern trader offers raw amber - the sun-stone - at a price that means he stole it or needs to vanish.",
+    "choices": [
+      { "id": "buy", "label": "Buy it, ask nothing", "tags": ["profit", "scheme"], "effects": [{ "type": "change_drachmae", "amount": 35 }, { "type": "change_composure", "amount": -5 }], "resultText": "It sells in Syracuse for four times the price. You still wonder." },
+      { "id": "refuse", "label": "Refuse stolen goods", "tags": ["judge_fairly"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_stat", "stat": "devotion", "amount": 1 }], "resultText": "Clean hands hold less amber, sleep more." }
+    ] },
+  { "id": "tra-stall-war", "weight": 6, "requires": { "class": "trader" }, "scene": "A rival undercuts you on every amphora in the agora, selling at a loss to break you.",
+    "choices": [
+      { "id": "outlast", "label": "Match prices and outlast him", "tags": ["wait"], "effects": [{ "type": "change_drachmae", "amount": -20 }, { "type": "change_stat", "stat": "intelligence", "amount": 2 }], "resultText": "His backers blink first. The agora is yours again." },
+      { "id": "whisper", "label": "Start a rumor his oil is rancid", "tags": ["deception"], "effects": [{ "type": "change_drachmae", "amount": 15 }, { "type": "change_composure", "amount": -5 }], "resultText": "Effective. Untrue. Effective." }
+    ] },
+  { "id": "tra-punic-smuggler", "weight": 5, "requires": { "class": "trader" }, "scene": "A Carthaginian offers to move your goods through ports closed to Greeks - for a cut and silence.",
+    "choices": [
+      { "id": "deal", "label": "Take the arrangement", "tags": ["scheme", "profit"], "effects": [{ "type": "change_drachmae", "amount": 40 }, { "type": "change_trait", "traitId": "carthaginian-sympathizer", "operation": "add" }], "resultText": "Closed ports open. So does a file with your name, somewhere in Qart-Hadasht." },
+      { "id": "refuse", "label": "Refuse - some silver costs too much", "tags": ["back_down"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "He shrugs and finds another Greek. There is always another Greek." }
+    ] },
+  { "id": "tra-caravan-guards", "weight": 6, "requires": { "class": "trader" }, "scene": "Your overland caravan to the Rhone posts needs guards. Greek mercenaries or Gaulish warriors?",
+    "choices": [
+      { "id": "gauls", "label": "Hire Gaulish warriors", "tags": ["reformist_act"], "effects": [{ "type": "change_ideology", "amount": 3 }, { "type": "change_drachmae", "amount": 15 }], "resultText": "Bandits see torques and long swords, and choose other caravans." },
+      { "id": "greeks", "label": "Hire Greek mercenaries", "tags": ["traditionalist_act"], "effects": [{ "type": "change_ideology", "amount": -2 }, { "type": "change_drachmae", "amount": -10 }, { "type": "change_stat", "stat": "militia", "amount": 1 }], "resultText": "Pricier, but they drill like citizens." }
+    ] },
+  { "id": "tra-credit-default", "weight": 5, "requires": { "class": "trader" }, "scene": "A merchant who owes you a season's profit cannot pay. He offers his daughter's dowry or his ship.",
+    "choices": [
+      { "id": "ship", "label": "Take the ship, forgive the rest", "tags": ["mercy"], "effects": [{ "type": "change_drachmae", "amount": 20 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "A fair hull for a fair debt. He works your docks now, loyally." },
+      { "id": "everything", "label": "Demand everything owed", "tags": ["extort", "cruelty"], "effects": [{ "type": "change_drachmae", "amount": 35 }, { "type": "change_stat", "stat": "prestige", "amount": -2 }, { "type": "change_composure", "amount": -5 }], "resultText": "Paid in full. His family's ruin is now part of your reputation." }
+    ] }
+]

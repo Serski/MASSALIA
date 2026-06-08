@@ -13,6 +13,7 @@ import { partyRoutes } from "./routes/party.js";
 import { worldRoutes } from "./routes/world.js";
 import { loadTraitDefs } from "./services/traits.js";
 import { loadComposureConfig } from "./services/composure.js";
+import { listEvents } from "./services/eventEngine.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../..");
@@ -36,6 +37,7 @@ await app.register(fastifyStatic, {
 // Validate content JSON at boot — fail fast on a malformed file.
 await loadTraitDefs();
 await loadComposureConfig();
+await listEvents();
 
 app.get("/health", async () => ({ ok: true }));
 await app.register(authRoutes, { prefix: "/auth" });

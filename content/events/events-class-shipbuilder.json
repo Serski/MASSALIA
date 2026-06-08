@@ -1,0 +1,52 @@
+[
+  { "id": "shi-timber", "weight": 7, "requires": { "class": "shipbuilder" }, "scene": "Good keel timber is scarce. A Gaulish clan controls the best upriver forests.",
+    "choices": [
+      { "id": "deal", "label": "Negotiate directly with the clan", "tags": ["reformist_act"], "effects": [{ "type": "change_ideology", "amount": 3 }, { "type": "change_drachmae", "amount": 15 }], "resultText": "Oak floats downriver by the raft-load. Your yards never stall." },
+      { "id": "import", "label": "Import Italian timber at cost", "tags": ["traditionalist_act"], "effects": [{ "type": "change_ideology", "amount": -2 }, { "type": "change_drachmae", "amount": -15 }], "resultText": "Pricier, slower, and not one favor owed to anyone north of the wall." }
+    ] },
+  { "id": "shi-war-commission", "weight": 7, "requires": { "class": "shipbuilder" }, "scene": "The council commissions a war galley. The contract is prestigious; the deadline, brutal.",
+    "choices": [
+      { "id": "accept", "label": "Take the contract", "tags": ["labor", "claim_office"], "effects": [{ "type": "change_drachmae", "amount": 30 }, { "type": "change_stat", "stat": "prestige", "amount": 2 }, { "type": "change_composure", "amount": -10 }], "resultText": "Lamps burn in your yard past midnight. The hull grows like a living thing." },
+      { "id": "pass", "label": "Pass - merchant hulls pay steadier", "tags": ["wait", "profit"], "effects": [{ "type": "change_drachmae", "amount": 15 }], "resultText": "Let another yard chase glory and penalty clauses." }
+    ] },
+  { "id": "shi-strike", "weight": 6, "requires": { "class": "shipbuilder" }, "scene": "Your dockworkers down tools over pay, with a half-finished hull on the slipway.",
+    "choices": [
+      { "id": "raise", "label": "Raise their pay", "tags": ["gift", "mercy"], "effects": [{ "type": "change_drachmae", "amount": -20 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "Work resumes with songs. Margins thin, loyalty thickens." },
+      { "id": "replace", "label": "Hire replacement hands", "tags": ["cruelty", "extort"], "effects": [{ "type": "change_drachmae", "amount": 10 }, { "type": "change_stat", "stat": "prestige", "amount": -2 }, { "type": "change_composure", "amount": -5 }], "resultText": "The hull gets finished. The old crew gets organized. This isn't over." }
+    ] },
+  { "id": "shi-innovation", "weight": 6, "requires": { "class": "shipbuilder" }, "scene": "A Gaulish boatwright shows you a hull-joint his people use on river craft. It could work at sea.",
+    "choices": [
+      { "id": "adopt", "label": "Test it on your next hull", "tags": ["reformist_act", "study"], "effects": [{ "type": "change_ideology", "amount": 3 }, { "type": "change_stat", "stat": "intelligence", "amount": 2 }], "resultText": "Stronger and lighter. Within a year, two rival yards are copying you copying him." },
+      { "id": "dismiss", "label": "Greek hulls conquered the sea already", "tags": ["traditionalist_act", "boast"], "effects": [{ "type": "change_ideology", "amount": -2 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "The old ways hold. So does a faint itch of curiosity." }
+    ] },
+  { "id": "shi-storm-repairs", "weight": 7, "requires": { "class": "shipbuilder" }, "scene": "After the great storm, half the harbor needs repairs at once. You can gouge or you can triage.",
+    "choices": [
+      { "id": "fair", "label": "Fair prices, worst damage first", "tags": ["judge_fairly"], "effects": [{ "type": "change_drachmae", "amount": 20 }, { "type": "change_stat", "stat": "prestige", "amount": 2 }], "resultText": "Captains remember who didn't bleed them when they were beached." },
+      { "id": "gouge", "label": "Charge what desperation pays", "tags": ["extort", "profit"], "effects": [{ "type": "change_drachmae", "amount": 45 }, { "type": "change_stat", "stat": "prestige", "amount": -2 }], "resultText": "A season's profit in a month. A decade of muttering, gratis." }
+    ] },
+  { "id": "shi-rival-yard", "weight": 6, "requires": { "class": "shipbuilder" }, "scene": "A rival yard poaches your best shipwright with promises of a partnership.",
+    "choices": [
+      { "id": "counter", "label": "Counter with a real partnership", "tags": ["gift"], "effects": [{ "type": "change_drachmae", "amount": -15 }, { "type": "change_stat", "stat": "intelligence", "amount": 1 }], "resultText": "He stays, now with a stake. The yard's craft deepens." },
+      { "id": "promote", "label": "Promote an ambitious apprentice instead", "tags": ["wait"], "effects": [{ "type": "change_drachmae", "amount": 5 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "Younger, hungrier, cheaper. The departed master's tricks live in the boy's hands anyway." }
+    ] },
+  { "id": "shi-inspection", "weight": 6, "requires": { "class": "shipbuilder" }, "scene": "Naval inspectors arrive unannounced. One hull batch used slightly green timber - it will hold, probably.",
+    "choices": [
+      { "id": "disclose", "label": "Disclose it and replace the planks", "tags": ["public_oath", "expose_secret"], "effects": [{ "type": "change_drachmae", "amount": -20 }, { "type": "change_stat", "stat": "prestige", "amount": 2 }], "resultText": "The inspectors note the honesty in their report. Contracts follow reports." },
+      { "id": "conceal", "label": "Paint over it, literally", "tags": ["deception"], "effects": [{ "type": "change_drachmae", "amount": 10 }, { "type": "change_composure", "amount": -10 }], "resultText": "Passed. Every storm those hulls sail through, you will count the days." }
+    ] },
+  { "id": "shi-launch", "weight": 6, "requires": { "class": "shipbuilder" }, "scene": "Your finest pentekonter yet is ready to launch. The ceremony could be modest or magnificent.",
+    "choices": [
+      { "id": "feast", "label": "A magnificent launch with priestess and feast", "tags": ["festival", "feast", "offering"], "effects": [{ "type": "change_drachmae", "amount": -25 }, { "type": "change_stat", "stat": "prestige", "amount": 2 }, { "type": "change_stat", "stat": "devotion", "amount": 1 }], "resultText": "Wine on the bow, the whole harbor cheering. Orders arrive within days." },
+      { "id": "quiet", "label": "Quiet launch, back to work", "tags": ["labor", "solitude"], "effects": [{ "type": "change_drachmae", "amount": 10 }], "resultText": "She slides into the water at dawn, witnessed by gulls. Perfect anyway." }
+    ] },
+  { "id": "shi-salvage", "weight": 5, "requires": { "class": "shipbuilder" }, "scene": "A wreck on the shoals is yours to salvage by right of contract - but a poor fishing village got there first.",
+    "choices": [
+      { "id": "share", "label": "Split the salvage with the village", "tags": ["mercy", "gift"], "effects": [{ "type": "change_drachmae", "amount": 15 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_ideology", "amount": 2 }], "resultText": "Half a wreck and a whole village's friendship. Their boats bring you repair work for years." },
+      { "id": "enforce", "label": "Enforce your contract fully", "tags": ["extort", "judge_fairly"], "effects": [{ "type": "change_drachmae", "amount": 30 }, { "type": "change_stat", "stat": "prestige", "amount": -1 }], "resultText": "The law is the law. The village learns to hate it, and you." }
+    ] },
+  { "id": "shi-apprentice-mishap", "weight": 6, "requires": { "class": "shipbuilder" }, "scene": "An apprentice's measuring error ruins a costly keel timber. He owns up immediately, white-faced.",
+    "choices": [
+      { "id": "teach", "label": "Make it a lesson, absorb the cost", "tags": ["mercy"], "effects": [{ "type": "change_drachmae", "amount": -15 }, { "type": "change_stat", "stat": "intelligence", "amount": 1 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "He never errs on a measurement again. Neither does anyone who heard the story." },
+      { "id": "dock", "label": "Dock his wages for a year", "tags": ["cruelty"], "effects": [{ "type": "change_drachmae", "amount": 5 }, { "type": "change_composure", "amount": -5 }], "resultText": "The debt is fair on papyrus. The boy's hands shake near keels now, which is its own cost." }
+    ] }
+]

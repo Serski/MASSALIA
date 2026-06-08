@@ -1,0 +1,52 @@
+[
+  { "id": "phi-debate", "weight": 7, "requires": { "class": "philosopher" }, "scene": "A visiting Pythagorean challenges you to public debate on the nature of the soul.",
+    "choices": [
+      { "id": "accept", "label": "Accept and prepare all night", "tags": ["debate", "study"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 2 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "Neither yields, both gain. The crowd argues about it for a week." },
+      { "id": "decline", "label": "Decline - debates are theater", "tags": ["solitude"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }, { "type": "change_stat", "stat": "prestige", "amount": -1 }], "resultText": "You write instead. Quieter, deeper, less applauded." }
+    ] },
+  { "id": "phi-rich-student", "weight": 7, "requires": { "class": "philosopher" }, "scene": "A merchant's dim but wealthy son wants to study under you. The fee would fund a year of work.",
+    "choices": [
+      { "id": "take", "label": "Take him and his fee", "tags": ["profit"], "effects": [{ "type": "change_drachmae", "amount": 35 }, { "type": "change_stat", "stat": "prestige", "amount": -1 }], "resultText": "He learns little. The fee teaches you plenty." },
+      { "id": "scholarship", "label": "Take instead a brilliant poor student", "tags": ["gift", "mercy"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_stat", "stat": "intelligence", "amount": 1 }], "resultText": "He pays in questions worth more than silver." }
+    ] },
+  { "id": "phi-banned-scroll", "weight": 5, "requires": { "class": "philosopher" }, "scene": "A scroll questioning the gods' existence circulates secretly. A copy reaches your hands.",
+    "choices": [
+      { "id": "study", "label": "Study it privately", "tags": ["study", "impiety"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 2 }, { "type": "change_stat", "stat": "devotion", "amount": -1 }], "resultText": "Dangerous arguments, annoyingly well constructed." },
+      { "id": "burn", "label": "Burn it publicly", "tags": ["traditionalist_act", "offering"], "effects": [{ "type": "change_stat", "stat": "devotion", "amount": 2 }, { "type": "change_ideology", "amount": -2 }], "resultText": "The flame is brief; the gesture, widely reported." }
+    ] },
+  { "id": "phi-lecture", "weight": 7, "requires": { "class": "philosopher" }, "scene": "The stoa by the harbor is free at midday - prime ground for a public lecture.",
+    "choices": [
+      { "id": "ethics", "label": "Lecture on virtue and the city", "tags": ["debate"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 2 }], "resultText": "Even the fishmongers pause. Briefly." },
+      { "id": "cosmos", "label": "Lecture on the heavens", "tags": ["study"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 2 }], "resultText": "Three listeners, one of them brilliant. A fair trade." }
+    ] },
+  { "id": "phi-slander", "weight": 6, "requires": { "class": "philosopher" }, "scene": "A rival school spreads word that your teachings corrupt the young.",
+    "choices": [
+      { "id": "rebut", "label": "Rebut them in the agora", "tags": ["debate"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_composure", "amount": -5 }], "resultText": "You quote their own master against them. It draws blood." },
+      { "id": "ignore", "label": "Let your students' conduct answer", "tags": ["wait"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }, { "type": "change_stat", "stat": "devotion", "amount": 1 }], "resultText": "Slow, dignified, and ultimately devastating." }
+    ] },
+  { "id": "phi-patron", "weight": 6, "requires": { "class": "philosopher" }, "scene": "A House offers patronage - steady silver, in exchange for conclusions they will find agreeable.",
+    "choices": [
+      { "id": "accept", "label": "Accept the leash with the meat", "tags": ["scheme"], "effects": [{ "type": "change_drachmae", "amount": 30 }, { "type": "change_stat", "stat": "intelligence", "amount": -1 }, { "type": "change_composure", "amount": -5 }], "resultText": "Comfortable. The word sits in your mouth like a stone." },
+      { "id": "refuse", "label": "Refuse - thought is not for hire", "tags": ["public_oath"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 2 }, { "type": "change_drachmae", "amount": -5 }], "resultText": "Poorer, prouder, quoted approvingly by people who pay you nothing." }
+    ] },
+  { "id": "phi-treatise", "weight": 6, "requires": { "class": "philosopher" }, "scene": "Your treatise on the mixing of peoples nears completion. Its conclusion will place you politically, forever.",
+    "choices": [
+      { "id": "integration", "label": "Conclude that mixing strengthens the polis", "tags": ["reformist_act", "study"], "effects": [{ "type": "change_ideology", "amount": 5 }, { "type": "change_stat", "stat": "intelligence", "amount": 2 }], "resultText": "Copies travel up the Rhone and across to Sicily. So does your name." },
+      { "id": "purity", "label": "Conclude that Hellenism must stay pure", "tags": ["traditionalist_act", "study"], "effects": [{ "type": "change_ideology", "amount": -5 }, { "type": "change_stat", "stat": "intelligence", "amount": 2 }], "resultText": "House Timon orders ten copies. House Kleitos orders none." }
+    ] },
+  { "id": "phi-student-scandal", "weight": 5, "requires": { "class": "philosopher" }, "scene": "Your best student is caught in a scandal with a magistrate's wife. His enemies blame your teachings.",
+    "choices": [
+      { "id": "defend", "label": "Defend him publicly", "tags": ["frontline", "mercy"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": -1 }, { "type": "change_stat", "stat": "devotion", "amount": 1 }, { "type": "change_composure", "amount": 5 }], "resultText": "Loyalty noted by everyone, approved by some." },
+      { "id": "expel", "label": "Expel him from the school", "tags": ["back_down"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_composure", "amount": -10 }], "resultText": "The school is safe. The look on his face stays with you." }
+    ] },
+  { "id": "phi-symposium-invite", "weight": 6, "requires": { "class": "philosopher" }, "scene": "An invitation: entertain a symposium of the powerful with philosophy, between the flute girls and the wine.",
+    "choices": [
+      { "id": "perform", "label": "Go and dazzle them", "tags": ["symposium", "wine"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 2 }, { "type": "change_drachmae", "amount": 15 }], "resultText": "Philosophy as entertainment. It pays better than philosophy as philosophy." },
+      { "id": "decline", "label": "Decline the circus", "tags": ["abstain", "solitude"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }], "resultText": "An evening with your scrolls instead. No regrets. Few regrets." }
+    ] },
+  { "id": "phi-oracle-paradox", "weight": 5, "requires": { "class": "philosopher" }, "scene": "A student asks: if the oracle is always right, can a man choose otherwise? The priests are listening.",
+    "choices": [
+      { "id": "engage", "label": "Engage the paradox honestly", "tags": ["debate", "impiety"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 2 }, { "type": "change_stat", "stat": "devotion", "amount": -1 }], "resultText": "A brilliant hour. A priest takes notes, not the friendly kind." },
+      { "id": "deflect", "label": "Deflect with reverence", "tags": ["offering"], "effects": [{ "type": "change_stat", "stat": "devotion", "amount": 1 }], "resultText": "The gods' ways exceed our grammar, you say. The priest relaxes." }
+    ] }
+]

@@ -1,0 +1,42 @@
+[
+  { "id": "cou-war-stance", "weight": 8, "requires": { "office": "councilor" }, "scene": "Carthaginian hulls were sighted shadowing a Massaliote convoy off Iberia. The council must set the city's stance.",
+    "choices": [
+      { "id": "escorts", "label": "Vote to arm convoy escorts", "tags": ["frontline"], "effects": [{ "type": "change_stat", "stat": "militia", "amount": 2 }, { "type": "change_party_favor", "party": "palaioi", "amount": 2 }], "resultText": "Pentekonters will ride with the silver ships." },
+      { "id": "envoy", "label": "Vote to send an envoy to Carthage", "tags": ["wait"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }, { "type": "change_party_favor", "party": "dynatoi", "amount": 2 }], "resultText": "Words before rams. For now." }
+    ] },
+  { "id": "cou-grain-tariff", "weight": 8, "requires": { "office": "councilor" }, "scene": "A motion to cut the tariff on Gaulish grain divides the chamber.",
+    "choices": [
+      { "id": "cut", "label": "Vote to cut it", "tags": ["reformist_act"], "effects": [{ "type": "change_ideology", "amount": 3 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "Bread gets cheaper. Landowners get louder." },
+      { "id": "keep", "label": "Vote to keep it", "tags": ["traditionalist_act"], "effects": [{ "type": "change_ideology", "amount": -3 }, { "type": "change_party_favor", "party": "palaioi", "amount": 2 }], "resultText": "The chora's farmers toast your name." }
+    ] },
+  { "id": "cou-ephor-audit", "weight": 6, "requires": { "office": "councilor" }, "scene": "The Ephors open an audit into harbor fees. A colleague quietly asks you to slow it down.",
+    "choices": [
+      { "id": "assist", "label": "Assist the audit fully", "tags": ["judge_fairly", "expose_secret"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 2 }, { "type": "change_stat", "stat": "intelligence", "amount": 1 }], "resultText": "The ledgers open. Some careers close." },
+      { "id": "slow", "label": "Misplace a few documents", "tags": ["deception", "scheme"], "effects": [{ "type": "change_drachmae", "amount": 30 }, { "type": "change_composure", "amount": -5 }], "resultText": "Papyrus is so easily mislaid in sea air." }
+    ] },
+  { "id": "cou-freedmen-petition", "weight": 6, "requires": { "office": "councilor" }, "scene": "A petition seeks limited civic rights for freedmen who served the city in war.",
+    "choices": [
+      { "id": "support", "label": "Speak for the petition", "tags": ["reformist_act", "mercy"], "effects": [{ "type": "change_ideology", "amount": 4 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "Scarred men in the gallery stand straighter." },
+      { "id": "oppose", "label": "Speak against it", "tags": ["traditionalist_act"], "effects": [{ "type": "change_ideology", "amount": -4 }, { "type": "change_party_favor", "party": "palaioi", "amount": 2 }], "resultText": "Citizenship, you argue, is blood and inheritance." }
+    ] },
+  { "id": "cou-naval-levy", "weight": 7, "requires": { "office": "councilor" }, "scene": "The Archons request a special levy for two new war galleys.",
+    "choices": [
+      { "id": "approve", "label": "Approve the levy", "tags": ["labor"], "effects": [{ "type": "change_stat", "stat": "militia", "amount": 1 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "Keels will be laid before the next moon." },
+      { "id": "amend", "label": "Amend it to one galley plus harbor repairs", "tags": ["judge_fairly"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 2 }], "resultText": "A compromise. Both sides claim half a victory." }
+    ] },
+  { "id": "cou-rome-envoys", "weight": 5, "requires": { "office": "councilor" }, "scene": "Envoys from the Roman Republic seek a renewal of old friendship - and intelligence on the Gauls.",
+    "choices": [
+      { "id": "warm", "label": "Vote for warm renewal", "tags": ["public_oath"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 2 }], "resultText": "The old friendship is re-inked. Rome remembers its friends, they say." },
+      { "id": "cautious", "label": "Renew, but share nothing of the Gauls", "tags": ["wait"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }, { "type": "change_party_favor", "party": "dynatoi", "amount": 2 }], "resultText": "Friendship, yes. Our neighbors' trust is not for sale." }
+    ] },
+  { "id": "cou-corruption-trial", "weight": 6, "requires": { "office": "councilor" }, "scene": "A magistrate stands accused of selling verdicts. His House is powerful; the evidence is strong.",
+    "choices": [
+      { "id": "convict", "label": "Vote to convict", "tags": ["judge_fairly"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 2 }, { "type": "change_stat", "stat": "devotion", "amount": 1 }, { "type": "change_composure", "amount": -5 }], "resultText": "Justice lands. So does an enemy's grudge." },
+      { "id": "acquit", "label": "Vote to acquit, bank the favor", "tags": ["scheme"], "effects": [{ "type": "change_party_favor", "party": "palaioi", "amount": 2 }, { "type": "change_party_favor", "party": "dynatoi", "amount": 2 }, { "type": "change_stat", "stat": "prestige", "amount": -1 }], "resultText": "His House now owes you. The agora suspects why." }
+    ] },
+  { "id": "cou-wall-funds", "weight": 7, "requires": { "office": "councilor" }, "scene": "Engineers report the old wooden wall sections need replacing in stone. The treasury winces.",
+    "choices": [
+      { "id": "stone", "label": "Fund the stone wall", "tags": ["labor"], "effects": [{ "type": "change_stat", "stat": "militia", "amount": 2 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "Protis built in wood. You build in stone." },
+      { "id": "patch", "label": "Patch the wood, defer the cost", "tags": ["wait"], "effects": [{ "type": "change_drachmae", "amount": 10 }], "resultText": "It will hold. Probably. For a while." }
+    ] }
+]

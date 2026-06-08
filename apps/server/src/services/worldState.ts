@@ -85,7 +85,7 @@ export function subscribeState(listener: Listener) {
   return () => listeners.delete(listener);
 }
 
-async function broadcastState() {
+export async function broadcastState() {
   await Promise.all([...listeners].map((listener) => listener()));
 }
 

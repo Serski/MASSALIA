@@ -121,6 +121,8 @@ export const playerCharacters = pgTable("player_characters", {
   ideology: integer("ideology").notNull().default(0),
   party: text("party").notNull().default("none"),
   composure: integer("composure").notNull().default(70),
+  // Set by the (future) council election system; gates 'councilor' events now.
+  isCouncilor: boolean("is_councilor").notNull().default(false),
   // Lazy composure recovery bookkeeping + break (withdrawn) state.
   lastComposureUpdate: timestamp("last_composure_update", { withTimezone: true }),
   breakUntil: timestamp("break_until", { withTimezone: true }),
@@ -144,6 +146,33 @@ export const characterTraits = pgTable("character_traits", {
 }, (table) => ({
   oneTraitPerCharacter: uniqueIndex("character_traits_character_trait_idx").on(table.characterId, table.traitId),
 }));
+
+// Party favor accrued via events (per character per party).
+export const partyFavor = pgTable("party_favor", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  characterId: uuid("character_id").references(() => playerCharacters.id).notNull(),
+  party: text("party").notNull(),
+  favor: integer("favor").notNull().default(0),
+}, (table) => ({
+  oneFavorPerCharacterParty: uniqueIndex("party_favor_character_party_idx").on(table.characterId, table.party),
+}));
+
+// Events drawn for a character (for the "exclude last 5 draws" rule).
+export const eventHistory = pgTable("event_history", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  characterId: uuid("character_id").references(() => playerCharacters.id).notNull(),
+  eventId: text("event_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Generic audit log of every applied effect.
+export const effectLog = pgTable("effect_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  characterId: uuid("character_id").references(() => playerCharacters.id).notNull(),
+  kind: text("kind").notNull(),
+  detail: jsonb("detail").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 // Audit log of every composure change (action delta, break, etc.).
 export const composureLog = pgTable("composure_log", {

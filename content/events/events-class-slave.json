@@ -1,0 +1,52 @@
+[
+  { "id": "sla-errand", "weight": 8, "requires": { "class": "slave" }, "scene": "Your master sends you across the city with a sealed message and more trust than usual.",
+    "choices": [
+      { "id": "swift", "label": "Deliver it swiftly and unread", "tags": ["labor"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_drachmae", "amount": 3 }], "resultText": "A coin for speed, and a notch more trust. Trust is the real currency here." },
+      { "id": "read", "label": "Steam the seal and read it first", "tags": ["deception", "scheme"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 2 }, { "type": "change_composure", "amount": -5 }], "resultText": "Knowledge of a debt the master hides. Dangerous to hold, impossible to unknow." }
+    ] },
+  { "id": "sla-escape-whisper", "weight": 5, "requires": { "class": "slave" }, "scene": "A dock slave whispers of a ship whose captain asks no questions, sailing at the dark of the moon.",
+    "choices": [
+      { "id": "refuse", "label": "Your path is manumission, not flight", "tags": ["wait"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }, { "type": "change_composure", "amount": 5 }], "resultText": "Runaways are hunted. Freedmen are citizens-almost. You play the long game." },
+      { "id": "help", "label": "Help him provision, stay yourself", "tags": ["mercy", "scheme"], "effects": [{ "type": "change_stat", "stat": "devotion", "amount": 1 }, { "type": "change_composure", "amount": -10 }], "resultText": "The ship sails with one more soul. You dream of dark water for a week." }
+    ] },
+  { "id": "sla-skill", "weight": 8, "requires": { "class": "slave" }, "scene": "The household scribe falls ill. Someone must keep the accounts, and you have watched him for years.",
+    "choices": [
+      { "id": "volunteer", "label": "Volunteer your letters", "tags": ["labor", "claim_office"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 2 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "The accounts balance. The master looks at you differently - like an asset that appreciates." },
+      { "id": "silent", "label": "Stay silent - visible skill brings visible burden", "tags": ["wait", "solitude"], "effects": [{ "type": "change_composure", "amount": 5 }], "resultText": "A hired scribe comes. Your letters remain your own secret savings." }
+    ] },
+  { "id": "sla-overseer", "weight": 6, "requires": { "class": "slave" }, "scene": "The new overseer beats the kitchen boy for a dropped amphora. The household holds its breath.",
+    "choices": [
+      { "id": "intervene", "label": "Step between them", "tags": ["frontline", "mercy"], "effects": [{ "type": "change_stat", "stat": "militia", "amount": 1 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_composure", "amount": -10 }], "resultText": "You take one blow meant for the boy. The household remembers. So does the overseer." },
+      { "id": "report", "label": "Report the overseer's thefts to the master instead", "tags": ["scheme", "expose_secret"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 2 }, { "type": "change_composure", "amount": -5 }], "resultText": "You fight with the weapon you have: information. The overseer is sold by month's end." }
+    ] },
+  { "id": "sla-peculium", "weight": 8, "requires": { "class": "slave" }, "scene": "Market day. Your small permitted earnings - the peculium - could grow, or buy a rare comfort.",
+    "choices": [
+      { "id": "save", "label": "Save every obol toward your price", "tags": ["abstain", "labor"], "effects": [{ "type": "change_drachmae", "amount": 8 }, { "type": "change_stat", "stat": "intelligence", "amount": 1 }], "resultText": "The buried jar grows heavier. Freedom has a number, and you know it to the obol." },
+      { "id": "comfort", "label": "Buy wine and honey cakes for the quarter", "tags": ["gift", "feast"], "effects": [{ "type": "change_drachmae", "amount": -5 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_composure", "amount": 10 }], "resultText": "One evening where the quarter laughs like free people. Worth a month of the jar." }
+    ] },
+  { "id": "sla-punished", "weight": 6, "requires": { "class": "slave" }, "scene": "A fellow slave is accused of stealing figs you saw the cook's son take.",
+    "choices": [
+      { "id": "speak", "label": "Speak the truth, against a free boy's word", "tags": ["public_oath", "frontline"], "effects": [{ "type": "change_stat", "stat": "devotion", "amount": 1 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_composure", "amount": -10 }], "resultText": "A slave's word against a citizen's son. Somehow, this time, yours holds. The quarter walks taller." },
+      { "id": "silence", "label": "Keep silent - the truth is not safe", "tags": ["back_down", "deception"], "effects": [{ "type": "change_composure", "amount": -10 }, { "type": "change_stat", "stat": "intelligence", "amount": 1 }], "resultText": "He takes the lashes. You learn the geometry of survival, and its price." }
+    ] },
+  { "id": "sla-master-secret", "weight": 5, "requires": { "class": "slave" }, "scene": "Cleaning the andron after a symposium, you find a letter implicating your master in smuggling.",
+    "choices": [
+      { "id": "return", "label": "Return it unread, seal intact", "tags": ["wait"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_drachmae", "amount": 5 }], "resultText": "He finds it exactly where it should be. His relief buys you a kindness." },
+      { "id": "copy", "label": "Copy it before returning it", "tags": ["scheme", "deception"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 2 }, { "type": "change_composure", "amount": -10 }], "resultText": "Insurance, buried beside the jar. May you never need it. May it work if you do." }
+    ] },
+  { "id": "sla-liberty-day", "weight": 6, "requires": { "class": "slave" }, "scene": "During the Kronia-like festival, masters serve and slaves feast. Yours plays along, mostly.",
+    "choices": [
+      { "id": "enjoy", "label": "Feast and speak freely, as the day allows", "tags": ["festival", "feast", "wine"], "effects": [{ "type": "change_composure", "amount": 10 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "For one day, your jokes land at the high table. Two of them are remembered all year." },
+      { "id": "useful", "label": "Use the loose day to map the household's secrets", "tags": ["scheme", "study"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 2 }], "resultText": "Wine loosens every tongue but yours. By nightfall you know who owes whom, and why." }
+    ] },
+  { "id": "sla-manumission-hint", "weight": 4, "requires": { "class": "slave" }, "scene": "The master, in good humor after a profitable season, muses aloud about your price and the temple registry.",
+    "choices": [
+      { "id": "press", "label": "Name your saved peculium then and there", "tags": ["claim_office", "rash_act"], "effects": [{ "type": "change_drachmae", "amount": -50 }, { "type": "change_trait", "traitId": "freedman", "operation": "add" }, { "type": "change_stat", "stat": "prestige", "amount": 2 }], "resultText": "Before Artemis and two witnesses, the registry takes your name. Free. The word tastes like sea air." },
+      { "id": "patient", "label": "Smile, serve well, let the idea ripen", "tags": ["wait", "patient"], "effects": [{ "type": "change_drachmae", "amount": 10 }, { "type": "change_stat", "stat": "intelligence", "amount": 1 }], "resultText": "Push a master and he remembers owning you. Wait, and he remembers liking you. The jar grows." }
+    ] },
+  { "id": "sla-tutor-notice", "weight": 5, "requires": { "class": "slave" }, "scene": "The children's hired tutor notices you mouthing the lesson's Greek verses from the doorway.",
+    "choices": [
+      { "id": "learn", "label": "Accept his offer of quiet lessons", "tags": ["study"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 2 }, { "type": "change_stat", "stat": "devotion", "amount": 1 }], "resultText": "Hesiod by lamplight, after the dishes. Slaves who read become freedmen who rise." },
+      { "id": "deflect", "label": "Deny it - learning above your station draws eyes", "tags": ["deception", "back_down"], "effects": [{ "type": "change_composure", "amount": -5 }], "resultText": "He shrugs and lets it go. The verses keep reciting themselves in your head anyway." }
+    ] }
+]

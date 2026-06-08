@@ -1,0 +1,52 @@
+[
+  { "id": "lan-drought", "weight": 7, "requires": { "class": "landowner" }, "scene": "The springs run low. Your groves and your tenant plots cannot both be watered.",
+    "choices": [
+      { "id": "groves", "label": "Water the groves", "tags": ["profit"], "effects": [{ "type": "change_drachmae", "amount": 25 }, { "type": "change_stat", "stat": "prestige", "amount": -1 }], "resultText": "The olives survive. The tenants remember." },
+      { "id": "tenants", "label": "Water the tenant plots", "tags": ["mercy", "gift"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 2 }, { "type": "change_drachmae", "amount": -15 }], "resultText": "Thin harvest, thick loyalty." }
+    ] },
+  { "id": "lan-blight", "weight": 6, "requires": { "class": "landowner" }, "scene": "Black spots on the olive leaves. A Gaulish farmhand claims his people know a remedy.",
+    "choices": [
+      { "id": "try", "label": "Try the Gaulish remedy", "tags": ["reformist_act"], "effects": [{ "type": "change_ideology", "amount": 2 }, { "type": "change_drachmae", "amount": 15 }], "resultText": "Ash and ditch-water, and somehow the trees recover." },
+      { "id": "greek", "label": "Stick to Greek methods", "tags": ["traditionalist_act"], "effects": [{ "type": "change_ideology", "amount": -2 }, { "type": "change_drachmae", "amount": -10 }], "resultText": "Hesiod's advice costs you a row of trees, with dignity." }
+    ] },
+  { "id": "lan-boundary", "weight": 6, "requires": { "class": "landowner" }, "scene": "A neighbor's boundary stone has migrated three paces into your field overnight.",
+    "choices": [
+      { "id": "court", "label": "Take it to the magistrates", "tags": ["judge_fairly"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }, { "type": "change_drachmae", "amount": 10 }], "resultText": "Witnesses, oaths, and the stone walks home." },
+      { "id": "move-back", "label": "Move it back four paces", "tags": ["rash_act"], "effects": [{ "type": "change_stat", "stat": "militia", "amount": 1 }, { "type": "change_composure", "amount": -5 }], "resultText": "An escalation measured in paces." }
+    ] },
+  { "id": "lan-harvest", "weight": 7, "requires": { "class": "landowner" }, "scene": "A bumper harvest. Your presses run day and night.",
+    "choices": [
+      { "id": "sell", "label": "Sell at market peak", "tags": ["profit"], "effects": [{ "type": "change_drachmae", "amount": 40 }], "resultText": "Amphorae out, silver in." },
+      { "id": "tithe", "label": "Tithe a share to the Temple of Artemis", "tags": ["offering"], "effects": [{ "type": "change_drachmae", "amount": 20 }, { "type": "change_stat", "stat": "devotion", "amount": 2 }], "resultText": "First fruits to the goddess; the rest still sells well." }
+    ] },
+  { "id": "lan-laborers", "weight": 6, "requires": { "class": "landowner" }, "scene": "Harvest hands are scarce. A Ligurian village offers seasonal workers at fair rates.",
+    "choices": [
+      { "id": "hire", "label": "Hire them", "tags": ["reformist_act", "labor"], "effects": [{ "type": "change_ideology", "amount": 3 }, { "type": "change_drachmae", "amount": 20 }], "resultText": "The harvest comes in on time, in two languages." },
+      { "id": "citizens", "label": "Pay extra for citizen labor", "tags": ["traditionalist_act"], "effects": [{ "type": "change_ideology", "amount": -3 }, { "type": "change_drachmae", "amount": -10 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "Costlier, slower, and politically pristine." }
+    ] },
+  { "id": "lan-granary-contract", "weight": 6, "requires": { "class": "landowner" }, "scene": "The city offers a contract to supply the public granary at a fixed, modest price.",
+    "choices": [
+      { "id": "accept", "label": "Accept - steady and civic", "tags": ["public_oath"], "effects": [{ "type": "change_drachmae", "amount": 15 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "Your grain becomes the city's bread." },
+      { "id": "refuse", "label": "Refuse - the open market pays better", "tags": ["profit", "refuse_aid"], "effects": [{ "type": "change_drachmae", "amount": 25 }, { "type": "change_stat", "stat": "prestige", "amount": -1 }], "resultText": "Better margins, colder nods at the council." }
+    ] },
+  { "id": "lan-sacred-grove", "weight": 5, "requires": { "class": "landowner" }, "scene": "Surveyors find your new parcel includes an old grove the Ligurians hold sacred.",
+    "choices": [
+      { "id": "preserve", "label": "Fence and preserve it", "tags": ["reformist_act", "mercy"], "effects": [{ "type": "change_ideology", "amount": 4 }, { "type": "change_stat", "stat": "devotion", "amount": 1 }], "resultText": "The grove stands. Gaulish goodwill takes root." },
+      { "id": "clear", "label": "Clear it for planting", "tags": ["defile", "profit"], "effects": [{ "type": "change_drachmae", "amount": 30 }, { "type": "change_ideology", "amount": -3 }, { "type": "change_composure", "amount": -5 }], "resultText": "Good soil under old roots. Someone curses your name in a language you don't speak." }
+    ] },
+  { "id": "lan-locusts", "weight": 4, "requires": { "class": "landowner" }, "scene": "A locust cloud darkens the eastern chora and drifts toward your land.",
+    "choices": [
+      { "id": "smoke", "label": "Light smoke fires, rally every hand", "tags": ["labor", "frontline"], "effects": [{ "type": "change_stat", "stat": "militia", "amount": 1 }, { "type": "change_drachmae", "amount": -10 }], "resultText": "Half saved. In a locust year, half is a triumph." },
+      { "id": "pray", "label": "Sacrifice to Demeter and wait", "tags": ["offering", "wait"], "effects": [{ "type": "change_stat", "stat": "devotion", "amount": 2 }, { "type": "change_drachmae", "amount": -20 }], "resultText": "The cloud turns at the river. Coincidence is a weak word." }
+    ] },
+  { "id": "lan-vineyard", "weight": 6, "requires": { "class": "landowner" }, "scene": "A hillside parcel ideal for vines comes up for sale - and the wine trade with Gaul is booming.",
+    "choices": [
+      { "id": "buy", "label": "Buy and plant vines", "tags": ["profit"], "effects": [{ "type": "change_drachmae", "amount": -30 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_stat", "stat": "intelligence", "amount": 1 }], "resultText": "In three years, every Gaulish chief will drink your vintage." },
+      { "id": "pass", "label": "Pass - olives are certainty", "tags": ["wait"], "effects": [{ "type": "change_drachmae", "amount": 5 }], "resultText": "A rival buys it. You will know in three years who was right." }
+    ] },
+  { "id": "lan-tenant-dispute", "weight": 6, "requires": { "class": "landowner" }, "scene": "Two tenant families feud over a shared threshing floor; work has stopped.",
+    "choices": [
+      { "id": "arbitrate", "label": "Arbitrate fairly", "tags": ["judge_fairly"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_stat", "stat": "intelligence", "amount": 1 }], "resultText": "A schedule, an oath, and threshing resumes." },
+      { "id": "evict", "label": "Evict the louder family", "tags": ["cruelty"], "effects": [{ "type": "change_drachmae", "amount": 10 }, { "type": "change_stat", "stat": "prestige", "amount": -1 }, { "type": "change_composure", "amount": -5 }], "resultText": "Quiet fields. Quieter dinner invitations." }
+    ] }
+]

@@ -1,0 +1,53 @@
+[
+  { "id": "het-senator-secret", "weight": 7, "requires": { "class": "hetaira" }, "scene": "At last night's symposium, a council member drank too deeply and spoke of a vote not yet public.",
+    "choices": [
+      { "id": "keep", "label": "Keep it - discretion is your currency", "tags": ["wait"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 2 }], "resultText": "He remembers, vaguely, what he said. Your silence makes you invaluable." },
+      { "id": "sell", "label": "Sell it to an interested trader", "tags": ["scheme", "profit"], "effects": [{ "type": "change_drachmae", "amount": 35 }, { "type": "change_composure", "amount": -5 }], "resultText": "Information becomes silver. Trust becomes a calculation." }
+    ] },
+  { "id": "het-jealous-wife", "weight": 6, "requires": { "class": "hetaira" }, "scene": "A patron's wife confronts you in the street, loud enough for the whole quarter.",
+    "choices": [
+      { "id": "grace", "label": "Answer with perfect grace", "tags": ["mercy"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 2 }, { "type": "change_composure", "amount": -5 }], "resultText": "You leave her shouting at your composure. The quarter takes your side." },
+      { "id": "wit", "label": "Cut her down with wit", "tags": ["boast", "cruelty"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_stat", "stat": "intelligence", "amount": 1 }, { "type": "change_composure", "amount": -5 }], "resultText": "The line is repeated at every dinner for a month. So is her grudge." }
+    ] },
+  { "id": "het-symposium-engagement", "weight": 8, "requires": { "class": "hetaira" }, "scene": "Three invitations for the same night: a Palaioi elder's staid dinner, a Dynatoi merchant's wild party, a quiet evening with a scholar.",
+    "choices": [
+      { "id": "elder", "label": "The elder's dinner", "tags": ["traditionalist_act"], "effects": [{ "type": "change_drachmae", "amount": 20 }, { "type": "change_party_favor", "party": "palaioi", "amount": 2 }, { "type": "change_ideology", "amount": -2 }], "resultText": "Restrained, lucrative, and full of careful old men with careless old secrets." },
+      { "id": "merchant", "label": "The merchant's party", "tags": ["reformist_act", "feast", "wine"], "effects": [{ "type": "change_drachmae", "amount": 25 }, { "type": "change_party_favor", "party": "dynatoi", "amount": 2 }, { "type": "change_ideology", "amount": 2 }], "resultText": "Gaulish guests, Greek wine, and connections in three languages." },
+      { "id": "scholar", "label": "The scholar's evening", "tags": ["study"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 2 }], "resultText": "He talks of Pytheas and the midnight sun. Worth every declined drachma." }
+    ] },
+  { "id": "het-blackmail", "weight": 5, "requires": { "class": "hetaira" }, "scene": "You hold letters that could end a magistrate's career. He is wealthy and afraid.",
+    "choices": [
+      { "id": "return", "label": "Return them, ask nothing", "tags": ["mercy"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 2 }, { "type": "change_stat", "stat": "devotion", "amount": 1 }], "resultText": "He owes you everything precisely because you demanded nothing." },
+      { "id": "price", "label": "Name a price", "tags": ["blackmail", "extort"], "effects": [{ "type": "change_drachmae", "amount": 50 }, { "type": "change_composure", "amount": -10 }], "resultText": "Paid in full, in silence, in hatred." }
+    ] },
+  { "id": "het-poet-muse", "weight": 6, "requires": { "class": "hetaira" }, "scene": "A young poet writes verses about you and recites them by the harbor. They are good. Embarrassingly good.",
+    "choices": [
+      { "id": "patron", "label": "Become his patron", "tags": ["patronage", "gift"], "effects": [{ "type": "change_drachmae", "amount": -15 }, { "type": "change_stat", "stat": "prestige", "amount": 2 }, { "type": "change_trait", "traitId": "muse", "operation": "add" }], "resultText": "Your name enters verse. Verse outlives everyone at the party." },
+      { "id": "distance", "label": "Keep a flattered distance", "tags": ["wait"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "Mystery feeds poetry better than presence." }
+    ] },
+  { "id": "het-rival", "weight": 6, "requires": { "class": "hetaira" }, "scene": "A new hetaira from Syracuse is taking your patrons - younger, and ruthless about it.",
+    "choices": [
+      { "id": "ally", "label": "Make her an ally, split the city", "tags": ["scheme"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 2 }, { "type": "change_drachmae", "amount": 10 }], "resultText": "Two networks joined see everything. The patrons never learn of the treaty." },
+      { "id": "outclass", "label": "Outclass her at the next great symposium", "tags": ["symposium", "boast"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 2 }, { "type": "change_composure", "amount": -5 }], "resultText": "One evening, one room, no contest. Syracuse trains them pretty, not deep." }
+    ] },
+  { "id": "het-jewels", "weight": 6, "requires": { "class": "hetaira" }, "scene": "A smitten patron gifts you jewels worth a ship's cargo. His family is furious.",
+    "choices": [
+      { "id": "keep", "label": "Keep them - gifts are gifts", "tags": ["profit"], "effects": [{ "type": "change_drachmae", "amount": 40 }, { "type": "change_stat", "stat": "prestige", "amount": -1 }], "resultText": "They glitter. The family's lawyers circle." },
+      { "id": "return-half", "label": "Return the heirloom pieces", "tags": ["mercy", "judge_fairly"], "effects": [{ "type": "change_drachmae", "amount": 15 }, { "type": "change_stat", "stat": "prestige", "amount": 2 }], "resultText": "Grace where they expected greed. The family stands down, impressed despite itself." }
+    ] },
+  { "id": "het-dangerous-client", "weight": 5, "requires": { "class": "hetaira" }, "scene": "A patron's temper is turning dangerous. He is also one of your wealthiest.",
+    "choices": [
+      { "id": "cut", "label": "Cut him off completely", "tags": ["back_down"], "effects": [{ "type": "change_drachmae", "amount": -20 }, { "type": "change_composure", "amount": 10 }], "resultText": "Poorer and safer. The whisper network quietly approves." },
+      { "id": "manage", "label": "Manage him carefully for the silver", "tags": ["scheme", "wait"], "effects": [{ "type": "change_drachmae", "amount": 30 }, { "type": "change_composure", "amount": -10 }], "resultText": "Profitable, for now. You map his moods like a sailor maps reefs." }
+    ] },
+  { "id": "het-network-tip", "weight": 7, "requires": { "class": "hetaira" }, "scene": "Your network brings word: a grain merchant plans to corner the market before a shortage becomes public.",
+    "choices": [
+      { "id": "warn", "label": "Warn the city quietly", "tags": ["expose_secret", "judge_fairly"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 2 }, { "type": "change_party_favor", "party": "dynatoi", "amount": 1 }], "resultText": "The Ephors act on an anonymous tip. Bread stays affordable. You stay anonymous." },
+      { "id": "invest", "label": "Buy grain first yourself", "tags": ["profit", "scheme"], "effects": [{ "type": "change_drachmae", "amount": 45 }, { "type": "change_composure", "amount": -10 }], "resultText": "You profit from the hunger you could have prevented. The silver weighs." }
+    ] },
+  { "id": "het-marriage-offer", "weight": 4, "requires": { "class": "hetaira" }, "scene": "A widowed landowner offers marriage - respectability, security, and the end of your independence.",
+    "choices": [
+      { "id": "refuse", "label": "Refuse with warmth", "tags": ["claim_office"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_stat", "stat": "intelligence", "amount": 1 }], "resultText": "You keep your house, your network, your name. He keeps a fond wound." },
+      { "id": "consider", "label": "Let him court you while you decide", "tags": ["wait", "scheme"], "effects": [{ "type": "change_drachmae", "amount": 20 }, { "type": "change_composure", "amount": -5 }], "resultText": "Courtship has its revenues. The decision can ripen." }
+    ] }
+]

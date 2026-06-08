@@ -1,10 +1,13 @@
 {
+  "startingComposure": 70,
   "costPerConflict": 15,
-  "gainPerEmbrace": 8,
-  "driftCostFactor": 0.5,
-  "maxGainPerAction": 20,
-  "baseRecoveryPerDay": 10,
-  "breakResetValue": 40,
-  "maxCopingTraits": 3,
-  "copingPool": ["stoic", "resilient", "philosophical", "hardened"]
+  "gainPerEmbrace": 10,
+  "maxGainPerAction": 15,
+  "driftCostFactor": 1.0,
+  "baseRecoveryPerDay": 5,
+  "breakResetValue": 50,
+  "breakLockoutDays": 1,
+  "maxCopingTraits": 2,
+  "copingPool": ["drunkard", "recluse", "flagellant"],
+  "escalation": { "fromBreakNumber": 3, "prestigePenalty": 5 }
 }

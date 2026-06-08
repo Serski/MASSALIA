@@ -15,6 +15,7 @@ import {
   type HeldTrait,
   type Party,
 } from "@massalia/shared";
+import { getComposureConfig } from "./composure.js";
 
 const db = createDb();
 
@@ -59,6 +60,8 @@ export async function createCharacterRow(
   classId: ClassId,
 ): Promise<CharacterRow> {
   const start = startingCharacter(houseId, classId);
+  // Starting composure is config-driven (composure-config.json), not a literal.
+  const startingComposure = getComposureConfig().startingComposure ?? start.composure;
   const inserted = await db
     .insert(playerCharacters)
     .values({
@@ -73,7 +76,7 @@ export async function createCharacterRow(
       drachmae: start.drachmae,
       ideology: start.ideology,
       party: start.party,
-      composure: start.composure,
+      composure: startingComposure,
       growthMultiplier: String(start.growthMultiplier),
       actionsSpentToday: 0,
       lastActionReset: null,

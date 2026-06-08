@@ -1,0 +1,52 @@
+[
+  { "id": "pal-purity-oath", "weight": 7, "requires": { "party": "palaioi" }, "scene": "Party elders circulate an oath to keep Greek bloodlines unmixed. Signatures are being watched.",
+    "choices": [
+      { "id": "sign", "label": "Sign prominently", "tags": ["traditionalist_act", "public_oath"], "effects": [{ "type": "change_ideology", "amount": -5 }, { "type": "change_party_favor", "party": "palaioi", "amount": 3 }], "resultText": "Your name sits high on the scroll." },
+      { "id": "delay", "label": "Find reasons to delay", "tags": ["wait"], "effects": [{ "type": "change_party_favor", "party": "palaioi", "amount": -2 }], "resultText": "The elders note the empty space where your name should be." }
+    ] },
+  { "id": "pal-greek-school", "weight": 7, "requires": { "party": "palaioi" }, "scene": "House Timon seeks patrons for a school teaching only Greek letters, Homer, and the old ways.",
+    "choices": [
+      { "id": "fund", "label": "Fund it generously", "tags": ["traditionalist_act", "patronage"], "effects": [{ "type": "change_drachmae", "amount": -30 }, { "type": "change_ideology", "amount": -4 }, { "type": "change_stat", "stat": "prestige", "amount": 2 }], "resultText": "Children will recite Homer because of you." },
+      { "id": "token", "label": "Give a token sum", "tags": ["gift"], "effects": [{ "type": "change_drachmae", "amount": -5 }, { "type": "change_party_favor", "party": "palaioi", "amount": 1 }], "resultText": "Noted. Barely." }
+    ] },
+  { "id": "pal-denounce-marriage", "weight": 6, "requires": { "party": "palaioi" }, "scene": "A prominent citizen has wed a Gaulish chieftain's daughter. The party wants it condemned in the assembly.",
+    "choices": [
+      { "id": "denounce", "label": "Deliver the condemnation yourself", "tags": ["traditionalist_act", "boast"], "effects": [{ "type": "change_ideology", "amount": -5 }, { "type": "change_party_favor", "party": "palaioi", "amount": 3 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "Your speech is quoted for a month. So is his glare." },
+      { "id": "refuse", "label": "Refuse - a marriage is a marriage", "tags": ["mercy"], "effects": [{ "type": "change_party_favor", "party": "palaioi", "amount": -3 }, { "type": "change_ideology", "amount": 2 }], "resultText": "Principled. Costly." }
+    ] },
+  { "id": "pal-procession", "weight": 8, "requires": { "party": "palaioi" }, "scene": "The party organizes a torchlit procession to the Temple of Apollo, old families first.",
+    "choices": [
+      { "id": "march", "label": "March in your House's place", "tags": ["traditionalist_act", "festival"], "effects": [{ "type": "change_stat", "stat": "devotion", "amount": 2 }, { "type": "change_ideology", "amount": -3 }], "resultText": "Torchlight on old stone. This is what the city was." },
+      { "id": "front", "label": "Pay for a place near the front", "tags": ["boast"], "effects": [{ "type": "change_drachmae", "amount": -20 }, { "type": "change_stat", "stat": "prestige", "amount": 2 }], "resultText": "Visibility has a price. You paid it." }
+    ] },
+  { "id": "pal-boycott", "weight": 6, "requires": { "party": "palaioi" }, "scene": "Party leadership calls for a boycott of Gaulish goods in the agora.",
+    "choices": [
+      { "id": "comply", "label": "Empty your household of Gaulish wares", "tags": ["traditionalist_act"], "effects": [{ "type": "change_ideology", "amount": -3 }, { "type": "change_drachmae", "amount": -10 }, { "type": "change_party_favor", "party": "palaioi", "amount": 2 }], "resultText": "A purer household, a thinner purse." },
+      { "id": "quietly-buy", "label": "Keep buying, quietly", "tags": ["deception"], "effects": [{ "type": "change_drachmae", "amount": 10 }], "resultText": "Gaulish hides are cheaper than ever now. Discretion advised." }
+    ] },
+  { "id": "pal-ancestral-rites", "weight": 7, "requires": { "party": "palaioi" }, "scene": "Your House's ancestral rites fall due. The party expects the old forms, performed exactly.",
+    "choices": [
+      { "id": "exact", "label": "Perform every syllable as written", "tags": ["traditionalist_act", "offering"], "effects": [{ "type": "change_stat", "stat": "devotion", "amount": 2 }, { "type": "change_party_favor", "party": "palaioi", "amount": 2 }], "resultText": "The ancestors, presumably, approve." },
+      { "id": "shorten", "label": "Shorten the tedious parts", "tags": ["skip_rite"], "effects": [{ "type": "change_stat", "stat": "devotion", "amount": -1 }], "resultText": "Done by noon. Someone counted the verses." }
+    ] },
+  { "id": "pal-waverer", "weight": 6, "requires": { "party": "palaioi" }, "scene": "A party member drifts toward reformist talk. Leadership asks you to bring him back.",
+    "choices": [
+      { "id": "persuade", "label": "Reason with him over wine", "tags": ["wine"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_party_favor", "party": "palaioi", "amount": 2 }], "resultText": "By the third cup he remembers his grandfather's politics." },
+      { "id": "threaten", "label": "Hint at consequences", "tags": ["extort", "cruelty"], "effects": [{ "type": "change_party_favor", "party": "palaioi", "amount": 3 }, { "type": "change_stat", "stat": "prestige", "amount": -1 }, { "type": "change_composure", "amount": -5 }], "resultText": "He returns to the fold, watching you sideways." }
+    ] },
+  { "id": "pal-tragedy", "weight": 6, "requires": { "party": "palaioi" }, "scene": "House Timon stages a classical tragedy and offers you a sponsorship credit.",
+    "choices": [
+      { "id": "sponsor", "label": "Sponsor the chorus", "tags": ["traditionalist_act", "patronage"], "effects": [{ "type": "change_drachmae", "amount": -25 }, { "type": "change_stat", "stat": "prestige", "amount": 2 }, { "type": "change_ideology", "amount": -2 }], "resultText": "Your name is announced before the first line." },
+      { "id": "attend", "label": "Just attend", "tags": ["festival"], "effects": [{ "type": "change_stat", "stat": "devotion", "amount": 1 }], "resultText": "Aeschylus still lands, three centuries on." }
+    ] },
+  { "id": "pal-genealogy", "weight": 5, "requires": { "party": "palaioi" }, "scene": "The party commissions a genealogy audit tracing members to the Phocaean founders. Yours has a gap.",
+    "choices": [
+      { "id": "research", "label": "Pay scribes to close the gap honestly", "tags": ["study"], "effects": [{ "type": "change_drachmae", "amount": -15 }, { "type": "change_stat", "stat": "intelligence", "amount": 1 }], "resultText": "A great-grandmother from Phocaea, documented. Mostly." },
+      { "id": "forge", "label": "Have the gap... filled", "tags": ["deception"], "effects": [{ "type": "change_drachmae", "amount": -25 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "The parchment looks suitably ancient. Sleep lightly." }
+    ] },
+  { "id": "pal-druid-sermon", "weight": 5, "requires": { "party": "palaioi" }, "scene": "A priest of Apollo plans a sermon against Gaulish grove-rites creeping into the city. He wants a notable citizen beside him.",
+    "choices": [
+      { "id": "stand", "label": "Stand beside him", "tags": ["traditionalist_act"], "effects": [{ "type": "change_ideology", "amount": -4 }, { "type": "change_stat", "stat": "devotion", "amount": 1 }, { "type": "change_party_favor", "party": "palaioi", "amount": 2 }], "resultText": "The steps of the temple, the crowd below, your face beside the fire of his words." },
+      { "id": "decline", "label": "Decline - too divisive", "tags": ["back_down"], "effects": [{ "type": "change_party_favor", "party": "palaioi", "amount": -1 }], "resultText": "He finds someone else. The someone else is now more famous." }
+    ] }
+]

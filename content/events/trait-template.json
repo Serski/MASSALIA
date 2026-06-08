@@ -6,7 +6,7 @@
     {
       "id": "gain-bold",
       "label": "Act boldly",
-      "effects": [{ "type": "change_trait", "characterId": "CHARACTER_ID", "traitId": "bold", "operation": "add" }],
+      "effects": [{ "type": "change_trait", "traitId": "bold", "operation": "add" }],
       "resultText": "Their reputation sharpens."
     }
   ]

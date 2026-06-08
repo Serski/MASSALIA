@@ -1,0 +1,52 @@
+[
+  { "id": "pri-omen", "weight": 7, "requires": { "class": "priest" }, "scene": "A sacrifice yields a malformed liver before a major convoy sails. The captains await your reading.",
+    "choices": [
+      { "id": "delay", "label": "Declare the omen ill - delay the sailing", "tags": ["offering"], "effects": [{ "type": "change_stat", "stat": "devotion", "amount": 2 }, { "type": "change_stat", "stat": "prestige", "amount": -1 }], "resultText": "The convoy waits a day, cursing. A squall passes through that night. Cursing stops." },
+      { "id": "reinterpret", "label": "Read it favorably - trade cannot wait", "tags": ["deception", "impiety"], "effects": [{ "type": "change_drachmae", "amount": 20 }, { "type": "change_composure", "amount": -10 }], "resultText": "The ships sail. You watch the horizon more than usual this week." }
+    ] },
+  { "id": "pri-donation", "weight": 7, "requires": { "class": "priest" }, "scene": "A merchant of dubious reputation offers a massive donation to the temple - and expects public blessing.",
+    "choices": [
+      { "id": "accept", "label": "Accept and bless him", "tags": ["profit"], "effects": [{ "type": "change_drachmae", "amount": 30 }, { "type": "change_stat", "stat": "devotion", "amount": -1 }], "resultText": "The temple roof gets repaired. The whispers get louder." },
+      { "id": "refuse", "label": "The goddess is not for purchase", "tags": ["public_oath", "judge_fairly"], "effects": [{ "type": "change_stat", "stat": "devotion", "amount": 2 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "He storms out. The story of the refusal is worth more than his silver." }
+    ] },
+  { "id": "pri-healing", "weight": 7, "requires": { "class": "priest" }, "scene": "A Gaulish mother carries her fevered child to the temple steps, barred by custom from entering.",
+    "choices": [
+      { "id": "heal", "label": "Treat the child on the steps yourself", "tags": ["reformist_act", "mercy"], "effects": [{ "type": "change_ideology", "amount": 4 }, { "type": "change_stat", "stat": "devotion", "amount": 1 }, { "type": "change_trait", "traitId": "herbal-healer", "operation": "add" }], "resultText": "Greek physic, a Gaulish herb she presses on you, and a fever that breaks by dawn." },
+      { "id": "custom", "label": "Send her to the healers' quarter, as custom demands", "tags": ["traditionalist_act", "refuse_aid"], "effects": [{ "type": "change_ideology", "amount": -3 }, { "type": "change_composure", "amount": -10 }], "resultText": "Custom upheld. Her look as she turned away is hard to put down." }
+    ] },
+  { "id": "pri-festival-org", "weight": 7, "requires": { "class": "priest" }, "scene": "You are handed the organizing of this year's Artemisia. The budget is thin; expectations are not.",
+    "choices": [
+      { "id": "lavish", "label": "Borrow against next year for a lavish festival", "tags": ["festival", "rash_act"], "effects": [{ "type": "change_drachmae", "amount": -20 }, { "type": "change_stat", "stat": "prestige", "amount": 2 }, { "type": "change_stat", "stat": "devotion", "amount": 1 }], "resultText": "Torches to the waterline. The city talks of nothing else for a month." },
+      { "id": "austere", "label": "An austere, perfectly correct rite", "tags": ["offering", "abstain"], "effects": [{ "type": "change_stat", "stat": "devotion", "amount": 2 }], "resultText": "No spectacle, no debt, no error. The old priests approve, loudly." }
+    ] },
+  { "id": "pri-sacrilege", "weight": 5, "requires": { "class": "priest" }, "scene": "A drunk young noble of a powerful House urinated against the temple wall at night. There were witnesses.",
+    "choices": [
+      { "id": "prosecute", "label": "Demand public penance regardless of his House", "tags": ["judge_fairly", "frontline"], "effects": [{ "type": "change_stat", "stat": "devotion", "amount": 2 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_composure", "amount": -5 }], "resultText": "He kneels on the steps with shorn hair. His House notes your name twice: once in anger, once in respect." },
+      { "id": "private", "label": "Settle it privately for a temple donation", "tags": ["scheme", "profit"], "effects": [{ "type": "change_drachmae", "amount": 25 }, { "type": "change_stat", "stat": "devotion", "amount": -1 }], "resultText": "The wall gets a new fresco. The witnesses get tired of waiting for justice." }
+    ] },
+  { "id": "pri-pilgrimage", "weight": 5, "requires": { "class": "priest" }, "scene": "The mother temple in Ephesos invites a Massaliote delegate for the great rites. The journey is long and costly.",
+    "choices": [
+      { "id": "go", "label": "Make the pilgrimage", "tags": ["pilgrimage", "offering"], "effects": [{ "type": "change_drachmae", "amount": -25 }, { "type": "change_stat", "stat": "devotion", "amount": 3 }], "resultText": "Ephesos at festival. Some things are worth every obol and every league." },
+      { "id": "send", "label": "Send a junior priest with your blessing", "tags": ["wait"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }, { "type": "change_drachmae", "amount": -5 }], "resultText": "He returns transformed and loyal. You remain where the politics are." }
+    ] },
+  { "id": "pri-herbs", "weight": 6, "requires": { "class": "priest" }, "scene": "The temple's healing herbs run low. The best replacements grow in groves the Gauls tend - and guard.",
+    "choices": [
+      { "id": "ask", "label": "Ask the grove-keepers respectfully", "tags": ["reformist_act"], "effects": [{ "type": "change_ideology", "amount": 3 }, { "type": "change_stat", "stat": "intelligence", "amount": 1 }], "resultText": "They share, amused that a Greek priest finally asked instead of took." },
+      { "id": "buy", "label": "Buy inferior stock from the market", "tags": ["wait"], "effects": [{ "type": "change_drachmae", "amount": -10 }], "resultText": "It serves. Barely. The sick heal slower this season." }
+    ] },
+  { "id": "pri-rival-cult", "weight": 5, "requires": { "class": "priest" }, "scene": "A mystery cult from the East gains followers in the lower city, drawing worshippers from your altars.",
+    "choices": [
+      { "id": "denounce", "label": "Denounce it from the temple steps", "tags": ["traditionalist_act", "boast"], "effects": [{ "type": "change_ideology", "amount": -3 }, { "type": "change_stat", "stat": "devotion", "amount": 1 }, { "type": "change_composure", "amount": -5 }], "resultText": "Attendance recovers. The cult goes quieter, not smaller." },
+      { "id": "observe", "label": "Attend one of their rites in plain dress", "tags": ["study", "scheme"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 2 }], "resultText": "Know the rival. Their rites borrow more from Artemis than they admit - useful." }
+    ] },
+  { "id": "pri-sacred-deer", "weight": 5, "requires": { "class": "priest" }, "scene": "A white deer - sacred to Artemis - is seen in the chora. Hunters are already boasting about who will take it.",
+    "choices": [
+      { "id": "protect", "label": "Declare it protected on pain of curse", "tags": ["offering", "public_oath"], "effects": [{ "type": "change_stat", "stat": "devotion", "amount": 2 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "No arrow flies. The deer is seen at dusk for years, always just out of reach, exactly as it should be." },
+      { "id": "hunt-rite", "label": "Organize a sanctioned ritual hunt", "tags": ["hunt", "festival"], "effects": [{ "type": "change_stat", "stat": "militia", "amount": 1 }, { "type": "change_stat", "stat": "devotion", "amount": -1 }, { "type": "change_drachmae", "amount": 15 }], "resultText": "The hunt is magnificent and the feast richer. Some old women make signs against you in the street." }
+    ] },
+  { "id": "pri-drought-prayers", "weight": 6, "requires": { "class": "priest" }, "scene": "Drought grips the chora. The city demands intercession; the farmers demand results.",
+    "choices": [
+      { "id": "great-rite", "label": "Lead a great rain rite, all altars burning", "tags": ["offering", "festival"], "effects": [{ "type": "change_drachmae", "amount": -10 }, { "type": "change_stat", "stat": "devotion", "amount": 2 }, { "type": "change_composure", "amount": -5 }], "resultText": "Nine days later, rain. Your standing rises with the river." },
+      { "id": "practical", "label": "Pray - and quietly organize water rationing", "tags": ["labor", "judge_fairly"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 2 }, { "type": "change_stat", "stat": "devotion", "amount": 1 }], "resultText": "The gods help those who dig cisterns. The harvest survives on both." }
+    ] }
+]

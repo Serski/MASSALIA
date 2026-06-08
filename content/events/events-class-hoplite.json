@@ -1,0 +1,52 @@
+[
+  { "id": "hop-border-skirmish", "weight": 7, "requires": { "class": "hoplite" }, "scene": "Hostile Gauls raid a farmstead at the chora's edge. Your unit is closest.",
+    "choices": [
+      { "id": "charge", "label": "Lead the counterattack", "tags": ["frontline", "rash_act"], "effects": [{ "type": "change_stat", "stat": "militia", "amount": 2 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_composure", "amount": -10 }], "resultText": "Driven off. Two of yours wounded, none lost. The farm stands." },
+      { "id": "screen", "label": "Screen the civilians, let them go", "tags": ["wait", "mercy"], "effects": [{ "type": "change_stat", "stat": "militia", "amount": 1 }, { "type": "change_stat", "stat": "intelligence", "amount": 1 }], "resultText": "No graves dug today. Some call it wisdom, some call it else." }
+    ] },
+  { "id": "hop-drill", "weight": 8, "requires": { "class": "hoplite" }, "scene": "The strategos orders extended phalanx drills in the summer heat. Men are grumbling.",
+    "choices": [
+      { "id": "lead", "label": "Drill hardest in the front rank", "tags": ["labor", "frontline"], "effects": [{ "type": "change_stat", "stat": "militia", "amount": 2 }], "resultText": "Blisters now, survival later. The strategos notices." },
+      { "id": "shade", "label": "Find duties in the shade", "tags": ["idle"], "effects": [{ "type": "change_composure", "amount": 5 }, { "type": "change_stat", "stat": "militia", "amount": -1 }], "resultText": "Inventory duty has its comforts. And its reputation." }
+    ] },
+  { "id": "hop-wounded-comrade", "weight": 6, "requires": { "class": "hoplite" }, "scene": "A shield-brother lies wounded and can't pay the healer. His family is proud and broke.",
+    "choices": [
+      { "id": "pay", "label": "Pay the healer quietly", "tags": ["gift", "mercy"], "effects": [{ "type": "change_drachmae", "amount": -15 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_trait", "traitId": "shield-brother", "operation": "add" }], "resultText": "He walks again by autumn. The phalanx knows who paid, though no one says." },
+      { "id": "collect", "label": "Organize a collection in the unit", "tags": ["labor"], "effects": [{ "type": "change_drachmae", "amount": -5 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "Every man gives an obol. The unit grows tighter for it." }
+    ] },
+  { "id": "hop-loot", "weight": 6, "requires": { "class": "hoplite" }, "scene": "After a successful action, the loot division turns ugly. Your share could be argued larger.",
+    "choices": [
+      { "id": "fair", "label": "Take the standard share", "tags": ["judge_fairly"], "effects": [{ "type": "change_drachmae", "amount": 15 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "Fair is remembered longer than rich." },
+      { "id": "argue", "label": "Argue for the larger cut", "tags": ["extort", "boast"], "effects": [{ "type": "change_drachmae", "amount": 30 }, { "type": "change_stat", "stat": "prestige", "amount": -1 }, { "type": "change_composure", "amount": -5 }], "resultText": "You win the argument and lose a card game invitation. Permanently." }
+    ] },
+  { "id": "hop-mercenary-offer", "weight": 5, "requires": { "class": "hoplite" }, "scene": "A recruiter offers triple pay for a season guarding Carthaginian interests in Iberia.",
+    "choices": [
+      { "id": "go", "label": "Take the contract", "tags": ["profit"], "effects": [{ "type": "change_drachmae", "amount": 50 }, { "type": "change_trait", "traitId": "carthaginian-sympathizer", "operation": "add" }, { "type": "change_stat", "stat": "militia", "amount": 1 }], "resultText": "Good silver, hard service, and questions waiting back home." },
+      { "id": "refuse", "label": "Massalia's spear stays Massalia's", "tags": ["public_oath", "traditionalist_act"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 2 }, { "type": "change_ideology", "amount": -2 }], "resultText": "The recruiter sails with other men. Your refusal is quoted at the barracks." }
+    ] },
+  { "id": "hop-night-watch", "weight": 7, "requires": { "class": "hoplite" }, "scene": "On wall watch, you spot a figure climbing the wooden palisade with a bundle. Could be a smuggler. Could be worse.",
+    "choices": [
+      { "id": "arrest", "label": "Sound the alarm and intercept", "tags": ["frontline"], "effects": [{ "type": "change_stat", "stat": "militia", "amount": 1 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "A smuggler of untaxed silphium. The Ephors send commendation." },
+      { "id": "bribe", "label": "Let him pass for a cut", "tags": ["scheme", "profit"], "effects": [{ "type": "change_drachmae", "amount": 20 }, { "type": "change_composure", "amount": -5 }], "resultText": "He pays. He will also remember which guard can be bought." }
+    ] },
+  { "id": "hop-duel-challenge", "weight": 5, "requires": { "class": "hoplite" }, "scene": "A Gaulish champion, drunk on feast-mead, challenges any Greek to single combat outside the gates.",
+    "choices": [
+      { "id": "accept", "label": "Accept the challenge", "tags": ["duel", "boast"], "effects": [{ "type": "change_stat", "stat": "militia", "amount": 2 }, { "type": "change_stat", "stat": "prestige", "amount": 2 }, { "type": "change_trait", "traitId": "duelist", "operation": "add" }, { "type": "change_composure", "amount": -10 }], "resultText": "First blood yours. He laughs, clasps your arm, and buys the wine. Gauls." },
+      { "id": "decline", "label": "Walk away - the city forbids it", "tags": ["back_down"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }], "resultText": "Discipline over glory. The Gaul shouts something probably unflattering." }
+    ] },
+  { "id": "hop-promotion", "weight": 6, "requires": { "class": "hoplite" }, "scene": "A file-leader position opens. The strategos weighs you against a rival with better connections.",
+    "choices": [
+      { "id": "merit", "label": "Let your record speak", "tags": ["wait"], "effects": [{ "type": "change_stat", "stat": "militia", "amount": 1 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "The strategos reads records after all. The file is yours." },
+      { "id": "lobby", "label": "Lobby through your House", "tags": ["scheme", "claim_office"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 2 }, { "type": "change_composure", "amount": -5 }], "resultText": "Strings pulled, position won, rival watching." }
+    ] },
+  { "id": "hop-armor", "weight": 6, "requires": { "class": "hoplite" }, "scene": "A smith offers a bronze cuirass of real quality - at a price that empties your purse.",
+    "choices": [
+      { "id": "buy", "label": "Buy it - armor is life", "tags": ["labor"], "effects": [{ "type": "change_drachmae", "amount": -35 }, { "type": "change_stat", "stat": "militia", "amount": 2 }], "resultText": "It fits like a second skin. Worth every starving week." },
+      { "id": "old", "label": "Keep your father's old panoply", "tags": ["traditionalist_act"], "effects": [{ "type": "change_ideology", "amount": -2 }, { "type": "change_stat", "stat": "devotion", "amount": 1 }], "resultText": "Dented where it saved him. That counts for something bronze can't buy." }
+    ] },
+  { "id": "hop-veteran-plea", "weight": 5, "requires": { "class": "hoplite" }, "scene": "A crippled veteran of the old wars begs at the gate your unit guards. Some say move him along.",
+    "choices": [
+      { "id": "honor", "label": "Stand him a meal and hear his stories", "tags": ["mercy", "gift"], "effects": [{ "type": "change_drachmae", "amount": -5 }, { "type": "change_stat", "stat": "militia", "amount": 1 }, { "type": "change_stat", "stat": "devotion", "amount": 1 }], "resultText": "He fought at the Rhone. The tactics he describes are not in any drill." },
+      { "id": "move", "label": "Move him along per orders", "tags": ["cruelty"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": -1 }, { "type": "change_composure", "amount": -5 }], "resultText": "Orders followed. His look follows you longer." }
+    ] }
+]
