@@ -40,8 +40,8 @@ type PlayerDashboardState = {
     amount: number;
   };
   party: "Palaioi" | "Dynatoi" | "Unaligned";
-  // -100..+100; negative = Reformist, positive = Conservative, 0 = centre.
-  alignment: number;
+  // -100 Traditionalist .. +100 Reformist, 0 = centre.
+  ideology: number;
   // ISO timestamp until which the player cannot rejoin a party, else null.
   partyCooldownUntil: string | null;
   stats: FourStats;
@@ -119,7 +119,7 @@ const placeholderPlayerState: PlayerDashboardState = {
     amount: 36,
   },
   party: "Unaligned",
-  alignment: 0,
+  ideology: 0,
   partyCooldownUntil: null,
   stats: { prestige: 12, devotion: 0, militia: 0, intelligence: 0 },
   balances: { wine: 36, wheat: 130, tin: 60, iron: 40 },
@@ -215,7 +215,7 @@ function playerFromState(state: PlayerState): PlayerDashboardView {
       amount: state.resources.classResource.amount,
     },
     party: normalizeParty(state.character.party),
-    alignment: state.character.alignment,
+    ideology: state.character.ideology,
     partyCooldownUntil: state.character.partyCooldownUntil,
     stats: state.stats,
     balances: state.resources.balances,
@@ -510,10 +510,10 @@ function useCountdownSeconds(untilIso: string | null) {
   return remaining;
 }
 
-function alignmentReadout(alignment: number) {
-  const abs = Math.abs(alignment);
+function ideologyReadout(ideology: number) {
+  const abs = Math.abs(ideology);
   if (abs === 0) return "Centrist (0%)";
-  return `${abs}% ${alignment < 0 ? "Reformist" : "Conservative"}`;
+  return `${abs}% ${ideology < 0 ? "Traditionalist" : "Reformist"}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -587,11 +587,11 @@ const partyOptions: {
   greek: string;
   name: "Dynatoi" | "Palaioi";
   pitch: string;
-  side: "Reformist" | "Conservative";
+  side: "Reformist" | "Traditionalist";
   consClass: boolean;
 }[] = [
   { slug: "dynatoi", greek: "ΔΥΝΑΤΟΙ", name: "Dynatoi", pitch: "The reformers — new money, open ports, and a League remade. They court the bold.", side: "Reformist", consClass: false },
-  { slug: "palaioi", greek: "ΠΑΛΑΙΟΙ", name: "Palaioi", pitch: "The old guard — tradition, temples, and the founders' law. They reward loyalty.", side: "Conservative", consClass: true },
+  { slug: "palaioi", greek: "ΠΑΛΑΙΟΙ", name: "Palaioi", pitch: "The old guard — tradition, temples, and the founders' law. They reward loyalty.", side: "Traditionalist", consClass: true },
 ];
 
 // ---------------------------------------------------------------------------
@@ -997,13 +997,13 @@ function PoliticsPanel({ player, onRefresh }: PanelProps) {
         <div className="pol-page">
           <div className="panel-label">Choose your side</div>
           <p className="pol-intro">
-            Your alignment is <b>{alignmentReadout(player.alignment)}</b>. Joining a party requires at least 10% alignment toward its side — and drifting 10% toward the other side will see you expelled.
+            Your ideology is <b>{ideologyReadout(player.ideology)}</b>. Joining a party requires at least 10% ideology toward its side — and drifting 10% toward the other side will see you expelled.
           </p>
           <div className="panel-grid2">
             {partyOptions.map((option) => {
-              const qualifies = option.slug === "dynatoi" ? player.alignment <= -10 : player.alignment >= 10;
+              const qualifies = option.slug === "dynatoi" ? player.ideology >= 10 : player.ideology <= -10;
               const canJoin = qualifies && cooldown <= 0;
-              const pct = option.slug === "dynatoi" ? Math.max(0, -player.alignment) : Math.max(0, player.alignment);
+              const pct = option.slug === "dynatoi" ? Math.max(0, player.ideology) : Math.max(0, -player.ideology);
               return (
                 <div className={`party-pick${option.consClass ? " cons" : ""}`} key={option.slug}>
                   <div className="party-banner">
@@ -1024,7 +1024,7 @@ function PoliticsPanel({ player, onRefresh }: PanelProps) {
                     <div className="party-req">
                       {qualifies
                         ? `You qualify — ${pct}% ${option.side} (needs 10%)`
-                        : `Requires 10% ${option.side} — you are ${alignmentReadout(player.alignment)}`}
+                        : `Requires 10% ${option.side} — you are ${ideologyReadout(player.ideology)}`}
                     </div>
                   </div>
                 </div>
@@ -1037,7 +1037,7 @@ function PoliticsPanel({ player, onRefresh }: PanelProps) {
             </div>
           ) : null}
           <p className="dashboard-todo">
-            Join eligibility uses your real alignment. Expulsion-on-drift is not implemented yet (no system moves alignment).
+            Join eligibility uses your real ideology. Expulsion-on-drift is not implemented yet (no system moves ideology).
           </p>
           {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
         </div>
@@ -1117,7 +1117,7 @@ const primaryStatByProfession: Record<string, keyof FourStats> = {
   philosopher: "prestige",
   priest: "devotion",
   hetaira: "intelligence",
-  "military-leader": "militia",
+  hoplite: "militia",
 };
 
 function primaryStatFor(slug: string): keyof FourStats {
@@ -1267,26 +1267,25 @@ function ResRow({
   );
 }
 
-function AlignmentBar({ alignment }: { alignment: number }) {
-  const clamped = Math.max(-100, Math.min(100, alignment));
-  const markerPct = 50 + clamped / 2; // -100 -> 0%, 0 -> 50%, +100 -> 100%
-  const abs = Math.abs(clamped);
-  const side = clamped < 0 ? "Reformist" : clamped > 0 ? "Conservative" : "Centrist";
-  const readout = abs === 0 ? "Centrist (0%)" : `${abs}% ${side}`;
+function AlignmentBar({ ideology }: { ideology: number }) {
+  const clamped = Math.max(-100, Math.min(100, ideology));
+  const markerPct = 50 + clamped / 2; // -100 (Traditionalist) -> 0%, +100 (Reformist) -> 100%
+  const readout = ideologyReadout(clamped);
   const eligibility =
-    clamped <= -10
+    clamped >= 10
       ? "eligible for the Dynatoi"
-      : clamped >= 10
+      : clamped <= -10
         ? "eligible for the Palaioi"
         : "centrist — not yet eligible for a party";
-  const readoutColor = clamped < 0 ? "var(--dash-ref)" : clamped > 0 ? "#c08a5e" : "var(--dash-parchment)";
+  // Left = Traditionalist (bronze), right = Reformist (blue).
+  const readoutColor = clamped < 0 ? "#c08a5e" : clamped > 0 ? "var(--dash-ref)" : "var(--dash-parchment)";
   return (
     <div className="cs-align">
       <div className="align-ends">
-        <span style={{ color: "var(--dash-ref)" }}>◀ Reformist</span>
-        <span style={{ color: "#c08a5e" }}>Conservative ▶</span>
+        <span style={{ color: "#c08a5e" }}>◀ Traditionalist</span>
+        <span style={{ color: "var(--dash-ref)" }}>Reformist ▶</span>
       </div>
-      <div className="align-bar" role="img" aria-label={`Alignment: ${readout}`}>
+      <div className="align-bar" role="img" aria-label={`Ideology: ${readout}`}>
         <span className="align-tick" style={{ left: "45%" }} />
         <span className="align-center" />
         <span className="align-tick" style={{ left: "55%" }} />
@@ -1528,7 +1527,7 @@ function CharacterTab({ player }: { player: PlayerDashboardView }) {
       <p className="sheet-todo">TODO: Devotion, Militia, and Intelligence stay 0 until the event engine grants them.</p>
 
       <SheetLabel>Alignment</SheetLabel>
-      <AlignmentBar alignment={player.alignment} />
+      <AlignmentBar ideology={player.ideology} />
 
       <SheetLabel>Traits · {placeholderTraits.length}</SheetLabel>
       {placeholderTraits.map((trait) => (

@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { nobleHouses, professions as sharedProfessions } from "@massalia/shared";
+import { HOUSE_START, nobleHouses, professions as sharedProfessions } from "@massalia/shared";
 import { createDb } from "./client.js";
 import {
   buildings,
@@ -83,7 +83,8 @@ async function seedCatalog() {
       motto: house.motto,
       patron: house.patron,
       crest: house.crest,
-      data: house,
+      startIdeology: HOUSE_START[house.slug]?.ideology ?? 0,
+      data: { ...house, startBonus: HOUSE_START[house.slug]?.bonus ?? {} },
     })))
     .onConflictDoNothing();
 

@@ -35,6 +35,9 @@ export const houses = pgTable("houses", {
   motto: text("motto").notNull(),
   patron: text("patron").notNull(),
   crest: text("crest").notNull(),
+  // Starting political ideology a member of this house begins with
+  // (-100 Traditionalist .. +100 Reformist). Stat bonus lives in `data.startBonus`.
+  startIdeology: integer("start_ideology").notNull().default(0),
   data: jsonb("data").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
 });
 
@@ -100,6 +103,32 @@ export const characters = pgTable("characters", {
   traits: jsonb("traits").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   relationships: jsonb("relationships").$type<Record<string, number>>().notNull().default(sql`'{}'::jsonb`),
 });
+
+// One character sheet per player per world. The canonical home for stats,
+// ideology, party, currency, and the daily action economy.
+export const playerCharacters = pgTable("player_characters", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  playerId: uuid("player_id").references(() => players.id).notNull(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  houseSlug: text("house_slug").references(() => houses.slug).notNull(),
+  classId: text("class_id").notNull(),
+  prestige: integer("prestige").notNull().default(0),
+  devotion: integer("devotion").notNull().default(0),
+  militia: integer("militia").notNull().default(0),
+  intelligence: integer("intelligence").notNull().default(0),
+  drachmae: integer("drachmae").notNull().default(100),
+  // -100 Traditionalist .. +100 Reformist.
+  ideology: integer("ideology").notNull().default(0),
+  party: text("party").notNull().default("none"),
+  composure: integer("composure").notNull().default(70),
+  growthMultiplier: numeric("growth_multiplier").notNull().default("1.0"),
+  actionsSpentToday: integer("actions_spent_today").notNull().default(0),
+  lastActionReset: timestamp("last_action_reset", { withTimezone: true }),
+  partyCooldownUntil: timestamp("party_cooldown_until", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  oneCharacterPerPlayerWorld: uniqueIndex("player_characters_player_world_idx").on(table.playerId, table.worldId),
+}));
 
 export const regions = pgTable("regions", {
   id: text("id").primaryKey(),

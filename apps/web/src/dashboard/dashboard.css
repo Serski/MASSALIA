@@ -2052,7 +2052,8 @@
 .dashboard-shell .align-bar{
   position: relative;
   height: 10px;
-  background: linear-gradient(90deg, var(--dash-ref), rgba(181, 138, 69, 0.25) 50%, #c08a5e);
+  /* left = Traditionalist (bronze), right = Reformist (blue) */
+  background: linear-gradient(90deg, #c08a5e, rgba(181, 138, 69, 0.25) 50%, var(--dash-ref));
   border: 1px solid var(--dash-line);
   border-radius: 6px;
 }

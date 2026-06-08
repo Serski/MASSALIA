@@ -16,7 +16,7 @@ const portraitClassSlugs = [
   "philosopher",
   "shipbuilder",
   "hetaira",
-  "military-leader",
+  "hoplite",
   "slave",
 ] as const;
 
@@ -29,13 +29,13 @@ const portraitPrefixes: Record<PortraitClassSlug, string> = {
   philosopher: "PH",
   shipbuilder: "SB",
   hetaira: "HE",
-  "military-leader": "ML",
+  hoplite: "ML",
   slave: "SL",
 };
 
 const uploadedPortraits: Partial<Record<PortraitClassSlug, string>> = {
   trader: "webp",
-  "military-leader": "webp",
+  hoplite: "webp",
   priest: "webp",
   shipbuilder: "webp",
   landowner: "webp",

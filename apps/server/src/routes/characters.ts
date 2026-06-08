@@ -10,7 +10,9 @@ import {
   resources,
   worlds,
 } from "@massalia/db";
+import type { ClassId } from "@massalia/shared";
 import { requireAuth } from "../services/auth.js";
+import { createCharacterRow } from "../services/character.js";
 
 const db = createDb();
 
@@ -29,7 +31,7 @@ const classResourceByProfession: Record<string, string> = {
   philosopher: "prestige",
   shipbuilder: "gold",
   hetaira: "intelligence",
-  "military-leader": "militia",
+  hoplite: "militia",
   slave: "freedom",
 };
 
@@ -148,6 +150,10 @@ export async function characterRoutes(app: FastifyInstance) {
 
       return { player, character };
     });
+
+    // Provision the canonical character sheet (stats, ideology, party, currency,
+    // action economy) so /api/character and the HUD work immediately.
+    await createCharacterRow(result.player.id, world.id, house.slug, profession.slug as ClassId);
 
     reply.code(201);
     return result;

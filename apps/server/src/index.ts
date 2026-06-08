@@ -6,6 +6,7 @@ import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { authRoutes } from "./routes/auth.js";
 import { characterRoutes } from "./routes/characters.js";
+import { characterSheetRoutes } from "./routes/character.js";
 import { eventRoutes } from "./routes/events.js";
 import { meRoutes } from "./routes/me.js";
 import { partyRoutes } from "./routes/party.js";
@@ -33,6 +34,7 @@ await app.register(fastifyStatic, {
 app.get("/health", async () => ({ ok: true }));
 await app.register(authRoutes, { prefix: "/auth" });
 await app.register(characterRoutes, { prefix: "/characters" });
+await app.register(characterSheetRoutes, { prefix: "/api/character" });
 await app.register(meRoutes, { prefix: "/me" });
 await app.register(partyRoutes, { prefix: "/party" });
 await app.register(worldRoutes, { prefix: "/api/world" });

@@ -1,7 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { and, eq } from "drizzle-orm";
 import { createDb, houses, players, professions, resources, users, worlds } from "@massalia/db";
+import { remainingActions } from "@massalia/shared";
 import { requireAuth } from "../services/auth.js";
+import { ensureCharacterRow, withDailyReset } from "../services/character.js";
 
 const db = createDb();
 
@@ -12,7 +14,7 @@ const classResourceByProfession: Record<string, string> = {
   philosopher: "prestige",
   shipbuilder: "gold",
   hetaira: "intelligence",
-  "military-leader": "militia",
+  hoplite: "militia",
   slave: "freedom",
 };
 
@@ -47,6 +49,9 @@ export async function meRoutes(app: FastifyInstance) {
       reply.code(404);
       return { error: "No active character found." };
     }
+
+    // Canonical character sheet (stats, ideology, party, currency, actions).
+    const character = await withDailyReset(await ensureCharacterRow(state.player, world.id), new Date());
 
     const resourceRows = await db.select().from(resources).where(and(eq(resources.scope, "player"), eq(resources.scopeId, state.player.id)));
     const resourceMap = new Map(resourceRows.map((resource) => [resource.type, numberAmount(resource.amount)]));
@@ -86,16 +91,21 @@ export async function meRoutes(app: FastifyInstance) {
         houseName: state.house.name,
         houseStance: state.house.stance,
         faceId: state.player.faceId,
-        party: state.player.party,
-        // -100..+100; negative = Reformist, positive = Conservative, 0 = centre.
-        alignment: state.player.alignment,
+        // Party + ideology now come from the canonical character sheet.
+        party: character.party,
+        // -100 Traditionalist .. +100 Reformist, 0 = centre.
+        ideology: character.ideology,
+        composure: character.composure,
+        drachmae: character.drachmae,
+        actionsRemaining: remainingActions(character.actionsSpentToday),
         // ISO timestamp until which the player cannot rejoin a party, else null.
-        partyCooldownUntil: state.player.partyCooldownUntil ? state.player.partyCooldownUntil.toISOString() : null,
+        partyCooldownUntil: character.partyCooldownUntil ? character.partyCooldownUntil.toISOString() : null,
         origin: state.player.origin,
       },
       resources: {
-        gold: resourceMap.get("gold") ?? 0,
-        prestige: resourceMap.get("prestige") ?? 0,
+        // Drachmae is the canonical currency; surfaced as "gold" for the existing UI.
+        gold: character.drachmae,
+        prestige: character.prestige,
         influence: resourceMap.get("influence") ?? 0,
         classResource: {
           type: classResourceType,
@@ -104,13 +114,12 @@ export async function meRoutes(app: FastifyInstance) {
         },
         balances,
       },
-      // The 4-stat model. Real where a resource row exists, else 0. The event
-      // engine has not granted Devotion/Militia/Intelligence yet for most paths.
+      // The 4-stat model, now sourced from the canonical character sheet.
       stats: {
-        prestige: resourceMap.get("prestige") ?? 0,
-        devotion: resourceMap.get("devotion") ?? 0,
-        militia: resourceMap.get("militia") ?? 0,
-        intelligence: resourceMap.get("intelligence") ?? 0,
+        prestige: character.prestige,
+        devotion: character.devotion,
+        militia: character.militia,
+        intelligence: character.intelligence,
       },
     };
   });

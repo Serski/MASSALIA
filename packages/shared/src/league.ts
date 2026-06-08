@@ -165,10 +165,10 @@ export const professions: Profession[] = [
   },
   {
     kind: "profession",
-    slug: "military-leader",
+    slug: "hoplite",
     initial: "M",
     image: "assets/HOPLITE copy.png",
-    name: "Military Leader",
+    name: "Hoplite",
     rank: "@Dekarchos",
     objective: "Command citizen soldiers and grow from local captain to League warlord.",
     income: "20 gold/day +5 Militia; leads 10 troops",

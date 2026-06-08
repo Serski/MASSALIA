@@ -6,6 +6,10 @@ if (import.meta.env.PROD && !configuredApiUrl) {
 
 export const apiBaseUrl = (configuredApiUrl ?? (import.meta.env.DEV ? "http://localhost:3001" : "")).replace(/\/$/, "");
 
+import type { CharacterSheet } from "@massalia/shared";
+
+export type { CharacterSheet } from "@massalia/shared";
+
 type RequestOptions = {
   method?: string;
   body?: unknown;
@@ -126,9 +130,13 @@ export type PlayerState = {
     houseName: string;
     houseStance: string;
     faceId: string | null;
+    // 'none' | 'palaioi' | 'dynatoi'
     party: string;
-    // -100..+100; negative = Reformist, positive = Conservative, 0 = centre.
-    alignment: number;
+    // -100 Traditionalist .. +100 Reformist, 0 = centre.
+    ideology: number;
+    composure: number;
+    drachmae: number;
+    actionsRemaining: number;
     // ISO timestamp until which the player cannot rejoin a party, else null.
     partyCooldownUntil: string | null;
     origin: string;
@@ -182,4 +190,5 @@ export const api = {
     apiFetch<{ party: string; partyCooldownUntil: string | null }>("/party/join", { method: "POST", body: { party } }),
   leaveParty: () =>
     apiFetch<{ party: string; partyCooldownUntil: string | null }>("/party/leave", { method: "POST" }),
+  character: () => apiFetch<{ character: CharacterSheet }>("/api/character"),
 };
