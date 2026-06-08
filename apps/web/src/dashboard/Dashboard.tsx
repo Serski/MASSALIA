@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api, ApiError, type PlayerState } from "../api.js";
+import { api, ApiError, type PlayerState, type CharacterSheet as CharacterSheetData } from "../api.js";
 import { assetPath, buildableBuildings, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
@@ -215,7 +215,9 @@ function playerFromState(state: PlayerState): PlayerDashboardView {
       amount: state.resources.classResource.amount,
     },
     party: normalizeParty(state.character.party),
-    ideology: state.character.ideology,
+    // Guard against a missing value (e.g. a frontend/backend deploy-window skew)
+    // so the bar degrades to "Centrist (0%)" instead of rendering "NaN%".
+    ideology: state.character.ideology ?? 0,
     partyCooldownUntil: state.character.partyCooldownUntil,
     stats: state.stats,
     balances: state.resources.balances,
@@ -1136,13 +1138,6 @@ const placeholderUnits = [
   { id: "militia", icon: "⚔️", name: "Militia × 0", line: "Trained and led by Military Leaders", tag: "—", dim: true },
 ];
 
-// TODO: placeholder traits until the event engine grants real ones.
-const placeholderTraits = [
-  { id: "shrewd", icon: "🧠", name: "Shrewd", line: "+5% better prices at the Agora · earned: Season I", tag: "asset", tone: "asset" as const },
-  { id: "harbor-born", icon: "⚓", name: "Harbor-Born", line: "+Favor with shipmasters · from your origins in Massalia", tag: "asset", tone: "asset" as const },
-  { id: "unproven", icon: "🌱", name: "Unproven", line: "The Houses have not yet measured you · fades as standing grows", tag: "neutral", tone: "neutral" as const },
-];
-
 // TODO: placeholder achievements until the achievement system exists.
 const earnedAchievements = [
   { id: "first-coin", icon: "🪙", name: "First Coin", detail: "Earn your first gold from a holding.", when: "Season I · Day 1" },
@@ -1213,7 +1208,7 @@ function DetailRow({
   name: ReactNode;
   sub?: ReactNode;
   tag?: string;
-  tone?: "asset" | "neutral";
+  tone?: "asset" | "neutral" | "flaw";
   action?: ReactNode;
   dim?: boolean;
 }) {
@@ -1511,30 +1506,81 @@ function InventorySheet({
   );
 }
 
-function CharacterTab({ player }: { player: PlayerDashboardView }) {
+// Icon + asset/neutral/flaw tag for a trait row (old Fatty-style display).
+const traitCategoryIcons: Record<string, string> = {
+  personality: "🧠",
+  upbringing: "⚓",
+  class: "⚔️",
+  coping: "🌿",
+  reputation: "🏛️",
+};
+
+function traitTone(trait: CharacterSheetData["traits"][number]): "asset" | "neutral" | "flaw" {
+  const mod = trait.statMod;
+  const net = mod ? (mod.prestige ?? 0) + (mod.devotion ?? 0) + (mod.militia ?? 0) + (mod.intelligence ?? 0) : 0;
+  return net > 0 ? "asset" : net < 0 ? "flaw" : "neutral";
+}
+
+function TraitRows({ traits }: { traits: CharacterSheetData["traits"] }) {
+  if (!traits.length) {
+    return (
+      <div className="slot-empty">Traits are earned through decisions, quests, and the life you lead — some help, some haunt.</div>
+    );
+  }
+  return (
+    <>
+      {traits.map((trait) => {
+        const tone = traitTone(trait);
+        return (
+          <DetailRow
+            key={trait.id}
+            icon={traitCategoryIcons[trait.category] ?? "•"}
+            name={trait.name}
+            sub={trait.description}
+            tag={tone === "flaw" ? "flaw" : tone}
+            tone={tone}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+function CharacterTab({ player, sheet }: { player: PlayerDashboardView; sheet: CharacterSheetData | null }) {
   const primary = primaryStatFor(player.professionSlug);
+  // Effective stats (base + trait mods) from the canonical sheet; base from the
+  // sheet too, falling back to /me/state base while the sheet loads.
+  const effective = sheet?.effective ?? player.stats;
+  const base = sheet?.base ?? player.stats;
   return (
     <div role="tabpanel">
       <SheetLabel>Stats</SheetLabel>
       <div className="cs-stats">
-        {statDefs.map((stat) => (
-          <div key={stat.key} className={`cs-stat${stat.key === primary ? " primary" : ""}`}>
-            <div className="cs-stat-v">{player.stats[stat.key]}</div>
-            <div className="cs-stat-k">{stat.label}</div>
-          </div>
-        ))}
+        {statDefs.map((stat) => {
+          const value = effective[stat.key];
+          const delta = value - base[stat.key];
+          return (
+            <div
+              key={stat.key}
+              className={`cs-stat${stat.key === primary ? " primary" : ""}`}
+              title={delta ? `base ${base[stat.key]} · ${delta > 0 ? "+" : ""}${delta} from traits` : undefined}
+            >
+              <div className="cs-stat-v">
+                {value}
+                {delta ? <span className="cs-stat-delta">{delta > 0 ? `+${delta}` : delta}</span> : null}
+              </div>
+              <div className="cs-stat-k">{stat.label}</div>
+            </div>
+          );
+        })}
       </div>
-      <p className="sheet-todo">TODO: Devotion, Militia, and Intelligence stay 0 until the event engine grants them.</p>
+      <p className="sheet-todo">Effective stats = base + trait bonuses. Base stays 0 until the event engine grants stats.</p>
 
       <SheetLabel>Alignment</SheetLabel>
       <AlignmentBar ideology={player.ideology} />
 
-      <SheetLabel>Traits · {placeholderTraits.length}</SheetLabel>
-      {placeholderTraits.map((trait) => (
-        <DetailRow key={trait.id} icon={trait.icon} name={trait.name} sub={trait.line} tag={trait.tag} tone={trait.tone} />
-      ))}
-      <div className="slot-empty">Traits are earned through decisions, quests, and the life you lead — some help, some haunt.</div>
-      <p className="sheet-todo">TODO: traits are placeholder until the event engine grants real ones.</p>
+      <SheetLabel>Traits · {sheet ? sheet.traits.length : "…"}</SheetLabel>
+      {sheet ? <TraitRows traits={sheet.traits} /> : <div className="slot-empty">Loading traits…</div>}
     </div>
   );
 }
@@ -1658,7 +1704,27 @@ function CharacterSheet({
   onLogout: () => void;
 }) {
   const [tab, setTab] = useState<CharacterSheetTab>("character");
+  const [sheet, setSheet] = useState<CharacterSheetData | null>(null);
   const partyChip = player.party === "Unaligned" ? "Party — chosen in-game" : player.party;
+
+  // Pull the canonical sheet (traits + base/effective stats) each time it opens.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setSheet(null);
+    api
+      .character()
+      .then((result) => {
+        if (!cancelled) setSheet(result.character);
+      })
+      .catch(() => {
+        /* sheet stays null -> tab shows base stats + loading state */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
   return (
     <BottomSheet
       open={open}
@@ -1691,7 +1757,7 @@ function CharacterSheet({
           { id: "settings", label: "Settings" },
         ]}
       />
-      {tab === "character" ? <CharacterTab player={player} /> : null}
+      {tab === "character" ? <CharacterTab player={player} sheet={sheet} /> : null}
       {tab === "achievements" ? <AchievementsTab /> : null}
       {tab === "settings" ? <SettingsTab player={player} onLogout={onLogout} /> : null}
     </BottomSheet>

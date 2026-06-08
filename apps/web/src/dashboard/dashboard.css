@@ -1607,8 +1607,10 @@
   inset: 0;
   z-index: 60;
   display: flex;
-  align-items: flex-end;
+  /* Centered, biased slightly toward the top (extra padding at the bottom). */
+  align-items: center;
   justify-content: center;
+  padding: 4vh 12px 9vh;
   background: rgba(8, 6, 5, 0.72);
   backdrop-filter: blur(3px);
 }
@@ -1618,18 +1620,17 @@
   display: flex;
   flex-direction: column;
   width: min(680px, 96%);
-  max-height: 92vh;
-  max-height: 92dvh;
+  max-height: 88vh;
+  max-height: 88dvh;
   background: linear-gradient(180deg, #221a14, #15100c);
   border: 1px solid var(--dash-gold);
-  border-bottom: none;
-  border-radius: 18px 18px 0 0;
-  box-shadow: 0 -30px 80px rgba(0, 0, 0, 0.6);
-  animation: sheetUp 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+  border-radius: 18px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7);
+  animation: sheetUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 @keyframes sheetUp {
-  from { transform: translateY(40px); opacity: 0.6; }
+  from { transform: translateY(24px); opacity: 0.6; }
   to { transform: none; opacity: 1; }
 }
 
@@ -1797,6 +1798,7 @@
 
 .dashboard-shell .sheet-row-tag.tone-asset{ color: #9ec487; }
 .dashboard-shell .sheet-row-tag.tone-neutral{ color: var(--dash-stone-dim); }
+.dashboard-shell .sheet-row-tag.tone-flaw{ color: #d49a86; }
 
 .dashboard-shell .sheet-btn{
   padding: 7px 13px;
@@ -2255,6 +2257,18 @@
 }
 
 @media (max-width: 620px) {
+  /* On phones, revert to a bottom sheet that slides up from the edge. */
+  .dashboard-shell .sheet-overlay{
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .dashboard-shell .sheet{
+    max-height: 92dvh;
+    border-bottom: none;
+    border-radius: 18px 18px 0 0;
+  }
+
   .dashboard-shell .sheet-body{
     padding: 14px 16px 22px;
   }
@@ -2793,4 +2807,12 @@
   .dashboard-shell .market-head-actions{ padding-top: 0; }
   .dashboard-shell .mkt-row{ grid-template-columns: 1.4fr 0.8fr 1fr auto; gap: 8px; padding: 10px 12px; }
   .dashboard-shell .mkt-row.mkt-h{ display: none; }
+}
+
+/* Effective-stat delta superscript on the character panel stat block. */
+.dashboard-shell .cs-stat-delta{
+  margin-left: 3px;
+  color: var(--dash-good);
+  font-size: 9px;
+  vertical-align: super;
 }

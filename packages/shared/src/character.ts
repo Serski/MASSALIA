@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { HeldTrait } from "./traits.js";
 
 // ---------------------------------------------------------------------------
 // Player character foundation: class/party vocab, starting data, action economy.
@@ -158,13 +159,16 @@ export const createCharacterSchema = z.object({
 });
 export type CreateCharacterInput = z.infer<typeof createCharacterSchema>;
 
-// Full sheet returned by the API (derived fields included).
-export type CharacterSheet = CharacterStats & {
+// Full sheet returned by the API (derived fields included). `base` is the stored
+// stat columns; `effective` = base + trait statMods (computed on read).
+export type CharacterSheet = {
   id: string;
   playerId: string;
   worldId: string;
   houseId: string;
   classId: ClassId;
+  base: CharacterStats;
+  effective: CharacterStats;
   drachmae: number;
   ideology: number;
   party: Party;
@@ -174,4 +178,5 @@ export type CharacterSheet = CharacterStats & {
   remainingActions: number;
   lastActionReset: string | null;
   createdAt: string;
+  traits: HeldTrait[];
 };

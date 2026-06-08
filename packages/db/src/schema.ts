@@ -130,6 +130,17 @@ export const playerCharacters = pgTable("player_characters", {
   oneCharacterPerPlayerWorld: uniqueIndex("player_characters_player_world_idx").on(table.playerId, table.worldId),
 }));
 
+// Traits held by a character. traitId references content/traits/traits.json
+// (not a DB FK). Rules (cap, opposites) are enforced in the service layer.
+export const characterTraits = pgTable("character_traits", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  characterId: uuid("character_id").references(() => playerCharacters.id).notNull(),
+  traitId: text("trait_id").notNull(),
+  gainedAt: timestamp("gained_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  oneTraitPerCharacter: uniqueIndex("character_traits_character_trait_idx").on(table.characterId, table.traitId),
+}));
+
 export const regions = pgTable("regions", {
   id: text("id").primaryKey(),
   worldId: uuid("world_id").references(() => worlds.id).notNull(),

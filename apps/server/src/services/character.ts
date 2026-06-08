@@ -3,11 +3,14 @@ import { createDb, players, playerCharacters, worlds } from "@massalia/db";
 import {
   applyDailyReset,
   CLASS_START,
+  effectiveStats,
   HOUSE_START,
   remainingActions,
   startingCharacter,
   type CharacterSheet,
+  type CharacterStats,
   type ClassId,
+  type HeldTrait,
   type Party,
 } from "@massalia/shared";
 
@@ -100,17 +103,22 @@ export async function withDailyReset(row: CharacterRow, now: Date): Promise<Char
   return updated[0]!;
 }
 
-export function toCharacterSheet(row: CharacterRow): CharacterSheet {
+export function toCharacterSheet(row: CharacterRow, traits: HeldTrait[] = []): CharacterSheet {
+  const base: CharacterStats = {
+    prestige: row.prestige,
+    devotion: row.devotion,
+    militia: row.militia,
+    intelligence: row.intelligence,
+  };
   return {
     id: row.id,
     playerId: row.playerId,
     worldId: row.worldId,
     houseId: row.houseSlug,
     classId: row.classId as ClassId,
-    prestige: row.prestige,
-    devotion: row.devotion,
-    militia: row.militia,
-    intelligence: row.intelligence,
+    base,
+    // Derived on read: base + trait statMods. Never persisted to base columns.
+    effective: effectiveStats(base, traits),
     drachmae: row.drachmae,
     ideology: row.ideology,
     party: row.party as Party,
@@ -120,5 +128,6 @@ export function toCharacterSheet(row: CharacterRow): CharacterSheet {
     remainingActions: remainingActions(row.actionsSpentToday),
     lastActionReset: row.lastActionReset ? row.lastActionReset.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
+    traits,
   };
 }

@@ -10,6 +10,7 @@ import {
   toCharacterSheet,
   withDailyReset,
 } from "../services/character.js";
+import { getHeldTraits } from "../services/traits.js";
 
 export async function characterSheetRoutes(app: FastifyInstance) {
   // Create the character sheet: choose house + class. Rejects if one exists.
@@ -40,7 +41,7 @@ export async function characterSheetRoutes(app: FastifyInstance) {
 
     const row = await createCharacterRow(player.id, worldId, parsed.data.houseId, parsed.data.classId);
     reply.code(201);
-    return { character: toCharacterSheet(row) };
+    return { character: toCharacterSheet(row, await getHeldTraits(row.id)) };
   });
 
   // Full character sheet incl. derived values (remaining actions).
@@ -58,6 +59,6 @@ export async function characterSheetRoutes(app: FastifyInstance) {
     }
 
     const row = await withDailyReset(await ensureCharacterRow(player, worldId), new Date());
-    return { character: toCharacterSheet(row) };
+    return { character: toCharacterSheet(row, await getHeldTraits(row.id)) };
   });
 }

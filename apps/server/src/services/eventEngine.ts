@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { EventDefinition, EventEffect } from "@massalia/shared";
 import { resolveOwnerToken, setProvinceOwner } from "./worldState.js";
+import { applyChangeTrait, TraitRuleError } from "./traits.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../../..");
@@ -21,7 +22,7 @@ export async function applyEventChoice(eventId: string, choiceId: string) {
   if (!choice) throw new Error(`Unknown choice ${choiceId}`);
 
   for (const effect of choice.effects) {
-    applyEffect(effect);
+    await applyEffect(effect);
   }
 
   return {
@@ -31,13 +32,22 @@ export async function applyEventChoice(eventId: string, choiceId: string) {
   };
 }
 
-function applyEffect(effect: EventEffect) {
+async function applyEffect(effect: EventEffect) {
   switch (effect.type) {
     case "set_province_owner":
       setProvinceOwner(effect.provinceId, resolveOwnerToken(effect.ownerPlayerId));
       return;
-    case "gain_resource":
     case "change_trait":
+      // Route through the rule-enforcing trait service. A rule violation (e.g.
+      // personality cap) is logged and skipped rather than failing the event.
+      try {
+        await applyChangeTrait(effect.characterId, effect.traitId, effect.operation);
+      } catch (error) {
+        if (!(error instanceof TraitRuleError)) throw error;
+        console.warn(`change_trait skipped (${error.reason}): ${error.message}`);
+      }
+      return;
+    case "gain_resource":
     case "spawn_army":
       // TODO: Persist and validate these effects through transactional game services.
       return;

@@ -11,6 +11,7 @@ import { eventRoutes } from "./routes/events.js";
 import { meRoutes } from "./routes/me.js";
 import { partyRoutes } from "./routes/party.js";
 import { worldRoutes } from "./routes/world.js";
+import { loadTraitDefs } from "./services/traits.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../..");
@@ -31,6 +32,9 @@ await app.register(fastifyStatic, {
   root: path.join(repoRoot, "content"),
   prefix: "/content/",
 });
+// Validate content/traits/traits.json at boot — fail fast on a malformed file.
+await loadTraitDefs();
+
 app.get("/health", async () => ({ ok: true }));
 await app.register(authRoutes, { prefix: "/auth" });
 await app.register(characterRoutes, { prefix: "/characters" });
