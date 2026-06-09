@@ -115,13 +115,18 @@
   animation: seasonPulse 1.8s ease-out infinite;
 }
 
+.dashboard-shell .season-live{
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* Clean season symbol (transparent art) — no circle/background. */
 .dashboard-shell .season-icon{
   width: 20px;
   height: 20px;
   flex: none;
-  border-radius: 50%;
-  object-fit: cover;
-  box-shadow: 0 0 0 1px rgba(236, 224, 204, 0.22);
+  object-fit: contain;
 }
 
 @keyframes seasonPulse {
