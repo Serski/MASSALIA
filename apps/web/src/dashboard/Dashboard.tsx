@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { api, ApiError, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet } from "../api.js";
 import { assetPath, buildableBuildings, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
@@ -263,8 +263,8 @@ function MoreIcon() {
   );
 }
 
-function DashboardCard({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <article className={`dashboard-card${className ? ` ${className}` : ""}`}>{children}</article>;
+function DashboardCard({ children, className = "", style }: { children: ReactNode; className?: string; style?: CSSProperties }) {
+  return <article className={`dashboard-card${className ? ` ${className}` : ""}`} style={style}>{children}</article>;
 }
 
 function ListRow({ children, action }: { children: ReactNode; action?: ReactNode }) {
@@ -696,14 +696,20 @@ function CourtPanel({ player, onRefresh }: PanelProps) {
             </div>
             <p className="dashboard-todo">TODO: digest is placeholder data until the away-summary service exists.</p>
           </DashboardCard>
-          <DashboardCard className="offices-card">
-            <h2>Offices in play</h2>
-            <div className="office-stack">
-              <span>Archon seats - 2 contested</span>
-              <span>Council petitions - 3 awaiting support</span>
-              <span>Next assembly - Day 21</span>
+          {/* order:3 mirrors the offices card this replaced, so on the mobile
+              court-grid (where .court-rail is display:contents) the stub stays
+              after the digest + decisions instead of floating to the top. */}
+          <DashboardCard className="actions-card" style={{ order: 3 }}>
+            <h2>Your Day</h2>
+            {/* Reuses the global .office-stack layout so the stub matches the
+                other rail cards; .action-stack is the stable hook for the
+                future routine system. */}
+            <div className="office-stack action-stack">
+              <span>Train at the gymnasium</span>
+              <span>Study at the stoa</span>
+              <span>Rest at the estate</span>
             </div>
-            <p className="dashboard-todo">TODO: offices mirror placeholder political state.</p>
+            <p className="dashboard-todo">TODO: daily routine actions — system to be implemented.</p>
           </DashboardCard>
         </aside>
       </div>
@@ -1009,6 +1015,15 @@ function PoliticsPanel({ player, onRefresh }: PanelProps) {
               ))}
             </div>
             <div>
+              <DashboardCard className="offices-card">
+                <h2>Offices in play</h2>
+                <div className="office-stack">
+                  <span>Archon seats - 2 contested</span>
+                  <span>Council petitions - 3 awaiting support</span>
+                  <span>Next assembly - Day 21</span>
+                </div>
+                <p className="dashboard-todo">TODO: offices mirror placeholder political state.</p>
+              </DashboardCard>
               <div className="panel-label">Council news</div>
               <DigestList items={councilNews} />
             </div>
