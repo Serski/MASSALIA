@@ -3,6 +3,7 @@ export * from "./types.js";
 export * from "./events.js";
 export * from "./league.js";
 export * from "./character.js";
+export * from "./calendar.js";
 export * from "./traits.js";
 export * from "./politics.js";
 export * from "./composure.js";

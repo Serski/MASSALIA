@@ -8,7 +8,6 @@ import {
   getActivePlayer,
   getActiveWorldId,
   toCharacterSheet,
-  withDailyReset,
 } from "../services/character.js";
 import { getHeldTraits } from "../services/traits.js";
 import { activeCensure } from "../services/politics.js";
@@ -47,7 +46,7 @@ export async function characterSheetRoutes(app: FastifyInstance) {
     // (a fresh character can have no censure)
   });
 
-  // Full character sheet incl. derived values (remaining actions).
+  // Full character sheet incl. derived values.
   app.get("/", async (request, reply) => {
     const user = await requireAuth(request);
     const worldId = await getActiveWorldId();
@@ -66,8 +65,7 @@ export async function characterSheetRoutes(app: FastifyInstance) {
     const censure = await activeCensure(ensured.id);
     // Lazy composure recovery (accrues + persists), then read the current row.
     await recoverComposure(ensured.id);
-    const current = (await findCharacterRow(ensured.playerId, ensured.worldId)) ?? ensured;
-    const row = await withDailyReset(current, new Date());
+    const row = (await findCharacterRow(ensured.playerId, ensured.worldId)) ?? ensured;
     return { character: toCharacterSheet(row, await getHeldTraits(row.id), censure ? censure.expiresAt.toISOString() : null) };
   });
 }

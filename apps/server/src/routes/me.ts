@@ -1,12 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { and, eq } from "drizzle-orm";
 import { createDb, houses, players, professions, resources, users, worlds } from "@massalia/db";
-import { remainingActions } from "@massalia/shared";
+import { formatGameDate, gameDate, isWithdrawn } from "@massalia/shared";
 import { requireAuth } from "../services/auth.js";
-import { ensureCharacterRow, findCharacterRow, withDailyReset } from "../services/character.js";
+import { ensureCharacterRow, findCharacterRow } from "../services/character.js";
 import { activeCensure } from "../services/politics.js";
 import { recoverComposure } from "../services/composure.js";
-import { isWithdrawn } from "@massalia/shared";
 
 const db = createDb();
 
@@ -58,7 +57,7 @@ export async function meRoutes(app: FastifyInstance) {
     // Resolve any expired censure first (it may flip party), then read the row.
     const censure = await activeCensure(ensured.id);
     await recoverComposure(ensured.id);
-    const character = await withDailyReset((await findCharacterRow(ensured.playerId, ensured.worldId)) ?? ensured, new Date());
+    const character = (await findCharacterRow(ensured.playerId, ensured.worldId)) ?? ensured;
 
     const resourceRows = await db.select().from(resources).where(and(eq(resources.scope, "player"), eq(resources.scopeId, state.player.id)));
     const resourceMap = new Map(resourceRows.map((resource) => [resource.type, numberAmount(resource.amount)]));
@@ -77,6 +76,9 @@ export async function meRoutes(app: FastifyInstance) {
       .where(eq(users.id, user.id))
       .limit(1);
 
+    // Written in-game date, derived from the world's DB start instant.
+    const worldGameDate = gameDate(Date.now(), world.startedAt.getTime());
+
     return {
       user: {
         ...user,
@@ -85,7 +87,10 @@ export async function meRoutes(app: FastifyInstance) {
       world: {
         id: world.id,
         name: world.name,
-        seasonDay: Math.max(1, Math.floor((Date.now() - world.startedAt.getTime()) / 86_400_000) + 1),
+        // In-game date: 1 real day = 1 season, counting BC years down from 300.
+        gameDate: worldGameDate,
+        gameDateLabel: formatGameDate(worldGameDate),
+        // Secondary real-time countdown to the end of the 182-day run.
         seasonEndsIn: Math.max(0, Math.ceil((world.endsAt.getTime() - Date.now()) / 86_400_000)),
       },
       character: {
@@ -104,7 +109,6 @@ export async function meRoutes(app: FastifyInstance) {
         ideology: character.ideology,
         composure: character.composure,
         drachmae: character.drachmae,
-        actionsRemaining: remainingActions(character.actionsSpentToday),
         // Composure break: withdrawn from public life until breakUntil.
         withdrawn: isWithdrawn(character.breakUntil, new Date()),
         // Active party censure (ideology drift) for the HUD warning + countdown.

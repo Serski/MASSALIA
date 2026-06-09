@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { HOUSE_START, nobleHouses, professions as sharedProfessions } from "@massalia/shared";
+import { HOUSE_START, nobleHouses, professions as sharedProfessions, SERVER_DURATION_DAYS } from "@massalia/shared";
 import { createDb } from "./client.js";
 import {
   buildings,
@@ -18,7 +18,7 @@ import {
 
 const db = createDb();
 const now = new Date();
-const seasonEnd = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+const seasonEnd = new Date(now.getTime() + SERVER_DURATION_DAYS * 24 * 60 * 60 * 1000);
 
 const provinceRows = [
   ["massalia-harbor", "Massalia Harbor", "coast", "realm-massalia", "plains", true],

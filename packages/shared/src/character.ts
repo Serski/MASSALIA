@@ -2,8 +2,10 @@ import { z } from "zod";
 import type { HeldTrait } from "./traits.js";
 
 // ---------------------------------------------------------------------------
-// Player character foundation: class/party vocab, starting data, action economy.
+// Player character foundation: class/party vocab and starting data.
 // Pure + server-shared. Note the HOPLITE rename (was "military-leader").
+// The action budget is now the daily decision set (one card per arena), not a
+// per-day action counter — see dailyArenasFor in events.ts.
 // ---------------------------------------------------------------------------
 
 export const CLASS_IDS = [
@@ -57,7 +59,6 @@ export const CLASS_START: Record<ClassId, { bonus: StatBonus; drachmae: number; 
   slave: { bonus: {}, drachmae: 10, growthMultiplier: 1.5 },
 };
 
-export const ACTIONS_PER_DAY = 2;
 export const STARTING_COMPOSURE = 70;
 export const IDEOLOGY_MIN = -100;
 export const IDEOLOGY_MAX = 100;
@@ -104,51 +105,6 @@ export function clampIdeology(value: number): number {
   return Math.max(IDEOLOGY_MIN, Math.min(IDEOLOGY_MAX, Math.round(value)));
 }
 
-// --- Action economy (no-loop lazy daily reset) -----------------------------
-
-// UTC midnight (ms) for the day containing `date`.
-export function utcDayStart(date: Date): number {
-  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
-}
-
-export function isNewUtcDay(lastReset: Date | null | undefined, now: Date): boolean {
-  if (!lastReset) return true;
-  return utcDayStart(lastReset) < utcDayStart(now);
-}
-
-export type ActionState = { actionsSpentToday: number; lastActionReset: Date | null };
-
-// Lazy reset: if we've crossed into a new UTC day since lastActionReset, zero the
-// counter and stamp the reset. Returns the (possibly) updated state + whether it changed.
-export function applyDailyReset(state: ActionState, now: Date): ActionState & { didReset: boolean } {
-  if (isNewUtcDay(state.lastActionReset, now)) {
-    return { actionsSpentToday: 0, lastActionReset: now, didReset: true };
-  }
-  return { ...state, didReset: false };
-}
-
-export function remainingActions(actionsSpentToday: number): number {
-  return Math.max(0, ACTIONS_PER_DAY - actionsSpentToday);
-}
-
-export type SpendResult =
-  | { ok: true; state: ActionState; remaining: number }
-  | { ok: false; reason: "no_actions"; state: ActionState; remaining: number };
-
-// Apply lazy reset, then spend one action if any remain.
-export function spendAction(state: ActionState, now: Date): SpendResult {
-  const reset = applyDailyReset(state, now);
-  const base: ActionState = { actionsSpentToday: reset.actionsSpentToday, lastActionReset: reset.lastActionReset };
-  if (base.actionsSpentToday >= ACTIONS_PER_DAY) {
-    return { ok: false, reason: "no_actions", state: base, remaining: 0 };
-  }
-  const next: ActionState = {
-    actionsSpentToday: base.actionsSpentToday + 1,
-    lastActionReset: base.lastActionReset,
-  };
-  return { ok: true, state: next, remaining: remainingActions(next.actionsSpentToday) };
-}
-
 // --- Zod input validation --------------------------------------------------
 
 export const HOUSE_IDS = Object.keys(HOUSE_START) as [string, ...string[]];
@@ -176,9 +132,6 @@ export type CharacterSheet = {
   // True while under a break (withdrawn from public life until breakUntil).
   withdrawn: boolean;
   growthMultiplier: number;
-  actionsSpentToday: number;
-  remainingActions: number;
-  lastActionReset: string | null;
   createdAt: string;
   traits: HeldTrait[];
   // Active party censure (ideology drift). null when not censured.

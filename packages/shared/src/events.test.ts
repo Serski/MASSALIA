@@ -140,6 +140,24 @@ describe("eventArena / dailyArenasFor", () => {
   it("oligarch in a party draws all four", () => {
     expect(dailyArenasFor({ isCouncilor: true, party: "dynatoi" })).toEqual(["class", "general", "council", "party"]);
   });
+
+  // The daily decision set IS the action budget: card count per day = arena count.
+  describe("daily card count by archetype", () => {
+    const cardCount = (ctx: { isCouncilor: boolean; party: string }) => dailyArenasFor(ctx).length;
+
+    it("a commoner (no office, unaligned) gets 2 cards", () => {
+      expect(cardCount({ isCouncilor: false, party: "none" })).toBe(2);
+    });
+    it("a partied commoner gets 3 cards", () => {
+      expect(cardCount({ isCouncilor: false, party: "palaioi" })).toBe(3);
+    });
+    it("an unaligned councilor gets 3 cards", () => {
+      expect(cardCount({ isCouncilor: true, party: "none" })).toBe(3);
+    });
+    it("a partied councilor gets 4 cards", () => {
+      expect(cardCount({ isCouncilor: true, party: "dynatoi" })).toBe(4);
+    });
+  });
 });
 
 describe("applyStatGrowth — growthMultiplier math (round half up)", () => {

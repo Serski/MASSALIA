@@ -27,7 +27,8 @@ type PlayerDashboardState = {
   name: string;
   email: string;
   newsletterOptIn: boolean;
-  seasonDay: number;
+  // Written in-game date, e.g. "Winter, 300 BC".
+  gameDateLabel: string;
   seasonEndsIn: number;
   gold: number;
   prestige: number;
@@ -47,7 +48,6 @@ type PlayerDashboardState = {
   censureExpiresAt: string | null;
   composure: number;
   withdrawn: boolean;
-  actionsRemaining: number;
   stats: FourStats;
   balances: Record<string, number>;
   faceImage?: string;
@@ -92,8 +92,8 @@ const placeholderPlayerState: PlayerDashboardState = {
   name: "Pytheas",
   email: "pytheas@example.com",
   newsletterOptIn: false,
-  seasonDay: 18,
-  seasonEndsIn: 11,
+  gameDateLabel: "Winter, 300 BC",
+  seasonEndsIn: 182,
   gold: 420,
   prestige: 12,
   influence: 7,
@@ -110,7 +110,6 @@ const placeholderPlayerState: PlayerDashboardState = {
   censureExpiresAt: null,
   composure: 70,
   withdrawn: false,
-  actionsRemaining: 2,
   stats: { prestige: 12, devotion: 0, militia: 0, intelligence: 0 },
   balances: { wine: 36, wheat: 130, tin: 60, iron: 40 },
 };
@@ -146,7 +145,7 @@ function playerFromState(state: PlayerState): PlayerDashboardView {
     name: state.character.name,
     email: state.user.email,
     newsletterOptIn: state.user.newsletterOptIn,
-    seasonDay: state.world.seasonDay,
+    gameDateLabel: state.world.gameDateLabel,
     seasonEndsIn: state.world.seasonEndsIn,
     gold: state.resources.gold,
     prestige: state.resources.prestige,
@@ -166,7 +165,6 @@ function playerFromState(state: PlayerState): PlayerDashboardView {
     censureExpiresAt: state.character.censureExpiresAt,
     composure: state.character.composure,
     withdrawn: state.character.withdrawn,
-    actionsRemaining: state.character.actionsRemaining,
     stats: state.stats,
     balances: state.resources.balances,
     faceImage: getFaceImage(profession.slug, state.character.faceId),
@@ -1911,7 +1909,7 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
         <div className="season-strip">
           <span className="season-live">
             <span className="season-pulse" aria-hidden="true" />
-            <span>Season I · Day {player.seasonDay}</span>
+            <span>{player.gameDateLabel}</span>
           </span>
           <strong>· ends in {player.seasonEndsIn} days</strong>
         </div>

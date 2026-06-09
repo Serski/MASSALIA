@@ -6,7 +6,7 @@ if (import.meta.env.PROD && !configuredApiUrl) {
 
 export const apiBaseUrl = (configuredApiUrl ?? (import.meta.env.DEV ? "http://localhost:3001" : "")).replace(/\/$/, "");
 
-import type { CharacterSheet } from "@massalia/shared";
+import type { CharacterSheet, GameDate } from "@massalia/shared";
 
 export type { CharacterSheet } from "@massalia/shared";
 
@@ -117,7 +117,10 @@ export type PlayerState = {
   world: {
     id: string;
     name: string;
-    seasonDay: number;
+    // In-game date: 1 real day = 1 season, BC years counting down from 300.
+    gameDate: GameDate;
+    gameDateLabel: string;
+    // Secondary real-time countdown to the end of the 182-day run.
     seasonEndsIn: number;
   };
   character: {
@@ -138,7 +141,6 @@ export type PlayerState = {
     // Composure break — withdrawn from public life (actions locked).
     withdrawn: boolean;
     drachmae: number;
-    actionsRemaining: number;
     // Active party censure (ideology drift): flag + ISO expiry for the countdown.
     censured: boolean;
     censureExpiresAt: string | null;

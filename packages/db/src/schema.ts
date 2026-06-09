@@ -105,7 +105,8 @@ export const characters = pgTable("characters", {
 });
 
 // One character sheet per player per world. The canonical home for stats,
-// ideology, party, currency, and the daily action economy.
+// ideology, party, and currency. The daily action budget is the daily decision
+// set (see daily_decisions), not a per-day action counter.
 export const playerCharacters = pgTable("player_characters", {
   id: uuid("id").primaryKey().defaultRandom(),
   playerId: uuid("player_id").references(() => players.id).notNull(),
@@ -128,8 +129,6 @@ export const playerCharacters = pgTable("player_characters", {
   breakUntil: timestamp("break_until", { withTimezone: true }),
   breaksCount: integer("breaks_count").notNull().default(0),
   growthMultiplier: numeric("growth_multiplier").notNull().default("1.0"),
-  actionsSpentToday: integer("actions_spent_today").notNull().default(0),
-  lastActionReset: timestamp("last_action_reset", { withTimezone: true }),
   partyCooldownUntil: timestamp("party_cooldown_until", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({

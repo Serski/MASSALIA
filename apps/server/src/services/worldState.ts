@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { MapGameState, ProvinceState } from "@massalia/shared";
+import { SERVER_DURATION_DAYS, type MapGameState, type ProvinceState } from "@massalia/shared";
 
 type Listener = () => void | Promise<void>;
 
@@ -57,7 +57,7 @@ export async function getWorldState(): Promise<MapGameState> {
       name: "Massalia Season One",
       seed: "massalia-alpha",
       startedAt: new Date().toISOString(),
-      endsAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+      endsAt: new Date(Date.now() + SERVER_DURATION_DAYS * 24 * 60 * 60 * 1000).toISOString(),
       status: "active",
     },
     provinces,
