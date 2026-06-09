@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { api, ApiError, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet } from "../api.js";
+import { api, ApiError, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult } from "../api.js";
 import { assetPath, buildableBuildings, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
@@ -667,6 +667,131 @@ function CourtDecisions({ onRefresh }: PanelProps) {
   );
 }
 
+const LADDER_LABELS: Record<string, string> = {
+  rhetoric: "Rhetoric",
+  philosophia: "Philosophia",
+  gymnasium: "Gymnasium",
+  mysteries: "Mysteries",
+};
+
+// The proactive half of the daily loop: pick ONE routine per day. Mirrors the
+// CourtDecisions resolve/preview pattern; locks after a pick and shows the four
+// upbringing-ladder progress bars.
+function RoutinesCard({ onRefresh }: PanelProps) {
+  const [set, setSet] = useState<RoutineSet | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  const [outcome, setOutcome] = useState<RoutineResult | null>(null);
+
+  const load = useCallback(() => {
+    api.routines().then(setSet).catch((err) => setError(err instanceof ApiError ? err.message : "Unable to load routines."));
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .routines()
+      .then((next) => !cancelled && setSet(next))
+      .catch((err) => !cancelled && setError(err instanceof ApiError ? err.message : "Unable to load routines."));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const pick = async (routineId: string) => {
+    setBusy(true);
+    setNote("");
+    try {
+      const result = await api.resolveRoutine(routineId);
+      setOutcome(result);
+      load();
+      onRefresh();
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "Could not begin that routine.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const ladderBars = set ? (
+    <div className="routine-ladders" style={{ display: "grid", gap: 6, marginTop: 12 }}>
+      {Object.entries(set.ladders).map(([key, ladder]) => {
+        const pct = ladder.nextThreshold ? Math.min(100, Math.round((ladder.xp / ladder.nextThreshold) * 100)) : 100;
+        return (
+          <div key={key} style={{ display: "grid", gridTemplateColumns: "84px 1fr auto", gap: 8, alignItems: "center", fontSize: 11 }}>
+            <span style={{ textTransform: "uppercase", letterSpacing: "0.06em", opacity: 0.8 }}>{LADDER_LABELS[key] ?? key}</span>
+            <span style={{ height: 6, borderRadius: 3, background: "rgba(12, 8, 7, 0.5)", border: "1px solid rgba(181, 138, 69, 0.18)", overflow: "hidden" }}>
+              <span style={{ display: "block", height: "100%", width: `${pct}%`, background: "var(--dash-good)" }} />
+            </span>
+            <span style={{ opacity: 0.7 }}>{ladder.nextThreshold !== null ? `${ladder.xp}/${ladder.nextThreshold}` : `${ladder.xp} ✓`}</span>
+          </div>
+        );
+      })}
+    </div>
+  ) : null;
+
+  // order:3 keeps this after the digest on the mobile court-grid reflow.
+  return (
+    <DashboardCard className="actions-card" style={{ order: 3 }}>
+      <h2>Your Day</h2>
+      {error ? (
+        <p className="dashboard-todo">{error}</p>
+      ) : !set ? (
+        <p className="dashboard-todo">Loading routines…</p>
+      ) : set.withdrawn ? (
+        <p className="dashboard-todo" role="status">You have withdrawn from public life. Choose a routine again tomorrow.</p>
+      ) : set.pickedRoutineId ? (
+        <div className="routine-chosen" role="status">
+          <p>
+            Today you chose <strong>{set.cards.find((c) => c.id === set.pickedRoutineId)?.label ?? "your routine"}</strong>. New choices arrive tomorrow.
+          </p>
+          {outcome && outcome.composureDelta !== 0 ? (
+            <p className={`composure-note ${outcome.composureDelta < 0 ? "neg" : "pos"}`}>
+              {outcome.composureDelta > 0 ? "+" : ""}{outcome.composureDelta} Composure — {outcome.composureReason}
+            </p>
+          ) : null}
+          {outcome?.ladder?.traitGranted ? (
+            <p className="composure-note pos">Your practice bore fruit: {outcome.ladder.traitGranted}.</p>
+          ) : null}
+          {outcome?.broke ? (
+            <p className="composure-note neg">The day broke you — withdrawn until tomorrow.</p>
+          ) : null}
+        </div>
+      ) : (
+        <div className="event-choice-stack">
+          {set.cards.map((card) => (
+            <button
+              className="event-choice-button"
+              type="button"
+              key={card.id}
+              disabled={busy}
+              title={card.scene}
+              onClick={() => pick(card.id)}
+            >
+              <strong>{card.label}</strong>
+              {card.costs.length > 0 || card.composureDelta !== 0 ? (
+                <span className="choice-costs">
+                  {card.costs.map((cost, i) => (
+                    <span key={i} className={`cost-chip cost-${cost.tone}`}>{cost.label}</span>
+                  ))}
+                  {card.composureDelta !== 0 ? (
+                    <span className={`cost-chip ${card.composureDelta < 0 ? "cost-negative" : "cost-positive"}`} title={card.composureReason}>
+                      {card.composureDelta > 0 ? "+" : ""}{card.composureDelta} Composure
+                    </span>
+                  ) : null}
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      )}
+      {ladderBars}
+      {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
+    </DashboardCard>
+  );
+}
+
 function CourtPanel({ player, onRefresh }: PanelProps) {
   return (
     <section className="dashboard-panel" aria-labelledby="court-title">
@@ -696,21 +821,9 @@ function CourtPanel({ player, onRefresh }: PanelProps) {
             </div>
             <p className="dashboard-todo">TODO: digest is placeholder data until the away-summary service exists.</p>
           </DashboardCard>
-          {/* order:3 mirrors the offices card this replaced, so on the mobile
-              court-grid (where .court-rail is display:contents) the stub stays
-              after the digest + decisions instead of floating to the top. */}
-          <DashboardCard className="actions-card" style={{ order: 3 }}>
-            <h2>Your Day</h2>
-            {/* Reuses the global .office-stack layout so the stub matches the
-                other rail cards; .action-stack is the stable hook for the
-                future routine system. */}
-            <div className="office-stack action-stack">
-              <span>Train at the gymnasium</span>
-              <span>Study at the stoa</span>
-              <span>Rest at the estate</span>
-            </div>
-            <p className="dashboard-todo">TODO: daily routine actions — system to be implemented.</p>
-          </DashboardCard>
+          {/* Daily Routines: the proactive half of the daily loop. order:3 lives
+              inside RoutinesCard so it stays after the digest on the mobile reflow. */}
+          <RoutinesCard player={player} onRefresh={onRefresh} />
         </aside>
       </div>
     </section>

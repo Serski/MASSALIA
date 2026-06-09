@@ -1,0 +1,85 @@
+[
+  { "id": "routine-gymnasium", "pool": "citizen", "label": "Train at the gymnasium",
+    "scene": "Oil, sand, and the steady work of the body. The gymnasium is where citizens are forged.",
+    "tags": ["labor"], "effects": [{ "type": "change_stat", "stat": "militia", "amount": 1 }],
+    "feedsLadder": "gymnasium", "ladderXp": 2,
+    "classMods": { "hoplite": { "amountMult": 1.5, "xpMult": 1.5, "composure": 2 }, "philosopher": { "composure": -2 } } },
+
+  { "id": "routine-ride", "pool": "citizen", "label": "Ride and hunt the hills",
+    "scene": "Out past the chora, horse under you and the hills open. Hard riding clears the head.",
+    "tags": ["hunt"], "effects": [{ "type": "change_stat", "stat": "militia", "amount": 1 }, { "type": "change_composure", "amount": 3 }],
+    "classMods": { "hoplite": { "composure": 2 } } },
+
+  { "id": "routine-stoa", "pool": "citizen", "label": "Study at the stoa",
+    "scene": "Scrolls, argument, and the long patience of learning beneath the painted colonnade.",
+    "tags": ["study", "solitude"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }],
+    "feedsLadder": "philosophia", "ladderXp": 2,
+    "classMods": { "philosopher": { "amountMult": 1.5, "xpMult": 1.5, "composure": 2 }, "hoplite": { "composure": -1 } } },
+
+  { "id": "routine-oratory", "pool": "citizen", "label": "Practice oratory in the agora",
+    "scene": "You take the speaker's ground and work the crowd, testing phrases on the city's ear.",
+    "tags": ["debate", "boast"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 1 }],
+    "feedsLadder": "rhetoric", "ladderXp": 2,
+    "classMods": { "philosopher": { "xpMult": 1.2 } } },
+
+  { "id": "routine-symposium", "pool": "citizen", "label": "Attend a symposium",
+    "scene": "Wine, music, and the talk of men who matter. Standing is won in the andron as much as the agora.",
+    "tags": ["symposium", "wine"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_drachmae", "amount": -8 }] },
+
+  { "id": "routine-offerings", "pool": "citizen", "label": "Make offerings at the temple",
+    "scene": "Incense, a libation, a beast at the altar. The gods remember those who remember them.",
+    "tags": ["offering"], "effects": [{ "type": "change_stat", "stat": "devotion", "amount": 1 }, { "type": "change_drachmae", "amount": -8 }],
+    "feedsLadder": "mysteries", "ladderXp": 2,
+    "classMods": { "priest": { "amountMult": 1.5, "xpMult": 1.5, "composure": 2 } } },
+
+  { "id": "routine-holdings", "pool": "citizen", "label": "Oversee your holdings",
+    "scene": "Ledgers, stewards, and the unglamorous work of making wealth behave.",
+    "tags": ["labor"], "effects": [{ "type": "change_drachmae", "amount": 10 }],
+    "classMods": {
+      "trader": { "amountMult": 1.5 },
+      "landowner": { "amountMult": 1.3, "extra": [{ "type": "change_stat", "stat": "prestige", "amount": 1 }] },
+      "shipbuilder": { "amountMult": 1.2, "extra": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }] } } },
+
+  { "id": "routine-spar", "pool": "citizen", "label": "Spar with arms",
+    "scene": "Shield, spear, and a willing opponent. Bruises today, survival later.",
+    "tags": ["frontline", "duel"], "effects": [{ "type": "change_stat", "stat": "militia", "amount": 1 }, { "type": "change_composure", "amount": -5 }],
+    "feedsLadder": "gymnasium", "ladderXp": 1,
+    "classMods": { "hoplite": { "amountMult": 1.5, "xpMult": 2, "composure": 5 } } },
+
+  { "id": "routine-rest", "pool": "citizen", "label": "Rest at the estate",
+    "scene": "A day given over to nothing at all. The soul, like a field, needs its fallow season.",
+    "tags": [], "effects": [{ "type": "change_composure", "amount": 15 }] },
+
+  { "id": "routine-harbor", "pool": "citizen", "label": "Walk the harbor and reflect",
+    "scene": "Salt wind, the creak of hulls, the long horizon. Quiet thinking by the water of Lacydon.",
+    "tags": ["solitude"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }, { "type": "change_composure", "amount": 3 }] },
+
+  { "id": "routine-het-salon", "pool": "hetaira", "label": "Host a salon",
+    "scene": "Your rooms fill with poets, statesmen, and the ambitious. You set the tone; they follow it.",
+    "tags": ["symposium"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 1 }],
+    "feedsLadder": "rhetoric", "ladderXp": 2 },
+
+  { "id": "routine-het-symposium", "pool": "hetaira", "label": "Work a symposium",
+    "scene": "Another man's table, another evening of charm and listening. The wine loosens useful tongues.",
+    "tags": ["symposium", "wine"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_stat", "stat": "intelligence", "amount": 1 }] },
+
+  { "id": "routine-het-patron", "pool": "hetaira", "label": "Cultivate a patron",
+    "scene": "Attention, flattery, and the careful management of a generous admirer.",
+    "tags": ["scheme"], "effects": [{ "type": "change_drachmae", "amount": 12 }] },
+
+  { "id": "routine-het-secrets", "pool": "hetaira", "label": "Trade in secrets",
+    "scene": "A word heard here, a confidence sold there. Information is the city's truest currency.",
+    "tags": ["scheme"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }] },
+
+  { "id": "routine-het-arts", "pool": "hetaira", "label": "Tend your arts",
+    "scene": "Music, verse, and presentation honed to a blade. Beauty, properly worked, is power.",
+    "tags": ["study"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_composure", "amount": 3 }] },
+
+  { "id": "routine-het-quiet", "pool": "hetaira", "label": "A quiet evening alone",
+    "scene": "No patrons, no performance. A rare night that belongs only to you.",
+    "tags": ["solitude"], "effects": [{ "type": "change_composure", "amount": 12 }] },
+
+  { "id": "routine-slave-mines", "pool": "slave", "label": "Labor in the mines",
+    "scene": "Rock, dust, and the endless dark. Each day the body hardens and a few obols of peculium are set aside toward the price of your freedom.",
+    "tags": ["labor"], "effects": [{ "type": "change_stat", "stat": "militia", "amount": 1 }, { "type": "change_drachmae", "amount": 3 }, { "type": "change_composure", "amount": -3 }] }
+]

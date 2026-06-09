@@ -199,6 +199,54 @@ export const api = {
   dailyEvents: () => apiFetch<DailySet>("/api/events/daily"),
   resolveEvent: (eventId: string, choiceId: string) =>
     apiFetch<EventResolution>(`/api/events/${eventId}/choices/${choiceId}`, { method: "POST" }),
+  routines: () => apiFetch<RoutineSet>("/api/routines"),
+  resolveRoutine: (routineId: string) =>
+    apiFetch<RoutineResult>("/api/routines/resolve", { method: "POST", body: { routineId } }),
+};
+
+// --- Daily Routines (proactive half of the daily loop) ---------------------
+
+export type RoutineCardView = {
+  id: string;
+  label: string;
+  scene: string;
+  tags: string[];
+  feedsLadder: string | null;
+  // Per-character resolved preview (effects after classMods + growthMultiplier).
+  costs: ChoiceCost[];
+  composureDelta: number;
+  composureReason: string;
+};
+
+export type RoutineLadder = {
+  xp: number;
+  nextThreshold: number | null;
+  stat: string;
+  tiers: { xp: number; trait: string }[];
+};
+
+export type RoutineSet = {
+  pool: string;
+  dailyPicks: number;
+  withdrawn: boolean;
+  // The routine already chosen today, if any (one pick/day).
+  pickedRoutineId: string | null;
+  cards: RoutineCardView[];
+  ladders: Record<string, RoutineLadder>;
+};
+
+export type RoutineResult = {
+  ok: true;
+  routineId: string;
+  label: string;
+  repeated: boolean;
+  costs: ChoiceCost[];
+  composureDelta: number;
+  composureReason: string;
+  composure: number;
+  broke: boolean;
+  grantedTrait: string | null;
+  ladder: { id: string; newXp: number; nextThreshold: number | null; traitGranted: string | null } | null;
 };
 
 export type DailyCard = {

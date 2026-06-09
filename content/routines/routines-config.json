@@ -1,0 +1,20 @@
+{
+  "dailyPicks": 1,
+  "repeatPenalty": 0.5,
+  "poolByClass": {
+    "landowner": "citizen",
+    "trader": "citizen",
+    "philosopher": "citizen",
+    "hoplite": "citizen",
+    "shipbuilder": "citizen",
+    "priest": "citizen",
+    "hetaira": "hetaira",
+    "slave": "slave"
+  },
+  "ladders": {
+    "rhetoric":    { "stat": "prestige",     "tiers": [ { "xp": 8, "trait": "rhetoric-1" },    { "xp": 20, "trait": "rhetoric-2" },    { "xp": 40, "trait": "rhetoric-3" } ] },
+    "philosophia": { "stat": "intelligence", "tiers": [ { "xp": 8, "trait": "philosophia-1" }, { "xp": 20, "trait": "philosophia-2" }, { "xp": 40, "trait": "philosophia-3" } ] },
+    "gymnasium":   { "stat": "militia",      "tiers": [ { "xp": 8, "trait": "gymnasium-1" },   { "xp": 20, "trait": "gymnasium-2" },   { "xp": 40, "trait": "gymnasium-3" } ] },
+    "mysteries":   { "stat": "devotion",     "tiers": [ { "xp": 8, "trait": "mysteries-1" },   { "xp": 20, "trait": "mysteries-2" },   { "xp": 40, "trait": "mysteries-3" } ] }
+  }
+}

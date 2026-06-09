@@ -129,6 +129,11 @@ export const playerCharacters = pgTable("player_characters", {
   breakUntil: timestamp("break_until", { withTimezone: true }),
   breaksCount: integer("breaks_count").notNull().default(0),
   growthMultiplier: numeric("growth_multiplier").notNull().default("1.0"),
+  // Hidden XP toward the four upbringing-trait ladders (fed by daily routines).
+  rhetoricXp: integer("rhetoric_xp").notNull().default(0),
+  philosophiaXp: integer("philosophia_xp").notNull().default(0),
+  gymnasiumXp: integer("gymnasium_xp").notNull().default(0),
+  mysteriesXp: integer("mysteries_xp").notNull().default(0),
   partyCooldownUntil: timestamp("party_cooldown_until", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
@@ -168,6 +173,18 @@ export const dailyDecisions = pgTable("daily_decisions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   oneCardPerArenaPerDay: uniqueIndex("daily_decisions_char_day_arena_idx").on(table.characterId, table.utcDay, table.arena),
+}));
+
+// One self-directed routine per character per UTC day. The UNIQUE
+// (character_id, utc_day) constraint enforces the one-pick-per-day rule.
+export const dailyRoutines = pgTable("daily_routines", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  characterId: uuid("character_id").references(() => playerCharacters.id).notNull(),
+  utcDay: text("utc_day").notNull(),
+  routineId: text("routine_id").notNull(),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  onePickPerDay: uniqueIndex("daily_routines_char_day_idx").on(table.characterId, table.utcDay),
 }));
 
 // Events drawn for a character (for the "exclude last 5 draws" rule).
