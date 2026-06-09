@@ -29,6 +29,8 @@ type PlayerDashboardState = {
   newsletterOptIn: boolean;
   // Written in-game date, e.g. "Winter, 300 BC".
   gameDateLabel: string;
+  // Current season name ("Winter".."Autumn"), drives the clock-strip icon.
+  seasonName: string;
   seasonEndsIn: number;
   gold: number;
   prestige: number;
@@ -93,6 +95,7 @@ const placeholderPlayerState: PlayerDashboardState = {
   email: "pytheas@example.com",
   newsletterOptIn: false,
   gameDateLabel: "Winter, 300 BC",
+  seasonName: "Winter",
   seasonEndsIn: 182,
   gold: 420,
   prestige: 12,
@@ -133,6 +136,19 @@ function normalizeParty(party: string): PlayerDashboardState["party"] {
   return "Unaligned";
 }
 
+// Clock-strip season icon, keyed by season name. Falls back to Winter for any
+// unexpected value (e.g. a frontend/backend deploy-window skew).
+const SEASON_ICONS: Record<string, string> = {
+  Winter: assetPath("assets/seasons/winter.webp"),
+  Spring: assetPath("assets/seasons/spring.webp"),
+  Summer: assetPath("assets/seasons/summer.webp"),
+  Autumn: assetPath("assets/seasons/autumn.webp"),
+};
+
+function seasonIcon(seasonName: string): string {
+  return SEASON_ICONS[seasonName] ?? SEASON_ICONS.Winter!;
+}
+
 function getFaceImage(professionSlug: string, faceId: string | null) {
   const portraits = portraitPools[professionSlug as PortraitClassSlug] ?? [];
   return portraits.find((portrait) => portrait.id === faceId && !portrait.placeholder)?.image;
@@ -146,6 +162,7 @@ function playerFromState(state: PlayerState): PlayerDashboardView {
     email: state.user.email,
     newsletterOptIn: state.user.newsletterOptIn,
     gameDateLabel: state.world.gameDateLabel,
+    seasonName: state.world.gameDate?.seasonName ?? "Winter",
     seasonEndsIn: state.world.seasonEndsIn,
     gold: state.resources.gold,
     prestige: state.resources.prestige,
@@ -1909,6 +1926,7 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
         <div className="season-strip">
           <span className="season-live">
             <span className="season-pulse" aria-hidden="true" />
+            <img className="season-icon" src={seasonIcon(player.seasonName)} alt={player.seasonName} width={20} height={20} />
             <span>{player.gameDateLabel}</span>
           </span>
           <strong>· ends in {player.seasonEndsIn} days</strong>

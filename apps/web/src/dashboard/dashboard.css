@@ -115,6 +115,15 @@
   animation: seasonPulse 1.8s ease-out infinite;
 }
 
+.dashboard-shell .season-icon{
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(236, 224, 204, 0.22);
+}
+
 @keyframes seasonPulse {
   70% {
     box-shadow: 0 0 0 9px rgba(126, 163, 106, 0);

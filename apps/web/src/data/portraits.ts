@@ -44,6 +44,8 @@ const uploadedSlots: Partial<Record<PortraitClassSlug, number[]>> = {
   shipbuilder: [1, 2, 3, 4, 5, 6],
   hoplite: [1, 2, 3, 4, 5, 6],
   philosopher: [1],
+  hetaira: [1, 2, 3, 4],
+  slave: [1],
 };
 
 export const portraitPools: Record<PortraitClassSlug, PortraitOption[]> = Object.fromEntries(
