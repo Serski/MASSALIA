@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { boolean, date, integer, jsonb, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, date, index, integer, jsonb, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const worlds = pgTable("worlds", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -136,6 +136,9 @@ export const playerCharacters = pgTable("player_characters", {
   avatarId: text("avatar_id"),
   deathAge: integer("death_age"),
   lastDecayAt: timestamp("last_decay_at", { withTimezone: true }),
+  // Family pack: sex (hetaira -> female) and the chosen spouse candidate (when married).
+  sex: text("sex").notNull().default("male"),
+  spouseCandidateId: uuid("spouse_candidate_id"),
   // Hidden XP toward the four upbringing-trait ladders (fed by daily routines).
   rhetoricXp: integer("rhetoric_xp").notNull().default(0),
   philosophiaXp: integer("philosophia_xp").notNull().default(0),
@@ -193,6 +196,40 @@ export const dailyRoutines = pgTable("daily_routines", {
 }, (table) => ({
   onePickPerDay: uniqueIndex("daily_routines_char_day_idx").on(table.characterId, table.utcDay),
 }));
+
+// Generated people for marriage AND adoption. PER PLAYER (for_character_id) so
+// the offer never runs dry. consumed_at set when chosen (kept for history).
+export const familyCandidates = pgTable("family_candidates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  forCharacterId: uuid("for_character_id").references(() => playerCharacters.id).notNull(),
+  purpose: text("purpose").notNull(),
+  name: text("name").notNull(),
+  sex: text("sex").notNull(),
+  houseSlug: text("house_slug").notNull(),
+  age: integer("age").notNull(),
+  prestige: integer("prestige").notNull().default(0),
+  devotion: integer("devotion").notNull().default(0),
+  militia: integer("militia").notNull().default(0),
+  intelligence: integer("intelligence").notNull().default(0),
+  traitId: text("trait_id"),
+  avatarId: text("avatar_id"),
+  ideology: integer("ideology").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+}, (table) => ({
+  forCharacterIdx: index("family_candidates_for_char_idx").on(table.forCharacterId, table.purpose, table.consumedAt),
+}));
+
+// The marriages ledger. ended_at/end_reason fill when a marriage ends (later packs).
+export const marriages = pgTable("marriages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  characterId: uuid("character_id").references(() => playerCharacters.id).notNull(),
+  candidateId: uuid("candidate_id").references(() => familyCandidates.id).notNull(),
+  marriedAt: timestamp("married_at", { withTimezone: true }).notNull().defaultNow(),
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+  endReason: text("end_reason"),
+});
 
 // Events drawn for a character (for the "exclude last 5 draws" rule).
 export const eventHistory = pgTable("event_history", {

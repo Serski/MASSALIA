@@ -98,6 +98,8 @@ export async function createCharacterRow(
       startAge,
       deathAge: rollDeathAge(ageCfg),
       lastDecayAt: now,
+      // Family pack: hetaira are women; everyone else reads male until new avatars.
+      sex: classId === "hetaira" ? "female" : "male",
     })
     .returning();
   return inserted[0]!;

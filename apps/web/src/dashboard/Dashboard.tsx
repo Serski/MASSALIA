@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult } from "../api.js";
+import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate } from "../api.js";
 import { assetPath, buildableBuildings, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
@@ -1003,10 +1003,72 @@ function MarketPanel() {
   );
 }
 
-function FamilyPanel() {
+const FAMILY_STAT_DEFS: { key: keyof FourStats; abbr: string }[] = [
+  { key: "prestige", abbr: "PRE" },
+  { key: "devotion", abbr: "DEV" },
+  { key: "militia", abbr: "MIL" },
+  { key: "intelligence", abbr: "INT" },
+];
+
+function CandidateStatChips({ stats }: { stats: FourStats }) {
+  return (
+    <span className="choice-costs">
+      {FAMILY_STAT_DEFS.map((s) => (
+        <span key={s.key} className="cost-chip cost-neutral">{s.abbr} {stats[s.key]}</span>
+      ))}
+    </span>
+  );
+}
+
+// Human-readable cross-house penalty preview for a marriage candidate.
+function penaltyText(candidate: MarriageCandidate): string | null {
+  const { ideologyShift, partyFavorLoss } = candidate.penalty;
+  if (ideologyShift === 0) return null;
+  const dir = ideologyShift > 0 ? "Reformist" : "Traditionalist";
+  const partyLabel = candidate.party === "palaioi" ? "Palaioi" : candidate.party === "dynatoi" ? "Dynatoi" : null;
+  const favorBit = partyFavorLoss > 0 && partyLabel ? ` and cost ${partyFavorLoss} ${partyLabel} favor` : "";
+  return `Marrying into House ${candidate.houseName} will pull you ${ideologyShift > 0 ? "+" : ""}${ideologyShift} toward ${dir}${favorBit}.`;
+}
+
+function FamilyPanel({ onRefresh }: PanelProps) {
+  const [state, setState] = useState<FamilyState | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
-  const houseXanthippos = nobleHouses.find((house) => house.slug === "xanthippos");
-  const houseKleitos = nobleHouses.find((house) => house.slug === "kleitos");
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    api.family().then(setState).catch((err) => setError(err instanceof ApiError ? err.message : "Unable to load the household."));
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .family()
+      .then((next) => !cancelled && setState(next))
+      .catch((err) => !cancelled && setError(err instanceof ApiError ? err.message : "Unable to load the household."));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const marry = async (candidateId: string) => {
+    setBusy(true);
+    setNote("");
+    try {
+      const result = await api.marry(candidateId);
+      setConfirmId(null);
+      const dowryBit = result.dowry > 0 ? ` Her dowry brings +${result.dowry} drachmae.` : "";
+      const shiftBit = result.ideologyShift !== 0 ? ` The match pulls you ${result.ideologyShift > 0 ? "+" : ""}${result.ideologyShift} toward ${result.ideologyShift > 0 ? "Reformist" : "Traditionalist"}${result.partyFavorLoss > 0 ? ` (−${result.partyFavorLoss} party favor)` : ""}.` : "";
+      setNote(`You are wed to ${result.spouseName}.${dowryBit}${shiftBit}`);
+      load();
+      onRefresh();
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "The match could not be made.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <section className="dashboard-panel" aria-labelledby="family-title">
@@ -1017,57 +1079,86 @@ function FamilyPanel() {
       </div>
       <PanelBanner scene="the oikos" />
 
-      <div className="panel-label">Your household</div>
-      <PersonRow
-        name="Theano of House Philon"
-        nameSuffix={<span className="person-suffix"> · your wife</span>}
-        role="Married 4 years"
-        traits={[{ label: "Gregarious", tone: "good" }, { label: "Shrewd", tone: "good" }]}
-        right={<span className="pr-lvl">+46 opinion</span>}
-      />
-      <PersonRow
-        name="Damon"
-        nameSuffix={<span className="heir-tag">Heir</span>}
-        role="Son · age 14 · came of age"
-        traits={[{ label: "Ambitious", tone: "good" }]}
-        right={<StubButton message="TODO: betrothal arrangement is a stub until the family system exists." onStub={setNote}>Arrange betrothal</StubButton>}
-      />
-      <PersonRow
-        name="Myrrine"
-        role="Daughter · age 9"
-        traits={[{ label: "Gifted", tone: "good" }, { label: "Shy" }]}
-        right={<StubButton ghost message="TODO: choosing a tutor is a stub until the family system exists." onStub={setNote}>Choose tutor</StubButton>}
-      />
+      {error ? (
+        <p className="dashboard-todo">{error}</p>
+      ) : !state ? (
+        <p className="dashboard-todo">Loading household…</p>
+      ) : state.locks.locked ? (
+        <>
+          <div className="panel-label">Locked</div>
+          <p className="dashboard-todo" role="status">No family is permitted to the unfree. Freedom will open this.</p>
+        </>
+      ) : (
+        <>
+          {state.spouse ? (
+            <>
+              <div className="panel-label">Your spouse</div>
+              <PersonRow
+                name={`${state.spouse.name} of House ${state.spouse.houseName}`}
+                nameSuffix={<span className="person-suffix"> · your wife</span>}
+                role={`Age ${state.spouse.age} · ${state.spouse.houseName}`}
+                traits={state.spouse.trait ? [{ label: state.spouse.trait.name, tone: "good" }] : []}
+                right={<CandidateStatChips stats={state.spouse.stats} />}
+              />
+            </>
+          ) : null}
 
-      <div className="panel-label">Eligible brides</div>
-      <PersonRow
-        name="Aglaia of House Xanthippos"
-        role={`Age 22 · ${houseXanthippos?.stance ?? "Centrist"} family · dowry 400g`}
-        traits={[{ label: "Diplomat", tone: "good" }, { label: "Beautiful", tone: "good" }]}
-        right={<StubButton message="TODO: proposing a match is a stub until the family system exists." onStub={setNote}>Propose</StubButton>}
-      />
-      <PersonRow
-        name="Niobe of House Kleitos"
-        role={`Age 26 · ${houseKleitos?.stance ?? "Reformist"} family · widow · dowry 250g`}
-        traits={[{ label: "Shrewd", tone: "good" }, { label: "Proud", tone: "warn" }]}
-        right={<StubButton message="TODO: proposing a match is a stub until the family system exists." onStub={setNote}>Propose</StubButton>}
-      />
+          {state.locks.marriage && !state.married ? (
+            <>
+              <div className="panel-label">Prospects</div>
+              {state.candidates.marriage.length === 0 ? (
+                <p className="dashboard-todo">No matches are on offer this season.</p>
+              ) : (
+                state.candidates.marriage.map((candidate) => {
+                  const penalty = penaltyText(candidate);
+                  return (
+                    <DashboardCard className="prospect-card" key={candidate.id}>
+                      <div className="event-body">
+                        <span className="dashboard-label">{candidate.name} of House {candidate.houseName}</span>
+                        <p>Age {candidate.age}{candidate.trait ? ` · ${candidate.trait.name}` : ""}{candidate.dowry > 0 ? ` · dowry ${candidate.dowry}g` : ""}</p>
+                        <CandidateStatChips stats={candidate.stats} />
+                        {penalty ? <p className="composure-note neg">{penalty}</p> : <p className="composure-note pos">No ideological cost — a comfortable match.</p>}
+                        {confirmId === candidate.id ? (
+                          <div className="event-choice-stack">
+                            <button className="event-choice-button" type="button" disabled={busy} onClick={() => marry(candidate.id)}>
+                              <strong>Confirm marriage to {candidate.name}</strong>
+                            </button>
+                            <button className="dashboard-ghost-button" type="button" disabled={busy} onClick={() => setConfirmId(null)}>Cancel</button>
+                          </div>
+                        ) : (
+                          <button className="event-choice-button" type="button" disabled={busy} onClick={() => setConfirmId(candidate.id)}>
+                            <strong>Marry {candidate.name}</strong>
+                          </button>
+                        )}
+                      </div>
+                    </DashboardCard>
+                  );
+                })
+              )}
+            </>
+          ) : null}
 
-      <div className="panel-label">Adoption</div>
-      <PersonRow
-        name="Lykos"
-        role="Orphan of the harbor · age 7 · fee 150g"
-        traits={[{ label: "Quick", tone: "good" }]}
-        right={<StubButton message="TODO: adoption is a stub until the family system exists." onStub={setNote}>Adopt · 150g</StubButton>}
-      />
-      <PersonRow
-        name="Chloe"
-        role="Ward of the temple · age 10 · fee 150g"
-        traits={[{ label: "Pious", tone: "good" }]}
-        right={<StubButton message="TODO: adoption is a stub until the family system exists." onStub={setNote}>Adopt · 150g</StubButton>}
-      />
-
-      <p className="dashboard-todo">TODO: household, brides, and adoption candidates are placeholders until the family system exists.</p>
+          {!state.locks.marriage && !state.locks.locked ? (
+            <>
+              <div className="panel-label">Adoption</div>
+              {state.candidates.adoption.length === 0 ? (
+                <p className="dashboard-todo">No wards are on offer this season.</p>
+              ) : (
+                state.candidates.adoption.map((candidate) => (
+                  <PersonRow
+                    key={candidate.id}
+                    name={`${candidate.name} of House ${candidate.houseName}`}
+                    role={`Age ${candidate.age}${candidate.trait ? ` · ${candidate.trait.name}` : ""}`}
+                    traits={candidate.trait ? [{ label: candidate.trait.name, tone: "good" }] : []}
+                    right={<CandidateStatChips stats={candidate.stats} />}
+                  />
+                ))
+              )}
+              <p className="dashboard-todo">Marriage is not your path; an heir comes by adoption — the rite arrives with the succession pack.</p>
+            </>
+          ) : null}
+        </>
+      )}
       {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
     </section>
   );

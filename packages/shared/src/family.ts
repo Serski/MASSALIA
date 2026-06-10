@@ -1,0 +1,177 @@
+import { z } from "zod";
+
+// ---------------------------------------------------------------------------
+// Family pack, Prompt A: marriage & the per-player candidate pool. All tuning
+// lives in content/family/family-config.json — these functions are pure and take
+// the config (and an injectable rng) so they unit-test deterministically.
+// ---------------------------------------------------------------------------
+
+const range = z.tuple([z.number(), z.number()]);
+const statMap = z
+  .object({ prestige: z.number().optional(), devotion: z.number().optional(), militia: z.number().optional(), intelligence: z.number().optional() })
+  .strict();
+
+const candidateTraitSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string(),
+    childChanceBonus: z.number().optional(),
+    birthDeathRiskMod: z.number().optional(),
+    dowryDrachmae: z.number().optional(),
+    statBonus: statMap.optional(),
+  })
+  .strict();
+
+// The full shipped config is validated; later-pack keys (children, regency, …)
+// are modelled loosely so the source-of-truth file always passes.
+export const familyConfigSchema = z.object({
+  comingOfAge: z.number(),
+  candidates: z.object({
+    perDraw: z.number(),
+    drawCadenceGameYears: z.number(),
+    statRanges: z.object({ prestige: range, devotion: range, militia: range, intelligence: range }),
+    traitChance: z.number(),
+    traitPool: z.array(z.string()),
+    houseWeighting: z.string(),
+  }),
+  candidateTraits: z.array(candidateTraitSchema),
+  marriage: z.object({
+    crossIdeologyPenalty: z.object({ threshold: z.number(), ideologyShift: z.number(), partyFavorLoss: z.number() }),
+    eligibleClasses: z.array(z.string()),
+  }),
+  children: z.object({}).passthrough(),
+  succession: z
+    .object({ adoptedStartAgeRange: range })
+    .passthrough(),
+  adoption: z.object({
+    perDraw: z.number(),
+    drawCadenceGameYears: z.number(),
+    hetairaRule: z.object({ womenOnly: z.boolean(), successorClass: z.string() }).passthrough(),
+  }),
+  regency: z.object({}).passthrough(),
+  classRules: z.object({
+    slave: z.object({ familyLocked: z.boolean(), unlockOnClasses: z.array(z.string()) }).passthrough(),
+    hetaira: z.object({ marriage: z.boolean(), children: z.boolean(), adoption: z.string() }).passthrough(),
+  }),
+});
+
+export type FamilyConfig = z.infer<typeof familyConfigSchema>;
+
+export function parseFamilyConfig(data: unknown): FamilyConfig {
+  return familyConfigSchema.parse(data);
+}
+
+// Trait lookup (dowry, stat bonus) by id.
+export function candidateTrait(cfg: FamilyConfig, traitId: string | null) {
+  return traitId ? cfg.candidateTraits.find((trait) => trait.id === traitId) ?? null : null;
+}
+
+// --- Candidate generation --------------------------------------------------
+
+export type Sex = "male" | "female";
+export type CandidatePurpose = "marriage" | "adoption";
+
+export type CandidateDraft = {
+  purpose: CandidatePurpose;
+  name: string;
+  sex: Sex;
+  houseSlug: string;
+  age: number;
+  prestige: number;
+  devotion: number;
+  militia: number;
+  intelligence: number;
+  traitId: string | null;
+  ideology: number;
+};
+
+// Greek name banks (not tuning — a name source, kept in code). Female names supply
+// wives and women-only adoptions; male names supply other adoptees.
+const GREEK_FEMALE_NAMES = [
+  "Aglaia", "Theano", "Niobe", "Chloe", "Myrrine", "Lysandra", "Phoebe", "Eirene", "Kallisto", "Daphne",
+  "Penelope", "Aspasia", "Helike", "Berenike", "Xanthe", "Melitta", "Phryne", "Glykera", "Ariadne", "Korinna",
+];
+const GREEK_MALE_NAMES = [
+  "Lykos", "Damon", "Theron", "Nikias", "Kleon", "Hippias", "Demetrios", "Sostratos", "Kallias", "Philon",
+  "Andreas", "Eumenes", "Leonidas", "Pyrrhos", "Aristos", "Kimon", "Drakon", "Hieron", "Menon", "Telamon",
+];
+
+function randInt(rng: () => number, min: number, max: number): number {
+  return min + Math.floor(rng() * (max - min + 1));
+}
+
+function pick<T>(rng: () => number, items: T[]): T {
+  return items[Math.floor(rng() * items.length)]!;
+}
+
+// Marriage candidates are female (Greek female names, wives). Adoption candidates
+// are either sex EXCEPT women-only (the hetaira rule). Stats roll inside
+// cfg.candidates.statRanges; a trait lands with cfg.candidates.traitChance; the
+// house is uniform; the candidate's ideology is its house's start ideology.
+export function generateCandidates(
+  rng: () => number,
+  purpose: CandidatePurpose,
+  count: number,
+  cfg: FamilyConfig,
+  houses: { slug: string; ideology: number }[],
+  womenOnly = false,
+): CandidateDraft[] {
+  const ranges = cfg.candidates.statRanges;
+  const ageRange: [number, number] = purpose === "marriage" ? [18, 30] : cfg.succession.adoptedStartAgeRange;
+  const drafts: CandidateDraft[] = [];
+
+  for (let i = 0; i < count; i++) {
+    // Marriage is always a wife; adoption is either sex unless women-only.
+    const sex: Sex = purpose === "marriage" || womenOnly ? "female" : rng() < 0.5 ? "female" : "male";
+    const name = pick(rng, sex === "female" ? GREEK_FEMALE_NAMES : GREEK_MALE_NAMES);
+    const house = pick(rng, houses);
+    const traitId = rng() < cfg.candidates.traitChance ? pick(rng, cfg.candidates.traitPool) : null;
+
+    drafts.push({
+      purpose,
+      name,
+      sex,
+      houseSlug: house.slug,
+      age: randInt(rng, ageRange[0], ageRange[1]),
+      prestige: randInt(rng, ranges.prestige[0], ranges.prestige[1]),
+      devotion: randInt(rng, ranges.devotion[0], ranges.devotion[1]),
+      militia: randInt(rng, ranges.militia[0], ranges.militia[1]),
+      intelligence: randInt(rng, ranges.intelligence[0], ranges.intelligence[1]),
+      traitId,
+      ideology: house.ideology,
+    });
+  }
+  return drafts;
+}
+
+// --- Cross-house marriage penalty ------------------------------------------
+
+export type MarriagePenalty = { ideologyShift: number; partyFavorLoss: number };
+
+// Marrying across the ideological divide pulls the CHARACTER toward the
+// candidate's side and costs standing with their own party — but only when the
+// gap is at least the configured threshold.
+export function marriagePenalty(characterIdeology: number, candidateHouseIdeology: number, cfg: FamilyConfig): MarriagePenalty {
+  const penalty = cfg.marriage.crossIdeologyPenalty;
+  const diff = candidateHouseIdeology - characterIdeology;
+  if (Math.abs(diff) < penalty.threshold) return { ideologyShift: 0, partyFavorLoss: 0 };
+  // Shift toward the candidate's side (positive = Reformist, negative = Traditionalist).
+  return { ideologyShift: diff > 0 ? penalty.ideologyShift : -penalty.ideologyShift, partyFavorLoss: penalty.partyFavorLoss };
+}
+
+// --- Class eligibility (Prompt A) ------------------------------------------
+
+export function isFamilyLocked(classId: string, cfg: FamilyConfig): boolean {
+  return classId === "slave" && cfg.classRules.slave.familyLocked;
+}
+
+export function canMarry(classId: string, cfg: FamilyConfig): boolean {
+  if (isFamilyLocked(classId, cfg)) return false;
+  if (classId === "hetaira") return cfg.classRules.hetaira.marriage; // false
+  return cfg.marriage.eligibleClasses.includes(classId);
+}
+
+export function adoptionWomenOnly(classId: string, cfg: FamilyConfig): boolean {
+  return classId === "hetaira" && cfg.classRules.hetaira.adoption === "womenOnly";
+}

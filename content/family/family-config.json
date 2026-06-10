@@ -1,0 +1,169 @@
+{
+  "comingOfAge": 15,
+  "candidates": {
+    "perDraw": 3,
+    "drawCadenceGameYears": 1,
+    "statRanges": {
+      "prestige": [
+        0,
+        4
+      ],
+      "devotion": [
+        0,
+        4
+      ],
+      "militia": [
+        0,
+        4
+      ],
+      "intelligence": [
+        0,
+        5
+      ]
+    },
+    "traitChance": 0.45,
+    "traitPool": [
+      "fertile",
+      "dowried",
+      "learned",
+      "devout",
+      "stern",
+      "frail"
+    ],
+    "houseWeighting": "uniform"
+  },
+  "candidateTraits": [
+    {
+      "id": "fertile",
+      "name": "Fertile",
+      "description": "Children come easily to this line.",
+      "childChanceBonus": 0.15,
+      "birthDeathRiskMod": -0.04
+    },
+    {
+      "id": "dowried",
+      "name": "Dowried",
+      "description": "Brings wealth into the marriage.",
+      "dowryDrachmae": 60
+    },
+    {
+      "id": "learned",
+      "name": "Learned",
+      "description": "Raised among scrolls.",
+      "statBonus": {
+        "intelligence": 2
+      }
+    },
+    {
+      "id": "devout",
+      "name": "Devout",
+      "description": "The gods know this name.",
+      "statBonus": {
+        "devotion": 2
+      }
+    },
+    {
+      "id": "stern",
+      "name": "Stern",
+      "description": "Runs a hard, orderly household.",
+      "statBonus": {
+        "prestige": 1,
+        "militia": 1
+      }
+    },
+    {
+      "id": "frail",
+      "name": "Frail",
+      "description": "Health was never her ally.",
+      "childChanceBonus": -0.05,
+      "birthDeathRiskMod": 0.05
+    }
+  ],
+  "marriage": {
+    "crossIdeologyPenalty": {
+      "threshold": 30,
+      "ideologyShift": 4,
+      "partyFavorLoss": 2
+    },
+    "eligibleClasses": [
+      "landowner",
+      "trader",
+      "philosopher",
+      "hoplite",
+      "shipbuilder",
+      "priest"
+    ]
+  },
+  "children": {
+    "yearlyChildChance": 0.4,
+    "thirdPlusChildChance": 0.15,
+    "birthDeathRisk": 0.07,
+    "maxChildren": 4,
+    "sexRatioBoys": 0.5,
+    "portraits": {
+      "boy": "family/avatars/child-boy.png",
+      "girl": "family/avatars/child-girl.png"
+    }
+  },
+  "succession": {
+    "prestigeCarryover": {
+      "blood": 0.5,
+      "adopted": 0.35,
+      "regent": 0.3
+    },
+    "alwaysInherited": [
+      "house",
+      "holdings",
+      "buildings",
+      "drachmae",
+      "oligarchSeat"
+    ],
+    "heirStartAge": 15,
+    "adoptedStartAgeRange": [
+      20,
+      35
+    ],
+    "regentStartAgeRange": [
+      25,
+      45
+    ]
+  },
+  "adoption": {
+    "perDraw": 3,
+    "drawCadenceGameYears": 1,
+    "hetairaRule": {
+      "womenOnly": true,
+      "successorClass": "hetaira"
+    }
+  },
+  "regency": {
+    "barredOffices": [
+      "archon",
+      "ephor"
+    ],
+    "keepsInTrust": [
+      "oligarchSeat"
+    ],
+    "endsAtChildAge": 15,
+    "adoptToExit": true
+  },
+  "classRules": {
+    "slave": {
+      "familyLocked": true,
+      "unlockOnClasses": [
+        "landowner",
+        "trader",
+        "philosopher",
+        "hoplite",
+        "shipbuilder",
+        "priest"
+      ],
+      "deathWhileEnslaved": "fresh_character"
+    },
+    "hetaira": {
+      "marriage": false,
+      "children": false,
+      "adoption": "womenOnly"
+    }
+  }
+}

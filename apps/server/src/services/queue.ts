@@ -39,3 +39,17 @@ export async function enqueueCensureResolution(characterId: string, delayMs: num
     console.warn(`Could not enqueue censure resolution (Redis down?): ${(error as Error).message}`);
   }
 }
+
+// Yearly per-character candidate draw (the worker re-enqueues the next year).
+// Best-effort: if Redis is down, the server's lazy-on-read draw is the safety net.
+export async function enqueueFamilyDraw(characterId: string, delayMs: number) {
+  try {
+    await getQueue().add(
+      "family-candidate-draw",
+      { characterId },
+      { delay: Math.max(0, delayMs), removeOnComplete: true, removeOnFail: 100, jobId: `family-draw:${characterId}` },
+    );
+  } catch (error) {
+    console.warn(`Could not enqueue family draw (Redis down?): ${(error as Error).message}`);
+  }
+}

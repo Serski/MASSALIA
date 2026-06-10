@@ -6,6 +6,7 @@ export * from "./character.js";
 export * from "./calendar.js";
 export * from "./routines.js";
 export * from "./age.js";
+export * from "./family.js";
 export * from "./traits.js";
 export * from "./politics.js";
 export * from "./composure.js";

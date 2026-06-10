@@ -12,11 +12,13 @@ import { meRoutes } from "./routes/me.js";
 import { partyRoutes } from "./routes/party.js";
 import { worldRoutes } from "./routes/world.js";
 import { routineRoutes } from "./routes/routines.js";
+import { familyRoutes } from "./routes/family.js";
 import { loadTraitDefs } from "./services/traits.js";
 import { loadComposureConfig } from "./services/composure.js";
 import { listEvents } from "./services/eventEngine.js";
 import { loadRoutineContent } from "./services/routines.js";
 import { loadAgeConfig } from "./services/age.js";
+import { loadFamilyConfig } from "./services/family.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../..");
@@ -43,6 +45,7 @@ await loadComposureConfig();
 await listEvents();
 await loadRoutineContent();
 await loadAgeConfig();
+await loadFamilyConfig();
 
 app.get("/health", async () => ({ ok: true }));
 await app.register(authRoutes, { prefix: "/auth" });
@@ -53,6 +56,7 @@ await app.register(partyRoutes, { prefix: "/api/party" });
 await app.register(worldRoutes, { prefix: "/api/world" });
 await app.register(eventRoutes, { prefix: "/api/events" });
 await app.register(routineRoutes, { prefix: "/api/routines" });
+await app.register(familyRoutes, { prefix: "/api/family" });
 
 const port = Number(process.env.PORT ?? 3000);
 await app.listen({ port, host: "0.0.0.0" });

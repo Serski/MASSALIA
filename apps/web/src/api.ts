@@ -214,6 +214,51 @@ export const api = {
     apiFetch<RoutineResult>("/api/routines/resolve", { method: "POST", body: { routineId } }),
   // Age config (avatars + age options) — served statically; public, for signup.
   ageConfig: () => apiFetch<AgeConfig>("/content/age/age-config.json"),
+  family: () => apiFetch<FamilyState>("/api/family"),
+  marry: (candidateId: string) => apiFetch<MarryResult>("/api/family/marry", { method: "POST", body: { candidateId } }),
+};
+
+// --- Family (marriage & candidate pool) ------------------------------------
+
+export type FamilyStats = { prestige: number; devotion: number; militia: number; intelligence: number };
+
+export type FamilyCandidate = {
+  id: string;
+  name: string;
+  sex: string;
+  houseSlug: string;
+  houseName: string;
+  age: number;
+  ideology: number;
+  stats: FamilyStats;
+  trait: { id: string; name: string; description: string } | null;
+  dowry: number;
+};
+
+export type MarriageCandidate = FamilyCandidate & {
+  // Cross-house penalty preview: how marrying shifts the player + costs party favor.
+  penalty: { ideologyShift: number; partyFavorLoss: number };
+  party: string;
+};
+
+export type FamilyState = {
+  sex: string;
+  classId: string;
+  married: boolean;
+  // slave -> locked (whole panel); hetaira -> marriage:false (adoption only).
+  locks: { locked: boolean; marriage: boolean; adoption: boolean };
+  characterIdeology: number;
+  spouse: FamilyCandidate | null;
+  candidates: { marriage: MarriageCandidate[]; adoption: FamilyCandidate[] };
+};
+
+export type MarryResult = {
+  ok: true;
+  spouseName: string;
+  dowry: number;
+  ideologyShift: number;
+  partyFavorLoss: number;
+  party: string;
 };
 
 // Absolute URL for a content asset path returned by the API (e.g. a portrait).
