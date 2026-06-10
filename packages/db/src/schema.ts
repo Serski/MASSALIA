@@ -280,6 +280,44 @@ export const children = pgTable("children", {
   parentIdx: index("children_parent_idx").on(table.parentCharacterId),
 }));
 
+// Per-character delivery of a festival event (one per character per festival per
+// game year). Auto-resolves to the free "attend" choice at close.
+export const festivalEvents = pgTable("festival_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  characterId: uuid("character_id").references(() => playerCharacters.id).notNull(),
+  festivalId: text("festival_id").notNull(),
+  eventId: text("event_id").notNull(),
+  gameYear: integer("game_year").notNull(),
+  resolved: boolean("resolved").notNull().default(false),
+  resolvedChoiceId: text("resolved_choice_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  oneInstancePerCharacter: uniqueIndex("festival_events_char_idx").on(table.characterId, table.festivalId, table.gameYear),
+}));
+
+// Donations toward a festival instance — the sum decides the choregos.
+export const festivalDonations = pgTable("festival_donations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  characterId: uuid("character_id").references(() => playerCharacters.id).notNull(),
+  festivalId: text("festival_id").notNull(),
+  gameYear: integer("game_year").notNull(),
+  amount: integer("amount").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  instanceIdx: index("festival_donations_instance_idx").on(table.festivalId, table.gameYear),
+}));
+
+// Closed festival instances + the crowned patron (each instance awards once).
+export const festivalChoregos = pgTable("festival_choregos", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  festivalId: text("festival_id").notNull(),
+  gameYear: integer("game_year").notNull(),
+  winnerCharacterId: uuid("winner_character_id").references(() => playerCharacters.id),
+  closedAt: timestamp("closed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  oneClosePerInstance: uniqueIndex("festival_choregos_instance_idx").on(table.festivalId, table.gameYear),
+}));
+
 // Events drawn for a character (for the "exclude last 5 draws" rule).
 export const eventHistory = pgTable("event_history", {
   id: uuid("id").primaryKey().defaultRandom(),

@@ -4,6 +4,7 @@ import {
   choiceIdeologyDelta,
   describeChoiceCosts,
   describeComposureDelta,
+  isCalendarEvent,
   isEventEligible,
   isWithdrawn,
   type ComposureConfig,
@@ -70,7 +71,7 @@ export async function eventRoutes(app: FastifyInstance) {
     }
     const traits = await getHeldTraits(acting.row.id);
     const ctx = contextFor(acting.row, traits.map((t) => t.id));
-    return (await listEvents()).filter((event) => isEventEligible(event, ctx)).map((event) => withPreviews(event, traits));
+    return (await listEvents()).filter((event) => !isCalendarEvent(event) && isEventEligible(event, ctx)).map((event) => withPreviews(event, traits));
   });
 
   // The curated daily decision set: one card per arena (class/general/council/party),

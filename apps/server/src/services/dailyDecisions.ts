@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { createDb, dailyDecisions } from "@massalia/db";
-import { dailyArenasFor, drawEvent, eventArena, isEventEligible, type EligibilityContext } from "@massalia/shared";
+import { dailyArenasFor, drawEvent, eventArena, isCalendarEvent, isEventEligible, type EligibilityContext } from "@massalia/shared";
 import { listEvents, recentEventIds, recordDraw } from "./eventEngine.js";
 
 const db = createDb();
@@ -26,7 +26,8 @@ export async function ensureDailySet(characterId: string, ctx: EligibilityContex
   if (existing.length > 0) return existing;
 
   const day = utcDayString(now);
-  const eligible = (await listEvents()).filter((event) => isEventEligible(event, ctx));
+  // Calendar/festival events fire from the festival system — never the daily draw.
+  const eligible = (await listEvents()).filter((event) => !isCalendarEvent(event) && isEventEligible(event, ctx));
   const recent = await recentEventIds(characterId, 5);
 
   for (const arena of dailyArenasFor(ctx)) {

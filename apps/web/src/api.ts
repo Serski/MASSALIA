@@ -160,6 +160,8 @@ export type PlayerState = {
   };
   // A pending succession blocks normal play until an heir is chosen.
   succession: SuccessionState | null;
+  // The festival live for the player this season (a free civic event), or null.
+  festival: FestivalLive | null;
   resources: {
     gold: number;
     prestige: number;
@@ -226,6 +228,18 @@ export const api = {
     apiFetch<{ ok: true; heirName: string; kind: string }>("/api/family/succeed", { method: "POST", body: { candidateId } }),
   adopt: (candidateId: string) =>
     apiFetch<{ ok: true; heirName: string; endedRegency: boolean }>("/api/family/adopt", { method: "POST", body: { candidateId } }),
+  resolveFestival: (festivalId: string, choiceId: string) =>
+    apiFetch<EventResolution>("/api/festivals/resolve", { method: "POST", body: { festivalId, choiceId } }),
+};
+
+// --- Annual festivals (Prompt 7) -------------------------------------------
+
+// A festival is a free civic event (not a daily decision); its choices carry the
+// same previewed effects (costs + composure) as the decision cards.
+export type FestivalLive = {
+  festivalId: string;
+  gameYear: number;
+  event: { id: string; scene: string; choices: EventChoicePreview[] };
 };
 
 // --- Death, succession & regency (Prompt C) --------------------------------

@@ -1,0 +1,22 @@
+{
+  "realMsPerPeriod": 86400000,
+  "periodsPerYear": 4,
+  "gameMonthsPerPeriod": 3,
+  "startYearBC": 300,
+  "serverDurationRealDays": 182,
+  "seasonNames": ["Winter", "Spring", "Summer", "Autumn"],
+  "election": {
+    "termPeriods": 30,
+    "campaignRealDays": 4,
+    "votingRealDays": 3,
+    "seats": 2
+  },
+  "festivals": [
+    { "id": "fest-dionysia", "eventId": "fest-dionysia", "season": 1, "cadenceYears": 1, "type": "donation", "choregosTraitId": "megas-choregos" },
+    { "id": "fest-artemisia", "eventId": "fest-artemisia", "season": 2, "cadenceYears": 1, "type": "donation", "choregosTraitId": "megas-choregos" },
+    { "id": "olympiad", "eventId": "olympic-nominate", "season": 3, "cadenceYears": 8, "type": "olympic",
+      "nominationRealDays": 2, "votingRealDays": 3, "seats": 2,
+      "excludeClasses": ["hetaira", "slave"], "payoffEventId": "olympic-games", "payoffPeriodsLater": 1 },
+    { "id": "fest-apollo", "eventId": "fest-apollo", "season": 4, "cadenceYears": 1, "type": "donation" }
+  ]
+}

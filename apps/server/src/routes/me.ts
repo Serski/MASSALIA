@@ -8,6 +8,7 @@ import { activeCensure } from "../services/politics.js";
 import { recoverComposure } from "../services/composure.js";
 import { decayCharacter, getAgeConfig, portraitUrl } from "../services/age.js";
 import { enforceDeathAndHandoff, regentBadge, successionInfo } from "../services/succession.js";
+import { closeDueFestivals, fireFestivalsForCharacter, liveFestivalForCharacter } from "../services/festival.js";
 
 const db = createDb();
 
@@ -74,6 +75,12 @@ export async function meRoutes(app: FastifyInstance) {
     const refreshedPlayer = await db.select({ name: players.name, faceId: players.faceId }).from(players).where(eq(players.id, state.player.id)).limit(1);
     const slotName = refreshedPlayer[0]?.name ?? state.player.name;
     const slotFaceId = refreshedPlayer[0]?.faceId ?? state.player.faceId;
+
+    // Annual festivals (Prompt 7): lazy fire any festival live this season + close
+    // any whose season has passed, then surface the live one for the HUD banner.
+    await closeDueFestivals();
+    await fireFestivalsForCharacter(character);
+    const festival = await liveFestivalForCharacter(character);
 
     const resourceRows = await db.select().from(resources).where(and(eq(resources.scope, "player"), eq(resources.scopeId, state.player.id)));
     const resourceMap = new Map(resourceRows.map((resource) => [resource.type, numberAmount(resource.amount)]));
@@ -152,6 +159,8 @@ export async function meRoutes(app: FastifyInstance) {
       // A pending succession (the character has died) — the client shows the
       // blocking Succession screen until an heir is chosen.
       succession,
+      // The festival live for the player this season (a free civic event), or null.
+      festival,
       resources: {
         // Drachmae is the canonical currency; surfaced as "gold" for the existing UI.
         gold: character.drachmae,

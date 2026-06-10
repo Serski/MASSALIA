@@ -7,6 +7,7 @@ export * from "./calendar.js";
 export * from "./routines.js";
 export * from "./age.js";
 export * from "./family.js";
+export * from "./festival.js";
 export * from "./traits.js";
 export * from "./politics.js";
 export * from "./composure.js";

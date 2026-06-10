@@ -1,73 +1,906 @@
 [
-  { "id": "brave", "name": "Brave", "category": "personality", "description": "Stands firm where others falter.", "statMod": { "militia": 2, "prestige": 1 }, "opposes": ["flee", "back_down"], "embraces": ["duel", "frontline", "hunt"], "opposite": "craven" },
-  { "id": "craven", "name": "Craven", "category": "personality", "description": "Survival first, glory never.", "statMod": { "militia": -2, "intelligence": 1 }, "opposes": ["duel", "frontline"], "embraces": ["flee", "back_down"], "opposite": "brave" },
-  { "id": "pious", "name": "Pious", "category": "personality", "description": "The gods see everything.", "statMod": { "devotion": 2, "intelligence": -1 }, "opposes": ["skip_rite", "impiety", "defile"], "embraces": ["offering", "festival", "pilgrimage"], "opposite": "skeptic" },
-  { "id": "skeptic", "name": "Skeptic", "category": "personality", "description": "Omens are wind and entrails.", "statMod": { "intelligence": 2, "devotion": -2 }, "opposes": ["offering", "pilgrimage"], "embraces": ["impiety", "debate"], "opposite": "pious" },
-  { "id": "traditionalist", "name": "Traditionalist", "category": "personality", "description": "Hellas pure and undiluted.", "statMod": { "devotion": 1 }, "opposes": ["reformist_act"], "embraces": ["traditionalist_act"], "opposite": "syncretist" },
-  { "id": "syncretist", "name": "Syncretist", "category": "personality", "description": "Two cultures, one stronger city.", "statMod": { "intelligence": 1 }, "opposes": ["traditionalist_act"], "embraces": ["reformist_act"], "opposite": "traditionalist" },
-  { "id": "generous", "name": "Generous", "category": "personality", "description": "Wealth is for giving.", "statMod": { "prestige": 2 }, "incomeMod": -0.10, "opposes": ["extort", "refuse_aid"], "embraces": ["gift", "patronage"], "opposite": "greedy" },
-  { "id": "greedy", "name": "Greedy", "category": "personality", "description": "Every obol counted twice.", "statMod": { "prestige": -1 }, "incomeMod": 0.10, "opposes": ["gift", "patronage"], "embraces": ["extort", "profit"], "opposite": "generous" },
-  { "id": "gregarious", "name": "Gregarious", "category": "personality", "description": "Never met a stranger.", "statMod": { "prestige": 2 }, "opposes": ["solitude"], "embraces": ["symposium", "festival", "feast"], "opposite": "reserved" },
-  { "id": "reserved", "name": "Reserved", "category": "personality", "description": "Words are spent carefully.", "statMod": { "intelligence": 1, "prestige": -1 }, "opposes": ["symposium", "feast"], "embraces": ["solitude", "study"], "opposite": "gregarious" },
-  { "id": "honest", "name": "Honest", "category": "personality", "description": "An oath is iron.", "statMod": { "prestige": 1, "devotion": 1 }, "opposes": ["deception", "blackmail"], "embraces": ["public_oath", "expose_secret"], "opposite": "cunning" },
-  { "id": "cunning", "name": "Cunning", "category": "personality", "description": "Truth is a tool like any other.", "statMod": { "intelligence": 2, "devotion": -1 }, "opposes": ["public_oath"], "embraces": ["deception", "scheme"], "opposite": "honest" },
-  { "id": "diligent", "name": "Diligent", "category": "personality", "description": "Work before rest.", "statMod": { "intelligence": 1, "prestige": 1 }, "opposes": ["idle"], "embraces": ["labor", "study"], "opposite": "indolent" },
-  { "id": "indolent", "name": "Indolent", "category": "personality", "description": "The world can wait.", "statMod": { "intelligence": -1 }, "recoveryBonus": 1, "opposes": ["labor"], "embraces": ["idle", "feast"], "opposite": "diligent" },
-  { "id": "temperate", "name": "Temperate", "category": "personality", "description": "Moderation in all things.", "statMod": { "devotion": 1, "intelligence": 1 }, "opposes": ["symposium", "feast", "wine"], "embraces": ["abstain", "study"], "opposite": "hedonist" },
-  { "id": "hedonist", "name": "Hedonist", "category": "personality", "description": "Life is short; the wine is here.", "statMod": { "prestige": 1, "devotion": -1 }, "opposes": ["abstain"], "embraces": ["symposium", "feast", "wine"], "opposite": "temperate" },
-  { "id": "ambitious", "name": "Ambitious", "category": "personality", "description": "Born for more than this.", "statMod": { "prestige": 1, "militia": 1, "intelligence": 1, "devotion": 1 }, "recoveryBonus": -2, "opposes": ["back_down", "idle"], "embraces": ["claim_office", "scheme"], "opposite": "content-soul" },
-  { "id": "content-soul", "name": "Content", "category": "personality", "description": "Enough is a feast.", "statMod": { "prestige": -1 }, "recoveryBonus": 2, "opposes": ["claim_office"], "embraces": ["idle", "festival"], "opposite": "ambitious" },
-  { "id": "just", "name": "Just", "category": "personality", "description": "The law binds even the strong.", "statMod": { "prestige": 1, "devotion": 1 }, "opposes": ["blackmail", "extort", "cruelty"], "embraces": ["judge_fairly", "expose_secret"], "opposite": "ruthless" },
-  { "id": "ruthless", "name": "Ruthless", "category": "personality", "description": "Mercy is a luxury of the safe.", "statMod": { "militia": 1, "intelligence": 1, "prestige": -1 }, "opposes": ["mercy"], "embraces": ["cruelty", "extort"], "opposite": "just" },
-  { "id": "patient", "name": "Patient", "category": "personality", "description": "Slow water cuts stone.", "statMod": { "intelligence": 1 }, "opposes": ["rash_act"], "embraces": ["study", "wait"], "opposite": "hotblooded" },
-  { "id": "hotblooded", "name": "Hot-blooded", "category": "personality", "description": "Strike while the iron screams.", "statMod": { "militia": 1 }, "opposes": ["wait", "back_down"], "embraces": ["rash_act", "duel"], "opposite": "patient" },
-  { "id": "humble", "name": "Humble", "category": "personality", "description": "The grain bows when it is full.", "statMod": { "devotion": 1 }, "opposes": ["boast"], "embraces": ["mercy", "offering"], "opposite": "proud" },
-  { "id": "proud", "name": "Proud", "category": "personality", "description": "Lineage is destiny.", "statMod": { "prestige": 1 }, "opposes": ["mercy", "back_down"], "embraces": ["boast", "claim_office"], "opposite": "humble" },
-  { "id": "rhetoric-1", "name": "Stammering Speaker", "category": "upbringing", "description": "Trained in rhetoric, barely.", "statMod": { "prestige": 2 } },
-  { "id": "rhetoric-2", "name": "Orator", "category": "upbringing", "description": "The agora listens.", "statMod": { "prestige": 4 } },
-  { "id": "rhetoric-3", "name": "Voice of the Agora", "category": "upbringing", "description": "Crowds move when this one speaks.", "statMod": { "prestige": 6 } },
-  { "id": "mysteries-1", "name": "Acolyte", "category": "upbringing", "description": "Raised among incense and hymns.", "statMod": { "devotion": 2 } },
-  { "id": "mysteries-2", "name": "Initiate", "category": "upbringing", "description": "Knows the rites behind the veil.", "statMod": { "devotion": 4 } },
-  { "id": "mysteries-3", "name": "Oracle's Chosen", "category": "upbringing", "description": "Marked by Artemis herself, they say.", "statMod": { "devotion": 6 } },
-  { "id": "gymnasium-1", "name": "Levy", "category": "upbringing", "description": "Knows which end of the spear bites.", "statMod": { "militia": 2 } },
-  { "id": "gymnasium-2", "name": "Phalangite", "category": "upbringing", "description": "Drilled until the shield is an arm.", "statMod": { "militia": 4 } },
-  { "id": "gymnasium-3", "name": "Strategos-Trained", "category": "upbringing", "description": "Reads a battlefield like a scroll.", "statMod": { "militia": 6 } },
-  { "id": "philosophia-1", "name": "Scribe", "category": "upbringing", "description": "Letters, sums, and patience.", "statMod": { "intelligence": 2 } },
-  { "id": "philosophia-2", "name": "Thinker", "category": "upbringing", "description": "Asks the second question.", "statMod": { "intelligence": 4 } },
-  { "id": "philosophia-3", "name": "Sage of Massalia", "category": "upbringing", "description": "Students cross the sea for this mind.", "statMod": { "intelligence": 6 } },
-  { "id": "master-of-groves", "name": "Master of Groves", "category": "class", "description": "Olives obey this hand.", "incomeMod": 0.15 },
-  { "id": "gyptis-heir", "name": "Gyptis' Heir", "category": "class", "description": "The Ligurian tribes remember the wedding cup.", "statMod": { "prestige": 2 } },
-  { "id": "granary-keeper", "name": "Granary Keeper", "category": "class", "description": "When Massalia hungers, it knocks here.", "statMod": { "prestige": 1, "intelligence": 1 } },
-  { "id": "tin-route-pioneer", "name": "Tin Route Pioneer", "category": "class", "description": "Knows the way to the Cassiterides.", "incomeMod": 0.15 },
-  { "id": "silver-tongued", "name": "Silver-Tongued", "category": "class", "description": "Closes deals others cannot open.", "statMod": { "prestige": 2 } },
-  { "id": "pytheas-disciple", "name": "Pytheas' Disciple", "category": "class", "description": "Has read On the Ocean. Believes it.", "statMod": { "intelligence": 2 } },
-  { "id": "sophist", "name": "Sophist", "category": "class", "description": "Wins arguments; truth optional.", "statMod": { "intelligence": 2, "devotion": -1 } },
-  { "id": "socratic", "name": "Socratic", "category": "class", "description": "Questions until the strong squirm.", "statMod": { "intelligence": 2 } },
-  { "id": "school-founder", "name": "School Founder", "category": "class", "description": "Students pay; legacy compounds.", "incomeMod": 0.10, "statMod": { "prestige": 1 } },
-  { "id": "confidante", "name": "Confidante", "category": "class", "description": "Powerful men talk in this company.", "statMod": { "intelligence": 2 } },
-  { "id": "muse", "name": "Muse", "category": "class", "description": "Inspires devotion in patrons.", "statMod": { "prestige": 2 } },
-  { "id": "whisper-network", "name": "Whisper Network", "category": "class", "description": "Hears everything by the second day.", "statMod": { "intelligence": 1, "prestige": 1 } },
-  { "id": "phalanx-veteran", "name": "Phalanx Veteran", "category": "class", "description": "Held the line at least once.", "statMod": { "militia": 2 } },
-  { "id": "shield-brother", "name": "Shield Brother", "category": "class", "description": "Hoplites trust this one with their flank.", "statMod": { "militia": 1, "prestige": 1 } },
-  { "id": "rhone-blooded", "name": "Rhone-Blooded", "category": "class", "description": "Survived the wars the songs are about.", "statMod": { "militia": 3 } },
-  { "id": "master-wright", "name": "Master Wright", "category": "class", "description": "Hulls from this yard do not leak.", "incomeMod": 0.10, "statMod": { "intelligence": 1 } },
-  { "id": "pentekonter-architect", "name": "Pentekonter Architect", "category": "class", "description": "Builds the ships that build the League.", "statMod": { "intelligence": 2, "militia": 1 } },
-  { "id": "storm-tested", "name": "Storm-Tested", "category": "class", "description": "The sea has tried and failed.", "statMod": { "militia": 1 } },
-  { "id": "artemis-voice", "name": "Artemis' Voice", "category": "class", "description": "Speaks for the city's patron.", "statMod": { "devotion": 3 } },
-  { "id": "herbal-healer", "name": "Herbal Healer", "category": "class", "description": "Greek physic, Gaulish herbs.", "statMod": { "devotion": 1, "intelligence": 1 } },
-  { "id": "oracle-reader", "name": "Oracle Reader", "category": "class", "description": "Sees the shape of tomorrow in smoke.", "statMod": { "devotion": 2 } },
-  { "id": "survivor", "name": "Survivor", "category": "class", "description": "Endured what would break free men.", "recoveryBonus": 2 },
-  { "id": "polyglot", "name": "Polyglot", "category": "class", "description": "Greek, Gaulish, Punic - all useful.", "statMod": { "intelligence": 2 } },
-  { "id": "trusted-steward", "name": "Trusted Steward", "category": "class", "description": "Holds the master's keys.", "incomeMod": 0.10 },
-  { "id": "freedman", "name": "Freedman", "category": "reputation", "description": "Bought or granted: freedom either way.", "statMod": { "prestige": 2, "devotion": 2, "militia": 2, "intelligence": 2 } },
-  { "id": "drunkard", "name": "Drunkard", "category": "coping", "description": "The amphora never judges.", "recoveryBonus": 3, "statMod": { "intelligence": -2 } },
-  { "id": "recluse", "name": "Recluse", "category": "coping", "description": "The crowd is the wound.", "recoveryBonus": 3, "statMod": { "prestige": -2 } },
-  { "id": "flagellant", "name": "Flagellant", "category": "coping", "description": "Pain offered up as prayer.", "recoveryBonus": 3, "statMod": { "militia": -1, "devotion": 1 } },
-  { "id": "gaulish-rites", "name": "Gaulish Rites Practitioner", "category": "reputation", "description": "Seen at the grove ceremonies.", "statMod": { "devotion": 1 } },
-  { "id": "intermarried", "name": "Intermarried", "category": "reputation", "description": "Wed across the cultural line." },
-  { "id": "oath-breaker", "name": "Oath-Breaker", "category": "reputation", "description": "Both parties remember.", "statMod": { "prestige": -2, "devotion": -1 } },
-  { "id": "temple-defiler", "name": "Temple Defiler", "category": "reputation", "description": "Whispered wherever incense burns.", "statMod": { "devotion": -3, "prestige": -1 } },
-  { "id": "carthaginian-sympathizer", "name": "Carthaginian Sympathizer", "category": "reputation", "description": "Too friendly with Qart-Hadasht.", "statMod": { "prestige": -2 } },
-  { "id": "duelist", "name": "Duelist", "category": "reputation", "description": "Settles things the old way.", "statMod": { "militia": 1 } },
-  { "id": "turncoat", "name": "Turncoat", "category": "reputation", "description": "Changed colors once; could again.", "statMod": { "prestige": -2 } }
+  {
+    "id": "brave",
+    "name": "Brave",
+    "category": "personality",
+    "description": "Stands firm where others falter.",
+    "statMod": {
+      "militia": 2,
+      "prestige": 1
+    },
+    "opposes": [
+      "flee",
+      "back_down"
+    ],
+    "embraces": [
+      "duel",
+      "frontline",
+      "hunt"
+    ],
+    "opposite": "craven"
+  },
+  {
+    "id": "craven",
+    "name": "Craven",
+    "category": "personality",
+    "description": "Survival first, glory never.",
+    "statMod": {
+      "militia": -2,
+      "intelligence": 1
+    },
+    "opposes": [
+      "duel",
+      "frontline"
+    ],
+    "embraces": [
+      "flee",
+      "back_down"
+    ],
+    "opposite": "brave"
+  },
+  {
+    "id": "pious",
+    "name": "Pious",
+    "category": "personality",
+    "description": "The gods see everything.",
+    "statMod": {
+      "devotion": 2,
+      "intelligence": -1
+    },
+    "opposes": [
+      "skip_rite",
+      "impiety",
+      "defile"
+    ],
+    "embraces": [
+      "offering",
+      "festival",
+      "pilgrimage"
+    ],
+    "opposite": "skeptic"
+  },
+  {
+    "id": "skeptic",
+    "name": "Skeptic",
+    "category": "personality",
+    "description": "Omens are wind and entrails.",
+    "statMod": {
+      "intelligence": 2,
+      "devotion": -2
+    },
+    "opposes": [
+      "offering",
+      "pilgrimage"
+    ],
+    "embraces": [
+      "impiety",
+      "debate"
+    ],
+    "opposite": "pious"
+  },
+  {
+    "id": "traditionalist",
+    "name": "Traditionalist",
+    "category": "personality",
+    "description": "Hellas pure and undiluted.",
+    "statMod": {
+      "devotion": 1
+    },
+    "opposes": [
+      "reformist_act"
+    ],
+    "embraces": [
+      "traditionalist_act"
+    ],
+    "opposite": "syncretist"
+  },
+  {
+    "id": "syncretist",
+    "name": "Syncretist",
+    "category": "personality",
+    "description": "Two cultures, one stronger city.",
+    "statMod": {
+      "intelligence": 1
+    },
+    "opposes": [
+      "traditionalist_act"
+    ],
+    "embraces": [
+      "reformist_act"
+    ],
+    "opposite": "traditionalist"
+  },
+  {
+    "id": "generous",
+    "name": "Generous",
+    "category": "personality",
+    "description": "Wealth is for giving.",
+    "statMod": {
+      "prestige": 2
+    },
+    "incomeMod": -0.1,
+    "opposes": [
+      "extort",
+      "refuse_aid"
+    ],
+    "embraces": [
+      "gift",
+      "patronage"
+    ],
+    "opposite": "greedy"
+  },
+  {
+    "id": "greedy",
+    "name": "Greedy",
+    "category": "personality",
+    "description": "Every obol counted twice.",
+    "statMod": {
+      "prestige": -1
+    },
+    "incomeMod": 0.1,
+    "opposes": [
+      "gift",
+      "patronage"
+    ],
+    "embraces": [
+      "extort",
+      "profit"
+    ],
+    "opposite": "generous"
+  },
+  {
+    "id": "gregarious",
+    "name": "Gregarious",
+    "category": "personality",
+    "description": "Never met a stranger.",
+    "statMod": {
+      "prestige": 2
+    },
+    "opposes": [
+      "solitude"
+    ],
+    "embraces": [
+      "symposium",
+      "festival",
+      "feast"
+    ],
+    "opposite": "reserved"
+  },
+  {
+    "id": "reserved",
+    "name": "Reserved",
+    "category": "personality",
+    "description": "Words are spent carefully.",
+    "statMod": {
+      "intelligence": 1,
+      "prestige": -1
+    },
+    "opposes": [
+      "symposium",
+      "feast"
+    ],
+    "embraces": [
+      "solitude",
+      "study"
+    ],
+    "opposite": "gregarious"
+  },
+  {
+    "id": "honest",
+    "name": "Honest",
+    "category": "personality",
+    "description": "An oath is iron.",
+    "statMod": {
+      "prestige": 1,
+      "devotion": 1
+    },
+    "opposes": [
+      "deception",
+      "blackmail"
+    ],
+    "embraces": [
+      "public_oath",
+      "expose_secret"
+    ],
+    "opposite": "cunning"
+  },
+  {
+    "id": "cunning",
+    "name": "Cunning",
+    "category": "personality",
+    "description": "Truth is a tool like any other.",
+    "statMod": {
+      "intelligence": 2,
+      "devotion": -1
+    },
+    "opposes": [
+      "public_oath"
+    ],
+    "embraces": [
+      "deception",
+      "scheme"
+    ],
+    "opposite": "honest"
+  },
+  {
+    "id": "diligent",
+    "name": "Diligent",
+    "category": "personality",
+    "description": "Work before rest.",
+    "statMod": {
+      "intelligence": 1,
+      "prestige": 1
+    },
+    "opposes": [
+      "idle"
+    ],
+    "embraces": [
+      "labor",
+      "study"
+    ],
+    "opposite": "indolent"
+  },
+  {
+    "id": "indolent",
+    "name": "Indolent",
+    "category": "personality",
+    "description": "The world can wait.",
+    "statMod": {
+      "intelligence": -1
+    },
+    "recoveryBonus": 1,
+    "opposes": [
+      "labor"
+    ],
+    "embraces": [
+      "idle",
+      "feast"
+    ],
+    "opposite": "diligent"
+  },
+  {
+    "id": "temperate",
+    "name": "Temperate",
+    "category": "personality",
+    "description": "Moderation in all things.",
+    "statMod": {
+      "devotion": 1,
+      "intelligence": 1
+    },
+    "opposes": [
+      "symposium",
+      "feast",
+      "wine"
+    ],
+    "embraces": [
+      "abstain",
+      "study"
+    ],
+    "opposite": "hedonist"
+  },
+  {
+    "id": "hedonist",
+    "name": "Hedonist",
+    "category": "personality",
+    "description": "Life is short; the wine is here.",
+    "statMod": {
+      "prestige": 1,
+      "devotion": -1
+    },
+    "opposes": [
+      "abstain"
+    ],
+    "embraces": [
+      "symposium",
+      "feast",
+      "wine"
+    ],
+    "opposite": "temperate"
+  },
+  {
+    "id": "ambitious",
+    "name": "Ambitious",
+    "category": "personality",
+    "description": "Born for more than this.",
+    "statMod": {
+      "prestige": 1,
+      "militia": 1,
+      "intelligence": 1,
+      "devotion": 1
+    },
+    "recoveryBonus": -2,
+    "opposes": [
+      "back_down",
+      "idle"
+    ],
+    "embraces": [
+      "claim_office",
+      "scheme"
+    ],
+    "opposite": "content-soul"
+  },
+  {
+    "id": "content-soul",
+    "name": "Content",
+    "category": "personality",
+    "description": "Enough is a feast.",
+    "statMod": {
+      "prestige": -1
+    },
+    "recoveryBonus": 2,
+    "opposes": [
+      "claim_office"
+    ],
+    "embraces": [
+      "idle",
+      "festival"
+    ],
+    "opposite": "ambitious"
+  },
+  {
+    "id": "just",
+    "name": "Just",
+    "category": "personality",
+    "description": "The law binds even the strong.",
+    "statMod": {
+      "prestige": 1,
+      "devotion": 1
+    },
+    "opposes": [
+      "blackmail",
+      "extort",
+      "cruelty"
+    ],
+    "embraces": [
+      "judge_fairly",
+      "expose_secret"
+    ],
+    "opposite": "ruthless"
+  },
+  {
+    "id": "ruthless",
+    "name": "Ruthless",
+    "category": "personality",
+    "description": "Mercy is a luxury of the safe.",
+    "statMod": {
+      "militia": 1,
+      "intelligence": 1,
+      "prestige": -1
+    },
+    "opposes": [
+      "mercy"
+    ],
+    "embraces": [
+      "cruelty",
+      "extort"
+    ],
+    "opposite": "just"
+  },
+  {
+    "id": "patient",
+    "name": "Patient",
+    "category": "personality",
+    "description": "Slow water cuts stone.",
+    "statMod": {
+      "intelligence": 1
+    },
+    "opposes": [
+      "rash_act"
+    ],
+    "embraces": [
+      "study",
+      "wait"
+    ],
+    "opposite": "hotblooded"
+  },
+  {
+    "id": "hotblooded",
+    "name": "Hot-blooded",
+    "category": "personality",
+    "description": "Strike while the iron screams.",
+    "statMod": {
+      "militia": 1
+    },
+    "opposes": [
+      "wait",
+      "back_down"
+    ],
+    "embraces": [
+      "rash_act",
+      "duel"
+    ],
+    "opposite": "patient"
+  },
+  {
+    "id": "humble",
+    "name": "Humble",
+    "category": "personality",
+    "description": "The grain bows when it is full.",
+    "statMod": {
+      "devotion": 1
+    },
+    "opposes": [
+      "boast"
+    ],
+    "embraces": [
+      "mercy",
+      "offering"
+    ],
+    "opposite": "proud"
+  },
+  {
+    "id": "proud",
+    "name": "Proud",
+    "category": "personality",
+    "description": "Lineage is destiny.",
+    "statMod": {
+      "prestige": 1
+    },
+    "opposes": [
+      "mercy",
+      "back_down"
+    ],
+    "embraces": [
+      "boast",
+      "claim_office"
+    ],
+    "opposite": "humble"
+  },
+  {
+    "id": "rhetoric-1",
+    "name": "Stammering Speaker",
+    "category": "upbringing",
+    "description": "Trained in rhetoric, barely.",
+    "statMod": {
+      "prestige": 2
+    }
+  },
+  {
+    "id": "rhetoric-2",
+    "name": "Orator",
+    "category": "upbringing",
+    "description": "The agora listens.",
+    "statMod": {
+      "prestige": 4
+    }
+  },
+  {
+    "id": "rhetoric-3",
+    "name": "Voice of the Agora",
+    "category": "upbringing",
+    "description": "Crowds move when this one speaks.",
+    "statMod": {
+      "prestige": 6
+    }
+  },
+  {
+    "id": "mysteries-1",
+    "name": "Acolyte",
+    "category": "upbringing",
+    "description": "Raised among incense and hymns.",
+    "statMod": {
+      "devotion": 2
+    }
+  },
+  {
+    "id": "mysteries-2",
+    "name": "Initiate",
+    "category": "upbringing",
+    "description": "Knows the rites behind the veil.",
+    "statMod": {
+      "devotion": 4
+    }
+  },
+  {
+    "id": "mysteries-3",
+    "name": "Oracle's Chosen",
+    "category": "upbringing",
+    "description": "Marked by Artemis herself, they say.",
+    "statMod": {
+      "devotion": 6
+    }
+  },
+  {
+    "id": "gymnasium-1",
+    "name": "Levy",
+    "category": "upbringing",
+    "description": "Knows which end of the spear bites.",
+    "statMod": {
+      "militia": 2
+    }
+  },
+  {
+    "id": "gymnasium-2",
+    "name": "Phalangite",
+    "category": "upbringing",
+    "description": "Drilled until the shield is an arm.",
+    "statMod": {
+      "militia": 4
+    }
+  },
+  {
+    "id": "gymnasium-3",
+    "name": "Strategos-Trained",
+    "category": "upbringing",
+    "description": "Reads a battlefield like a scroll.",
+    "statMod": {
+      "militia": 6
+    }
+  },
+  {
+    "id": "philosophia-1",
+    "name": "Scribe",
+    "category": "upbringing",
+    "description": "Letters, sums, and patience.",
+    "statMod": {
+      "intelligence": 2
+    }
+  },
+  {
+    "id": "philosophia-2",
+    "name": "Thinker",
+    "category": "upbringing",
+    "description": "Asks the second question.",
+    "statMod": {
+      "intelligence": 4
+    }
+  },
+  {
+    "id": "philosophia-3",
+    "name": "Sage of Massalia",
+    "category": "upbringing",
+    "description": "Students cross the sea for this mind.",
+    "statMod": {
+      "intelligence": 6
+    }
+  },
+  {
+    "id": "master-of-groves",
+    "name": "Master of Groves",
+    "category": "class",
+    "description": "Olives obey this hand.",
+    "incomeMod": 0.15
+  },
+  {
+    "id": "gyptis-heir",
+    "name": "Gyptis' Heir",
+    "category": "class",
+    "description": "The Ligurian tribes remember the wedding cup.",
+    "statMod": {
+      "prestige": 2
+    }
+  },
+  {
+    "id": "granary-keeper",
+    "name": "Granary Keeper",
+    "category": "class",
+    "description": "When Massalia hungers, it knocks here.",
+    "statMod": {
+      "prestige": 1,
+      "intelligence": 1
+    }
+  },
+  {
+    "id": "tin-route-pioneer",
+    "name": "Tin Route Pioneer",
+    "category": "class",
+    "description": "Knows the way to the Cassiterides.",
+    "incomeMod": 0.15
+  },
+  {
+    "id": "silver-tongued",
+    "name": "Silver-Tongued",
+    "category": "class",
+    "description": "Closes deals others cannot open.",
+    "statMod": {
+      "prestige": 2
+    }
+  },
+  {
+    "id": "pytheas-disciple",
+    "name": "Pytheas' Disciple",
+    "category": "class",
+    "description": "Has read On the Ocean. Believes it.",
+    "statMod": {
+      "intelligence": 2
+    }
+  },
+  {
+    "id": "sophist",
+    "name": "Sophist",
+    "category": "class",
+    "description": "Wins arguments; truth optional.",
+    "statMod": {
+      "intelligence": 2,
+      "devotion": -1
+    }
+  },
+  {
+    "id": "socratic",
+    "name": "Socratic",
+    "category": "class",
+    "description": "Questions until the strong squirm.",
+    "statMod": {
+      "intelligence": 2
+    }
+  },
+  {
+    "id": "school-founder",
+    "name": "School Founder",
+    "category": "class",
+    "description": "Students pay; legacy compounds.",
+    "incomeMod": 0.1,
+    "statMod": {
+      "prestige": 1
+    }
+  },
+  {
+    "id": "confidante",
+    "name": "Confidante",
+    "category": "class",
+    "description": "Powerful men talk in this company.",
+    "statMod": {
+      "intelligence": 2
+    }
+  },
+  {
+    "id": "muse",
+    "name": "Muse",
+    "category": "class",
+    "description": "Inspires devotion in patrons.",
+    "statMod": {
+      "prestige": 2
+    }
+  },
+  {
+    "id": "whisper-network",
+    "name": "Whisper Network",
+    "category": "class",
+    "description": "Hears everything by the second day.",
+    "statMod": {
+      "intelligence": 1,
+      "prestige": 1
+    }
+  },
+  {
+    "id": "phalanx-veteran",
+    "name": "Phalanx Veteran",
+    "category": "class",
+    "description": "Held the line at least once.",
+    "statMod": {
+      "militia": 2
+    }
+  },
+  {
+    "id": "shield-brother",
+    "name": "Shield Brother",
+    "category": "class",
+    "description": "Hoplites trust this one with their flank.",
+    "statMod": {
+      "militia": 1,
+      "prestige": 1
+    }
+  },
+  {
+    "id": "rhone-blooded",
+    "name": "Rhone-Blooded",
+    "category": "class",
+    "description": "Survived the wars the songs are about.",
+    "statMod": {
+      "militia": 3
+    }
+  },
+  {
+    "id": "master-wright",
+    "name": "Master Wright",
+    "category": "class",
+    "description": "Hulls from this yard do not leak.",
+    "incomeMod": 0.1,
+    "statMod": {
+      "intelligence": 1
+    }
+  },
+  {
+    "id": "pentekonter-architect",
+    "name": "Pentekonter Architect",
+    "category": "class",
+    "description": "Builds the ships that build the League.",
+    "statMod": {
+      "intelligence": 2,
+      "militia": 1
+    }
+  },
+  {
+    "id": "storm-tested",
+    "name": "Storm-Tested",
+    "category": "class",
+    "description": "The sea has tried and failed.",
+    "statMod": {
+      "militia": 1
+    }
+  },
+  {
+    "id": "artemis-voice",
+    "name": "Artemis' Voice",
+    "category": "class",
+    "description": "Speaks for the city's patron.",
+    "statMod": {
+      "devotion": 3
+    }
+  },
+  {
+    "id": "herbal-healer",
+    "name": "Herbal Healer",
+    "category": "class",
+    "description": "Greek physic, Gaulish herbs.",
+    "statMod": {
+      "devotion": 1,
+      "intelligence": 1
+    }
+  },
+  {
+    "id": "oracle-reader",
+    "name": "Oracle Reader",
+    "category": "class",
+    "description": "Sees the shape of tomorrow in smoke.",
+    "statMod": {
+      "devotion": 2
+    }
+  },
+  {
+    "id": "survivor",
+    "name": "Survivor",
+    "category": "class",
+    "description": "Endured what would break free men.",
+    "recoveryBonus": 2
+  },
+  {
+    "id": "polyglot",
+    "name": "Polyglot",
+    "category": "class",
+    "description": "Greek, Gaulish, Punic - all useful.",
+    "statMod": {
+      "intelligence": 2
+    }
+  },
+  {
+    "id": "trusted-steward",
+    "name": "Trusted Steward",
+    "category": "class",
+    "description": "Holds the master's keys.",
+    "incomeMod": 0.1
+  },
+  {
+    "id": "freedman",
+    "name": "Freedman",
+    "category": "reputation",
+    "description": "Bought or granted: freedom either way.",
+    "statMod": {
+      "prestige": 2,
+      "devotion": 2,
+      "militia": 2,
+      "intelligence": 2
+    }
+  },
+  {
+    "id": "drunkard",
+    "name": "Drunkard",
+    "category": "coping",
+    "description": "The amphora never judges.",
+    "recoveryBonus": 3,
+    "statMod": {
+      "intelligence": -2
+    }
+  },
+  {
+    "id": "recluse",
+    "name": "Recluse",
+    "category": "coping",
+    "description": "The crowd is the wound.",
+    "recoveryBonus": 3,
+    "statMod": {
+      "prestige": -2
+    }
+  },
+  {
+    "id": "flagellant",
+    "name": "Flagellant",
+    "category": "coping",
+    "description": "Pain offered up as prayer.",
+    "recoveryBonus": 3,
+    "statMod": {
+      "militia": -1,
+      "devotion": 1
+    }
+  },
+  {
+    "id": "gaulish-rites",
+    "name": "Gaulish Rites Practitioner",
+    "category": "reputation",
+    "description": "Seen at the grove ceremonies.",
+    "statMod": {
+      "devotion": 1
+    }
+  },
+  {
+    "id": "intermarried",
+    "name": "Intermarried",
+    "category": "reputation",
+    "description": "Wed across the cultural line."
+  },
+  {
+    "id": "oath-breaker",
+    "name": "Oath-Breaker",
+    "category": "reputation",
+    "description": "Both parties remember.",
+    "statMod": {
+      "prestige": -2,
+      "devotion": -1
+    }
+  },
+  {
+    "id": "temple-defiler",
+    "name": "Temple Defiler",
+    "category": "reputation",
+    "description": "Whispered wherever incense burns.",
+    "statMod": {
+      "devotion": -3,
+      "prestige": -1
+    }
+  },
+  {
+    "id": "carthaginian-sympathizer",
+    "name": "Carthaginian Sympathizer",
+    "category": "reputation",
+    "description": "Too friendly with Qart-Hadasht.",
+    "statMod": {
+      "prestige": -2
+    }
+  },
+  {
+    "id": "duelist",
+    "name": "Duelist",
+    "category": "reputation",
+    "description": "Settles things the old way.",
+    "statMod": {
+      "militia": 1
+    }
+  },
+  {
+    "id": "turncoat",
+    "name": "Turncoat",
+    "category": "reputation",
+    "description": "Changed colors once; could again.",
+    "statMod": {
+      "prestige": -2
+    }
+  },
+  {
+    "id": "megas-choregos",
+    "name": "Megas Choregos",
+    "category": "reputation",
+    "description": "The greatest patron of this season's festival. The city's gratitude, until the next rites.",
+    "statMod": {
+      "prestige": 3
+    }
+  },
+  {
+    "id": "olympic-delegate",
+    "name": "Olympic Delegate",
+    "category": "reputation",
+    "description": "Chosen to represent Massalia at Olympia. Transient - removed once the Games are run.",
+    "statMod": {
+      "prestige": 1
+    }
+  },
+  {
+    "id": "olympionikes",
+    "name": "Olympionikes",
+    "category": "reputation",
+    "description": "An Olympic victor, crowned with wild olive at Olympia - an honor that outlives the man.",
+    "statMod": {
+      "prestige": 5,
+      "militia": 1
+    }
+  }
 ]

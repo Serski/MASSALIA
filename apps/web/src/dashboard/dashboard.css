@@ -2982,3 +2982,7 @@
 .dashboard-shell .dynasty-head { margin: 4px 0 10px; padding: 10px 12px; border-radius: 8px; background: rgba(12, 8, 7, 0.4); border: 1px solid rgba(181, 138, 69, 0.2); font-size: 13px; }
 .dashboard-shell .dynasty-history { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; font-size: 12px; opacity: 0.82; }
 .dashboard-shell .dynasty-kind { opacity: 0.6; }
+
+/* Festivals (Prompt 7): a prominent, distinct civic banner above the decisions. */
+.dashboard-shell .festival-card { margin-bottom: 14px; border: 1px solid rgba(216, 178, 90, 0.5); background: linear-gradient(180deg, rgba(60, 44, 18, 0.42), rgba(20, 14, 9, 0.55)); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28); }
+.dashboard-shell .festival-kicker { color: #e7c66a; }

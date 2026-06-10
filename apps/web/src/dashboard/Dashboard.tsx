@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SuccessionState } from "../api.js";
+import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SuccessionState, type FestivalLive } from "../api.js";
 import { assetPath, buildableBuildings, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
@@ -59,6 +59,8 @@ type PlayerDashboardState = {
   portrait?: string;
   deceased: boolean;
   decaying: string[];
+  // The festival live this season (a free civic event), or null.
+  festival: FestivalLive | null;
 };
 
 type PlayerDashboardView = PlayerDashboardState & {
@@ -125,6 +127,7 @@ const placeholderPlayerState: PlayerDashboardState = {
   lifeStage: "Prime",
   deceased: false,
   decaying: [],
+  festival: null,
 };
 
 // TODO: Replace with real away-summary records.
@@ -200,6 +203,7 @@ function playerFromState(state: PlayerState): PlayerDashboardView {
     portrait: contentUrl(state.character.portrait),
     deceased: state.character.deceased,
     decaying: state.character.decaying ?? [],
+    festival: state.festival ?? null,
     profession,
     house,
   };
@@ -807,6 +811,68 @@ function RoutinesCard({ onRefresh }: PanelProps) {
   );
 }
 
+// A festival is a free civic event — surfaced prominently, above the daily
+// decisions, with each donation tier's previewed effects.
+function FestivalBanner({ festival, onRefresh }: { festival: FestivalLive; onRefresh: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  const [outcome, setOutcome] = useState<EventResolution | null>(null);
+
+  const choose = async (choiceId: string) => {
+    setBusy(true);
+    setNote("");
+    try {
+      const result = await api.resolveFestival(festival.festivalId, choiceId);
+      setOutcome(result);
+      onRefresh();
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "The festival offering could not be made.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <DashboardCard className="festival-card">
+      <div className="event-body">
+        <span className="dashboard-label festival-kicker">🎭 Festival · free civic event</span>
+        <h3>{festival.event.scene}</h3>
+        {outcome ? (
+          <div className="event-outcome" role="status">
+            <p>{outcome.resultText}</p>
+            {outcome.composureDelta !== 0 ? (
+              <p className={`composure-note ${outcome.composureDelta < 0 ? "neg" : "pos"}`}>
+                {outcome.composureDelta > 0 ? "+" : ""}{outcome.composureDelta} Composure — {outcome.composureReason}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <div className="event-choice-stack">
+            {festival.event.choices.map((choice) => (
+              <button className="event-choice-button" type="button" key={choice.id} disabled={busy} onClick={() => choose(choice.id)}>
+                <strong>{choice.label}</strong>
+                {choice.costs.length > 0 || choice.composureDelta !== 0 ? (
+                  <span className="choice-costs">
+                    {choice.costs.map((cost, i) => (
+                      <span key={i} className={`cost-chip cost-${cost.tone}`}>{cost.label}</span>
+                    ))}
+                    {choice.composureDelta !== 0 ? (
+                      <span className={`cost-chip ${choice.composureDelta < 0 ? "cost-negative" : "cost-positive"}`} title={choice.composureReason}>
+                        {choice.composureDelta > 0 ? "+" : ""}{choice.composureDelta} Composure
+                      </span>
+                    ) : null}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        )}
+        {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
+      </div>
+    </DashboardCard>
+  );
+}
+
 function CourtPanel({ player, onRefresh }: PanelProps) {
   return (
     <section className="dashboard-panel" aria-labelledby="court-title">
@@ -818,6 +884,7 @@ function CourtPanel({ player, onRefresh }: PanelProps) {
       <PanelBanner scene="the court of Massalia" />
       <div className="court-grid">
         <div className="decision-column">
+          {player.festival ? <FestivalBanner festival={player.festival} onRefresh={onRefresh} /> : null}
           <div className="panel-subhead decision-subhead">
             <span className="dashboard-label">Decisions awaiting you</span>
           </div>

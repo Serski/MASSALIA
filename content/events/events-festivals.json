@@ -1,0 +1,290 @@
+[
+  {
+    "id": "fest-dionysia",
+    "weight": 0,
+    "trigger": "calendar",
+    "scene": "Winter brings the Great Dionysia. The theatre fills for days of tragedy and comedy, and the city looks to its wealthy citizens to serve as choregoi - funding the choruses that make a play immortal.",
+    "choices": [
+      {
+        "id": "choregos-tragedy",
+        "label": "Serve as choregos for a tragedy (25 dr.)",
+        "tags": [
+          "festival",
+          "patronage"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -25
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "register_choregos",
+            "festivalId": "fest-dionysia",
+            "amount": 25
+          }
+        ],
+        "resultText": "Your chorus brings the house to its feet. If yours is the season's grandest patronage, the city will name you Megas Choregos."
+      },
+      {
+        "id": "fund-comedy",
+        "label": "Fund a comedy chorus (10 dr.)",
+        "tags": [
+          "festival",
+          "patronage"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "Laughter rolls down the tiers. Cheaper than tragedy, and well received."
+      },
+      {
+        "id": "attend",
+        "label": "Attend the plays",
+        "tags": [
+          "festival"
+        ],
+        "effects": [],
+        "resultText": "A long winter's day of drama from a good seat. The season turns, as it does."
+      }
+    ]
+  },
+  {
+    "id": "fest-apollo",
+    "weight": 0,
+    "trigger": "calendar",
+    "scene": "Autumn brings the festival of Apollo at the Sanctuary of Phoebus. As the harvest closes, hymns rise and the Delphic verses are read in the god of light's name.",
+    "choices": [
+      {
+        "id": "fund-chorus",
+        "label": "Fund the hymnal chorus (15 dr.)",
+        "tags": [
+          "offering",
+          "festival",
+          "patronage"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "The chorus sings your patronage into the hymn. Apollo's light, briefly, seems to fall on you."
+      },
+      {
+        "id": "libation",
+        "label": "Offer a libation (5 dr.)",
+        "tags": [
+          "offering",
+          "festival"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "Wine poured on the altar stone, a verse murmured. Modest and correct."
+      },
+      {
+        "id": "attend",
+        "label": "Attend the hymns",
+        "tags": [
+          "offering",
+          "festival"
+        ],
+        "effects": [],
+        "resultText": "You sit among the philosophers and listen. The verses linger past nightfall."
+      }
+    ]
+  },
+  {
+    "id": "fest-artemisia",
+    "weight": 0,
+    "trigger": "calendar",
+    "scene": "Spring brings the Great Artemisia, the year's grandest rite. The sacred procession winds from the agora to the Temple of Artemis, the city's patron, in incense and song. The choregoi who fund it are remembered all year.",
+    "choices": [
+      {
+        "id": "sponsor",
+        "label": "Sponsor the great procession (25 dr.)",
+        "tags": [
+          "offering",
+          "festival",
+          "patronage"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -25
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "register_choregos",
+            "festivalId": "fest-artemisia",
+            "amount": 25
+          }
+        ],
+        "resultText": "Your name is proclaimed before the goddess's altar. The grandest patron this summer is crowned Megas Choregos."
+      },
+      {
+        "id": "offer",
+        "label": "Make an offering (8 dr.)",
+        "tags": [
+          "offering",
+          "festival"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -8
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "A fair offering, honestly given. Artemis, they say, prefers sincerity to spectacle."
+      },
+      {
+        "id": "attend",
+        "label": "March in the procession",
+        "tags": [
+          "offering",
+          "festival"
+        ],
+        "effects": [],
+        "resultText": "You walk with the whole city under the goddess's eyes. The summer's heart."
+      }
+    ]
+  },
+  {
+    "id": "olympic-nominate",
+    "weight": 0,
+    "trigger": "calendar",
+    "requires": {
+      "noClass": [
+        "hetaira",
+        "slave"
+      ]
+    },
+    "scene": "High summer of the Olympiad year. Massalia will send two citizens to compete at Olympia before all the Greek world - the highest honor a polis can bestow. Names are put forward; the assembly will vote on whom to send.",
+    "choices": [
+      {
+        "id": "stand",
+        "label": "Put your name forward as a candidate",
+        "tags": [
+          "claim_office",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "olympic_nominate"
+          }
+        ],
+        "resultText": "Your name enters the ballot. Now the city decides. Campaign well - Olympia waits for two."
+      },
+      {
+        "id": "support",
+        "label": "Decline, but pledge to vote",
+        "tags": [
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "Not your year to compete. But your vote helps choose who carries the city's name."
+      }
+    ]
+  },
+  {
+    "id": "olympic-games",
+    "weight": 0,
+    "trigger": "calendar",
+    "requires": {
+      "trait": "olympic-delegate"
+    },
+    "scene": "You stand in the sacred precinct of Olympia, oil on your skin, the eyes of all Hellas upon you. You were chosen to carry Massalia's name. The herald calls your event.",
+    "choices": [
+      {
+        "id": "all-out",
+        "label": "Compete with everything you have",
+        "tags": [
+          "frontline",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "olympic_compete",
+            "mode": "all_out"
+          },
+          {
+            "type": "change_trait",
+            "traitId": "olympic-delegate",
+            "operation": "remove"
+          }
+        ],
+        "resultText": "You leave nothing in reserve. Olive crown or honorable defeat, Massalia will remember you reached for glory."
+      },
+      {
+        "id": "measured",
+        "label": "Compete with discipline and honor",
+        "tags": [
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "olympic_compete",
+            "mode": "measured"
+          },
+          {
+            "type": "change_trait",
+            "traitId": "olympic-delegate",
+            "operation": "remove"
+          }
+        ],
+        "resultText": "You compete with the composure of a true Hellene. Win or lose, you bring no shame to the League."
+      }
+    ]
+  }
+]

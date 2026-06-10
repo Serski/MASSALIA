@@ -16,7 +16,12 @@ export type EventEffect =
   | { type: "change_composure"; amount: number }
   | { type: "change_drachmae"; amount: number }
   | { type: "change_party_favor"; party: "palaioi" | "dynatoi"; amount: number }
-  | { type: "spawn_army"; ownerPlayerId: string; provinceId: string; units: Record<string, number> };
+  | { type: "spawn_army"; ownerPlayerId: string; provinceId: string; units: Record<string, number> }
+  // Festivals (Prompt 7): record a choregos donation to a festival instance.
+  | { type: "register_choregos"; festivalId: string; amount: number }
+  // Olympiad (Prompt 8 — accepted in schema now, no-op until then).
+  | { type: "olympic_nominate" }
+  | { type: "olympic_compete"; mode: string };
 
 // Event-level gating. An event is eligible only if every present condition passes.
 export interface EventRequirements {
@@ -26,6 +31,7 @@ export interface EventRequirements {
   minStat?: Partial<Record<keyof CharacterStats, number>>;
   trait?: string;
   noTrait?: string;
+  noClass?: string[]; // excluded classes (e.g. festivals barred to hetaira/slave)
 }
 
 export interface EventChoice {
@@ -42,6 +48,8 @@ export interface EventDefinition {
   weight: number;
   conditions?: EventCondition[];
   requires?: EventRequirements;
+  // "calendar" events fire from the festival/calendar system, NOT the daily draw.
+  trigger?: string;
   scene: string;
   choices: EventChoice[];
 }
@@ -71,6 +79,9 @@ const effectSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("change_drachmae"), amount: z.number() }),
   z.object({ type: z.literal("change_party_favor"), party: z.enum(["palaioi", "dynatoi"]), amount: z.number() }),
   z.object({ type: z.literal("spawn_army"), ownerPlayerId: z.string(), provinceId: z.string(), units: z.record(z.string(), z.number()) }),
+  z.object({ type: z.literal("register_choregos"), festivalId: z.string(), amount: z.number() }),
+  z.object({ type: z.literal("olympic_nominate") }),
+  z.object({ type: z.literal("olympic_compete"), mode: z.string() }),
 ]);
 
 const requiresSchema = z
@@ -81,6 +92,7 @@ const requiresSchema = z
     minStat: z.record(statName, z.number()).optional(),
     trait: z.string().optional(),
     noTrait: z.string().optional(),
+    noClass: z.array(z.string()).optional(),
   })
   .strict();
 
@@ -98,6 +110,7 @@ export const eventDefinitionSchema = z.object({
   weight: z.number(),
   conditions: z.array(conditionSchema).optional(),
   requires: requiresSchema.optional(),
+  trigger: z.string().optional(),
   scene: z.string(),
   choices: z.array(eventChoiceSchema),
 });
@@ -122,10 +135,16 @@ export type EligibilityContext = {
   traitIds: string[];
 };
 
+// Calendar/festival events fire from the festival system, never the daily draw.
+export function isCalendarEvent(event: EventDefinition): boolean {
+  return event.trigger === "calendar";
+}
+
 export function isEventEligible(event: EventDefinition, ctx: EligibilityContext): boolean {
   const req = event.requires;
   if (!req) return true;
   if (req.class && req.class !== ctx.classId) return false;
+  if (req.noClass && req.noClass.includes(ctx.classId)) return false;
   if (req.party && req.party !== ctx.party) return false;
   if (req.office === "councilor" && !ctx.isCouncilor) return false;
   if (req.trait && !ctx.traitIds.includes(req.trait)) return false;
