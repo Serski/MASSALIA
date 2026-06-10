@@ -49,7 +49,13 @@ export const familyConfigSchema = z.object({
     portraits: z.object({ boy: z.string(), girl: z.string() }),
   }),
   succession: z
-    .object({ adoptedStartAgeRange: range })
+    .object({
+      prestigeCarryover: z.object({ blood: z.number(), adopted: z.number(), regent: z.number() }),
+      alwaysInherited: z.array(z.string()),
+      heirStartAge: z.number(),
+      adoptedStartAgeRange: range,
+      regentStartAgeRange: range,
+    })
     .passthrough(),
   adoption: z.object({
     perDraw: z.number(),
@@ -202,6 +208,83 @@ export function defaultChildName(sex: Sex, rng: () => number = Math.random): str
 
 // Just the trait fields the child roll needs (a spouse's candidate trait).
 export type SpouseTrait = { childChanceBonus?: number; birthDeathRiskMod?: number } | null;
+
+// --- Death, succession & regency (Prompt C) --------------------------------
+
+export type StatBlock = { prestige: number; devotion: number; militia: number; intelligence: number };
+
+export type SuccessionKind = "blood" | "adopted" | "regency" | "fresh" | "forced_adoption";
+
+export type ChildInfo = { id: string; age: number; sex: Sex; name: string };
+
+export type SuccessionPlan = {
+  kind: SuccessionKind;
+  // The of-age child who inherits (blood), or the minor a regent holds for (regency).
+  heirChildId?: string;
+  regentForChildId?: string;
+};
+
+// The succession ladder, in order: an of-age child (blood) > an adopted heir >
+// a regency for a minor child > a fresh start (slave) / forced adoption (citizens
+// & hetaira). Every branch yields a playable next character.
+export function successionPlan(character: { classId: string }, children: ChildInfo[], hasAdoptedHeir: boolean, cfg: FamilyConfig): SuccessionPlan {
+  const ofAge = children.filter((child) => child.age >= cfg.comingOfAge);
+  if (ofAge.length > 0) {
+    const eldest = ofAge.reduce((a, b) => (b.age > a.age ? b : a));
+    return { kind: "blood", heirChildId: eldest.id };
+  }
+  if (hasAdoptedHeir) return { kind: "adopted" };
+  if (children.length > 0) {
+    // All remaining children are minors — regent for the eldest (next of age).
+    const eldestMinor = children.reduce((a, b) => (b.age > a.age ? b : a));
+    return { kind: "regency", regentForChildId: eldestMinor.id };
+  }
+  return character.classId === "slave" ? { kind: "fresh" } : { kind: "forced_adoption" };
+}
+
+const STAT_ORDER: (keyof StatBlock)[] = ["prestige", "devotion", "militia", "intelligence"];
+
+// The dead's highest stat (ties resolve by STAT_ORDER), for the bloodline nudge.
+export function highestStatKey(stats: StatBlock): keyof StatBlock {
+  return STAT_ORDER.reduce((best, key) => (stats[key] > stats[best] ? key : best), STAT_ORDER[0]!);
+}
+
+export type InheritanceKind = "blood" | "adopted" | "regent";
+export type Inheritance = StatBlock & { alwaysInherited: string[] };
+
+// What the next character starts with. Prestige ALWAYS carries over (floored by
+// the kind's rate: blood .50 / adopted .35 / regent .30). A blood heir rolls the
+// other three fresh from the candidate ranges plus a +1 bloodline nudge to the
+// dead's highest stat; an adopted/regent successor keeps the candidate's own
+// already-rolled stats. House/holdings/drachmae/seat always pass (alwaysInherited).
+export function inheritance(
+  dead: StatBlock,
+  kind: InheritanceKind,
+  cfg: FamilyConfig,
+  opts: { rng?: () => number; candidate?: StatBlock } = {},
+): Inheritance {
+  const prestige = Math.floor(dead.prestige * (cfg.succession.prestigeCarryover[kind] ?? 0));
+  const alwaysInherited = cfg.succession.alwaysInherited;
+
+  if (kind === "blood") {
+    const rng = opts.rng ?? Math.random;
+    const r = cfg.candidates.statRanges;
+    const rolled: StatBlock = {
+      prestige,
+      devotion: r.devotion[0] + Math.floor(rng() * (r.devotion[1] - r.devotion[0] + 1)),
+      militia: r.militia[0] + Math.floor(rng() * (r.militia[1] - r.militia[0] + 1)),
+      intelligence: r.intelligence[0] + Math.floor(rng() * (r.intelligence[1] - r.intelligence[0] + 1)),
+    };
+    // +1 nudge toward the dead's strongest line.
+    const nudge = highestStatKey(dead);
+    rolled[nudge] += 1;
+    return { ...rolled, alwaysInherited };
+  }
+
+  // adopted / regent: keep the candidate's own stats, only prestige carries over.
+  const candidate = opts.candidate ?? { prestige: 0, devotion: 0, militia: 0, intelligence: 0 };
+  return { prestige, devotion: candidate.devotion, militia: candidate.militia, intelligence: candidate.intelligence, alwaysInherited };
+}
 
 export type ChildRollOutcome =
   | { born: false }

@@ -9,10 +9,14 @@ import {
   childRoll,
   defaultChildName,
   generateCandidates,
+  highestStatKey,
+  inheritance,
   isFamilyLocked,
   isOfAge,
   marriagePenalty,
   parseFamilyConfig,
+  successionPlan,
+  type ChildInfo,
   type FamilyConfig,
 } from "./index.js";
 
@@ -208,5 +212,72 @@ describe("defaultChildName", () => {
   it("returns a Greek name for the child's sex", () => {
     expect(typeof defaultChildName("male", () => 0)).toBe("string");
     expect(defaultChildName("female", () => 0).length).toBeGreaterThan(0);
+  });
+});
+
+const child = (id: string, age: number, name = id): ChildInfo => ({ id, age, sex: "male", name });
+
+describe("successionPlan — the ladder", () => {
+  it("a. eldest of-age living child -> blood", () => {
+    const plan = successionPlan({ classId: "trader" }, [child("a", 17), child("b", 16), child("c", 9)], false, cfg);
+    expect(plan.kind).toBe("blood");
+    expect(plan.heirChildId).toBe("a"); // eldest of-age
+  });
+  it("b. no of-age child but an adopted heir -> adopted", () => {
+    expect(successionPlan({ classId: "trader" }, [child("c", 9)], true, cfg).kind).toBe("adopted");
+  });
+  it("c. only a minor child, no adopted heir -> regency for the eldest minor", () => {
+    const plan = successionPlan({ classId: "trader" }, [child("c", 9), child("d", 12)], false, cfg);
+    expect(plan.kind).toBe("regency");
+    expect(plan.regentForChildId).toBe("d");
+  });
+  it("d. no heirs: slave -> fresh; citizen/hetaira -> forced_adoption", () => {
+    expect(successionPlan({ classId: "slave" }, [], false, cfg).kind).toBe("fresh");
+    expect(successionPlan({ classId: "trader" }, [], false, cfg).kind).toBe("forced_adoption");
+    expect(successionPlan({ classId: "hetaira" }, [], false, cfg).kind).toBe("forced_adoption");
+  });
+  it("blood outranks adopted, adopted outranks regency", () => {
+    expect(successionPlan({ classId: "trader" }, [child("a", 16), child("c", 9)], true, cfg).kind).toBe("blood");
+    expect(successionPlan({ classId: "trader" }, [child("c", 9)], true, cfg).kind).toBe("adopted");
+  });
+});
+
+describe("inheritance — carryover, always-inherited, bloodline nudge", () => {
+  const dead = { prestige: 80, devotion: 40, militia: 60, intelligence: 30 };
+
+  it("prestige carries over at 50/35/30 per kind, floored", () => {
+    // blood: floor(80*.50)=40, +1 bloodline nudge (prestige is the dead's highest) = 41.
+    expect(inheritance(dead, "blood", cfg, { rng: () => 0 }).prestige).toBe(41);
+    expect(inheritance(dead, "adopted", cfg, { candidate: dead }).prestige).toBe(28); // floor(80*.35), no nudge
+    expect(inheritance(dead, "regent", cfg, { candidate: dead }).prestige).toBe(24); // floor(80*.30), no nudge
+  });
+
+  it("always-inherited set comes from config", () => {
+    expect(inheritance(dead, "blood", cfg, { rng: () => 0 }).alwaysInherited).toEqual(cfg.succession.alwaysInherited);
+    expect(inheritance(dead, "blood", cfg, { rng: () => 0 }).alwaysInherited).toContain("oligarchSeat");
+  });
+
+  it("blood: rolls the other three in range + a +1 nudge to the dead's highest stat", () => {
+    // rng=0 -> each rolled stat = its range minimum. Dead's highest is prestige -> nudge prestige.
+    const h = inheritance(dead, "blood", cfg, { rng: () => 0 });
+    const r = cfg.candidates.statRanges;
+    expect(h.devotion).toBe(r.devotion[0]);
+    expect(h.militia).toBe(r.militia[0]);
+    expect(h.intelligence).toBe(r.intelligence[0]);
+    expect(h.prestige).toBe(40 + 1); // carryover 40 + bloodline nudge (prestige is highest)
+  });
+
+  it("blood nudge lands on a rolled stat when that is the dead's highest", () => {
+    const bodyDead = { prestige: 10, devotion: 5, militia: 70, intelligence: 5 };
+    const h = inheritance(bodyDead, "blood", cfg, { rng: () => 0 });
+    expect(highestStatKey(bodyDead)).toBe("militia");
+    expect(h.militia).toBe(cfg.candidates.statRanges.militia[0] + 1); // nudge on militia
+  });
+
+  it("adopted/regent keep the candidate's own rolled stats", () => {
+    const cand = { prestige: 3, devotion: 2, militia: 4, intelligence: 5 };
+    const a = inheritance(dead, "adopted", cfg, { candidate: cand });
+    expect({ d: a.devotion, m: a.militia, i: a.intelligence }).toEqual({ d: 2, m: 4, i: 5 });
+    expect(a.prestige).toBe(28); // still carryover, not the candidate's
   });
 });

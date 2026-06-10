@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent } from "../api.js";
+import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SuccessionState } from "../api.js";
 import { assetPath, buildableBuildings, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
@@ -1003,6 +1003,24 @@ function MarketPanel() {
   );
 }
 
+// Display-layer title-case so a slug-derived dynasty name reads "House Leonidas".
+function titleCase(text: string): string {
+  return text.replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
+function ordinalGeneration(n: number): string {
+  const v = n % 100;
+  const suffix = v >= 11 && v <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th";
+  return `${n}${suffix}`;
+}
+
+const SUCCESSION_KIND_LABEL: Record<string, string> = {
+  blood: "blood heir",
+  adopted: "adoption",
+  regent_handoff: "regent handoff",
+  fresh: "fresh start",
+};
+
 const FAMILY_STAT_DEFS: { key: keyof FourStats; abbr: string }[] = [
   { key: "prestige", abbr: "PRE" },
   { key: "devotion", abbr: "DEV" },
@@ -1160,6 +1178,22 @@ function FamilyPanel({ onRefresh }: PanelProps) {
         <p>Your blood, your heirs, and the matches that bind the Houses.</p>
       </div>
       <PanelBanner scene="the oikos" />
+
+      {state?.dynasty ? (
+        <div className="dynasty-head">
+          <strong>{titleCase(state.dynasty.name)}</strong> · {ordinalGeneration(state.dynasty.generation)} generation
+          {state.dynasty.history.length > 0 ? (
+            <ul className="dynasty-history">
+              {state.dynasty.history.map((h, i) => (
+                <li key={i}>
+                  {h.fromName ? `${h.fromName} (age ${h.fromAge ?? "?"})` : "—"} → <strong>{h.toName ?? "heir"}</strong>
+                  <span className="dynasty-kind"> · {SUCCESSION_KIND_LABEL[h.kind] ?? h.kind}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
 
       {error ? (
         <p className="dashboard-todo">{error}</p>
@@ -2199,6 +2233,84 @@ function CharacterSheet({
   );
 }
 
+// The blocking Succession screen: death notice -> heir reveal -> confirm, so the
+// player always continues controlling a living character.
+function SuccessionScreen({ succession, onResolved }: { succession: SuccessionState; onResolved: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [picked, setPicked] = useState<string | null>(null);
+  const { epitaph, plan, heir, candidates } = succession;
+
+  const succeed = async (candidateId?: string) => {
+    setBusy(true);
+    setError("");
+    try {
+      await api.succeed(candidateId);
+      onResolved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "The succession could not be settled.");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <main className="succession-shell">
+      <section className="succession-card">
+        <p className="section-eyebrow">Succession</p>
+        <h1 className="succession-title">
+          {epitaph.name}{epitaph.ladderTrait ? `, ${epitaph.ladderTrait}` : ""}, dies in the {epitaph.age}th year.
+        </h1>
+        <p className="succession-epitaph">{epitaph.lifeStage} · age {epitaph.age}. The house must pass to another.</p>
+
+        {plan.kind === "forced_adoption" ? (
+          <>
+            <p>No blood remains to inherit. Choose a ward to adopt — they become the next head of your house.</p>
+            <div className="succession-candidates">
+              {candidates.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={`succession-candidate${picked === c.id ? " selected" : ""}`}
+                  onClick={() => setPicked(c.id)}
+                  aria-pressed={picked === c.id}
+                >
+                  <strong>{c.name}</strong>
+                  <span>{c.sex === "male" ? "man" : "woman"} · age {c.age}</span>
+                </button>
+              ))}
+            </div>
+            <button className="primary-cta" type="button" disabled={busy || !picked} onClick={() => succeed(picked!)}>
+              {busy ? "Settling…" : "Adopt and continue"}
+            </button>
+          </>
+        ) : plan.kind === "regency" ? (
+          <>
+            <p>{heir ? `${heir.name} — ${heir.relation}.` : "Your heir is too young to rule."} A regent will govern in trust until the heir comes of age.</p>
+            <button className="primary-cta" type="button" disabled={busy} onClick={() => succeed()}>
+              {busy ? "Settling…" : "Appoint a regent and continue"}
+            </button>
+          </>
+        ) : plan.kind === "fresh" ? (
+          <>
+            <p>The unfree leave nothing behind. Begin again, a new life in the city.</p>
+            <button className="primary-cta" type="button" disabled={busy} onClick={() => succeed()}>
+              {busy ? "Settling…" : "Begin anew"}
+            </button>
+          </>
+        ) : (
+          <>
+            <p>{heir ? `Your heir: ${heir.name} — ${heir.relation}.` : "Your adopted heir takes the house."} Continue the line as the next head.</p>
+            <button className="primary-cta" type="button" disabled={busy} onClick={() => succeed()}>
+              {busy ? "Settling…" : heir ? `Continue as ${heir.name}` : "Continue the line"}
+            </button>
+          </>
+        )}
+        {error ? <p className="auth-message" role="status">{error}</p> : null}
+      </section>
+    </main>
+  );
+}
+
 const panelComponents: Record<DashboardSection, (props: PanelProps) => ReactNode> = {
   court: CourtPanel,
   holdings: HoldingsPanel,
@@ -2260,6 +2372,13 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
     refreshState();
   }, [refreshState]);
 
+  // A death opens a blocking Succession screen until the player picks an heir.
+  if (playerState?.succession?.pending) {
+    return <SuccessionScreen succession={playerState.succession} onResolved={refreshState} />;
+  }
+
+  const regent = playerState?.character.regent ?? null;
+
   return (
     <main className="dashboard-shell">
       <header className="dashboard-topbar">
@@ -2276,6 +2395,14 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
             <span>{player.gameDateLabel}</span>
           </span>
           <strong>· ends in {player.seasonEndsIn} days</strong>
+          {regent ? (
+            <span
+              className="regent-badge"
+              title={`Regent — barred from elected office (${regent.barredOffices.join(", ")}); holds the seat in trust`}
+            >
+              👑 Regent for {regent.wardName} · of age in {regent.wardComingOfAgeInYears}y
+            </span>
+          ) : null}
         </div>
         <div className="topbar-actions">
           <button

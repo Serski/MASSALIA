@@ -7,6 +7,7 @@ import { ensureCharacterRow, findCharacterRow } from "../services/character.js";
 import { activeCensure } from "../services/politics.js";
 import { recoverComposure } from "../services/composure.js";
 import { decayCharacter, getAgeConfig, portraitUrl } from "../services/age.js";
+import { enforceDeathAndHandoff, regentBadge, successionInfo } from "../services/succession.js";
 
 const db = createDb();
 
@@ -60,7 +61,19 @@ export async function meRoutes(app: FastifyInstance) {
     await recoverComposure(ensured.id);
     // Lazy old-age decay on the same read path (accrues stat decline; no loop).
     await decayCharacter(ensured.id);
+    // Death enforcement + regency handoff (lazy on read; same callable path future
+    // assassination/battle reuse). May flip status to 'deceased' -> opens succession.
+    await enforceDeathAndHandoff(ensured.id);
     const character = (await findCharacterRow(ensured.playerId, ensured.worldId)) ?? ensured;
+
+    // A pending succession blocks normal play until the player picks an heir.
+    const succession = await successionInfo(character);
+    const regent = await regentBadge(character);
+    // A regency handoff (during this read) renames the slot — re-read the player
+    // identity so the response reflects the heir, not the previous holder.
+    const refreshedPlayer = await db.select({ name: players.name, faceId: players.faceId }).from(players).where(eq(players.id, state.player.id)).limit(1);
+    const slotName = refreshedPlayer[0]?.name ?? state.player.name;
+    const slotFaceId = refreshedPlayer[0]?.faceId ?? state.player.faceId;
 
     const resourceRows = await db.select().from(resources).where(and(eq(resources.scope, "player"), eq(resources.scopeId, state.player.id)));
     const resourceMap = new Map(resourceRows.map((resource) => [resource.type, numberAmount(resource.amount)]));
@@ -103,14 +116,14 @@ export async function meRoutes(app: FastifyInstance) {
       },
       character: {
         id: state.player.id,
-        name: state.player.name,
+        name: slotName,
         professionSlug: state.profession.slug,
         professionName: state.profession.name,
         professionRank: state.profession.rank,
         houseSlug: state.house.slug,
         houseName: state.house.name,
         houseStance: state.house.stance,
-        faceId: state.player.faceId,
+        faceId: slotFaceId,
         // Party + ideology now come from the canonical character sheet.
         party: character.party,
         // -100 Traditionalist .. +100 Reformist, 0 = centre.
@@ -133,7 +146,12 @@ export async function meRoutes(app: FastifyInstance) {
         portrait: portraitUrl(portraitFor(character.avatarId ?? "", age, ageCfg)),
         deceased: character.deathAge !== null ? isDeceased(age, character.deathAge) : false,
         decaying: decayingStats,
+        // Regency (Prompt C): the HUD badge + the offices a regent is barred from.
+        regent,
       },
+      // A pending succession (the character has died) — the client shows the
+      // blocking Succession screen until an heir is chosen.
+      succession,
       resources: {
         // Drachmae is the canonical currency; surfaced as "gold" for the existing UI.
         gold: character.drachmae,

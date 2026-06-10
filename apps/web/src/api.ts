@@ -155,7 +155,11 @@ export type PlayerState = {
     portrait: string | null;
     deceased: boolean;
     decaying: string[];
+    // Regency (Prompt C): set while this character governs for a minor ward.
+    regent: RegentBadge | null;
   };
+  // A pending succession blocks normal play until an heir is chosen.
+  succession: SuccessionState | null;
   resources: {
     gold: number;
     prestige: number;
@@ -218,6 +222,34 @@ export const api = {
   marry: (candidateId: string) => apiFetch<MarryResult>("/api/family/marry", { method: "POST", body: { candidateId } }),
   nameChild: (childId: string, name: string) =>
     apiFetch<{ ok: boolean; name: string }>(`/api/family/children/${childId}/name`, { method: "POST", body: { name } }),
+  succeed: (candidateId?: string) =>
+    apiFetch<{ ok: true; heirName: string; kind: string }>("/api/family/succeed", { method: "POST", body: { candidateId } }),
+  adopt: (candidateId: string) =>
+    apiFetch<{ ok: true; heirName: string; endedRegency: boolean }>("/api/family/adopt", { method: "POST", body: { candidateId } }),
+};
+
+// --- Death, succession & regency (Prompt C) --------------------------------
+
+export type RegentBadge = {
+  isRegent: true;
+  wardName: string;
+  wardComingOfAgeInYears: number;
+  barredOffices: string[];
+  keepsInTrust: string[];
+};
+
+export type SuccessionState = {
+  pending: true;
+  epitaph: { name: string; age: number; lifeStage: string; ladderTrait: string | null };
+  plan: { kind: "blood" | "adopted" | "regency" | "fresh" | "forced_adoption" };
+  heir: { name: string; relation: string } | null;
+  candidates: { id: string; name: string; sex: string; age: number; houseSlug: string }[];
+};
+
+export type DynastyInfo = {
+  name: string;
+  generation: number;
+  history: { kind: string; fromName: string | null; fromAge: number | null; toName: string | null; at: string }[];
 };
 
 // --- Family (marriage & candidate pool) ------------------------------------
@@ -275,6 +307,10 @@ export type FamilyState = {
   candidates: { marriage: MarriageCandidate[]; adoption: FamilyCandidate[] };
   children: FamilyChild[];
   birthEvent: BirthEvent | null;
+  // Prompt C: the dynasty header/history, the regent badge, and a pending succession.
+  dynasty?: DynastyInfo | null;
+  regent?: RegentBadge | null;
+  succession?: SuccessionState | null;
 };
 
 export type MarryResult = {

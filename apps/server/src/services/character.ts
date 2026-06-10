@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { createDb, players, playerCharacters, worlds } from "@massalia/db";
+import { createDb, dynasties, players, playerCharacters, worlds } from "@massalia/db";
 import {
   capStat,
   CLASS_START,
@@ -78,9 +78,16 @@ export async function createCharacterRow(
   const bonus = startBonusForAge(startAge, ageCfg);
   const capped = (key: keyof CharacterStats) => capStat(start[key] + (bonus[key] ?? 0), ageCfg);
 
+  // The dynasty spine (Prompt C): every character founds/continues a dynasty.
+  const dynasty = (await db
+    .insert(dynasties)
+    .values({ worldId, name: `House ${houseId}`, houseSlug: houseId, foundingPlayerId: playerId, generation: 1 })
+    .returning())[0]!;
+
   const inserted = await db
     .insert(playerCharacters)
     .values({
+      dynastyId: dynasty.id,
       playerId,
       worldId,
       houseSlug: houseId,

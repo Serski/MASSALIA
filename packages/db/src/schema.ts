@@ -87,7 +87,28 @@ export const dynasties = pgTable("dynasties", {
   worldId: uuid("world_id").references(() => worlds.id).notNull(),
   name: text("name").notNull(),
   prestige: integer("prestige").notNull().default(0),
+  // The dynasty spine (Prompt C): generation increments at each succession.
+  houseSlug: text("house_slug"),
+  foundingPlayerId: uuid("founding_player_id"),
+  generation: integer("generation").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// The succession ledger. The slot row is reused for the heir, so from/to ids may
+// match; from_name/from_age/to_name snapshot the people for a readable history.
+export const successions = pgTable("successions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  dynastyId: uuid("dynasty_id").references(() => dynasties.id).notNull(),
+  fromCharacterId: uuid("from_character_id"),
+  toCharacterId: uuid("to_character_id"),
+  kind: text("kind").notNull(),
+  fromName: text("from_name"),
+  fromAge: integer("from_age"),
+  toName: text("to_name"),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  dynastyIdx: index("successions_dynasty_idx").on(table.dynastyId),
+}));
 
 export const characters = pgTable("characters", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -141,6 +162,13 @@ export const playerCharacters = pgTable("player_characters", {
   spouseCandidateId: uuid("spouse_candidate_id"),
   // Anchor for the yearly child roll (set at marriage; advanced one game year per roll).
   lastChildRollAt: timestamp("last_child_roll_at", { withTimezone: true }),
+  // Death, succession & regency (Prompt C). status flips to 'deceased' when
+  // death_age is reached, opening succession; the heir reuses this slot.
+  status: text("status").notNull().default("alive"),
+  dynastyId: uuid("dynasty_id"),
+  isRegent: boolean("is_regent").notNull().default(false),
+  regentForChildId: uuid("regent_for_child_id"),
+  adoptedCandidateId: uuid("adopted_candidate_id"),
   // Hidden XP toward the four upbringing-trait ladders (fed by daily routines).
   rhetoricXp: integer("rhetoric_xp").notNull().default(0),
   philosophiaXp: integer("philosophia_xp").notNull().default(0),

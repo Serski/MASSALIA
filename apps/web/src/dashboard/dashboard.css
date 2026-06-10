@@ -2968,3 +2968,17 @@
 .dashboard-shell .birth-name-row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
 .dashboard-shell .birth-name-row input { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 6px; background: rgba(12, 8, 7, 0.5); border: 1px solid rgba(181, 138, 69, 0.3); color: inherit; }
 .dashboard-shell .birth-name-row .event-choice-button { flex: none; width: auto; }
+
+/* Family pack, Prompt C: succession screen, regent badge, dynasty header. */
+.succession-shell { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: radial-gradient(ellipse at top, rgba(40, 26, 16, 0.6), rgba(10, 7, 5, 0.98)); }
+.succession-card { max-width: 540px; width: 100%; padding: 28px; border-radius: 14px; background: rgba(18, 13, 9, 0.92); border: 1px solid rgba(181, 138, 69, 0.3); box-shadow: 0 24px 60px rgba(0,0,0,0.5); display: grid; gap: 14px; }
+.succession-title { font-size: 24px; line-height: 1.25; color: var(--dash-gold, #d8b25a); }
+.succession-epitaph { opacity: 0.78; }
+.succession-candidates { display: grid; gap: 8px; }
+.succession-candidate { display: grid; gap: 2px; text-align: left; padding: 12px 14px; border-radius: 8px; background: rgba(12, 8, 7, 0.5); border: 1px solid rgba(181, 138, 69, 0.28); color: inherit; cursor: pointer; }
+.succession-candidate.selected { border-color: var(--dash-gold, #d8b25a); background: rgba(181, 138, 69, 0.16); }
+.succession-candidate span { font-size: 12px; opacity: 0.7; }
+.dashboard-shell .regent-badge { font-size: 10px; font-weight: 900; letter-spacing: 0.04em; text-transform: uppercase; color: #e7c66a; border: 1px solid rgba(231, 198, 106, 0.45); border-radius: 5px; padding: 2px 7px; margin-left: 10px; white-space: nowrap; }
+.dashboard-shell .dynasty-head { margin: 4px 0 10px; padding: 10px 12px; border-radius: 8px; background: rgba(12, 8, 7, 0.4); border: 1px solid rgba(181, 138, 69, 0.2); font-size: 13px; }
+.dashboard-shell .dynasty-history { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; font-size: 12px; opacity: 0.82; }
+.dashboard-shell .dynasty-kind { opacity: 0.6; }
