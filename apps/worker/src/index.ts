@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Queue, Worker } from "bullmq";
 import { completionDelayMs, parseAgeConfig, parseFamilyConfig, type AgeConfig, type FamilyConfig } from "@massalia/shared";
-import { drawFamilyCandidates, resolveCensureIfExpired } from "@massalia/db";
+import { drawFamilyCandidates, resolveCensureIfExpired, rollChildrenDue } from "@massalia/db";
 
 const redisUrl = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
 const connection = {
@@ -62,6 +62,18 @@ new Worker(
         "family-candidate-draw",
         { characterId },
         { delay: ac.realMsPerGameYear * fc.candidates.drawCadenceGameYears, removeOnComplete: true, removeOnFail: 100, jobId: `family-draw:${characterId}` },
+      );
+      return;
+    }
+    if (job.name === "family-child-roll") {
+      const characterId = job.data.characterId as string;
+      const { familyCfg: fc, ageCfg: ac } = await configs();
+      const births = await rollChildrenDue(characterId, { familyCfg: fc, ageCfg: ac });
+      console.log(`Child roll for ${characterId}: ${births.length} birth(s)`);
+      await scheduledResolutionQueue.add(
+        "family-child-roll",
+        { characterId },
+        { delay: ac.realMsPerGameYear * fc.candidates.drawCadenceGameYears, removeOnComplete: true, removeOnFail: 100, jobId: `family-child-roll:${characterId}` },
       );
     }
   },

@@ -2,13 +2,16 @@ import { and, eq, isNull } from "drizzle-orm";
 import {
   adoptionWomenOnly,
   canMarry,
+  candidateTrait,
+  childRoll,
+  defaultChildName,
   generateCandidates,
   isFamilyLocked,
   type AgeConfig,
   type FamilyConfig,
 } from "@massalia/shared";
 import { createDb } from "./client.js";
-import { familyCandidates, houses, playerCharacters } from "./schema.js";
+import { children, familyCandidates, houses, marriages, playerCharacters } from "./schema.js";
 
 const db = createDb();
 
@@ -76,4 +79,69 @@ export async function drawFamilyCandidates(characterId: string, args: DrawArgs):
     }
   }
   return inserted;
+}
+
+export type ChildRow = typeof children.$inferSelect;
+export type ChildBirth = { child: ChildRow; motherDied: boolean; lateWifeName: string | null };
+
+// The yearly child roll, with lazy catch-up. Mirrors the candidate cadence and
+// the composure/decay lazy-on-read model: rolls once per game year elapsed since
+// last_child_roll_at (capped), advancing the anchor. Called by BOTH the BullMQ
+// worker (scheduled) and the server (lazy-on-read). Births insert a child with a
+// default name (named=false -> the birth event awaits naming). If the mother dies
+// the marriage ends ('death_in_childbirth') and the spouse link clears, but the
+// child survives — the widower may remarry from future draws.
+export async function rollChildrenDue(characterId: string, args: { familyCfg: FamilyConfig; ageCfg: AgeConfig; now?: Date }): Promise<ChildBirth[]> {
+  const { familyCfg, ageCfg } = args;
+  const now = args.now ?? new Date();
+  const gameYearMs = ageCfg.realMsPerGameYear;
+
+  const load = async () => (await db.select().from(playerCharacters).where(eq(playerCharacters.id, characterId)).limit(1))[0];
+  let character = await load();
+  if (!character || !character.spouseCandidateId || isFamilyLocked(character.classId, familyCfg)) return [];
+
+  // Initialise the anchor for a freshly married / legacy row.
+  if (!character.lastChildRollAt) {
+    await db.update(playerCharacters).set({ lastChildRollAt: now }).where(eq(playerCharacters.id, characterId));
+    return [];
+  }
+
+  const anchorStart = character.lastChildRollAt;
+  const years = Math.floor((now.getTime() - anchorStart.getTime()) / gameYearMs);
+  if (years <= 0) return [];
+  const rolls = Math.min(years, familyCfg.children.maxChildren + 2); // catch-up cap
+
+  const births: ChildBirth[] = [];
+  for (let i = 0; i < rolls; i++) {
+    character = await load();
+    if (!character || !character.spouseCandidateId) break; // widowed -> no more rolls until remarriage
+
+    const spouseRows = await db.select().from(familyCandidates).where(eq(familyCandidates.id, character.spouseCandidateId)).limit(1);
+    const spouseTrait = candidateTrait(familyCfg, spouseRows[0]?.traitId ?? null);
+
+    const existing = await db.select({ id: children.id }).from(children).where(eq(children.parentCharacterId, characterId));
+    const outcome = childRoll(Math.random, { active: true }, existing.length, spouseTrait, familyCfg);
+    if (!outcome.born) continue;
+
+    const inserted = (await db
+      .insert(children)
+      .values({ parentCharacterId: characterId, worldId: character.worldId, name: defaultChildName(outcome.sex), sex: outcome.sex, bornAt: now, named: false })
+      .returning())[0]!;
+
+    let lateWifeName: string | null = null;
+    if (outcome.motherDied) {
+      lateWifeName = spouseRows[0]?.name ?? null;
+      // End the active marriage (the child survives) and free the widower to remarry.
+      await db
+        .update(marriages)
+        .set({ endedAt: now, endReason: "death_in_childbirth" })
+        .where(and(eq(marriages.characterId, characterId), eq(marriages.candidateId, character.spouseCandidateId), isNull(marriages.endedAt)));
+      await db.update(playerCharacters).set({ spouseCandidateId: null }).where(eq(playerCharacters.id, characterId));
+    }
+    births.push({ child: inserted, motherDied: outcome.motherDied, lateWifeName });
+  }
+
+  // Consume the elapsed years on the anchor (preserve sub-year remainder).
+  await db.update(playerCharacters).set({ lastChildRollAt: new Date(anchorStart.getTime() + years * gameYearMs) }).where(eq(playerCharacters.id, characterId));
+  return births;
 }

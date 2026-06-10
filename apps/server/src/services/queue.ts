@@ -53,3 +53,17 @@ export async function enqueueFamilyDraw(characterId: string, delayMs: number) {
     console.warn(`Could not enqueue family draw (Redis down?): ${(error as Error).message}`);
   }
 }
+
+// Yearly per-married-character child roll (the worker re-enqueues). Lazy-on-read
+// roll is the safety net when Redis is down.
+export async function enqueueChildRoll(characterId: string, delayMs: number) {
+  try {
+    await getQueue().add(
+      "family-child-roll",
+      { characterId },
+      { delay: Math.max(0, delayMs), removeOnComplete: true, removeOnFail: 100, jobId: `family-child-roll:${characterId}` },
+    );
+  } catch (error) {
+    console.warn(`Could not enqueue child roll (Redis down?): ${(error as Error).message}`);
+  }
+}

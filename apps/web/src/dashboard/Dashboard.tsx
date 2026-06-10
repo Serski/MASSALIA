@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate } from "../api.js";
+import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent } from "../api.js";
 import { assetPath, buildableBuildings, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
@@ -1030,6 +1030,73 @@ function penaltyText(candidate: MarriageCandidate): string | null {
   return `Marrying into House ${candidate.houseName} will pull you ${ideologyShift > 0 ? "+" : ""}${ideologyShift} toward ${dir}${favorBit}.`;
 }
 
+// A child portrait (boy/girl), gracefully falling back to an initial while the
+// placeholder art has no real PNG yet.
+function ChildPortrait({ child }: { child: FamilyChild }) {
+  const [ok, setOk] = useState(true);
+  const src = contentUrl(child.portrait);
+  if (!src || !ok) return <span className="child-av-fallback" aria-hidden="true">{child.name[0]}</span>;
+  return <img src={src} alt="" loading="lazy" onError={() => setOk(false)} />;
+}
+
+function ChildCard({ child }: { child: FamilyChild }) {
+  const pct = child.comingOfAge > 0 ? Math.min(100, Math.round((child.age / child.comingOfAge) * 100)) : 100;
+  return (
+    <DashboardCard className="child-card">
+      <div className="child-row">
+        <span className="child-av">
+          <ChildPortrait child={child} />
+        </span>
+        <div className="child-id">
+          <div className="child-nm">
+            {child.name} <span className="child-meta">· {child.sex === "male" ? "son" : "daughter"} · age {child.age}</span>
+            {child.heirEligible ? <span className="heir-tag">Heir eligible</span> : null}
+          </div>
+          {child.heirEligible ? (
+            <div className="child-grow done">Of age — an eligible heir.</div>
+          ) : (
+            <>
+              <div className="child-grow-bar" aria-label={`${child.age} of ${child.comingOfAge}`}>
+                <span style={{ width: `${pct}%` }} />
+              </div>
+              <div className="child-grow">{child.yearsToComingOfAge} year{child.yearsToComingOfAge === 1 ? "" : "s"} to coming of age</div>
+            </>
+          )}
+        </div>
+      </div>
+    </DashboardCard>
+  );
+}
+
+function BirthNotice({ event, busy, onName }: { event: BirthEvent; busy: boolean; onName: (name: string) => void }) {
+  const [name, setName] = useState("");
+  return (
+    <DashboardCard className="birth-card">
+      <div className="event-body">
+        <span className="dashboard-label event-kicker">A child is born to your house</span>
+        <h3>A {event.sex === "male" ? "son" : "daughter"} is born — provisionally named {event.childName}.</h3>
+        {event.motherDied ? (
+          <p className="composure-note neg">Your wife {event.lateWifeName ?? ""} did not survive the birth. The child lives; the house endures in grief.</p>
+        ) : null}
+        <div className="birth-name-row">
+          <input
+            type="text"
+            value={name}
+            placeholder={event.childName}
+            maxLength={64}
+            aria-label="Name the child"
+            onChange={(e) => setName(e.target.value)}
+          />
+          <button className="event-choice-button" type="button" disabled={busy} onClick={() => onName(name)}>
+            <strong>{name.trim() ? `Name ${name.trim()}` : `Keep ${event.childName}`}</strong>
+          </button>
+        </div>
+        <p className="dashboard-todo">If you let the season pass, the name {event.childName} stays.</p>
+      </div>
+    </DashboardCard>
+  );
+}
+
 function FamilyPanel({ onRefresh }: PanelProps) {
   const [state, setState] = useState<FamilyState | null>(null);
   const [error, setError] = useState("");
@@ -1070,6 +1137,21 @@ function FamilyPanel({ onRefresh }: PanelProps) {
     }
   };
 
+  const nameChild = async (childId: string, name: string) => {
+    setBusy(true);
+    setNote("");
+    try {
+      const result = await api.nameChild(childId, name);
+      setNote(`Your child is named ${result.name}.`);
+      load();
+      onRefresh();
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "The child could not be named.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <section className="dashboard-panel" aria-labelledby="family-title">
       <div className="dashboard-panel-heading">
@@ -1090,6 +1172,8 @@ function FamilyPanel({ onRefresh }: PanelProps) {
         </>
       ) : (
         <>
+          {state.birthEvent ? <BirthNotice event={state.birthEvent} busy={busy} onName={(name) => nameChild(state.birthEvent!.childId, name)} /> : null}
+
           {state.spouse ? (
             <>
               <div className="panel-label">Your spouse</div>
@@ -1100,6 +1184,15 @@ function FamilyPanel({ onRefresh }: PanelProps) {
                 traits={state.spouse.trait ? [{ label: state.spouse.trait.name, tone: "good" }] : []}
                 right={<CandidateStatChips stats={state.spouse.stats} />}
               />
+            </>
+          ) : null}
+
+          {state.children.length > 0 ? (
+            <>
+              <div className="panel-label">Children · {state.children.length}</div>
+              {state.children.map((child) => (
+                <ChildCard key={child.id} child={child} />
+              ))}
             </>
           ) : null}
 

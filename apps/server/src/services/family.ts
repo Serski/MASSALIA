@@ -1,8 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import {
+  children,
   createDb,
   drawFamilyCandidates,
   effectLog,
@@ -11,20 +12,24 @@ import {
   marriages,
   partyFavor,
   playerCharacters,
+  rollChildrenDue,
 } from "@massalia/db";
 import {
   canMarry,
   candidateTrait,
+  childAge,
   clampIdeology,
   isFamilyLocked,
+  isOfAge,
   marriagePenalty,
   parseFamilyConfig,
+  REAL_MS_PER_SEASON,
   type FamilyConfig,
 } from "@massalia/shared";
 import { getAgeConfig } from "./age.js";
 import { broadcastState } from "./worldState.js";
 import { onIdeologyChanged } from "./politics.js";
-import { enqueueFamilyDraw } from "./queue.js";
+import { enqueueChildRoll, enqueueFamilyDraw } from "./queue.js";
 
 const db = createDb();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -93,9 +98,87 @@ function candidateView(cand: CandidateRow, cfg: FamilyConfig, houseLabel: string
   };
 }
 
+// Lazy-on-read child roll (the BullMQ worker is the scheduled path). Safe to call
+// on every GET — it only rolls when a game year has actually elapsed.
+export async function advanceChildren(characterId: string, now: Date = new Date()): Promise<void> {
+  await rollChildrenDue(characterId, { familyCfg: getFamilyConfig(), ageCfg: getAgeConfig(), now });
+}
+
+function childPortrait(sex: string, cfg: FamilyConfig): string {
+  return `/content/${sex === "male" ? cfg.children.portraits.boy : cfg.children.portraits.girl}`;
+}
+
+// Children list (+ lazy coming-of-age) and the pending birth event (the newest
+// still-unnamed child; the default name sticks once the season passes).
+async function childrenSection(character: CharacterRow, now: Date) {
+  const cfg = getFamilyConfig();
+  const gameYearMs = getAgeConfig().realMsPerGameYear;
+  const rows = await db.select().from(children).where(eq(children.parentCharacterId, character.id)).orderBy(desc(children.bornAt));
+
+  const list = [];
+  for (const child of rows) {
+    const age = childAge(child.bornAt.getTime(), now.getTime(), gameYearMs);
+    const ofAge = isOfAge(age, cfg);
+    // Lazy coming-of-age: stamp the moment they reach 15 (no stat roll — that's succession).
+    if (ofAge && child.comeOfAgeAt === null) {
+      await db.update(children).set({ comeOfAgeAt: now }).where(eq(children.id, child.id));
+    }
+    // Auto-acknowledge a birth once its naming season has passed (default sticks).
+    if (!child.named && now.getTime() - child.bornAt.getTime() >= REAL_MS_PER_SEASON) {
+      await db.update(children).set({ named: true }).where(eq(children.id, child.id));
+      child.named = true;
+    }
+    list.push({
+      id: child.id,
+      name: child.name,
+      sex: child.sex,
+      age,
+      portrait: childPortrait(child.sex, cfg),
+      comingOfAge: cfg.comingOfAge,
+      yearsToComingOfAge: Math.max(0, cfg.comingOfAge - age),
+      heirEligible: ofAge,
+      named: child.named,
+    });
+  }
+
+  // The pending birth event: newest child still awaiting a name.
+  const pending = rows.find((child) => !child.named && now.getTime() - child.bornAt.getTime() < REAL_MS_PER_SEASON);
+  let birthEvent = null;
+  if (pending) {
+    // Grief: did this birth end the marriage? (the roll stamps both at the same instant)
+    const ended = await db
+      .select({ candidateId: marriages.candidateId })
+      .from(marriages)
+      .where(and(eq(marriages.characterId, character.id), eq(marriages.endReason, "death_in_childbirth"), eq(marriages.endedAt, pending.bornAt)))
+      .limit(1);
+    let lateWifeName: string | null = null;
+    if (ended[0]) {
+      const wife = await db.select({ name: familyCandidates.name }).from(familyCandidates).where(eq(familyCandidates.id, ended[0].candidateId)).limit(1);
+      lateWifeName = wife[0]?.name ?? null;
+    }
+    birthEvent = { childId: pending.id, childName: pending.name, sex: pending.sex, motherDied: lateWifeName !== null, lateWifeName };
+  }
+
+  return { children: list, birthEvent };
+}
+
+// Rename a newborn (the birth event's text input). Falls back to keeping the
+// default if the name is blank; marks the child named either way.
+export async function nameChild(character: CharacterRow, childId: string, name: string, now: Date = new Date()): Promise<{ ok: boolean; name: string }> {
+  const clean = name.trim().replace(/\s+/g, " ").slice(0, 64);
+  const rows = await db.select().from(children).where(and(eq(children.id, childId), eq(children.parentCharacterId, character.id))).limit(1);
+  const child = rows[0];
+  if (!child) return { ok: false, name: "" };
+  const finalName = clean || child.name; // blank -> keep the generated default
+  await db.update(children).set({ name: finalName, named: true }).where(eq(children.id, childId));
+  void now;
+  await broadcastState();
+  return { ok: true, name: finalName };
+}
+
 // GET /api/family payload: locks, current spouse, and the open offers (with the
 // cross-house penalty preview baked into each marriage candidate).
-export async function familyState(character: CharacterRow) {
+export async function familyState(character: CharacterRow, now: Date = new Date()) {
   const cfg = getFamilyConfig();
   const locked = isFamilyLocked(character.classId, cfg); // slave
   const marriageAllowed = canMarry(character.classId, cfg);
@@ -124,6 +207,8 @@ export async function familyState(character: CharacterRow) {
     if (rows[0]) spouse = candidateView(rows[0], cfg, await houseName(rows[0].houseSlug));
   }
 
+  const { children: childList, birthEvent } = locked ? { children: [], birthEvent: null } : await childrenSection(character, now);
+
   return {
     sex: character.sex,
     classId: character.classId,
@@ -132,6 +217,8 @@ export async function familyState(character: CharacterRow) {
     characterIdeology: character.ideology,
     spouse,
     candidates: { marriage: marriageOffers, adoption: adoptionOffers },
+    children: childList,
+    birthEvent,
   };
 }
 
@@ -173,7 +260,8 @@ export async function marry(character: CharacterRow, candidateId: string, now: D
     await tx.insert(marriages).values({ characterId: character.id, candidateId });
     await tx.update(familyCandidates).set({ consumedAt: now }).where(eq(familyCandidates.id, candidateId));
 
-    const updates: Partial<typeof playerCharacters.$inferInsert> = { spouseCandidateId: candidateId };
+    // spouse + the child-roll anchor (the first roll comes a game year from now).
+    const updates: Partial<typeof playerCharacters.$inferInsert> = { spouseCandidateId: candidateId, lastChildRollAt: now };
     if (dowry > 0) {
       updates.drachmae = character.drachmae + dowry;
       await tx.insert(effectLog).values({ characterId: character.id, kind: "change_drachmae", detail: { amount: dowry, source: "marriage:dowry" } });
@@ -195,6 +283,8 @@ export async function marry(character: CharacterRow, candidateId: string, now: D
 
   // A marriage that shifts ideology can open/close a party censure (same hook events use).
   if (penalty.ideologyShift !== 0) await onIdeologyChanged(character.id);
+  // Schedule the yearly child roll (worker re-enqueues; lazy-on-read is the net).
+  await enqueueChildRoll(character.id, getAgeConfig().realMsPerGameYear * cfg.candidates.drawCadenceGameYears);
   await broadcastState();
 
   return {

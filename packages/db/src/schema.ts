@@ -139,6 +139,8 @@ export const playerCharacters = pgTable("player_characters", {
   // Family pack: sex (hetaira -> female) and the chosen spouse candidate (when married).
   sex: text("sex").notNull().default("male"),
   spouseCandidateId: uuid("spouse_candidate_id"),
+  // Anchor for the yearly child roll (set at marriage; advanced one game year per roll).
+  lastChildRollAt: timestamp("last_child_roll_at", { withTimezone: true }),
   // Hidden XP toward the four upbringing-trait ladders (fed by daily routines).
   rhetoricXp: integer("rhetoric_xp").notNull().default(0),
   philosophiaXp: integer("philosophia_xp").notNull().default(0),
@@ -221,7 +223,8 @@ export const familyCandidates = pgTable("family_candidates", {
   forCharacterIdx: index("family_candidates_for_char_idx").on(table.forCharacterId, table.purpose, table.consumedAt),
 }));
 
-// The marriages ledger. ended_at/end_reason fill when a marriage ends (later packs).
+// The marriages ledger. ended_at/end_reason fill when a marriage ends (e.g.
+// death in childbirth).
 export const marriages = pgTable("marriages", {
   id: uuid("id").primaryKey().defaultRandom(),
   characterId: uuid("character_id").references(() => playerCharacters.id).notNull(),
@@ -230,6 +233,24 @@ export const marriages = pgTable("marriages", {
   endedAt: timestamp("ended_at", { withTimezone: true }),
   endReason: text("end_reason"),
 });
+
+// Children of a played character. Age derives lazily from born_at (1 game year /
+// 4 real days). came_of_age_at flips them to heir-eligible at 15; stats are NOT
+// rolled until succession (Prompt C).
+export const children = pgTable("children", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  parentCharacterId: uuid("parent_character_id").references(() => playerCharacters.id).notNull(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  name: text("name").notNull(),
+  sex: text("sex").notNull(),
+  bornAt: timestamp("born_at", { withTimezone: true }).notNull().defaultNow(),
+  named: boolean("named").notNull().default(false),
+  comeOfAgeAt: timestamp("came_of_age_at", { withTimezone: true }),
+  heirCharacterId: uuid("heir_character_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  parentIdx: index("children_parent_idx").on(table.parentCharacterId),
+}));
 
 // Events drawn for a character (for the "exclude last 5 draws" rule).
 export const eventHistory = pgTable("event_history", {

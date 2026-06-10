@@ -216,6 +216,8 @@ export const api = {
   ageConfig: () => apiFetch<AgeConfig>("/content/age/age-config.json"),
   family: () => apiFetch<FamilyState>("/api/family"),
   marry: (candidateId: string) => apiFetch<MarryResult>("/api/family/marry", { method: "POST", body: { candidateId } }),
+  nameChild: (childId: string, name: string) =>
+    apiFetch<{ ok: boolean; name: string }>(`/api/family/children/${childId}/name`, { method: "POST", body: { name } }),
 };
 
 // --- Family (marriage & candidate pool) ------------------------------------
@@ -241,6 +243,27 @@ export type MarriageCandidate = FamilyCandidate & {
   party: string;
 };
 
+export type FamilyChild = {
+  id: string;
+  name: string;
+  sex: string;
+  age: number;
+  portrait: string;
+  comingOfAge: number;
+  yearsToComingOfAge: number;
+  heirEligible: boolean;
+  named: boolean;
+};
+
+// The pending birth notice (newest still-unnamed child). motherDied carries grief.
+export type BirthEvent = {
+  childId: string;
+  childName: string;
+  sex: string;
+  motherDied: boolean;
+  lateWifeName: string | null;
+};
+
 export type FamilyState = {
   sex: string;
   classId: string;
@@ -250,6 +273,8 @@ export type FamilyState = {
   characterIdeology: number;
   spouse: FamilyCandidate | null;
   candidates: { marriage: MarriageCandidate[]; adoption: FamilyCandidate[] };
+  children: FamilyChild[];
+  birthEvent: BirthEvent | null;
 };
 
 export type MarryResult = {

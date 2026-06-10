@@ -40,7 +40,14 @@ export const familyConfigSchema = z.object({
     crossIdeologyPenalty: z.object({ threshold: z.number(), ideologyShift: z.number(), partyFavorLoss: z.number() }),
     eligibleClasses: z.array(z.string()),
   }),
-  children: z.object({}).passthrough(),
+  children: z.object({
+    yearlyChildChance: z.number(),
+    thirdPlusChildChance: z.number(),
+    birthDeathRisk: z.number(),
+    maxChildren: z.number(),
+    sexRatioBoys: z.number(),
+    portraits: z.object({ boy: z.string(), girl: z.string() }),
+  }),
   succession: z
     .object({ adoptedStartAgeRange: range })
     .passthrough(),
@@ -174,4 +181,52 @@ export function canMarry(classId: string, cfg: FamilyConfig): boolean {
 
 export function adoptionWomenOnly(classId: string, cfg: FamilyConfig): boolean {
   return classId === "hetaira" && cfg.classRules.hetaira.adoption === "womenOnly";
+}
+
+// --- Children & growing up (Prompt B) --------------------------------------
+
+// Lazy age from the season clock — the same math as character age (1 game year
+// per realMsPerGameYear). Floors to whole game years.
+export function childAge(bornAtMs: number, nowMs: number, realMsPerGameYear: number): number {
+  return Math.max(0, Math.floor((nowMs - bornAtMs) / realMsPerGameYear));
+}
+
+export function isOfAge(age: number, cfg: FamilyConfig): boolean {
+  return age >= cfg.comingOfAge;
+}
+
+// A default Greek name for a newborn (sticks if the player never renames).
+export function defaultChildName(sex: Sex, rng: () => number = Math.random): string {
+  return pick(rng, sex === "female" ? GREEK_FEMALE_NAMES : GREEK_MALE_NAMES);
+}
+
+// Just the trait fields the child roll needs (a spouse's candidate trait).
+export type SpouseTrait = { childChanceBonus?: number; birthDeathRiskMod?: number } | null;
+
+export type ChildRollOutcome =
+  | { born: false }
+  | { born: true; sex: Sex; motherDied: boolean };
+
+// The yearly roll for one married character. No child past maxChildren; the 3rd+
+// child uses the lower chance; the spouse's Fertile/Frail trait nudges both the
+// child chance and the birth-death risk. If the mother dies the child still
+// survives (the line continues; the cost is the wife) — handled by the caller.
+export function childRoll(
+  rng: () => number,
+  marriage: { active: boolean },
+  existingChildrenCount: number,
+  spouseTrait: SpouseTrait,
+  cfg: FamilyConfig,
+): ChildRollOutcome {
+  if (!marriage.active) return { born: false };
+  if (existingChildrenCount >= cfg.children.maxChildren) return { born: false };
+
+  const base = existingChildrenCount < 2 ? cfg.children.yearlyChildChance : cfg.children.thirdPlusChildChance;
+  const chance = base + (spouseTrait?.childChanceBonus ?? 0);
+  if (rng() >= chance) return { born: false };
+
+  const sex: Sex = rng() < cfg.children.sexRatioBoys ? "male" : "female";
+  const risk = cfg.children.birthDeathRisk + (spouseTrait?.birthDeathRiskMod ?? 0);
+  const motherDied = rng() < risk;
+  return { born: true, sex, motherDied };
 }
