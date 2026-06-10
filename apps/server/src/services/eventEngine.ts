@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { eq, sql } from "drizzle-orm";
 import {
   applyStatGrowth,
+  capStat,
   clampIdeology,
   parseEventFile,
   type EventChoice,
@@ -13,6 +14,7 @@ import { createDb, effectLog, eventHistory, partyFavor, playerCharacters } from 
 import { broadcastState, resolveOwnerToken, setProvinceOwner } from "./worldState.js";
 import { applyChangeTrait, TraitRuleError } from "./traits.js";
 import { onIdeologyChanged } from "./politics.js";
+import { getAgeConfig } from "./age.js";
 
 const db = createDb();
 
@@ -69,7 +71,8 @@ export async function applyChoiceEffects(actingCharacterId: string, eventId: str
           const row = rows[0];
           if (!row) break;
           const applied = applyStatGrowth(effect.amount, Number(row.growthMultiplier));
-          const next = Math.max(0, row[effect.stat] + applied);
+          // Hard-cap every stat write to [0,100] (the CHECK constraint enforces it).
+          const next = capStat(row[effect.stat] + applied, getAgeConfig());
           await tx.update(playerCharacters).set({ [effect.stat]: next }).where(eq(playerCharacters.id, actingCharacterId));
           await tx.insert(effectLog).values({ characterId: actingCharacterId, kind: "change_stat", detail: { stat: effect.stat, requested: effect.amount, applied } });
           break;

@@ -606,3 +606,32 @@
     width: 100%;
   }
 }
+
+/* Age pack: starting-age toggle (20 / 30) that swaps the avatar gallery. */
+.creation-age-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.creation-age-option {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  text-align: left;
+  border: 1px solid rgba(181, 138, 69, 0.3);
+  border-radius: 10px;
+  background: rgba(12, 8, 7, 0.4);
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.creation-age-option:hover { border-color: rgba(236, 215, 160, 0.6); }
+.creation-age-option.selected {
+  border-color: var(--dash-gold, #d8b25a);
+  background: rgba(181, 138, 69, 0.16);
+}
+.creation-age-option strong { font-size: 15px; }
+.creation-age-note { font-size: 12px; opacity: 0.78; line-height: 1.35; }
+.creation-age-bonus { font-size: 12px; font-weight: 700; color: var(--dash-good, #7ea36a); }
+.creation-age-bonus.muted { color: inherit; opacity: 0.6; font-weight: 500; }

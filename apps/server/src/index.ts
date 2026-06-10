@@ -16,6 +16,7 @@ import { loadTraitDefs } from "./services/traits.js";
 import { loadComposureConfig } from "./services/composure.js";
 import { listEvents } from "./services/eventEngine.js";
 import { loadRoutineContent } from "./services/routines.js";
+import { loadAgeConfig } from "./services/age.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../..");
@@ -41,6 +42,7 @@ await loadTraitDefs();
 await loadComposureConfig();
 await listEvents();
 await loadRoutineContent();
+await loadAgeConfig();
 
 app.get("/health", async () => ({ ok: true }));
 await app.register(authRoutes, { prefix: "/auth" });

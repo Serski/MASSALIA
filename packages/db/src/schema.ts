@@ -129,6 +129,13 @@ export const playerCharacters = pgTable("player_characters", {
   breakUntil: timestamp("break_until", { withTimezone: true }),
   breaksCount: integer("breaks_count").notNull().default(0),
   growthMultiplier: numeric("growth_multiplier").notNull().default("1.0"),
+  // Life-arc: starting age (20/30), chosen avatar, rolled death age, and the
+  // lazy-decay bookkeeping anchor (like last_composure_update). Stats are hard-
+  // capped 0..100 by CHECK constraints (see migration 0014).
+  startAge: integer("start_age").notNull().default(30),
+  avatarId: text("avatar_id"),
+  deathAge: integer("death_age"),
+  lastDecayAt: timestamp("last_decay_at", { withTimezone: true }),
   // Hidden XP toward the four upbringing-trait ladders (fed by daily routines).
   rhetoricXp: integer("rhetoric_xp").notNull().default(0),
   philosophiaXp: integer("philosophia_xp").notNull().default(0),

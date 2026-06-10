@@ -1,10 +1,18 @@
 import { and, eq } from "drizzle-orm";
 import { createDb, players, playerCharacters, worlds } from "@massalia/db";
 import {
+  capStat,
   CLASS_START,
+  currentAge,
   effectiveStats,
   HOUSE_START,
+  isDeceased,
   isWithdrawn,
+  lifeStage,
+  portraitFor,
+  rollDeathAge,
+  startAgeForAvatar,
+  startBonusForAge,
   startingCharacter,
   type CharacterSheet,
   type CharacterStats,
@@ -13,6 +21,7 @@ import {
   type Party,
 } from "@massalia/shared";
 import { getComposureConfig } from "./composure.js";
+import { getAgeConfig, portraitUrl } from "./age.js";
 
 const db = createDb();
 
@@ -55,10 +64,20 @@ export async function createCharacterRow(
   worldId: string,
   houseId: string,
   classId: ClassId,
+  avatarId = "avatar-30-1",
+  now: Date = new Date(),
 ): Promise<CharacterRow> {
   const start = startingCharacter(houseId, classId);
   // Starting composure is config-driven (composure-config.json), not a literal.
   const startingComposure = getComposureConfig().startingComposure ?? start.composure;
+
+  // Age pack: the avatar fixes the start age (20 or 30); apply that age's start
+  // bonus on top of house+class, then hard-cap each stat. Roll the death age.
+  const ageCfg = getAgeConfig();
+  const startAge = startAgeForAvatar(avatarId, ageCfg) ?? 30;
+  const bonus = startBonusForAge(startAge, ageCfg);
+  const capped = (key: keyof CharacterStats) => capStat(start[key] + (bonus[key] ?? 0), ageCfg);
+
   const inserted = await db
     .insert(playerCharacters)
     .values({
@@ -66,15 +85,19 @@ export async function createCharacterRow(
       worldId,
       houseSlug: houseId,
       classId,
-      prestige: start.prestige,
-      devotion: start.devotion,
-      militia: start.militia,
-      intelligence: start.intelligence,
+      prestige: capped("prestige"),
+      devotion: capped("devotion"),
+      militia: capped("militia"),
+      intelligence: capped("intelligence"),
       drachmae: start.drachmae,
       ideology: start.ideology,
       party: start.party,
       composure: startingComposure,
       growthMultiplier: String(start.growthMultiplier),
+      avatarId,
+      startAge,
+      deathAge: rollDeathAge(ageCfg),
+      lastDecayAt: now,
     })
     .returning();
   return inserted[0]!;
@@ -100,6 +123,20 @@ export function toCharacterSheet(
     militia: row.militia,
     intelligence: row.intelligence,
   };
+  const ageCfg = getAgeConfig();
+  // The 100 cap is a true ceiling: clamp derived (base + trait statMods) too.
+  const raw = effectiveStats(base, traits);
+  const effective: CharacterStats = {
+    prestige: capStat(raw.prestige, ageCfg),
+    devotion: capStat(raw.devotion, ageCfg),
+    militia: capStat(raw.militia, ageCfg),
+    intelligence: capStat(raw.intelligence, ageCfg),
+  };
+
+  const age = currentAge(row.startAge, row.createdAt.getTime(), now.getTime(), ageCfg);
+  // TODO: succession pack wires death -> heir/adoption; deceased is display-only.
+  const deceased = row.deathAge !== null ? isDeceased(age, row.deathAge) : false;
+
   return {
     id: row.id,
     playerId: row.playerId,
@@ -107,8 +144,8 @@ export function toCharacterSheet(
     houseId: row.houseSlug,
     classId: row.classId as ClassId,
     base,
-    // Derived on read: base + trait statMods. Never persisted to base columns.
-    effective: effectiveStats(base, traits),
+    // Derived on read: base + trait statMods, clamped to the cap. Never persisted.
+    effective,
     drachmae: row.drachmae,
     ideology: row.ideology,
     party: row.party as Party,
@@ -119,5 +156,11 @@ export function toCharacterSheet(
     traits,
     censured: censureExpiresAt !== null,
     censureExpiresAt,
+    avatarId: row.avatarId,
+    startAge: row.startAge,
+    currentAge: age,
+    lifeStage: lifeStage(age, ageCfg),
+    portrait: portraitUrl(portraitFor(row.avatarId ?? "", age, ageCfg)),
+    deceased,
   };
 }

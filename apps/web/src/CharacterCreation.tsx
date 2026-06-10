@@ -1,8 +1,26 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { api, apiErrorMessage } from "./api.js";
+import { api, apiErrorMessage, contentUrl, type AgeConfig } from "./api.js";
 import { assetPath, nobleHouses, professions, type Alignment, type House, type Profession } from "./data/league.js";
-import { portraitPools, type PortraitClassSlug, type PortraitOption } from "./data/portraits.js";
 import "./characterCreation.css";
+
+type AgeAvatar = AgeConfig["avatars"][number];
+type AgeOption = AgeConfig["ageOptions"][number];
+
+// Signup shows each avatar at its starting-age stage (20 -> young, 30 -> prime).
+function signupStage(startAge: number): "young" | "prime" {
+  return startAge >= 30 ? "prime" : "young";
+}
+
+function avatarSignupImage(avatar: AgeAvatar): string | undefined {
+  return contentUrl(`/content/age/${avatar.portraits[signupStage(avatar.startAge)] ?? ""}`);
+}
+
+const STAT_LABELS: Record<string, string> = { prestige: "Prestige", devotion: "Devotion", militia: "Militia", intelligence: "Intelligence" };
+
+function headStartLabel(option: AgeOption): string {
+  const parts = Object.entries(option.startBonus).filter(([, v]) => v).map(([k, v]) => `+${v} ${STAT_LABELS[k] ?? k}`);
+  return parts.length ? parts.join(", ") : "No head start";
+}
 
 type CreationPayload = {
   classSlug: string;
@@ -21,9 +39,30 @@ type SheetState =
 const steps = [
   "Choose your calling",
   "Pledge your House",
-  "Choose your face",
+  "Choose your age & face",
   "Save your character",
 ];
+
+// A signup avatar tile. Falls back to a label when the (placeholder) art is missing.
+function AvatarFace({ label, image, selected, onSelect }: { label: string; image?: string; selected: boolean; onSelect: () => void }) {
+  const [imageOk, setImageOk] = useState(true);
+  const showImage = Boolean(image) && imageOk;
+  return (
+    <button
+      type="button"
+      className={`creation-face${selected ? " selected" : ""}${showImage ? "" : " placeholder"}`}
+      onClick={onSelect}
+      aria-pressed={selected}
+      aria-label={`Choose ${label}`}
+    >
+      {showImage ? (
+        <img src={image} alt="" width="320" height="420" loading="lazy" decoding="async" onError={() => setImageOk(false)} />
+      ) : (
+        <span>{label}</span>
+      )}
+    </button>
+  );
+}
 
 function alignmentLabel(alignment: Alignment) {
   return alignment[0]!.toUpperCase() + alignment.slice(1);
@@ -237,23 +276,28 @@ function ChoiceCard({
 function SummaryCard({
   selectedClass,
   selectedHouse,
-  selectedPortrait,
+  portraitImage,
+  portraitFallback,
   name,
 }: {
   selectedClass?: Profession;
   selectedHouse?: House;
-  selectedPortrait?: PortraitOption;
+  portraitImage?: string;
+  portraitFallback: string;
   name: string;
 }) {
+  const [imageOk, setImageOk] = useState(true);
+  useEffect(() => setImageOk(true), [portraitImage]);
+  const showImage = Boolean(portraitImage) && imageOk;
   return (
     <aside className="creation-summary" aria-label="You, in the League">
       <p className="section-eyebrow">You, in the League</p>
       <div className="summary-portrait">
-        <span className={`summary-ring${selectedPortrait && !selectedPortrait.placeholder ? " has-portrait" : ""}`} aria-hidden="true">
-          {selectedPortrait && !selectedPortrait.placeholder ? (
-            <img src={selectedPortrait.image} alt="" width="160" height="160" />
+        <span className={`summary-ring${showImage ? " has-portrait" : ""}`} aria-hidden="true">
+          {showImage ? (
+            <img src={portraitImage} alt="" width="160" height="160" onError={() => setImageOk(false)} />
           ) : (
-            selectedPortrait?.label.split(" ").at(-1) || "—"
+            portraitFallback
           )}
         </span>
       </div>
@@ -275,6 +319,8 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
   const [selectedClassSlug, setSelectedClassSlug] = useState("");
   const [selectedHouseSlug, setSelectedHouseSlug] = useState("");
   const [selectedFace, setSelectedFace] = useState("");
+  const [ageConfig, setAgeConfig] = useState<AgeConfig | null>(null);
+  const [selectedAge, setSelectedAge] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -286,15 +332,27 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
 
   const selectedClass = useMemo(() => professions.find((profession) => profession.slug === selectedClassSlug), [selectedClassSlug]);
   const selectedHouse = useMemo(() => nobleHouses.find((house) => house.slug === selectedHouseSlug), [selectedHouseSlug]);
-  const portraitOptions = selectedClass
-    ? portraitPools[selectedClass.slug as PortraitClassSlug]
-    : [];
-  const selectedPortrait = useMemo(() => portraitOptions.find((portrait) => portrait.id === selectedFace), [portraitOptions, selectedFace]);
+
+  // Load the age config (avatars + age options) for the signup gallery.
+  useEffect(() => {
+    let cancelled = false;
+    api.ageConfig().then((cfg) => !cancelled && setAgeConfig(cfg)).catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // The five avatars for the chosen age (20 -> young faces, 30 -> prime faces).
+  const avatarsForAge = useMemo(
+    () => (ageConfig && selectedAge !== null ? ageConfig.avatars.filter((avatar) => avatar.startAge === selectedAge) : []),
+    [ageConfig, selectedAge],
+  );
+  const selectedAvatar = useMemo(() => avatarsForAge.find((avatar) => avatar.id === selectedFace), [avatarsForAge, selectedFace]);
 
   const canContinue =
     (step === 1 && Boolean(selectedClass)) ||
     (step === 2 && Boolean(selectedHouse)) ||
-    (step === 3 && Boolean(selectedFace) && Boolean(name.trim())) ||
+    (step === 3 && selectedAge !== null && Boolean(selectedFace) && Boolean(name.trim())) ||
     (step === 4 && consent);
 
   function continueLabel() {
@@ -354,7 +412,13 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
         <button className="creation-ghost-button" type="button" onClick={onExit}>Exit</button>
       </nav>
       <section className="creation-layout" aria-labelledby="creation-title">
-        <SummaryCard selectedClass={selectedClass} selectedHouse={selectedHouse} selectedPortrait={selectedPortrait} name={name} />
+        <SummaryCard
+          selectedClass={selectedClass}
+          selectedHouse={selectedHouse}
+          portraitImage={selectedAvatar ? avatarSignupImage(selectedAvatar) : undefined}
+          portraitFallback={selectedAge !== null ? `Age ${selectedAge}` : "—"}
+          name={name}
+        />
         <section className="creation-panel">
           <p className="section-eyebrow">Character Creation · Step {step} of 4</p>
           <h1 id="creation-title">{steps[step - 1]}</h1>
@@ -414,26 +478,45 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
 
           {step === 3 ? (
             <div className="creation-avatar-step">
-              <div className="creation-face-grid" aria-label="Choose your face">
-                {portraitOptions.map((portrait) => {
-                  return (
-                    <button
-                      className={`creation-face${selectedFace === portrait.id ? " selected" : ""}${portrait.placeholder ? " placeholder" : ""}`}
-                      type="button"
-                      key={portrait.id}
-                      onClick={() => setSelectedFace(portrait.id)}
-                      aria-pressed={selectedFace === portrait.id}
-                      aria-label={`Choose ${portrait.label}`}
-                    >
-                      {portrait.placeholder ? (
-                        <span>{portrait.label.split(" ").at(-1)}</span>
-                      ) : (
-                        <img src={portrait.image} alt="" width="320" height="420" loading="lazy" decoding="async" />
-                      )}
-                    </button>
-                  );
-                })}
+              {/* Choose a starting age FIRST — it swaps the avatar gallery and is
+                  the whole tradeoff (20 = longer life, 30 = a head start). */}
+              <div className="creation-age-toggle" role="group" aria-label="Choose your starting age">
+                {(ageConfig?.ageOptions ?? []).map((option) => (
+                  <button
+                    key={option.age}
+                    type="button"
+                    className={`creation-age-option${selectedAge === option.age ? " selected" : ""}`}
+                    aria-pressed={selectedAge === option.age}
+                    onClick={() => {
+                      setSelectedAge(option.age);
+                      setSelectedFace("");
+                    }}
+                  >
+                    <strong>{option.label}</strong>
+                    <span className="creation-age-note">{option.note}</span>
+                    <span className={`creation-age-bonus${Object.keys(option.startBonus).length ? "" : " muted"}`}>
+                      Head start: {headStartLabel(option)}
+                    </span>
+                  </button>
+                ))}
               </div>
+
+              {selectedAge === null ? (
+                <p className="creation-note">Pick an age to see its faces.</p>
+              ) : (
+                <div className="creation-face-grid" aria-label="Choose your face">
+                  {avatarsForAge.map((avatar, index) => (
+                    <AvatarFace
+                      key={avatar.id}
+                      label={`Face ${index + 1}`}
+                      image={avatarSignupImage(avatar)}
+                      selected={selectedFace === avatar.id}
+                      onSelect={() => setSelectedFace(avatar.id)}
+                    />
+                  ))}
+                </div>
+              )}
+
               <div className="creation-name-fields">
                 <label>
                   <span>Name</span>

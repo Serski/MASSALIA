@@ -6,6 +6,7 @@ import { createDb, dailyRoutines, effectLog, playerCharacters } from "@massalia/
 import {
   applyClassMods,
   applyStatGrowth,
+  capStat,
   describeComposureDelta,
   isWithdrawn,
   ladderProgress,
@@ -20,6 +21,7 @@ import {
   type RoutinesConfig,
 } from "@massalia/shared";
 import { applyComposureDelta, getComposureConfig, recoverComposure } from "./composure.js";
+import { getAgeConfig } from "./age.js";
 import { addTrait, getHeldTraits, removeTrait, TraitRuleError } from "./traits.js";
 import { utcDayString } from "./dailyDecisions.js";
 import { broadcastState } from "./worldState.js";
@@ -226,7 +228,7 @@ export async function resolveRoutine(row: CharacterRow, routineId: string, now: 
         const current = rows[0];
         if (!current) continue;
         const applied = applyStatGrowth(effect.amount, Number(current.growthMultiplier));
-        const next = Math.max(0, current[effect.stat] + applied);
+        const next = capStat(current[effect.stat] + applied, getAgeConfig());
         await tx.update(playerCharacters).set({ [effect.stat]: next }).where(eq(playerCharacters.id, row.id));
         await tx.insert(effectLog).values({
           characterId: row.id,

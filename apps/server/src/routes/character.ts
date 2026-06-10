@@ -12,6 +12,7 @@ import {
 import { getHeldTraits } from "../services/traits.js";
 import { activeCensure } from "../services/politics.js";
 import { recoverComposure } from "../services/composure.js";
+import { decayCharacter } from "../services/age.js";
 
 export async function characterSheetRoutes(app: FastifyInstance) {
   // Create the character sheet: choose house + class. Rejects if one exists.
@@ -63,8 +64,9 @@ export async function characterSheetRoutes(app: FastifyInstance) {
     const ensured = await ensureCharacterRow(player, worldId);
     // Resolve any expired censure first (it may flip party), then read the row.
     const censure = await activeCensure(ensured.id);
-    // Lazy composure recovery (accrues + persists), then read the current row.
+    // Lazy composure recovery + old-age decay (accrue + persist), then read.
     await recoverComposure(ensured.id);
+    await decayCharacter(ensured.id);
     const row = (await findCharacterRow(ensured.playerId, ensured.worldId)) ?? ensured;
     return { character: toCharacterSheet(row, await getHeldTraits(row.id), censure ? censure.expiresAt.toISOString() : null) };
   });

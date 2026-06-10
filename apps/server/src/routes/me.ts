@@ -1,11 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { and, eq } from "drizzle-orm";
 import { createDb, houses, players, professions, resources, users, worlds } from "@massalia/db";
-import { formatGameDate, gameDate, isWithdrawn } from "@massalia/shared";
+import { currentAge, decayBandFor, formatGameDate, gameDate, isDeceased, isWithdrawn, lifeStage, portraitFor } from "@massalia/shared";
 import { requireAuth } from "../services/auth.js";
 import { ensureCharacterRow, findCharacterRow } from "../services/character.js";
 import { activeCensure } from "../services/politics.js";
 import { recoverComposure } from "../services/composure.js";
+import { decayCharacter, getAgeConfig, portraitUrl } from "../services/age.js";
 
 const db = createDb();
 
@@ -57,6 +58,8 @@ export async function meRoutes(app: FastifyInstance) {
     // Resolve any expired censure first (it may flip party), then read the row.
     const censure = await activeCensure(ensured.id);
     await recoverComposure(ensured.id);
+    // Lazy old-age decay on the same read path (accrues stat decline; no loop).
+    await decayCharacter(ensured.id);
     const character = (await findCharacterRow(ensured.playerId, ensured.worldId)) ?? ensured;
 
     const resourceRows = await db.select().from(resources).where(and(eq(resources.scope, "player"), eq(resources.scopeId, state.player.id)));
@@ -78,6 +81,11 @@ export async function meRoutes(app: FastifyInstance) {
 
     // Written in-game date, derived from the world's DB start instant.
     const worldGameDate = gameDate(Date.now(), world.startedAt.getTime());
+
+    // Life-arc for the character sheet: age, stage, aging portrait, decay band.
+    const ageCfg = getAgeConfig();
+    const age = currentAge(character.startAge, character.createdAt.getTime(), Date.now(), ageCfg);
+    const decayingStats = Object.keys(decayBandFor(age, ageCfg));
 
     return {
       user: {
@@ -115,6 +123,16 @@ export async function meRoutes(app: FastifyInstance) {
         censured: censure !== null,
         censureExpiresAt: censure ? censure.expiresAt.toISOString() : null,
         origin: state.player.origin,
+        // Life-arc (age pack). portrait ages with the character; `decaying` lists
+        // the stats currently in a decay band (prestige is never among them).
+        // deceased is display-only — succession is a later pack.
+        avatarId: character.avatarId,
+        startAge: character.startAge,
+        currentAge: age,
+        lifeStage: lifeStage(age, ageCfg),
+        portrait: portraitUrl(portraitFor(character.avatarId ?? "", age, ageCfg)),
+        deceased: character.deathAge !== null ? isDeceased(age, character.deathAge) : false,
+        decaying: decayingStats,
       },
       resources: {
         // Drachmae is the canonical currency; surfaced as "gold" for the existing UI.

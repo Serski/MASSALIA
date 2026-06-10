@@ -10,9 +10,10 @@ import {
   resources,
   worlds,
 } from "@massalia/db";
-import type { ClassId } from "@massalia/shared";
+import { avatarById, type ClassId } from "@massalia/shared";
 import { requireAuth } from "../services/auth.js";
 import { createCharacterRow } from "../services/character.js";
+import { getAgeConfig } from "../services/age.js";
 
 const db = createDb();
 
@@ -86,6 +87,12 @@ export async function characterRoutes(app: FastifyInstance) {
       reply.code(400);
       return { error: "Character name and face are required." };
     }
+    // Age pack: the avatar must be one of the configured age avatars (it fixes
+    // the start age 20/30 and the start bonus).
+    if (!avatarById(faceId, getAgeConfig())) {
+      reply.code(400);
+      return { error: "Choose a valid starting avatar." };
+    }
 
     const world = await getActiveWorld();
     const { profession, house } = await assertCatalog(payload);
@@ -152,8 +159,9 @@ export async function characterRoutes(app: FastifyInstance) {
     });
 
     // Provision the canonical character sheet (stats, ideology, party, currency,
-    // action economy) so /api/character and the HUD work immediately.
-    await createCharacterRow(result.player.id, world.id, house.slug, profession.slug as ClassId);
+    // age) so /api/character and the HUD work immediately. The chosen avatar
+    // fixes the start age + start bonus.
+    await createCharacterRow(result.player.id, world.id, house.slug, profession.slug as ClassId, faceId);
 
     reply.code(201);
     return result;

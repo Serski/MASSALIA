@@ -1,0 +1,188 @@
+{
+  "realMsPerGameYear": 345600000,
+  "statCap": 100,
+  "statFloor": 0,
+  "ageOptions": [
+    {
+      "age": 20,
+      "label": "Young (20)",
+      "note": "Weaker now, but a long road ahead and many years before age bites. The marathon.",
+      "startBonus": {}
+    },
+    {
+      "age": 30,
+      "label": "Established (30)",
+      "note": "A modest head start - a decade of standing and learning - with most of your prime still ahead.",
+      "startBonus": {
+        "prestige": 3,
+        "intelligence": 2
+      }
+    }
+  ],
+  "avatars": [
+    {
+      "id": "avatar-20-1",
+      "startAge": 20,
+      "label": "Young (20)",
+      "portraits": {
+        "young": "avatars/avatar-20-1-young.png",
+        "prime": "avatars/avatar-20-1-prime.png",
+        "old": "avatars/avatar-20-1-old.png"
+      }
+    },
+    {
+      "id": "avatar-20-2",
+      "startAge": 20,
+      "label": "Young (20)",
+      "portraits": {
+        "young": "avatars/avatar-20-2-young.png",
+        "prime": "avatars/avatar-20-2-prime.png",
+        "old": "avatars/avatar-20-2-old.png"
+      }
+    },
+    {
+      "id": "avatar-20-3",
+      "startAge": 20,
+      "label": "Young (20)",
+      "portraits": {
+        "young": "avatars/avatar-20-3-young.png",
+        "prime": "avatars/avatar-20-3-prime.png",
+        "old": "avatars/avatar-20-3-old.png"
+      }
+    },
+    {
+      "id": "avatar-20-4",
+      "startAge": 20,
+      "label": "Young (20)",
+      "portraits": {
+        "young": "avatars/avatar-20-4-young.png",
+        "prime": "avatars/avatar-20-4-prime.png",
+        "old": "avatars/avatar-20-4-old.png"
+      }
+    },
+    {
+      "id": "avatar-20-5",
+      "startAge": 20,
+      "label": "Young (20)",
+      "portraits": {
+        "young": "avatars/avatar-20-5-young.png",
+        "prime": "avatars/avatar-20-5-prime.png",
+        "old": "avatars/avatar-20-5-old.png"
+      }
+    },
+    {
+      "id": "avatar-30-1",
+      "startAge": 30,
+      "label": "Established (30)",
+      "portraits": {
+        "young": "avatars/avatar-30-1-young.png",
+        "prime": "avatars/avatar-30-1-prime.png",
+        "old": "avatars/avatar-30-1-old.png"
+      }
+    },
+    {
+      "id": "avatar-30-2",
+      "startAge": 30,
+      "label": "Established (30)",
+      "portraits": {
+        "young": "avatars/avatar-30-2-young.png",
+        "prime": "avatars/avatar-30-2-prime.png",
+        "old": "avatars/avatar-30-2-old.png"
+      }
+    },
+    {
+      "id": "avatar-30-3",
+      "startAge": 30,
+      "label": "Established (30)",
+      "portraits": {
+        "young": "avatars/avatar-30-3-young.png",
+        "prime": "avatars/avatar-30-3-prime.png",
+        "old": "avatars/avatar-30-3-old.png"
+      }
+    },
+    {
+      "id": "avatar-30-4",
+      "startAge": 30,
+      "label": "Established (30)",
+      "portraits": {
+        "young": "avatars/avatar-30-4-young.png",
+        "prime": "avatars/avatar-30-4-prime.png",
+        "old": "avatars/avatar-30-4-old.png"
+      }
+    },
+    {
+      "id": "avatar-30-5",
+      "startAge": 30,
+      "label": "Established (30)",
+      "portraits": {
+        "young": "avatars/avatar-30-5-young.png",
+        "prime": "avatars/avatar-30-5-prime.png",
+        "old": "avatars/avatar-30-5-old.png"
+      }
+    }
+  ],
+  "portraitStages": [
+    {
+      "fromAge": 0,
+      "stage": "young"
+    },
+    {
+      "fromAge": 30,
+      "stage": "prime"
+    },
+    {
+      "fromAge": 50,
+      "stage": "old"
+    }
+  ],
+  "deathAge": {
+    "min": 55,
+    "max": 68
+  },
+  "lifeStages": [
+    {
+      "fromAge": 0,
+      "name": "Prime"
+    },
+    {
+      "fromAge": 40,
+      "name": "Middle Age"
+    },
+    {
+      "fromAge": 55,
+      "name": "Old"
+    },
+    {
+      "fromAge": 65,
+      "name": "Venerable"
+    }
+  ],
+  "decayBands": [
+    {
+      "fromAge": 0,
+      "perYear": {}
+    },
+    {
+      "fromAge": 40,
+      "perYear": {
+        "militia": 2
+      }
+    },
+    {
+      "fromAge": 55,
+      "perYear": {
+        "militia": 4,
+        "intelligence": 2,
+        "devotion": 2
+      }
+    },
+    {
+      "fromAge": 65,
+      "perYear": {
+        "militia": 6,
+        "intelligence": 4,
+        "devotion": 4
+      }
+    }
+  ]
+}

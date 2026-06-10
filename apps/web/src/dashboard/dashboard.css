@@ -2945,3 +2945,9 @@
 
 /* Make disabled choice buttons clearly inert */
 .dashboard-shell .event-choice-button:disabled{ opacity: 0.45; cursor: not-allowed; }
+
+/* Age pack: stat cap + decay markers on the character sheet. */
+.dashboard-shell .cs-stat-cap { font-size: 10px; opacity: 0.5; margin-left: 1px; }
+.dashboard-shell .cs-stat.declining .cs-stat-v { color: #c98b6a; }
+.dashboard-shell .cs-stat-decay { font-size: 10px; color: #c98b6a; margin-left: 3px; vertical-align: middle; }
+.dashboard-shell .cs-deceased { color: rgba(201, 139, 106, 0.9); font-weight: 700; }

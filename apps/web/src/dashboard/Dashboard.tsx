@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { api, ApiError, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult } from "../api.js";
+import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult } from "../api.js";
 import { assetPath, buildableBuildings, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
@@ -53,6 +53,12 @@ type PlayerDashboardState = {
   stats: FourStats;
   balances: Record<string, number>;
   faceImage?: string;
+  // Life-arc (age pack).
+  currentAge: number;
+  lifeStage: string;
+  portrait?: string;
+  deceased: boolean;
+  decaying: string[];
 };
 
 type PlayerDashboardView = PlayerDashboardState & {
@@ -115,6 +121,10 @@ const placeholderPlayerState: PlayerDashboardState = {
   withdrawn: false,
   stats: { prestige: 12, devotion: 0, militia: 0, intelligence: 0 },
   balances: { wine: 36, wheat: 130, tin: 60, iron: 40 },
+  currentAge: 30,
+  lifeStage: "Prime",
+  deceased: false,
+  decaying: [],
 };
 
 // TODO: Replace with real away-summary records.
@@ -185,6 +195,11 @@ function playerFromState(state: PlayerState): PlayerDashboardView {
     stats: state.stats,
     balances: state.resources.balances,
     faceImage: getFaceImage(profession.slug, state.character.faceId),
+    currentAge: state.character.currentAge,
+    lifeStage: state.character.lifeStage,
+    portrait: contentUrl(state.character.portrait),
+    deceased: state.character.deceased,
+    decaying: state.character.decaying ?? [],
     profession,
     house,
   };
@@ -1355,10 +1370,16 @@ function maskEmail(email: string) {
   return `${local[0]}•••@•••${tld}`;
 }
 
-function avatarContent(player: PlayerDashboardView) {
-  if (player.faceImage) return <img src={player.faceImage} alt="" loading="lazy" />;
-  if (player.profession.image) return <img src={player.profession.image} alt="" loading="lazy" />;
-  return <span>{player.name[0]}</span>;
+// Prefers the age portrait (which ages young -> prime at 30 -> old at 50); falls
+// back through the class portrait and profession art when art is missing (the
+// age portraits ship as placeholders until real PNGs land).
+function AvatarImage({ player }: { player: PlayerDashboardView }) {
+  const candidates = [player.portrait, player.faceImage, player.profession.image].filter(Boolean) as string[];
+  const [idx, setIdx] = useState(0);
+  useEffect(() => setIdx(0), [player.portrait, player.faceImage, player.profession.image]);
+  const src = candidates[idx];
+  if (!src) return <span>{player.name[0]}</span>;
+  return <img src={src} alt="" loading="lazy" onError={() => setIdx((current) => current + 1)} />;
 }
 
 function SheetLabel({ children }: { children: ReactNode }) {
@@ -1766,29 +1787,38 @@ function CharacterTab({ player, sheet }: { player: PlayerDashboardView; sheet: C
   // sheet too, falling back to /me/state base while the sheet loads.
   const effective = sheet?.effective ?? player.stats;
   const base = sheet?.base ?? player.stats;
+  // Prestige NEVER decays (reputation outlives the man) — never mark it declining.
+  const declining = (key: keyof FourStats) => key !== "prestige" && player.decaying.includes(key);
+  const anyDeclining = statDefs.some((stat) => declining(stat.key));
   return (
     <div role="tabpanel">
-      <SheetLabel>Stats</SheetLabel>
+      <SheetLabel>Stats · capped at 100</SheetLabel>
       <div className="cs-stats">
         {statDefs.map((stat) => {
           const value = effective[stat.key];
           const delta = value - base[stat.key];
+          const isDeclining = declining(stat.key);
           return (
             <div
               key={stat.key}
-              className={`cs-stat${stat.key === primary ? " primary" : ""}`}
-              title={delta ? `base ${base[stat.key]} · ${delta > 0 ? "+" : ""}${delta} from traits` : undefined}
+              className={`cs-stat${stat.key === primary ? " primary" : ""}${isDeclining ? " declining" : ""}`}
+              title={isDeclining ? "Age is taking its toll on this stat." : delta ? `base ${base[stat.key]} · ${delta > 0 ? "+" : ""}${delta} from traits` : undefined}
             >
               <div className="cs-stat-v">
-                {value}
+                {value}<span className="cs-stat-cap">/100</span>
                 {delta ? <span className="cs-stat-delta">{delta > 0 ? `+${delta}` : delta}</span> : null}
+                {isDeclining ? <span className="cs-stat-decay" aria-label="declining with age">▼</span> : null}
               </div>
               <div className="cs-stat-k">{stat.label}</div>
             </div>
           );
         })}
       </div>
-      <p className="sheet-todo">Effective stats = base + trait bonuses. Base stays 0 until the event engine grants stats.</p>
+      {anyDeclining ? (
+        <p className="sheet-todo">Age is taking its toll — body and mind soften with the years. Prestige endures.</p>
+      ) : (
+        <p className="sheet-todo">Effective stats = base + trait bonuses, capped at 100.</p>
+      )}
 
       <SheetLabel>Composure</SheetLabel>
       <ComposureBar composure={sheet?.composure ?? player.composure} withdrawn={sheet?.withdrawn ?? player.withdrawn} />
@@ -1949,13 +1979,17 @@ function CharacterSheet({
       labelledBy="character-sheet-title"
       header={
         <div className="cs-head">
-          <span className="cs-av">{avatarContent(player)}</span>
+          <span className="cs-av"><AvatarImage player={player} /></span>
           <div className="cs-id">
             <div className="cs-nm" id="character-sheet-title">
               {player.name} <span className="cs-ep">· epithet earned later</span>
             </div>
             <div className="cs-rk">
               {player.profession.rank} · {player.profession.name} · {BASE_TIER_LABEL}
+            </div>
+            <div className="cs-rk">
+              Age {player.currentAge} · {player.lifeStage}
+              {player.deceased ? <span className="cs-deceased"> · final years</span> : null}
             </div>
             <div className="cs-chips">
               <span className="chip house">⬤ House {player.house.name} · {player.house.stance}</span>
@@ -2096,7 +2130,7 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
             onClick={() => setActiveSheet("character")}
             title="Open your character"
           >
-            <span className="avatar-av" aria-hidden="true">{avatarContent(player)}</span>
+            <span className="avatar-av" aria-hidden="true"><AvatarImage player={player} /></span>
             <span className="avatar-text">
               <span className="avatar-nm">{player.name}</span>
               <span className="avatar-sb">{player.profession.rank} · {player.profession.name}</span>

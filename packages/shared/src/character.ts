@@ -137,4 +137,12 @@ export type CharacterSheet = {
   // Active party censure (ideology drift). null when not censured.
   censured: boolean;
   censureExpiresAt: string | null;
+  // Life-arc (age pack). portrait ages with the character; deceased is display-
+  // only — TODO: succession pack wires death -> heir/adoption.
+  avatarId: string | null;
+  startAge: number;
+  currentAge: number;
+  lifeStage: string;
+  portrait: string | null;
+  deceased: boolean;
 };

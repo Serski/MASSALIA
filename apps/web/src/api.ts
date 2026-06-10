@@ -6,9 +6,10 @@ if (import.meta.env.PROD && !configuredApiUrl) {
 
 export const apiBaseUrl = (configuredApiUrl ?? (import.meta.env.DEV ? "http://localhost:3001" : "")).replace(/\/$/, "");
 
-import type { CharacterSheet, GameDate } from "@massalia/shared";
+import type { AgeConfig, CharacterSheet, GameDate } from "@massalia/shared";
 
 export type { CharacterSheet } from "@massalia/shared";
+export type { AgeConfig } from "@massalia/shared";
 
 type RequestOptions = {
   method?: string;
@@ -145,6 +146,15 @@ export type PlayerState = {
     censured: boolean;
     censureExpiresAt: string | null;
     origin: string;
+    // Life-arc (age pack). portrait ages with the character; `decaying` lists the
+    // stats currently declining (never prestige); deceased is display-only.
+    avatarId: string | null;
+    startAge: number;
+    currentAge: number;
+    lifeStage: string;
+    portrait: string | null;
+    deceased: boolean;
+    decaying: string[];
   };
   resources: {
     gold: number;
@@ -202,7 +212,15 @@ export const api = {
   routines: () => apiFetch<RoutineSet>("/api/routines"),
   resolveRoutine: (routineId: string) =>
     apiFetch<RoutineResult>("/api/routines/resolve", { method: "POST", body: { routineId } }),
+  // Age config (avatars + age options) — served statically; public, for signup.
+  ageConfig: () => apiFetch<AgeConfig>("/content/age/age-config.json"),
 };
+
+// Absolute URL for a content asset path returned by the API (e.g. a portrait).
+export function contentUrl(path: string | null | undefined): string | undefined {
+  if (!path) return undefined;
+  return `${apiBaseUrl}${path.startsWith("/") ? path : `/${path}`}`;
+}
 
 // --- Daily Routines (proactive half of the daily loop) ---------------------
 
