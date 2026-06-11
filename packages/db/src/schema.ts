@@ -260,6 +260,9 @@ export const marriages = pgTable("marriages", {
   marriedAt: timestamp("married_at", { withTimezone: true }).notNull().defaultNow(),
   endedAt: timestamp("ended_at", { withTimezone: true }),
   endReason: text("end_reason"),
+  // The wife's rolled lifespan (uniform in spouse.deathAge); the marriage ends
+  // with 'spouse_died' once her lazily-aged current age reaches it.
+  spouseDeathAge: integer("spouse_death_age"),
 });
 
 // Children of a played character. Age derives lazily from born_at (1 game year /

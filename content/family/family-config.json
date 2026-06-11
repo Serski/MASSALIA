@@ -94,6 +94,16 @@
       "priest"
     ]
   },
+  "spouse": {
+    "deathAge": {
+      "min": 60,
+      "max": 70
+    },
+    "fertilityWindow": {
+      "from": 18,
+      "to": 35
+    }
+  },
   "children": {
     "yearlyChildChance": 0.4,
     "thirdPlusChildChance": 0.15,

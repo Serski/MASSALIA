@@ -12,13 +12,20 @@ import {
   highestStatKey,
   inheritance,
   isFamilyLocked,
+  isFertile,
   isOfAge,
+  isSpouseDeceased,
   marriagePenalty,
   parseFamilyConfig,
+  rollSpouseDeathAge,
+  spouseCurrentAge,
   successionPlan,
   type ChildInfo,
   type FamilyConfig,
 } from "./index.js";
+
+// One game year = 4 real days (the season clock); used for the lazy spouse-age math.
+const GAME_YEAR_MS = 4 * 86_400_000;
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const cfg: FamilyConfig = parseFamilyConfig(JSON.parse(readFileSync(resolve(root, "content/family/family-config.json"), "utf8")));
@@ -279,5 +286,85 @@ describe("inheritance — carryover, always-inherited, bloodline nudge", () => {
     const a = inheritance(dead, "adopted", cfg, { candidate: cand });
     expect({ d: a.devotion, m: a.militia, i: a.intelligence }).toEqual({ d: 2, m: 4, i: 5 });
     expect(a.prestige).toBe(28); // still carryover, not the candidate's
+  });
+});
+
+// --- Wife lifespan & fertility window --------------------------------------
+
+describe("config: spouse block", () => {
+  it("parses spouse.deathAge and spouse.fertilityWindow from the shipped config", () => {
+    expect(cfg.spouse.deathAge).toEqual({ min: 60, max: 70 });
+    expect(cfg.spouse.fertilityWindow).toEqual({ from: 18, to: 35 });
+  });
+});
+
+describe("spouseCurrentAge", () => {
+  it("is the rolled age before any game year elapses", () => {
+    expect(spouseCurrentAge(22, 0, 0, GAME_YEAR_MS)).toBe(22);
+    // Just under one game year — still the rolled age (floors).
+    expect(spouseCurrentAge(22, 0, GAME_YEAR_MS - 1, GAME_YEAR_MS)).toBe(22);
+  });
+
+  it("adds one year exactly at each game-year boundary", () => {
+    expect(spouseCurrentAge(22, 0, GAME_YEAR_MS, GAME_YEAR_MS)).toBe(23);
+    expect(spouseCurrentAge(22, 0, 2 * GAME_YEAR_MS, GAME_YEAR_MS)).toBe(24);
+    expect(spouseCurrentAge(22, 0, 13 * GAME_YEAR_MS + 5, GAME_YEAR_MS)).toBe(35);
+  });
+
+  it("never goes below the rolled age for a now before generation", () => {
+    expect(spouseCurrentAge(30, GAME_YEAR_MS, 0, GAME_YEAR_MS)).toBe(30);
+  });
+
+  it("defaults to the real 4-day game year when no interval is passed", () => {
+    expect(spouseCurrentAge(40, 0, GAME_YEAR_MS)).toBe(41); // 1 game year elapsed
+  });
+});
+
+describe("isSpouseDeceased", () => {
+  it("death fires exactly at the rolled death age, not a year early", () => {
+    expect(isSpouseDeceased(64, 65)).toBe(false);
+    expect(isSpouseDeceased(65, 65)).toBe(true); // exactly at
+    expect(isSpouseDeceased(66, 65)).toBe(true);
+  });
+});
+
+describe("isFertile (window 18–35 inclusive)", () => {
+  it("blocks just below the window and opens exactly at the lower bound", () => {
+    expect(isFertile(17, cfg)).toBe(false);
+    expect(isFertile(18, cfg)).toBe(true); // boundary 17/18
+  });
+
+  it("stays fertile through the upper bound and closes just past it", () => {
+    expect(isFertile(35, cfg)).toBe(true); // boundary 35/36
+    expect(isFertile(36, cfg)).toBe(false);
+  });
+
+  it("is fertile across the interior of the window", () => {
+    for (let age = 18; age <= 35; age++) expect(isFertile(age, cfg)).toBe(true);
+  });
+});
+
+describe("childRoll is unchanged inside the window", () => {
+  // The fertility GATE lives in the DB roll (rollChildrenDue); the pure childRoll
+  // itself is unaffected — a guaranteed-chance roll still produces a birth.
+  it("still bears a child when chance passes (gate is applied upstream)", () => {
+    const rng = seqRng([0, 0.99, 0.99]); // born; boy; mother survives
+    const outcome = childRoll(rng, { active: true }, 0, null, cfg);
+    expect(outcome.born).toBe(true);
+  });
+});
+
+describe("rollSpouseDeathAge", () => {
+  it("always lands within [deathAge.min, deathAge.max] (backfill band)", () => {
+    for (let i = 0; i < 500; i++) {
+      const age = rollSpouseDeathAge(cfg, Math.random);
+      expect(age).toBeGreaterThanOrEqual(cfg.spouse.deathAge.min);
+      expect(age).toBeLessThanOrEqual(cfg.spouse.deathAge.max);
+    }
+  });
+
+  it("covers both ends of the band (uniform, inclusive)", () => {
+    expect(rollSpouseDeathAge(cfg, () => 0)).toBe(60); // min
+    expect(rollSpouseDeathAge(cfg, () => 0.9999)).toBe(70); // max
   });
 });

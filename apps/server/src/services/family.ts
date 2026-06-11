@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import {
+  checkSpouseDeath,
   children,
   createDb,
   drawFamilyCandidates,
@@ -20,10 +21,13 @@ import {
   childAge,
   clampIdeology,
   isFamilyLocked,
+  isFertile,
   isOfAge,
   marriagePenalty,
   parseFamilyConfig,
   REAL_MS_PER_SEASON,
+  rollSpouseDeathAge,
+  spouseCurrentAge,
   type FamilyConfig,
 } from "@massalia/shared";
 import { getAgeConfig } from "./age.js";
@@ -102,6 +106,14 @@ function candidateView(cand: CandidateRow, cfg: FamilyConfig, houseLabel: string
 // on every GET — it only rolls when a game year has actually elapsed.
 export async function advanceChildren(characterId: string, now: Date = new Date()): Promise<void> {
   await rollChildrenDue(characterId, { familyCfg: getFamilyConfig(), ageCfg: getAgeConfig(), now });
+}
+
+// Lazy-on-read spouse death of old age (the BullMQ sweep is the scheduled net).
+// Ends the marriage with 'spouse_died' and frees the widower to remarry; the
+// notice surfaces through familyState (a recently 'spouse_died' marriage).
+export async function advanceSpouseDeath(characterId: string, now: Date = new Date()): Promise<void> {
+  const death = await checkSpouseDeath(characterId, { familyCfg: getFamilyConfig(), ageCfg: getAgeConfig(), now });
+  if (death) await broadcastState();
 }
 
 function childPortrait(sex: string, cfg: FamilyConfig): string {
@@ -204,7 +216,34 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
   let spouse = null;
   if (character.spouseCandidateId) {
     const rows = await db.select().from(familyCandidates).where(eq(familyCandidates.id, character.spouseCandidateId)).limit(1);
-    if (rows[0]) spouse = candidateView(rows[0], cfg, await houseName(rows[0].houseSlug));
+    if (rows[0]) {
+      // She ages over time — surface her CURRENT age and a quiet fertility hint.
+      const currentAge = spouseCurrentAge(rows[0].age, rows[0].createdAt.getTime(), now.getTime(), getAgeConfig().realMsPerGameYear);
+      spouse = {
+        ...candidateView(rows[0], cfg, await houseName(rows[0].houseSlug)),
+        age: currentAge,
+        fertile: isFertile(currentAge, cfg),
+        pastChildbearing: currentAge > cfg.spouse.fertilityWindow.to,
+      };
+    }
+  }
+
+  // A spouse-death notice: a marriage that ended of old age within the last season
+  // (auto-acknowledged once the season passes, like the birth notice).
+  let spouseDeath = null;
+  if (!locked) {
+    const ended = await db
+      .select()
+      .from(marriages)
+      .where(and(eq(marriages.characterId, character.id), eq(marriages.endReason, "spouse_died")))
+      .orderBy(desc(marriages.endedAt))
+      .limit(1);
+    const row = ended[0];
+    if (row && row.endedAt && now.getTime() - row.endedAt.getTime() < REAL_MS_PER_SEASON) {
+      const wife = await db.select({ name: familyCandidates.name }).from(familyCandidates).where(eq(familyCandidates.id, row.candidateId)).limit(1);
+      const yearsMarried = Math.max(0, Math.floor((row.endedAt.getTime() - row.marriedAt.getTime()) / getAgeConfig().realMsPerGameYear));
+      spouseDeath = { lateWifeName: wife[0]?.name ?? null, yearsMarried };
+    }
   }
 
   const { children: childList, birthEvent } = locked ? { children: [], birthEvent: null } : await childrenSection(character, now);
@@ -216,6 +255,7 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
     locks: { locked, marriage: marriageAllowed, adoption: !locked },
     characterIdeology: character.ideology,
     spouse,
+    spouseDeath,
     candidates: { marriage: marriageOffers, adoption: adoptionOffers },
     children: childList,
     birthEvent,
@@ -257,7 +297,8 @@ export async function marry(character: CharacterRow, candidateId: string, now: D
   const applyFavorLoss = penalty.partyFavorLoss > 0 && favorParty !== null;
 
   await db.transaction(async (tx) => {
-    await tx.insert(marriages).values({ characterId: character.id, candidateId });
+    // Roll the wife's lifespan now (uniform in spouse.deathAge); she ages toward it.
+    await tx.insert(marriages).values({ characterId: character.id, candidateId, spouseDeathAge: rollSpouseDeathAge(cfg) });
     await tx.update(familyCandidates).set({ consumedAt: now }).where(eq(familyCandidates.id, candidateId));
 
     // spouse + the child-roll anchor (the first roll comes a game year from now).

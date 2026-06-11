@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Queue, Worker } from "bullmq";
 import { completionDelayMs, parseAgeConfig, parseCalendarConfig, parseFamilyConfig, type AgeConfig, type CalendarConfig, type FamilyConfig } from "@massalia/shared";
-import { closeDueFestivals, drawFamilyCandidates, fireFestivalsForAll, resolveCensureIfExpired, rollChildrenDue } from "@massalia/db";
+import { closeDueFestivals, drawFamilyCandidates, fireFestivalsForAll, resolveCensureIfExpired, rollChildrenDue, sweepSpouseDeaths } from "@massalia/db";
 
 const redisUrl = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
 const connection = {
@@ -34,6 +34,8 @@ async function calendarConfig(): Promise<CalendarConfig> {
 
 // Festival sweep cadence: well under a season so boundaries are caught promptly.
 const FESTIVAL_SWEEP_MS = 6 * 60 * 60 * 1000;
+// Spouse-death sweep cadence: same belt-and-suspenders rhythm as the festival sweep.
+const SPOUSE_SWEEP_MS = 6 * 60 * 60 * 1000;
 
 export async function scheduleBuildingCompletion(buildingId: string, completesAt: number) {
   await scheduledResolutionQueue.add(
@@ -97,6 +99,17 @@ new Worker(
         { delay: FESTIVAL_SWEEP_MS, removeOnComplete: true, removeOnFail: 100, jobId: "festival-sweep" },
       );
     }
+    if (job.name === "spouse-death-sweep") {
+      const { familyCfg: fc, ageCfg: ac } = await configs();
+      const deaths = await sweepSpouseDeaths({ familyCfg: fc, ageCfg: ac });
+      console.log(`Spouse-death sweep: ended ${deaths.length} marriage(s) of old age`);
+      // Re-arm the recurring sweep.
+      await scheduledResolutionQueue.add(
+        "spouse-death-sweep",
+        {},
+        { delay: SPOUSE_SWEEP_MS, removeOnComplete: true, removeOnFail: 100, jobId: "spouse-death-sweep" },
+      );
+    }
   },
   { connection },
 );
@@ -105,3 +118,8 @@ new Worker(
 scheduledResolutionQueue
   .add("festival-sweep", {}, { delay: 0, removeOnComplete: true, removeOnFail: 100, jobId: "festival-sweep" })
   .catch((error) => console.warn(`Could not schedule festival sweep (Redis down?): ${(error as Error).message}`));
+
+// Kick off the recurring spouse-death sweep on worker start (best-effort).
+scheduledResolutionQueue
+  .add("spouse-death-sweep", {}, { delay: 0, removeOnComplete: true, removeOnFail: 100, jobId: "spouse-death-sweep" })
+  .catch((error) => console.warn(`Could not schedule spouse-death sweep (Redis down?): ${(error as Error).message}`));

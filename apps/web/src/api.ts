@@ -310,6 +310,20 @@ export type BirthEvent = {
   lateWifeName: string | null;
 };
 
+// The current spouse: a candidate plus her lazily-aged current age (in `age`)
+// and a quiet fertility hint.
+export type SpouseView = FamilyCandidate & {
+  fertile: boolean;
+  // True once she is past the childbearing window — a quiet note, nothing loud.
+  pastChildbearing: boolean;
+};
+
+// A spouse-death-of-old-age notice (surfaces for one season, then auto-clears).
+export type SpouseDeathNotice = {
+  lateWifeName: string | null;
+  yearsMarried: number;
+};
+
 export type FamilyState = {
   sex: string;
   classId: string;
@@ -317,7 +331,8 @@ export type FamilyState = {
   // slave -> locked (whole panel); hetaira -> marriage:false (adoption only).
   locks: { locked: boolean; marriage: boolean; adoption: boolean };
   characterIdeology: number;
-  spouse: FamilyCandidate | null;
+  spouse: SpouseView | null;
+  spouseDeath: SpouseDeathNotice | null;
   candidates: { marriage: MarriageCandidate[]; adoption: FamilyCandidate[] };
   children: FamilyChild[];
   birthEvent: BirthEvent | null;

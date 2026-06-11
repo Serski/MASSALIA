@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../services/auth.js";
 import { ensureCharacterRow, findCharacterRow, getActivePlayer, getActiveWorldId, type CharacterRow } from "../services/character.js";
-import { advanceChildren, ensureFreshDraw, familyState, marry, nameChild } from "../services/family.js";
+import { advanceChildren, advanceSpouseDeath, ensureFreshDraw, familyState, marry, nameChild } from "../services/family.js";
 import { adopt, dynastyInfo, regentBadge, resolveSuccession, successionInfo } from "../services/succession.js";
 
 async function actingRow(userId: string): Promise<{ row: CharacterRow } | { error: string; code: number }> {
@@ -23,10 +23,12 @@ export async function familyRoutes(app: FastifyInstance) {
       return { error: acting.error };
     }
     const now = new Date();
-    // Lazy-on-read: keep an offer fresh, and run the due child rolls + coming-of-age.
+    // Lazy-on-read: first retire a wife who has died of old age (so the marriage
+    // draws re-open), then keep an offer fresh and run the due child rolls.
+    await advanceSpouseDeath(acting.row.id, now);
     await ensureFreshDraw(acting.row, now);
     await advanceChildren(acting.row.id, now);
-    // Reload — a child roll can have ended the marriage (death in childbirth).
+    // Reload — a spouse death or child roll can have ended the marriage.
     const fresh = (await findCharacterRow(acting.row.playerId, acting.row.worldId)) ?? acting.row;
     const state = await familyState(fresh, now);
     // Prompt C: dynasty header + history, the regent badge, and a pending succession.

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SuccessionState, type FestivalLive } from "../api.js";
+import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive } from "../api.js";
 import { assetPath, buildableBuildings, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
@@ -1182,6 +1182,24 @@ function BirthNotice({ event, busy, onName }: { event: BirthEvent; busy: boolean
   );
 }
 
+// Spouse death of old age — rendered somberly, like a childbirth death. The
+// widower's marriage prospects return at the next yearly draw.
+function SpouseDeathCard({ notice }: { notice: SpouseDeathNotice }) {
+  const name = notice.lateWifeName ?? "Your wife";
+  const years = notice.yearsMarried;
+  return (
+    <DashboardCard className="birth-card mourning-card">
+      <div className="event-body">
+        <span className="dashboard-label event-kicker">A death in the household</span>
+        <h3>{name} has died.</h3>
+        <p className="composure-note neg">
+          {name}, your wife of {years} year{years === 1 ? "" : "s"}, has died of old age. The house mourns; in time you may seek a new match.
+        </p>
+      </div>
+    </DashboardCard>
+  );
+}
+
 function FamilyPanel({ onRefresh }: PanelProps) {
   const [state, setState] = useState<FamilyState | null>(null);
   const [error, setError] = useState("");
@@ -1275,6 +1293,8 @@ function FamilyPanel({ onRefresh }: PanelProps) {
         <>
           {state.birthEvent ? <BirthNotice event={state.birthEvent} busy={busy} onName={(name) => nameChild(state.birthEvent!.childId, name)} /> : null}
 
+          {state.spouseDeath ? <SpouseDeathCard notice={state.spouseDeath} /> : null}
+
           {state.spouse ? (
             <>
               <div className="panel-label">Your spouse</div>
@@ -1285,6 +1305,9 @@ function FamilyPanel({ onRefresh }: PanelProps) {
                 traits={state.spouse.trait ? [{ label: state.spouse.trait.name, tone: "good" }] : []}
                 right={<CandidateStatChips stats={state.spouse.stats} />}
               />
+              {state.spouse.pastChildbearing ? (
+                <p className="composure-note muted spouse-fertility-note">She is past her childbearing years.</p>
+              ) : null}
             </>
           ) : null}
 

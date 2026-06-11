@@ -7,6 +7,8 @@ import {
   defaultChildName,
   generateCandidates,
   isFamilyLocked,
+  isFertile,
+  spouseCurrentAge,
   type AgeConfig,
   type FamilyConfig,
 } from "@massalia/shared";
@@ -117,7 +119,15 @@ export async function rollChildrenDue(characterId: string, args: { familyCfg: Fa
     if (!character || !character.spouseCandidateId) break; // widowed -> no more rolls until remarriage
 
     const spouseRows = await db.select().from(familyCandidates).where(eq(familyCandidates.id, character.spouseCandidateId)).limit(1);
-    const spouseTrait = candidateTrait(familyCfg, spouseRows[0]?.traitId ?? null);
+    const spouse = spouseRows[0];
+    const spouseTrait = candidateTrait(familyCfg, spouse?.traitId ?? null);
+
+    // Fertility window: outside [from, to] no roll fires — the marriage simply
+    // bears no more children (it continues; she may yet die of old age later).
+    if (spouse) {
+      const wifeAge = spouseCurrentAge(spouse.age, spouse.createdAt.getTime(), now.getTime(), gameYearMs);
+      if (!isFertile(wifeAge, familyCfg)) continue;
+    }
 
     const existing = await db.select({ id: children.id }).from(children).where(eq(children.parentCharacterId, characterId));
     const outcome = childRoll(Math.random, { active: true }, existing.length, spouseTrait, familyCfg);
@@ -144,4 +154,62 @@ export async function rollChildrenDue(characterId: string, args: { familyCfg: Fa
   // Consume the elapsed years on the anchor (preserve sub-year remainder).
   await db.update(playerCharacters).set({ lastChildRollAt: new Date(anchorStart.getTime() + years * gameYearMs) }).where(eq(playerCharacters.id, characterId));
   return births;
+}
+
+// --- Spouse death of old age -----------------------------------------------
+
+export type SpouseDeath = { characterId: string; lateWifeName: string | null; yearsMarried: number };
+
+type SpouseArgs = { familyCfg: FamilyConfig; ageCfg: AgeConfig; now?: Date };
+
+// End one active marriage if the wife has reached her rolled death age: stamp
+// ended_at/end_reason='spouse_died' and clear the character's spouse link so the
+// yearly marriage-candidate draws re-open. Returns the death (for a notice) or null.
+// Shared by the server (lazy-on-read) and the worker sweep, like the child roll.
+export async function checkSpouseDeath(characterId: string, args: SpouseArgs): Promise<SpouseDeath | null> {
+  const now = args.now ?? new Date();
+  const gameYearMs = args.ageCfg.realMsPerGameYear;
+
+  const character = (await db.select().from(playerCharacters).where(eq(playerCharacters.id, characterId)).limit(1))[0];
+  if (!character || !character.spouseCandidateId) return null;
+
+  const marriage = (
+    await db
+      .select()
+      .from(marriages)
+      .where(and(eq(marriages.characterId, characterId), eq(marriages.candidateId, character.spouseCandidateId), isNull(marriages.endedAt)))
+      .limit(1)
+  )[0];
+  if (!marriage || marriage.spouseDeathAge === null) return null;
+
+  const spouse = (await db.select().from(familyCandidates).where(eq(familyCandidates.id, character.spouseCandidateId)).limit(1))[0];
+  if (!spouse) return null;
+
+  const wifeAge = spouseCurrentAge(spouse.age, spouse.createdAt.getTime(), now.getTime(), gameYearMs);
+  if (wifeAge < marriage.spouseDeathAge) return null;
+
+  // She has died of old age — end the marriage and free the widower to remarry.
+  await db.update(marriages).set({ endedAt: now, endReason: "spouse_died" }).where(eq(marriages.id, marriage.id));
+  await db.update(playerCharacters).set({ spouseCandidateId: null }).where(eq(playerCharacters.id, characterId));
+
+  const yearsMarried = Math.max(0, Math.floor((now.getTime() - marriage.marriedAt.getTime()) / gameYearMs));
+  return { characterId, lateWifeName: spouse.name, yearsMarried };
+}
+
+// The global belt-and-suspenders sweep (the worker's scheduled path, mirroring
+// the festival sweep): end every active marriage whose wife has died of old age.
+export async function sweepSpouseDeaths(args: SpouseArgs): Promise<SpouseDeath[]> {
+  const now = args.now ?? new Date();
+  const married = await db
+    .select({ id: playerCharacters.id })
+    .from(playerCharacters)
+    .innerJoin(marriages, and(eq(marriages.characterId, playerCharacters.id), isNull(marriages.endedAt)))
+    .where(eq(playerCharacters.status, "alive"));
+
+  const deaths: SpouseDeath[] = [];
+  for (const row of married) {
+    const death = await checkSpouseDeath(row.id, { ...args, now });
+    if (death) deaths.push(death);
+  }
+  return deaths;
 }

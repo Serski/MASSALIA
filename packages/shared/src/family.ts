@@ -1,4 +1,9 @@
 import { z } from "zod";
+import { REAL_MS_PER_SEASON, SEASONS_PER_YEAR } from "./calendar.js";
+
+// One game year in real milliseconds (4 real days) — the same clock as character
+// and child age. Used as the default for the lazy spouse-age math.
+const REAL_MS_PER_GAME_YEAR = REAL_MS_PER_SEASON * SEASONS_PER_YEAR;
 
 // ---------------------------------------------------------------------------
 // Family pack, Prompt A: marriage & the per-player candidate pool. All tuning
@@ -36,6 +41,12 @@ export const familyConfigSchema = z.object({
     houseWeighting: z.string(),
   }),
   candidateTraits: z.array(candidateTraitSchema),
+  // Wife lifespan & fertility: wives age, die of old age in [deathAge.min, max],
+  // and only bear children inside [fertilityWindow.from, to] (inclusive).
+  spouse: z.object({
+    deathAge: z.object({ min: z.number(), max: z.number() }),
+    fertilityWindow: z.object({ from: z.number(), to: z.number() }),
+  }),
   marriage: z.object({
     crossIdeologyPenalty: z.object({ threshold: z.number(), ideologyShift: z.number(), partyFavorLoss: z.number() }),
     eligibleClasses: z.array(z.string()),
@@ -199,6 +210,38 @@ export function childAge(bornAtMs: number, nowMs: number, realMsPerGameYear: num
 
 export function isOfAge(age: number, cfg: FamilyConfig): boolean {
   return age >= cfg.comingOfAge;
+}
+
+// --- Wife lifespan & fertility window --------------------------------------
+
+// A wife ages lazily: her rolled age at generation + whole game-years elapsed
+// since (1 game year / 4 real days — the same math as character & child age).
+// realMsPerGameYear is injectable for tests; defaults to the real clock.
+export function spouseCurrentAge(
+  candidateAge: number,
+  candidateCreatedAtMs: number,
+  nowMs: number,
+  realMsPerGameYear: number = REAL_MS_PER_GAME_YEAR,
+): number {
+  return candidateAge + Math.max(0, Math.floor((nowMs - candidateCreatedAtMs) / realMsPerGameYear));
+}
+
+// True once the wife reaches the death age rolled for her at marriage.
+export function isSpouseDeceased(spouseAge: number, spouseDeathAge: number): boolean {
+  return spouseAge >= spouseDeathAge;
+}
+
+// Children come only within the fertility window (inclusive on both ends).
+export function isFertile(spouseAge: number, cfg: FamilyConfig): boolean {
+  const window = cfg.spouse.fertilityWindow;
+  return spouseAge >= window.from && spouseAge <= window.to;
+}
+
+// Roll a wife's death age uniformly in [deathAge.min, deathAge.max] (inclusive)
+// at marriage time. rng injectable for tests.
+export function rollSpouseDeathAge(cfg: FamilyConfig, rng: () => number = Math.random): number {
+  const { min, max } = cfg.spouse.deathAge;
+  return randInt(rng, min, max);
 }
 
 // A default Greek name for a newborn (sticks if the player never renames).
