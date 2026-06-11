@@ -157,6 +157,17 @@
     "endsAtChildAge": 15,
     "adoptToExit": true
   },
+  "manumission": {
+    "eligibleClasses": [
+      "landowner",
+      "trader",
+      "philosopher",
+      "hoplite",
+      "shipbuilder",
+      "priest"
+    ],
+    "requiresTrait": "freedman"
+  },
   "classRules": {
     "slave": {
       "familyLocked": true,

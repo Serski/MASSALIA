@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot } from "../api.js";
+import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice } from "../api.js";
 import { assetPath, buildableBuildings, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
@@ -63,6 +63,8 @@ type PlayerDashboardState = {
   festival: FestivalLive | null;
   // The Olympiad cycle status (phase, badges, live event, victor), or null.
   olympiad: OlympiadStatus | null;
+  // Manumission: { eligible } when a slave holds the freedman trait, else null.
+  manumission: { eligible: boolean } | null;
 };
 
 type PlayerDashboardView = PlayerDashboardState & {
@@ -131,6 +133,7 @@ const placeholderPlayerState: PlayerDashboardState = {
   decaying: [],
   festival: null,
   olympiad: null,
+  manumission: null,
 };
 
 // TODO: Replace with real away-summary records.
@@ -208,6 +211,7 @@ function playerFromState(state: PlayerState): PlayerDashboardView {
     decaying: state.character.decaying ?? [],
     festival: state.festival ?? null,
     olympiad: state.olympiad ?? null,
+    manumission: state.manumission ?? null,
     profession,
     house,
   };
@@ -1042,6 +1046,78 @@ function OlympiadSection({ olympiad, onRefresh }: { olympiad: OlympiadStatus; on
   );
 }
 
+// The stat bonus of a manumission class, rendered as chips.
+function bonusChips(bonus: ManumissionChoice["bonus"]) {
+  const labels: [keyof ManumissionChoice["bonus"], string][] = [
+    ["prestige", "Prestige"],
+    ["devotion", "Devotion"],
+    ["militia", "Militia"],
+    ["intelligence", "Intelligence"],
+  ];
+  return labels
+    .filter(([key]) => (bonus[key] ?? 0) !== 0)
+    .map(([key, label]) => (
+      <span key={key} className="cost-chip cost-positive">+{bonus[key]} {label}</span>
+    ));
+}
+
+// The milestone the whole slave arc has built toward: a freedman buys into a
+// citizen class. Choosing one switches classId — the mine routine is gone and the
+// full citizen daily loop + family unlock. Shown only while the slave holds freedman.
+function FreedomPanel({ onRefresh }: { onRefresh: () => void }) {
+  const [choices, setChoices] = useState<ManumissionChoice[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    api.manumission()
+      .then((opts) => !cancelled && setChoices(opts.eligible ? opts.choices : []))
+      .catch(() => !cancelled && setNote("The registry could not be read."));
+    return () => { cancelled = true; };
+  }, []);
+
+  const claim = async (classId: string, name: string) => {
+    setBusy(true);
+    setNote("");
+    try {
+      await api.manumit(classId);
+      setNote(`Free, and a ${name.toLowerCase()} of Massalia. The mine is behind you.`);
+      onRefresh();
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "The manumission could not be recorded.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!choices) return null;
+  return (
+    <DashboardCard className="freedom-card">
+      <div className="event-body">
+        <span className="dashboard-label freedom-kicker">⛓️‍💥 Claim your freedom</span>
+        <h3>The registry holds your name as a free citizen. Choose the life you will build.</h3>
+        <p className="dashboard-todo">You keep all you have earned — your stats, your traits, your years — and take up the trade of your new station.</p>
+        <div className="freedom-grid">
+          {choices.map((choice) => (
+            <DashboardCard className="freedom-choice" key={choice.classId}>
+              <div className="event-body">
+                <span className="dashboard-label">{choice.name}</span>
+                <p className="freedom-flavor">{choice.flavor}</p>
+                <span className="choice-costs">{bonusChips(choice.bonus)}</span>
+                <button className="event-choice-button" type="button" disabled={busy} onClick={() => claim(choice.classId, choice.name)}>
+                  <strong>Become a {choice.name}</strong>
+                </button>
+              </div>
+            </DashboardCard>
+          ))}
+        </div>
+        {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
+      </div>
+    </DashboardCard>
+  );
+}
+
 function CourtPanel({ player, onRefresh }: PanelProps) {
   return (
     <section className="dashboard-panel" aria-labelledby="court-title">
@@ -1053,6 +1129,7 @@ function CourtPanel({ player, onRefresh }: PanelProps) {
       <PanelBanner scene="the court of Massalia" />
       <div className="court-grid">
         <div className="decision-column">
+          {player.manumission?.eligible ? <FreedomPanel onRefresh={onRefresh} /> : null}
           {player.olympiad ? <OlympiadSection olympiad={player.olympiad} onRefresh={onRefresh} /> : null}
           {player.festival ? <FestivalBanner festival={player.festival} onRefresh={onRefresh} /> : null}
           <div className="panel-subhead decision-subhead">

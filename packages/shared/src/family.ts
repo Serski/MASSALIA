@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { REAL_MS_PER_SEASON, SEASONS_PER_YEAR } from "./calendar.js";
+import { manumissionConfigSchema } from "./manumission.js";
 
 // One game year in real milliseconds (4 real days) — the same clock as character
 // and child age. Used as the default for the lazy spouse-age math.
@@ -74,6 +75,9 @@ export const familyConfigSchema = z.object({
     hetairaRule: z.object({ womenOnly: z.boolean(), successorClass: z.string() }).passthrough(),
   }),
   regency: z.object({}).passthrough(),
+  // Manumission (the slave's path out): which citizen classes a freedman may
+  // buy into, and the trait that unlocks it. Validated at boot.
+  manumission: manumissionConfigSchema,
   classRules: z.object({
     slave: z.object({ familyLocked: z.boolean(), unlockOnClasses: z.array(z.string()) }).passthrough(),
     hetaira: z.object({ marriage: z.boolean(), children: z.boolean(), adoption: z.string() }).passthrough(),

@@ -164,6 +164,8 @@ export type PlayerState = {
   festival: FestivalLive | null;
   // The Olympiad cycle status (phase, badges, live event, city-wide victor), or null.
   olympiad: OlympiadStatus | null;
+  // Manumission: { eligible } when a slave holds the freedman trait, else flag false.
+  manumission: { eligible: boolean } | null;
   resources: {
     gold: number;
     prestige: number;
@@ -239,6 +241,10 @@ export const api = {
     apiFetch<{ ok: true; candidateId: string }>("/api/olympics/vote", { method: "POST", body: { candidateId } }),
   resolveOlympic: (choiceId: string) =>
     apiFetch<OlympicResolution>("/api/olympics/resolve", { method: "POST", body: { choiceId } }),
+  // Manumission: the freedman's choice of citizen class, and claiming it.
+  manumission: () => apiFetch<ManumissionOptions>("/api/manumission"),
+  manumit: (classId: string) =>
+    apiFetch<ManumitResult>("/api/manumission", { method: "POST", body: { classId } }),
 };
 
 // --- Annual festivals (Prompt 7) -------------------------------------------
@@ -299,6 +305,29 @@ export type OlympiadBallot = {
 export type OlympicResolution = EventResolution & {
   nominated?: boolean;
   compete?: { won: boolean; prestigeAward: number; mode: string } | null;
+};
+
+// --- Manumission (the slave's path out) ------------------------------------
+
+export type StatBonus = Partial<{ prestige: number; devotion: number; militia: number; intelligence: number }>;
+
+export type ManumissionChoice = {
+  classId: string;
+  name: string;
+  flavor: string;
+  bonus: StatBonus;
+};
+
+export type ManumissionOptions = {
+  eligible: boolean;
+  choices: ManumissionChoice[];
+};
+
+export type ManumitResult = {
+  ok: true;
+  classId: string;
+  className: string;
+  bonus: StatBonus;
 };
 
 // --- Death, succession & regency (Prompt C) --------------------------------
