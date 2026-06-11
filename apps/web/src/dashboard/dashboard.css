@@ -2991,3 +2991,13 @@
 /* Festivals (Prompt 7): a prominent, distinct civic banner above the decisions. */
 .dashboard-shell .festival-card { margin-bottom: 14px; border: 1px solid rgba(216, 178, 90, 0.5); background: linear-gradient(180deg, rgba(60, 44, 18, 0.42), rgba(20, 14, 9, 0.55)); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28); }
 .dashboard-shell .festival-kicker { color: #e7c66a; }
+
+/* The Olympiad (Prompt 8): a marble-and-laurel civic banner, ballot, and honors. */
+.dashboard-shell .olympic-card { margin-bottom: 14px; border: 1px solid rgba(120, 170, 210, 0.5); background: linear-gradient(180deg, rgba(28, 40, 56, 0.5), rgba(16, 20, 28, 0.6)); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28); }
+.dashboard-shell .olympic-kicker { color: #8fc0e6; letter-spacing: 0.02em; }
+.dashboard-shell .champion-card { border-color: rgba(216, 178, 90, 0.7); background: linear-gradient(180deg, rgba(66, 50, 18, 0.5), rgba(20, 14, 9, 0.6)); }
+.dashboard-shell .champion-card .olympic-kicker { color: #e7c66a; }
+.dashboard-shell .olympic-victory { color: #e7c66a; font-weight: 600; }
+.dashboard-shell .ballot-chosen { border-color: rgba(158, 196, 135, 0.8); box-shadow: inset 0 0 0 1px rgba(158, 196, 135, 0.5); }
+.dashboard-shell .olympic-badge { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; font-size: 12.5px; border: 1px solid rgba(120, 170, 210, 0.45); background: rgba(28, 40, 56, 0.4); color: #bcd6ea; }
+.dashboard-shell .olympic-badge.olympic-honor { border-color: rgba(216, 178, 90, 0.55); background: rgba(60, 44, 18, 0.36); color: #e7c66a; }

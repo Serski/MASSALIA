@@ -321,6 +321,45 @@ export const festivalChoregos = pgTable("festival_choregos", {
   oneClosePerInstance: uniqueIndex("festival_choregos_instance_idx").on(table.festivalId, table.gameYear),
 }));
 
+// The Olympiad (Prompt 8): cycle state, advanced through its phases by the
+// worker sweep (lazy-on-read net). One row per Olympiad (world + game year).
+export const olympiads = pgTable("olympiads", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  gameYear: integer("game_year").notNull(),
+  phase: text("phase").notNull(), // 'nomination' | 'voting' | 'resolved' | 'completed'
+  nominationEndsAt: timestamp("nomination_ends_at", { withTimezone: true }),
+  votingEndsAt: timestamp("voting_ends_at", { withTimezone: true }),
+  payoffAt: timestamp("payoff_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  oneePerYear: uniqueIndex("olympiads_world_year_idx").on(table.worldId, table.gameYear),
+}));
+
+// Standing candidates — the nominate event registers the actor here.
+export const olympicCandidates = pgTable("olympic_candidates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  olympiadGameYear: integer("olympiad_game_year").notNull(),
+  characterId: uuid("character_id").references(() => playerCharacters.id).notNull(),
+  nominatedAt: timestamp("nominated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  oneNominationPerCharacter: uniqueIndex("olympic_candidates_idx").on(table.olympiadGameYear, table.characterId),
+}));
+
+// The ballot: one vote per voter, replaceable until close (upsert on re-vote).
+export const olympicVotes = pgTable("olympic_votes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  olympiadGameYear: integer("olympiad_game_year").notNull(),
+  voterCharacterId: uuid("voter_character_id").references(() => playerCharacters.id).notNull(),
+  candidateCharacterId: uuid("candidate_character_id").references(() => playerCharacters.id).notNull(),
+  castAt: timestamp("cast_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  oneVotePerVoter: uniqueIndex("olympic_votes_voter_idx").on(table.olympiadGameYear, table.voterCharacterId),
+  tallyIdx: index("olympic_votes_tally_idx").on(table.olympiadGameYear, table.candidateCharacterId),
+}));
+
 // Events drawn for a character (for the "exclude last 5 draws" rule).
 export const eventHistory = pgTable("event_history", {
   id: uuid("id").primaryKey().defaultRandom(),

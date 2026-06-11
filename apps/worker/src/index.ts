@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Queue, Worker } from "bullmq";
 import { completionDelayMs, parseAgeConfig, parseCalendarConfig, parseFamilyConfig, type AgeConfig, type CalendarConfig, type FamilyConfig } from "@massalia/shared";
-import { closeDueFestivals, drawFamilyCandidates, fireFestivalsForAll, resolveCensureIfExpired, rollChildrenDue, sweepSpouseDeaths } from "@massalia/db";
+import { advanceOlympiads, closeDueFestivals, deliverOlympicNominationToAll, drawFamilyCandidates, fireFestivalsForAll, resolveCensureIfExpired, rollChildrenDue, sweepSpouseDeaths } from "@massalia/db";
 
 const redisUrl = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
 const connection = {
@@ -36,6 +36,9 @@ async function calendarConfig(): Promise<CalendarConfig> {
 const FESTIVAL_SWEEP_MS = 6 * 60 * 60 * 1000;
 // Spouse-death sweep cadence: same belt-and-suspenders rhythm as the festival sweep.
 const SPOUSE_SWEEP_MS = 6 * 60 * 60 * 1000;
+// Olympiad sweep cadence: the cycle windows are real-days long, so an hourly tick
+// catches the nomination/voting/payoff boundaries promptly.
+const OLYMPIAD_SWEEP_MS = 60 * 60 * 1000;
 
 export async function scheduleBuildingCompletion(buildingId: string, completesAt: number) {
   await scheduledResolutionQueue.add(
@@ -110,6 +113,18 @@ new Worker(
         { delay: SPOUSE_SWEEP_MS, removeOnComplete: true, removeOnFail: 100, jobId: "spouse-death-sweep" },
       );
     }
+    if (job.name === "olympiad-sweep") {
+      const cfg = await calendarConfig();
+      const delivered = await deliverOlympicNominationToAll(cfg);
+      const advanced = await advanceOlympiads(cfg);
+      console.log(`Olympiad sweep: delivered ${delivered} nominate card(s), advanced ${advanced.length} cycle(s)`);
+      // Re-arm the recurring sweep.
+      await scheduledResolutionQueue.add(
+        "olympiad-sweep",
+        {},
+        { delay: OLYMPIAD_SWEEP_MS, removeOnComplete: true, removeOnFail: 100, jobId: "olympiad-sweep" },
+      );
+    }
   },
   { connection },
 );
@@ -123,3 +138,8 @@ scheduledResolutionQueue
 scheduledResolutionQueue
   .add("spouse-death-sweep", {}, { delay: 0, removeOnComplete: true, removeOnFail: 100, jobId: "spouse-death-sweep" })
   .catch((error) => console.warn(`Could not schedule spouse-death sweep (Redis down?): ${(error as Error).message}`));
+
+// Kick off the recurring Olympiad sweep on worker start (best-effort).
+scheduledResolutionQueue
+  .add("olympiad-sweep", {}, { delay: 0, removeOnComplete: true, removeOnFail: 100, jobId: "olympiad-sweep" })
+  .catch((error) => console.warn(`Could not schedule Olympiad sweep (Redis down?): ${(error as Error).message}`));

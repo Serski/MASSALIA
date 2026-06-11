@@ -162,6 +162,8 @@ export type PlayerState = {
   succession: SuccessionState | null;
   // The festival live for the player this season (a free civic event), or null.
   festival: FestivalLive | null;
+  // The Olympiad cycle status (phase, badges, live event, city-wide victor), or null.
+  olympiad: OlympiadStatus | null;
   resources: {
     gold: number;
     prestige: number;
@@ -230,6 +232,13 @@ export const api = {
     apiFetch<{ ok: true; heirName: string; endedRegency: boolean }>("/api/family/adopt", { method: "POST", body: { candidateId } }),
   resolveFestival: (festivalId: string, choiceId: string) =>
     apiFetch<EventResolution>("/api/festivals/resolve", { method: "POST", body: { festivalId, choiceId } }),
+  // The Olympiad (Prompt 8): the voting ballot, casting a vote, resolving the
+  // live Olympic event (nominate / the Games).
+  olympicBallot: () => apiFetch<OlympiadBallot>("/api/olympics/ballot"),
+  olympicVote: (candidateId: string) =>
+    apiFetch<{ ok: true; candidateId: string }>("/api/olympics/vote", { method: "POST", body: { candidateId } }),
+  resolveOlympic: (choiceId: string) =>
+    apiFetch<OlympicResolution>("/api/olympics/resolve", { method: "POST", body: { choiceId } }),
 };
 
 // --- Annual festivals (Prompt 7) -------------------------------------------
@@ -240,6 +249,56 @@ export type FestivalLive = {
   festivalId: string;
   gameYear: number;
   event: { id: string; scene: string; choices: EventChoicePreview[] };
+};
+
+// --- The Olympiad (Prompt 8) -----------------------------------------------
+
+// The live Olympic event (nominate or the Games) — surfaced like a festival.
+export type OlympicLiveEvent = {
+  festivalId: string;
+  eventId: string;
+  gameYear: number;
+  event: { id: string; scene: string; choices: EventChoicePreview[] };
+};
+
+export type OlympiadStatus = {
+  gameYear: number;
+  phase: "nomination" | "voting" | "resolved" | "completed";
+  nominationEndsAt: string | null;
+  votingEndsAt: string | null;
+  youAreCandidate: boolean;
+  youAreDelegate: boolean;
+  youAreOlympionikes: boolean;
+  yourVote: string | null;
+  ballotCount: number;
+  liveEvent: OlympicLiveEvent | null;
+  // The city-wide victor announcement (every client sees it via me/state).
+  champion: { name: string } | null;
+};
+
+// One candidate on the voting ballot (live standings stay HIDDEN until close).
+export type BallotCandidate = {
+  characterId: string;
+  name: string;
+  houseSlug: string;
+  houseName: string;
+  classId: string;
+  prestige: number;
+  nominatedAt: string;
+};
+
+export type OlympiadBallot = {
+  gameYear: number | null;
+  phase: "nomination" | "voting" | "resolved" | "completed" | null;
+  votingEndsAt: string | null;
+  seats: number;
+  candidates: BallotCandidate[];
+  yourVote: string | null;
+};
+
+export type OlympicResolution = EventResolution & {
+  nominated?: boolean;
+  compete?: { won: boolean; prestigeAward: number; mode: string } | null;
 };
 
 // --- Death, succession & regency (Prompt C) --------------------------------

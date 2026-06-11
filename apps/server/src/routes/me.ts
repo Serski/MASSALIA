@@ -9,6 +9,7 @@ import { recoverComposure } from "../services/composure.js";
 import { decayCharacter, getAgeConfig, portraitUrl } from "../services/age.js";
 import { enforceDeathAndHandoff, regentBadge, successionInfo } from "../services/succession.js";
 import { closeDueFestivals, fireFestivalsForCharacter, liveFestivalForCharacter } from "../services/festival.js";
+import { olympiadStatus, syncOlympiadForCharacter } from "../services/olympiad.js";
 
 const db = createDb();
 
@@ -81,6 +82,11 @@ export async function meRoutes(app: FastifyInstance) {
     await closeDueFestivals();
     await fireFestivalsForCharacter(character);
     const festival = await liveFestivalForCharacter(character);
+
+    // Olympiad (Prompt 8): advance any due cycle + deliver the nominate card lazily,
+    // then surface the cycle status (phase, badges, live event, city-wide victor).
+    await syncOlympiadForCharacter(character);
+    const olympiad = await olympiadStatus(character);
 
     const resourceRows = await db.select().from(resources).where(and(eq(resources.scope, "player"), eq(resources.scopeId, state.player.id)));
     const resourceMap = new Map(resourceRows.map((resource) => [resource.type, numberAmount(resource.amount)]));
@@ -161,6 +167,9 @@ export async function meRoutes(app: FastifyInstance) {
       succession,
       // The festival live for the player this season (a free civic event), or null.
       festival,
+      // The Olympiad cycle status (Prompt 8): phase, your candidacy/vote/delegate
+      // badges, the live Olympic event, and the city-wide victor — or null.
+      olympiad,
       resources: {
         // Drachmae is the canonical currency; surfaced as "gold" for the existing UI.
         gold: character.drachmae,

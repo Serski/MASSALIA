@@ -17,6 +17,7 @@ import {
   choiceIdeologyDelta,
   describeChoiceCosts,
   describeComposureDelta,
+  festivalById,
   gameDate,
   parseCalendarConfig,
   type CalendarConfig,
@@ -50,7 +51,7 @@ type CharacterRow = typeof playerCharacters.$inferSelect;
 
 // --- Previews (reuses the event composure-preview path) --------------------
 
-function composurePreview(choice: EventChoice, traits: Trait[]): { delta: number; reason: string } {
+export function composurePreview(choice: EventChoice, traits: Trait[]): { delta: number; reason: string } {
   const config = getComposureConfig();
   const tag = describeComposureDelta(traits, choice.tags ?? [], choiceIdeologyDelta(choice), config);
   const explicit = choiceComposureEffectDelta(choice);
@@ -59,7 +60,7 @@ function composurePreview(choice: EventChoice, traits: Trait[]): { delta: number
   return { delta, reason };
 }
 
-function withPreviews(event: EventDefinition, traits: Trait[]) {
+export function withPreviews(event: EventDefinition, traits: Trait[]) {
   return {
     ...event,
     choices: event.choices.map((choice) => {
@@ -93,12 +94,14 @@ export async function liveFestivalForCharacter(character: CharacterRow, now: Dat
   const started = await worldStartedMs();
   if (started === null) return null;
   const gd = gameDate(now.getTime(), started);
+  const cfg = getCalendarConfig();
   const rows = await db
     .select()
     .from(festivalEvents)
-    .where(and(eq(festivalEvents.characterId, character.id), eq(festivalEvents.gameYear, gd.yearInGame), eq(festivalEvents.resolved, false)))
-    .limit(1);
-  const fe = rows[0];
+    .where(and(eq(festivalEvents.characterId, character.id), eq(festivalEvents.gameYear, gd.yearInGame), eq(festivalEvents.resolved, false)));
+  // Donation festivals only — Olympic deliveries (olympiad / olympiad-games) ride
+  // the same table but surface through the Olympiad HUD, never this banner.
+  const fe = rows.find((row) => festivalById(cfg, row.festivalId)?.type === "donation");
   if (!fe) return null;
   const event = (await listEvents()).find((e) => e.id === fe.eventId);
   if (!event) return null;

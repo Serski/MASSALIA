@@ -14,6 +14,7 @@ import { worldRoutes } from "./routes/world.js";
 import { routineRoutes } from "./routes/routines.js";
 import { familyRoutes } from "./routes/family.js";
 import { festivalRoutes } from "./routes/festival.js";
+import { olympiadRoutes } from "./routes/olympiad.js";
 import { loadTraitDefs } from "./services/traits.js";
 import { loadComposureConfig } from "./services/composure.js";
 import { listEvents } from "./services/eventEngine.js";
@@ -61,6 +62,7 @@ await app.register(eventRoutes, { prefix: "/api/events" });
 await app.register(routineRoutes, { prefix: "/api/routines" });
 await app.register(familyRoutes, { prefix: "/api/family" });
 await app.register(festivalRoutes, { prefix: "/api/festivals" });
+await app.register(olympiadRoutes, { prefix: "/api/olympics" });
 
 const port = Number(process.env.PORT ?? 3000);
 await app.listen({ port, host: "0.0.0.0" });

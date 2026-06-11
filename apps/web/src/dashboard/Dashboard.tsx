@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive } from "../api.js";
+import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot } from "../api.js";
 import { assetPath, buildableBuildings, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
@@ -61,6 +61,8 @@ type PlayerDashboardState = {
   decaying: string[];
   // The festival live this season (a free civic event), or null.
   festival: FestivalLive | null;
+  // The Olympiad cycle status (phase, badges, live event, victor), or null.
+  olympiad: OlympiadStatus | null;
 };
 
 type PlayerDashboardView = PlayerDashboardState & {
@@ -128,6 +130,7 @@ const placeholderPlayerState: PlayerDashboardState = {
   deceased: false,
   decaying: [],
   festival: null,
+  olympiad: null,
 };
 
 // TODO: Replace with real away-summary records.
@@ -204,6 +207,7 @@ function playerFromState(state: PlayerState): PlayerDashboardView {
     deceased: state.character.deceased,
     decaying: state.character.decaying ?? [],
     festival: state.festival ?? null,
+    olympiad: state.olympiad ?? null,
     profession,
     house,
   };
@@ -873,6 +877,171 @@ function FestivalBanner({ festival, onRefresh }: { festival: FestivalLive; onRef
   );
 }
 
+// Remaining real time until a window shuts (the ballot/Olympiad countdown).
+function timeUntil(iso: string | null): string {
+  if (!iso) return "";
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return "closing now";
+  const h = Math.floor(ms / 3_600_000);
+  const m = Math.floor((ms % 3_600_000) / 60_000);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+// The live Olympic event (nominate / the Games) — surfaced like a festival: free,
+// no daily decision spent. On the Games it reveals the victor/honorable outcome.
+function OlympicBanner({ live, onRefresh }: { live: NonNullable<OlympiadStatus["liveEvent"]>; onRefresh: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  const [outcome, setOutcome] = useState<EventResolution | null>(null);
+  const [victory, setVictory] = useState<{ won: boolean } | null>(null);
+
+  const choose = async (choiceId: string) => {
+    setBusy(true);
+    setNote("");
+    try {
+      const result = await api.resolveOlympic(choiceId);
+      setOutcome(result);
+      if (result.compete) setVictory({ won: result.compete.won });
+      onRefresh();
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "The herald could not record your choice.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const isGames = live.eventId === "olympic-games";
+  return (
+    <DashboardCard className="olympic-card">
+      <div className="event-body">
+        <span className="dashboard-label olympic-kicker">{isGames ? "🏛️ The Olympic Games" : "🏛️ The Olympiad · the assembly nominates"}</span>
+        <h3>{live.event.scene}</h3>
+        {outcome ? (
+          <div className="event-outcome" role="status">
+            {victory ? (
+              <p className={victory.won ? "olympic-victory" : "composure-note"}>
+                {victory.won ? "🥇 Olive crown! Massalia crowns an Olympionikes." : "An honorable showing — the city is not shamed."}
+              </p>
+            ) : null}
+            <p>{outcome.resultText}</p>
+          </div>
+        ) : (
+          <div className="event-choice-stack">
+            {live.event.choices.map((choice) => (
+              <button className="event-choice-button" type="button" key={choice.id} disabled={busy} onClick={() => choose(choice.id)}>
+                <strong>{choice.label}</strong>
+                {choice.costs.length > 0 || choice.composureDelta !== 0 ? (
+                  <span className="choice-costs">
+                    {choice.costs.map((cost, i) => (
+                      <span key={i} className={`cost-chip cost-${cost.tone}`}>{cost.label}</span>
+                    ))}
+                    {choice.composureDelta !== 0 ? (
+                      <span className={`cost-chip ${choice.composureDelta < 0 ? "cost-negative" : "cost-positive"}`} title={choice.composureReason}>
+                        {choice.composureDelta > 0 ? "+" : ""}{choice.composureDelta} Composure
+                      </span>
+                    ) : null}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        )}
+        {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
+      </div>
+    </DashboardCard>
+  );
+}
+
+// The voting ballot: every living citizen votes (even those who cannot stand).
+// Live standings are HIDDEN until close — your vote is changeable until the window
+// shuts, with a countdown.
+function OlympicBallotPanel({ onRefresh }: { onRefresh: () => void }) {
+  const [ballot, setBallot] = useState<OlympiadBallot | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+
+  const load = useCallback(() => {
+    api.olympicBallot().then(setBallot).catch(() => setNote("The ballot could not be read."));
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const vote = async (candidateId: string) => {
+    setBusy(true);
+    setNote("");
+    try {
+      await api.olympicVote(candidateId);
+      load();
+      onRefresh();
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "Your vote could not be cast.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!ballot || ballot.phase !== "voting") return null;
+  return (
+    <DashboardCard className="olympic-card ballot-card">
+      <div className="event-body">
+        <span className="dashboard-label olympic-kicker">🗳️ Olympic ballot · choose {ballot.seats} to send</span>
+        <h3>The assembly votes. Closes in {timeUntil(ballot.votingEndsAt)}.</h3>
+        <p className="dashboard-todo">The count is sealed until the vote closes — choose who carries Massalia's name. You may change your vote until then.</p>
+        <div className="event-choice-stack">
+          {ballot.candidates.length === 0 ? (
+            <p className="dashboard-todo">No names stand on the ballot.</p>
+          ) : (
+            ballot.candidates.map((c) => {
+              const chosen = ballot.yourVote === c.characterId;
+              return (
+                <button
+                  key={c.characterId}
+                  type="button"
+                  className={`event-choice-button${chosen ? " ballot-chosen" : ""}`}
+                  disabled={busy}
+                  onClick={() => vote(c.characterId)}
+                >
+                  <strong>{c.name} of House {c.houseName}</strong>
+                  <span className="choice-costs">
+                    <span className="cost-chip cost-neutral">{titleCase(c.classId)}</span>
+                    <span className="cost-chip cost-positive">Prestige {c.prestige}</span>
+                    {chosen ? <span className="cost-chip cost-positive">✓ your vote</span> : null}
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+        {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
+      </div>
+    </DashboardCard>
+  );
+}
+
+// The Olympiad section of the Court: the city-wide victor, your delegate badge,
+// the live event banner, and the voting ballot — whatever the phase calls for.
+function OlympiadSection({ olympiad, onRefresh }: { olympiad: OlympiadStatus; onRefresh: () => void }) {
+  return (
+    <>
+      {olympiad.champion ? (
+        <DashboardCard className="olympic-card champion-card">
+          <div className="event-body">
+            <span className="dashboard-label olympic-kicker">🥇 Olympia</span>
+            <h3>Massalia crowns an Olympionikes — {olympiad.champion.name}, victor at the Games!</h3>
+          </div>
+        </DashboardCard>
+      ) : null}
+      {olympiad.youAreOlympionikes ? (
+        <p className="olympic-badge olympic-honor" role="status">🥇 Olympionikes — an Olympic victor, crowned with wild olive. An honor that outlives the man.</p>
+      ) : null}
+      {olympiad.youAreDelegate ? (
+        <p className="olympic-badge" role="status">🏛️ You are an Olympic Delegate — chosen to carry Massalia's name to Olympia.</p>
+      ) : null}
+      {olympiad.liveEvent ? <OlympicBanner live={olympiad.liveEvent} onRefresh={onRefresh} /> : null}
+      {olympiad.phase === "voting" ? <OlympicBallotPanel onRefresh={onRefresh} /> : null}
+    </>
+  );
+}
+
 function CourtPanel({ player, onRefresh }: PanelProps) {
   return (
     <section className="dashboard-panel" aria-labelledby="court-title">
@@ -884,6 +1053,7 @@ function CourtPanel({ player, onRefresh }: PanelProps) {
       <PanelBanner scene="the court of Massalia" />
       <div className="court-grid">
         <div className="decision-column">
+          {player.olympiad ? <OlympiadSection olympiad={player.olympiad} onRefresh={onRefresh} /> : null}
           {player.festival ? <FestivalBanner festival={player.festival} onRefresh={onRefresh} /> : null}
           <div className="panel-subhead decision-subhead">
             <span className="dashboard-label">Decisions awaiting you</span>
