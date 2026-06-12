@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Queue, Worker } from "bullmq";
+import { Queue, Worker, type Job } from "bullmq";
 import { completionDelayMs, parseAgeConfig, parseCalendarConfig, parseFamilyConfig, parsePoliticsConfig, type AgeConfig, type CalendarConfig, type FamilyConfig, type PoliticsConfig } from "@massalia/shared";
 import { advanceElections, advanceOlympiads, closeDueChamberVotes, closeDueFestivals, deliverOlympicNominationToAll, drawFamilyCandidates, fireFestivalsForAll, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, sweepSpouseDeaths } from "@massalia/db";
 
@@ -147,9 +147,7 @@ export async function scheduleBuildingCompletion(buildingId: string, completesAt
   );
 }
 
-new Worker(
-  "scheduled-resolution",
-  async (job) => {
+const processJob = async (job: Job) => {
     if (job.name === "building-complete") {
       // TODO: Mark the queued building complete in Postgres inside a transaction.
       console.log(`Resolved building completion for ${job.data.buildingId}`);
@@ -197,10 +195,17 @@ new Worker(
       }
       return;
     }
-  },
-  { connection },
-);
+};
 
-// Install the self-healing sweep schedulers on worker start (best-effort). Idempotent
-// across restarts; clears any stale fixed-jobId sweep job from the old scheme.
-void installSweepSchedulers();
+// Boot order matters: install the schedulers FIRST (awaited, with no Worker yet
+// consuming the queue) so the stale-job cleanup can't race a worker that's already
+// pulling due jobs — then start the Worker. installSweepSchedulers is idempotent
+// across restarts and clears any stale fixed-jobId sweep job from the old scheme.
+async function bootstrap() {
+  await installSweepSchedulers();
+  // A single, non-bursty confirmation line (reliably captured, unlike the parallel
+  // first-occurrence ticks): every sweep is scheduled and self-healing.
+  console.log(`Sweep schedulers ready (${SWEEPS.length}): ${SWEEPS.map((sweep) => sweep.name).join(", ")}`);
+  new Worker("scheduled-resolution", processJob, { connection });
+}
+void bootstrap();
