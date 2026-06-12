@@ -1,0 +1,40 @@
+{
+  "chamber": {
+    "capacity": 300,
+    "seatPrice": 300,
+    "npcSeats": {
+      "palaioi": 50,
+      "dynatoi": 50,
+      "independent": 10
+    },
+    "npcSwingFraction": 0.2,
+    "favorPerSwingVote": 5,
+    "chamberVoteCadenceGameYears": 1,
+    "questions": [
+      {
+        "id": "harbor-tariff",
+        "title": "Halve the harbor tariff",
+        "description": "The trading houses petition to halve the tariff on foreign hulls for a year. The treasury would lean on the chora's farmers instead.",
+        "leans": { "palaioi": "no", "dynatoi": "yes", "independent": "yes" }
+      },
+      {
+        "id": "founders-rites",
+        "title": "Fund the Founders' Rites in marble",
+        "description": "Rebuild the shrine of Protis in marble and expand the founders' procession — a public statement that the old ways still rule Massalia.",
+        "leans": { "palaioi": "yes", "dynatoi": "no", "independent": "no" }
+      },
+      {
+        "id": "metic-muster",
+        "title": "Open the muster rolls to metics",
+        "description": "Let resident foreigners serve in the city levy in exchange for limited market rights. More shields on the wall — and more strangers behind it.",
+        "leans": { "palaioi": "no", "dynatoi": "yes", "independent": "no" }
+      },
+      {
+        "id": "grain-reserve",
+        "title": "Raise a public grain reserve",
+        "description": "Tax this year's surplus into a civic granary against a bad harvest. Prudence to some; a seizure of honest profit to others.",
+        "leans": { "palaioi": "yes", "dynatoi": "no", "independent": "yes" }
+      }
+    ]
+  }
+}

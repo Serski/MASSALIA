@@ -1,5 +1,9 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { eq } from "drizzle-orm";
-import { HOUSE_START, nobleHouses, professions as sharedProfessions, SERVER_DURATION_DAYS } from "@massalia/shared";
+import { HOUSE_START, nobleHouses, parsePoliticsConfig, professions as sharedProfessions, SERVER_DURATION_DAYS } from "@massalia/shared";
+import { ensureChamberSeats } from "./chamber.js";
 import { createDb } from "./client.js";
 import {
   buildings,
@@ -190,6 +194,15 @@ async function seedWorldState() {
   return world;
 }
 
+// The Oligarchy Chamber: seed this world's 300 seats from politics-config.json
+// (idempotent — existing worlds were seeded by migration 0021).
+async function seedChamber(worldId: string) {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+  const politics = parsePoliticsConfig(JSON.parse(await readFile(path.join(repoRoot, "content/politics/politics-config.json"), "utf8")));
+  await ensureChamberSeats(worldId, politics.chamber);
+}
+
 const world = await seedWorldState();
 await seedCatalog();
+await seedChamber(world.id);
 console.log(`Seeded ${world.name} with ${nobleHouses.length} houses and ${sharedProfessions.length} professions`);

@@ -3008,3 +3008,41 @@
 .dashboard-shell .freedom-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 10px; }
 .dashboard-shell .freedom-choice { border: 1px solid rgba(158, 196, 135, 0.35); background: rgba(20, 30, 18, 0.4); }
 .dashboard-shell .freedom-flavor { font-size: 12.5px; color: #c7d6bd; margin: 4px 0 8px; font-style: italic; }
+
+/* The Oligarchy Chamber (Politics Prompt 1): hemicycle, seat purchase, ledger. */
+.dashboard-shell .chamber-card { margin-bottom: 14px; padding: 14px; border: 1px solid rgba(181, 138, 69, 0.4); background: linear-gradient(180deg, rgba(40, 32, 22, 0.5), rgba(18, 13, 10, 0.6)); }
+.dashboard-shell .chamber-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(180px, 1fr); gap: 14px; align-items: center; }
+.dashboard-shell .hemicycle { width: 100%; height: auto; display: block; }
+.dashboard-shell .seat-dot { stroke: rgba(0, 0, 0, 0.45); stroke-width: 0.6; }
+.dashboard-shell .seat-dot.seat-palaioi { fill: #a8783a; }
+.dashboard-shell .seat-dot.seat-dynatoi { fill: #4f7e9e; }
+.dashboard-shell .seat-dot.seat-independent { fill: #6f6f76; }
+.dashboard-shell .seat-dot.seat-empty { fill: #2b241e; stroke: rgba(181, 138, 69, 0.25); }
+.dashboard-shell .seat-dot.seat-held { stroke: rgba(255, 244, 214, 0.9); stroke-width: 1.2; }
+.dashboard-shell .seat-dot.seat-held.seat-palaioi { fill: #e7c66a; }
+.dashboard-shell .seat-dot.seat-held.seat-dynatoi { fill: #7fc4e8; }
+.dashboard-shell .seat-dot.seat-held.seat-independent { fill: #b9b9c2; }
+.dashboard-shell .chamber-legend { display: flex; flex-direction: column; gap: 7px; font-size: 12.5px; color: var(--dash-stone); }
+.dashboard-shell .legend-row { display: flex; align-items: center; gap: 8px; }
+.dashboard-shell .legend-dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+.dashboard-shell .legend-dot.seat-palaioi { background: #a8783a; }
+.dashboard-shell .legend-dot.seat-dynatoi { background: #4f7e9e; }
+.dashboard-shell .legend-dot.seat-independent { background: #6f6f76; }
+.dashboard-shell .legend-dot.seat-empty { background: #2b241e; box-shadow: inset 0 0 0 1px rgba(181, 138, 69, 0.3); }
+.dashboard-shell .legend-note { margin-top: 4px; font-size: 12px; color: var(--dash-stone-dim); }
+.dashboard-shell .legend-note.legend-yours { color: #e7c66a; }
+.dashboard-shell .oligarchy-buy-card { margin-bottom: 14px; border: 1px solid rgba(216, 178, 90, 0.65); background: linear-gradient(180deg, rgba(58, 42, 16, 0.55), rgba(22, 15, 9, 0.65)); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.32); }
+.dashboard-shell .oligarchy-kicker { color: #e7c66a; letter-spacing: 0.02em; }
+.dashboard-shell .chamber-vote-card { margin-bottom: 14px; border: 1px solid rgba(181, 138, 69, 0.45); background: linear-gradient(180deg, rgba(36, 28, 18, 0.5), rgba(16, 12, 9, 0.6)); }
+.dashboard-shell .chamber-vote-desc { font-size: 13px; color: var(--dash-stone); margin: 4px 0 10px; }
+.dashboard-shell .chamber-vote-choices { margin-bottom: 8px; }
+.dashboard-shell .chamber-result-card { margin-bottom: 14px; border: 1px solid rgba(181, 138, 69, 0.35); background: rgba(24, 18, 13, 0.5); }
+.dashboard-shell .chamber-result-card.passed { border-color: rgba(158, 196, 135, 0.5); }
+.dashboard-shell .chamber-result-card.failed { border-color: rgba(187, 106, 82, 0.5); }
+.dashboard-shell .ledger-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.dashboard-shell .ledger-chip { padding: 3px 9px; border-radius: 999px; font-size: 11.5px; border: 1px solid rgba(181, 138, 69, 0.3); background: rgba(0, 0, 0, 0.25); color: var(--dash-parchment); }
+.dashboard-shell .ledger-chip.ledger-yes { border-color: rgba(158, 196, 135, 0.55); color: #b6dd9a; }
+.dashboard-shell .ledger-chip.ledger-no { border-color: rgba(187, 106, 82, 0.55); color: #e0a18c; }
+@media (max-width: 760px) {
+  .dashboard-shell .chamber-grid { grid-template-columns: 1fr; }
+}

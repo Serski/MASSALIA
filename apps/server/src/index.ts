@@ -16,6 +16,7 @@ import { familyRoutes } from "./routes/family.js";
 import { festivalRoutes } from "./routes/festival.js";
 import { olympiadRoutes } from "./routes/olympiad.js";
 import { manumissionRoutes } from "./routes/manumission.js";
+import { oligarchyRoutes } from "./routes/oligarchy.js";
 import { loadTraitDefs } from "./services/traits.js";
 import { loadComposureConfig } from "./services/composure.js";
 import { listEvents } from "./services/eventEngine.js";
@@ -23,6 +24,7 @@ import { loadRoutineContent } from "./services/routines.js";
 import { loadAgeConfig } from "./services/age.js";
 import { loadFamilyConfig } from "./services/family.js";
 import { loadCalendarConfig } from "./services/festival.js";
+import { loadPoliticsConfig } from "./services/oligarchy.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../..");
@@ -51,6 +53,7 @@ await loadRoutineContent();
 await loadAgeConfig();
 await loadFamilyConfig();
 await loadCalendarConfig();
+await loadPoliticsConfig();
 
 app.get("/health", async () => ({ ok: true }));
 await app.register(authRoutes, { prefix: "/auth" });
@@ -65,6 +68,7 @@ await app.register(familyRoutes, { prefix: "/api/family" });
 await app.register(festivalRoutes, { prefix: "/api/festivals" });
 await app.register(olympiadRoutes, { prefix: "/api/olympics" });
 await app.register(manumissionRoutes, { prefix: "/api/manumission" });
+await app.register(oligarchyRoutes, { prefix: "/api/oligarchy" });
 
 const port = Number(process.env.PORT ?? 3000);
 await app.listen({ port, host: "0.0.0.0" });

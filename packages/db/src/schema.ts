@@ -360,6 +360,54 @@ export const olympicVotes = pgTable("olympic_votes", {
   tallyIdx: index("olympic_votes_tally_idx").on(table.olympiadGameYear, table.candidateCharacterId),
 }));
 
+// The Oligarchy Chamber (Politics Prompt 1): one row per seat per world.
+// seat_index is stable (0-299) and drives the hemicycle infographic; purchases
+// take the lowest-index empty seat. The slot row (player_characters) is reused
+// across successions, so a dynastic seat rides its character_id to the heir.
+export const oligarchSeats = pgTable("oligarch_seats", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  seatIndex: integer("seat_index").notNull(),
+  holderType: text("holder_type").notNull().default("empty"), // 'npc' | 'player' | 'empty'
+  npcParty: text("npc_party"), // 'palaioi' | 'dynatoi' | 'independent'
+  characterId: uuid("character_id").references(() => playerCharacters.id),
+  acquiredAt: timestamp("acquired_at", { withTimezone: true }),
+}, (table) => ({
+  oneSeatPerIndex: uniqueIndex("oligarch_seats_world_seat_idx").on(table.worldId, table.seatIndex),
+  // One seat per character — a unique partial index (WHERE character_id IS NOT
+  // NULL) in the migration; mirrored here for reference.
+  oneSeatPerCharacter: uniqueIndex("oligarch_seats_character_idx").on(table.characterId).where(sql`character_id IS NOT NULL`),
+}));
+
+// The yearly chamber vote: one per world per game year, open for one season.
+export const chamberVotes = pgTable("chamber_votes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  gameYear: integer("game_year").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  opensAt: timestamp("opens_at", { withTimezone: true }).notNull(),
+  closesAt: timestamp("closes_at", { withTimezone: true }).notNull(),
+  status: text("status").notNull().default("open"), // 'open' | 'passed' | 'failed'
+  yesCount: integer("yes_count"),
+  noCount: integer("no_count"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  oneVotePerYear: uniqueIndex("chamber_votes_world_year_idx").on(table.worldId, table.gameYear),
+}));
+
+// Chamber ballots: one per voter per vote, changeable while open. PUBLIC record
+// by design — the API exposes who voted which way (the political ledger).
+export const chamberBallots = pgTable("chamber_ballots", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  voteId: uuid("vote_id").references(() => chamberVotes.id).notNull(),
+  voterCharacterId: uuid("voter_character_id").references(() => playerCharacters.id).notNull(),
+  choice: text("choice").notNull(), // 'yes' | 'no'
+  castAt: timestamp("cast_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  oneBallotPerVoter: uniqueIndex("chamber_ballots_voter_idx").on(table.voteId, table.voterCharacterId),
+}));
+
 // Events drawn for a character (for the "exclude last 5 draws" rule).
 export const eventHistory = pgTable("event_history", {
   id: uuid("id").primaryKey().defaultRandom(),

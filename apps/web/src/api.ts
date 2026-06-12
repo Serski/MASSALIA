@@ -245,6 +245,65 @@ export const api = {
   manumission: () => apiFetch<ManumissionOptions>("/api/manumission"),
   manumit: (classId: string) =>
     apiFetch<ManumitResult>("/api/manumission", { method: "POST", body: { classId } }),
+  // The Oligarchy Chamber (Politics Prompt 1): the 300-seat hemicycle, buying a
+  // dynastic seat, and the yearly chamber vote with its public ballot ledger.
+  oligarchyChamber: () => apiFetch<ChamberView>("/api/oligarchy/chamber"),
+  buySeat: () => apiFetch<{ ok: true; seatIndex: number; price: number }>("/api/oligarchy/buy-seat", { method: "POST" }),
+  chamberVotes: () => apiFetch<ChamberVotesView>("/api/oligarchy/votes"),
+  castChamberVote: (choice: "yes" | "no") =>
+    apiFetch<{ ok: true; choice: "yes" | "no" }>("/api/oligarchy/vote", { method: "POST", body: { choice } }),
+};
+
+// --- The Oligarchy Chamber (Politics Prompt 1) -------------------------------
+
+export type SeatParty = "palaioi" | "dynatoi" | "independent";
+
+export type ChamberSeat = {
+  seatIndex: number;
+  holderType: "npc" | "player" | "empty";
+  // NPC seats by npc_party; player seats by the holder's CURRENT party
+  // (independent-grey when party is 'none'); null for empty seats.
+  party: SeatParty | null;
+  holderName: string | null;
+};
+
+export type ChamberView = {
+  capacity: number;
+  seatPrice: number;
+  seats: ChamberSeat[];
+  composition: {
+    npc: Record<SeatParty, number>;
+    players: Record<SeatParty, number>;
+    playersTotal: number;
+    empty: number;
+  };
+  you: { holdsSeat: boolean; seatIndex: number | null; canBuy: boolean; reason: string | null };
+};
+
+// PUBLIC by design — the chamber's political ledger names every voter.
+export type ChamberPublicBallot = {
+  voterName: string;
+  party: SeatParty;
+  choice: "yes" | "no";
+  castAt: string;
+};
+
+export type ChamberVoteView = {
+  id: string;
+  gameYear: number;
+  title: string;
+  description: string;
+  opensAt: string;
+  closesAt: string;
+  status: "open" | "passed" | "failed";
+  yesCount: number | null;
+  noCount: number | null;
+  ballots: ChamberPublicBallot[];
+};
+
+export type ChamberVotesView = {
+  open: (ChamberVoteView & { yourBallot: "yes" | "no" | null; youMayVote: boolean }) | null;
+  past: ChamberVoteView[];
 };
 
 // --- Annual festivals (Prompt 7) -------------------------------------------

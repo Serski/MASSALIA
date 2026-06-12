@@ -19,6 +19,7 @@ import { getAgeConfig } from "./age.js";
 import { getFamilyConfig } from "./family.js";
 import { getComposureConfig } from "./composure.js";
 import { getHeldTraits } from "./traits.js";
+import { releaseSeatOf } from "./oligarchy.js";
 import { broadcastState } from "./worldState.js";
 
 const db = createDb();
@@ -275,6 +276,9 @@ export async function resolveSuccession(row: CharacterRow, candidateId: string |
   }
 
   // fresh (slave): a clean new character — the unfree leave nothing behind.
+  // A slave can never hold an oligarch seat, but keep the seats table in
+  // lockstep with the is_councilor reset all the same.
+  await releaseSeatOf(row.id);
   const name = defaultChildName(row.sex as Sex);
   const r = cfg.candidates.statRanges;
   const fresh: StatBlock = {

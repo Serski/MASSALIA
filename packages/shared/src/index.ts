@@ -13,4 +13,5 @@ export * from "./ballot.js";
 export * from "./olympiad.js";
 export * from "./traits.js";
 export * from "./politics.js";
+export * from "./oligarchy.js";
 export * from "./composure.js";

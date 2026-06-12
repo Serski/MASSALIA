@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice } from "../api.js";
+import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty } from "../api.js";
 import { assetPath, buildableBuildings, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
@@ -1628,6 +1628,254 @@ function FamilyPanel({ onRefresh }: PanelProps) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// The Oligarchy Chamber (Politics Prompt 1): the 300-seat hemicycle, buying a
+// dynastic seat, and the yearly chamber vote with its public ballot ledger.
+// ---------------------------------------------------------------------------
+
+const SEAT_PARTY_LABELS: Record<SeatParty, string> = {
+  palaioi: "Palaioi",
+  dynatoi: "Dynatoi",
+  independent: "Independent",
+};
+
+type SeatDot = { x: number; y: number; seat: ChamberSeat };
+
+// Lay the chamber out as a parliament arc: rows of dots, seats per row
+// proportional to the row's circumference. Display order groups the benches —
+// Palaioi NPCs far left, Dynatoi NPCs far right, independents in the centre,
+// and the bought/empty seats (seat_index 110+) filling the gaps left-to-right
+// as players buy in. seat_index is the stable identity; this mapping is purely
+// presentational.
+function hemicycleLayout(seats: ChamberSeat[]): SeatDot[] {
+  const total = seats.length;
+  if (!total) return [];
+  const cx = 230;
+  const cy = 212;
+  const rowCount = 6;
+  const radii = Array.from({ length: rowCount }, (_, i) => 86 + i * 22);
+  const weight = radii.reduce((sum, r) => sum + r, 0);
+  const counts = radii.map((r) => Math.floor((total * r) / weight));
+  let remainder = total - counts.reduce((sum, n) => sum + n, 0);
+  for (let i = rowCount - 1; remainder > 0; i = (i - 1 + rowCount) % rowCount, remainder--) counts[i]!++;
+
+  // All dot positions, sorted left -> right across the arc.
+  const positions: { x: number; y: number; angle: number }[] = [];
+  counts.forEach((n, i) => {
+    const r = radii[i]!;
+    for (let k = 0; k < n; k++) {
+      const angle = n === 1 ? Math.PI / 2 : Math.PI - (Math.PI * k) / (n - 1);
+      positions.push({ x: cx + r * Math.cos(angle), y: cy - r * Math.sin(angle), angle });
+    }
+  });
+  positions.sort((a, b) => b.angle - a.angle || a.y - b.y);
+
+  // Benches: Palaioi left, Dynatoi right (mirrored), independents centred,
+  // everything else (player + empty, by seat_index) fills the free slots.
+  const ordered = [...seats].sort((a, b) => a.seatIndex - b.seatIndex);
+  const slots = new Array<ChamberSeat | undefined>(total);
+  const npc = (party: SeatParty) => ordered.filter((seat) => seat.holderType === "npc" && seat.party === party);
+  npc("palaioi").forEach((seat, i) => (slots[i] = seat));
+  npc("dynatoi").forEach((seat, i) => (slots[total - 1 - i] = seat));
+  const independents = npc("independent");
+  let cursor = Math.floor((total - independents.length) / 2);
+  for (const seat of independents) {
+    while (slots[cursor]) cursor++;
+    slots[cursor] = seat;
+  }
+  cursor = 0;
+  for (const seat of ordered) {
+    if (seat.holderType === "npc") continue;
+    while (slots[cursor]) cursor++;
+    slots[cursor] = seat;
+  }
+
+  return slots.map((seat, i) => ({ x: positions[i]!.x, y: positions[i]!.y, seat: seat! }));
+}
+
+function Hemicycle({ seats }: { seats: ChamberSeat[] }) {
+  const dots = useMemo(() => hemicycleLayout(seats), [seats]);
+  return (
+    <svg className="hemicycle" viewBox="0 0 460 226" role="img" aria-label="The Oligarchy chamber — 300 seats">
+      {dots.map(({ x, y, seat }) => (
+        <circle
+          key={seat.seatIndex}
+          cx={x}
+          cy={y}
+          r={seat.holderType === "player" ? 5.2 : 4.2}
+          className={`seat-dot seat-${seat.party ?? "empty"}${seat.holderType === "player" ? " seat-held" : ""}`}
+        >
+          <title>
+            {seat.holderType === "player"
+              ? `${seat.holderName ?? "A citizen"} — seat ${seat.seatIndex} (${SEAT_PARTY_LABELS[seat.party ?? "independent"]})`
+              : seat.holderType === "npc"
+                ? `${SEAT_PARTY_LABELS[seat.party!]} bench — seat ${seat.seatIndex}`
+                : `Empty seat ${seat.seatIndex} — 300 dr.`}
+          </title>
+        </circle>
+      ))}
+    </svg>
+  );
+}
+
+// The public ballot record — every voter named with the side they took.
+function BallotLedger({ ballots }: { ballots: ChamberVoteView["ballots"] }) {
+  if (!ballots.length) return <p className="dashboard-todo">No citizen ballots were cast.</p>;
+  return (
+    <div className="ledger-list">
+      {ballots.map((ballot) => (
+        <span key={`${ballot.voterName}-${ballot.castAt}`} className={`ledger-chip ledger-${ballot.choice}`}>
+          {ballot.voterName} · {ballot.choice === "yes" ? "AYE" : "NAY"}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function OligarchySection({ onRefresh }: PanelProps) {
+  const [chamber, setChamber] = useState<ChamberView | null>(null);
+  const [votes, setVotes] = useState<ChamberVotesView | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
+
+  const load = useCallback(() => {
+    api.oligarchyChamber().then(setChamber).catch((err) => setError(err instanceof ApiError ? err.message : "The chamber rolls could not be read."));
+    api.chamberVotes().then(setVotes).catch(() => {});
+  }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const openVote = votes?.open ?? null;
+  const lastVote = votes?.past[0] ?? null;
+  const countdown = useCountdownSeconds(openVote ? openVote.closesAt : null);
+
+  const buy = async () => {
+    setBusy(true);
+    setNote("");
+    try {
+      const result = await api.buySeat();
+      setNote(`Seat ${result.seatIndex} is yours. Your name joins the roll of the Three Hundred — and your heirs will keep it.`);
+      load();
+      onRefresh();
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "The purchase could not be recorded.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cast = async (choice: "yes" | "no") => {
+    setBusy(true);
+    setNote("");
+    try {
+      await api.castChamberVote(choice);
+      load();
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "Your ballot could not be cast.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (error) return <p className="dashboard-todo">{error}</p>;
+  if (!chamber) return <p className="dashboard-todo">Loading the chamber…</p>;
+
+  const { composition, you } = chamber;
+
+  return (
+    <>
+      <div className="panel-label">The Oligarchy — the Three Hundred</div>
+      <DashboardCard className="chamber-card">
+        <div className="chamber-grid">
+          <Hemicycle seats={chamber.seats} />
+          <div className="chamber-legend">
+            <div className="legend-row"><span className="legend-dot seat-palaioi" /> Palaioi · {composition.npc.palaioi + composition.players.palaioi} ({composition.players.palaioi} citizens)</div>
+            <div className="legend-row"><span className="legend-dot seat-dynatoi" /> Dynatoi · {composition.npc.dynatoi + composition.players.dynatoi} ({composition.players.dynatoi} citizens)</div>
+            <div className="legend-row"><span className="legend-dot seat-independent" /> Independent · {composition.npc.independent + composition.players.independent} ({composition.players.independent} citizens)</div>
+            <div className="legend-row"><span className="legend-dot seat-empty" /> Empty · {composition.empty}</div>
+            <div className="legend-note">{composition.playersTotal} seats held by living dynasties.</div>
+            {you.holdsSeat ? (
+              <div className="legend-note legend-yours">🏛️ Your dynasty holds seat {you.seatIndex}.</div>
+            ) : null}
+          </div>
+        </div>
+      </DashboardCard>
+
+      {!you.holdsSeat && you.canBuy ? (
+        <DashboardCard className="oligarchy-buy-card">
+          <div className="event-body">
+            <span className="dashboard-label oligarchy-kicker">🏛️ A seat among the Three Hundred</span>
+            <h3>The chamber has empty marble. Buy your dynasty's seat — it passes to your heirs with your name.</h3>
+            <p className="dashboard-todo">A seat seats you in the Oligarchy Council: its daily matters reach your desk, and the yearly chamber vote counts your voice — publicly.</p>
+            <button className="event-choice-button" type="button" disabled={busy} onClick={buy}>
+              <strong>Buy a seat — {chamber.seatPrice} dr.</strong>
+            </button>
+          </div>
+        </DashboardCard>
+      ) : null}
+      {!you.holdsSeat && !you.canBuy && you.reason ? (
+        <PanelRow icon="🏛️" title="A seat among the Three Hundred" sub={you.reason} dim tag="—" />
+      ) : null}
+
+      {openVote ? (
+        <DashboardCard className="chamber-vote-card">
+          <div className="event-body">
+            <span className="dashboard-label oligarchy-kicker">🗳️ The chamber votes — closes in {formatDuration(countdown)}</span>
+            <h3>{openVote.title}</h3>
+            <p className="chamber-vote-desc">{openVote.description}</p>
+            {openVote.youMayVote ? (
+              <div className="event-choice-stack chamber-vote-choices">
+                <button
+                  type="button"
+                  className={`event-choice-button${openVote.yourBallot === "yes" ? " ballot-chosen" : ""}`}
+                  disabled={busy}
+                  onClick={() => cast("yes")}
+                >
+                  <strong>Vote AYE</strong>
+                  {openVote.yourBallot === "yes" ? <span className="choice-costs"><span className="cost-chip cost-positive">✓ your ballot — changeable until close</span></span> : null}
+                </button>
+                <button
+                  type="button"
+                  className={`event-choice-button${openVote.yourBallot === "no" ? " ballot-chosen" : ""}`}
+                  disabled={busy}
+                  onClick={() => cast("no")}
+                >
+                  <strong>Vote NAY</strong>
+                  {openVote.yourBallot === "no" ? <span className="choice-costs"><span className="cost-chip cost-positive">✓ your ballot — changeable until close</span></span> : null}
+                </button>
+              </div>
+            ) : (
+              <p className="dashboard-todo">Only seat-holders vote in the chamber. Ballots are a public record.</p>
+            )}
+            {openVote.ballots.length ? (
+              <>
+                <div className="panel-label panel-label-spaced">Ballots on the floor — public record</div>
+                <BallotLedger ballots={openVote.ballots} />
+              </>
+            ) : null}
+          </div>
+        </DashboardCard>
+      ) : null}
+
+      {lastVote ? (
+        <DashboardCard className={`chamber-result-card ${lastVote.status}`}>
+          <div className="event-body">
+            <span className="dashboard-label oligarchy-kicker">
+              {lastVote.status === "passed" ? "✅ The chamber assented" : "❌ The chamber refused"} · year {300 - lastVote.gameYear} BC
+            </span>
+            <h3>{lastVote.title} — {lastVote.yesCount ?? 0} aye, {lastVote.noCount ?? 0} nay</h3>
+            <div className="panel-label">The ledger — who voted how</div>
+            <BallotLedger ballots={lastVote.ballots} />
+          </div>
+        </DashboardCard>
+      ) : null}
+      {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
+    </>
+  );
+}
+
 function PoliticsPanel({ player, onRefresh }: PanelProps) {
   const [tab, setTab] = useState<"council" | "party">("council");
   const [note, setNote] = useState("");
@@ -1673,6 +1921,7 @@ function PoliticsPanel({ player, onRefresh }: PanelProps) {
       {tab === "council" ? (
         <div className="pol-page">
           <PanelBanner scene="the council chamber" />
+          <OligarchySection player={player} onRefresh={onRefresh} />
           <div className="court-grid">
             <div>
               <div className="panel-label">Issues before the council</div>
