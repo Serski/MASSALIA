@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { REAL_MS_PER_SEASON } from "./calendar.js";
+import { agendaConfigSchema, endorsementConfigSchema, partyDuesConfigSchema, treasuryConfigSchema } from "./agenda.js";
 
 // ---------------------------------------------------------------------------
 // The Oligarchy Chamber (Politics Prompt 1). 300 seats: NPC blocs (Palaioi /
@@ -80,8 +81,13 @@ export const politicsConfigSchema = z
         (chamber) => chamber.npcSeats.palaioi + chamber.npcSeats.dynatoi + chamber.npcSeats.independent <= chamber.capacity,
         { message: "npcSeats must not exceed the chamber capacity" },
       ),
+    // Politics Prompt 3 (the agenda & three governments). Validated at boot.
+    treasury: treasuryConfigSchema,
+    partyDues: partyDuesConfigSchema,
+    agenda: agendaConfigSchema,
+    endorsement: endorsementConfigSchema,
   })
-  .passthrough(); // later politics packs (agenda, elections) ride along
+  .passthrough(); // election cadence lives in calendar-config; future packs ride along
 
 export type PoliticsConfig = z.infer<typeof politicsConfigSchema>;
 export type ChamberConfig = PoliticsConfig["chamber"];

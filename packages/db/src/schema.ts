@@ -391,9 +391,15 @@ export const chamberVotes = pgTable("chamber_votes", {
   status: text("status").notNull().default("open"), // 'open' | 'passed' | 'failed'
   yesCount: integer("yes_count"),
   noCount: integer("no_count"),
+  // Politics Prompt 3: the agenda routes votes by scope; party scope restricts the
+  // tally electorate. agenda_card_id ties a passed vote to its effect + treasury spend.
+  scope: text("scope").notNull().default("league"), // 'league' | 'palaioi' | 'dynatoi'
+  agendaCardId: text("agenda_card_id"),
+  // yes/no leans per NPC party for the tally; NULL → flavor question fallback.
+  leans: jsonb("leans").$type<{ palaioi: "yes" | "no"; dynatoi: "yes" | "no"; independent: "yes" | "no" }>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
-  oneVotePerYear: uniqueIndex("chamber_votes_world_year_idx").on(table.worldId, table.gameYear),
+  oneVotePerScopeYear: uniqueIndex("chamber_votes_world_scope_year_idx").on(table.worldId, table.scope, table.gameYear),
 }));
 
 // Chamber ballots: one per voter per vote, changeable while open. PUBLIC record
@@ -478,6 +484,75 @@ export const officeHistory = pgTable("office_history", {
 }, (table) => ({
   worldIdx: index("office_history_world_idx").on(table.worldId, table.office, table.side),
   characterIdx: index("office_history_character_idx").on(table.characterId, table.office),
+}));
+
+// --- The Agenda & the Three Governments (Politics Prompt 3) ------------------
+
+// One treasury per owner per world. Spent only via passed agenda items.
+export const treasuries = pgTable("treasuries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  owner: text("owner").notNull(), // 'league' | 'palaioi' | 'dynatoi'
+  balance: integer("balance").notNull().default(0),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  oneTreasuryPerOwner: uniqueIndex("treasuries_world_owner_idx").on(table.worldId, table.owner),
+}));
+
+// The audit trail the Ephors read: every treasury movement with a reason.
+export const treasuryLedger = pgTable("treasury_ledger", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  owner: text("owner").notNull(),
+  delta: integer("delta").notNull(),
+  reason: text("reason").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  ownerIdx: index("treasury_ledger_owner_idx").on(table.worldId, table.owner, table.createdAt),
+}));
+
+// Agenda cycle state: drafting → voting → resolved on the season clock.
+export const agendaCycles = pgTable("agenda_cycles", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  scope: text("scope").notNull(), // 'league' | 'palaioi' | 'dynatoi'
+  gameYear: integer("game_year").notNull(),
+  phase: text("phase").notNull(), // 'drafting' | 'voting' | 'resolved'
+  cardIds: jsonb("card_ids").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  draftedCardId: text("drafted_card_id"),
+  vetoedCardId: text("vetoed_card_id"),
+  vetoedByCharacterId: uuid("vetoed_by_character_id").references(() => playerCharacters.id),
+  opensAt: timestamp("opens_at", { withTimezone: true }).notNull(),
+  votingEndsAt: timestamp("voting_ends_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  onePerScopeYear: uniqueIndex("agenda_cycles_world_scope_year_idx").on(table.worldId, table.scope, table.gameYear),
+}));
+
+// One veto per Ephor per term (scoped by the office term-started year).
+export const ephorVetoes = pgTable("ephor_vetoes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  ephorCharacterId: uuid("ephor_character_id").references(() => playerCharacters.id).notNull(),
+  scope: text("scope").notNull(),
+  officeTermStartedYear: integer("office_term_started_year").notNull(),
+  agendaCycleId: uuid("agenda_cycle_id").references(() => agendaCycles.id),
+  usedAt: timestamp("used_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  oneVetoPerTerm: uniqueIndex("ephor_vetoes_term_idx").on(table.ephorCharacterId, table.scope, table.officeTermStartedYear),
+}));
+
+// Party-leader endorsements during a league election (one per leader per election).
+export const partyEndorsements = pgTable("party_endorsements", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  electionId: uuid("election_id").references(() => elections.id).notNull(),
+  endorserCharacterId: uuid("endorser_character_id").references(() => playerCharacters.id).notNull(),
+  party: text("party").notNull(),
+  endorseeCharacterId: uuid("endorsee_character_id").references(() => playerCharacters.id).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  oneEndorsementPerLeader: uniqueIndex("party_endorsements_election_endorser_idx").on(table.electionId, table.endorserCharacterId),
 }));
 
 // Events drawn for a character (for the "exclude last 5 draws" rule).

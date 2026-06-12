@@ -1,0 +1,50 @@
+[
+  {
+    "id": "dyn-war-chest",
+    "title": "A Merchant's War Chest",
+    "description": "Stake a rising trader who means to stand for office. The Dynatoi reward those who climb — and expect the climb to pay dividends.",
+    "cost": 25,
+    "partyLean": "dynatoi",
+    "effect": { "type": "treasury_grant", "beneficiary": "officials", "amount": 20 }
+  },
+  {
+    "id": "dyn-propaganda",
+    "title": "Pamphlets in the Agora",
+    "description": "Hire the scribes and the loud-voiced to argue the case for reform in every stoa before the chamber meets. Opinion is a commodity like any other.",
+    "cost": 15,
+    "partyLean": "dynatoi",
+    "effect": { "type": "party_favor", "party": "dynatoi", "amount": 6 }
+  },
+  {
+    "id": "dyn-recruit-seat",
+    "title": "Buy a Ship-captain a Seat",
+    "description": "A bold young naukleros with silver but no name — put the price of the Three Hundred in his hand and make him yours.",
+    "cost": 40,
+    "partyLean": "dynatoi",
+    "effect": { "type": "party_favor", "party": "dynatoi", "amount": 4 }
+  },
+  {
+    "id": "dyn-audit-waverers",
+    "title": "Audit the Waverers",
+    "description": "Call in the members whose loyalty has cooled and review their accounts with the party. Debt is leverage, and leverage is loyalty.",
+    "cost": 10,
+    "partyLean": "dynatoi",
+    "effect": { "type": "party_favor", "party": "dynatoi", "amount": 3 }
+  },
+  {
+    "id": "dyn-regatta",
+    "title": "The Harbor Regatta",
+    "description": "Fund a festival of the sea in the party's name — races, prizes, and a fortune in spilled wine. Massalia's future, the Dynatoi remind her, is on the water.",
+    "cost": 30,
+    "partyLean": "dynatoi",
+    "effect": { "type": "party_favor", "party": "dynatoi", "amount": 5 }
+  },
+  {
+    "id": "dyn-lending-house",
+    "title": "A Lending House",
+    "description": "Charter a party bank to finance ventures the old families would never touch. Credit is the new aristocracy, and the Dynatoi mean to mint it.",
+    "cost": 35,
+    "partyLean": "dynatoi",
+    "effect": { "type": "league_stat", "stat": "intelligence", "amount": 1 }
+  }
+]

@@ -1,0 +1,74 @@
+[
+  {
+    "id": "league-sea-wall",
+    "title": "Raise the Sea Wall",
+    "description": "Quarry the headland and ring the harbor in dressed stone. A statement of permanence — and a wall the old families have wanted for a generation.",
+    "cost": 60,
+    "partyLean": "palaioi",
+    "effect": { "type": "league_stat", "stat": "militia", "amount": 1 }
+  },
+  {
+    "id": "league-grain-tariff",
+    "title": "Strike the Grain Tariff",
+    "description": "Lift the duty on imported grain so the harbor undercuts the chora's farmers. The trading houses cheer; the landed families do not.",
+    "cost": 0,
+    "partyLean": "dynatoi",
+    "effect": { "type": "party_favor", "party": "dynatoi", "amount": 3 }
+  },
+  {
+    "id": "league-festival",
+    "title": "A Festival in the League's Name",
+    "description": "Crown the year with games and a procession paid from the common purse — a feast that belongs to no House but to Massalia herself.",
+    "cost": 40,
+    "partyLean": "independent",
+    "effect": { "type": "league_stat", "stat": "prestige", "amount": 1 }
+  },
+  {
+    "id": "league-naval-levy",
+    "title": "A Naval Levy",
+    "description": "Lay down a squadron of triremes in the yards. Massalia's reach is her hulls — and her debts, if the timber runs short.",
+    "cost": 80,
+    "partyLean": "dynatoi",
+    "effect": { "type": "league_stat", "stat": "militia", "amount": 1 }
+  },
+  {
+    "id": "league-founders-shrine",
+    "title": "Restore the Founders' Shrine",
+    "description": "Rebuild the shrine of Protis in fresh marble and lengthen the founders' rite. The gods of the first ships, honored as the old ways demand.",
+    "cost": 50,
+    "partyLean": "palaioi",
+    "effect": { "type": "league_stat", "stat": "devotion", "amount": 1 }
+  },
+  {
+    "id": "league-public-granary",
+    "title": "A Public Granary",
+    "description": "Tax this year's surplus into a civic store against a lean harvest. Prudence to the careful; a seizure of honest profit to the bold.",
+    "cost": 70,
+    "partyLean": "palaioi",
+    "effect": { "type": "league_stat", "stat": "prestige", "amount": 1 }
+  },
+  {
+    "id": "league-open-agora",
+    "title": "Open the Agora to Metics",
+    "description": "Grant resident foreigners the right to trade under their own names. More silver through the gates — and more strangers behind the wall.",
+    "cost": 0,
+    "partyLean": "dynatoi",
+    "effect": { "type": "party_favor", "party": "dynatoi", "amount": 2 }
+  },
+  {
+    "id": "league-tin-embassy",
+    "title": "An Embassy to the Tin Routes",
+    "description": "Send envoys north to the tin lords with gifts and guarantees. If the road holds, the dividends flow back to those who sit in council.",
+    "cost": 50,
+    "partyLean": "dynatoi",
+    "effect": { "type": "treasury_grant", "beneficiary": "officials", "amount": 10 }
+  },
+  {
+    "id": "league-civic-games",
+    "title": "Civic Games",
+    "description": "A modest year of footraces and recitations in the agora — cheap glory, and a crowd that remembers who paid for the wine.",
+    "cost": 30,
+    "partyLean": "independent",
+    "effect": { "type": "league_stat", "stat": "prestige", "amount": 1 }
+  }
+]

@@ -129,9 +129,14 @@ export async function closeDueChamberVotes(cfg: PoliticsConfig, now: Date = new 
 }
 
 // The tally of one vote: NPC blocs sized from the live seats table, the leans
-// from the question that opened the vote, ballots + favor-sway from the DB.
+// from the stored vote (agenda card) or the flavor question, ballots + favor-sway
+// from the DB. SCOPE-aware: a party-scope vote (Prompt 3) restricts the electorate
+// to that party's members + that party's NPC bloc only.
 async function tallyChamberVote(worldId: string, vote: ChamberVoteRow, cfg: PoliticsConfig) {
-  const question = questionForYear(cfg.chamber, vote.gameYear);
+  const leans = vote.leans ?? questionForYear(cfg.chamber, vote.gameYear).leans;
+  // Party scope folds the electorate down to a single party (its members + bloc).
+  const scopeParty: NpcParty | null = vote.scope === "palaioi" || vote.scope === "dynatoi" ? vote.scope : null;
+  const blocParties = scopeParty ? [scopeParty] : NPC_PARTIES;
 
   // NPC blocs at their live size (stable 50/50/10 unless content changes).
   const npcRows = await db
@@ -143,18 +148,20 @@ async function tallyChamberVote(worldId: string, vote: ChamberVoteRow, cfg: Poli
     const party = row.npcParty as NpcParty | null;
     if (party) blocSizes.set(party, (blocSizes.get(party) ?? 0) + 1);
   }
-  const blocs: NpcBlocResult[] = NPC_PARTIES.filter((party) => blocSizes.has(party)).map((party) =>
-    npcBlocVotes(blocSizes.get(party)!, cfg.chamber.npcSwingFraction, question.leans[party], party),
+  const blocs: NpcBlocResult[] = blocParties.filter((party) => blocSizes.has(party)).map((party) =>
+    npcBlocVotes(blocSizes.get(party)!, cfg.chamber.npcSwingFraction, leans[party], party),
   );
   const swingSizeByParty = new Map(blocs.map((bloc) => [bloc.party, bloc.swingSize]));
 
   // Player ballots, with each voter's CURRENT party (a defector sways nobody on
-  // the old side) and their favor with that party.
-  const ballotRows = await db
+  // the old side) and their favor with that party. Party scope counts only that
+  // party's members.
+  const allBallotRows = await db
     .select({ choice: chamberBallots.choice, voterId: chamberBallots.voterCharacterId, party: playerCharacters.party })
     .from(chamberBallots)
     .innerJoin(playerCharacters, eq(playerCharacters.id, chamberBallots.voterCharacterId))
     .where(eq(chamberBallots.voteId, vote.id));
+  const ballotRows = scopeParty ? allBallotRows.filter((b) => b.party === scopeParty) : allBallotRows;
 
   const swayedTotals: Partial<Record<NpcParty, SwayTotals>> = {};
   for (const ballot of ballotRows) {

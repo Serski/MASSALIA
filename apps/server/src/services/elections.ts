@@ -63,16 +63,15 @@ async function currentGameYear(now: Date): Promise<number> {
   return world ? gameDate(now.getTime(), world.startedMs).yearInGame : 0;
 }
 
-// Prompt 3 hook: party Archons/Ephors (for-life party leaders) may not stand for
-// league office. None exist yet, so this is always false — but the query is ready.
+// Prompt 3: a for-life party leader (party_archon / party_ephor) may NOT stand for
+// league office — the career fork between machine boss and magistrate. canDeclare
+// reads this flag and rejects them.
 async function barredFromLeagueOffice(characterId: string): Promise<boolean> {
   const rows = await db
-    .select({ id: offices.id })
+    .select({ office: offices.office })
     .from(offices)
-    .where(and(eq(offices.holderCharacterId, characterId)))
-    .limit(10);
-  // (No party_archon/party_ephor seats are ever created in Prompt 2.)
-  return rows.some(() => false);
+    .where(eq(offices.holderCharacterId, characterId));
+  return rows.some((r) => r.office === "party_archon" || r.office === "party_ephor");
 }
 
 // --- The lazy-on-read net + worker delegator --------------------------------

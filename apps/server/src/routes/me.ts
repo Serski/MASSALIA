@@ -11,6 +11,7 @@ import { enforceDeathAndHandoff, regentBadge, successionInfo } from "../services
 import { closeDueFestivals, fireFestivalsForCharacter, liveFestivalForCharacter } from "../services/festival.js";
 import { olympiadStatus, syncOlympiadForCharacter } from "../services/olympiad.js";
 import { manumissionStatus } from "../services/manumission.js";
+import { syncAgenda } from "../services/agenda.js";
 import { syncElections } from "../services/elections.js";
 
 const db = createDb();
@@ -94,6 +95,10 @@ export async function meRoutes(app: FastifyInstance) {
     // reconcile office vacancies (death cascade + defection forfeit) on the same
     // lazy-on-read net the worker sweep also drives.
     await syncElections();
+
+    // The Agenda & three governments (Politics Prompt 3): accrue treasuries, seat
+    // the party leaders, and advance the league + party agenda cycles, lazily.
+    await syncAgenda();
 
     // Manumission (the slave's path out): is this a slave who has earned freedom?
     const manumission = await manumissionStatus(character);

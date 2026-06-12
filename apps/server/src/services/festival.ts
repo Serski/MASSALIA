@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import {
   closeDueFestivals as dbCloseDueFestivals,
   createDb,
+  creditFestivalDonationCut,
   festivalDonations,
   festivalEvents,
   fireFestivalsForAll as dbFireFestivalsForAll,
@@ -26,6 +27,7 @@ import {
   type Trait,
 } from "@massalia/shared";
 import { listEvents, applyChoiceEffects } from "./eventEngine.js";
+import { getPoliticsConfig } from "./oligarchy.js";
 import { applyComposureDelta, getComposureConfig, recoverComposure } from "./composure.js";
 import { getHeldTraits } from "./traits.js";
 import { broadcastState } from "./worldState.js";
@@ -148,10 +150,12 @@ export async function resolveFestival(character: CharacterRow, festivalId: strin
   const composure = await applyComposureDelta(character.id, delta, `festival:${festivalId}`, now);
   const result = await applyChoiceEffects(character.id, event.id, choice);
 
-  // Record the choregos donation(s) for this festival instance.
+  // Record the choregos donation(s) for this festival instance, and route a cut
+  // of each donation to the league treasury (Prompt 3).
   for (const effect of choice.effects) {
     if (effect.type === "register_choregos") {
       await db.insert(festivalDonations).values({ characterId: character.id, festivalId: effect.festivalId, gameYear: gd.yearInGame, amount: effect.amount });
+      await creditFestivalDonationCut(character.worldId, effect.amount, getPoliticsConfig(), now);
     }
   }
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide } from "../api.js";
+import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type AgendaScopeView } from "../api.js";
 import { assetPath, buildableBuildings, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
@@ -519,22 +519,6 @@ const marketFilters: { id: "all" | MarketCat; label: string }[] = [
   { id: "special", label: "Special" },
 ];
 
-// TODO: council content is placeholder until political state exists.
-const councilIssues = [
-  { id: "tariff", icon: "⚖️", title: "Tin tariff at the harbor", sub: "Proposed by House Leonidas · voting closes Day 6" },
-  { id: "fleet", icon: "🚢", title: "Fund a patrol fleet", sub: "Against Tyrrhenian piracy · costs the treasury 2,000g" },
-  { id: "dole", icon: "🏛️", title: "Temple grain dole", sub: "Expand the dole to non-citizens · contested" },
-];
-const councilNews = [
-  { id: "seats", icon: "📯", text: <><b>Two Archon seats</b> open this season.</> },
-  { id: "tariff", icon: "⚔️", text: <><b>House Leonidas</b> pushed the tin tariff to a vote.</> },
-  { id: "pirates", icon: "🚢", text: <>Pirate raids near <b>Antipolis</b> — a patrol fleet is proposed.</> },
-];
-const partyMatters = [
-  { id: "champion", icon: "🗳️", title: "Back a champion for Archon", sub: "Internal vote · the party picks its candidate", votable: true },
-  { id: "whip", icon: "🤝", title: "Whip count: tin tariff", sub: "The party asks you to vote AGAINST · loyalty noted", votable: false },
-  { id: "recruit", icon: "🪶", title: "Recruit a fence-sitter", sub: "Bring an unaligned player to the cause · +party standing", votable: false },
-];
 const partyNews = [
   { id: "champion", icon: "📣", text: <>A member seeks the party's backing for <b>Archon</b>.</> },
   { id: "drift", icon: "⚠️", text: <>Members who drift to the other side are <b>expelled</b>.</> },
@@ -2139,6 +2123,124 @@ function OfficesSection({ onRefresh }: PanelProps) {
   );
 }
 
+// The treasury balance + audit ledger (the Ephors' oversight), visible to all.
+function TreasuryCard({ treasury }: { treasury: AgendaScopeView["treasury"] }) {
+  const label = treasury.owner === "league" ? "League treasury" : `${titleCase(treasury.owner)} treasury`;
+  return (
+    <DashboardCard className="treasury-card">
+      <div className="event-body">
+        <span className="dashboard-label">{label}</span>
+        <p className="treasury-balance">{treasury.balance} <span className="treasury-unit">drachmae</span></p>
+        {treasury.ledger.length > 0 ? (
+          <ul className="treasury-ledger">
+            {treasury.ledger.slice(0, 6).map((l, i) => (
+              <li key={i}><span className={l.delta >= 0 ? "ledger-pos" : "ledger-neg"}>{l.delta >= 0 ? "+" : ""}{l.delta}</span> <span className="ledger-reason">{l.reason}</span></li>
+            ))}
+          </ul>
+        ) : <p className="dashboard-todo">The books are empty.</p>}
+      </div>
+    </DashboardCard>
+  );
+}
+
+// One government's agenda: the drafting docket (with the officials' draft/veto
+// controls) or the drafted card going to the chamber, plus the treasury.
+function AgendaScopeSection({ view, onRefresh }: { view: AgendaScopeView; onRefresh: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  const act = async (fn: () => Promise<unknown>, ok: string) => {
+    setBusy(true); setNote("");
+    try { await fn(); setNote(ok); onRefresh(); } catch (err) { setNote(err instanceof ApiError ? err.message : "That could not be done."); } finally { setBusy(false); }
+  };
+  const drafted = view.cards.find((c) => c.id === view.draftedCardId);
+  const kicker = view.scope === "league" ? "🏛️ The League agenda" : `⚖️ ${titleCase(view.scope)} agenda`;
+  return (
+    <DashboardCard className="agenda-card">
+      <div className="event-body">
+        <span className="dashboard-label agenda-kicker">{kicker}{view.phase ? ` · ${view.phase}` : ""}</span>
+        {view.phase === "drafting" ? (
+          <>
+            <h3>{view.youMayDraft ? "Choose the measure that goes before the chamber." : "The officials weigh the docket."}</h3>
+            <div className="agenda-grid">
+              {view.cards.map((card) => {
+                const isDrafted = card.id === view.draftedCardId;
+                const isVetoed = card.id === view.vetoedCardId;
+                return (
+                  <DashboardCard key={card.id} className={`agenda-choice${isDrafted ? " agenda-drafted" : ""}${isVetoed ? " agenda-vetoed" : ""}`}>
+                    <div className="event-body">
+                      <span className="dashboard-label">{card.title}</span>
+                      <p className="agenda-flavor">{card.description}</p>
+                      <span className="choice-costs">
+                        <span className="cost-chip cost-neutral">{titleCase(card.partyLean)} lean</span>
+                        {card.cost > 0 ? <span className="cost-chip cost-negative">{card.cost} dr.</span> : <span className="cost-chip cost-positive">Free</span>}
+                        {isVetoed ? <span className="cost-chip cost-negative">Vetoed</span> : null}
+                        {isDrafted ? <span className="cost-chip cost-positive">✓ drafted</span> : null}
+                      </span>
+                      {view.youMayDraft && !isVetoed ? (
+                        <button className="event-choice-button" type="button" disabled={busy} onClick={() => act(() => api.draftAgenda(view.scope, card.id), `${card.title} goes to the chamber.`)}>
+                          <strong>Put forward</strong>
+                        </button>
+                      ) : null}
+                    </div>
+                  </DashboardCard>
+                );
+              })}
+            </div>
+            {view.youMayVeto && drafted ? (
+              <button className="dashboard-ghost-button agenda-veto-btn" type="button" disabled={busy} onClick={() => act(() => api.vetoAgenda(view.scope), `You vetoed ${drafted.title}.`)}>
+                ⛔ Veto {drafted.title} (one per term)
+              </button>
+            ) : null}
+          </>
+        ) : view.phase === "voting" ? (
+          <h3>{drafted ? `"${drafted.title}" is before the chamber — cast your vote below.` : "The chamber is in session."}</h3>
+        ) : (
+          <p className="dashboard-todo">No measure is in session.</p>
+        )}
+        <TreasuryCard treasury={view.treasury} />
+        {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
+      </div>
+    </DashboardCard>
+  );
+}
+
+// The league agenda + treasury for the council tab; lazily fetched.
+function LeagueAgendaSection({ onRefresh }: { onRefresh: () => void }) {
+  const [view, setView] = useState<AgendaView | null>(null);
+  const load = useCallback(() => { api.agenda().then(setView).catch(() => {}); }, []);
+  useEffect(() => { load(); }, [load]);
+  const refresh = () => { load(); onRefresh(); };
+  if (!view) return null;
+  return <AgendaScopeSection view={view.league} onRefresh={refresh} />;
+}
+
+// The party government for the party tab: its treasury, agenda, and for-life leaders.
+function PartyGovernmentSection({ party, onRefresh }: { party: "palaioi" | "dynatoi"; onRefresh: () => void }) {
+  const [view, setView] = useState<AgendaView | null>(null);
+  const load = useCallback(() => { api.agenda().then(setView).catch(() => {}); }, []);
+  useEffect(() => { load(); }, [load]);
+  const refresh = () => { load(); onRefresh(); };
+  if (!view) return null;
+  const leaders = view.leaders.filter((l) => l.party === party);
+  return (
+    <>
+      <div className="panel-label">Party leadership</div>
+      <div className="party-leaders">
+        {leaders.map((l) => (
+          <PersonRow
+            key={l.office}
+            name={l.holder ? l.holder.name : "— vacant —"}
+            nameSuffix={<span className="person-suffix"> · {l.office === "party_archon" ? "Party Archon" : "Party Ephor"}</span>}
+            role={l.youHold ? "You hold this seat (for life)" : "For life · barred from league office"}
+            traits={l.youHold ? [{ label: "You", tone: "good" }] : []}
+          />
+        ))}
+      </div>
+      <AgendaScopeSection view={view[party]} onRefresh={refresh} />
+    </>
+  );
+}
+
 function PoliticsPanel({ player, onRefresh }: PanelProps) {
   const [tab, setTab] = useState<"council" | "party">("council");
   const [note, setNote] = useState("");
@@ -2185,26 +2287,8 @@ function PoliticsPanel({ player, onRefresh }: PanelProps) {
         <div className="pol-page">
           <PanelBanner scene="the council chamber" />
           <OligarchySection player={player} onRefresh={onRefresh} />
+          <LeagueAgendaSection onRefresh={onRefresh} />
           <OfficesSection player={player} onRefresh={onRefresh} />
-          <div className="court-grid">
-            <div>
-              <div className="panel-label">Issues before the council</div>
-              {councilIssues.map((issue) => (
-                <PanelRow
-                  key={issue.id}
-                  icon={issue.icon}
-                  title={issue.title}
-                  sub={issue.sub}
-                  action={<StubButton message="TODO: council voting is a stub until political state exists." onStub={setNote}>Vote</StubButton>}
-                />
-              ))}
-            </div>
-            <div>
-              <div className="panel-label">Council news</div>
-              <DigestList items={councilNews} />
-            </div>
-          </div>
-          <p className="dashboard-todo">TODO: the council "issues" above are placeholder until the agenda system (Prompt 3); the offices, elections, and ledger above are live.</p>
           {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
         </div>
       ) : joined ? (
@@ -2222,20 +2306,8 @@ function PoliticsPanel({ player, onRefresh }: PanelProps) {
               </div>
             </div>
           ) : null}
+          <PartyGovernmentSection party={player.party.toLowerCase() === "dynatoi" ? "dynatoi" : "palaioi"} onRefresh={onRefresh} />
           <div className="court-grid">
-            <div>
-              <div className="panel-label">Party matters · {player.party}</div>
-              {partyMatters.map((matter) => (
-                <PanelRow
-                  key={matter.id}
-                  icon={matter.icon}
-                  title={matter.title}
-                  sub={matter.sub}
-                  action={matter.votable ? <StubButton message="TODO: party voting is a stub until political state exists." onStub={setNote}>Vote</StubButton> : undefined}
-                  tag={matter.votable ? undefined : "noted"}
-                />
-              ))}
-            </div>
             <div>
               <div className="panel-label">Party news</div>
               <DigestList items={partyNews} />

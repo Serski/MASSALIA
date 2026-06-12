@@ -16,6 +16,8 @@ import { familyRoutes } from "./routes/family.js";
 import { festivalRoutes } from "./routes/festival.js";
 import { olympiadRoutes } from "./routes/olympiad.js";
 import { manumissionRoutes } from "./routes/manumission.js";
+import { agendaRoutes } from "./routes/agenda.js";
+import { loadAgendaContent } from "./services/agenda.js";
 import { oligarchyRoutes } from "./routes/oligarchy.js";
 import { electionRoutes } from "./routes/elections.js";
 import { officeRoutes } from "./routes/offices.js";
@@ -57,6 +59,7 @@ await loadAgeConfig();
 await loadFamilyConfig();
 await loadCalendarConfig();
 await loadPoliticsConfig();
+await loadAgendaContent();
 // Fail fast on a malformed election block (Politics Prompt 2).
 electionConfig(getCalendarConfig());
 
@@ -73,6 +76,7 @@ await app.register(familyRoutes, { prefix: "/api/family" });
 await app.register(festivalRoutes, { prefix: "/api/festivals" });
 await app.register(olympiadRoutes, { prefix: "/api/olympics" });
 await app.register(manumissionRoutes, { prefix: "/api/manumission" });
+await app.register(agendaRoutes, { prefix: "/api/agenda" });
 await app.register(oligarchyRoutes, { prefix: "/api/oligarchy" });
 await app.register(electionRoutes, { prefix: "/api/elections" });
 await app.register(officeRoutes, { prefix: "/api/offices" });

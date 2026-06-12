@@ -8,6 +8,7 @@ import {
   closedChamberVotes,
   closeDueChamberVotes,
   createDb,
+  creditSeatPurchaseCut,
   effectLog,
   oligarchSeats,
   openChamberVote,
@@ -120,6 +121,8 @@ export async function buySeat(row: CharacterRow, now: Date = new Date()): Promis
     return { ok: false, code: 409, error: "Your dynasty already holds a seat in the chamber." };
   }
 
+  // Prompt 3: a cut of the seat price funds the league treasury.
+  await creditSeatPurchaseCut(row.worldId, price, getPoliticsConfig(), now);
   await broadcastState();
   return { ok: true, seatIndex, price };
 }

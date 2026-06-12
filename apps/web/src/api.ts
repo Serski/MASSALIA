@@ -266,6 +266,14 @@ export const api = {
     apiFetch<{ ok: true }>("/api/offices/appoint-ephor", { method: "POST", body: { side, candidateCharacterId } }),
   appointStrategos: (candidateCharacterId: string) =>
     apiFetch<{ ok: true }>("/api/offices/appoint-strategos", { method: "POST", body: { candidateCharacterId } }),
+  // The Agenda & three governments (Politics Prompt 3).
+  agenda: () => apiFetch<AgendaView>("/api/agenda"),
+  draftAgenda: (scope: AgendaScope, cardId: string) =>
+    apiFetch<{ ok: true }>("/api/agenda/draft", { method: "POST", body: { scope, cardId } }),
+  vetoAgenda: (scope: AgendaScope) =>
+    apiFetch<{ ok: true }>("/api/agenda/veto", { method: "POST", body: { scope } }),
+  endorse: (electionId: string, candidateCharacterId: string) =>
+    apiFetch<{ ok: true }>("/api/agenda/endorse", { method: "POST", body: { electionId, candidateCharacterId } }),
 };
 
 // --- Archon & Ephor elections (Politics Prompt 2) ---------------------------
@@ -326,6 +334,44 @@ export type OfficesView = {
   seats: OfficeSeatView[];
   ledger: OfficeLedgerEntry[];
   houseTallies: { houseName: string; archonships: number; ephorships: number }[];
+};
+
+// --- The Agenda & three governments (Politics Prompt 3) ---------------------
+
+export type AgendaScope = "league" | "palaioi" | "dynatoi";
+
+export type AgendaCardView = { id: string; title: string; description: string; cost: number; partyLean: string };
+
+export type TreasuryView = {
+  owner: AgendaScope;
+  balance: number;
+  ledger: { delta: number; reason: string; createdAt: string }[];
+};
+
+export type AgendaScopeView = {
+  scope: AgendaScope;
+  phase: "drafting" | "voting" | "resolved" | null;
+  gameYear: number | null;
+  cards: AgendaCardView[];
+  draftedCardId: string | null;
+  vetoedCardId: string | null;
+  treasury: TreasuryView;
+  youMayDraft: boolean;
+  youMayVeto: boolean;
+};
+
+export type PartyLeaderView = {
+  office: "party_archon" | "party_ephor";
+  party: "palaioi" | "dynatoi";
+  holder: { characterId: string; name: string } | null;
+  youHold: boolean;
+};
+
+export type AgendaView = {
+  league: AgendaScopeView;
+  palaioi: AgendaScopeView;
+  dynatoi: AgendaScopeView;
+  leaders: PartyLeaderView[];
 };
 
 export type OfficeAppointee = { characterId: string; name: string; houseName: string; party: string };

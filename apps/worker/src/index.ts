@@ -2,8 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Queue, Worker, type Job } from "bullmq";
-import { completionDelayMs, parseAgeConfig, parseCalendarConfig, parseFamilyConfig, parsePoliticsConfig, type AgeConfig, type CalendarConfig, type FamilyConfig, type PoliticsConfig } from "@massalia/shared";
-import { advanceElections, advanceOlympiads, closeDueChamberVotes, closeDueFestivals, deliverOlympicNominationToAll, drawFamilyCandidates, fireFestivalsForAll, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, sweepSpouseDeaths } from "@massalia/db";
+import { completionDelayMs, parseAgeConfig, parseAgendaFile, parseCalendarConfig, parseFamilyConfig, parsePoliticsConfig, type AgeConfig, type AgendaScope, type CalendarConfig, type FamilyConfig, type PoliticsConfig } from "@massalia/shared";
+import { accrueTreasuries, advanceAgendaCycles, advanceElections, advanceOlympiads, closeDueChamberVotes, closeDueFestivals, deliverOlympicNominationToAll, drawFamilyCandidates, ensurePartyLeaders, fireFestivalsForAll, openAgendaCycleIfDue, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, sweepSpouseDeaths, type AgendaPools } from "@massalia/db";
 
 const redisUrl = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
 const connection = {
@@ -39,6 +39,14 @@ async function politicsConfig(): Promise<PoliticsConfig> {
 async function bothConfigs(): Promise<{ calendar: CalendarConfig; politics: PoliticsConfig }> {
   return { calendar: await calendarConfig(), politics: await politicsConfig() };
 }
+let agendaPoolsCache: AgendaPools | null = null;
+async function agendaPools(): Promise<AgendaPools> {
+  if (!agendaPoolsCache) {
+    const read = async (file: string) => parseAgendaFile(JSON.parse(await fs.readFile(path.join(repoRoot, "content/politics", file), "utf8")));
+    agendaPoolsCache = { league: await read("agenda-league.json"), palaioi: await read("agenda-palaioi.json"), dynatoi: await read("agenda-dynatoi.json") };
+  }
+  return agendaPoolsCache;
+}
 
 // Festival sweep cadence: well under a season so boundaries are caught promptly.
 const FESTIVAL_SWEEP_MS = 6 * 60 * 60 * 1000;
@@ -54,6 +62,9 @@ const CHAMBER_SWEEP_MS = 60 * 60 * 1000;
 // so an hourly tick catches the season boundaries promptly. Idempotent + season-
 // correct: it never retro-fires a cycle whose window already passed.
 const ELECTION_SWEEP_MS = 60 * 60 * 1000;
+// Agenda sweep cadence: drafting/voting windows are seasons (real days) long; an
+// hourly tick catches the season boundaries (and accrues the per-season levy/dues).
+const AGENDA_SWEEP_MS = 60 * 60 * 1000;
 
 // --- Recurring sweeps: self-healing job SCHEDULERS --------------------------
 // Each sweep runs on a fixed cadence via a BullMQ job scheduler. The scheduler
@@ -115,6 +126,25 @@ const SWEEPS: Sweep[] = [
       const delivered = await deliverOlympicNominationToAll(cfg);
       const advanced = await advanceOlympiads(cfg);
       return `Olympiad sweep: delivered ${delivered} nominate card(s), advanced ${advanced.length} cycle(s)`;
+    },
+  },
+  {
+    // The Agenda & three governments (Prompt 3): treasury accrual, party leaders,
+    // the league + party agenda cycles (open → chamber vote → resolve).
+    name: "agenda-sweep",
+    every: AGENDA_SWEEP_MS,
+    run: async () => {
+      const { calendar, politics } = await bothConfigs();
+      const pools = await agendaPools();
+      const accrued = (await accrueTreasuries(politics)) !== null;
+      const leaders = (await ensurePartyLeaders()).filled.length;
+      let opened = 0;
+      for (const scope of ["league", "palaioi", "dynatoi"] as AgendaScope[]) {
+        if (await openAgendaCycleIfDue(scope, politics, pools)) opened++;
+      }
+      await closeDueChamberVotes(politics);
+      const adv = await advanceAgendaCycles(calendar, politics, pools);
+      return `Agenda sweep: accrued ${accrued ? "yes" : "—"}, ${leaders} leader(s) seated, opened ${opened}, ${adv.toVoting.length} to vote, resolved ${adv.resolved.length}`;
     },
   },
 ];

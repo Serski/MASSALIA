@@ -1,0 +1,50 @@
+[
+  {
+    "id": "pal-campaign-chest",
+    "title": "A Loyalist's Campaign Chest",
+    "description": "Open the party's purse to a favored son standing for office. Money is not virtue — but it buys the wine that buys the vote.",
+    "cost": 25,
+    "partyLean": "palaioi",
+    "effect": { "type": "treasury_grant", "beneficiary": "officials", "amount": 20 }
+  },
+  {
+    "id": "pal-propaganda",
+    "title": "Hymns in the Old Tongue",
+    "description": "Pay the choruses and the temple criers to sing the founders' virtues through the wards before the next chamber sits. The waverers will remember.",
+    "cost": 15,
+    "partyLean": "palaioi",
+    "effect": { "type": "party_favor", "party": "palaioi", "amount": 6 }
+  },
+  {
+    "id": "pal-recruit-seat",
+    "title": "Buy a Farmer's Son a Seat",
+    "description": "Find a steady young landowner and put the price of the Three Hundred in his hand. The machine grows by one loyal voice.",
+    "cost": 40,
+    "partyLean": "palaioi",
+    "effect": { "type": "party_favor", "party": "palaioi", "amount": 4 }
+  },
+  {
+    "id": "pal-loyalty-inquiry",
+    "title": "A Loyalty Inquiry",
+    "description": "Summon the members whose favor has thinned and remind them whose patronage seated them. Pressure is its own kind of dues.",
+    "cost": 10,
+    "partyLean": "palaioi",
+    "effect": { "type": "party_favor", "party": "palaioi", "amount": 3 }
+  },
+  {
+    "id": "pal-founders-feast",
+    "title": "The Founders' Feast",
+    "description": "Throw the party's own festival in the founders' honor — couches, lamb, and a procession in Palaioi colors. The old families are reminded who keeps the old ways.",
+    "cost": 30,
+    "partyLean": "palaioi",
+    "effect": { "type": "party_favor", "party": "palaioi", "amount": 5 }
+  },
+  {
+    "id": "pal-almshouse",
+    "title": "An Almshouse for the Chora",
+    "description": "Endow a hostel for the farm poor in the party's name. Charity binds the countryside to the Palaioi cause — and to its god.",
+    "cost": 35,
+    "partyLean": "palaioi",
+    "effect": { "type": "league_stat", "stat": "devotion", "amount": 1 }
+  }
+]

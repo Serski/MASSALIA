@@ -44,5 +44,23 @@
     ],
     "strategoi": { "count": 2, "crossPartyBalance": true },
     "campaign": { "drachmaeCost": 10, "favorGain": 3 }
+  },
+  "treasury": {
+    "leviedPerSeason": 20,
+    "seatPurchaseCutFraction": 0.1,
+    "festivalDonationCutFraction": 0.2
+  },
+  "partyDues": {
+    "duesPerSeasonPerMember": 5
+  },
+  "agenda": {
+    "leagueCardsPerCycle": 3,
+    "leagueCadenceGameYears": 1,
+    "partyCadenceGameYears": 1,
+    "partyCadenceSeasonOffset": 2,
+    "vetoesPerEphorPerTerm": 1
+  },
+  "endorsement": {
+    "swingVotes": 8
   }
 }

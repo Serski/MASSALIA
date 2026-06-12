@@ -18,6 +18,7 @@ import {
   type PoliticsConfig,
 } from "@massalia/shared";
 import { createDb } from "./client.js";
+import { endorsementSwayByCandidate } from "./agenda.js";
 import {
   electionCandidates,
   elections,
@@ -221,6 +222,15 @@ async function resolveOne(
       .limit(1);
     const swayed = swayedVotes(favorRows[0]?.favor ?? 0, chamber.favorPerSwingVote, swingBySide.get(cand.party) ?? 0);
     if (swayed > 0) swayByCandidate[cand.characterId] = swayed;
+  }
+
+  // Prompt 3 endorsement lever: a party leader's endorsement transfers swing
+  // weight to the endorsee, on top of the favor-sway above.
+  const endorseSway = await endorsementSwayByCandidate(row.id, politicsCfg);
+  for (const [cid, votes2] of Object.entries(endorseSway)) {
+    if (swayByCandidate[cid] !== undefined || candidates.some((c) => c.characterId === cid)) {
+      swayByCandidate[cid] = (swayByCandidate[cid] ?? 0) + votes2;
+    }
   }
 
   const outcome = resolveElection(candidates, votes, npcResults, swayByCandidate);
