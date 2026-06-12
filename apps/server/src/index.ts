@@ -17,14 +17,17 @@ import { festivalRoutes } from "./routes/festival.js";
 import { olympiadRoutes } from "./routes/olympiad.js";
 import { manumissionRoutes } from "./routes/manumission.js";
 import { oligarchyRoutes } from "./routes/oligarchy.js";
+import { electionRoutes } from "./routes/elections.js";
+import { officeRoutes } from "./routes/offices.js";
 import { loadTraitDefs } from "./services/traits.js";
 import { loadComposureConfig } from "./services/composure.js";
 import { listEvents } from "./services/eventEngine.js";
 import { loadRoutineContent } from "./services/routines.js";
 import { loadAgeConfig } from "./services/age.js";
 import { loadFamilyConfig } from "./services/family.js";
-import { loadCalendarConfig } from "./services/festival.js";
+import { loadCalendarConfig, getCalendarConfig } from "./services/festival.js";
 import { loadPoliticsConfig } from "./services/oligarchy.js";
+import { electionConfig } from "@massalia/shared";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../..");
@@ -54,6 +57,8 @@ await loadAgeConfig();
 await loadFamilyConfig();
 await loadCalendarConfig();
 await loadPoliticsConfig();
+// Fail fast on a malformed election block (Politics Prompt 2).
+electionConfig(getCalendarConfig());
 
 app.get("/health", async () => ({ ok: true }));
 await app.register(authRoutes, { prefix: "/auth" });
@@ -69,6 +74,8 @@ await app.register(festivalRoutes, { prefix: "/api/festivals" });
 await app.register(olympiadRoutes, { prefix: "/api/olympics" });
 await app.register(manumissionRoutes, { prefix: "/api/manumission" });
 await app.register(oligarchyRoutes, { prefix: "/api/oligarchy" });
+await app.register(electionRoutes, { prefix: "/api/elections" });
+await app.register(officeRoutes, { prefix: "/api/offices" });
 
 const port = Number(process.env.PORT ?? 3000);
 await app.listen({ port, host: "0.0.0.0" });

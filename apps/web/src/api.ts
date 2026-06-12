@@ -252,7 +252,83 @@ export const api = {
   chamberVotes: () => apiFetch<ChamberVotesView>("/api/oligarchy/votes"),
   castChamberVote: (choice: "yes" | "no") =>
     apiFetch<{ ok: true; choice: "yes" | "no" }>("/api/oligarchy/vote", { method: "POST", body: { choice } }),
+  // Archon & Ephor elections (Politics Prompt 2): the cycle ballot, declaring,
+  // the secret vote, the current offices, the ledger, and appointments.
+  elections: () => apiFetch<ElectionsView>("/api/elections"),
+  declareCandidacy: (office: LeagueOffice, side?: OfficeSide) =>
+    apiFetch<{ ok: true; office: LeagueOffice; side: OfficeSide }>("/api/elections/declare", { method: "POST", body: { office, side } }),
+  castElectionVote: (office: LeagueOffice, candidateCharacterId: string) =>
+    apiFetch<{ ok: true }>("/api/elections/vote", { method: "POST", body: { office, candidateCharacterId } }),
+  offices: () => apiFetch<OfficesView>("/api/offices"),
+  officeAppointees: (side: OfficeSide | "") =>
+    apiFetch<{ appointees: OfficeAppointee[] }>(`/api/offices/appointees${side ? `?side=${side}` : ""}`),
+  appointEphor: (side: OfficeSide, candidateCharacterId: string) =>
+    apiFetch<{ ok: true }>("/api/offices/appoint-ephor", { method: "POST", body: { side, candidateCharacterId } }),
+  appointStrategos: (candidateCharacterId: string) =>
+    apiFetch<{ ok: true }>("/api/offices/appoint-strategos", { method: "POST", body: { candidateCharacterId } }),
 };
+
+// --- Archon & Ephor elections (Politics Prompt 2) ---------------------------
+
+export type LeagueOffice = "archon" | "ephor";
+export type OfficeSide = "palaioi" | "dynatoi";
+
+export type ElectionBallotCandidate = {
+  characterId: string;
+  side: OfficeSide;
+  name: string;
+  houseName: string;
+  party: string;
+  prestige: number;
+};
+
+export type ElectionOfficeView = {
+  office: LeagueOffice;
+  phase: "declaration" | "voting" | "resolved";
+  declarationEndsAt: string;
+  votingEndsAt: string;
+  candidates: ElectionBallotCandidate[];
+  // The voter's OWN choice (secret — others never see it).
+  yourVote: string | null;
+  youMayDeclare: { palaioi: boolean; dynatoi: boolean };
+  youAreCandidate: boolean;
+};
+
+export type ElectionsView = {
+  hasOpenElection: boolean;
+  offices: ElectionOfficeView[];
+  nextElectionYear: number | null;
+};
+
+export type OfficeHolder = { characterId: string; name: string; houseName: string; party: string };
+
+export type OfficeSeatView = {
+  office: LeagueOffice | "strategos";
+  side: OfficeSide | null;
+  seatSlot: number;
+  holder: OfficeHolder | null;
+  acquiredVia: string | null;
+  termEndsYear: number | null;
+  youMayAppoint: boolean;
+};
+
+export type OfficeLedgerEntry = {
+  holderName: string;
+  houseName: string;
+  office: string;
+  side: string | null;
+  startedYear: number;
+  endedYear: number | null;
+  acquiredVia: string;
+};
+
+export type OfficesView = {
+  seats: OfficeSeatView[];
+  ledger: OfficeLedgerEntry[];
+  houseTallies: { houseName: string; archonships: number; ephorships: number }[];
+};
+
+export type OfficeAppointee = { characterId: string; name: string; houseName: string; party: string };
 
 // --- The Oligarchy Chamber (Politics Prompt 1) -------------------------------
 

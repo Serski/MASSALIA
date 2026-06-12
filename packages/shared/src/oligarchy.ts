@@ -30,8 +30,35 @@ export const chamberQuestionSchema = z.object({
 
 export type ChamberQuestion = z.infer<typeof chamberQuestionSchema>;
 
+// The elected/appointed offices of the constitution (Politics Prompt 2). Each
+// elected office has one seat per side; independents may stand on either side.
+// Strategoi are appointed by the four elected officials (title-only for now).
+export const officeSideSchema = z.enum(["palaioi", "dynatoi"]);
+export type OfficeSide = z.infer<typeof officeSideSchema>;
+
+export const officesConfigSchema = z.object({
+  elected: z
+    .array(
+      z.object({
+        office: z.enum(["archon", "ephor"]),
+        sides: z.array(officeSideSchema).min(1),
+      }),
+    )
+    .min(1),
+  strategoi: z.object({
+    count: z.number().int().nonnegative(),
+    crossPartyBalance: z.boolean(),
+  }),
+  campaign: z.object({
+    drachmaeCost: z.number().int().nonnegative(),
+    favorGain: z.number().int().nonnegative(),
+  }),
+});
+export type OfficesConfig = z.infer<typeof officesConfigSchema>;
+
 export const politicsConfigSchema = z
   .object({
+    offices: officesConfigSchema,
     chamber: z
       .object({
         capacity: z.number().int().positive(),

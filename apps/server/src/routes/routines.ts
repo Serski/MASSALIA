@@ -8,6 +8,7 @@ import { recoverComposure } from "../services/composure.js";
 import { getHeldTraits } from "../services/traits.js";
 import { utcDayString } from "../services/dailyDecisions.js";
 import {
+  campaignCardFor,
   getRoutineCards,
   getRoutinesConfig,
   ladderStates,
@@ -41,6 +42,9 @@ export async function routineRoutes(app: FastifyInstance) {
     const cfg = getRoutinesConfig();
     const traits = await getHeldTraits(acting.row.id);
     const pool = routinesForClass(getRoutineCards(), acting.row.classId, cfg);
+    // Surface the campaign card to declared candidates in an active election.
+    const campaign = await campaignCardFor(acting.row.id);
+    const cards = campaign ? [...pool, campaign] : pool;
 
     const utcDay = utcDayString(now);
     const todays = await db
@@ -54,7 +58,7 @@ export async function routineRoutes(app: FastifyInstance) {
       dailyPicks: cfg.dailyPicks,
       withdrawn: isWithdrawn(acting.row.breakUntil, now),
       pickedRoutineId,
-      cards: pool.map((card) => previewRoutine(card, acting.row, traits)),
+      cards: cards.map((card) => previewRoutine(card, acting.row, traits)),
       ladders: ladderStates(acting.row),
     };
   });

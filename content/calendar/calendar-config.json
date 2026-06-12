@@ -6,7 +6,12 @@
   "serverDurationRealDays": 182,
   "seasonNames": ["Winter", "Spring", "Summer", "Autumn"],
   "election": {
-    "termPeriods": 30,
+    "termPeriods": 24,
+    "cadenceYears": 6,
+    "declareSeasonOffset": 1,
+    "voteSeasonOffset": 4,
+    "officeSeasonOffset": 5,
+    "maxTermsPerCharacter": 2,
     "campaignRealDays": 4,
     "votingRealDays": 3,
     "seats": 2

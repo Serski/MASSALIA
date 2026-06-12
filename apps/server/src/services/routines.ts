@@ -24,9 +24,27 @@ import { applyComposureDelta, getComposureConfig, recoverComposure } from "./com
 import { getAgeConfig } from "./age.js";
 import { addTrait, getHeldTraits, removeTrait, TraitRuleError } from "./traits.js";
 import { utcDayString } from "./dailyDecisions.js";
+import { eligibleForCampaign, grantCampaignFavor } from "./elections.js";
 import { broadcastState } from "./worldState.js";
 
 const db = createDb();
+
+// The campaign routine (Politics Prompt 2) lives in the "campaign" pool — off
+// every class pool — and is surfaced ONLY to declared candidates in an active
+// election. Picking it grants party-favor visibility that feeds the NPC sway.
+const CAMPAIGN_POOL = "campaign";
+
+function campaignCard(): RoutineCard | null {
+  return getRoutineCards().find((card) => card.pool === CAMPAIGN_POOL) ?? null;
+}
+
+// The campaign card a declared candidate may pick today (appended to their pool),
+// or null when they are not standing in an active election.
+export async function campaignCardFor(characterId: string): Promise<RoutineCard | null> {
+  const card = campaignCard();
+  if (!card) return null;
+  return (await eligibleForCampaign(characterId)) ? card : null;
+}
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../../..");
 const routinesFile = path.join(repoRoot, "content/routines/routines.json");
@@ -171,7 +189,11 @@ export type RoutineResolution =
 export async function resolveRoutine(row: CharacterRow, routineId: string, now: Date = new Date()): Promise<RoutineResolution> {
   const cfg = getRoutinesConfig();
   const pool = routinesForClass(getRoutineCards(), row.classId, cfg);
-  const card = pool.find((candidate) => candidate.id === routineId);
+  let card = pool.find((candidate) => candidate.id === routineId);
+  // The campaign card is off-pool: allow it only for a declared candidate.
+  if (!card && routineId === campaignCard()?.id) {
+    card = (await campaignCardFor(row.id)) ?? undefined;
+  }
   if (!card) return { ok: false, code: 409, error: "That routine is not among your daily choices." };
 
   if (isWithdrawn(row.breakUntil, now)) {
@@ -283,6 +305,10 @@ export async function resolveRoutine(row: CharacterRow, routineId: string, now: 
       };
     }
   }
+
+  // Campaign visibility: +party favor toward the candidate's own party (feeds the
+  // NPC favor-sway at the close tally). Independents court no party — no-op there.
+  if (card.pool === CAMPAIGN_POOL) await grantCampaignFavor(row.id);
 
   await broadcastState();
 

@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../services/auth.js";
 import { ensureCharacterRow, getActivePlayer, getActiveWorldId } from "../services/character.js";
 import { joinParty, leaveParty, PartyError } from "../services/politics.js";
+import { reconcileOffices } from "../services/elections.js";
 
 type PartySlug = "dynatoi" | "palaioi";
 
@@ -33,7 +34,10 @@ export async function partyRoutes(app: FastifyInstance) {
       return { error: "Choose the Dynatoi or the Palaioi." };
     }
     try {
-      return await joinParty(resolved.characterId, party);
+      const result = await joinParty(resolved.characterId, party);
+      // Joining the opposing party forfeits any office held on the other side.
+      await reconcileOffices();
+      return result;
     } catch (error) {
       if (error instanceof PartyError) {
         reply.code(error.statusCode);
@@ -51,7 +55,10 @@ export async function partyRoutes(app: FastifyInstance) {
       return { error: resolved.error };
     }
     try {
-      return await leaveParty(resolved.characterId);
+      const result = await leaveParty(resolved.characterId);
+      // Leaving the party whose side you hold forfeits that office at once.
+      await reconcileOffices();
+      return result;
     } catch (error) {
       if (error instanceof PartyError) {
         reply.code(error.statusCode);

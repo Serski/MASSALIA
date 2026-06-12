@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Queue, Worker } from "bullmq";
 import { completionDelayMs, parseAgeConfig, parseCalendarConfig, parseFamilyConfig, parsePoliticsConfig, type AgeConfig, type CalendarConfig, type FamilyConfig, type PoliticsConfig } from "@massalia/shared";
-import { advanceOlympiads, closeDueChamberVotes, closeDueFestivals, deliverOlympicNominationToAll, drawFamilyCandidates, fireFestivalsForAll, openChamberVoteIfDue, resolveCensureIfExpired, rollChildrenDue, sweepSpouseDeaths } from "@massalia/db";
+import { advanceElections, advanceOlympiads, closeDueChamberVotes, closeDueFestivals, deliverOlympicNominationToAll, drawFamilyCandidates, fireFestivalsForAll, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, sweepSpouseDeaths } from "@massalia/db";
 
 const redisUrl = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
 const connection = {
@@ -36,6 +36,9 @@ async function politicsConfig(): Promise<PoliticsConfig> {
   if (!politicsCfg) politicsCfg = parsePoliticsConfig(JSON.parse(await fs.readFile(path.join(repoRoot, "content/politics/politics-config.json"), "utf8")));
   return politicsCfg;
 }
+async function bothConfigs(): Promise<{ calendar: CalendarConfig; politics: PoliticsConfig }> {
+  return { calendar: await calendarConfig(), politics: await politicsConfig() };
+}
 
 // Festival sweep cadence: well under a season so boundaries are caught promptly.
 const FESTIVAL_SWEEP_MS = 6 * 60 * 60 * 1000;
@@ -47,6 +50,10 @@ const OLYMPIAD_SWEEP_MS = 60 * 60 * 1000;
 // Chamber sweep cadence: the yearly vote is open a whole season (a real day), so
 // an hourly tick opens/closes promptly at the boundaries.
 const CHAMBER_SWEEP_MS = 60 * 60 * 1000;
+// Election sweep cadence: declaration/voting windows are seasons (real days) long,
+// so an hourly tick catches the season boundaries promptly. Idempotent + season-
+// correct: it never retro-fires a cycle whose window already passed.
+const ELECTION_SWEEP_MS = 60 * 60 * 1000;
 
 export async function scheduleBuildingCompletion(buildingId: string, completesAt: number) {
   await scheduledResolutionQueue.add(
@@ -133,6 +140,20 @@ new Worker(
         { delay: CHAMBER_SWEEP_MS, removeOnComplete: true, removeOnFail: 100, jobId: "chamber-sweep" },
       );
     }
+    if (job.name === "election-sweep") {
+      const { calendar, politics } = await bothConfigs();
+      const opened = await openElectionsIfDue(calendar);
+      const advanced = await advanceElections(calendar, politics);
+      console.log(
+        `Election sweep: opened ${opened.length} declaration(s), ${advanced.toVoting.length} to voting, resolved ${advanced.resolved.length}` +
+          (advanced.resolved.length ? ` (${advanced.resolved.map((r) => r.office).join(", ")})` : ""),
+      );
+      await scheduledResolutionQueue.add(
+        "election-sweep",
+        {},
+        { delay: ELECTION_SWEEP_MS, removeOnComplete: true, removeOnFail: 100, jobId: "election-sweep" },
+      );
+    }
     if (job.name === "olympiad-sweep") {
       const cfg = await calendarConfig();
       const delivered = await deliverOlympicNominationToAll(cfg);
@@ -168,3 +189,8 @@ scheduledResolutionQueue
 scheduledResolutionQueue
   .add("chamber-sweep", {}, { delay: 0, removeOnComplete: true, removeOnFail: 100, jobId: "chamber-sweep" })
   .catch((error) => console.warn(`Could not schedule chamber sweep (Redis down?): ${(error as Error).message}`));
+
+// Kick off the recurring election sweep on worker start (best-effort).
+scheduledResolutionQueue
+  .add("election-sweep", {}, { delay: 0, removeOnComplete: true, removeOnFail: 100, jobId: "election-sweep" })
+  .catch((error) => console.warn(`Could not schedule election sweep (Redis down?): ${(error as Error).message}`));

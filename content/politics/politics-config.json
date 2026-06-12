@@ -36,5 +36,13 @@
         "leans": { "palaioi": "yes", "dynatoi": "no", "independent": "yes" }
       }
     ]
+  },
+  "offices": {
+    "elected": [
+      { "office": "archon", "sides": ["palaioi", "dynatoi"] },
+      { "office": "ephor", "sides": ["palaioi", "dynatoi"] }
+    ],
+    "strategoi": { "count": 2, "crossPartyBalance": true },
+    "campaign": { "drachmaeCost": 10, "favorGain": 3 }
   }
 }

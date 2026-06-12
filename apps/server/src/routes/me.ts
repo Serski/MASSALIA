@@ -11,6 +11,7 @@ import { enforceDeathAndHandoff, regentBadge, successionInfo } from "../services
 import { closeDueFestivals, fireFestivalsForCharacter, liveFestivalForCharacter } from "../services/festival.js";
 import { olympiadStatus, syncOlympiadForCharacter } from "../services/olympiad.js";
 import { manumissionStatus } from "../services/manumission.js";
+import { syncElections } from "../services/elections.js";
 
 const db = createDb();
 
@@ -88,6 +89,11 @@ export async function meRoutes(app: FastifyInstance) {
     // then surface the cycle status (phase, badges, live event, city-wide victor).
     await syncOlympiadForCharacter(character);
     const olympiad = await olympiadStatus(character);
+
+    // Elections (Politics Prompt 2): open due declarations, advance phases, and
+    // reconcile office vacancies (death cascade + defection forfeit) on the same
+    // lazy-on-read net the worker sweep also drives.
+    await syncElections();
 
     // Manumission (the slave's path out): is this a slave who has earned freedom?
     const manumission = await manumissionStatus(character);

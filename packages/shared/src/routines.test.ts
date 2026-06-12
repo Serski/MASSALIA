@@ -176,15 +176,18 @@ describe("pool routing + content parsing", () => {
     expect(routinesForClass(cards, "slave", config).map((c) => c.id)).toEqual(["s1"]);
   });
 
-  it("parses the shipped content files (17 routines; pools 10/6/1)", () => {
+  it("parses the shipped content files (18 routines; pools 10/6/1 + 1 campaign)", () => {
     const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
     const routinesJson = JSON.parse(readFileSync(resolve(root, "content/routines/routines.json"), "utf8"));
     const configJson = JSON.parse(readFileSync(resolve(root, "content/routines/routines-config.json"), "utf8"));
     const cards = parseRoutineFile(routinesJson);
     const cfg = parseRoutinesConfig(configJson);
-    expect(cards).toHaveLength(17);
+    // 17 class-pool routines + the off-pool "campaign" card (Politics Prompt 2).
+    expect(cards).toHaveLength(18);
     expect(routinesForClass(cards, "trader", cfg)).toHaveLength(10);
     expect(routinesForClass(cards, "hetaira", cfg)).toHaveLength(6);
     expect(routinesForClass(cards, "slave", cfg)).toHaveLength(1);
+    // The campaign card belongs to no class pool — it is gated on candidacy.
+    expect(cards.filter((c) => c.pool === "campaign")).toHaveLength(1);
   });
 });

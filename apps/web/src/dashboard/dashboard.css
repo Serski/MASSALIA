@@ -3046,3 +3046,19 @@
 @media (max-width: 760px) {
   .dashboard-shell .chamber-grid { grid-template-columns: 1fr; }
 }
+
+/* Archon & Ephor offices + elections (Politics Prompt 2). */
+.dashboard-shell .offices-grid-card { margin-bottom: 14px; padding: 12px 14px; border: 1px solid rgba(181, 138, 69, 0.4); background: linear-gradient(180deg, rgba(38, 30, 20, 0.5), rgba(18, 13, 10, 0.6)); }
+.dashboard-shell .offices-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+.dashboard-shell .office-seat { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 9px; border: 1px solid rgba(181, 138, 69, 0.22); background: rgba(0, 0, 0, 0.22); }
+.dashboard-shell .office-seat-body { flex: 1; min-width: 0; }
+.dashboard-shell .office-seat-title { font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--dash-stone); }
+.dashboard-shell .office-seat-sub { font-size: 13px; color: var(--dash-parchment); margin-top: 2px; }
+.dashboard-shell .office-seat-sub.vacant { color: var(--dash-stone-dim); font-style: italic; }
+.dashboard-shell .office-via { color: var(--dash-gold); }
+.dashboard-shell .appoint-picker { display: flex; flex-direction: column; gap: 6px; width: 100%; margin-top: 4px; }
+.dashboard-shell .election-card { margin-bottom: 14px; border: 1px solid rgba(181, 138, 69, 0.45); background: linear-gradient(180deg, rgba(40, 30, 18, 0.5), rgba(16, 12, 9, 0.6)); }
+.dashboard-shell .ballot-side { margin-top: 8px; }
+.dashboard-shell .office-ledger { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
+.dashboard-shell .office-ledger-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--dash-stone); }
+.dashboard-shell .office-ledger-row b { color: var(--dash-parchment); }

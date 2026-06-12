@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty } from "../api.js";
+import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide } from "../api.js";
 import { assetPath, buildableBuildings, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
@@ -524,10 +524,6 @@ const councilIssues = [
   { id: "tariff", icon: "⚖️", title: "Tin tariff at the harbor", sub: "Proposed by House Leonidas · voting closes Day 6" },
   { id: "fleet", icon: "🚢", title: "Fund a patrol fleet", sub: "Against Tyrrhenian piracy · costs the treasury 2,000g" },
   { id: "dole", icon: "🏛️", title: "Temple grain dole", sub: "Expand the dole to non-citizens · contested" },
-];
-const councilElections = [
-  { id: "archon", icon: "🏺", title: "Archon seats · 2 contested", sub: "Voting open · 3 days remain", votable: true },
-  { id: "assembly", icon: "📜", title: "Next assembly", sub: "Day 21 · petitions close Day 19", votable: false },
 ];
 const councilNews = [
   { id: "seats", icon: "📯", text: <><b>Two Archon seats</b> open this season.</> },
@@ -1876,6 +1872,273 @@ function OligarchySection({ onRefresh }: PanelProps) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Archon & Ephor offices + elections (Politics Prompt 2). The constitution's
+// seats by side/party, the declare→vote→resolve cycle (secret ballot), the
+// appointment cascade, and the dynasty-spanning office ledger.
+// ---------------------------------------------------------------------------
+
+const OFFICE_LABEL: Record<string, string> = { archon: "Archon", ephor: "Ephor", strategos: "Strategos" };
+const SIDE_LABEL: Record<string, string> = { palaioi: "Palaioi", dynatoi: "Dynatoi" };
+
+function partyDotClass(party: string | null | undefined): string {
+  if (party === "palaioi") return "seat-palaioi";
+  if (party === "dynatoi") return "seat-dynatoi";
+  return "seat-independent";
+}
+function bcYear(gameYear: number): string {
+  return `${300 - gameYear} BC`;
+}
+function titleCaseVia(via: string | null): string {
+  if (!via) return "";
+  return via.charAt(0).toUpperCase() + via.slice(1);
+}
+
+// One appointment picker (Ephor vacancy or Strategos), lazily loading eligible
+// same-side seat-holders when opened.
+function AppointPicker({ kind, side, onAppoint }: { kind: "ephor" | "strategos"; side: OfficeSide | null; onAppoint: (characterId: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [appointees, setAppointees] = useState<{ characterId: string; name: string; houseName: string; party: string }[] | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    api.officeAppointees(side ?? "").then((r) => setAppointees(r.appointees)).catch(() => setAppointees([]));
+  }, [open, side]);
+  if (!open) {
+    return (
+      <button type="button" className="panel-btn" onClick={() => setOpen(true)}>
+        Appoint {kind === "ephor" ? "an Ephor" : "a Strategos"}
+      </button>
+    );
+  }
+  return (
+    <div className="appoint-picker">
+      {!appointees ? (
+        <span className="dashboard-todo">Loading eligible seat-holders…</span>
+      ) : appointees.length === 0 ? (
+        <span className="dashboard-todo">No eligible seat-holder is available.</span>
+      ) : (
+        appointees.map((a) => (
+          <button key={a.characterId} type="button" className="event-choice-button" onClick={() => onAppoint(a.characterId)}>
+            <strong>{a.name} of House {a.houseName}</strong>
+            <span className="choice-costs"><span className={`cost-chip cost-neutral`}>{a.party === "none" ? "Independent" : SIDE_LABEL[a.party]}</span></span>
+          </button>
+        ))
+      )}
+    </div>
+  );
+}
+
+function OfficeSeatRow({ seat, onAppoint }: { seat: OfficeSeatView; onAppoint: (kind: "ephor" | "strategos", side: OfficeSide | null, characterId: string) => void }) {
+  const label = `${seat.office === "strategos" ? "Strategos" : `${SIDE_LABEL[seat.side ?? ""]} ${OFFICE_LABEL[seat.office]}`}`;
+  return (
+    <div className="office-seat">
+      <span className={`legend-dot ${partyDotClass(seat.holder?.party ?? seat.side)}`} />
+      <div className="office-seat-body">
+        <div className="office-seat-title">{label}</div>
+        {seat.holder ? (
+          <div className="office-seat-sub">
+            {seat.holder.name} of House {seat.holder.houseName}
+            {seat.acquiredVia && seat.acquiredVia !== "elected" ? <span className="office-via"> · {titleCaseVia(seat.acquiredVia)}</span> : null}
+          </div>
+        ) : (
+          <div className="office-seat-sub vacant">Vacant</div>
+        )}
+      </div>
+      {!seat.holder && seat.youMayAppoint ? (
+        <AppointPicker
+          kind={seat.office === "strategos" ? "strategos" : "ephor"}
+          side={seat.side}
+          onAppoint={(id) => onAppoint(seat.office === "strategos" ? "strategos" : "ephor", seat.side, id)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+// The live election: declaration (declare a candidacy) or voting (secret ballot).
+function ElectionCycleCard({ office, onRefresh }: { office: ElectionOfficeView; onRefresh: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  const until = office.phase === "declaration" ? office.declarationEndsAt : office.votingEndsAt;
+  const countdown = useCountdownSeconds(until);
+
+  const declare = async (side: OfficeSide) => {
+    setBusy(true);
+    setNote("");
+    try {
+      await api.declareCandidacy(office.office, side);
+      onRefresh();
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "Your candidacy could not be recorded.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const vote = async (candidateCharacterId: string) => {
+    setBusy(true);
+    setNote("");
+    try {
+      await api.castElectionVote(office.office, candidateCharacterId);
+      onRefresh();
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "Your vote could not be cast.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <DashboardCard className="election-card">
+      <div className="event-body">
+        <span className="dashboard-label oligarchy-kicker">
+          🗳️ {OFFICE_LABEL[office.office]} election — {office.phase === "declaration" ? "declarations close" : "voting closes"} in {formatDuration(countdown)}
+        </span>
+        {office.phase === "declaration" ? (
+          <>
+            <h3>The {OFFICE_LABEL[office.office]}ship is open. The benches fill with candidates.</h3>
+            {office.youAreCandidate ? (
+              <p className="dashboard-todo">✓ You have declared. Campaign in your daily routines to court the blocs before the vote.</p>
+            ) : office.youMayDeclare.palaioi || office.youMayDeclare.dynatoi ? (
+              <div className="event-choice-stack">
+                {office.youMayDeclare.palaioi ? (
+                  <button type="button" className="event-choice-button" disabled={busy} onClick={() => declare("palaioi")}>
+                    <strong>Declare for the {OFFICE_LABEL[office.office]}ship — Palaioi bench</strong>
+                  </button>
+                ) : null}
+                {office.youMayDeclare.dynatoi ? (
+                  <button type="button" className="event-choice-button" disabled={busy} onClick={() => declare("dynatoi")}>
+                    <strong>Declare for the {OFFICE_LABEL[office.office]}ship — Dynatoi bench</strong>
+                  </button>
+                ) : null}
+              </div>
+            ) : (
+              <p className="dashboard-todo">You are not eligible to stand (a seat in the Three Hundred and a clear party path are required).</p>
+            )}
+          </>
+        ) : (
+          <>
+            <h3>Cast your vote for {OFFICE_LABEL[office.office]} — one per bench.</h3>
+            <p className="dashboard-todo">🔒 The ballot is secret. Only the winners are announced; no tally is shown until close.</p>
+            {(["palaioi", "dynatoi"] as OfficeSide[]).map((side) => {
+              const sideCandidates = office.candidates.filter((c) => c.side === side);
+              return (
+                <div key={side} className="ballot-side">
+                  <div className="panel-label">{SIDE_LABEL[side]} bench</div>
+                  {sideCandidates.length === 0 ? (
+                    <p className="dashboard-todo">No candidate stood on this bench — the seat will fall vacant.</p>
+                  ) : (
+                    sideCandidates.map((c) => {
+                      const chosen = office.yourVote === c.characterId;
+                      return (
+                        <button key={c.characterId} type="button" className={`event-choice-button${chosen ? " ballot-chosen" : ""}`} disabled={busy} onClick={() => vote(c.characterId)}>
+                          <strong>{c.name} of House {c.houseName}</strong>
+                          <span className="choice-costs">
+                            <span className="cost-chip cost-neutral">{c.party === "none" ? "Independent" : SIDE_LABEL[c.party]}</span>
+                            <span className="cost-chip cost-positive">Prestige {c.prestige}</span>
+                            {chosen ? <span className="cost-chip cost-positive">✓ your vote</span> : null}
+                          </span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              );
+            })}
+          </>
+        )}
+        {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
+      </div>
+    </DashboardCard>
+  );
+}
+
+function OfficesSection({ onRefresh }: PanelProps) {
+  const [offices, setOffices] = useState<OfficesView | null>(null);
+  const [elections, setElections] = useState<ElectionsView | null>(null);
+  const [note, setNote] = useState("");
+
+  const load = useCallback(() => {
+    api.offices().then(setOffices).catch(() => {});
+    api.elections().then(setElections).catch(() => {});
+  }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const refresh = () => {
+    load();
+    onRefresh();
+  };
+
+  const onAppoint = async (kind: "ephor" | "strategos", side: OfficeSide | null, characterId: string) => {
+    setNote("");
+    try {
+      if (kind === "ephor" && side) await api.appointEphor(side, characterId);
+      else await api.appointStrategos(characterId);
+      refresh();
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "The appointment could not be made.");
+    }
+  };
+
+  if (!offices) return null;
+
+  return (
+    <>
+      <div className="panel-label panel-label-spaced">The Constitution — offices of the League</div>
+      <DashboardCard className="offices-grid-card">
+        <div className="offices-grid">
+          {offices.seats.map((seat) => (
+            <OfficeSeatRow key={`${seat.office}-${seat.side ?? "x"}-${seat.seatSlot}`} seat={seat} onAppoint={onAppoint} />
+          ))}
+        </div>
+        {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
+      </DashboardCard>
+
+      {elections?.offices.length ? (
+        elections.offices.map((office) => <ElectionCycleCard key={office.office} office={office} onRefresh={refresh} />)
+      ) : (
+        <p className="dashboard-todo">
+          No election is in session.{elections?.nextElectionYear != null ? ` The next falls in ${bcYear(elections.nextElectionYear)}.` : ""}
+        </p>
+      )}
+
+      {offices.houseTallies.length ? (
+        <>
+          <div className="panel-label panel-label-spaced">Houses by office held</div>
+          <div className="ledger-list">
+            {offices.houseTallies.map((t) => (
+              <span key={t.houseName} className="ledger-chip">
+                {t.houseName}: {t.archonships ? `${t.archonships} Archonship${t.archonships > 1 ? "s" : ""}` : ""}
+                {t.archonships && t.ephorships ? " · " : ""}
+                {t.ephorships ? `${t.ephorships} Ephorship${t.ephorships > 1 ? "s" : ""}` : ""}
+              </span>
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      {offices.ledger.length ? (
+        <>
+          <div className="panel-label panel-label-spaced">The political ledger</div>
+          <div className="office-ledger">
+            {offices.ledger.slice(0, 16).map((h, i) => (
+              <div key={i} className="office-ledger-row">
+                <span className={`legend-dot ${partyDotClass(h.side)}`} />
+                <span>
+                  <b>{h.holderName}</b> of House {h.houseName} — {h.side ? `${SIDE_LABEL[h.side]} ` : ""}{OFFICE_LABEL[h.office]}
+                  {h.acquiredVia !== "elected" ? ` (${titleCaseVia(h.acquiredVia)})` : ""}, {bcYear(h.startedYear)}
+                  {h.endedYear != null ? `–${bcYear(h.endedYear)}` : " — sitting"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : null}
+    </>
+  );
+}
+
 function PoliticsPanel({ player, onRefresh }: PanelProps) {
   const [tab, setTab] = useState<"council" | "party">("council");
   const [note, setNote] = useState("");
@@ -1922,6 +2185,7 @@ function PoliticsPanel({ player, onRefresh }: PanelProps) {
         <div className="pol-page">
           <PanelBanner scene="the council chamber" />
           <OligarchySection player={player} onRefresh={onRefresh} />
+          <OfficesSection player={player} onRefresh={onRefresh} />
           <div className="court-grid">
             <div>
               <div className="panel-label">Issues before the council</div>
@@ -1934,33 +2198,13 @@ function PoliticsPanel({ player, onRefresh }: PanelProps) {
                   action={<StubButton message="TODO: council voting is a stub until political state exists." onStub={setNote}>Vote</StubButton>}
                 />
               ))}
-              <div className="panel-label panel-label-spaced">Elections</div>
-              {councilElections.map((election) => (
-                <PanelRow
-                  key={election.id}
-                  icon={election.icon}
-                  title={election.title}
-                  sub={election.sub}
-                  action={election.votable ? <StubButton message="TODO: election voting is a stub until political state exists." onStub={setNote}>Vote</StubButton> : undefined}
-                  tag={election.votable ? undefined : "—"}
-                />
-              ))}
             </div>
             <div>
-              <DashboardCard className="offices-card">
-                <h2>Offices in play</h2>
-                <div className="office-stack">
-                  <span>Archon seats - 2 contested</span>
-                  <span>Council petitions - 3 awaiting support</span>
-                  <span>Next assembly - Day 21</span>
-                </div>
-                <p className="dashboard-todo">TODO: offices mirror placeholder political state.</p>
-              </DashboardCard>
               <div className="panel-label">Council news</div>
               <DigestList items={councilNews} />
             </div>
           </div>
-          <p className="dashboard-todo">TODO: council issues, elections, and news are placeholder until political state exists.</p>
+          <p className="dashboard-todo">TODO: the council "issues" above are placeholder until the agenda system (Prompt 3); the offices, elections, and ledger above are live.</p>
           {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
         </div>
       ) : joined ? (

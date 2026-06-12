@@ -408,6 +408,78 @@ export const chamberBallots = pgTable("chamber_ballots", {
   oneBallotPerVoter: uniqueIndex("chamber_ballots_voter_idx").on(table.voteId, table.voterCharacterId),
 }));
 
+// Archon & Ephor elections (Politics Prompt 2). Current office-holders: one row
+// per (world, office, side, seat_slot). Strategoi use side NULL + seat_slot 0/1.
+export const offices = pgTable("offices", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  office: text("office").notNull(), // 'archon' | 'ephor' | 'strategos' | 'party_archon' | 'party_ephor'
+  side: text("side"), // 'palaioi' | 'dynatoi' | null (strategoi)
+  seatSlot: integer("seat_slot").notNull().default(0),
+  holderCharacterId: uuid("holder_character_id").references(() => playerCharacters.id),
+  // True when the holder took the seat as an independent (drives defection forfeit).
+  independentHolder: boolean("independent_holder").notNull().default(false),
+  termStartedYear: integer("term_started_year"),
+  termEndsYear: integer("term_ends_year"),
+  acquiredVia: text("acquired_via"), // 'elected' | 'ascended' | 'appointed' | 'interim'
+}, (table) => ({
+  oneSeatPerSlot: uniqueIndex("offices_world_office_side_slot_idx").on(table.worldId, table.office, table.side, table.seatSlot),
+}));
+
+// Election cycle state: one per (world, office, game_year), advanced through
+// declaration → voting → resolved against the season clock.
+export const elections = pgTable("elections", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  office: text("office").notNull(), // 'archon' | 'ephor'
+  gameYear: integer("game_year").notNull(),
+  phase: text("phase").notNull(), // 'declaration' | 'voting' | 'resolved'
+  declarationEndsAt: timestamp("declaration_ends_at", { withTimezone: true }).notNull(),
+  votingEndsAt: timestamp("voting_ends_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  onePerOfficeYear: uniqueIndex("elections_world_office_year_idx").on(table.worldId, table.office, table.gameYear),
+}));
+
+// Standing candidates. side is chosen at declaration (independents pick a side).
+export const electionCandidates = pgTable("election_candidates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  electionId: uuid("election_id").references(() => elections.id).notNull(),
+  characterId: uuid("character_id").references(() => playerCharacters.id).notNull(),
+  side: text("side").notNull(), // 'palaioi' | 'dynatoi'
+  declaredAt: timestamp("declared_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  oneCandidacyPerCharacter: uniqueIndex("election_candidates_idx").on(table.electionId, table.characterId),
+}));
+
+// The ballot: one vote per voter, changeable until close. SECRET — no public
+// per-voter read (unlike chamber_ballots).
+export const electionVotes = pgTable("election_votes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  electionId: uuid("election_id").references(() => elections.id).notNull(),
+  voterCharacterId: uuid("voter_character_id").references(() => playerCharacters.id).notNull(),
+  candidateCharacterId: uuid("candidate_character_id").references(() => playerCharacters.id).notNull(),
+  castAt: timestamp("cast_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  oneVotePerVoter: uniqueIndex("election_votes_voter_idx").on(table.electionId, table.voterCharacterId),
+}));
+
+// The public ledger + the term-limit source (count only acquired_via='elected').
+export const officeHistory = pgTable("office_history", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  characterId: uuid("character_id").references(() => playerCharacters.id).notNull(),
+  office: text("office").notNull(),
+  side: text("side"),
+  startedYear: integer("started_year").notNull(),
+  endedYear: integer("ended_year"),
+  acquiredVia: text("acquired_via").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  worldIdx: index("office_history_world_idx").on(table.worldId, table.office, table.side),
+  characterIdx: index("office_history_character_idx").on(table.characterId, table.office),
+}));
+
 // Events drawn for a character (for the "exclude last 5 draws" rule).
 export const eventHistory = pgTable("event_history", {
   id: uuid("id").primaryKey().defaultRandom(),
