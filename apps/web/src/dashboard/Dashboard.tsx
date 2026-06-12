@@ -310,7 +310,7 @@ function PanelBanner({ scene, art, className = "" }: { scene: string; art?: stri
   return (
     <div
       className={`panel-banner${className ? ` ${className}` : ""}`}
-      style={art ? { backgroundImage: `url(${art})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+      style={art ? { backgroundImage: `url("${art}")`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
     >
       {art ? null : <span className="scene-tag">scene art — {scene}</span>}
     </div>
@@ -1762,7 +1762,10 @@ function OligarchySection({ onRefresh }: PanelProps) {
 
   return (
     <>
-      <div className="panel-label">The Oligarchy — the Three Hundred</div>
+      <div className="panel-label panel-label-seal">
+        <img src={assetPath(OFFICE_ICON.oligarch ?? "")} alt="" loading="lazy" />
+        The Oligarchy — the Three Hundred
+      </div>
       <DashboardCard className="chamber-card">
         <div className="chamber-grid">
           <Hemicycle seats={chamber.seats} />
@@ -1860,6 +1863,14 @@ function OligarchySection({ onRefresh }: PanelProps) {
 
 const OFFICE_LABEL: Record<string, string> = { archon: "Archon", ephor: "Ephor", strategos: "Strategos" };
 const SIDE_LABEL: Record<string, string> = { palaioi: "Palaioi", dynatoi: "Dynatoi" };
+// Office seals reuse the front-page government art (App.tsx office grid):
+// Archon→ARCHON, Ephor→EPHOR, Strategos→GENERAL, the Oligarchy Council→OLIGARCH.
+const OFFICE_ICON: Record<string, string> = {
+  archon: "assets/offices/ARCHON.webp",
+  ephor: "assets/offices/EPHOR.webp",
+  strategos: "assets/offices/GENERAL.webp",
+  oligarch: "assets/offices/OLIGARCH.webp",
+};
 
 function partyDotClass(party: string | null | undefined): string {
   if (party === "palaioi") return "seat-palaioi";
@@ -1913,6 +1924,9 @@ function OfficeSeatRow({ seat, onAppoint }: { seat: OfficeSeatView; onAppoint: (
   return (
     <div className="office-seat">
       <span className={`legend-dot ${partyDotClass(seat.holder?.party ?? seat.side)}`} />
+      <span className="office-seat-icon" aria-hidden="true">
+        <img src={assetPath(OFFICE_ICON[seat.office] ?? "")} alt="" loading="lazy" />
+      </span>
       <div className="office-seat-body">
         <div className="office-seat-title">{label}</div>
         {seat.holder ? (
@@ -2281,7 +2295,6 @@ function PoliticsPanel({ player, onRefresh }: PanelProps) {
 
       {tab === "council" ? (
         <div className="pol-page">
-          <PanelBanner scene="the council chamber" />
           <OligarchySection player={player} onRefresh={onRefresh} />
           <LeagueAgendaSection onRefresh={onRefresh} />
           <OfficesSection player={player} onRefresh={onRefresh} />
@@ -2289,7 +2302,11 @@ function PoliticsPanel({ player, onRefresh }: PanelProps) {
         </div>
       ) : joined ? (
         <div className="pol-page">
-          <PanelBanner scene={`the ${player.party} hall`} className={player.party === "Dynatoi" ? "banner-reform" : "banner-cons"} />
+          <PanelBanner
+            scene={`the ${player.party} hall`}
+            art={assetPath(player.party === "Dynatoi" ? "assets/DYNATOI READY.png" : "assets/PALAIOI READY.png")}
+            className={player.party === "Dynatoi" ? "banner-reform" : "banner-cons"}
+          />
           {player.censured ? (
             <div className="censure-banner" role="alert">
               <span className="censure-ic" aria-hidden="true">⚠️</span>
@@ -2342,9 +2359,14 @@ function PoliticsPanel({ player, onRefresh }: PanelProps) {
               const pct = option.slug === "dynatoi" ? Math.max(0, player.ideology) : Math.max(0, -player.ideology);
               return (
                 <div className={`party-pick${option.consClass ? " cons" : ""}`} key={option.slug}>
-                  <div className="party-banner">
-                    <span className="scene-tag">scene art — {option.consClass ? "the old guard" : "the reformers"}</span>
-                  </div>
+                  <div
+                    className="party-banner"
+                    style={{
+                      backgroundImage: `url("${assetPath(option.consClass ? "assets/PALAIOI READY.png" : "assets/DYNATOI READY.png")}")`,
+                      backgroundSize: "cover",
+                      backgroundPosition: "center",
+                    }}
+                  />
                   <div className="party-body">
                     <div className="party-greek">{option.greek}</div>
                     <div className="party-name">{option.name}</div>

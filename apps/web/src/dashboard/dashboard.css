@@ -3010,7 +3010,9 @@
 .dashboard-shell .freedom-flavor { font-size: 12.5px; color: #c7d6bd; margin: 4px 0 8px; font-style: italic; }
 
 /* The Oligarchy Chamber (Politics Prompt 1): hemicycle, seat purchase, ledger. */
-.dashboard-shell .chamber-card { margin-bottom: 14px; padding: 14px; border: 1px solid rgba(181, 138, 69, 0.4); background: linear-gradient(180deg, rgba(40, 32, 22, 0.5), rgba(18, 13, 10, 0.6)); }
+/* The 300-seat hemicycle sits in front of the front-page government art
+   (Politics.jpg), dimmed hard so the seat dots and labels stay legible. */
+.dashboard-shell .chamber-card { margin-bottom: 14px; padding: 14px; border: 1px solid rgba(181, 138, 69, 0.4); position: relative; isolation: isolate; background: linear-gradient(180deg, rgba(18, 12, 8, 0.84), rgba(12, 8, 6, 0.9)), url("../assets/Politics.jpg") center / cover no-repeat, #130d0a; }
 .dashboard-shell .chamber-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(180px, 1fr); gap: 14px; align-items: center; }
 .dashboard-shell .hemicycle { width: 100%; height: auto; display: block; }
 .dashboard-shell .seat-dot { stroke: rgba(0, 0, 0, 0.45); stroke-width: 0.6; }
@@ -3051,6 +3053,12 @@
 .dashboard-shell .offices-grid-card { margin-bottom: 14px; padding: 12px 14px; border: 1px solid rgba(181, 138, 69, 0.4); background: linear-gradient(180deg, rgba(38, 30, 20, 0.5), rgba(18, 13, 10, 0.6)); }
 .dashboard-shell .offices-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
 .dashboard-shell .office-seat { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 9px; border: 1px solid rgba(181, 138, 69, 0.22); background: rgba(0, 0, 0, 0.22); }
+/* The office seal (front-page government art) beside each seat, filled or vacant. */
+.dashboard-shell .office-seat-icon { flex: 0 0 auto; display: inline-flex; }
+.dashboard-shell .office-seat-icon img { width: 28px; height: 28px; object-fit: contain; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55)); }
+/* The Oligarchy seal inline in the chamber header. */
+.dashboard-shell .panel-label-seal { display: flex; align-items: center; gap: 8px; }
+.dashboard-shell .panel-label-seal img { width: 22px; height: 22px; object-fit: contain; }
 .dashboard-shell .office-seat-body { flex: 1; min-width: 0; }
 .dashboard-shell .office-seat-title { font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--dash-stone); }
 .dashboard-shell .office-seat-sub { font-size: 13px; color: var(--dash-parchment); margin-top: 2px; }
