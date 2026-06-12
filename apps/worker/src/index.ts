@@ -55,6 +55,86 @@ const CHAMBER_SWEEP_MS = 60 * 60 * 1000;
 // correct: it never retro-fires a cycle whose window already passed.
 const ELECTION_SWEEP_MS = 60 * 60 * 1000;
 
+// --- Recurring sweeps: self-healing job SCHEDULERS --------------------------
+// Each sweep runs on a fixed cadence via a BullMQ job scheduler. The scheduler
+// emits the next occurrence regardless of whether the current run throws, so a
+// transient failure (e.g. the DB/migration race at deploy time) self-heals on the
+// next tick instead of wedging. This replaces the old "re-arm with a fixed jobId
+// at the end of the handler" pattern, which BullMQ dedupes against the still-active
+// job — so it NEVER re-fired, leaving every sweep running only once per boot.
+type Sweep = { name: string; every: number; run: () => Promise<string> };
+
+const SWEEPS: Sweep[] = [
+  {
+    name: "festival-sweep",
+    every: FESTIVAL_SWEEP_MS,
+    run: async () => {
+      const cfg = await calendarConfig();
+      const fired = await fireFestivalsForAll(cfg);
+      const closed = await closeDueFestivals(cfg);
+      return `Festival sweep: fired to ${fired} living characters, closed ${closed} instance(s)`;
+    },
+  },
+  {
+    name: "spouse-death-sweep",
+    every: SPOUSE_SWEEP_MS,
+    run: async () => {
+      const { familyCfg: fc, ageCfg: ac } = await configs();
+      const deaths = await sweepSpouseDeaths({ familyCfg: fc, ageCfg: ac });
+      return `Spouse-death sweep: ended ${deaths.length} marriage(s) of old age`;
+    },
+  },
+  {
+    name: "chamber-sweep",
+    every: CHAMBER_SWEEP_MS,
+    run: async () => {
+      const cfg = await politicsConfig();
+      const opened = await openChamberVoteIfDue(cfg);
+      const closed = await closeDueChamberVotes(cfg);
+      return `Chamber sweep: ${opened ? `opened "${opened.title}" (year ${opened.gameYear})` : "no vote opened"}, closed ${closed.length} vote(s)`;
+    },
+  },
+  {
+    name: "election-sweep",
+    every: ELECTION_SWEEP_MS,
+    run: async () => {
+      const { calendar, politics } = await bothConfigs();
+      const opened = await openElectionsIfDue(calendar);
+      const advanced = await advanceElections(calendar, politics);
+      return (
+        `Election sweep: opened ${opened.length} declaration(s), ${advanced.toVoting.length} to voting, resolved ${advanced.resolved.length}` +
+        (advanced.resolved.length ? ` (${advanced.resolved.map((r) => r.office).join(", ")})` : "")
+      );
+    },
+  },
+  {
+    name: "olympiad-sweep",
+    every: OLYMPIAD_SWEEP_MS,
+    run: async () => {
+      const cfg = await calendarConfig();
+      const delivered = await deliverOlympicNominationToAll(cfg);
+      const advanced = await advanceOlympiads(cfg);
+      return `Olympiad sweep: delivered ${delivered} nominate card(s), advanced ${advanced.length} cycle(s)`;
+    },
+  },
+];
+const SWEEP_BY_NAME = new Map(SWEEPS.map((sweep) => [sweep.name, sweep]));
+
+// Install (idempotent) every sweep's scheduler on boot, and clear any stale
+// fixed-jobId sweep job left by the previous manual-rearm scheme so it can't
+// linger wedged in the failed set and block its name.
+async function installSweepSchedulers() {
+  for (const sweep of SWEEPS) {
+    try {
+      const stale = await scheduledResolutionQueue.getJob(sweep.name);
+      if (stale) await stale.remove();
+      await scheduledResolutionQueue.upsertJobScheduler(sweep.name, { every: sweep.every }, { name: sweep.name });
+    } catch (error) {
+      console.warn(`Could not install ${sweep.name} scheduler (Redis down?): ${(error as Error).message}`);
+    }
+  }
+}
+
 export async function scheduleBuildingCompletion(buildingId: string, completesAt: number) {
   await scheduledResolutionQueue.add(
     "building-complete",
@@ -105,92 +185,22 @@ new Worker(
       );
       return;
     }
-    if (job.name === "festival-sweep") {
-      const cfg = await calendarConfig();
-      const fired = await fireFestivalsForAll(cfg);
-      const closed = await closeDueFestivals(cfg);
-      console.log(`Festival sweep: fired to ${fired} living characters, closed ${closed} instance(s)`);
-      // Re-arm the recurring sweep.
-      await scheduledResolutionQueue.add(
-        "festival-sweep",
-        {},
-        { delay: FESTIVAL_SWEEP_MS, removeOnComplete: true, removeOnFail: 100, jobId: "festival-sweep" },
-      );
-    }
-    if (job.name === "spouse-death-sweep") {
-      const { familyCfg: fc, ageCfg: ac } = await configs();
-      const deaths = await sweepSpouseDeaths({ familyCfg: fc, ageCfg: ac });
-      console.log(`Spouse-death sweep: ended ${deaths.length} marriage(s) of old age`);
-      // Re-arm the recurring sweep.
-      await scheduledResolutionQueue.add(
-        "spouse-death-sweep",
-        {},
-        { delay: SPOUSE_SWEEP_MS, removeOnComplete: true, removeOnFail: 100, jobId: "spouse-death-sweep" },
-      );
-    }
-    if (job.name === "chamber-sweep") {
-      const cfg = await politicsConfig();
-      const opened = await openChamberVoteIfDue(cfg);
-      const closed = await closeDueChamberVotes(cfg);
-      console.log(`Chamber sweep: ${opened ? `opened "${opened.title}" (year ${opened.gameYear})` : "no vote opened"}, closed ${closed.length} vote(s)`);
-      // Re-arm the recurring sweep.
-      await scheduledResolutionQueue.add(
-        "chamber-sweep",
-        {},
-        { delay: CHAMBER_SWEEP_MS, removeOnComplete: true, removeOnFail: 100, jobId: "chamber-sweep" },
-      );
-    }
-    if (job.name === "election-sweep") {
-      const { calendar, politics } = await bothConfigs();
-      const opened = await openElectionsIfDue(calendar);
-      const advanced = await advanceElections(calendar, politics);
-      console.log(
-        `Election sweep: opened ${opened.length} declaration(s), ${advanced.toVoting.length} to voting, resolved ${advanced.resolved.length}` +
-          (advanced.resolved.length ? ` (${advanced.resolved.map((r) => r.office).join(", ")})` : ""),
-      );
-      await scheduledResolutionQueue.add(
-        "election-sweep",
-        {},
-        { delay: ELECTION_SWEEP_MS, removeOnComplete: true, removeOnFail: 100, jobId: "election-sweep" },
-      );
-    }
-    if (job.name === "olympiad-sweep") {
-      const cfg = await calendarConfig();
-      const delivered = await deliverOlympicNominationToAll(cfg);
-      const advanced = await advanceOlympiads(cfg);
-      console.log(`Olympiad sweep: delivered ${delivered} nominate card(s), advanced ${advanced.length} cycle(s)`);
-      // Re-arm the recurring sweep.
-      await scheduledResolutionQueue.add(
-        "olympiad-sweep",
-        {},
-        { delay: OLYMPIAD_SWEEP_MS, removeOnComplete: true, removeOnFail: 100, jobId: "olympiad-sweep" },
-      );
+    // Recurring sweeps run via their scheduler. The scheduler guarantees the next
+    // occurrence regardless of the outcome here, so a throw is logged (not re-armed
+    // by hand) and swallowed to avoid noisy failed-job stacks — it self-heals next tick.
+    const sweep = SWEEP_BY_NAME.get(job.name);
+    if (sweep) {
+      try {
+        console.log(await sweep.run());
+      } catch (error) {
+        console.error(`${job.name} failed (self-heals next interval): ${(error as Error).message}`);
+      }
+      return;
     }
   },
   { connection },
 );
 
-// Kick off the recurring festival sweep on worker start (best-effort).
-scheduledResolutionQueue
-  .add("festival-sweep", {}, { delay: 0, removeOnComplete: true, removeOnFail: 100, jobId: "festival-sweep" })
-  .catch((error) => console.warn(`Could not schedule festival sweep (Redis down?): ${(error as Error).message}`));
-
-// Kick off the recurring spouse-death sweep on worker start (best-effort).
-scheduledResolutionQueue
-  .add("spouse-death-sweep", {}, { delay: 0, removeOnComplete: true, removeOnFail: 100, jobId: "spouse-death-sweep" })
-  .catch((error) => console.warn(`Could not schedule spouse-death sweep (Redis down?): ${(error as Error).message}`));
-
-// Kick off the recurring Olympiad sweep on worker start (best-effort).
-scheduledResolutionQueue
-  .add("olympiad-sweep", {}, { delay: 0, removeOnComplete: true, removeOnFail: 100, jobId: "olympiad-sweep" })
-  .catch((error) => console.warn(`Could not schedule Olympiad sweep (Redis down?): ${(error as Error).message}`));
-
-// Kick off the recurring chamber sweep on worker start (best-effort).
-scheduledResolutionQueue
-  .add("chamber-sweep", {}, { delay: 0, removeOnComplete: true, removeOnFail: 100, jobId: "chamber-sweep" })
-  .catch((error) => console.warn(`Could not schedule chamber sweep (Redis down?): ${(error as Error).message}`));
-
-// Kick off the recurring election sweep on worker start (best-effort).
-scheduledResolutionQueue
-  .add("election-sweep", {}, { delay: 0, removeOnComplete: true, removeOnFail: 100, jobId: "election-sweep" })
-  .catch((error) => console.warn(`Could not schedule election sweep (Redis down?): ${(error as Error).message}`));
+// Install the self-healing sweep schedulers on worker start (best-effort). Idempotent
+// across restarts; clears any stale fixed-jobId sweep job from the old scheme.
+void installSweepSchedulers();
