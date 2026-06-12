@@ -178,7 +178,7 @@ function ClassSheet({ profession }: { profession: Profession }) {
         </div>
         <div>
           <dt>Cost facts</dt>
-          <dd>{profession.narrativePath ? "No coin, land, or House at start." : "100 gold to start."}</dd>
+          <dd>{profession.narrativePath ? "No coin, land, or House at start." : "100 dr. to start."}</dd>
         </div>
       </dl>
       {profession.narrativePath ? (

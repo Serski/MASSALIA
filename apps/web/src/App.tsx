@@ -68,7 +68,7 @@ const parties: Party[] = [
     alignment: "conservative",
     formed: "360 BC",
     motto: "Preserving the Heritage",
-    stipend: "Party Archon: 80 gold/day",
+    stipend: "Party Archon: 80 dr./day",
     who: "The old Phocaean aristocracy, families of the first settlers who hold land, temples, and military prestige.",
     wants: "Pure Hellenic tradition, resistance to Gaulish syncretism, and independence from Carthage and Rome.",
     influence: "They draw strength from old families, temples, officer networks, and citizens wary of foreign entanglements.",
@@ -84,7 +84,7 @@ const parties: Party[] = [
     alignment: "reformist",
     formed: "c. 360 BC",
     motto: "Reform for Prosperity",
-    stipend: "Party Archon: 80 gold/day",
+    stipend: "Party Archon: 80 dr./day",
     who: "Newer progressive families, traders, and diplomats tied to the Gaulish tribes.",
     wants: "A cosmopolitan Massalia open to Gaulish customs, trade expansion into Gaul, and security through alliance.",
     influence: "They rise through merchant wealth, diplomacy, interpreters, and citizens who see survival in adaptation.",
@@ -92,10 +92,10 @@ const parties: Party[] = [
 ];
 
 const offices = [
-  { title: "Archons x2", type: "Elected", pay: "150 gold/day", icon: "assets/offices/ARCHON.webp", description: "Heads of state and chief generals; one must be Palaioi, one Dynatoi." },
-  { title: "Ephors x2", type: "Appointed", pay: "60 gold/day", icon: "assets/offices/EPHOR.webp", description: "Checks on the Archons; finances, laws, and calling or dissolving council." },
-  { title: "Strategoi x2", type: "Appointed", pay: "100 gold/day", icon: "assets/offices/GENERAL.webp", description: "Command armies with or for the Archons." },
-  { title: "Council of Oligarchy", type: "Council", pay: "40 gold/day", icon: "assets/offices/OLIGARCH.webp", description: "Senior family members who approve laws, treaties, war, and budgets." },
+  { title: "Archons x2", type: "Elected", pay: "150 dr./day", icon: "assets/offices/ARCHON.webp", description: "Heads of state and chief generals; one must be Palaioi, one Dynatoi." },
+  { title: "Ephors x2", type: "Appointed", pay: "60 dr./day", icon: "assets/offices/EPHOR.webp", description: "Checks on the Archons; finances, laws, and calling or dissolving council." },
+  { title: "Strategoi x2", type: "Appointed", pay: "100 dr./day", icon: "assets/offices/GENERAL.webp", description: "Command armies with or for the Archons." },
+  { title: "Council of Oligarchy", type: "Council", pay: "40 dr./day", icon: "assets/offices/OLIGARCH.webp", description: "Senior family members who approve laws, treaties, war, and budgets." },
 ];
 
 const detailCollections = {
@@ -437,7 +437,7 @@ function DetailBody({ entry }: { entry: DetailEntry }) {
           <h2>Objective</h2>
           <p>{entry.objective}</p>
           <p><strong>Starting income:</strong> {entry.income}</p>
-          <p><strong>Cost to start:</strong> 100 gold</p>
+          <p><strong>Cost to start:</strong> 100 dr.</p>
           <p>{entry.note}</p>
         </article>
         <article className="detail-panel">

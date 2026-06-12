@@ -167,14 +167,14 @@ export type PlayerState = {
   // Manumission: { eligible } when a slave holds the freedman trait, else flag false.
   manumission: { eligible: boolean } | null;
   resources: {
-    gold: number;
+    drachmae: number;
     prestige: number;
     influence: number;
     classResource: {
       type: string;
       label: string;
       amount: number;
-    };
+    } | null;
     // Every per-type balance the player holds (type -> amount).
     balances: Record<string, number>;
   };

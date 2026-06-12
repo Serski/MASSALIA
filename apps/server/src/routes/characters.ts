@@ -25,12 +25,13 @@ type CharacterPayload = {
   name?: string;
 };
 
-const classResourceByProfession: Record<string, string> = {
+const classResourceByProfession: Record<string, string | null> = {
   landowner: "wheat",
   trader: "wine",
   priest: "herbal",
   philosopher: "prestige",
-  shipbuilder: "gold",
+  // Shipbuilders' trade pays drachmae directly — no separate class resource.
+  shipbuilder: null,
   hetaira: "intelligence",
   hoplite: "militia",
   slave: "freedom",
@@ -137,13 +138,15 @@ export async function characterRoutes(app: FastifyInstance) {
         })
         .returning())[0]!;
 
-      const classResource = classResourceByProfession[profession.slug] ?? "favor";
-      const startingResources = new Map([
-        ["gold", "100"],
+      // The wallet lives on player_characters.drachmae, NOT the resources table —
+      // no phantom currency row is seeded. Seed prestige/influence, plus the class
+      // resource only when the profession has one (shipbuilder has none).
+      const classResource: string | null = profession.slug in classResourceByProfession ? classResourceByProfession[profession.slug] ?? null : "favor";
+      const startingResources = new Map<string, string>([
         ["prestige", "0"],
         ["influence", "0"],
-        [classResource, classResource === "gold" ? "100" : "0"],
       ]);
+      if (classResource) startingResources.set(classResource, "0");
       await tx.insert(resources).values(
         Array.from(startingResources, ([type, amount]) => ({
           scope: "player",

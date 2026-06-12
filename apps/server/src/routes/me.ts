@@ -16,12 +16,13 @@ import { syncElections } from "../services/elections.js";
 
 const db = createDb();
 
-const classResourceByProfession: Record<string, string> = {
+const classResourceByProfession: Record<string, string | null> = {
   landowner: "wheat",
   trader: "wine",
   priest: "herbal",
   philosopher: "prestige",
-  shipbuilder: "gold",
+  // Shipbuilders' trade pays drachmae directly — no separate class resource.
+  shipbuilder: null,
   hetaira: "intelligence",
   hoplite: "militia",
   slave: "freedom",
@@ -105,7 +106,9 @@ export async function meRoutes(app: FastifyInstance) {
 
     const resourceRows = await db.select().from(resources).where(and(eq(resources.scope, "player"), eq(resources.scopeId, state.player.id)));
     const resourceMap = new Map(resourceRows.map((resource) => [resource.type, numberAmount(resource.amount)]));
-    const classResourceType = classResourceByProfession[state.profession.slug] ?? "favor";
+    // A known slug maps to its resource (or null = no class resource, e.g. shipbuilder);
+    // "favor" stays a defensive default only for a genuinely unknown slug.
+    const classResourceType: string | null = state.profession.slug in classResourceByProfession ? classResourceByProfession[state.profession.slug] ?? null : "favor";
 
     // Full per-type balance map so the inventory sheet can show every good the
     // player actually holds. Goods absent from the table render as 0 on the client.
@@ -189,15 +192,17 @@ export async function meRoutes(app: FastifyInstance) {
       // signal for the client's "Claim Your Freedom" panel.
       manumission,
       resources: {
-        // Drachmae is the canonical currency; surfaced as "gold" for the existing UI.
-        gold: character.drachmae,
+        // Drachmae is the canonical currency.
+        drachmae: character.drachmae,
         prestige: character.prestige,
         influence: resourceMap.get("influence") ?? 0,
-        classResource: {
-          type: classResourceType,
-          label: classResourceType[0]!.toUpperCase() + classResourceType.slice(1),
-          amount: resourceMap.get(classResourceType) ?? 0,
-        },
+        classResource: classResourceType
+          ? {
+              type: classResourceType,
+              label: classResourceType[0]!.toUpperCase() + classResourceType.slice(1),
+              amount: resourceMap.get(classResourceType) ?? 0,
+            }
+          : null,
         balances,
       },
       // The 4-stat model, now sourced from the canonical character sheet.

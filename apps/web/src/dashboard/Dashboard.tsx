@@ -32,7 +32,7 @@ type PlayerDashboardState = {
   // Current season name ("Winter".."Autumn"), drives the clock-strip icon.
   seasonName: string;
   seasonEndsIn: number;
-  gold: number;
+  drachmae: number;
   prestige: number;
   influence: number;
   professionSlug: string;
@@ -41,7 +41,7 @@ type PlayerDashboardState = {
     type: string;
     label: string;
     amount: number;
-  };
+  } | null;
   party: "Palaioi" | "Dynatoi" | "Unaligned";
   // -100 Traditionalist .. +100 Reformist, 0 = centre.
   ideology: number;
@@ -109,7 +109,7 @@ const placeholderPlayerState: PlayerDashboardState = {
   gameDateLabel: "Winter, 300 BC",
   seasonName: "Winter",
   seasonEndsIn: 182,
-  gold: 420,
+  drachmae: 420,
   prestige: 12,
   influence: 7,
   professionSlug: "trader",
@@ -183,16 +183,12 @@ function playerFromState(state: PlayerState): PlayerDashboardView {
     gameDateLabel: state.world.gameDateLabel,
     seasonName: state.world.gameDate?.seasonName ?? "Winter",
     seasonEndsIn: state.world.seasonEndsIn,
-    gold: state.resources.gold,
+    drachmae: state.resources.drachmae,
     prestige: state.resources.prestige,
     influence: state.resources.influence,
     professionSlug: profession.slug,
     houseSlug: house.slug,
-    classResource: {
-      type: state.resources.classResource.type,
-      label: state.resources.classResource.label,
-      amount: state.resources.classResource.amount,
-    },
+    classResource: state.resources.classResource,
     party: normalizeParty(state.character.party),
     // Guard against a missing value (e.g. a frontend/backend deploy-window skew)
     // so the bar degrades to "Centrist (0%)" instead of rendering "NaN%".
@@ -2410,9 +2406,9 @@ const PLACEHOLDER_NEW_ITEM_COUNT = 0;
 // Everyone starts at Tier 1; real tier tracking lands with profession progression.
 const BASE_TIER_LABEL = "Tier 1";
 
-// Emoji per resource type, used for the coin & class store rows and goods.
+// Emoji per resource type, used for the class store row and goods. The wallet
+// (drachmae) is not a resources-table type — its coin row uses 🪙 directly.
 const resourceIcons: Record<string, string> = {
-  gold: "🪙",
   wine: "🍷",
   wheat: "🌾",
   herbal: "🌿",
@@ -2462,7 +2458,7 @@ function primaryStatFor(slug: string): keyof FourStats {
 // TODO: placeholder items until the items system exists.
 const placeholderItems = [
   { id: "tin-shipment", icon: "📦", name: "Recovered Tin Shipment", origin: 'Event reward · "The Missing Shipment" · sell or hold', action: "Sell" },
-  { id: "letter-credit", icon: "📜", name: "Letter of Credit", origin: "Redeem at any Agora for 100 gold", action: "Redeem" },
+  { id: "letter-credit", icon: "📜", name: "Letter of Credit", origin: "Redeem at any Agora for 100 dr.", action: "Redeem" },
 ];
 
 // TODO: placeholder units until the units system exists.
@@ -2473,7 +2469,7 @@ const placeholderUnits = [
 
 // TODO: placeholder achievements until the achievement system exists.
 const earnedAchievements = [
-  { id: "first-coin", icon: "🪙", name: "First Coin", detail: "Earn your first gold from a holding.", when: "Season I · Day 1" },
+  { id: "first-coin", icon: "🪙", name: "First Coin", detail: "Earn your first drachmae from a holding.", when: "Season I · Day 1" },
   { id: "name-at-court", icon: "⚖️", name: "A Name at Court", detail: "Resolve your first decision.", when: "Season I · Day 2" },
 ];
 const lockedAchievements = [
@@ -2716,7 +2712,7 @@ function BottomSheet({
 }
 
 function InventoryResources({ player }: { player: PlayerDashboardView }) {
-  const classType = player.classResource.type;
+  const classType = player.classResource?.type ?? null;
   return (
     <div role="tabpanel">
       <div className="cap-banner">
@@ -2736,16 +2732,17 @@ function InventoryResources({ player }: { player: PlayerDashboardView }) {
       <SheetLabel>Coin &amp; class stores</SheetLabel>
       <ResRow
         icon="🪙"
-        name="Gold"
-        amount={player.gold.toLocaleString()}
+        name="Drachmae"
+        amount={player.drachmae.toLocaleString()}
         rate={PLACEHOLDER_GOLD_RATE}
         rateTone="up"
         rateTitle={PLACEHOLDER_RATE_TITLE}
       />
-      {/* Some paths (e.g. Shipbuilder) earn gold as their class resource; skip the duplicate row. */}
-      {classType !== "gold" ? (
+      {/* Some paths (e.g. Shipbuilder) earn drachmae directly and have no separate
+          class resource — render the class store row only when one exists. */}
+      {player.classResource ? (
         <ResRow
-          icon={resourceIcons[classType] ?? "🏺"}
+          icon={resourceIcons[player.classResource.type] ?? "🏺"}
           name={player.classResource.label}
           sub="your trade"
           amount={player.classResource.amount.toLocaleString()}
@@ -3314,9 +3311,9 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
             title="Open your inventory"
           >
             <span className="vital-ic" aria-hidden="true">🪙</span>
-            <span className="vital-v">{player.gold.toLocaleString()}</span>
+            <span className="vital-v">{player.drachmae.toLocaleString()}</span>
             <span className="vital-meta">
-              <span className="vital-k">Gold</span>
+              <span className="vital-k">Drachmae</span>
               <span className="vital-d placeholder" title={PLACEHOLDER_RATE_TITLE}>{PLACEHOLDER_GOLD_RATE}</span>
             </span>
           </button>
