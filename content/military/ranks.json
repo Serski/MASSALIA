@@ -1,0 +1,8 @@
+{
+  "ranks": [
+    { "id": "recruit",       "name": "Recruit",       "rank": "@Stratiotes",    "gate": { "militia": 0,  "prestige": 0  }, "salaryPerDay": 8,  "militiaPerDay": 0 },
+    { "id": "veteran",       "name": "Veteran",       "rank": "@Epilektos",     "gate": { "militia": 15, "prestige": 10 }, "salaryPerDay": 16, "militiaPerDay": 1 },
+    { "id": "lochagos",      "name": "Lochagos",      "rank": "@Lochagos",      "gate": { "militia": 30, "prestige": 25 }, "salaryPerDay": 28, "militiaPerDay": 1 },
+    { "id": "archilochagos", "name": "Archilochagos", "rank": "@Archilochagos", "gate": { "militia": 50, "prestige": 45 }, "salaryPerDay": 45, "militiaPerDay": 2 }
+  ]
+}

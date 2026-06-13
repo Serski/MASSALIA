@@ -175,11 +175,12 @@ suite("Ledger / building engine (integration)", () => {
     const landMine = await m.buildings.mine("landowner", c, new Date(T0));
     expect(landMine.classSection.label).toBeNull();
 
-    // A hoplite (no class building wired) gets a labelled, empty "Commissions" slot.
+    // A hoplite (no class building wired) gets a labelled "Service" slot (the
+    // home army rank ladder lives in this section; buildings leave entries empty).
     playerId = await freshPlayer(100, "hoplite");
     const hopliteCtx = await ctx();
     const hopMine = await m.buildings.mine("hoplite", hopliteCtx, new Date(T0));
-    expect(hopMine.classSection.label).toBe("Commissions");
+    expect(hopMine.classSection.label).toBe("Service");
     expect(hopMine.classSection.entries).toEqual([]);
     expect(hopMine.classSection.comingSoon).toBe(true);
 

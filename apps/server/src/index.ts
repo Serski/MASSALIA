@@ -23,6 +23,8 @@ import { electionRoutes } from "./routes/elections.js";
 import { officeRoutes } from "./routes/offices.js";
 import { buildingRoutes } from "./routes/buildings.js";
 import { loadBuildingsContent } from "./services/buildings.js";
+import { serviceRoutes } from "./routes/service.js";
+import { loadRanksContent } from "./services/service.js";
 import { loadTraitDefs } from "./services/traits.js";
 import { loadComposureConfig } from "./services/composure.js";
 import { listEvents } from "./services/eventEngine.js";
@@ -63,6 +65,7 @@ await loadCalendarConfig();
 await loadPoliticsConfig();
 await loadAgendaContent();
 await loadBuildingsContent();
+await loadRanksContent();
 // Fail fast on a malformed election block (Politics Prompt 2).
 electionConfig(getCalendarConfig());
 
@@ -84,6 +87,7 @@ await app.register(oligarchyRoutes, { prefix: "/api/oligarchy" });
 await app.register(electionRoutes, { prefix: "/api/elections" });
 await app.register(officeRoutes, { prefix: "/api/offices" });
 await app.register(buildingRoutes, { prefix: "/api/buildings" });
+await app.register(serviceRoutes, { prefix: "/api/service" });
 
 const port = Number(process.env.PORT ?? 3000);
 await app.listen({ port, host: "0.0.0.0" });

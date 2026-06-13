@@ -316,17 +316,17 @@ export type ClassSection = {
 };
 
 // The label a class's section carries. null classes (landowner, slave) render no
-// section. Built for the hardest case (hoplite "Commissions"); the rest are
-// empty labelled slots awaiting their own builds.
+// section. The hoplite's "Service" slot is the home army rank ladder (Hoplite
+// Step 1, populated). The rest are empty labelled slots awaiting their own builds.
 const CLASS_SECTION_LABELS: Record<string, string | null> = {
   landowner: null,
   slave: null,
-  hoplite: "Commissions",
+  hoplite: "Service",
   trader: "Ventures",
   philosopher: "Pupils",
   priest: "Rites",
   hetaira: "Clientele",
-  shipbuilder: "Service",
+  shipbuilder: "Commissions",
 };
 
 export function classSectionLabel(classId: string): string | null {

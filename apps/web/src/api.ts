@@ -285,6 +285,11 @@ export const api = {
   collectBuildings: () => apiFetch<CollectResult>("/api/buildings/collect", { method: "POST" }),
   vendorTrade: (action: "buy" | "sell", type: string, qty: number) =>
     apiFetch<VendorResult>("/api/buildings/vendor", { method: "POST", body: { action, type, qty } }),
+  // The hoplite's home army (Hoplite Step 1): rank ladder + daily salary.
+  service: () => apiFetch<ServiceView>("/api/service"),
+  enlistService: () => apiFetch<ServiceActionResult>("/api/service/enlist", { method: "POST" }),
+  promoteService: () => apiFetch<ServiceActionResult>("/api/service/promote", { method: "POST" }),
+  collectService: () => apiFetch<ServiceActionResult>("/api/service/collect", { method: "POST" }),
 };
 
 // --- Archon & Ephor elections (Politics Prompt 2) ---------------------------
@@ -799,6 +804,26 @@ export type CollectResult = {
   owed: number;
   composure: number;
 };
+
+// --- The hoplite's home army: ranks + salary (Hoplite Step 1) ---------------
+
+export type ServiceRankView = { id: string; name: string; rank?: string; salaryPerDay: number; militiaPerDay: number };
+export type ServiceNextRank = ServiceRankView & { gate: { militia: number; prestige: number } };
+
+export type ServiceView = {
+  isHoplite: boolean;
+  rankId: "none" | "recruit" | "veteran" | "lochagos" | "archilochagos";
+  rank: ServiceRankView | null;
+  next: ServiceNextRank | null;
+  // Whether the player clears `next`'s gate (drives the Enlist/Promote button).
+  qualifies: boolean;
+  shortfall: { militia: number; prestige: number } | null;
+  accrued: { drachmae: number; militia: number };
+  salaryPerDay: number;
+  stats: { militia: number; prestige: number };
+};
+
+export type ServiceActionResult = { ok: true; collected?: { drachmae: number; militia: number }; status: ServiceView };
 
 export type DailyCard = {
   arena: string;

@@ -175,6 +175,10 @@ export const playerCharacters = pgTable("player_characters", {
   gymnasiumXp: integer("gymnasium_xp").notNull().default(0),
   mysteriesXp: integer("mysteries_xp").notNull().default(0),
   partyCooldownUntil: timestamp("party_cooldown_until", { withTimezone: true }),
+  // The hoplite's home army (Hoplite Step 1): the four-rank promotion ladder and
+  // the lazy salary-accrual anchor (reset on collect / enlist / promote).
+  armyRank: text("army_rank").notNull().default("none"),
+  lastSalaryAt: timestamp("last_salary_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   oneCharacterPerPlayerWorld: uniqueIndex("player_characters_player_world_idx").on(table.playerId, table.worldId),
