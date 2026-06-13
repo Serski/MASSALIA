@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type AgendaScopeView, type BuildingsCatalog, type BuildingsMine, type CatalogEntry, type OwnedBuilding, type ClassSection, type VendorPrice, type ServiceView } from "../api.js";
+import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type AgendaScopeView, type BuildingsCatalog, type BuildingsMine, type CatalogEntry, type OwnedBuilding, type ClassSection, type VendorPrice, type ServiceView, type MercBoard } from "../api.js";
 import { assetPath, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
@@ -1188,17 +1188,20 @@ function ClassActionsList({ section }: { section: ClassSection }) {
   );
 }
 
-// The hoplite's "Service" section (Hoplite Step 1): the home army rank ladder +
-// daily salary. Rendered in the class-section slot for hoplites only; other
-// classes keep the generic ClassActionsList placeholder. A later step adds the
-// "Commissions" mercenary board.
+// The hoplite's "Service" section: the home army rank ladder + daily salary
+// (Step 1) AND the mercenary hiring board + go/return lifecycle (Step 2). Rendered
+// in the class-section slot for hoplites only; other classes keep the generic
+// ClassActionsList placeholder.
 function ServiceSection({ label, onRefresh }: { label: string; onRefresh: () => void }) {
   const [data, setData] = useState<ServiceView | null>(null);
+  const [merc, setMerc] = useState<MercBoard | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    setData(await api.service());
+    const [s, b] = await Promise.all([api.service(), api.mercBoard()]);
+    setData(s);
+    setMerc(b);
   }, []);
   useEffect(() => {
     let cancelled = false;
@@ -1223,7 +1226,7 @@ function ServiceSection({ label, onRefresh }: { label: string; onRefresh: () => 
     }
   };
 
-  if (!data) {
+  if (!data || !merc) {
     return (
       <>
         <div className="panel-label">{label}</div>
@@ -1236,6 +1239,8 @@ function ServiceSection({ label, onRefresh }: { label: string; onRefresh: () => 
   const hasAccrued = accrued.drachmae > 0 || accrued.militia > 0;
   const next = data.next;
   const enlisted = data.rankId !== "none";
+  const abroad = data.abroad;
+  const current = merc.current;
 
   return (
     <>
@@ -1245,14 +1250,16 @@ function ServiceSection({ label, onRefresh }: { label: string; onRefresh: () => 
           <PanelRow
             icon="🛡️"
             title={`${data.rank.name} · ${data.rank.salaryPerDay}dr/day`}
-            sub={`Home garrison${data.rank.militiaPerDay > 0 ? ` · +${data.rank.militiaPerDay} militia/day` : ""}`}
-            tag="serving"
+            sub={abroad ? "Home rank salary paused — you are serving abroad" : `Home garrison${data.rank.militiaPerDay > 0 ? ` · +${data.rank.militiaPerDay} militia/day` : ""}`}
+            dim={abroad}
+            tag={abroad ? "paused" : "serving"}
           />
         ) : (
           <PanelRow icon="🛡️" title="Not enlisted" sub="Apply to the home garrison to draw a soldier's salary." />
         )}
       </div>
 
+      {/* Home salary collect bar (paused while abroad → never shows then). */}
       {hasAccrued ? (
         <div className="ledger-collect">
           <div>
@@ -1269,41 +1276,121 @@ function ServiceSection({ label, onRefresh }: { label: string; onRefresh: () => 
         </div>
       ) : null}
 
-      <div className="panel-grid2">
-        {!enlisted ? (
-          <PanelRow
-            icon="📜"
-            title="Enlist — Recruit"
-            sub={next ? `${next.salaryPerDay}dr/day · no requirement` : ""}
-            action={
-              <button type="button" className="panel-btn" disabled={busy} onClick={() => act(() => api.enlistService(), "Enlisted as Recruit.")}>
-                Enlist
-              </button>
-            }
-          />
-        ) : next ? (
-          <PanelRow
-            icon="📜"
-            title={`Promote → ${next.name}`}
-            sub={
-              data.qualifies
-                ? `${next.salaryPerDay}dr/day · gate met (${next.gate.militia} militia / ${next.gate.prestige} prestige)`
-                : `need ${next.gate.militia} militia (you have ${data.stats.militia}) · ${next.gate.prestige} prestige (you have ${data.stats.prestige})`
-            }
-            dim={!data.qualifies}
-            tag={data.qualifies ? undefined : "locked"}
-            action={
-              data.qualifies ? (
-                <button type="button" className="panel-btn" disabled={busy} onClick={() => act(() => api.promoteService(), `Promoted to ${next.name}.`)}>
-                  Promote
+      {/* Rank actions — hidden while abroad (you act on the contract instead). */}
+      {!abroad ? (
+        <div className="panel-grid2">
+          {!enlisted ? (
+            <PanelRow
+              icon="📜"
+              title="Enlist — Recruit"
+              sub={next ? `${next.salaryPerDay}dr/day · no requirement` : ""}
+              action={
+                <button type="button" className="panel-btn" disabled={busy} onClick={() => act(() => api.enlistService(), "Enlisted as Recruit.")}>
+                  Enlist
                 </button>
-              ) : undefined
-            }
-          />
-        ) : (
-          <PanelRow icon="🏅" title="Archilochagos" sub="The highest home rank — you command the garrison." dim />
-        )}
-      </div>
+              }
+            />
+          ) : next ? (
+            <PanelRow
+              icon="📜"
+              title={`Promote → ${next.name}`}
+              sub={
+                data.qualifies
+                  ? `${next.salaryPerDay}dr/day · gate met (${next.gate.militia} militia / ${next.gate.prestige} prestige)`
+                  : `need ${next.gate.militia} militia (you have ${data.stats.militia}) · ${next.gate.prestige} prestige (you have ${data.stats.prestige})`
+              }
+              dim={!data.qualifies}
+              tag={data.qualifies ? undefined : "locked"}
+              action={
+                data.qualifies ? (
+                  <button type="button" className="panel-btn" disabled={busy} onClick={() => act(() => api.promoteService(), `Promoted to ${next.name}.`)}>
+                    Promote
+                  </button>
+                ) : undefined
+              }
+            />
+          ) : (
+            <PanelRow icon="🏅" title="Archilochagos" sub="The highest home rank — you command the garrison." dim />
+          )}
+        </div>
+      ) : null}
+
+      {/* Hiring board (Step 2): the 5 contracts at home, or the abroad card. */}
+      <div className="panel-label">Hiring Board</div>
+      {abroad && current ? (
+        <>
+          <div className="panel-grid2">
+            <PanelRow
+              icon="⚔️"
+              title={`Serving abroad — ${current.name}`}
+              sub={`Season ${Math.min(current.seasonsElapsed + 1, current.seasonsTotal)} of ${current.seasonsTotal} · ${current.dailyDrachmae}dr/season foreign income`}
+              tag="abroad"
+            />
+          </div>
+          {current.accrued > 0 ? (
+            <div className="ledger-collect">
+              <div>
+                <strong>Foreign pay owed</strong>
+                <div className="pr-s">{current.accrued}dr</div>
+              </div>
+              <button type="button" className="primary-cta" disabled={busy} onClick={() => act(() => api.collectForeign(), "Foreign pay collected.")}>
+                Collect pay
+              </button>
+            </div>
+          ) : null}
+          <div className="panel-grid2">
+            <PanelRow
+              icon="🏠"
+              title="Return home"
+              sub={current.canCancel ? "End the contract early and sail home (you forgo the rest of the term)." : `Sworn for now — you may return after season ${current.earliestCancelSeason} (served ${current.seasonsElapsed}).`}
+              dim={!current.canCancel}
+              tag={current.canCancel ? undefined : "locked"}
+              action={
+                current.canCancel ? (
+                  <button type="button" className="panel-btn" disabled={busy} onClick={() => act(() => api.cancelContract(), "Returned home.")}>
+                    Return
+                  </button>
+                ) : undefined
+              }
+            />
+          </div>
+          <p className="pr-s" style={{ marginTop: 6 }}>The contract completes on its own at the end of the term — you sail home and your home rank salary resumes.</p>
+        </>
+      ) : (
+        <>
+          <div className="panel-grid2">
+            {merc.contracts.map((c) => {
+              const blockedByStrategos = merc.holdsStrategos;
+              const canTake = c.qualifies && !blockedByStrategos;
+              return (
+                <PanelRow
+                  key={c.id}
+                  icon="⚔️"
+                  title={`${c.name} · ${c.dailyDrachmae}dr/season`}
+                  sub={
+                    blockedByStrategos
+                      ? "A Strategos cannot be sworn abroad."
+                      : c.qualifies
+                        ? `${c.termSeasons} season${c.termSeasons > 1 ? "s" : ""} · gate met (${c.gate.militia} militia / ${c.gate.prestige} prestige)`
+                        : `${c.termSeasons} season${c.termSeasons > 1 ? "s" : ""} · need ${c.gate.militia} militia (you have ${merc.stats.militia}) · ${c.gate.prestige} prestige (you have ${merc.stats.prestige})`
+                  }
+                  dim={!canTake}
+                  tag={canTake ? undefined : "locked"}
+                  action={
+                    canTake ? (
+                      <button type="button" className="panel-btn" disabled={busy} onClick={() => act(() => api.takeContract(c.id), `Sworn to the ${c.name}.`)}>
+                        Take contract
+                      </button>
+                    ) : undefined
+                  }
+                />
+              );
+            })}
+          </div>
+          <p className="pr-s" style={{ marginTop: 6 }}>Foreign contracts pay better than home rank, but your home salary pauses while you serve abroad. You keep your vote in the city.</p>
+        </>
+      )}
+
       {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
     </>
   );

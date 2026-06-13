@@ -2,8 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Queue, Worker, type Job } from "bullmq";
-import { completionDelayMs, parseAgeConfig, parseAgendaFile, parseCalendarConfig, parseFamilyConfig, parsePoliticsConfig, type AgeConfig, type AgendaScope, type CalendarConfig, type FamilyConfig, type PoliticsConfig } from "@massalia/shared";
-import { accrueTreasuries, advanceAgendaCycles, advanceElections, advanceOlympiads, closeDueChamberVotes, closeDueFestivals, deliverOlympicNominationToAll, drawFamilyCandidates, ensurePartyLeaders, fireFestivalsForAll, openAgendaCycleIfDue, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, sweepSpouseDeaths, type AgendaPools } from "@massalia/db";
+import { completionDelayMs, parseAgeConfig, parseAgendaFile, parseCalendarConfig, parseContractsContent, parseFamilyConfig, parsePoliticsConfig, type AgeConfig, type AgendaScope, type CalendarConfig, type FamilyConfig, type PoliticsConfig } from "@massalia/shared";
+import { accrueTreasuries, advanceAgendaCycles, advanceElections, advanceOlympiads, closeDueChamberVotes, closeDueFestivals, deliverOlympicNominationToAll, drawFamilyCandidates, ensurePartyLeaders, fireFestivalsForAll, openAgendaCycleIfDue, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, sweepMercenaryContracts, sweepSpouseDeaths, type AgendaPools, type MercContractCfgMap } from "@massalia/db";
 
 const redisUrl = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
 const connection = {
@@ -39,6 +39,17 @@ async function politicsConfig(): Promise<PoliticsConfig> {
 async function bothConfigs(): Promise<{ calendar: CalendarConfig; politics: PoliticsConfig }> {
   return { calendar: await calendarConfig(), politics: await politicsConfig() };
 }
+// Mercenary contract config (id → income + term), for the completion sweep —
+// loaded from the same content file the server validates at boot.
+let mercCfgCache: MercContractCfgMap | null = null;
+async function mercContractCfg(): Promise<MercContractCfgMap> {
+  if (!mercCfgCache) {
+    const content = parseContractsContent(JSON.parse(await fs.readFile(path.join(repoRoot, "content/military/contracts.json"), "utf8")));
+    mercCfgCache = Object.fromEntries(content.contracts.map((c) => [c.id, { dailyDrachmae: c.dailyDrachmae, termSeasons: c.termSeasons }]));
+  }
+  return mercCfgCache;
+}
+
 let agendaPoolsCache: AgendaPools | null = null;
 async function agendaPools(): Promise<AgendaPools> {
   if (!agendaPoolsCache) {
@@ -52,6 +63,9 @@ async function agendaPools(): Promise<AgendaPools> {
 const FESTIVAL_SWEEP_MS = 6 * 60 * 60 * 1000;
 // Spouse-death sweep cadence: same belt-and-suspenders rhythm as the festival sweep.
 const SPOUSE_SWEEP_MS = 6 * 60 * 60 * 1000;
+// Mercenary-contract sweep cadence: terms are seasons (real days) long, so an
+// hourly tick completes served-out contracts promptly even for an offline player.
+const MERC_SWEEP_MS = 60 * 60 * 1000;
 // Olympiad sweep cadence: the cycle windows are real-days long, so an hourly tick
 // catches the nomination/voting/payoff boundaries promptly.
 const OLYMPIAD_SWEEP_MS = 60 * 60 * 1000;
@@ -93,6 +107,16 @@ const SWEEPS: Sweep[] = [
       const { familyCfg: fc, ageCfg: ac } = await configs();
       const deaths = await sweepSpouseDeaths({ familyCfg: fc, ageCfg: ac });
       return `Spouse-death sweep: ended ${deaths.length} marriage(s) of old age`;
+    },
+  },
+  {
+    // The hoplite's mercenary contracts (Step 2): complete every served-out
+    // contract (safe return home) even if the player never opens the app.
+    name: "merc-contract-sweep",
+    every: MERC_SWEEP_MS,
+    run: async () => {
+      const swept = await sweepMercenaryContracts(await mercContractCfg());
+      return `Merc-contract sweep: checked ${swept.checked} abroad, completed ${swept.completed}`;
     },
   },
   {

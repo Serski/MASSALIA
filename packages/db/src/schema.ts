@@ -176,9 +176,17 @@ export const playerCharacters = pgTable("player_characters", {
   mysteriesXp: integer("mysteries_xp").notNull().default(0),
   partyCooldownUntil: timestamp("party_cooldown_until", { withTimezone: true }),
   // The hoplite's home army (Hoplite Step 1): the four-rank promotion ladder and
-  // the lazy salary-accrual anchor (reset on collect / enlist / promote).
+  // the lazy salary-accrual anchor (reset on collect / enlist / promote). While on
+  // a mercenary contract (Step 2) the same anchor serves the foreign-income accrual
+  // — home and foreign income are mutually exclusive.
   armyRank: text("army_rank").notNull().default("none"),
   lastSalaryAt: timestamp("last_salary_at", { withTimezone: true }),
+  // Mercenary contract (Hoplite Step 2): the content key of the active contract
+  // (NULL = home), the immutable lifecycle anchor (seasons-elapsed → completion),
+  // and the term length in seasons.
+  contractId: text("contract_id"),
+  contractStartedAt: timestamp("contract_started_at", { withTimezone: true }),
+  contractSeasonsTotal: integer("contract_seasons_total"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   oneCharacterPerPlayerWorld: uniqueIndex("player_characters_player_world_idx").on(table.playerId, table.worldId),

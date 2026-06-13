@@ -77,6 +77,9 @@ export type ServiceStatus = {
   accrued: { drachmae: number; militia: number };
   salaryPerDay: number;
   stats: { militia: number; prestige: number };
+  // True while sworn to a mercenary contract (Step 2): home rank salary PAUSES and
+  // foreign income accrues instead (see the merc service / hiring board).
+  abroad: boolean;
 };
 
 function rankView(def: RankDef): RankView {
@@ -96,7 +99,9 @@ export function serviceStatus(row: CharacterRow, now: Date = new Date()): Servic
 
   const qualifies = nextDef ? meetsGate(nextDef.gate, row.militia, row.prestige) : false;
   const shortfall = nextDef ? gateShortfall(nextDef.gate, row.militia, row.prestige) : null;
-  const accrued = currentDef ? accrueService(currentDef, anchorMs(row), now.getTime()) : { drachmae: 0, militia: 0 };
+  // Home salary PAUSES while on a mercenary contract — no home accrual to show.
+  const abroad = row.contractId !== null;
+  const accrued = currentDef && !abroad ? accrueService(currentDef, anchorMs(row), now.getTime()) : { drachmae: 0, militia: 0 };
 
   return {
     isHoplite: isHoplite(row),
@@ -108,6 +113,7 @@ export function serviceStatus(row: CharacterRow, now: Date = new Date()): Servic
     accrued: { drachmae: accrued.drachmae, militia: accrued.militia },
     salaryPerDay: currentDef?.salaryPerDay ?? 0,
     stats: { militia: row.militia, prestige: row.prestige },
+    abroad,
   };
 }
 
@@ -116,11 +122,13 @@ export function serviceStatus(row: CharacterRow, now: Date = new Date()): Servic
 // militia stat (clamped to the cap), advancing the anchor only by the consumed
 // time. The wallet only ever increases here, so it can never go negative.
 
-async function settleSalary(tx: DbTx, characterId: string, now: Date): Promise<{ drachmae: number; militia: number }> {
+export async function settleSalary(tx: DbTx, characterId: string, now: Date): Promise<{ drachmae: number; militia: number }> {
   const ranks = getRanksContent();
   const rows = await tx.select().from(playerCharacters).where(eq(playerCharacters.id, characterId)).limit(1);
   const row = rows[0];
   if (!row || row.armyRank === "none") return { drachmae: 0, militia: 0 };
+  // Home salary is PAUSED while on a mercenary contract (foreign income takes over).
+  if (row.contractId) return { drachmae: 0, militia: 0 };
   const def = rankDef(ranks, row.armyRank);
   if (!def) return { drachmae: 0, militia: 0 };
 

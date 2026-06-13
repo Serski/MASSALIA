@@ -290,6 +290,11 @@ export const api = {
   enlistService: () => apiFetch<ServiceActionResult>("/api/service/enlist", { method: "POST" }),
   promoteService: () => apiFetch<ServiceActionResult>("/api/service/promote", { method: "POST" }),
   collectService: () => apiFetch<ServiceActionResult>("/api/service/collect", { method: "POST" }),
+  // Mercenary contracts (Hoplite Step 2): the hiring board + go/return lifecycle.
+  mercBoard: () => apiFetch<MercBoard>("/api/merc/board"),
+  takeContract: (contractId: string) => apiFetch<MercActionResult>("/api/merc/take", { method: "POST", body: { contractId } }),
+  cancelContract: () => apiFetch<MercActionResult>("/api/merc/cancel", { method: "POST" }),
+  collectForeign: () => apiFetch<MercActionResult>("/api/merc/collect", { method: "POST" }),
 };
 
 // --- Archon & Ephor elections (Politics Prompt 2) ---------------------------
@@ -821,9 +826,48 @@ export type ServiceView = {
   accrued: { drachmae: number; militia: number };
   salaryPerDay: number;
   stats: { militia: number; prestige: number };
+  // True while sworn to a mercenary contract — home rank salary is paused.
+  abroad: boolean;
 };
 
 export type ServiceActionResult = { ok: true; collected?: { drachmae: number; militia: number }; status: ServiceView };
+
+// --- Mercenary contracts: hiring board + go/return lifecycle (Hoplite Step 2) ---
+
+export type ContractBoardEntry = {
+  id: string;
+  name: string;
+  gate: { militia: number; prestige: number };
+  dailyDrachmae: number;
+  termSeasons: number;
+  minCancelSeasons: number;
+  poolKey: string;
+  qualifies: boolean;
+  shortfall: { militia: number; prestige: number };
+};
+
+export type CurrentContractView = {
+  id: string;
+  name: string;
+  poolKey: string;
+  dailyDrachmae: number;
+  seasonsElapsed: number;
+  seasonsTotal: number;
+  accrued: number;
+  canCancel: boolean;
+  earliestCancelSeason: number;
+};
+
+export type MercBoard = {
+  isHoplite: boolean;
+  abroad: boolean;
+  holdsStrategos: boolean;
+  stats: { militia: number; prestige: number };
+  contracts: ContractBoardEntry[];
+  current: CurrentContractView | null;
+};
+
+export type MercActionResult = { ok: true; collected?: number; completed?: boolean; board: MercBoard };
 
 export type DailyCard = {
   arena: string;

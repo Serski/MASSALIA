@@ -113,3 +113,79 @@ export function accrueService(rank: RankDef, anchorMs: number, nowMs: number): S
     consumedMs: consumedDays * MS_PER_GAME_DAY,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Mercenary contracts — STATE + go/return lifecycle (Hoplite Step 2 of 5).
+//
+// A contract pauses home rank salary and pays FOREIGN income (dailyDrachmae per
+// season, HIGHER than home — the wealth path) for `termSeasons`, then completes
+// SAFELY and returns home. Gates rise on the same militia + prestige as ranks.
+// Duration is counted in SEASONS on the existing clock (REAL_MS_PER_SEASON; 1 real
+// day = 1 season). The 50 abroad cards + pool routing are Step 3 — `poolKey` is the
+// pool a contract will swap in then; this step only carries it.
+//
+// TODO (Step 4 — NOT here): a death/injury roll at completion, age>30 lethality
+// scaling, succession / "died gloriously abroad". Step 2 contracts always complete.
+// ---------------------------------------------------------------------------
+
+export type ContractDef = {
+  id: string;
+  name: string;
+  gate: RankGate;
+  dailyDrachmae: number; // foreign income per season (per real day) — the payout
+  termSeasons: number; // full term length in seasons
+  minCancelSeasons: number; // seasons that must elapse before early return is allowed
+  poolKey: string; // Step-3 abroad card pool (carried, not used yet)
+};
+
+export type ContractsContent = { contracts: ContractDef[] };
+
+const contractSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    gate: z.object({ militia: z.number(), prestige: z.number() }).strict(),
+    dailyDrachmae: z.number().positive(),
+    termSeasons: z.number().int().positive(),
+    minCancelSeasons: z.number().int().nonnegative(),
+    poolKey: z.string(),
+  })
+  .strict();
+
+export const contractsContentSchema = z.object({ contracts: z.array(contractSchema) }).strict();
+
+export function parseContractsContent(data: unknown): ContractsContent {
+  const parsed = contractsContentSchema.parse(data) as ContractsContent;
+  if (parsed.contracts.length === 0) throw new Error("contracts.json must define at least one contract");
+  for (const c of parsed.contracts) {
+    if (c.minCancelSeasons > c.termSeasons) {
+      throw new Error(`contract ${c.id}: minCancelSeasons (${c.minCancelSeasons}) cannot exceed termSeasons (${c.termSeasons})`);
+    }
+  }
+  return parsed;
+}
+
+export function contractDef(content: ContractsContent, id: string): ContractDef | null {
+  return content.contracts.find((c) => c.id === id) ?? null;
+}
+
+// Whole seasons elapsed since the contract's (immutable) start anchor — the
+// lifecycle clock that drives completion + the cancel gate.
+export function seasonsElapsed(startedMs: number, nowMs: number): number {
+  return Math.max(0, Math.floor((nowMs - startedMs) / REAL_MS_PER_SEASON));
+}
+
+export type ForeignAccrual = { drachmae: number; consumedMs: number };
+
+// Foreign income accrued between the collection anchor and now, CAPPED at the
+// contract's term end (income never accrues past the term). Whole drachmae only,
+// advancing the anchor solely by the consumed whole-drachma time so sub-coin
+// remainders carry — the same anchor discipline as the home salary.
+export function foreignIncomeAccrual(dailyDrachmae: number, anchorMs: number, nowMs: number, termEndMs: number): ForeignAccrual {
+  const windowEnd = Math.min(nowMs, termEndMs);
+  const elapsedSeasons = (windowEnd - anchorMs) / REAL_MS_PER_SEASON;
+  if (elapsedSeasons <= 0 || dailyDrachmae <= 0) return { drachmae: 0, consumedMs: 0 };
+  const drachmae = Math.floor(dailyDrachmae * elapsedSeasons);
+  const consumedSeasons = drachmae / dailyDrachmae;
+  return { drachmae, consumedMs: consumedSeasons * REAL_MS_PER_SEASON };
+}

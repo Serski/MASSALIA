@@ -7,3 +7,4 @@ export * from "./olympiad.js";
 export * from "./agenda.js";
 export * from "./chamber.js";
 export * from "./elections.js";
+export * from "./merc.js";
