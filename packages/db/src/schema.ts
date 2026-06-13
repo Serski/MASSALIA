@@ -634,6 +634,30 @@ export const buildings = pgTable("buildings", {
   queuedCompletionAt: timestamp("queued_completion_at", { withTimezone: true }),
 });
 
+// The Ledger / player economy (Economy Build 1). A player-scoped buildings table,
+// distinct from the province-scoped `buildings` table (map/atlas system). Tier
+// upgrades happen in place; one row per (world, owner, buildingId).
+export const playerBuildings = pgTable("player_buildings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  ownerPlayerId: uuid("owner_player_id").references(() => players.id).notNull(),
+  buildingId: text("building_id").notNull(),
+  tier: integer("tier").notNull().default(1),
+  status: text("status").notNull().default("constructing"), // 'constructing' | 'active'
+  completesAt: timestamp("completes_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  oneBuildingPerOwner: uniqueIndex("player_buildings_owner_building_idx").on(table.worldId, table.ownerPlayerId, table.buildingId),
+  ownerIdx: index("player_buildings_owner_idx").on(table.worldId, table.ownerPlayerId),
+}));
+
+// Stub treasury sink: routine fees accrue here (one row per world). NO spending
+// in this build — a counter the future treasury system will read.
+export const worldTreasury = pgTable("world_treasury", {
+  worldId: uuid("world_id").primaryKey().references(() => worlds.id),
+  balance: integer("balance").notNull().default(0),
+});
+
 export const resources = pgTable("resources", {
   id: uuid("id").primaryKey().defaultRandom(),
   scope: text("scope").notNull(),

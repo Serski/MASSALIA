@@ -1,5 +1,128 @@
-[
-  { "id": "harbor", "name": "Harbor", "baseBuildSeconds": 900 },
-  { "id": "market", "name": "Market", "baseBuildSeconds": 600 },
-  { "id": "watchtower", "name": "Watchtower", "baseBuildSeconds": 450 }
-]
+{
+  "classBuildings": {
+    "landowner": {
+      "id": "estate",
+      "category": "agricultural",
+      "flavor": "The land is your business — no ledger of clients, only the harvest.",
+      "tiers": [
+        { "tier": 1, "name": "Farmstead", "rank": "@Georgos" },
+        { "tier": 2, "name": "Olive Groves", "rank": "@Ktematias" },
+        { "tier": 3, "name": "Great Estate", "rank": "@Protogeorgos" },
+        { "tier": 4, "name": "Chōra (Χώρα)", "rank": "@Mega Georgos" }
+      ],
+      "yields": [
+        { "good": "grain", "base": 6 },
+        { "good": "oliveoil", "base": 2, "fromTier": 3 }
+      ]
+    }
+  },
+  "commonBuildings": [
+    {
+      "id": "poultry-yard",
+      "name": "Poultry Yard",
+      "icon": "🐔",
+      "category": "yearround",
+      "cost": 60,
+      "buildDays": 1,
+      "yields": [{ "good": "chicken", "base": 2 }],
+      "blurb": "A clutch of hens and a watchful cock. Eggs, birds, and the altar's small needs."
+    },
+    {
+      "id": "vineyard",
+      "name": "Vineyard",
+      "icon": "🍇",
+      "category": "agricultural",
+      "cost": 150,
+      "buildDays": 1,
+      "yields": [{ "good": "wine", "base": 2 }],
+      "blurb": "Terraced vines above the harbor. The press runs hardest after the autumn pick."
+    },
+    {
+      "id": "timber-lot",
+      "name": "Timber Lot",
+      "icon": "🪵",
+      "category": "agricultural",
+      "cost": 150,
+      "buildDays": 1,
+      "yields": [{ "good": "timber", "base": 3 }],
+      "blurb": "A managed stand of pine and oak — hulls, beams, and the shipwright's appetite."
+    },
+    {
+      "id": "bull-farm",
+      "name": "Bull Farm",
+      "icon": "🐂",
+      "category": "agricultural",
+      "cost": 250,
+      "buildDays": 2,
+      "yields": [{ "good": "bull", "base": 0.5 }],
+      "blurb": "Heavy beasts for the plough and the altar. Slow to raise, valued at market."
+    },
+    {
+      "id": "horse-farm",
+      "name": "Horse Farm",
+      "icon": "🐎",
+      "category": "agricultural",
+      "cost": 300,
+      "buildDays": 2,
+      "yields": [{ "good": "horse", "base": 0.5 }],
+      "blurb": "Paddocks beyond the wall. A horse is a rich man's animal, and the hills know it."
+    },
+    {
+      "id": "harbor-warehouse",
+      "name": "Harbor Warehouse",
+      "icon": "⚓",
+      "category": "yearround",
+      "cost": 300,
+      "buildDays": 2,
+      "yields": [],
+      "storageBonus": 200,
+      "blurb": "Dry, guarded storage by the quay. Holds more goods against the day the market opens."
+    },
+    {
+      "id": "household-shrine",
+      "name": "Household Shrine",
+      "icon": "🕯️",
+      "category": "yearround",
+      "cost": 80,
+      "buildDays": 1,
+      "yields": [],
+      "composurePerDay": 1,
+      "blurb": "A hearth-altar to the household gods. A steady, modest calm — it never grows beyond it."
+    }
+  ],
+  "vendor": {
+    "chicken": { "sell": 3, "buy": 1 },
+    "wine": { "sell": 5, "buy": 2 },
+    "grain": { "sell": 3, "buy": 1 },
+    "timber": { "sell": 4, "buy": 2 },
+    "bull": { "sell": 25, "buy": 12 },
+    "oliveoil": { "sell": 6, "buy": 3 },
+    "horse": { "sell": 30, "buy": 15 }
+  },
+  "seasonal": {
+    "newPlayerGuardDays": 3,
+    "goodCategory": {
+      "grain": "agricultural",
+      "oliveoil": "agricultural",
+      "wine": "agricultural",
+      "timber": "agricultural",
+      "bull": "agricultural",
+      "horse": "agricultural",
+      "chicken": "yearround"
+    },
+    "coefficients": {
+      "agricultural": {
+        "Winter": { "production": 0.65, "price": 1.25 },
+        "Spring": { "production": 1.1, "price": 1.05 },
+        "Summer": { "production": 1.25, "price": 0.85 },
+        "Autumn": { "production": 1.0, "price": 0.95 }
+      },
+      "yearround": {
+        "Winter": { "production": 0.95, "price": 1.05 },
+        "Spring": { "production": 1.0, "price": 1.0 },
+        "Summer": { "production": 1.05, "price": 0.98 },
+        "Autumn": { "production": 1.0, "price": 1.0 }
+      }
+    }
+  }
+}

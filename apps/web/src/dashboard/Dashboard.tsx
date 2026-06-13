@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type AgendaScopeView } from "../api.js";
-import { assetPath, buildableBuildings, nobleHouses, professions, type House, type Profession } from "../data/league.js";
+import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type AgendaScopeView, type BuildingsCatalog, type BuildingsMine, type CatalogEntry, type OwnedBuilding, type ClassSection, type VendorPrice } from "../api.js";
+import { assetPath, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
 import "./dashboard.css";
 
-type DashboardSection = "court" | "holdings" | "market" | "family" | "politics" | "atlas";
+type DashboardSection = "court" | "ledger" | "market" | "family" | "politics" | "atlas";
 
-type IconName = "court" | "holdings" | "market" | "family" | "politics" | "atlas";
+type IconName = "court" | "ledger" | "market" | "family" | "politics" | "atlas";
 
 type DashboardNavItem = {
   id: DashboardSection;
@@ -86,7 +86,7 @@ const placeholderFamilyEventCount = 1;
 
 const dashboardNav: DashboardNavItem[] = [
   { id: "court", label: "Court", icon: "court" },
-  { id: "holdings", label: "Holdings", icon: "holdings" },
+  { id: "ledger", label: "Ledger", icon: "ledger" },
   { id: "market", label: "Market", icon: "market" },
   { id: "family", label: "Family", icon: "family", badge: placeholderFamilyEventCount },
   { id: "politics", label: "Politics", icon: "politics" },
@@ -94,7 +94,7 @@ const dashboardNav: DashboardNavItem[] = [
 ];
 
 const mobilePrimaryNav: DashboardNavItem[] = dashboardNav.filter((item) =>
-  ["court", "holdings", "market", "family"].includes(item.id),
+  ["court", "ledger", "market", "family"].includes(item.id),
 );
 
 const mobileMoreNav: DashboardNavItem[] = dashboardNav.filter((item) =>
@@ -223,7 +223,7 @@ function iconPath(icon: IconName) {
           <path d="M9 18v-5h6v5" />
         </>
       );
-    case "holdings":
+    case "ledger":
       return (
         <>
           <path d="M4 20V8l8-4 8 4v12" />
@@ -1135,63 +1135,249 @@ function CourtPanel({ player, onRefresh }: PanelProps) {
   );
 }
 
-function HoldingsPanel({ player }: PanelProps) {
-  const [note, setNote] = useState("");
-  const tier1 = player.profession.tiers[0];
+// --- The Ledger / player economy (Economy Build 1) --------------------------
+// A universal frame for ALL classes: (a) Your Trade — the class building line,
+// (b) Common Buildings — the seven commons, and (c) the class-section slot, a
+// generic stateful/time-bound/stat-gated list built for the hardest future case
+// (the hoplite's contracts), empty now. Plus the banded NPC-agora vendor drawer.
+
+// A short, human countdown to an ISO instant (e.g. "ready in 5h", "ready in 2d").
+function buildCountdown(iso: string | null): string {
+  if (!iso) return "";
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return "ready";
+  const hours = Math.ceil(ms / 3_600_000);
+  return hours < 24 ? `ready in ${hours}h` : `ready in ${Math.ceil(hours / 24)}d`;
+}
+
+function yieldSummary(yields: { good: string; perDay: number }[]): string {
+  return yields.map((y) => `${y.perDay >= 1 ? Math.round(y.perDay) : y.perDay.toFixed(1)} ${y.good}/day`).join(" · ");
+}
+
+const GOOD_ICON: Record<string, string> = {
+  grain: "🌾", oliveoil: "🫒", wine: "🍷", chicken: "🐔", timber: "🪵", bull: "🐂", horse: "🐎",
+};
+
+// The class-section slot. Built to render a list of stateful, time-bound, stat-
+// gated entries (the hoplite's future contracts); for now every class's list is
+// empty, so it shows a labelled "coming soon" placeholder.
+function ClassActionsList({ section }: { section: ClassSection }) {
+  if (!section.label) {
+    // Landowner / slave: no class section — a flavor line, not a slot.
+    return section.flavor ? <p className="dashboard-todo">{section.flavor}</p> : null;
+  }
   return (
-    <section className="dashboard-panel" aria-labelledby="holdings-title">
+    <>
+      <div className="panel-label">{section.label}</div>
+      <div className="panel-grid2">
+        {section.entries.length === 0 ? (
+          <PanelRow icon="📜" title={`${section.label} — coming soon`} sub="This path's stateful undertakings arrive in a later build." dim />
+        ) : (
+          section.entries.map((entry) => (
+            <PanelRow
+              key={entry.id}
+              icon="📜"
+              title={entry.title}
+              sub={entry.detail}
+              tag={entry.status}
+            />
+          ))
+        )}
+      </div>
+    </>
+  );
+}
+
+function VendorDrawer({ catalog, onTrade, busy }: { catalog: BuildingsCatalog; onTrade: (action: "buy" | "sell", type: string, qty: number) => void; busy: boolean }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="ledger-vendor">
+      <button type="button" className="panel-btn" onClick={() => setOpen((v) => !v)}>
+        {open ? "Close the agora" : "Visit the agora vendor"}
+      </button>
+      {open ? (
+        <div className="panel-grid2" style={{ marginTop: 10 }}>
+          {catalog.vendor.map((price: VendorPrice) => (
+            <div key={price.good} className="panel-row">
+              <div className="pr-l">
+                <span className="pr-ic" aria-hidden="true">{GOOD_ICON[price.good] ?? "📦"}</span>
+                <div>
+                  <div className="pr-t">{price.good[0]!.toUpperCase() + price.good.slice(1)}</div>
+                  <div className="pr-s">buy {price.buy}dr · sell {price.sell}dr</div>
+                </div>
+              </div>
+              <span style={{ display: "flex", gap: 6 }}>
+                <button type="button" className="panel-btn ghost" disabled={busy} onClick={() => onTrade("buy", price.good, 1)}>Buy 1</button>
+                <button type="button" className="panel-btn" disabled={busy} onClick={() => onTrade("sell", price.good, 1)}>Sell 1</button>
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <p className="pr-s" style={{ marginTop: 6 }}>The agora trades at a fixed band ({catalog.season}); the vendor sells dear and buys cheap, so the market can never deadlock.</p>
+    </div>
+  );
+}
+
+function LedgerPanel({ player, onRefresh }: PanelProps) {
+  const [catalog, setCatalog] = useState<BuildingsCatalog | null>(null);
+  const [mine, setMine] = useState<BuildingsMine | null>(null);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    const [c, m] = await Promise.all([api.buildingsCatalog(), api.buildingsMine()]);
+    setCatalog(c);
+    setMine(m);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    load().catch((err) => !cancelled && setNote(err instanceof ApiError ? err.message : "Unable to load your ledger."));
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
+
+  const act = async (fn: () => Promise<unknown>, ok?: string) => {
+    setBusy(true);
+    setNote("");
+    try {
+      await fn();
+      await load();
+      onRefresh();
+      if (ok) setNote(ok);
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "That could not be done.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!catalog || !mine) {
+    return (
+      <section className="dashboard-panel" aria-labelledby="ledger-title">
+        <div className="dashboard-panel-heading">
+          <p className="section-eyebrow">{player.profession.name}</p>
+          <h1 id="ledger-title">Your Ledger</h1>
+        </div>
+        <p className="dashboard-todo">{note || "Reckoning your books…"}</p>
+      </section>
+    );
+  }
+
+  const ownedById = new Map<string, OwnedBuilding>(mine.buildings.map((b) => [b.id, b]));
+  const classBuilding = catalog.classBuilding;
+  const ownedClass = classBuilding ? ownedById.get(classBuilding.id) : undefined;
+  const pendingGoods = Object.entries(mine.pendingGoods);
+  const hasPending = pendingGoods.length > 0 || mine.pendingIncomeTotal >= 1;
+
+  const ownedRow = (b: OwnedBuilding) => (
+    <PanelRow
+      key={b.id}
+      icon={b.icon ?? "🏛️"}
+      title={`${b.name}${b.kind === "class" ? ` · Tier ${b.tier}` : ""}`}
+      sub={
+        b.status === "constructing"
+          ? `under construction · ${buildCountdown(b.completesAt)}`
+          : `${yieldSummary(b.yields)}${b.upkeepPerDay > 0 ? ` · upkeep ${b.upkeepPerDay}dr/day` : ""}`
+      }
+      tag={b.status === "constructing" ? "building" : undefined}
+      action={
+        b.status === "active" && b.upgrade ? (
+          <button type="button" className="panel-btn" disabled={busy} onClick={() => act(() => api.upgradeBuilding(b.id))}>
+            Upgrade → {b.upgrade.name} · {b.upgrade.cost}dr
+          </button>
+        ) : undefined
+      }
+    />
+  );
+
+  const buildableRow = (entry: CatalogEntry, disabled?: string) => {
+    const t1 = entry.tiers[0]!;
+    const sub = entry.composurePerDay
+      ? `+${entry.composurePerDay} composure/day (flat) · ${t1.cost}dr · ${t1.buildDays}d`
+      : entry.storageBonus
+        ? `+${entry.storageBonus} storage · ${t1.cost}dr · ${t1.buildDays}d`
+        : `${yieldSummary(t1.yields)} · ${t1.cost}dr · ${t1.buildDays}d`;
+    return (
+      <PanelRow
+        key={entry.id}
+        icon={entry.icon ?? "🏛️"}
+        title={entry.name}
+        sub={disabled ? disabled : sub}
+        dim={Boolean(disabled)}
+        tag={disabled ? "soon" : undefined}
+        action={
+          disabled ? undefined : (
+            <button type="button" className="panel-btn" disabled={busy} onClick={() => act(() => api.buildBuilding(entry.id))}>
+              Build · {t1.cost}dr
+            </button>
+          )
+        }
+      />
+    );
+  };
+
+  // Other classes have no wired class line yet: show their profession tier-1 as a
+  // buildable preview, disabled until their own build lands.
+  const professionTier1 = player.profession.tiers[0];
+
+  return (
+    <section className="dashboard-panel" aria-labelledby="ledger-title">
       <div className="dashboard-panel-heading">
-        <p className="section-eyebrow">{player.profession.name}</p>
-        <h1 id="holdings-title">Your Holdings</h1>
-        <p>Massalia · your trade operations and their income.</p>
+        <p className="section-eyebrow">{player.profession.name} · {catalog.season}</p>
+        <h1 id="ledger-title">Your Ledger</h1>
+        <p>Massalia · your trade, your buildings, and their income.</p>
       </div>
       <PanelBanner scene="your quarter of the city" />
 
-      <div className="panel-label">Your holdings</div>
+      {hasPending || mine.upkeepOwed > 0 ? (
+        <div className="ledger-collect">
+          <div>
+            <strong>Ready to collect</strong>
+            <div className="pr-s">
+              {pendingGoods.map(([good, amt]) => `${Math.floor(amt)} ${good}`).join(" · ") || "—"}
+              {mine.pendingIncomeTotal >= 1 ? ` · ${Math.floor(mine.pendingIncomeTotal)}dr income` : ""}
+              {mine.upkeepOwed > 0 ? ` · upkeep owed ${Math.round(mine.upkeepOwed)}dr` : ""}
+            </div>
+          </div>
+          <button type="button" className="primary-cta" disabled={busy} onClick={() => act(() => api.collectBuildings(), "Collected.")}>
+            Collect
+          </button>
+        </div>
+      ) : null}
+
+      <div className="panel-label">Your Trade</div>
       <div className="panel-grid2">
-        {tier1 ? (
+        {classBuilding ? (
+          ownedClass ? ownedRow(ownedClass) : buildableRow(classBuilding)
+        ) : professionTier1 ? (
           <PanelRow
             icon="🏛️"
-            title={`${tier1.building} · ${BASE_TIER_LABEL}`}
-            sub={`${tier1.benefit}${tier1.upkeep ? ` · upkeep ${tier1.upkeep}` : ""}`}
-            action={<StubButton message="TODO: holding upgrades land in Phase 2." onStub={setNote}>Upgrade</StubButton>}
+            title={professionTier1.building}
+            sub={`${professionTier1.benefit} — your class line opens in a later build`}
+            dim
+            tag="soon"
           />
         ) : (
-          <PanelRow icon="🛠️" title="No holdings yet" sub="This path builds standing through the story, not buildings." />
+          <PanelRow icon="🛠️" title="No trade line" sub="This path builds standing through the story, not buildings." />
         )}
-        <PanelRow
-          icon="⚓"
-          title={`Warehouse · ${BASE_TIER_LABEL}`}
-          sub="Storage capacity arrives with the warehouse system"
-          action={<StubButton message="TODO: warehouse upgrades land with the storage system." onStub={setNote}>Upgrade</StubButton>}
-        />
       </div>
-      <p className="dashboard-todo">TODO: holdings are derived from your real profession; live production, capacity, and upgrades land in Phase 2 (buttons are stubs).</p>
 
-      <div className="panel-label">Available buildings</div>
+      <div className="panel-label">Common Buildings</div>
       <div className="panel-grid2">
-        {buildableBuildings.map((building) => {
-          const locked = Boolean(building.requirement);
-          return (
-            <PanelRow
-              key={building.slug}
-              icon={building.icon}
-              title={building.name}
-              sub={locked ? building.requirement : `${building.benefit} · ${building.cost}g · ${building.buildDays} days to build`}
-              dim={locked}
-              tag={locked ? "locked" : undefined}
-              action={
-                locked ? undefined : (
-                  <StubButton message={`TODO: building construction is a stub (${building.name}).`} onStub={setNote}>
-                    Build · {building.cost}g
-                  </StubButton>
-                )
-              }
-            />
-          );
+        {catalog.commons.map((entry) => {
+          const owned = ownedById.get(entry.id);
+          return owned ? ownedRow(owned) : buildableRow(entry);
         })}
       </div>
-      <p className="dashboard-todo">TODO: TUNING — buildable catalog is placeholder; build actions are stubs until construction exists.</p>
+
+      <ClassActionsList section={mine.classSection} />
+
+      <div className="panel-label">The Agora</div>
+      <VendorDrawer catalog={catalog} busy={busy} onTrade={(action, type, qty) => act(() => api.vendorTrade(action, type, qty))} />
+
       {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
     </section>
   );
@@ -2491,7 +2677,7 @@ const placeholderUnits = [
 
 // TODO: placeholder achievements until the achievement system exists.
 const earnedAchievements = [
-  { id: "first-coin", icon: "🪙", name: "First Coin", detail: "Earn your first drachmae from a holding.", when: "Season I · Day 1" },
+  { id: "first-coin", icon: "🪙", name: "First Coin", detail: "Earn your first drachmae from your trade.", when: "Season I · Day 1" },
   { id: "name-at-court", icon: "⚖️", name: "A Name at Court", detail: "Resolve your first decision.", when: "Season I · Day 2" },
 ];
 const lockedAchievements = [
@@ -3234,7 +3420,7 @@ function SuccessionScreen({ succession, onResolved }: { succession: SuccessionSt
 
 const panelComponents: Record<DashboardSection, (props: PanelProps) => ReactNode> = {
   court: CourtPanel,
-  holdings: HoldingsPanel,
+  ledger: LedgerPanel,
   market: MarketPanel,
   family: FamilyPanel,
   politics: PoliticsPanel,

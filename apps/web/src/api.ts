@@ -274,6 +274,17 @@ export const api = {
     apiFetch<{ ok: true }>("/api/agenda/veto", { method: "POST", body: { scope } }),
   endorse: (electionId: string, candidateCharacterId: string) =>
     apiFetch<{ ok: true }>("/api/agenda/endorse", { method: "POST", body: { electionId, candidateCharacterId } }),
+  // The Ledger / player economy (Economy Build 1): the building catalog, owned
+  // buildings, build/upgrade/collect, and the banded NPC-agora vendor.
+  buildingsCatalog: () => apiFetch<BuildingsCatalog>("/api/buildings"),
+  buildingsMine: () => apiFetch<BuildingsMine>("/api/buildings/mine"),
+  buildBuilding: (buildingId: string) =>
+    apiFetch<{ ok: true; buildingId: string; tier: number; completesAt: string; cost: number }>("/api/buildings/build", { method: "POST", body: { buildingId } }),
+  upgradeBuilding: (buildingId: string) =>
+    apiFetch<{ ok: true; buildingId: string; tier: number; completesAt: string; cost: number }>("/api/buildings/upgrade", { method: "POST", body: { buildingId } }),
+  collectBuildings: () => apiFetch<CollectResult>("/api/buildings/collect", { method: "POST" }),
+  vendorTrade: (action: "buy" | "sell", type: string, qty: number) =>
+    apiFetch<VendorResult>("/api/buildings/vendor", { method: "POST", body: { action, type, qty } }),
 };
 
 // --- Archon & Ephor elections (Politics Prompt 2) ---------------------------
@@ -628,6 +639,14 @@ export function contentUrl(path: string | null | undefined): string | undefined 
 
 // --- Daily Routines (proactive half of the daily loop) ---------------------
 
+export type RoutineRequirementView = {
+  good?: { type: string; qty: number };
+  fee?: number;
+  waivedBy?: string;
+  // True when the player owns the waivedBy building (cost is zeroed).
+  waived: boolean;
+};
+
 export type RoutineCardView = {
   id: string;
   label: string;
@@ -638,6 +657,8 @@ export type RoutineCardView = {
   costs: ChoiceCost[];
   composureDelta: number;
   composureReason: string;
+  // Routine consumption hook: the good/fee the card consumes + waiver state.
+  requires: RoutineRequirementView | null;
 };
 
 export type RoutineLadder = {
@@ -669,6 +690,114 @@ export type RoutineResult = {
   broke: boolean;
   grantedTrait: string | null;
   ladder: { id: string; newXp: number; nextThreshold: number | null; traitGranted: string | null } | null;
+  // True when a required cost was waived because the player owns the building.
+  waived: boolean;
+};
+
+// --- The Ledger / player economy (Economy Build 1) --------------------------
+
+export type BuildingCategory = "agricultural" | "yearround";
+
+export type CatalogTier = {
+  tier: number;
+  name?: string;
+  rank?: string;
+  cost: number;
+  buildDays: number;
+  upkeep: number;
+  income: number;
+  yields: { good: string; perDay: number }[];
+};
+
+export type CatalogEntry = {
+  id: string;
+  kind: "class" | "common";
+  name: string;
+  icon?: string;
+  category: BuildingCategory;
+  blurb?: string;
+  storageBonus?: number;
+  composurePerDay?: number;
+  tiers: CatalogTier[];
+};
+
+export type VendorPrice = { good: string; buy: number; sell: number };
+
+export type BuildingsCatalog = {
+  season: string;
+  seasonMultiplier: { agricultural: number; yearround: number };
+  classBuilding: CatalogEntry | null;
+  commons: CatalogEntry[];
+  classSectionLabel: string | null;
+  vendor: VendorPrice[];
+};
+
+export type OwnedBuilding = {
+  id: string;
+  kind: "class" | "common";
+  name: string;
+  icon?: string;
+  tier: number;
+  status: "constructing" | "active";
+  completesAt: string | null;
+  category: BuildingCategory;
+  yields: { good: string; perDay: number; pending: number }[];
+  income: number;
+  pendingIncome: number;
+  upkeepPerDay: number;
+  upgrade: { tier: number; name?: string; cost: number; buildDays: number; newYields: { good: string; perDay: number }[] } | null;
+};
+
+// The class-section slot — built for the hard case (the hoplite's stateful,
+// time-bound, stat-gated contracts), empty for the landowner and every class now.
+export type ClassActionEntry = {
+  id: string;
+  title: string;
+  detail: string;
+  status: "available" | "active" | "locked" | "complete";
+  startedAt?: string | null;
+  expiresAt?: string | null;
+  requiresStat?: { stat: string; min: number };
+  requiresRank?: string;
+  rewards?: { label: string }[];
+  costs?: { label: string }[];
+};
+
+export type ClassSection = {
+  label: string | null;
+  comingSoon: boolean;
+  flavor?: string;
+  entries: ClassActionEntry[];
+};
+
+export type BuildingsMine = {
+  season: string;
+  buildings: OwnedBuilding[];
+  pendingIncomeTotal: number;
+  upkeepOwed: number;
+  pendingGoods: Record<string, number>;
+  storageCap: number;
+  classSection: ClassSection;
+};
+
+export type VendorResult = {
+  ok: true;
+  action: "buy" | "sell";
+  type: string;
+  qty: number;
+  unitPrice: number;
+  total: number;
+  wallet: number;
+  balance: number;
+};
+
+export type CollectResult = {
+  banked: Record<string, number>;
+  income: number;
+  upkeep: number;
+  collected: number;
+  owed: number;
+  composure: number;
 };
 
 export type DailyCard = {

@@ -6,6 +6,7 @@ import { requireAuth } from "../services/auth.js";
 import { ensureCharacterRow, getActivePlayer, getActiveWorldId, type CharacterRow } from "../services/character.js";
 import { recoverComposure } from "../services/composure.js";
 import { getHeldTraits } from "../services/traits.js";
+import { ownedBuildingIds } from "../services/buildings.js";
 import { utcDayString } from "../services/dailyDecisions.js";
 import {
   campaignCardFor,
@@ -41,6 +42,7 @@ export async function routineRoutes(app: FastifyInstance) {
 
     const cfg = getRoutinesConfig();
     const traits = await getHeldTraits(acting.row.id);
+    const owned = await ownedBuildingIds(acting.row.playerId);
     const pool = routinesForClass(getRoutineCards(), acting.row.classId, cfg);
     // Surface the campaign card to declared candidates in an active election.
     const campaign = await campaignCardFor(acting.row.id);
@@ -58,7 +60,7 @@ export async function routineRoutes(app: FastifyInstance) {
       dailyPicks: cfg.dailyPicks,
       withdrawn: isWithdrawn(acting.row.breakUntil, now),
       pickedRoutineId,
-      cards: cards.map((card) => previewRoutine(card, acting.row, traits)),
+      cards: cards.map((card) => previewRoutine(card, acting.row, traits, owned)),
       ladders: ladderStates(acting.row),
     };
   });

@@ -25,6 +25,7 @@ import { getAgeConfig } from "./age.js";
 import { addTrait, getHeldTraits, removeTrait, TraitRuleError } from "./traits.js";
 import { utcDayString } from "./dailyDecisions.js";
 import { eligibleForCampaign, grantCampaignFavor } from "./elections.js";
+import { consumeRoutineRequirement } from "./buildings.js";
 import { broadcastState } from "./worldState.js";
 
 const db = createDb();
@@ -108,6 +109,14 @@ function costChips(effects: { type: string; stat?: keyof CharacterStats; amount:
   return chips;
 }
 
+export type RoutineRequirementView = {
+  good?: { type: string; qty: number };
+  fee?: number;
+  waivedBy?: string;
+  // True when the player owns the waivedBy building (cost is zeroed).
+  waived: boolean;
+};
+
 export type RoutinePreview = {
   id: string;
   label: string;
@@ -117,6 +126,8 @@ export type RoutinePreview = {
   costs: ChoiceCost[];
   composureDelta: number;
   composureReason: string;
+  // Routine consumption hook: the good/fee the card consumes + the waiver state.
+  requires: RoutineRequirementView | null;
 };
 
 // Per-character resolved preview: effects after classMods + growthMultiplier, and
@@ -126,6 +137,7 @@ export function previewRoutine(
   card: RoutineCard,
   row: Pick<CharacterRow, "classId" | "growthMultiplier">,
   traits: Parameters<typeof describeComposureDelta>[0],
+  ownedBuildingIds: Set<string> = new Set(),
 ): RoutinePreview {
   const cfg = getRoutinesConfig();
   const resolved = applyClassMods(card, row.classId, cfg);
@@ -143,6 +155,15 @@ export function previewRoutine(
   const composureReason =
     tag.delta !== 0 ? tag.reason : composureDelta !== 0 ? "the rhythm of the day" : tag.reason;
 
+  const requires: RoutineRequirementView | null = card.requires
+    ? {
+        good: card.requires.good,
+        fee: card.requires.fee,
+        waivedBy: card.requires.waivedBy,
+        waived: card.requires.waivedBy ? ownedBuildingIds.has(card.requires.waivedBy) : false,
+      }
+    : null;
+
   return {
     id: card.id,
     label: card.label,
@@ -152,6 +173,7 @@ export function previewRoutine(
     costs: costChips(finalEffects),
     composureDelta,
     composureReason,
+    requires,
   };
 }
 
@@ -181,6 +203,8 @@ export type RoutineResolution =
       broke: boolean;
       grantedTrait: string | null;
       ladder: { id: string; newXp: number; nextThreshold: number | null; traitGranted: string | null } | null;
+      // True when a required cost was waived because the player owns the building.
+      waived: boolean;
     };
 
 // Resolve a routine for the acting character. One pick/day (daily_routines unique
@@ -206,6 +230,16 @@ export async function resolveRoutine(row: CharacterRow, routineId: string, now: 
     .from(dailyRoutines)
     .where(and(eq(dailyRoutines.characterId, row.id), eq(dailyRoutines.utcDay, utcDay)));
   if (already.length > 0) return { ok: false, code: 409, error: "You have already chosen your routine today." };
+
+  // Routine consumption hook: a card may require a good and/or a fee (waivable by
+  // owning a building). Resolve + debit it before claiming the day; a missing good
+  // (with no waiver) rejects the pick with copy pointing at the agora.
+  let waived = false;
+  if (card.requires) {
+    const consumed = await consumeRoutineRequirement(row.playerId, row.worldId, card.requires, now);
+    if (!consumed.ok) return { ok: false, code: consumed.code, error: consumed.error };
+    waived = consumed.waived;
+  }
 
   // Repeat penalty: same routine as yesterday halves stat/drachmae/ladder gains.
   const yesterday = utcDayString(new Date(now.getTime() - 86_400_000));
@@ -324,5 +358,6 @@ export async function resolveRoutine(row: CharacterRow, routineId: string, now: 
     broke: composure.broke,
     grantedTrait: composure.grantedTrait,
     ladder: ladderOut,
+    waived,
   };
 }

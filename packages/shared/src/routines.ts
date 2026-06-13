@@ -41,6 +41,26 @@ const classModSchema = z
   })
   .strict();
 
+// Routine consumption hooks (Economy Build 1): a card may REQUIRE a good and/or a
+// drachmae fee to be picked. A `good` is debited from the player's inventory (the
+// resources rows); if absent the pick is rejected. A `fee` is debited from the
+// wallet and credited to the world treasury stub. `waivedBy` names a building —
+// if the player owns it (any tier), the cost is zeroed (shown as a waiver). NO
+// free variants: without the good (and without a waiver) the card cannot be run.
+export type RoutineRequirement = {
+  good?: { type: string; qty: number };
+  fee?: number;
+  waivedBy?: string;
+};
+
+const routineRequirementSchema = z
+  .object({
+    good: z.object({ type: z.string(), qty: z.number().int().positive() }).strict().optional(),
+    fee: z.number().int().positive().optional(),
+    waivedBy: z.string().optional(),
+  })
+  .strict();
+
 export type RoutineCard = {
   id: string;
   pool: string;
@@ -51,6 +71,7 @@ export type RoutineCard = {
   feedsLadder?: string;
   ladderXp?: number;
   classMods?: Record<string, ClassMod>;
+  requires?: RoutineRequirement;
 };
 
 export const routineCardSchema = z
@@ -64,6 +85,7 @@ export const routineCardSchema = z
     feedsLadder: z.string().optional(),
     ladderXp: z.number().optional(),
     classMods: z.record(z.string(), classModSchema).optional(),
+    requires: routineRequirementSchema.optional(),
   })
   .strict();
 

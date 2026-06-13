@@ -2336,8 +2336,22 @@
 }
 
 /* ===========================================================================
-   PANEL KIT (Holdings / Market / Family / Politics) — ported from v8 mockup
+   PANEL KIT (Ledger / Market / Family / Politics) — ported from v8 mockup
    =========================================================================== */
+.dashboard-shell .ledger-collect{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(181, 138, 69, 0.32);
+  background: rgba(40, 28, 16, 0.5);
+}
+.dashboard-shell .ledger-vendor{
+  margin-bottom: 8px;
+}
 .dashboard-shell .panel-banner{
   position: relative;
   display: flex;

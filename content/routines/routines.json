@@ -16,6 +16,10 @@
     ],
     "feedsLadder": "gymnasium",
     "ladderXp": 2,
+    "requires": {
+      "fee": 2,
+      "waivedBy": "palaestra"
+    },
     "classMods": {
       "hoplite": {
         "amountMult": 1.5,
@@ -30,7 +34,7 @@
   {
     "id": "routine-ride",
     "pool": "citizen",
-    "label": "Ride and hunt the hills",
+    "label": "Ride the hills",
     "scene": "Out past the chora, horse under you and the hills open. Hard riding clears the head.",
     "tags": [
       "hunt"
@@ -46,6 +50,13 @@
         "amount": 3
       }
     ],
+    "requires": {
+      "good": {
+        "type": "horse",
+        "qty": 1
+      },
+      "waivedBy": "horse-farm"
+    },
     "classMods": {
       "hoplite": {
         "composure": 2
@@ -108,7 +119,7 @@
   {
     "id": "routine-symposium",
     "pool": "citizen",
-    "label": "Attend a symposium",
+    "label": "Evening symposion",
     "scene": "Wine, music, and the talk of men who matter. Standing is won in the andron as much as the agora.",
     "tags": [
       "symposium",
@@ -121,16 +132,23 @@
         "amount": 1
       },
       {
-        "type": "change_drachmae",
-        "amount": -8
+        "type": "change_stat",
+        "stat": "intelligence",
+        "amount": 1
       }
-    ]
+    ],
+    "requires": {
+      "good": {
+        "type": "wine",
+        "qty": 1
+      }
+    }
   },
   {
     "id": "routine-offerings",
     "pool": "citizen",
-    "label": "Make offerings at the temple",
-    "scene": "Incense, a libation, a beast at the altar. The gods remember those who remember them.",
+    "label": "Make an offering",
+    "scene": "Incense, a libation, a bird at the altar. The gods remember those who remember them.",
     "tags": [
       "offering"
     ],
@@ -141,12 +159,18 @@
         "amount": 1
       },
       {
-        "type": "change_drachmae",
-        "amount": -8
+        "type": "change_composure",
+        "amount": 3
       }
     ],
     "feedsLadder": "mysteries",
     "ladderXp": 2,
+    "requires": {
+      "good": {
+        "type": "chicken",
+        "qty": 1
+      }
+    },
     "classMods": {
       "priest": {
         "amountMult": 1.5,
@@ -257,6 +281,24 @@
         "amount": 3
       }
     ]
+  },
+  {
+    "id": "routine-bathhouse",
+    "pool": "citizen",
+    "label": "Bathhouse visit",
+    "scene": "Hot water, a strigil, and the murmur of the baths. A small coin for a small mending of the day.",
+    "tags": [
+      "solitude"
+    ],
+    "effects": [
+      {
+        "type": "change_composure",
+        "amount": 5
+      }
+    ],
+    "requires": {
+      "fee": 1
+    }
   },
   {
     "id": "routine-het-salon",
