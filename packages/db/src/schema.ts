@@ -105,6 +105,9 @@ export const successions = pgTable("successions", {
   fromName: text("from_name"),
   fromAge: integer("from_age"),
   toName: text("to_name"),
+  // Free-text chronicle line for the handoff (Hoplite Step 4): a glorious merc
+  // death records "<name> fell <setting>, season <n>"; other handoffs leave it null.
+  note: text("note"),
   occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   dynastyIdx: index("successions_dynasty_idx").on(table.dynastyId),
@@ -187,6 +190,9 @@ export const playerCharacters = pgTable("player_characters", {
   contractId: text("contract_id"),
   contractStartedAt: timestamp("contract_started_at", { withTimezone: true }),
   contractSeasonsTotal: integer("contract_seasons_total"),
+  // Hoplite Step 4: the composed chronicle line for a glorious merc death, carried
+  // from the death instant to heir resolution (becomeHeir → successions.note).
+  pendingDeathNote: text("pending_death_note"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   oneCharacterPerPlayerWorld: uniqueIndex("player_characters_player_world_idx").on(table.playerId, table.worldId),

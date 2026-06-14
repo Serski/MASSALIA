@@ -128,6 +128,10 @@ export function accrueService(rank: RankDef, anchorMs: number, nowMs: number): S
 // scaling, succession / "died gloriously abroad". Step 2 contracts always complete.
 // ---------------------------------------------------------------------------
 
+// Per-contract OVER-30, full-danger risk rates (Hoplite Step 4). The engine scales
+// death + careerInjury by age (see ageRiskScale); scare stays flat.
+export type ContractRisk = { death: number; careerInjury: number; scare: number };
+
 export type ContractDef = {
   id: string;
   name: string;
@@ -136,10 +140,19 @@ export type ContractDef = {
   termSeasons: number; // full term length in seasons
   minCancelSeasons: number; // seasons that must elapse before early return is allowed
   poolKey: string; // the abroad daily-decision card pool (Step 3)
-  completionTraits: string[]; // reputation/class traits awarded on SAFE completion (Step 3)
+  completionTraits: string[]; // reputation/class traits awarded on a CLEAN completion (Step 3)
+  hard: boolean; // a HARD contract — barred to the wounded (one-eyed/lamed) (Step 4)
+  deathSetting: string; // chronicle fragment, e.g. "in the king's phalanx" (Step 4)
+  risk: ContractRisk; // over-30 full-danger rates (Step 4)
 };
 
-export type ContractsContent = { contracts: ContractDef[] };
+// Global, tunable risk config (content). ageScale ramps death/injury by age.
+export type AgeScaleConfig = { minMultiplier: number; rampStartAge: number; fullAge: number };
+export type RiskConfig = { ageScale: AgeScaleConfig; clampMax: number; scareComposureHit: number; gloriousDeathPrestige: number };
+
+export type ContractsContent = { risk: RiskConfig; contracts: ContractDef[] };
+
+const contractRiskSchema = z.object({ death: z.number().min(0), careerInjury: z.number().min(0), scare: z.number().min(0) }).strict();
 
 const contractSchema = z
   .object({
@@ -151,14 +164,29 @@ const contractSchema = z
     minCancelSeasons: z.number().int().nonnegative(),
     poolKey: z.string(),
     completionTraits: z.array(z.string()),
+    hard: z.boolean(),
+    deathSetting: z.string(),
+    risk: contractRiskSchema,
   })
   .strict();
 
-export const contractsContentSchema = z.object({ contracts: z.array(contractSchema) }).strict();
+const riskConfigSchema = z
+  .object({
+    ageScale: z.object({ minMultiplier: z.number().positive(), rampStartAge: z.number(), fullAge: z.number() }).strict(),
+    clampMax: z.number().min(0).max(1),
+    scareComposureHit: z.number().min(0),
+    gloriousDeathPrestige: z.number().min(0),
+  })
+  .strict();
+
+export const contractsContentSchema = z.object({ risk: riskConfigSchema, contracts: z.array(contractSchema) }).strict();
 
 export function parseContractsContent(data: unknown): ContractsContent {
   const parsed = contractsContentSchema.parse(data) as ContractsContent;
   if (parsed.contracts.length === 0) throw new Error("contracts.json must define at least one contract");
+  if (parsed.risk.ageScale.fullAge <= parsed.risk.ageScale.rampStartAge) {
+    throw new Error("risk.ageScale.fullAge must exceed rampStartAge");
+  }
   for (const c of parsed.contracts) {
     if (c.minCancelSeasons > c.termSeasons) {
       throw new Error(`contract ${c.id}: minCancelSeasons (${c.minCancelSeasons}) cannot exceed termSeasons (${c.termSeasons})`);
@@ -166,6 +194,57 @@ export function parseContractsContent(data: unknown): ContractsContent {
   }
   return parsed;
 }
+
+// --- Mercenary risk roll (Hoplite Step 4) -----------------------------------
+// Resolved ONCE at successful term completion (never on cancel). Death + injury
+// scale with age; scare is flat. One outcome max, highest-severity first.
+//
+// AGE SCALING (death + careerInjury only): a linear ramp anchored at the over-30
+// rates. Below rampStartAge the multiplier is the floor `minMultiplier` (×0.5);
+// from rampStartAge it climbs linearly at slope = (1 - minMultiplier)/(fullAge -
+// rampStartAge) per year — reaching ×1.0 at fullAge and CONTINUING past it at the
+// same slope (so with 0.5/30/40: age 30 →×0.5, 40 →×1.0, 50 →×1.5). The final
+// probability (rate × multiplier) is clamped to [0, clampMax]. Scare is unscaled.
+
+export type RiskOutcome = "clean" | "scare" | "injury" | "death";
+
+export function ageRiskScale(age: number, cfg: AgeScaleConfig): number {
+  if (age < cfg.rampStartAge) return cfg.minMultiplier;
+  const slope = (1 - cfg.minMultiplier) / (cfg.fullAge - cfg.rampStartAge);
+  return cfg.minMultiplier + slope * (age - cfg.rampStartAge);
+}
+
+function clampProb(p: number, max: number): number {
+  return Math.max(0, Math.min(max, p));
+}
+
+// Scaled, clamped probabilities for a contract at a given age (for previews/tests).
+export function riskProbabilities(risk: ContractRisk, age: number, cfg: RiskConfig): { death: number; injury: number; scare: number } {
+  const scale = ageRiskScale(age, cfg.ageScale);
+  return {
+    death: clampProb(risk.death * scale, cfg.clampMax),
+    injury: clampProb(risk.careerInjury * scale, cfg.clampMax),
+    scare: clampProb(risk.scare, cfg.clampMax),
+  };
+}
+
+// Resolve the single outcome. rng() must return [0,1); inject a seeded rng in tests
+// to force a branch. Prioritised death → injury → scare (independent rolls).
+export function resolveRisk(risk: ContractRisk, age: number, cfg: RiskConfig, rng: () => number): RiskOutcome {
+  const p = riskProbabilities(risk, age, cfg);
+  if (rng() < p.death) return "death";
+  if (rng() < p.injury) return "injury";
+  if (rng() < p.scare) return "scare";
+  return "clean";
+}
+
+// The career-ending injury trait (a coin-flip between the two), seeded by rng.
+export function injuryTrait(rng: () => number): "one-eyed" | "lamed" {
+  return rng() < 0.5 ? "one-eyed" : "lamed";
+}
+
+// The traits that bar a character from HARD contracts (Step 4 wound bar).
+export const WOUND_TRAITS = ["one-eyed", "lamed"] as const;
 
 export function contractDef(content: ContractsContent, id: string): ContractDef | null {
   return content.contracts.find((c) => c.id === id) ?? null;

@@ -1,9 +1,15 @@
 {
+  "risk": {
+    "ageScale": { "minMultiplier": 0.5, "rampStartAge": 30, "fullAge": 40 },
+    "clampMax": 0.95,
+    "scareComposureHit": 8,
+    "gloriousDeathPrestige": 5
+  },
   "contracts": [
-    { "id": "trade-ship",   "name": "Trade-Ship Guard",   "gate": { "militia": 0,  "prestige": 0  }, "dailyDrachmae": 12, "termSeasons": 1, "minCancelSeasons": 0, "poolKey": "merc-trade-ship",   "completionTraits": ["sellsword"] },
-    { "id": "gaul-caravan", "name": "Gaulish Caravan",     "gate": { "militia": 10, "prestige": 5  }, "dailyDrachmae": 16, "termSeasons": 1, "minCancelSeasons": 0, "poolKey": "merc-gaul-caravan", "completionTraits": ["sellsword", "polyglot"] },
-    { "id": "syracuse",     "name": "Syracusan Levy",      "gate": { "militia": 20, "prestige": 15 }, "dailyDrachmae": 22, "termSeasons": 2, "minCancelSeasons": 2, "poolKey": "merc-syracuse",     "completionTraits": ["sellsword", "shield-brother"] },
-    { "id": "carthage",     "name": "Carthaginian Service", "gate": { "militia": 35, "prestige": 30 }, "dailyDrachmae": 30, "termSeasons": 2, "minCancelSeasons": 2, "poolKey": "merc-carthage",     "completionTraits": ["sellsword", "storm-tested"] },
-    { "id": "ptolemy",      "name": "Ptolemaic Guard",     "gate": { "militia": 50, "prestige": 45 }, "dailyDrachmae": 42, "termSeasons": 4, "minCancelSeasons": 4, "poolKey": "merc-ptolemy",      "completionTraits": ["ptolemys-spear", "survivor"] }
+    { "id": "trade-ship",   "name": "Trade-Ship Guard",   "gate": { "militia": 0,  "prestige": 0  }, "dailyDrachmae": 12, "termSeasons": 1, "minCancelSeasons": 0, "poolKey": "merc-trade-ship",   "completionTraits": ["sellsword"],                "hard": false, "deathSetting": "guarding a trade galley", "risk": { "death": 0.010, "careerInjury": 0.00, "scare": 0.03 } },
+    { "id": "gaul-caravan", "name": "Gaulish Caravan",     "gate": { "militia": 10, "prestige": 5  }, "dailyDrachmae": 16, "termSeasons": 1, "minCancelSeasons": 0, "poolKey": "merc-gaul-caravan", "completionTraits": ["sellsword", "polyglot"],     "hard": false, "deathSetting": "on the Gaulish road", "risk": { "death": 0.015, "careerInjury": 0.01, "scare": 0.05 } },
+    { "id": "syracuse",     "name": "Syracusan Levy",      "gate": { "militia": 20, "prestige": 15 }, "dailyDrachmae": 22, "termSeasons": 2, "minCancelSeasons": 2, "poolKey": "merc-syracuse",     "completionTraits": ["sellsword", "shield-brother"], "hard": true,  "deathSetting": "in Syracusan service", "risk": { "death": 0.030, "careerInjury": 0.02, "scare": 0.07 } },
+    { "id": "carthage",     "name": "Carthaginian Service", "gate": { "militia": 35, "prestige": 30 }, "dailyDrachmae": 30, "termSeasons": 2, "minCancelSeasons": 2, "poolKey": "merc-carthage",     "completionTraits": ["sellsword", "storm-tested"], "hard": true,  "deathSetting": "in Carthaginian pay", "risk": { "death": 0.045, "careerInjury": 0.03, "scare": 0.09 } },
+    { "id": "ptolemy",      "name": "Ptolemaic Guard",     "gate": { "militia": 50, "prestige": 45 }, "dailyDrachmae": 42, "termSeasons": 4, "minCancelSeasons": 4, "poolKey": "merc-ptolemy",      "completionTraits": ["ptolemys-spear", "survivor"], "hard": true,  "deathSetting": "in the king's phalanx", "risk": { "death": 0.060, "careerInjury": 0.04, "scare": 0.10 } }
   ]
 }

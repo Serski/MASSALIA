@@ -922,5 +922,31 @@
       "militia": 2,
       "prestige": 2
     }
+  },
+  {
+    "id": "one-eyed",
+    "name": "One-Eyed",
+    "category": "reputation",
+    "description": "Lost an eye in a far war.",
+    "statMod": {
+      "militia": -1,
+      "prestige": 1
+    }
+  },
+  {
+    "id": "lamed",
+    "name": "Lamed",
+    "category": "reputation",
+    "description": "A wound that never healed right.",
+    "statMod": {
+      "militia": -2
+    }
+  },
+  {
+    "id": "war-scarred",
+    "name": "War-Scarred",
+    "category": "reputation",
+    "description": "Carries the marks of a foreign campaign.",
+    "statMod": {}
   }
 ]

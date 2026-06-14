@@ -5,9 +5,11 @@ import { describe, expect, it } from "vitest";
 import { REAL_MS_PER_SEASON } from "./calendar.js";
 import {
   accrueService,
+  ageRiskScale,
   contractDef,
   foreignIncomeAccrual,
   gateShortfall,
+  injuryTrait,
   meetsGate,
   MS_PER_GAME_DAY,
   nextRankId,
@@ -15,6 +17,8 @@ import {
   parseRanksContent,
   rankDef,
   RANK_ORDER,
+  resolveRisk,
+  riskProbabilities,
   seasonsElapsed,
   type ContractsContent,
   type RanksContent,
@@ -102,5 +106,55 @@ describe("mercenary contracts (Step 2)", () => {
     // The Ptolemaic guard over its full 4-season term: 42 × 4 = 168.
     const ptEnd = ptolemy.termSeasons * REAL_MS_PER_SEASON;
     expect(foreignIncomeAccrual(ptolemy.dailyDrachmae, 0, 99 * REAL_MS_PER_SEASON, ptEnd).drachmae).toBe(168);
+  });
+});
+
+describe("mercenary risk + age scaling (Step 4)", () => {
+  const cfg = contracts.risk;
+
+  it("ageScale: under 30 → ×0.5; 40 → ×1.0; 50 → ×1.5 (linear, continuing past 40)", () => {
+    expect(ageRiskScale(25, cfg.ageScale)).toBeCloseTo(0.5, 6); // floor below rampStart
+    expect(ageRiskScale(30, cfg.ageScale)).toBeCloseTo(0.5, 6);
+    expect(ageRiskScale(35, cfg.ageScale)).toBeCloseTo(0.75, 6); // halfway up the ramp
+    expect(ageRiskScale(40, cfg.ageScale)).toBeCloseTo(1.0, 6);
+    expect(ageRiskScale(50, cfg.ageScale)).toBeCloseTo(1.5, 6); // same slope past 40
+  });
+
+  it("under-30 death rate is exactly half the over-30 (×1.0 at 40) rate", () => {
+    const at30 = riskProbabilities(ptolemy.risk, 30, cfg).death; // ×0.5
+    const at40 = riskProbabilities(ptolemy.risk, 40, cfg).death; // ×1.0
+    expect(at30).toBeCloseTo(at40 / 2, 6);
+    expect(at40).toBeCloseTo(ptolemy.risk.death, 6); // full over-30 rate at age 40
+  });
+
+  it("scare is FLAT (never age-scaled)", () => {
+    expect(riskProbabilities(ptolemy.risk, 25, cfg).scare).toBe(ptolemy.risk.scare);
+    expect(riskProbabilities(ptolemy.risk, 60, cfg).scare).toBe(ptolemy.risk.scare);
+  });
+
+  it("clamps the final probability to clampMax", () => {
+    const huge = { death: 5, careerInjury: 5, scare: 0.1 };
+    const p = riskProbabilities(huge, 50, cfg);
+    expect(p.death).toBe(cfg.clampMax);
+    expect(p.injury).toBe(cfg.clampMax);
+  });
+
+  it("resolveRisk picks the branch from the seeded rng, highest-severity first", () => {
+    const seq = (...v: number[]) => { let i = 0; return () => v[Math.min(i++, v.length - 1)]!; };
+    // syracuse @30: pDeath=0.015, pInjury=0.01, pScare=0.07.
+    expect(resolveRisk(contractDef(contracts, "syracuse")!.risk, 30, cfg, seq(0))).toBe("death");
+    expect(resolveRisk(contractDef(contracts, "syracuse")!.risk, 30, cfg, seq(0.9, 0))).toBe("injury");
+    expect(resolveRisk(contractDef(contracts, "syracuse")!.risk, 30, cfg, seq(0.9, 0.9, 0))).toBe("scare");
+    expect(resolveRisk(contractDef(contracts, "syracuse")!.risk, 30, cfg, seq(0.9, 0.9, 0.9))).toBe("clean");
+  });
+
+  it("trade-ship has zero career-injury by design", () => {
+    expect(tradeShip.risk.careerInjury).toBe(0);
+    expect(riskProbabilities(tradeShip.risk, 50, cfg).injury).toBe(0);
+  });
+
+  it("injuryTrait is a seeded coin between one-eyed and lamed", () => {
+    expect(injuryTrait(() => 0)).toBe("one-eyed");
+    expect(injuryTrait(() => 0.99)).toBe("lamed");
   });
 });

@@ -834,6 +834,8 @@ export type ServiceActionResult = { ok: true; collected?: { drachmae: number; mi
 
 // --- Mercenary contracts: hiring board + go/return lifecycle (Hoplite Step 2) ---
 
+export type RiskOutcome = "clean" | "scare" | "injury" | "death";
+
 export type ContractBoardEntry = {
   id: string;
   name: string;
@@ -844,7 +846,11 @@ export type ContractBoardEntry = {
   poolKey: string;
   qualifies: boolean;
   shortfall: { militia: number; prestige: number };
+  hard: boolean;
+  woundBarred: boolean;
 };
+
+export type JustReturned = { outcome: RiskOutcome; awardedTraits: string[]; died: boolean; composureHit: number };
 
 export type CurrentContractView = {
   id: string;
@@ -862,12 +868,14 @@ export type MercBoard = {
   isHoplite: boolean;
   abroad: boolean;
   holdsStrategos: boolean;
+  wounded: boolean;
   stats: { militia: number; prestige: number };
   contracts: ContractBoardEntry[];
   current: CurrentContractView | null;
+  justReturned: JustReturned | null;
 };
 
-export type MercActionResult = { ok: true; collected?: number; completed?: boolean; awardedTraits?: string[]; board: MercBoard };
+export type MercActionResult = { ok: true; collected?: number; completed?: boolean; awardedTraits?: string[]; outcome?: RiskOutcome | null; died?: boolean; board: MercBoard };
 
 export type DailyCard = {
   arena: string;

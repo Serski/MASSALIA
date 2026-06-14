@@ -85,6 +85,9 @@ async function becomeHeir(
       fromName,
       fromAge,
       toName: heir.name,
+      // Hoplite Step 4: a glorious merc death stashed its chronicle line here; carry
+      // it into the dynasty ledger. Null for old-age / other handoffs.
+      note: slot.pendingDeathNote ?? null,
     });
   }
 
@@ -112,6 +115,8 @@ async function becomeHeir(
     isRegent: heir.isRegent ?? false,
     regentForChildId: heir.regentForChildId ?? null,
     adoptedCandidateId: null,
+    // The chronicle line has been written to the succession ledger — clear the carry.
+    pendingDeathNote: null,
   };
   if (heir.drachmae !== undefined) updates.drachmae = heir.drachmae;
   if (heir.isCouncilor !== undefined) updates.isCouncilor = heir.isCouncilor;

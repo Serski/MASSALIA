@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type AgendaScopeView, type BuildingsCatalog, type BuildingsMine, type CatalogEntry, type OwnedBuilding, type ClassSection, type VendorPrice, type ServiceView, type MercBoard } from "../api.js";
+import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type AgendaScopeView, type BuildingsCatalog, type BuildingsMine, type CatalogEntry, type OwnedBuilding, type ClassSection, type VendorPrice, type ServiceView, type MercBoard, type RiskOutcome } from "../api.js";
 import { assetPath, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
@@ -1197,11 +1197,17 @@ function ServiceSection({ label, onRefresh }: { label: string; onRefresh: () => 
   const [merc, setMerc] = useState<MercBoard | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  // The contract-return outcome (Step 4). STICKY: set only when an outcome arrives
+  // (a board read that completes a contract, or a collect/cancel action), never
+  // cleared by a subsequent empty read — so it survives the StrictMode re-fetch and
+  // stays visible until the player leaves the panel.
+  const [outcome, setOutcome] = useState<MercBoard["justReturned"]>(null);
 
   const load = useCallback(async () => {
     const [s, b] = await Promise.all([api.service(), api.mercBoard()]);
     setData(s);
     setMerc(b);
+    if (b.justReturned) setOutcome(b.justReturned);
   }, []);
   useEffect(() => {
     let cancelled = false;
@@ -1215,7 +1221,10 @@ function ServiceSection({ label, onRefresh }: { label: string; onRefresh: () => 
     setBusy(true);
     setNote("");
     try {
-      await fn();
+      const res = (await fn()) as { outcome?: RiskOutcome | null; awardedTraits?: string[]; died?: boolean } | undefined;
+      // Capture an outcome surfaced by the action itself (e.g. collecting the final
+      // foreign pay that completes the term) — robust against the lazy-read path.
+      if (res?.outcome) setOutcome({ outcome: res.outcome, awardedTraits: res.awardedTraits ?? [], died: res.died ?? false, composureHit: 0 });
       await load();
       onRefresh();
       if (ok) setNote(ok);
@@ -1241,6 +1250,18 @@ function ServiceSection({ label, onRefresh }: { label: string; onRefresh: () => 
   const enlisted = data.rankId !== "none";
   const abroad = data.abroad;
   const current = merc.current;
+  // The outcome of a contract that just resolved (Step 4), from sticky state. Death
+  // is also handled by the succession screen taking over after onRefresh.
+  const jr = outcome;
+  const returnMessage = jr
+    ? jr.outcome === "death"
+      ? "You fell abroad — your heir takes up the name."
+      : jr.outcome === "injury"
+        ? `A wound will trouble you for life — you come home ${jr.awardedTraits.includes("lamed") ? "lamed" : "one-eyed"}.`
+        : jr.outcome === "scare"
+          ? "You come home war-scarred, but whole."
+          : "You return whole and richer."
+    : null;
 
   return (
     <>
@@ -1315,6 +1336,16 @@ function ServiceSection({ label, onRefresh }: { label: string; onRefresh: () => 
         </div>
       ) : null}
 
+      {/* Return outcome (Step 4): the result of a contract that just resolved. */}
+      {returnMessage ? (
+        <div className="ledger-collect" role="status">
+          <div>
+            <strong>{jr?.outcome === "death" ? "Fallen abroad" : jr?.outcome === "clean" ? "Returned home" : "Home, with scars"}</strong>
+            <div className="pr-s">{returnMessage}</div>
+          </div>
+        </div>
+      ) : null}
+
       {/* Hiring board (Step 2): the 5 contracts at home, or the abroad card. */}
       <div className="panel-label">Hiring Board</div>
       {abroad && current ? (
@@ -1361,18 +1392,20 @@ function ServiceSection({ label, onRefresh }: { label: string; onRefresh: () => 
           <div className="panel-grid2">
             {merc.contracts.map((c) => {
               const blockedByStrategos = merc.holdsStrategos;
-              const canTake = c.qualifies && !blockedByStrategos;
+              const canTake = c.qualifies && !blockedByStrategos && !c.woundBarred;
               return (
                 <PanelRow
                   key={c.id}
                   icon="⚔️"
                   title={`${c.name} · ${c.dailyDrachmae}dr/season`}
                   sub={
-                    blockedByStrategos
-                      ? "A Strategos cannot be sworn abroad."
-                      : c.qualifies
-                        ? `${c.termSeasons} season${c.termSeasons > 1 ? "s" : ""} · gate met (${c.gate.militia} militia / ${c.gate.prestige} prestige)`
-                        : `${c.termSeasons} season${c.termSeasons > 1 ? "s" : ""} · need ${c.gate.militia} militia (you have ${merc.stats.militia}) · ${c.gate.prestige} prestige (you have ${merc.stats.prestige})`
+                    c.woundBarred
+                      ? "Your wounds bar you from the hard wars."
+                      : blockedByStrategos
+                        ? "A Strategos cannot be sworn abroad."
+                        : c.qualifies
+                          ? `${c.termSeasons} season${c.termSeasons > 1 ? "s" : ""} · gate met (${c.gate.militia} militia / ${c.gate.prestige} prestige)`
+                          : `${c.termSeasons} season${c.termSeasons > 1 ? "s" : ""} · need ${c.gate.militia} militia (you have ${merc.stats.militia}) · ${c.gate.prestige} prestige (you have ${merc.stats.prestige})`
                   }
                   dim={!canTake}
                   tag={canTake ? undefined : "locked"}

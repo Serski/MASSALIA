@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeAll, beforeEach } from "vitest";
+import { describe, expect, it, beforeAll, beforeEach, afterAll } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
@@ -25,7 +25,9 @@ async function loadModules() {
   const traits = await import("./traits.js");
   const routines = await import("./routines.js");
   const composure = await import("./composure.js");
-  return { dbPkg, merc, service, age, traits, routines, composure };
+  const succession = await import("./succession.js");
+  const family = await import("./family.js");
+  return { dbPkg, merc, service, age, traits, routines, composure, succession, family };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -34,10 +36,11 @@ suite("Mercenary contracts (integration)", () => {
   let db: ReturnType<Mods["dbPkg"]["createDb"]>;
   let worldId: string;
 
-  async function makeHoplite(opts: { militia?: number; prestige?: number; drachmae?: number; classId?: string; rank?: string } = {}) {
-    const { users, players, playerCharacters } = m.dbPkg;
+  async function makeHoplite(opts: { militia?: number; prestige?: number; drachmae?: number; classId?: string; rank?: string; name?: string } = {}) {
+    const { users, players, playerCharacters, dynasties } = m.dbPkg;
     const user = (await db.insert(users).values({ email: `u-${Math.random().toString(36).slice(2)}@t`, passwordHash: "x" }).returning())[0]!;
-    const player = (await db.insert(players).values({ worldId, userId: user.id, name: "H", color: "#123456", houseSlug: "test-house" }).returning())[0]!;
+    const player = (await db.insert(players).values({ worldId, userId: user.id, name: opts.name ?? "Brasidas", color: "#123456", houseSlug: "test-house" }).returning())[0]!;
+    const dynasty = (await db.insert(dynasties).values({ worldId, name: "House Test", prestige: 0, houseSlug: "test-house", foundingPlayerId: player.id, generation: 1 }).returning())[0]!;
     return (await db
       .insert(playerCharacters)
       .values({
@@ -45,6 +48,7 @@ suite("Mercenary contracts (integration)", () => {
         worldId,
         houseSlug: "test-house",
         classId: opts.classId ?? "hoplite",
+        dynastyId: dynasty.id,
         militia: opts.militia ?? 0,
         prestige: opts.prestige ?? 0,
         drachmae: opts.drachmae ?? 0,
@@ -53,6 +57,15 @@ suite("Mercenary contracts (integration)", () => {
         deathAge: 90,
       })
       .returning())[0]!;
+  }
+  async function dynastyPrestige(characterId: string): Promise<number> {
+    const rows = await db
+      .select({ prestige: m.dbPkg.dynasties.prestige })
+      .from(m.dbPkg.dynasties)
+      .innerJoin(m.dbPkg.playerCharacters, eq(m.dbPkg.playerCharacters.dynastyId, m.dbPkg.dynasties.id))
+      .where(eq(m.dbPkg.playerCharacters.id, characterId))
+      .limit(1);
+    return rows[0]?.prestige ?? 0;
   }
   async function reload(id: string) {
     return (await db.select().from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.id, id)).limit(1))[0]!;
@@ -74,11 +87,27 @@ suite("Mercenary contracts (integration)", () => {
   });
 
   beforeEach(async () => {
+    // Default service-path completions to a CLEAN outcome so the Step 2/3 tests are
+    // deterministic; the Step 4 risk-branch tests drive the DB layer with a seeded
+    // rng directly (env-independent), or override this env for service-path death.
+    process.env.MERC_FORCE_OUTCOME = "clean";
     await db.execute(sql`TRUNCATE TABLE character_traits, offices, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
     await db.insert(m.dbPkg.houses).values({ slug: "test-house", name: "House Test", initial: "T", alignment: "c", stance: "s", motto: "m", patron: "p", crest: "c" }).onConflictDoNothing();
     const world = (await db.insert(m.dbPkg.worlds).values({ name: "Merc Test", seed: "mtest", startedAt: new Date(T0), endsAt: new Date(T0 + 182 * DAY), status: "active" }).returning())[0]!;
     worldId = world.id;
   });
+
+  afterAll(() => {
+    delete process.env.MERC_FORCE_OUTCOME;
+  });
+
+  // Seeded rng for the DB-layer risk-branch tests: yields the given values in order.
+  const seq = (...vals: number[]) => {
+    let i = 0;
+    return () => vals[Math.min(i++, vals.length - 1)] ?? 1;
+  };
+  const riskCfg = () => m.merc.riskConfig();
+  const traitDefsAll = () => m.traits.getAllTraitDefs();
 
   it("takes a contract: home salary pauses, foreign income accrues per season", async () => {
     // A veteran (home salary 16/day) takes the trade-ship (foreign 12/season, term 1).
@@ -123,8 +152,9 @@ suite("Mercenary contracts (integration)", () => {
   it("the worker sweep completes a served-out contract for an offline player", async () => {
     const c = await makeHoplite({ drachmae: 0 });
     await m.merc.takeContract(c, "trade-ship", at(0));
-    // Player never opens the app; the sweep runs after the term (real content cfg).
-    const swept = await m.dbPkg.sweepMercenaryContracts(m.merc.contractCfgMap(), m.traits.getAllTraitDefs(), at(1));
+    // Player never opens the app; the sweep runs after the term (real content cfg,
+    // clean outcome forced so the offline completion is deterministic).
+    const swept = await m.dbPkg.sweepMercenaryContracts(m.merc.contractCfgMap(), { traitDefs: traitDefsAll(), riskCfg: riskCfg(), rng: seq(0.999999), now: at(1) });
     expect(swept.completed).toBe(1);
     const home = await reload(c.id);
     expect(home.contractId).toBeNull();
@@ -214,7 +244,7 @@ suite("Mercenary contracts (integration)", () => {
     await m.merc.board(await reload(c.id), at(2)); // lazy completion awards
     expect(await heldTraitIds(c.id)).toEqual(["sellsword", "shield-brother"]);
     // A second settle finds no contract (already cleared) → no re-award, no error.
-    const again = await m.dbPkg.settleMercContract(c.id, m.merc.contractCfgMap(), "complete", m.traits.getAllTraitDefs(), at(3));
+    const again = await m.dbPkg.settleMercContract(c.id, m.merc.contractCfgMap(), "complete", { traitDefs: traitDefsAll(), riskCfg: riskCfg(), rng: seq(0.999999), now: at(3) });
     expect(again).toBeNull();
     expect(await heldTraitIds(c.id)).toEqual(["sellsword", "shield-brother"]);
   });
@@ -269,5 +299,118 @@ suite("Mercenary contracts (integration)", () => {
       .where(and(eq(m.dbPkg.partyFavor.characterId, c.id), eq(m.dbPkg.partyFavor.party, "palaioi")))
       .limit(1);
     expect(favor[0]?.favor).toBe(1);
+  });
+
+  // --- Step 4: mercenary risk (death / injury / scare / clean) ---------------
+
+  it("CLEAN return (forced): completion traits + income, alive, no wounds", async () => {
+    const c = await makeHoplite({ drachmae: 0 });
+    await m.merc.takeContract(c, "trade-ship", at(0));
+    const res = await m.dbPkg.settleMercContract(c.id, m.merc.contractCfgMap(), "complete", { traitDefs: traitDefsAll(), riskCfg: riskCfg(), rng: seq(0.9, 0.9, 0.9), now: at(1) });
+    expect(res?.outcome).toBe("clean");
+    const row = await reload(c.id);
+    expect(row.status).toBe("alive");
+    expect(row.contractId).toBeNull();
+    expect(row.drachmae).toBe(12); // full term income home
+    expect(await heldTraitIds(c.id)).toEqual(["sellsword"]); // Step-3 completion trait
+  });
+
+  it("MINOR SCARE (forced): war-scarred + a temporary composure hit, income home", async () => {
+    const c = await makeHoplite({ militia: 15, prestige: 10 }); // gaul gate
+    await m.merc.takeContract(c, "gaul-caravan", at(0));
+    const before = await reload(c.id);
+    // rng: skip death, skip injury, hit scare.
+    const res = await m.dbPkg.settleMercContract(c.id, m.merc.contractCfgMap(), "complete", { traitDefs: traitDefsAll(), riskCfg: riskCfg(), rng: seq(0.9, 0.9, 0), now: at(1) });
+    expect(res?.outcome).toBe("scare");
+    expect(res?.composureHit).toBe(riskCfg().scareComposureHit);
+    const row = await reload(c.id);
+    expect(row.status).toBe("alive");
+    expect(await heldTraitIds(c.id)).toContain("war-scarred");
+    expect(row.composure).toBe(before.composure - riskCfg().scareComposureHit);
+    expect(row.drachmae).toBe(16); // 1 season gaul income
+  });
+
+  it("CAREER INJURY (forced): one-eyed/lamed awarded + hard-contract bar, income home", async () => {
+    const c = await makeHoplite({ militia: 25, prestige: 20 }); // syracuse gate
+    await m.merc.takeContract(c, "syracuse", at(0));
+    // rng: skip death, HIT injury, then injuryTrait coin → one-eyed.
+    const res = await m.dbPkg.settleMercContract(c.id, m.merc.contractCfgMap(), "complete", { traitDefs: traitDefsAll(), riskCfg: riskCfg(), rng: seq(0.9, 0, 0), now: at(2) });
+    expect(res?.outcome).toBe("injury");
+    const row = await reload(c.id);
+    expect(row.status).toBe("alive");
+    expect(row.contractId).toBeNull();
+    expect(row.drachmae).toBe(44); // 2 seasons syracuse income (22×2) came home
+    const held = await heldTraitIds(c.id);
+    expect(held.some((t) => t === "one-eyed" || t === "lamed")).toBe(true);
+
+    // Hard-contract bar: barred from syracuse/carthage/ptolemy, still allowed trade-ship.
+    const hard = await m.merc.takeContract(await reload(c.id), "carthage", at(2));
+    expect(hard.ok).toBe(false);
+    if (!hard.ok) expect(hard.code).toBe(409);
+    const soft = await m.merc.takeContract(await reload(c.id), "trade-ship", at(2));
+    expect(soft.ok).toBe(true);
+  });
+
+  it("DEATH (forced): income to estate, dynasty prestige +, chronicle line, status deceased — once", async () => {
+    const c = await makeHoplite({ militia: 25, prestige: 20, name: "Brasidas" });
+    const prestigeBefore = await dynastyPrestige(c.id);
+    await m.merc.takeContract(c, "syracuse", at(0));
+    const res = await m.dbPkg.settleMercContract(c.id, m.merc.contractCfgMap(), "complete", { traitDefs: traitDefsAll(), riskCfg: riskCfg(), rng: seq(0), now: at(2) });
+    expect(res?.outcome).toBe("death");
+    expect(res?.died).toBe(true);
+    const row = await reload(c.id);
+    expect(row.status).toBe("deceased");
+    expect(row.contractId).toBeNull();
+    expect(row.drachmae).toBe(44); // income came home to the estate (inherited)
+    expect(row.pendingDeathNote).toMatch(/Brasidas fell in Syracusan service, season \d+/);
+    expect(await dynastyPrestige(c.id)).toBe(prestigeBefore + riskCfg().gloriousDeathPrestige);
+
+    // IDEMPOTENT: a second settle (the other path) finds no contract → no double death.
+    const again = await m.dbPkg.settleMercContract(c.id, m.merc.contractCfgMap(), "complete", { traitDefs: traitDefsAll(), riskCfg: riskCfg(), rng: seq(0), now: at(3) });
+    expect(again).toBeNull();
+    expect(await dynastyPrestige(c.id)).toBe(prestigeBefore + riskCfg().gloriousDeathPrestige); // not doubled
+  });
+
+  it("the death chronicle line is written into the dynasty ledger on heir resolution", async () => {
+    await m.family.loadFamilyConfig();
+    const c = await makeHoplite({ militia: 25, prestige: 20, name: "Brasidas" });
+    // An adult blood child so succession resolves down the normal (blood) heir path.
+    await db.insert(m.dbPkg.children).values({ parentCharacterId: c.id, worldId, name: "Kleon", sex: "male", bornAt: new Date(T0 - 1000 * DAY) });
+    await m.merc.takeContract(c, "syracuse", at(0));
+    await m.dbPkg.settleMercContract(c.id, m.merc.contractCfgMap(), "complete", { traitDefs: traitDefsAll(), riskCfg: riskCfg(), rng: seq(0), now: at(2) });
+    // Player resolves succession (the normal flow) → becomeHeir writes the note.
+    const dead = await reload(c.id);
+    const note = dead.pendingDeathNote;
+    const res = await m.succession.resolveSuccession(dead, undefined, at(2));
+    expect(res.ok).toBe(true);
+    const rows = await db.select({ note: m.dbPkg.successions.note }).from(m.dbPkg.successions).where(eq(m.dbPkg.successions.dynastyId, dead.dynastyId!));
+    expect(rows.some((r) => r.note === note)).toBe(true);
+    // The slot is reused by the heir (alive again), and the carry is cleared.
+    expect((await reload(c.id)).status).toBe("alive");
+    expect((await reload(c.id)).pendingDeathNote).toBeNull();
+  });
+
+  it("CANCEL rolls NO risk even with a death-forcing rng (early return is safe)", async () => {
+    const c = await makeHoplite({ drachmae: 0 });
+    await m.merc.takeContract(c, "trade-ship", at(0)); // minCancel 0
+    // settle "cancel" must ignore the rng entirely — no death, no awards.
+    const res = await m.dbPkg.settleMercContract(c.id, m.merc.contractCfgMap(), "cancel", { traitDefs: traitDefsAll(), riskCfg: riskCfg(), rng: seq(0), now: at(0.5) });
+    expect(res?.outcome).toBeNull();
+    const row = await reload(c.id);
+    expect(row.status).toBe("alive");
+    expect(row.contractId).toBeNull();
+    expect(await heldTraitIds(c.id)).toEqual([]);
+  });
+
+  it("a wounded character is barred from hard contracts but may take trade-ship/caravan", async () => {
+    const c = await makeHoplite({ militia: 60, prestige: 60 }); // clears every gate
+    await db.insert(m.dbPkg.characterTraits).values({ characterId: c.id, traitId: "lamed" });
+    for (const hard of ["syracuse", "carthage", "ptolemy"]) {
+      const r = await m.merc.takeContract(await reload(c.id), hard, at(0));
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.code).toBe(409);
+    }
+    const ok = await m.merc.takeContract(await reload(c.id), "gaul-caravan", at(0));
+    expect(ok.ok).toBe(true);
   });
 });
