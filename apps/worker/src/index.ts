@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Queue, Worker, type Job } from "bullmq";
-import { completionDelayMs, parseAgeConfig, parseAgendaFile, parseCalendarConfig, parseContractsContent, parseFamilyConfig, parsePoliticsConfig, type AgeConfig, type AgendaScope, type CalendarConfig, type FamilyConfig, type PoliticsConfig } from "@massalia/shared";
+import { completionDelayMs, parseAgeConfig, parseAgendaFile, parseCalendarConfig, parseContractsContent, parseFamilyConfig, parsePoliticsConfig, parseTraitsFile, type AgeConfig, type AgendaScope, type CalendarConfig, type FamilyConfig, type PoliticsConfig, type Trait } from "@massalia/shared";
 import { accrueTreasuries, advanceAgendaCycles, advanceElections, advanceOlympiads, closeDueChamberVotes, closeDueFestivals, deliverOlympicNominationToAll, drawFamilyCandidates, ensurePartyLeaders, fireFestivalsForAll, openAgendaCycleIfDue, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, sweepMercenaryContracts, sweepSpouseDeaths, type AgendaPools, type MercContractCfgMap } from "@massalia/db";
 
 const redisUrl = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
@@ -39,15 +39,23 @@ async function politicsConfig(): Promise<PoliticsConfig> {
 async function bothConfigs(): Promise<{ calendar: CalendarConfig; politics: PoliticsConfig }> {
   return { calendar: await calendarConfig(), politics: await politicsConfig() };
 }
-// Mercenary contract config (id → income + term), for the completion sweep —
-// loaded from the same content file the server validates at boot.
+// Mercenary contract config (id → income + term + completion traits) and the trait
+// catalog, for the completion sweep — loaded from the same content files the server
+// validates at boot.
 let mercCfgCache: MercContractCfgMap | null = null;
 async function mercContractCfg(): Promise<MercContractCfgMap> {
   if (!mercCfgCache) {
     const content = parseContractsContent(JSON.parse(await fs.readFile(path.join(repoRoot, "content/military/contracts.json"), "utf8")));
-    mercCfgCache = Object.fromEntries(content.contracts.map((c) => [c.id, { dailyDrachmae: c.dailyDrachmae, termSeasons: c.termSeasons }]));
+    mercCfgCache = Object.fromEntries(content.contracts.map((c) => [c.id, { dailyDrachmae: c.dailyDrachmae, termSeasons: c.termSeasons, completionTraits: c.completionTraits }]));
   }
   return mercCfgCache;
+}
+let traitDefsCache: Trait[] | null = null;
+async function traitDefs(): Promise<Trait[]> {
+  if (!traitDefsCache) {
+    traitDefsCache = parseTraitsFile(JSON.parse(await fs.readFile(path.join(repoRoot, "content/traits/traits.json"), "utf8")));
+  }
+  return traitDefsCache;
 }
 
 let agendaPoolsCache: AgendaPools | null = null;
@@ -115,8 +123,8 @@ const SWEEPS: Sweep[] = [
     name: "merc-contract-sweep",
     every: MERC_SWEEP_MS,
     run: async () => {
-      const swept = await sweepMercenaryContracts(await mercContractCfg());
-      return `Merc-contract sweep: checked ${swept.checked} abroad, completed ${swept.completed}`;
+      const swept = await sweepMercenaryContracts(await mercContractCfg(), await traitDefs());
+      return `Merc-contract sweep: checked ${swept.checked} abroad, completed ${swept.completed}, awarded ${swept.awarded} trait(s)`;
     },
   },
   {

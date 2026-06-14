@@ -176,19 +176,29 @@ describe("pool routing + content parsing", () => {
     expect(routinesForClass(cards, "slave", config).map((c) => c.id)).toEqual(["s1"]);
   });
 
-  it("parses the shipped content files (19 routines; pools 11/6/1 + 1 campaign)", () => {
+  it("parses the shipped content files (home pools + the 50 mercenary abroad cards)", () => {
     const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
     const routinesJson = JSON.parse(readFileSync(resolve(root, "content/routines/routines.json"), "utf8"));
     const configJson = JSON.parse(readFileSync(resolve(root, "content/routines/routines-config.json"), "utf8"));
     const cards = parseRoutineFile(routinesJson);
     const cfg = parseRoutinesConfig(configJson);
-    // 18 class-pool routines + the off-pool "campaign" card (Politics Prompt 2).
-    // The citizen pool gained "Bathhouse visit" with the routine consumption hooks.
-    expect(cards).toHaveLength(19);
-    expect(routinesForClass(cards, "trader", cfg)).toHaveLength(11);
+    // 19 home/off-pool cards + 50 mercenary abroad cards (Hoplite Step 3).
+    expect(cards).toHaveLength(69);
+    expect(routinesForClass(cards, "trader", cfg)).toHaveLength(11); // citizen pool
     expect(routinesForClass(cards, "hetaira", cfg)).toHaveLength(6);
     expect(routinesForClass(cards, "slave", cfg)).toHaveLength(1);
-    // The campaign card belongs to no class pool — it is gated on candidacy.
     expect(cards.filter((c) => c.pool === "campaign")).toHaveLength(1);
+    // The five abroad pools, 10 cards each, all ids unique.
+    for (const pool of ["merc-trade-ship", "merc-gaul-caravan", "merc-syracuse", "merc-carthage", "merc-ptolemy"]) {
+      expect(cards.filter((c) => c.pool === pool)).toHaveLength(10);
+    }
+    expect(new Set(cards.map((c) => c.id)).size).toBe(cards.length);
+  });
+
+  it("parses the abroad cards' change_party_favor effect (the new routine vocab)", () => {
+    const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+    const cards = parseRoutineFile(JSON.parse(readFileSync(resolve(root, "content/routines/routines.json"), "utf8")));
+    const favorCards = cards.filter((c) => c.effects.some((e) => e.type === "change_party_favor"));
+    expect(favorCards.length).toBeGreaterThan(0);
   });
 });

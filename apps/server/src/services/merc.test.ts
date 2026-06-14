@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeAll, beforeEach } from "vitest";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // The hoplite's mercenary contracts — STATE + SAFE go/return lifecycle (Step 2).
@@ -22,7 +22,10 @@ async function loadModules() {
   const merc = await import("./merc.js");
   const service = await import("./service.js");
   const age = await import("./age.js");
-  return { dbPkg, merc, service, age };
+  const traits = await import("./traits.js");
+  const routines = await import("./routines.js");
+  const composure = await import("./composure.js");
+  return { dbPkg, merc, service, age, traits, routines, composure };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -54,6 +57,10 @@ suite("Mercenary contracts (integration)", () => {
   async function reload(id: string) {
     return (await db.select().from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.id, id)).limit(1))[0]!;
   }
+  async function heldTraitIds(id: string): Promise<string[]> {
+    const rows = await db.select({ traitId: m.dbPkg.characterTraits.traitId }).from(m.dbPkg.characterTraits).where(eq(m.dbPkg.characterTraits.characterId, id));
+    return rows.map((r) => r.traitId).sort();
+  }
 
   beforeAll(async () => {
     m = await loadModules();
@@ -61,10 +68,13 @@ suite("Mercenary contracts (integration)", () => {
     await m.merc.loadContractsContent();
     await m.service.loadRanksContent();
     await m.age.loadAgeConfig();
+    await m.traits.loadTraitDefs();
+    await m.routines.loadRoutineContent();
+    await m.composure.loadComposureConfig();
   });
 
   beforeEach(async () => {
-    await db.execute(sql`TRUNCATE TABLE offices, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
+    await db.execute(sql`TRUNCATE TABLE character_traits, offices, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
     await db.insert(m.dbPkg.houses).values({ slug: "test-house", name: "House Test", initial: "T", alignment: "c", stance: "s", motto: "m", patron: "p", crest: "c" }).onConflictDoNothing();
     const world = (await db.insert(m.dbPkg.worlds).values({ name: "Merc Test", seed: "mtest", startedAt: new Date(T0), endsAt: new Date(T0 + 182 * DAY), status: "active" }).returning())[0]!;
     worldId = world.id;
@@ -113,12 +123,14 @@ suite("Mercenary contracts (integration)", () => {
   it("the worker sweep completes a served-out contract for an offline player", async () => {
     const c = await makeHoplite({ drachmae: 0 });
     await m.merc.takeContract(c, "trade-ship", at(0));
-    // Player never opens the app; the sweep runs after the term.
-    const swept = await m.dbPkg.sweepMercenaryContracts({ "trade-ship": { dailyDrachmae: 12, termSeasons: 1 } }, at(1));
+    // Player never opens the app; the sweep runs after the term (real content cfg).
+    const swept = await m.dbPkg.sweepMercenaryContracts(m.merc.contractCfgMap(), m.traits.getAllTraitDefs(), at(1));
     expect(swept.completed).toBe(1);
     const home = await reload(c.id);
     expect(home.contractId).toBeNull();
     expect(home.drachmae).toBe(12);
+    // The sweep also awarded the completion trait for an offline player.
+    expect(await heldTraitIds(c.id)).toContain("sellsword");
   });
 
   it("gates early return on minCancelSeasons; allows an early return inside the window", async () => {
@@ -181,5 +193,81 @@ suite("Mercenary contracts (integration)", () => {
     // untouched, so the vote still counts (proxy voting, by construction).
     expect(row.contractId).toBe("trade-ship");
     expect(row.status).toBe("alive");
+  });
+
+  // --- Step 3: completion trait awards ---------------------------------------
+
+  it("awards the mapped completion traits on successful term completion (per contract)", async () => {
+    // Gaulish caravan (term 1) → sellsword + polyglot.
+    const c = await makeHoplite({ militia: 15, prestige: 10 });
+    await m.merc.takeContract(c, "gaul-caravan", at(0));
+    const done = await m.merc.collectForeign(await reload(c.id), at(1)); // collect at term → completes
+    expect(done.ok).toBe(true);
+    if (done.ok) expect(done.completed).toBe(true);
+    expect(await heldTraitIds(c.id)).toEqual(["polyglot", "sellsword"]);
+    expect((await reload(c.id)).contractId).toBeNull();
+  });
+
+  it("does NOT double-award when the contract is already complete (idempotent)", async () => {
+    const c = await makeHoplite({ militia: 25, prestige: 20 });
+    await m.merc.takeContract(c, "syracuse", at(0)); // → sellsword + shield-brother (term 2)
+    await m.merc.board(await reload(c.id), at(2)); // lazy completion awards
+    expect(await heldTraitIds(c.id)).toEqual(["sellsword", "shield-brother"]);
+    // A second settle finds no contract (already cleared) → no re-award, no error.
+    const again = await m.dbPkg.settleMercContract(c.id, m.merc.contractCfgMap(), "complete", m.traits.getAllTraitDefs(), at(3));
+    expect(again).toBeNull();
+    expect(await heldTraitIds(c.id)).toEqual(["sellsword", "shield-brother"]);
+  });
+
+  it("awards NOTHING on an early cancel", async () => {
+    const c = await makeHoplite({ drachmae: 0 });
+    await m.merc.takeContract(c, "trade-ship", at(0)); // minCancel 0
+    const cancelled = await m.merc.cancelContract(await reload(c.id), at(0.5));
+    expect(cancelled.ok).toBe(true);
+    expect((await reload(c.id)).contractId).toBeNull();
+    expect(await heldTraitIds(c.id)).toEqual([]); // no sellsword on early return
+  });
+
+  // --- Step 3: abroad pool routing + card resolution -------------------------
+
+  it("routes the daily pool by contract (home → class pool; abroad → contract pool) and resolves abroad cards", async () => {
+    const c = await makeHoplite({ militia: 25, prestige: 20, drachmae: 0 });
+    // Home: the source pool is the home class pool; abroad pools are hidden.
+    expect(m.routines.activePoolKey(await reload(c.id))).toBe("citizen");
+
+    await m.merc.takeContract(c, "syracuse", at(0));
+    const abroad = await reload(c.id);
+    // Abroad: the source pool swaps to the contract's poolKey (10 cards, all that pool).
+    expect(m.routines.activePoolKey(abroad)).toBe("merc-syracuse");
+    const cards = m.routines.activePoolCards(abroad);
+    expect(cards.length).toBe(10);
+    expect(cards.every((card) => card.pool === "merc-syracuse")).toBe(true);
+
+    // A HOME card cannot be picked while abroad (validated against the active pool).
+    const homeReject = await m.routines.resolveRoutine(abroad, "routine-rest", at(0.1));
+    expect(homeReject.ok).toBe(false);
+
+    // Picking an abroad card resolves its effects through the existing handler:
+    // merc-sy-muster = +1 militia, +4 drachmae.
+    const before = await reload(c.id);
+    const res = await m.routines.resolveRoutine(before, "merc-sy-muster", at(0.1));
+    expect(res.ok).toBe(true);
+    const after = await reload(c.id);
+    expect(after.militia).toBe(before.militia + 1);
+    expect(after.drachmae).toBe(before.drachmae + 4);
+  });
+
+  it("resolves an abroad card's change_party_favor (the new routine effect type)", async () => {
+    const c = await makeHoplite({ drachmae: 0 });
+    await m.merc.takeContract(c, "trade-ship", at(0));
+    // merc-ts-mercy grants +1 palaioi favor (a change_party_favor effect).
+    const res = await m.routines.resolveRoutine(await reload(c.id), "merc-ts-mercy", at(0.1));
+    expect(res.ok).toBe(true);
+    const favor = await db
+      .select({ favor: m.dbPkg.partyFavor.favor })
+      .from(m.dbPkg.partyFavor)
+      .where(and(eq(m.dbPkg.partyFavor.characterId, c.id), eq(m.dbPkg.partyFavor.party, "palaioi")))
+      .limit(1);
+    expect(favor[0]?.favor).toBe(1);
   });
 });

@@ -30,6 +30,12 @@ export function getTraitDef(id: string): Trait | undefined {
   return defs().get(id);
 }
 
+// The full trait catalog (for callers that run their own rule-checked grants, e.g.
+// the DB-layer mercenary completion awards).
+export function getAllTraitDefs(): Trait[] {
+  return [...defs().values()];
+}
+
 export class TraitRuleError extends Error {
   reason: AddTraitRejection | "unknown_trait";
   statusCode: number;

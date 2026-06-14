@@ -867,7 +867,7 @@ export type MercBoard = {
   current: CurrentContractView | null;
 };
 
-export type MercActionResult = { ok: true; collected?: number; completed?: boolean; board: MercBoard };
+export type MercActionResult = { ok: true; collected?: number; completed?: boolean; awardedTraits?: string[]; board: MercBoard };
 
 export type DailyCard = {
   arena: string;

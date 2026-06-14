@@ -902,5 +902,25 @@
       "prestige": 5,
       "militia": 1
     }
+  },
+  {
+    "id": "sellsword",
+    "name": "Sellsword",
+    "category": "reputation",
+    "description": "Has sold his spear to foreign paymasters.",
+    "statMod": {
+      "militia": 1,
+      "prestige": -1
+    }
+  },
+  {
+    "id": "ptolemys-spear",
+    "name": "Spear of the Ptolemies",
+    "category": "reputation",
+    "description": "Stood in a king's phalanx against the Seleukids.",
+    "statMod": {
+      "militia": 2,
+      "prestige": 2
+    }
   }
 ]

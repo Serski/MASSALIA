@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { and, eq } from "drizzle-orm";
 import { createDb, dailyRoutines } from "@massalia/db";
-import { isWithdrawn, routinePoolFor, routinesForClass } from "@massalia/shared";
+import { isWithdrawn } from "@massalia/shared";
 import { requireAuth } from "../services/auth.js";
 import { ensureCharacterRow, getActivePlayer, getActiveWorldId, type CharacterRow } from "../services/character.js";
 import { recoverComposure } from "../services/composure.js";
@@ -9,8 +9,9 @@ import { getHeldTraits } from "../services/traits.js";
 import { ownedBuildingIds } from "../services/buildings.js";
 import { utcDayString } from "../services/dailyDecisions.js";
 import {
+  activePoolCards,
+  activePoolKey,
   campaignCardFor,
-  getRoutineCards,
   getRoutinesConfig,
   ladderStates,
   previewRoutine,
@@ -43,9 +44,11 @@ export async function routineRoutes(app: FastifyInstance) {
     const cfg = getRoutinesConfig();
     const traits = await getHeldTraits(acting.row.id);
     const owned = await ownedBuildingIds(acting.row.playerId);
-    const pool = routinesForClass(getRoutineCards(), acting.row.classId, cfg);
-    // Surface the campaign card to declared candidates in an active election.
-    const campaign = await campaignCardFor(acting.row.id);
+    // Source pool: the abroad contract pool while sworn, else the home class pool.
+    const pool = activePoolCards(acting.row);
+    // The campaign card is surfaced to declared candidates AT HOME only (an abroad
+    // character is never a candidate, so the two off-pool overrides never collide).
+    const campaign = acting.row.contractId ? null : await campaignCardFor(acting.row.id);
     const cards = campaign ? [...pool, campaign] : pool;
 
     const utcDay = utcDayString(now);
@@ -56,7 +59,7 @@ export async function routineRoutes(app: FastifyInstance) {
     const pickedRoutineId = todays[0]?.routineId ?? null;
 
     return {
-      pool: routinePoolFor(acting.row.classId, cfg),
+      pool: activePoolKey(acting.row),
       dailyPicks: cfg.dailyPicks,
       withdrawn: isWithdrawn(acting.row.breakUntil, now),
       pickedRoutineId,

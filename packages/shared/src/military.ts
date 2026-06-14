@@ -135,7 +135,8 @@ export type ContractDef = {
   dailyDrachmae: number; // foreign income per season (per real day) — the payout
   termSeasons: number; // full term length in seasons
   minCancelSeasons: number; // seasons that must elapse before early return is allowed
-  poolKey: string; // Step-3 abroad card pool (carried, not used yet)
+  poolKey: string; // the abroad daily-decision card pool (Step 3)
+  completionTraits: string[]; // reputation/class traits awarded on SAFE completion (Step 3)
 };
 
 export type ContractsContent = { contracts: ContractDef[] };
@@ -149,6 +150,7 @@ const contractSchema = z
     termSeasons: z.number().int().positive(),
     minCancelSeasons: z.number().int().nonnegative(),
     poolKey: z.string(),
+    completionTraits: z.array(z.string()),
   })
   .strict();
 

@@ -11,16 +11,20 @@ import type { CharacterStats } from "./character.js";
 
 const statName = z.enum(["prestige", "devotion", "militia", "intelligence"]);
 
-// Routines use a subset of the event effect vocab.
+// Routines use a subset of the event effect vocab. change_party_favor arrived with
+// the mercenary abroad cards (Hoplite Step 3) — foreign service shifts factional
+// standing — reusing the event engine's party-favor effect shape.
 export type RoutineEffect =
   | { type: "change_stat"; stat: keyof CharacterStats; amount: number }
   | { type: "change_composure"; amount: number }
-  | { type: "change_drachmae"; amount: number };
+  | { type: "change_drachmae"; amount: number }
+  | { type: "change_party_favor"; party: "palaioi" | "dynatoi"; amount: number };
 
 const routineEffectSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("change_stat"), stat: statName, amount: z.number() }),
   z.object({ type: z.literal("change_composure"), amount: z.number() }),
   z.object({ type: z.literal("change_drachmae"), amount: z.number() }),
+  z.object({ type: z.literal("change_party_favor"), party: z.enum(["palaioi", "dynatoi"]), amount: z.number() }),
 ]);
 
 // Per-class flavour: scale the card's own effect amounts / ladder XP, add a flat

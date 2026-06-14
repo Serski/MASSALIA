@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { and, eq } from "drizzle-orm";
-import { createDb, dailyRoutines, effectLog, playerCharacters } from "@massalia/db";
+import { and, eq, sql } from "drizzle-orm";
+import { createDb, dailyRoutines, effectLog, partyFavor, playerCharacters } from "@massalia/db";
 import {
   applyClassMods,
   applyStatGrowth,
@@ -14,7 +14,7 @@ import {
   parseRoutineFile,
   parseRoutinesConfig,
   roundHalfUp,
-  routinesForClass,
+  routinePoolFor,
   type ChoiceCost,
   type CharacterStats,
   type RoutineCard,
@@ -26,6 +26,7 @@ import { addTrait, getHeldTraits, removeTrait, TraitRuleError } from "./traits.j
 import { utcDayString } from "./dailyDecisions.js";
 import { eligibleForCampaign, grantCampaignFavor } from "./elections.js";
 import { consumeRoutineRequirement } from "./buildings.js";
+import { contractPoolKey } from "./merc.js";
 import { broadcastState } from "./worldState.js";
 
 const db = createDb();
@@ -85,6 +86,24 @@ export function getRoutinesConfig(): RoutinesConfig {
   return config;
 }
 
+// The SOURCE POOL for a character's daily picks (Hoplite Step 3 pool routing):
+// while sworn to a mercenary contract, the daily decision is drawn from that
+// contract's abroad pool INSTEAD of the home class pool; at home it is unchanged.
+// (dailyPicks, repeatPenalty, and the effect-resolution path are identical — only
+// the source pool changes.) Mirrors the CAMPAIGN_POOL off-pool override precedent.
+export function activePoolKey(row: Pick<CharacterRow, "classId" | "contractId">): string {
+  if (row.contractId) {
+    const poolKey = contractPoolKey(row.contractId);
+    if (poolKey) return poolKey;
+  }
+  return routinePoolFor(row.classId, getRoutinesConfig());
+}
+
+export function activePoolCards(row: Pick<CharacterRow, "classId" | "contractId">): RoutineCard[] {
+  const poolKey = activePoolKey(row);
+  return getRoutineCards().filter((card) => card.pool === poolKey);
+}
+
 const STAT_LABELS: Record<keyof CharacterStats, string> = {
   prestige: "Prestige",
   devotion: "Devotion",
@@ -97,13 +116,16 @@ function signed(amount: number): string {
 }
 
 // Cost chips for a final (post-classMods, post-growth) effect list.
-function costChips(effects: { type: string; stat?: keyof CharacterStats; amount: number }[]): ChoiceCost[] {
+function costChips(effects: { type: string; stat?: keyof CharacterStats; amount: number; party?: string }[]): ChoiceCost[] {
   const chips: ChoiceCost[] = [];
   for (const effect of effects) {
     if (effect.type === "change_stat" && effect.stat) {
       chips.push({ label: `${signed(effect.amount)} ${STAT_LABELS[effect.stat]}`, tone: effect.amount >= 0 ? "positive" : "negative" });
     } else if (effect.type === "change_drachmae") {
       chips.push({ label: `${signed(effect.amount)} drachmae`, tone: effect.amount >= 0 ? "positive" : "negative" });
+    } else if (effect.type === "change_party_favor" && effect.party) {
+      const party = effect.party[0]!.toUpperCase() + effect.party.slice(1);
+      chips.push({ label: `${signed(effect.amount)} ${party} favor`, tone: effect.amount >= 0 ? "positive" : "negative" });
     }
   }
   return chips;
@@ -212,10 +234,14 @@ export type RoutineResolution =
 // penalty on stat/drachmae/ladder XP (not composure).
 export async function resolveRoutine(row: CharacterRow, routineId: string, now: Date = new Date()): Promise<RoutineResolution> {
   const cfg = getRoutinesConfig();
-  const pool = routinesForClass(getRoutineCards(), row.classId, cfg);
+  // Source pool: the abroad contract pool while sworn, else the home class pool
+  // (Step 3). This also VALIDATES the pick belongs to the currently-active pool —
+  // a home card can't be submitted while abroad and vice versa.
+  const pool = activePoolCards(row);
   let card = pool.find((candidate) => candidate.id === routineId);
-  // The campaign card is off-pool: allow it only for a declared candidate.
-  if (!card && routineId === campaignCard()?.id) {
+  // The campaign card is off-pool: allow it only for a declared candidate AT HOME.
+  // Abroad characters are not candidates, so the two overrides never collide.
+  if (!card && !row.contractId && routineId === campaignCard()?.id) {
     card = (await campaignCardFor(row.id)) ?? undefined;
   }
   if (!card) return { ok: false, code: 409, error: "That routine is not among your daily choices." };
@@ -304,6 +330,20 @@ export async function resolveRoutine(row: CharacterRow, routineId: string, now: 
           detail: { amount: effect.amount, value: next, source: `routine:${card.id}` },
         });
         appliedCosts.push({ label: `${signed(effect.amount)} drachmae`, tone: effect.amount >= 0 ? "positive" : "negative" });
+      } else if (effect.type === "change_party_favor") {
+        // Factional standing shift (abroad cards, Step 3) — reuses the event
+        // engine's party-favor upsert. Not subject to the repeat penalty.
+        await tx
+          .insert(partyFavor)
+          .values({ characterId: row.id, party: effect.party, favor: effect.amount })
+          .onConflictDoUpdate({ target: [partyFavor.characterId, partyFavor.party], set: { favor: sql`${partyFavor.favor} + ${effect.amount}` } });
+        await tx.insert(effectLog).values({
+          characterId: row.id,
+          kind: "change_party_favor",
+          detail: { party: effect.party, amount: effect.amount, source: `routine:${card.id}` },
+        });
+        const party = effect.party[0]!.toUpperCase() + effect.party.slice(1);
+        appliedCosts.push({ label: `${signed(effect.amount)} ${party} favor`, tone: effect.amount >= 0 ? "positive" : "negative" });
       }
       // change_composure handled below as a single combined delta.
     }

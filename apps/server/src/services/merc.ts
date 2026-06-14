@@ -15,6 +15,7 @@ import {
   type ContractsContent,
 } from "@massalia/shared";
 import { isHoplite, settleSalary } from "./service.js";
+import { getAllTraitDefs } from "./traits.js";
 import type { CharacterRow } from "./character.js";
 
 // ---------------------------------------------------------------------------
@@ -27,9 +28,9 @@ import type { CharacterRow } from "./character.js";
 // A character on contract stays status "alive" — voting (oligarchy/elections) is
 // untouched, so he keeps his chamber/election vote while abroad (proxy voting).
 //
-// TODO (Step 3): swap the routine pool to the contract's poolKey (CAMPAIGN_POOL
-// precedent). TODO (Step 4): the death/injury roll at completion. TODO (Step 5):
-// veteran/Strategos eligibility rules.
+// The daily-decision pool swaps to the contract's poolKey while abroad (Step 3,
+// done in routines.ts via contractPoolKey below). TODO (Step 4): the death/injury
+// roll at completion. TODO (Step 5): veteran/Strategos eligibility rules.
 // ---------------------------------------------------------------------------
 
 const db = createDb();
@@ -52,9 +53,16 @@ export function getContractsContent(): ContractsContent {
   return content;
 }
 
-// The runtime config the DB-layer settle/sweep needs (id → income + term).
+// The runtime config the DB-layer settle/sweep needs (id → income + term + the
+// completion trait awards).
 export function contractCfgMap(): MercContractCfgMap {
-  return Object.fromEntries(getContractsContent().contracts.map((c) => [c.id, { dailyDrachmae: c.dailyDrachmae, termSeasons: c.termSeasons }]));
+  return Object.fromEntries(getContractsContent().contracts.map((c) => [c.id, { dailyDrachmae: c.dailyDrachmae, termSeasons: c.termSeasons, completionTraits: c.completionTraits }]));
+}
+
+// The abroad daily-decision pool for an active contract (Step 3 pool routing), or
+// null when the contract id is unknown.
+export function contractPoolKey(contractId: string): string | null {
+  return contractDef(getContractsContent(), contractId)?.poolKey ?? null;
 }
 
 // --- Strategos eligibility --------------------------------------------------
@@ -157,14 +165,14 @@ async function buildBoard(row: CharacterRow, now: Date): Promise<MercBoard> {
 // read, even if the player never collected). Read-only otherwise.
 export async function board(row: CharacterRow, now: Date = new Date()): Promise<MercBoard> {
   if (isHoplite(row) && row.contractId) {
-    await settleMercContract(row.id, contractCfgMap(), "complete", now);
+    await settleMercContract(row.id, contractCfgMap(), "complete", getAllTraitDefs(), now);
   }
   return buildBoard(await freshRow(row.id), now);
 }
 
 // --- Engine actions ---------------------------------------------------------
 
-export type MercResult = { ok: false; code: number; error: string } | { ok: true; collected?: number; completed?: boolean; board: MercBoard };
+export type MercResult = { ok: false; code: number; error: string } | { ok: true; collected?: number; completed?: boolean; awardedTraits?: string[]; board: MercBoard };
 
 function notHoplite(): MercResult {
   return { ok: false, code: 403, error: "Only hoplites take mercenary contracts." };
@@ -197,8 +205,8 @@ export async function takeContract(row: CharacterRow, contractId: string, now: D
 export async function collectForeign(row: CharacterRow, now: Date = new Date()): Promise<MercResult> {
   if (!isHoplite(row)) return notHoplite();
   if (!row.contractId) return { ok: false, code: 409, error: "You are not on a contract." };
-  const res = await settleMercContract(row.id, contractCfgMap(), "collect", now);
-  return { ok: true, collected: res?.collected ?? 0, completed: res?.completed ?? false, board: await buildBoard(await freshRow(row.id), now) };
+  const res = await settleMercContract(row.id, contractCfgMap(), "collect", getAllTraitDefs(), now);
+  return { ok: true, collected: res?.collected ?? 0, completed: res?.completed ?? false, awardedTraits: res?.awardedTraits ?? [], board: await buildBoard(await freshRow(row.id), now) };
 }
 
 // Early return — allowed only once minCancelSeasons have elapsed. Settles income
@@ -212,6 +220,7 @@ export async function cancelContract(row: CharacterRow, now: Date = new Date()):
   if (elapsed < def.minCancelSeasons) {
     return { ok: false, code: 409, error: `You are sworn for now — you may return after season ${def.minCancelSeasons} (served ${elapsed}).` };
   }
-  const res = await settleMercContract(row.id, contractCfgMap(), "cancel", now);
+  // Early cancel awards NO completion traits (settle in "cancel" mode never awards).
+  const res = await settleMercContract(row.id, contractCfgMap(), "cancel", getAllTraitDefs(), now);
   return { ok: true, collected: res?.collected ?? 0, board: await buildBoard(await freshRow(row.id), now) };
 }
