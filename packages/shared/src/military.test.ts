@@ -14,9 +14,14 @@ import {
   MS_PER_GAME_DAY,
   nextRankId,
   parseContractsContent,
+  canReclass,
+  isReclassTarget,
   parseRanksContent,
   rankDef,
   RANK_ORDER,
+  RECLASS_AGE,
+  RECLASS_TARGETS,
+  reclassReason,
   resolveRisk,
   riskProbabilities,
   seasonsElapsed,
@@ -156,5 +161,27 @@ describe("mercenary risk + age scaling (Step 4)", () => {
   it("injuryTrait is a seeded coin between one-eyed and lamed", () => {
     expect(injuryTrait(() => 0)).toBe("one-eyed");
     expect(injuryTrait(() => 0.99)).toBe("lamed");
+  });
+});
+
+describe("re-class rules (Step 5 capstone)", () => {
+  it("only the curated four trades are re-class targets", () => {
+    expect([...RECLASS_TARGETS]).toEqual(["landowner", "trader", "philosopher", "priest"]);
+    expect(isReclassTarget("landowner")).toBe(true);
+    for (const no of ["hetaira", "shipbuilder", "slave", "hoplite"]) expect(isReclassTarget(no)).toBe(false);
+  });
+
+  it("a living hoplite may re-class iff wounded OR aged out", () => {
+    expect(canReclass("hoplite", "alive", 40, true)).toBe(true); // wounded, young
+    expect(canReclass("hoplite", "alive", RECLASS_AGE, false)).toBe(true); // aged out, unwounded
+    expect(canReclass("hoplite", "alive", 40, false)).toBe(false); // unwounded, <50
+    expect(canReclass("hoplite", "deceased", 60, true)).toBe(false); // dead
+    expect(canReclass("trader", "alive", 60, true)).toBe(false); // not a hoplite
+  });
+
+  it("reclassReason prefers wound over age", () => {
+    expect(reclassReason(true, 40)).toBe("wound");
+    expect(reclassReason(false, 55)).toBe("retirement");
+    expect(reclassReason(false, 40)).toBeNull();
   });
 });

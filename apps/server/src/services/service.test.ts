@@ -83,7 +83,7 @@ suite("Hoplite home army (integration)", () => {
     const enlisted = await reload(c.id);
 
     // Status after 3 in-game days: recruit pays 8/day → 24dr accrued (militia trickle 0).
-    const status = m.service.serviceStatus(enlisted, new Date(T0 + 3 * DAY));
+    const status = await m.service.serviceStatus(enlisted, new Date(T0 + 3 * DAY));
     expect(status.rankId).toBe("recruit");
     expect(status.accrued.drachmae).toBe(24);
     expect(status.accrued.militia).toBe(0);
@@ -107,7 +107,7 @@ suite("Hoplite home army (integration)", () => {
     await m.service.enlist(c, new Date(T0));
     const recruit = await reload(c.id);
 
-    const status = m.service.serviceStatus(recruit, new Date(T0));
+    const status = await m.service.serviceStatus(recruit, new Date(T0));
     expect(status.next?.id).toBe("veteran"); // next is exactly one rank up — no skipping
     expect(status.qualifies).toBe(false);
     expect(status.shortfall).toEqual({ militia: 4, prestige: 5 });

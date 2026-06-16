@@ -1336,6 +1336,43 @@ function ServiceSection({ label, onRefresh }: { label: string; onRefresh: () => 
         </div>
       ) : null}
 
+      {/* Leave soldiering (Step 5): available — never prompted — to a wounded or
+          aged-out hoplite. A single irreversible confirm; no cost, only permanence. */}
+      {!abroad && data.reclass.eligible ? (
+        <>
+          <div className="panel-label">Leave Soldiering</div>
+          <p className="pr-s" style={{ marginBottom: 6 }}>
+            {data.reclass.reason === "wound"
+              ? "Your wounds make the phalanx no place for you. You may hang up the spear and take up a new trade — for good."
+              : "The years weigh on you. You may retire from the phalanx and take up a new trade — for good."}
+          </p>
+          <div className="panel-grid2">
+            {data.reclass.targets.map((t) => (
+              <PanelRow
+                key={t.classId}
+                icon="🕊️"
+                title={`Become a ${t.name}`}
+                sub={t.flavor}
+                action={
+                  <button
+                    type="button"
+                    className="panel-btn"
+                    disabled={busy}
+                    onClick={() => {
+                      if (window.confirm(`Hang up the spear and take up the life of a ${t.name}? You keep your wealth and your name, but you can never be a hoplite again. This cannot be undone.`)) {
+                        act(() => api.reclassService(t.classId), `You hang up the spear — now a ${t.name}.`);
+                      }
+                    }}
+                  >
+                    Take up
+                  </button>
+                }
+              />
+            ))}
+          </div>
+        </>
+      ) : null}
+
       {/* Return outcome (Step 4): the result of a contract that just resolved. */}
       {returnMessage ? (
         <div className="ledger-collect" role="status">

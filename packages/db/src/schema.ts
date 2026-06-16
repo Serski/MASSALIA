@@ -193,6 +193,9 @@ export const playerCharacters = pgTable("player_characters", {
   // Hoplite Step 4: the composed chronicle line for a glorious merc death, carried
   // from the death instant to heir resolution (becomeHeir → successions.note).
   pendingDeathNote: text("pending_death_note"),
+  // Hoplite Step 5: true if the character is, or ever was, a hoplite. Set at
+  // creation-as-hoplite and PRESERVED through re-class — the veteran Strategos signal.
+  wasHoplite: boolean("was_hoplite").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   oneCharacterPerPlayerWorld: uniqueIndex("player_characters_player_world_idx").on(table.playerId, table.worldId),

@@ -496,6 +496,12 @@ export async function appointStrategos(actor: CharacterRow, candidateCharacterId
   const eligible = await appointEligible(world.id, candidateCharacterId, null);
   if (!eligible.ok) return { ok: false, code: 409, error: eligible.reason };
 
+  // Hoplite Step 5: the Strategos commands soldiers — restricted to a current or
+  // FORMER hoplite (the was-hoplite signal, preserved through re-class). A
+  // never-soldier is not eligible. (The shared appointEligible — also used for Ephor
+  // appointments — is intentionally NOT gated on class; only the Strategos is.)
+  if (!eligible.row.wasHoplite) return { ok: false, code: 409, error: "The Strategos must be a soldier or a veteran of the phalanx." };
+
   // Cross-party balance: the two Strategoi must not share a party.
   if (politics.offices.strategoi.crossPartyBalance && eligible.row.party !== "none") {
     for (const filledSeat of filled) {

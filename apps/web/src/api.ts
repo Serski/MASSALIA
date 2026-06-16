@@ -290,6 +290,8 @@ export const api = {
   enlistService: () => apiFetch<ServiceActionResult>("/api/service/enlist", { method: "POST" }),
   promoteService: () => apiFetch<ServiceActionResult>("/api/service/promote", { method: "POST" }),
   collectService: () => apiFetch<ServiceActionResult>("/api/service/collect", { method: "POST" }),
+  // Re-class (Step 5): the hoplite leaves soldiering for a new trade (one-way).
+  reclassService: (targetClass: string) => apiFetch<ReclassResult>("/api/service/reclass", { method: "POST", body: { targetClass } }),
   // Mercenary contracts (Hoplite Step 2): the hiring board + go/return lifecycle.
   mercBoard: () => apiFetch<MercBoard>("/api/merc/board"),
   takeContract: (contractId: string) => apiFetch<MercActionResult>("/api/merc/take", { method: "POST", body: { contractId } }),
@@ -828,9 +830,16 @@ export type ServiceView = {
   stats: { militia: number; prestige: number };
   // True while sworn to a mercenary contract — home rank salary is paused.
   abroad: boolean;
+  // Re-class (Step 5): the "leave soldiering" option — available, never prompted.
+  reclass: {
+    eligible: boolean;
+    reason: "wound" | "retirement" | null;
+    targets: { classId: string; name: string; flavor: string }[];
+  };
 };
 
 export type ServiceActionResult = { ok: true; collected?: { drachmae: number; militia: number }; status: ServiceView };
+export type ReclassResult = { ok: true; from: string; to: string; reason: "wound" | "retirement" };
 
 // --- Mercenary contracts: hiring board + go/return lifecycle (Hoplite Step 2) ---
 

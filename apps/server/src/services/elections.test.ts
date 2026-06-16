@@ -38,14 +38,14 @@ suite("Archon & Ephor elections (integration)", () => {
   let worldId: string;
   let seatCursor = 110;
 
-  async function createCharacter(name: string, opts: { party?: string; prestige?: number; seat?: boolean } = {}) {
+  async function createCharacter(name: string, opts: { party?: string; prestige?: number; seat?: boolean; wasHoplite?: boolean } = {}) {
     const { users, players, playerCharacters } = m.dbPkg;
     const user = (await db.insert(users).values({ email: `${name}-${Math.random().toString(36).slice(2)}@t`, passwordHash: "x" }).returning())[0]!;
     const player = (await db.insert(players).values({ worldId, userId: user.id, name, color: "#123456", houseSlug: "test-house" }).returning())[0]!;
     const character = (
       await db
         .insert(playerCharacters)
-        .values({ playerId: player.id, worldId, houseSlug: "test-house", classId: "trader", party: opts.party ?? "none", prestige: opts.prestige ?? 0, startAge: 30, deathAge: 90 })
+        .values({ playerId: player.id, worldId, houseSlug: "test-house", classId: "trader", party: opts.party ?? "none", prestige: opts.prestige ?? 0, startAge: 30, deathAge: 90, wasHoplite: opts.wasHoplite ?? false })
         .returning()
     )[0]!;
     if (opts.seat !== false) {
@@ -265,12 +265,13 @@ suite("Archon & Ephor elections (integration)", () => {
     expect(JSON.stringify(view)).not.toContain(voter.id);
   });
 
-  // --- Strategoi appointment (cross-party balance) --------------------------
+  // --- Strategoi appointment (cross-party balance + veteran gate, Step 5) ----
   it("the sitting officials appoint Strategoi with cross-party balance", async () => {
     const archon = await seatHolderOffice("archon", "palaioi", "Stratarchos", "palaioi");
-    const palAppointee = await createCharacter("PalStrat", { party: "palaioi" });
-    const palTwo = await createCharacter("PalTwo", { party: "palaioi" });
-    const dynAppointee = await createCharacter("DynStrat", { party: "dynatoi" });
+    // Strategos appointees must be current or FORMER hoplites (the was-hoplite gate).
+    const palAppointee = await createCharacter("PalStrat", { party: "palaioi", wasHoplite: true });
+    const palTwo = await createCharacter("PalTwo", { party: "palaioi", wasHoplite: true });
+    const dynAppointee = await createCharacter("DynStrat", { party: "dynatoi", wasHoplite: true });
     const outsider = await createCharacter("Outsider", { party: "palaioi", seat: false });
 
     // A non-official cannot appoint.
@@ -283,6 +284,17 @@ suite("Archon & Ephor elections (integration)", () => {
     expect((await m.elections.appointStrategos(await fresh(archon.id), dynAppointee.id, resolveNow)).ok).toBe(true);
     const strat = await db.select().from(m.dbPkg.offices).where(and(eq(m.dbPkg.offices.worldId, worldId), eq(m.dbPkg.offices.office, "strategos")));
     expect(strat.filter((s) => s.holderCharacterId).length).toBe(2);
+  });
+
+  // Hoplite Step 5: the Strategos is restricted to current/former hoplites.
+  it("a never-hoplite cannot be Strategos; a former hoplite (veteran) can", async () => {
+    const archon = await seatHolderOffice("archon", "palaioi", "Polemarch", "palaioi");
+    // A career civilian (never a hoplite) holding a seat — barred from command.
+    const neverSoldier = await createCharacter("Merchant", { party: "dynatoi", wasHoplite: false });
+    expect(await m.elections.appointStrategos(await fresh(archon.id), neverSoldier.id, resolveNow)).toMatchObject({ ok: false, code: 409 });
+    // A re-classed veteran (was_hoplite, now a trader) remains appointable.
+    const veteran = await createCharacter("OldSpear", { party: "dynatoi", wasHoplite: true });
+    expect((await m.elections.appointStrategos(await fresh(archon.id), veteran.id, resolveNow)).ok).toBe(true);
   });
 
   // --- Campaign routine gating ----------------------------------------------

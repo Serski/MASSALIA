@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../services/auth.js";
 import { ensureCharacterRow, getActivePlayer, getActiveWorldId, type CharacterRow } from "../services/character.js";
-import { collectSalary, enlist, isHoplite, promote, serviceStatus } from "../services/service.js";
+import { collectSalary, enlist, isHoplite, performReclass, promote, serviceStatus } from "../services/service.js";
 
 async function actingRow(userId: string): Promise<{ row: CharacterRow } | { error: string; code: number }> {
   const worldId = await getActiveWorldId();
@@ -67,6 +67,28 @@ export async function serviceRoutes(app: FastifyInstance) {
       return { error: acting.error };
     }
     const result = await collectSalary(acting.row, new Date());
+    if (!result.ok) {
+      reply.code(result.code);
+      return { error: result.error };
+    }
+    return result;
+  });
+
+  // Re-class (Step 5 capstone): the hoplite hangs up the spear for a new trade.
+  // ONE-WAY — the engine validates eligibility (wounded or aged-out) + the target.
+  app.post("/reclass", async (request, reply) => {
+    const user = await requireAuth(request);
+    const acting = await actingRow(user.id);
+    if ("error" in acting) {
+      reply.code(acting.code);
+      return { error: acting.error };
+    }
+    const targetClass = (request.body as { targetClass?: string } | undefined)?.targetClass;
+    if (!targetClass) {
+      reply.code(400);
+      return { error: "A targetClass is required." };
+    }
+    const result = await performReclass(acting.row, targetClass, new Date());
     if (!result.ok) {
       reply.code(result.code);
       return { error: result.error };

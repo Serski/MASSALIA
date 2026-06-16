@@ -92,6 +92,8 @@ export async function createCharacterRow(
       worldId,
       houseSlug: houseId,
       classId,
+      // Hoplite Step 5: the persistent veteran signal, preserved through re-class.
+      wasHoplite: classId === "hoplite",
       prestige: capped("prestige"),
       devotion: capped("devotion"),
       militia: capped("militia"),

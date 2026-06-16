@@ -120,7 +120,7 @@ suite("Mercenary contracts (integration)", () => {
     expect(row.contractSeasonsTotal).toBe(1);
 
     // Home salary is PAUSED while abroad — the rank status shows no home accrual.
-    const status = m.service.serviceStatus(row, at(0.5));
+    const status = await m.service.serviceStatus(row, at(0.5));
     expect(status.abroad).toBe(true);
     expect(status.accrued.drachmae).toBe(0);
 

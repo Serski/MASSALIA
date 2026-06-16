@@ -246,6 +246,33 @@ export function injuryTrait(rng: () => number): "one-eyed" | "lamed" {
 // The traits that bar a character from HARD contracts (Step 4 wound bar).
 export const WOUND_TRAITS = ["one-eyed", "lamed"] as const;
 
+// --- Re-class (Hoplite capstone, Step 5) ------------------------------------
+// A hoplite may LEAVE soldiering — forced early by a career-ending wound, or
+// voluntarily at RECLASS_AGE — and take up a new trade (a curated subset, NOT all
+// eight). One-way and irreversible: once re-classed, never a hoplite again.
+
+export const RECLASS_AGE = 50;
+export const RECLASS_TARGETS = ["landowner", "trader", "philosopher", "priest"] as const;
+export type ReclassTarget = (typeof RECLASS_TARGETS)[number];
+export type ReclassReason = "wound" | "retirement";
+
+export function isReclassTarget(classId: string): classId is ReclassTarget {
+  return (RECLASS_TARGETS as readonly string[]).includes(classId);
+}
+
+// Eligible to leave soldiering iff a living hoplite who is wounded OR has reached
+// the retirement age. (`wounded` = holds one-eyed/lamed; computed by the caller.)
+export function canReclass(classId: string, status: string, age: number, wounded: boolean): boolean {
+  return classId === "hoplite" && status === "alive" && (wounded || age >= RECLASS_AGE);
+}
+
+// Why the option is available (wound takes precedence over age), or null if not.
+export function reclassReason(wounded: boolean, age: number): ReclassReason | null {
+  if (wounded) return "wound";
+  if (age >= RECLASS_AGE) return "retirement";
+  return null;
+}
+
 export function contractDef(content: ContractsContent, id: string): ContractDef | null {
   return content.contracts.find((c) => c.id === id) ?? null;
 }

@@ -1,21 +1,30 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { eq } from "drizzle-orm";
-import { createDb, playerCharacters } from "@massalia/db";
+import { and, eq, inArray } from "drizzle-orm";
+import { characterTraits, createDb, effectLog, playerBuildings, players, playerCharacters } from "@massalia/db";
 import {
   accrueService,
+  canReclass,
   capStat,
+  currentAge,
   gateShortfall,
+  isReclassTarget,
   meetsGate,
   nextRankId,
   parseRanksContent,
   rankDef,
+  reclassReason,
+  RECLASS_TARGETS,
+  WOUND_TRAITS,
   type ArmyRank,
   type RankDef,
   type RanksContent,
+  type ReclassReason,
 } from "@massalia/shared";
 import { getAgeConfig } from "./age.js";
+import { classBuildingIdFor } from "./buildings.js";
+import { broadcastState } from "./worldState.js";
 import type { CharacterRow } from "./character.js";
 
 // ---------------------------------------------------------------------------
@@ -80,7 +89,34 @@ export type ServiceStatus = {
   // True while sworn to a mercenary contract (Step 2): home rank salary PAUSES and
   // foreign income accrues instead (see the merc service / hiring board).
   abroad: boolean;
+  // Re-class (Step 5 capstone): the "leave soldiering" option. Available (not
+  // prompted) when a living hoplite is wounded or has reached the retirement age.
+  reclass: {
+    eligible: boolean;
+    reason: ReclassReason | null;
+    targets: { classId: string; name: string; flavor: string }[];
+  };
 };
+
+// One-line flavour of each citizen life the hoplite may take up (code, like the
+// manumission flavour bank — not tuning).
+const CLASS_FLAVOR: Record<string, { name: string; flavor: string }> = {
+  landowner: { name: "Landowner", flavor: "Wheat fields and a name on the land — the slow, sure wealth of soil." },
+  trader: { name: "Trader", flavor: "Wine, risk, and the harbor's churn — fortunes made on a good crossing." },
+  philosopher: { name: "Philosopher", flavor: "The Stoa and the scroll — influence won by the sharpened mind." },
+  priest: { name: "Priest", flavor: "The altar and the god's favor — devotion the city heeds." },
+};
+
+const RECLASS_CHOICES = RECLASS_TARGETS.map((classId) => ({ classId, name: CLASS_FLAVOR[classId]?.name ?? classId, flavor: CLASS_FLAVOR[classId]?.flavor ?? "" }));
+
+// Career-ending wounds (one-eyed / lamed) — the forced-early re-class trigger.
+async function isWounded(characterId: string): Promise<boolean> {
+  const rows = await db
+    .select({ traitId: characterTraits.traitId })
+    .from(characterTraits)
+    .where(and(eq(characterTraits.characterId, characterId), inArray(characterTraits.traitId, [...WOUND_TRAITS])));
+  return rows.length > 0;
+}
 
 function rankView(def: RankDef): RankView {
   return { id: def.id, name: def.name, rank: def.rank, salaryPerDay: def.salaryPerDay, militiaPerDay: def.militiaPerDay };
@@ -90,7 +126,7 @@ function anchorMs(row: CharacterRow): number {
   return (row.lastSalaryAt ?? row.createdAt).getTime();
 }
 
-export function serviceStatus(row: CharacterRow, now: Date = new Date()): ServiceStatus {
+export async function serviceStatus(row: CharacterRow, now: Date = new Date()): Promise<ServiceStatus> {
   const ranks = getRanksContent();
   const rankId = row.armyRank as ArmyRank;
   const currentDef = rankId === "none" ? null : rankDef(ranks, rankId);
@@ -103,6 +139,11 @@ export function serviceStatus(row: CharacterRow, now: Date = new Date()): Servic
   const abroad = row.contractId !== null;
   const accrued = currentDef && !abroad ? accrueService(currentDef, anchorMs(row), now.getTime()) : { drachmae: 0, militia: 0 };
 
+  // Re-class availability (Step 5): a living hoplite who is wounded or aged out.
+  const wounded = await isWounded(row.id);
+  const age = currentAge(row.startAge, row.createdAt.getTime(), now.getTime(), getAgeConfig());
+  const eligible = canReclass(row.classId, row.status, age, wounded);
+
   return {
     isHoplite: isHoplite(row),
     rankId,
@@ -114,6 +155,7 @@ export function serviceStatus(row: CharacterRow, now: Date = new Date()): Servic
     salaryPerDay: currentDef?.salaryPerDay ?? 0,
     stats: { militia: row.militia, prestige: row.prestige },
     abroad,
+    reclass: { eligible, reason: eligible ? reclassReason(wounded, age) : null, targets: eligible ? RECLASS_CHOICES : [] },
   };
 }
 
@@ -175,7 +217,7 @@ export async function enlist(row: CharacterRow, now: Date = new Date()): Promise
     return { ok: false, code: 403, error: "You do not yet meet the muster." };
   }
   await db.update(playerCharacters).set({ armyRank: "recruit", lastSalaryAt: now }).where(eq(playerCharacters.id, row.id));
-  return { ok: true, status: serviceStatus((await freshRow(row.id))!, now) };
+  return { ok: true, status: await serviceStatus((await freshRow(row.id))!, now) };
 }
 
 // Apply for the NEXT rank up (one at a time; never skips, never auto-demotes).
@@ -196,7 +238,7 @@ export async function promote(row: CharacterRow, now: Date = new Date()): Promis
     await settleSalary(tx, row.id, now); // bank pay earned at the old rank first
     await tx.update(playerCharacters).set({ armyRank: nextId, lastSalaryAt: now }).where(eq(playerCharacters.id, row.id));
   });
-  return { ok: true, status: serviceStatus((await freshRow(row.id))!, now) };
+  return { ok: true, status: await serviceStatus((await freshRow(row.id))!, now) };
 }
 
 // Bank accrued salary (drachmae) + militia trickle, reset the anchor.
@@ -204,5 +246,51 @@ export async function collectSalary(row: CharacterRow, now: Date = new Date()): 
   if (!isHoplite(row)) return notHoplite();
   if (row.armyRank === "none") return { ok: false, code: 409, error: "You have not enlisted." };
   const collected = await db.transaction(async (tx) => settleSalary(tx, row.id, now));
-  return { ok: true, collected, status: serviceStatus((await freshRow(row.id))!, now) };
+  return { ok: true, collected, status: await serviceStatus((await freshRow(row.id))!, now) };
+}
+
+// --- Re-class (Hoplite capstone, Step 5) ------------------------------------
+// A hoplite hangs up the spear and takes up a new trade — ONE-WAY and IRREVERSIBLE.
+// Follows the manumission template (classId + professionSlug + effectLog), but with
+// NO stat bonus and NO kit: the same person carries his whole life (drachmae, seat,
+// prestige, dynasty, court/family, militia value, ALL traits, army_rank, the
+// was-hoplite signal). Only the class — and the class building line — change.
+//
+// Irreversibility is structural: eligibility requires classId === "hoplite", and the
+// targets exclude hoplite, so once re-classed the door is shut for good. The military
+// engine (enlist/promote/takeContract) gates on classId === "hoplite", so a re-classed
+// veteran is automatically barred — army_rank staying set does NOT re-enable him.
+
+export type ReclassResult = { ok: false; code: number; error: string } | { ok: true; from: string; to: string; reason: ReclassReason };
+
+export async function performReclass(row: CharacterRow, targetClass: string, now: Date = new Date()): Promise<ReclassResult> {
+  if (!isHoplite(row)) return { ok: false, code: 403, error: "Only a hoplite may leave soldiering." };
+  if (row.status !== "alive") return { ok: false, code: 409, error: "The dead take up no new trade." };
+  if (row.contractId) return { ok: false, code: 409, error: "Return from your contract before you hang up the spear." };
+  if (!isReclassTarget(targetClass)) return { ok: false, code: 409, error: "A hoplite cannot take up that trade." };
+
+  const wounded = await isWounded(row.id);
+  const age = currentAge(row.startAge, row.createdAt.getTime(), now.getTime(), getAgeConfig());
+  const reason = reclassReason(wounded, age);
+  if (!canReclass(row.classId, row.status, age, wounded) || !reason) {
+    return { ok: false, code: 403, error: "You may not yet leave soldiering — that door opens only to the wounded or the grey-haired." };
+  }
+
+  // Retire the OLD class building line (KEEP commons). The hoplite has no class
+  // building in content, so this is a defensive no-op today; a class line that does
+  // exist (e.g. the landowner's estate) would have its rows removed here.
+  const oldClassBuilding = classBuildingIdFor(row.classId);
+
+  await db.transaction(async (tx) => {
+    await tx.update(playerCharacters).set({ classId: targetClass }).where(eq(playerCharacters.id, row.id));
+    // Keep the display profession in sync (me/state reads players.professionSlug).
+    await tx.update(players).set({ professionSlug: targetClass }).where(eq(players.id, row.playerId));
+    if (oldClassBuilding) {
+      await tx.delete(playerBuildings).where(and(eq(playerBuildings.ownerPlayerId, row.playerId), eq(playerBuildings.buildingId, oldClassBuilding)));
+    }
+    await tx.insert(effectLog).values({ characterId: row.id, kind: "reclass", detail: { from: row.classId, to: targetClass, reason } });
+  });
+
+  await broadcastState();
+  return { ok: true, from: row.classId, to: targetClass, reason };
 }
