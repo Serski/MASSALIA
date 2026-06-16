@@ -37,23 +37,25 @@ type City = {
 type DetailEntry = Profession | House | Party | City;
 
 const landingStats = {
-  cities: "10",
   houses: "10",
   seasonLabel: "Season I",
   seasonStatus: "Open now",
 };
 
+// The Phocaean world around Massalia — its sister-colonies and trading ports, the
+// SETTING for the one city you play. These are lore, not places to join: you are a
+// citizen of Massalia itself. (`resource` reads as "known for", historical flavor.)
 const leagueCities: City[] = [
-  { kind: "city", slug: "massalia", initial: "M", name: "Massalia", resource: "Lead", capital: true, flavor: "The capital is a shared hub of harbor votes, lead contracts, and League ambition." },
-  { kind: "city", slug: "emporion", initial: "E", name: "Emporion", resource: "Tin", flavor: "A shared western market where tin wealth and Iberian trade pull many players into the same streets." },
-  { kind: "city", slug: "rhoda", initial: "R", name: "Rhoda", resource: "Leather", flavor: "A communal coastal workshop where leather goods, ships, and frontier politics overlap." },
-  { kind: "city", slug: "agathe", initial: "A", name: "Agathe", resource: "Horse", flavor: "A shared cavalry-minded settlement where horses shape local prestige and military planning." },
-  { kind: "city", slug: "arelate", initial: "A", name: "Arelate", resource: "Wool", flavor: "A river hub where many citizens turn wool, tolls, and alliances into steady influence." },
-  { kind: "city", slug: "olbia", initial: "O", name: "Olbia", resource: "Wood", flavor: "A shared timber port where shipwrights and traders compete without owning the city outright." },
-  { kind: "city", slug: "monoikos", initial: "M", name: "Monoikos", resource: "Iron", flavor: "A rugged shared harbor where iron, forts, and maritime risk draw ambitious players together." },
-  { kind: "city", slug: "antipolis", initial: "A", name: "Antipolis", resource: "Marble", flavor: "A civic showcase where marble turns shared public works into prestige." },
-  { kind: "city", slug: "nikaia", initial: "N", name: "Nikaia", resource: "Stone", flavor: "A shared defensive city where stone, walls, and council politics create durable power." },
-  { kind: "city", slug: "athinopolis", initial: "A", name: "Athinopolis", resource: "Salt", flavor: "A shared salt hub where food, trade, and ritual supply lines become political currency." },
+  { kind: "city", slug: "massalia", initial: "M", name: "Massalia", resource: "Lead", capital: true, flavor: "The great Phocaean city of the western sea — your home, and the seat of the oligarchy you mean to lead." },
+  { kind: "city", slug: "emporion", initial: "E", name: "Emporion", resource: "Tin", flavor: "The western tin market on the Iberian coast, where Massalian traders meet the silver roads inland." },
+  { kind: "city", slug: "rhoda", initial: "R", name: "Rhoda", resource: "Leather", flavor: "A coastal workshop town of the Phocaean sphere, known for its leatherwork and small ships." },
+  { kind: "city", slug: "agathe", initial: "A", name: "Agathe", resource: "Horse", flavor: "A settlement of the open hinterland, prized along the coast for its horses." },
+  { kind: "city", slug: "arelate", initial: "A", name: "Arelate", resource: "Wool", flavor: "A river town of tolls and wool, where the Rhône trade flows down to the sea." },
+  { kind: "city", slug: "olbia", initial: "O", name: "Olbia", resource: "Wood", flavor: "A timber port whose pine and oak feed the shipwrights of the coast." },
+  { kind: "city", slug: "monoikos", initial: "M", name: "Monoikos", resource: "Iron", flavor: "A rugged harbor of iron and watch-forts, guarding the eastern sea-lanes." },
+  { kind: "city", slug: "antipolis", initial: "A", name: "Antipolis", resource: "Marble", flavor: "A showcase of the western shore, its public works dressed in marble." },
+  { kind: "city", slug: "nikaia", initial: "N", name: "Nikaia", resource: "Stone", flavor: "A walled frontier city of dressed stone above the eastern bays." },
+  { kind: "city", slug: "athinopolis", initial: "A", name: "Athinopolis", resource: "Salt", flavor: "A salt town whose pans feed trade, table, and altar alike." },
 ];
 
 const parties: Party[] = [
@@ -256,7 +258,7 @@ function AuthPanel({
           <p className="auth-brandline">The League of Massalia</p>
           <h1 id="auth-title">{isSignup ? "Join the League" : "Enter the League"}</h1>
           <p className="auth-subtitle">
-            {isSignup ? "Choose a city. Pledge a House. Make your name." : "Your city awaits your return."}
+            {isSignup ? "Choose your calling. Pledge a House. Make your name." : "Massalia awaits your return."}
           </p>
 
           <div className="auth-social-row" aria-label="Social sign in">
@@ -497,14 +499,13 @@ function DetailBody({ entry }: { entry: DetailEntry }) {
   return (
     <div className="detail-grid">
       <article className="detail-panel">
-        <h2>{entry.capital ? "Capital city" : "Shared city hub"}</h2>
-        <p><strong>Resource:</strong> {entry.resource}</p>
+        <h2>{entry.capital ? "Massalia — your city" : "A city of the Phocaean world"}</h2>
+        <p><strong>Known for:</strong> {entry.resource}</p>
         <p>{entry.flavor}</p>
       </article>
       <article className="detail-panel">
-        <h2>How cities work</h2>
-        <p>Cities are shared player hubs. You join a city, build your role inside it, and contest its politics with other citizens rather than owning it alone.</p>
-        <p className="todo-note">TODO: confirm whether map-level competition exists, such as Houses or parties contesting cities, or League conflicts with rivals.</p>
+        <h2>One city, not ten</h2>
+        <p>You don&apos;t pick a city — you are a citizen of Massalia itself. These Phocaean colonies and ports are the world she leads: the backdrop for your trade, your alliances, and your rivalries, not separate places to join.</p>
       </article>
     </div>
   );
@@ -604,11 +605,11 @@ export function App() {
             </p>
             <p className="hero-lead">4th Century BC · The League Of</p>
             <h1>Massalia</h1>
-            <p className="hero-subline">Founded by Phocaean Greeks. Forged by ten cities. Ruled by whoever dares.</p>
+            <p className="hero-subline">Founded by Phocaean Greeks. Ruled by whoever dares.</p>
             <p className="hero-logline">
-              Join one of ten cities, each with its own resource. Join a Noble House, take a side between the old guard
-              and the reformers, and trade, scheme, and ally your way to the head of the western Mediterranean&apos;s
-              greatest confederation.
+              Rise in Massalia, the Greek jewel of the western sea. Choose your calling, join a Noble House, and take a
+              side between the old guard and the reformers — then trade, scheme, marry, and campaign your way to the head
+              of the city&apos;s oligarchy, building a dynasty that outlives you.
             </p>
             <div className="hero-actions">
               {/* TODO: If entry is via Discord, change this CTA to "Join the Discord" / "Enter the League" and point it to the invite link. The "Play free in your browser" microcopy may also need to change. */}
@@ -616,7 +617,7 @@ export function App() {
               <p className="cta-note">No download. Play free in your browser.</p>
             </div>
             <dl className="stat-row" aria-label="Live game status">
-              <div><dt>Cities to join</dt><dd>{landingStats.cities}</dd></div>
+              <div><dt>Callings to master</dt><dd>{professions.length}</dd></div>
               <div><dt>Noble Houses</dt><dd>{landingStats.houses}</dd></div>
               <div><dt>{landingStats.seasonLabel}</dt><dd>{landingStats.seasonStatus}</dd></div>
             </dl>
@@ -634,8 +635,8 @@ export function App() {
         <div className="pillar-grid">
           <article className="pillar-card">
             <span className="pillar-kicker">I · Settle</span>
-            <h3>Join a City &amp; Resource</h3>
-            <p>Choose your city among the ten, each defined by its resource: tin, marble, horses, and more.</p>
+            <h3>Become a Citizen of Massalia</h3>
+            <p>Create a citizen of the one great city of the western sea — your name, your face, and the dynasty you mean to found.</p>
           </article>
           <article className="pillar-card">
             <span className="pillar-kicker">II · Master a Role</span>
@@ -674,9 +675,9 @@ export function App() {
       <section className="landing-section atlas-section" id="atlas" aria-labelledby="atlas-title">
         <div className="atlas-copy">
           <p className="section-eyebrow">Atlas</p>
-          <h2 id="atlas-title">The cities of the League</h2>
-          <p>Ten Phocaean cities hold the western sea together. Each is a shared player hub with a resource worth fighting over politically, economically, and socially.</p>
-          <div className="city-list" aria-label="League cities and resources">
+          <h2 id="atlas-title">Massalia and the Phocaean world</h2>
+          <p>Massalia is the shared arena: a 300-seat oligarchy, the elected Archons and Ephors, and two rival parties — power worth fighting over politically, economically, and socially. Around her lie the Phocaean colonies and trading ports of the western sea.</p>
+          <div className="city-list" aria-label="Cities of the Phocaean world">
             {leagueCities.map((city) => (
               <DetailLink className="city-item" entry={city} key={city.name}>
                 <span>{city.capital ? "★ " : ""}{city.name}</span>
