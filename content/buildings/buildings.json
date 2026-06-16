@@ -29,6 +29,62 @@
       "yields": [
         { "good": "herbal", "base": 4 }
       ]
+    },
+    "trader": {
+      "id": "emporion",
+      "category": "yearround",
+      "flavor": "A counting-house above the quay — ledgers, scales, and bales of goods carried in from beyond the sea.",
+      "tiers": [
+        { "tier": 1, "name": "Market Stall", "rank": "@Kapelos" },
+        { "tier": 2, "name": "Counting House", "rank": "@Emporos" },
+        { "tier": 3, "name": "Trade House", "rank": "@Naukleros" },
+        { "tier": 4, "name": "Emporion of the West", "rank": "@Megemporos" }
+      ],
+      "income": 7,
+      "yields": [
+        { "good": "wine", "base": 2, "fromTier": 2 }
+      ]
+    },
+    "philosopher": {
+      "id": "school",
+      "category": "yearround",
+      "flavor": "A school of letters — tuition fills the purse while the arguments fill the agora and raise your name.",
+      "tiers": [
+        { "tier": 1, "name": "Stoa Corner", "rank": "@Sophistes" },
+        { "tier": 2, "name": "Private School", "rank": "@Didaskalos" },
+        { "tier": 3, "name": "Academy", "rank": "@Scholarches" },
+        { "tier": 4, "name": "The Lyceum", "rank": "@Philosophos" }
+      ],
+      "income": 6,
+      "yields": []
+    },
+    "hetaira": {
+      "id": "salon",
+      "category": "yearround",
+      "flavor": "A salon of wit and company — coin and whispers both change hands across the wine.",
+      "tiers": [
+        { "tier": 1, "name": "Rented Rooms", "rank": "@Auletris" },
+        { "tier": 2, "name": "The Salon", "rank": "@Hetaira" },
+        { "tier": 3, "name": "House of Muses", "rank": "@Megale Hetaira" },
+        { "tier": 4, "name": "The Symposion Court", "rank": "@Despoina" }
+      ],
+      "income": 6,
+      "yields": []
+    },
+    "shipbuilder": {
+      "id": "slipway",
+      "category": "agricultural",
+      "flavor": "A slipway by the harbor — timber becomes hulls, hulls become ships for sale when the sailing season opens.",
+      "tiers": [
+        { "tier": 1, "name": "Boat Shed", "rank": "@Naupegos" },
+        { "tier": 2, "name": "Slipway", "rank": "@Architekton" },
+        { "tier": 3, "name": "Small Shipyard", "rank": "@Nauarchos" },
+        { "tier": 4, "name": "Great Shipyard", "rank": "@Meganaupegos" }
+      ],
+      "income": 0,
+      "yields": [
+        { "good": "ship", "base": 1 }
+      ]
     }
   },
   "commonBuildings": [
@@ -113,7 +169,8 @@
     "bull": { "sell": 25, "buy": 12 },
     "oliveoil": { "sell": 6, "buy": 3 },
     "horse": { "sell": 30, "buy": 15 },
-    "herbal": { "sell": 5, "buy": 2 }
+    "herbal": { "sell": 5, "buy": 2 },
+    "ship": { "sell": 40, "buy": 20 }
   },
   "seasonal": {
     "newPlayerGuardDays": 3,
@@ -125,7 +182,8 @@
       "bull": "agricultural",
       "horse": "agricultural",
       "chicken": "yearround",
-      "herbal": "yearround"
+      "herbal": "yearround",
+      "ship": "agricultural"
     },
     "coefficients": {
       "agricultural": {

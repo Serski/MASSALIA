@@ -228,6 +228,84 @@ suite("Ledger / building engine (integration)", () => {
     expect(priestMine.classSection.comingSoon).toBe(true);
   });
 
+  it("trader/philosopher/hetaira are income-only lines: collect banks offering drachmae to the wallet, upgrade raises it", async () => {
+    for (const [classId, buildingId, label] of [
+      ["trader", "emporion", "Ventures"],
+      ["philosopher", "school", "Pupils"],
+      ["hetaira", "salon", "Clientele"],
+    ] as const) {
+      playerId = await freshPlayer(100, classId);
+      const c = await ctx();
+
+      const built = await m.buildings.build(classId, c, buildingId, new Date(T0));
+      expect(built.ok).toBe(true);
+      if (built.ok) expect(built.cost).toBe(100);
+      expect(await wallet()).toBe(0);
+
+      // ~1 day active → income accrues to the wallet (no goods at T1 for these lines).
+      const collectAt = new Date(T0 + 2 * DAY);
+      const view = await m.buildings.mine(classId, c, collectAt);
+      expect(view.buildings[0]!.status).toBe("active");
+      expect(view.pendingIncomeTotal).toBeGreaterThan(5.5); // income 6–7/day pending
+      expect(Object.keys(view.pendingGoods)).toHaveLength(0); // no tradeable good
+
+      const collected = await m.buildings.collect(c, collectAt);
+      expect(collected.collected).toBeGreaterThanOrEqual(5); // banked to integer wallet, never negative
+      expect(await wallet()).toBe(collected.collected);
+      expect(collected.banked).toEqual({}); // nothing into resources
+
+      // Upgrade to tier 2 works on the curve; the section slot stays the labelled stub.
+      await setWallet(300);
+      const up = await m.buildings.upgrade(c, buildingId, new Date(T0 + 5 * DAY));
+      expect(up.ok).toBe(true);
+      if (up.ok) expect(up.tier).toBe(2);
+      const mineV = await m.buildings.mine(classId, c, new Date(T0 + 5 * DAY));
+      expect(mineV.classSection.label).toBe(label);
+      expect(mineV.classSection.comingSoon).toBe(true);
+    }
+  });
+
+  it("a SHIPBUILDER earns no passive income but produces 'ship' goods into resources; ships trade on the vendor band", async () => {
+    playerId = await freshPlayer(100, "shipbuilder");
+    const c = await ctx();
+
+    const built = await m.buildings.build("shipbuilder", c, "slipway", new Date(T0));
+    expect(built.ok).toBe(true);
+    expect(await wallet()).toBe(0);
+
+    const collectAt = new Date(T0 + 2 * DAY);
+    const view = await m.buildings.mine("shipbuilder", c, collectAt);
+    expect(view.buildings[0]!.status).toBe("active");
+    expect(view.pendingGoods.ship).toBeGreaterThan(0.8); // ~1 ship/day, guarded full output
+    expect(view.pendingIncomeTotal).toBeLessThan(1); // income 0 — no passive drachmae
+
+    const collected = await m.buildings.collect(c, collectAt);
+    expect(collected.collected).toBe(0); // no income to bank
+    expect(collected.banked.ship).toBeCloseTo(1, 0);
+    expect(await goodBalance("ship")).toBeCloseTo(1, 0);
+
+    // Ships sell to the vendor at the seasonal floor (exists + trades, no deadlock).
+    const sell = await m.buildings.vendorTrade(c, "sell", "ship", 1, collectAt);
+    expect(sell.ok).toBe(true);
+    if (sell.ok) expect(sell.total).toBeGreaterThan(0);
+  });
+
+  it("the class gate stays generic for all four: no cross-class building", async () => {
+    // A landowner cannot raise any of the four new lines.
+    const landCtx = await ctx();
+    for (const buildingId of ["emporion", "school", "salon", "slipway"]) {
+      const denied = await m.buildings.build("landowner", landCtx, buildingId, new Date(T0));
+      expect(denied.ok).toBe(false);
+      if (!denied.ok) expect(denied.code).toBe(403);
+    }
+    // And a trader cannot raise another class's line (e.g. the shipbuilder's slipway).
+    playerId = await freshPlayer(100, "trader");
+    const traderCtx = await ctx();
+    const crossed = await m.buildings.build("trader", traderCtx, "slipway", new Date(T0));
+    expect(crossed.ok).toBe(false);
+    if (!crossed.ok) expect(crossed.code).toBe(403);
+  });
+
   it("slaves cannot build; the class-section slot is labelled+empty for non-landowners, null for the landowner", async () => {
     const c = await ctx();
     // Landowner: no class section (the land is the business).

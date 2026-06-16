@@ -202,6 +202,68 @@ describe("the priest's Sanctuary (a year-round, dual-yield class line on the sam
   });
 });
 
+describe("the four remaining class lines (content-only, same generic frame)", () => {
+  const trader = content.classBuildings.trader!;
+  const philosopher = content.classBuildings.philosopher!;
+  const hetaira = content.classBuildings.hetaira!;
+  const shipbuilder = content.classBuildings.shipbuilder!;
+
+  it("every class line has four tiers, four @ranks, and resolves on the shared curve", () => {
+    for (const line of [trader, philosopher, hetaira, shipbuilder]) {
+      expect(line.tiers.map((t) => t.tier)).toEqual([1, 2, 3, 4]);
+      expect(line.tiers.every((t) => t.rank?.startsWith("@"))).toBe(true);
+      // Tier-1 cost is the universal 100dr entry; nothing hand-rolled.
+      expect(buildingCost(1)).toBe(100);
+    }
+  });
+
+  it("trader: drachmae income 7 + wine stock from tier 2 (reuses the wine good, scales on the curve)", () => {
+    expect(trader.id).toBe("emporion");
+    expect(trader.category).toBe("yearround");
+    expect(trader.income).toBe(7);
+    const wine = trader.yields.find((y) => y.good === "wine")!;
+    expect(wine.fromTier).toBe(2);
+    expect(goodPerDay(wine, 1)).toBe(0); // dormant at tier 1
+    expect(goodPerDay(wine, 2)).toBeCloseTo(2, 6); // scales from its own base at T2
+    expect(vendor.wine).toBeTruthy(); // reused, already registered
+  });
+
+  it("philosopher & hetaira are income-only lines (no tradeable good); their STATS are never goods", () => {
+    expect(philosopher.id).toBe("school");
+    expect(hetaira.id).toBe("salon");
+    expect(philosopher.income).toBe(6);
+    expect(hetaira.income).toBe(6);
+    expect(philosopher.yields).toEqual([]);
+    expect(hetaira.yields).toEqual([]);
+    // prestige / intelligence are STATS — never registered as tradeable goods.
+    expect(vendor.prestige).toBeUndefined();
+    expect(vendor.intelligence).toBeUndefined();
+    expect(seasonal.goodCategory.prestige).toBeUndefined();
+    expect(seasonal.goodCategory.intelligence).toBeUndefined();
+  });
+
+  it("shipbuilder: no passive income — produces the NEW 'ship' good, sailing-season (agricultural)", () => {
+    expect(shipbuilder.id).toBe("slipway");
+    expect(shipbuilder.category).toBe("agricultural");
+    expect(shipbuilder.income ?? 0).toBe(0);
+    const ship = shipbuilder.yields.find((y) => y.good === "ship")!;
+    expect(ship.base).toBe(1);
+    // Ships are valuable and swing with the season (agricultural production curve).
+    const agSwing = Math.abs(
+      coeffFor(seasonal, "agricultural", "Summer").production - coeffFor(seasonal, "agricultural", "Winter").production,
+    );
+    expect(agSwing).toBeGreaterThan(0.3);
+  });
+
+  it("the new 'ship' good has a vendor band (high-value, ~2× floor, can't deadlock) and a seasonal category", () => {
+    const band = vendor.ship!;
+    expect(band.sell).toBe(40);
+    expect(band.buy).toBe(20);
+    expect(band.sell / band.buy).toBeLessThanOrEqual(3);
+    expect(seasonal.goodCategory.ship).toBe("agricultural");
+  });
+});
+
 describe("upkeep is a tax, not a treadmill", () => {
   it("tier-1 (the entry point) is free, and even tier 4 is a small daily flat", () => {
     expect(buildingUpkeep(1)).toBe(0);
