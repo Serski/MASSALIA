@@ -180,6 +180,7 @@ export async function castVote(character: CharacterRow, candidateId: string, now
   if (outcome === "not_voting") return { ok: false, code: 409, error: "The ballot is not open." };
   if (outcome === "unknown_candidate") return { ok: false, code: 404, error: "No such candidate stands." };
   if (outcome === "voter_dead") return { ok: false, code: 409, error: "The dead cast no vote." };
+  if (outcome === "already_voted") return { ok: false, code: 409, error: "You have already cast your Olympic vote — it is final." };
   await broadcastState();
   return { ok: true, candidateId };
 }

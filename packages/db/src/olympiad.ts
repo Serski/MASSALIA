@@ -188,9 +188,11 @@ export async function getOlympiadBallot(gameYear: number): Promise<BallotEntry[]
   }));
 }
 
-// Cast or replace a vote. Only while voting is open and the candidate is real and
-// the voter is living. One row per voter (upsert). Returns an outcome code.
-export type VoteOutcome = "ok" | "not_voting" | "unknown_candidate" | "voter_dead";
+// Cast a vote — ONE per voter per Olympiad, then LOCKED (unlike the changeable
+// chamber votes, the Olympiad is one-and-done). Only while voting is open, the
+// candidate is real, and the voter is living. A second attempt is REJECTED
+// ("already_voted") and never changes or duplicates the existing vote.
+export type VoteOutcome = "ok" | "not_voting" | "unknown_candidate" | "voter_dead" | "already_voted";
 
 export async function castOlympiadVote(voterCharacterId: string, candidateCharacterId: string, gameYear: number, now: Date = new Date()): Promise<VoteOutcome> {
   const world = await activeWorld();
@@ -210,13 +212,22 @@ export async function castOlympiadVote(voterCharacterId: string, candidateCharac
   )[0];
   if (!candidate) return "unknown_candidate";
 
+  // Already voted this Olympiad? The vote is final — reject, do NOT update.
+  const existing = (
+    await db
+      .select({ id: olympicVotes.id })
+      .from(olympicVotes)
+      .where(and(eq(olympicVotes.olympiadGameYear, gameYear), eq(olympicVotes.voterCharacterId, voterCharacterId)))
+      .limit(1)
+  )[0];
+  if (existing) return "already_voted";
+
+  // First and only vote. onConflictDoNothing guards the unique key against a race
+  // (two simultaneous casts) — the loser changes nothing, matching the lock.
   await db
     .insert(olympicVotes)
     .values({ worldId: world.id, olympiadGameYear: gameYear, voterCharacterId, candidateCharacterId, castAt: now })
-    .onConflictDoUpdate({
-      target: [olympicVotes.olympiadGameYear, olympicVotes.voterCharacterId],
-      set: { candidateCharacterId, castAt: now },
-    });
+    .onConflictDoNothing({ target: [olympicVotes.olympiadGameYear, olympicVotes.voterCharacterId] });
   return "ok";
 }
 

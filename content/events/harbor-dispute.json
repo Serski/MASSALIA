@@ -1,7 +1,7 @@
 {
   "id": "harbor-dispute",
   "weight": 10,
-  "scene": "Two merchant houses dispute docking rights at the old harbor. Both promise loyalty if the archon rules in their favor.",
+  "scene": "Two merchant houses dispute docking rights at the old harbor. Both come to you for backing — each promising loyalty if your voice helps sway the archons their way.",
   "choices": [
     {
       "id": "favor-harbor",
@@ -12,10 +12,10 @@
     },
     {
       "id": "give-old-port",
-      "label": "Grant Old Port to the rival league",
+      "label": "Throw your weight behind the rival league's claim to Old Port",
       "tags": ["foreign-rites", "reform"],
       "effects": [{ "type": "set_province_owner", "provinceId": "old-port", "ownerPlayerId": "SECOND_PLAYER" }],
-      "resultText": "Old Port changes hands under a brittle but public settlement."
+      "resultText": "Your backing tips a brittle but public settlement; Old Port changes hands."
     }
   ]
 }

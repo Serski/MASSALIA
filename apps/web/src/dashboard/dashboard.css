@@ -710,6 +710,41 @@
   border-radius: 12px;
 }
 
+/* Card persistence (Bug 4): every card carries a ✕ dismiss, and a resolved/dimmed
+   "done" state once the player has answered it. Cards stay until ✕ or next day. */
+.dashboard-shell .event-card,
+.dashboard-shell .festival-card,
+.dashboard-shell .olympic-card{
+  position: relative;
+}
+.dashboard-shell .card-close{
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(181, 138, 69, 0.32);
+  background: rgba(20, 14, 9, 0.55);
+  color: rgba(228, 214, 188, 0.75);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.dashboard-shell .card-close:hover{
+  background: rgba(40, 28, 16, 0.8);
+  color: rgba(244, 232, 208, 0.95);
+}
+.dashboard-shell .card-resolved{
+  opacity: 0.62;
+  filter: saturate(0.85);
+}
+
 .dashboard-shell .event-card.urgency-high{
   border-color: rgba(187, 106, 82, 0.58);
 }

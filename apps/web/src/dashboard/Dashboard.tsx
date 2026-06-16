@@ -551,6 +551,10 @@ function CourtDecisions({ onRefresh }: PanelProps) {
   const [outcomes, setOutcomes] = useState<Record<string, EventResolution>>({});
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
+  // Bug 4: per-card ✕ dismissal. Daily cards already persist (resolved) all day; the
+  // dismissed-set lets the player clear any one on demand. It clears on the next
+  // day's reset because the daily set reloads fresh (a new set replaces these ids).
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
   const load = useCallback(() => {
     api
@@ -608,12 +612,13 @@ function CourtDecisions({ onRefresh }: PanelProps) {
           {daily.remaining} of {daily.cards.length} decisions awaiting you today
         </div>
       )}
-      {daily.cards.map((card) => {
+      {daily.cards.filter((card) => !dismissed.has(card.event.id)).map((card) => {
         const event = card.event;
         const liveOutcome = outcomes[event.id];
         const isResolved = card.resolved || Boolean(liveOutcome);
         return (
-          <DashboardCard className="event-card" key={event.id}>
+          <DashboardCard className={`event-card${isResolved ? " card-resolved" : ""}`} key={event.id}>
+            <CardClose onClose={() => setDismissed((prev) => new Set(prev).add(event.id))} />
             <div className="event-body">
               <span className="dashboard-label event-kicker">{ARENA_LABELS[card.arena] ?? "Decision"}</span>
               <h3>{event.scene}</h3>
@@ -795,9 +800,20 @@ function RoutinesCard({ onRefresh }: PanelProps) {
   );
 }
 
+// A small dismiss (✕) control every card carries (Bug 4): the player may clear any
+// card on demand; cards otherwise persist (resolved/dimmed) until the next day.
+function CardClose({ onClose }: { onClose: () => void }) {
+  return (
+    <button type="button" className="card-close" aria-label="Dismiss this card" title="Dismiss" onClick={onClose}>
+      ✕
+    </button>
+  );
+}
+
 // A festival is a free civic event — surfaced prominently, above the daily
-// decisions, with each donation tier's previewed effects.
-function FestivalBanner({ festival, onRefresh }: { festival: FestivalLive; onRefresh: () => void }) {
+// decisions, with each donation tier's previewed effects. After the offering is
+// made it STAYS in a resolved/dimmed state (Bug 4) until dismissed or the next day.
+function FestivalBanner({ festival, onRefresh, onClose }: { festival: FestivalLive; onRefresh: () => void; onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const [outcome, setOutcome] = useState<EventResolution | null>(null);
@@ -817,7 +833,8 @@ function FestivalBanner({ festival, onRefresh }: { festival: FestivalLive; onRef
   };
 
   return (
-    <DashboardCard className="festival-card">
+    <DashboardCard className={`festival-card${outcome ? " card-resolved" : ""}`}>
+      <CardClose onClose={onClose} />
       <div className="event-body">
         <span className="dashboard-label festival-kicker">🎭 Festival · free civic event</span>
         <h3>{festival.event.scene}</h3>
@@ -869,7 +886,7 @@ function timeUntil(iso: string | null): string {
 
 // The live Olympic event (nominate / the Games) — surfaced like a festival: free,
 // no daily decision spent. On the Games it reveals the victor/honorable outcome.
-function OlympicBanner({ live, onRefresh }: { live: NonNullable<OlympiadStatus["liveEvent"]>; onRefresh: () => void }) {
+function OlympicBanner({ live, onRefresh, onClose }: { live: NonNullable<OlympiadStatus["liveEvent"]>; onRefresh: () => void; onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const [outcome, setOutcome] = useState<EventResolution | null>(null);
@@ -892,7 +909,8 @@ function OlympicBanner({ live, onRefresh }: { live: NonNullable<OlympiadStatus["
 
   const isGames = live.eventId === "olympic-games";
   return (
-    <DashboardCard className="olympic-card">
+    <DashboardCard className={`olympic-card${outcome ? " card-resolved" : ""}`}>
+      <CardClose onClose={onClose} />
       <div className="event-body">
         <span className="dashboard-label olympic-kicker">{isGames ? "🏛️ The Olympic Games" : "🏛️ The Olympiad · the assembly nominates"}</span>
         <h3>{live.event.scene}</h3>
@@ -935,7 +953,7 @@ function OlympicBanner({ live, onRefresh }: { live: NonNullable<OlympiadStatus["
 // The voting ballot: every living citizen votes (even those who cannot stand).
 // Live standings are HIDDEN until close — your vote is changeable until the window
 // shuts, with a countdown.
-function OlympicBallotPanel({ onRefresh }: { onRefresh: () => void }) {
+function OlympicBallotPanel({ onRefresh, onClose }: { onRefresh: () => void; onClose: () => void }) {
   const [ballot, setBallot] = useState<OlympiadBallot | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
@@ -960,46 +978,50 @@ function OlympicBallotPanel({ onRefresh }: { onRefresh: () => void }) {
   };
 
   if (!ballot || ballot.phase !== "voting") return null;
+  // Bug 2: the Olympic vote is ONE-AND-DONE. Once cast it is locked — show the
+  // chosen name and remove the controls so there is no way to submit again.
+  const voted = Boolean(ballot.yourVote);
+  const votedFor = ballot.candidates.find((c) => c.characterId === ballot.yourVote);
   return (
-    <DashboardCard className="olympic-card ballot-card">
+    <DashboardCard className={`olympic-card ballot-card${voted ? " card-resolved" : ""}`}>
+      <CardClose onClose={onClose} />
       <div className="event-body">
         <span className="dashboard-label olympic-kicker">🗳️ Olympic ballot · choose {ballot.seats} to send</span>
         <h3>The assembly votes. Closes in {timeUntil(ballot.votingEndsAt)}.</h3>
-        <p className="dashboard-todo">The count is sealed until the vote closes — choose who carries Massalia's name. You may change your vote until then.</p>
-        <div className="event-choice-stack">
-          {ballot.candidates.length === 0 ? (
-            <p className="dashboard-todo">No names stand on the ballot.</p>
-          ) : (
-            ballot.candidates.map((c) => {
-              const chosen = ballot.yourVote === c.characterId;
-              return (
-                <button
-                  key={c.characterId}
-                  type="button"
-                  className={`event-choice-button${chosen ? " ballot-chosen" : ""}`}
-                  disabled={busy}
-                  onClick={() => vote(c.characterId)}
-                >
-                  <strong>{c.name} of House {c.houseName}</strong>
-                  <span className="choice-costs">
-                    <span className="cost-chip cost-neutral">{titleCase(c.classId)}</span>
-                    <span className="cost-chip cost-positive">Prestige {c.prestige}</span>
-                    {chosen ? <span className="cost-chip cost-positive">✓ your vote</span> : null}
-                  </span>
-                </button>
-              );
-            })
-          )}
-        </div>
+        {voted ? (
+          <div className="event-outcome" role="status">
+            <p>✓ You voted for {votedFor ? `${votedFor.name} of House ${votedFor.houseName}` : "your candidate"} — votes are final.</p>
+          </div>
+        ) : (
+          <>
+            <p className="dashboard-todo">The count is sealed until the vote closes — choose who carries Massalia's name. Your vote is final; you cannot change it.</p>
+            <div className="event-choice-stack">
+              {ballot.candidates.length === 0 ? (
+                <p className="dashboard-todo">No names stand on the ballot.</p>
+              ) : (
+                ballot.candidates.map((c) => (
+                  <button key={c.characterId} type="button" className="event-choice-button" disabled={busy} onClick={() => vote(c.characterId)}>
+                    <strong>{c.name} of House {c.houseName}</strong>
+                    <span className="choice-costs">
+                      <span className="cost-chip cost-neutral">{titleCase(c.classId)}</span>
+                      <span className="cost-chip cost-positive">Prestige {c.prestige}</span>
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </>
+        )}
         {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
       </div>
     </DashboardCard>
   );
 }
 
-// The Olympiad section of the Court: the city-wide victor, your delegate badge,
-// the live event banner, and the voting ballot — whatever the phase calls for.
-function OlympiadSection({ olympiad, onRefresh }: { olympiad: OlympiadStatus; onRefresh: () => void }) {
+// The Olympiad STATUS of the Court: the city-wide victor + your honour/delegate
+// badges. The live event banner + the voting ballot are rendered by CourtPanel so
+// they can persist (resolved/dimmed) past the server clearing them (Bug 4).
+function OlympiadSection({ olympiad }: { olympiad: OlympiadStatus }) {
   return (
     <>
       {olympiad.champion ? (
@@ -1016,8 +1038,6 @@ function OlympiadSection({ olympiad, onRefresh }: { olympiad: OlympiadStatus; on
       {olympiad.youAreDelegate ? (
         <p className="olympic-badge" role="status">🏛️ You are an Olympic Delegate — chosen to carry Massalia's name to Olympia.</p>
       ) : null}
-      {olympiad.liveEvent ? <OlympicBanner live={olympiad.liveEvent} onRefresh={onRefresh} /> : null}
-      {olympiad.phase === "voting" ? <OlympicBallotPanel onRefresh={onRefresh} /> : null}
     </>
   );
 }
@@ -1095,6 +1115,35 @@ function FreedomPanel({ onRefresh }: { onRefresh: () => void }) {
 }
 
 function CourtPanel({ player, onRefresh }: PanelProps) {
+  // Card persistence (Bug 4): calendar cards (festival / Olympiad) vanish the moment
+  // the server stops returning them on resolve. Keep a sticky snapshot so the SAME
+  // card instance stays mounted (showing its resolved state) for the rest of the
+  // day, and a dismissed-set for the ✕ button. Both reset at the next day (the
+  // in-game date label changes once per real day, matching the daily-card reset).
+  const dayKey = player.gameDateLabel;
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [festivalSticky, setFestivalSticky] = useState<FestivalLive | null>(null);
+  const [olympicLiveSticky, setOlympicLiveSticky] = useState<NonNullable<OlympiadStatus["liveEvent"]> | null>(null);
+  const lastDayKey = useRef(dayKey);
+
+  useEffect(() => {
+    if (lastDayKey.current !== dayKey) {
+      lastDayKey.current = dayKey;
+      setDismissed(new Set());
+      setFestivalSticky(null);
+      setOlympicLiveSticky(null);
+    }
+  }, [dayKey]);
+  useEffect(() => { if (player.festival) setFestivalSticky(player.festival); }, [player.festival]);
+  const liveEvent = player.olympiad?.liveEvent;
+  useEffect(() => { if (liveEvent) setOlympicLiveSticky(liveEvent); }, [liveEvent]);
+
+  const close = useCallback((key: string) => setDismissed((prev) => new Set(prev).add(key)), []);
+
+  const festival = player.festival ?? festivalSticky;
+  const olympicLive = liveEvent ?? olympicLiveSticky;
+  const voting = player.olympiad?.phase === "voting";
+
   return (
     <section className="dashboard-panel" aria-labelledby="court-title">
       <div className="dashboard-panel-heading">
@@ -1106,8 +1155,10 @@ function CourtPanel({ player, onRefresh }: PanelProps) {
       <div className="court-grid">
         <div className="decision-column">
           {player.manumission?.eligible ? <FreedomPanel onRefresh={onRefresh} /> : null}
-          {player.olympiad ? <OlympiadSection olympiad={player.olympiad} onRefresh={onRefresh} /> : null}
-          {player.festival ? <FestivalBanner festival={player.festival} onRefresh={onRefresh} /> : null}
+          {player.olympiad ? <OlympiadSection olympiad={player.olympiad} /> : null}
+          {olympicLive && !dismissed.has("olympic-live") ? <OlympicBanner key="olympic-live" live={olympicLive} onRefresh={onRefresh} onClose={() => close("olympic-live")} /> : null}
+          {voting && !dismissed.has("olympic-ballot") ? <OlympicBallotPanel onRefresh={onRefresh} onClose={() => close("olympic-ballot")} /> : null}
+          {festival && !dismissed.has("festival") ? <FestivalBanner key="festival" festival={festival} onRefresh={onRefresh} onClose={() => close("festival")} /> : null}
           <div className="panel-subhead decision-subhead">
             <span className="dashboard-label">Decisions awaiting you</span>
           </div>
@@ -3709,7 +3760,7 @@ const panelComponents: Record<DashboardSection, (props: PanelProps) => ReactNode
   atlas: AtlasPanel,
 };
 
-export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onExit: () => void; onRequireLogin: () => void; onRequireCharacter: () => void }) {
+export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () => void; onRequireLogin: () => void; onRequireCharacter: () => void }) {
   const [activeSection, setActiveSection] = useState<DashboardSection>("court");
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [activeSheet, setActiveSheet] = useState<"inventory" | "character" | null>(null);
@@ -3867,7 +3918,6 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
               </div>
               <p className="dashboard-todo">TODO: House standing score awaits backend state.</p>
             </DashboardCard>
-            <button className="dashboard-ghost-button" type="button" onClick={onExit}>Campaigns</button>
           </div>
         </aside>
 
