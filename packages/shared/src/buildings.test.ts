@@ -161,6 +161,47 @@ describe("BALANCE GUARDRAIL — class ROI beats commons for the owner", () => {
   });
 });
 
+describe("the priest's Sanctuary (a year-round, dual-yield class line on the same curve)", () => {
+  const sanctuary = content.classBuildings.priest!;
+
+  it("is wired into classBuildings with four tiers and priestly ranks", () => {
+    expect(sanctuary.id).toBe("sanctuary");
+    expect(sanctuary.tiers.map((t) => t.tier)).toEqual([1, 2, 3, 4]);
+    expect(sanctuary.tiers.every((t) => t.rank?.startsWith("@"))).toBe(true);
+  });
+
+  it("yields BOTH offering drachmae (the income field → wallet) AND herbal (a good)", () => {
+    // Drachmae rides the same income path as building_income (no second mechanism).
+    expect(sanctuary.income).toBe(6);
+    const herbal = sanctuary.yields.find((y) => y.good === "herbal")!;
+    expect(herbal.base).toBe(4);
+    // Both scale on the shared yield curve, tier over tier.
+    expect(buildingYield(sanctuary.income!, 2)).toBeCloseTo(10.8, 6);
+    expect(goodPerDay(herbal, 2)).toBeCloseTo(7.2, 6);
+  });
+
+  it("is a YEAR-ROUND trade — its output barely swings winter→summer (unlike the Estate)", () => {
+    expect(sanctuary.category).toBe("yearround");
+    const winter = coeffFor(seasonal, "yearround", "Winter").production;
+    const summer = coeffFor(seasonal, "yearround", "Summer").production;
+    expect(Math.abs(summer - winter)).toBeLessThan(0.11);
+    // The Estate's agricultural swing is far deeper.
+    const agSwing = Math.abs(
+      coeffFor(seasonal, "agricultural", "Summer").production - coeffFor(seasonal, "agricultural", "Winter").production,
+    );
+    expect(agSwing).toBeGreaterThan(Math.abs(summer - winter));
+  });
+
+  it("herbal trades on a vendor band (can't deadlock, ~2× floor) and prices as a gentle year-round good", () => {
+    const band = vendor.herbal!;
+    expect(band.sell).toBeGreaterThan(band.buy);
+    expect(band.sell / band.buy).toBeLessThanOrEqual(3);
+    const buy = vendorUnitPrice(band, "buy", seasonal, "yearround", "Winter");
+    const sell = vendorUnitPrice(band, "sell", seasonal, "yearround", "Winter");
+    expect(buy).toBeGreaterThan(sell); // player buys at ceiling, sells at floor
+  });
+});
+
 describe("upkeep is a tax, not a treadmill", () => {
   it("tier-1 (the entry point) is free, and even tier 4 is a small daily flat", () => {
     expect(buildingUpkeep(1)).toBe(0);

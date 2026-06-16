@@ -1206,7 +1206,7 @@ function yieldSummary(yields: { good: string; perDay: number }[]): string {
 }
 
 const GOOD_ICON: Record<string, string> = {
-  grain: "🌾", oliveoil: "🫒", wine: "🍷", chicken: "🐔", timber: "🪵", bull: "🐂", horse: "🐎",
+  grain: "🌾", oliveoil: "🫒", wine: "🍷", chicken: "🐔", timber: "🪵", bull: "🐂", horse: "🐎", herbal: "🌿",
 };
 
 // The class-section slot. Built to render a list of stateful, time-bound, stat-
@@ -1217,12 +1217,19 @@ function ClassActionsList({ section }: { section: ClassSection }) {
     // Landowner / slave: no class section — a flavor line, not a slot.
     return section.flavor ? <p className="dashboard-todo">{section.flavor}</p> : null;
   }
+  // The priest's signature verb is the pilgrimage (PRIEST STEP 2): sacred travel
+  // to Delphi, Gaul, and Syracuse. The Sanctuary building ships now; the travel
+  // system is a clean labelled stub here until that build lands.
+  const comingSoon =
+    section.label === "Rites"
+      ? { title: "Pilgrimage — coming soon", sub: "Sacred travel to Delphi, Gaul, and Syracuse arrives in a later build." }
+      : { title: `${section.label} — coming soon`, sub: "This path's stateful undertakings arrive in a later build." };
   return (
     <>
       <div className="panel-label">{section.label}</div>
       <div className="panel-grid2">
         {section.entries.length === 0 ? (
-          <PanelRow icon="📜" title={`${section.label} — coming soon`} sub="This path's stateful undertakings arrive in a later build." dim />
+          <PanelRow icon="📜" title={comingSoon.title} sub={comingSoon.sub} dim />
         ) : (
           section.entries.map((entry) => (
             <PanelRow

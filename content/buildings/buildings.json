@@ -14,6 +14,21 @@
         { "good": "grain", "base": 6 },
         { "good": "oliveoil", "base": 2, "fromTier": 3 }
       ]
+    },
+    "priest": {
+      "id": "sanctuary",
+      "category": "yearround",
+      "flavor": "The god's house and the physic-garden behind it — offerings fill the bowl, simples grow in the beds. No clients, only the faithful.",
+      "tiers": [
+        { "tier": 1, "name": "Roadside Shrine", "rank": "@Neokoros" },
+        { "tier": 2, "name": "Temple Precinct", "rank": "@Hiereus" },
+        { "tier": 3, "name": "Sanctuary of Artemis", "rank": "@Archiereus" },
+        { "tier": 4, "name": "Oracle Seat", "rank": "@Hierophantes" }
+      ],
+      "income": 6,
+      "yields": [
+        { "good": "herbal", "base": 4 }
+      ]
     }
   },
   "commonBuildings": [
@@ -97,7 +112,8 @@
     "timber": { "sell": 4, "buy": 2 },
     "bull": { "sell": 25, "buy": 12 },
     "oliveoil": { "sell": 6, "buy": 3 },
-    "horse": { "sell": 30, "buy": 15 }
+    "horse": { "sell": 30, "buy": 15 },
+    "herbal": { "sell": 5, "buy": 2 }
   },
   "seasonal": {
     "newPlayerGuardDays": 3,
@@ -108,7 +124,8 @@
       "timber": "agricultural",
       "bull": "agricultural",
       "horse": "agricultural",
-      "chicken": "yearround"
+      "chicken": "yearround",
+      "herbal": "yearround"
     },
     "coefficients": {
       "agricultural": {

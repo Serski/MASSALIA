@@ -281,34 +281,49 @@ export async function creditWorldTreasury(exec: Exec, worldId: string, amount: n
 
 type WalletSettle = { income: number; upkeep: number; collected: number; owed: number };
 
+// Both upkeep and income accrue per-building from max(marker, completesAt) — the
+// same backdating the goods path uses (accruedUnits). When the wallet marker is
+// absent (never collected → lastMs 0) each building starts at its own completesAt,
+// so a building's first collect is never silently dropped.
 function continuousUpkeep(rows: BuildingRow[], lastMs: number, now: Date): number {
-  const elapsedSec = Math.max(0, (now.getTime() - lastMs) / 1000);
   return rows
     .filter((r) => isActive(r, now))
     .reduce((sum, r) => {
       const def = resolveDef(r.buildingId);
-      return def ? sum + (def.upkeep(r.tier) / 86_400) * elapsedSec : sum;
+      if (!def) return sum;
+      const start = Math.max(lastMs, r.completesAt.getTime());
+      const elapsedSec = Math.max(0, (now.getTime() - start) / 1000);
+      return sum + (def.upkeep(r.tier) / 86_400) * elapsedSec;
     }, 0);
 }
 
 function pendingIncome(rows: BuildingRow[], lastMs: number, season: SeasonName, now: Date): number {
   const c = getBuildingsContent();
-  const elapsedSec = Math.max(0, (now.getTime() - lastMs) / 1000);
   return rows
     .filter((r) => isActive(r, now))
     .reduce((sum, r) => {
       const def = resolveDef(r.buildingId);
       if (!def || def.income <= 0) return sum;
+      const start = Math.max(lastMs, r.completesAt.getTime());
+      const elapsedSec = Math.max(0, (now.getTime() - start) / 1000);
       const prodMult = productionMultiplier(c.seasonal, def.category, season, r.completesAt.getTime(), now.getTime());
       return sum + ratePerSecond(incomeAtTier(def, r.tier)) * elapsedSec * prodMult;
     }, 0);
 }
 
 async function settleWallet(exec: Exec, ctx: ActingContext, rows: BuildingRow[], now: Date): Promise<WalletSettle> {
-  const incomeRow = await getOrCreateResource(exec, ctx.playerId, INCOME_TYPE, now);
-  const lastMs = incomeRow.lastUpdatedAt.getTime();
+  // Read the marker WITHOUT creating it: a fresh player has no row, so lastMs 0
+  // lets each building backdate to its own completesAt (no lost first collect).
+  const existing = (
+    await exec
+      .select()
+      .from(resources)
+      .where(and(eq(resources.scope, "player"), eq(resources.scopeId, ctx.playerId), eq(resources.type, INCOME_TYPE)))
+      .limit(1)
+  )[0];
+  const lastMs = existing ? existing.lastUpdatedAt.getTime() : 0;
   const season = seasonAt(now.getTime(), ctx.worldStartedMs);
-  const income = Number(incomeRow.amount) + pendingIncome(rows, lastMs, season, now);
+  const income = Number(existing?.amount ?? 0) + pendingIncome(rows, lastMs, season, now);
   const upkeep = continuousUpkeep(rows, lastMs, now);
   const net = income - upkeep;
 
@@ -321,7 +336,11 @@ async function settleWallet(exec: Exec, ctx: ActingContext, rows: BuildingRow[],
     nextWallet = 0;
   }
   await exec.update(playerCharacters).set({ drachmae: Math.round(nextWallet) }).where(eq(playerCharacters.playerId, ctx.playerId));
-  await exec.update(resources).set({ amount: "0", lastUpdatedAt: now }).where(eq(resources.id, incomeRow.id));
+  if (existing) {
+    await exec.update(resources).set({ amount: "0", lastUpdatedAt: now }).where(eq(resources.id, existing.id));
+  } else {
+    await exec.insert(resources).values({ scope: "player", scopeId: ctx.playerId, type: INCOME_TYPE, amount: "0", ratePerSecond: "0", lastUpdatedAt: now });
+  }
   return { income, upkeep, collected: Math.round(net), owed: Math.round(owed) };
 }
 
@@ -520,7 +539,9 @@ export async function mine(classId: string, ctx: ActingContext, now: Date): Prom
 
   // Wallet pending (income − upkeep) is whole-account, not per building.
   const incomeRow = byType.get(INCOME_TYPE);
-  const lastMs = incomeRow ? incomeRow.lastUpdatedAt.getTime() : now.getTime();
+  // No marker yet → backdate per-building to completesAt (lastMs 0), so pending
+  // offering income shows in the Ledger before the first collect, like goods do.
+  const lastMs = incomeRow ? incomeRow.lastUpdatedAt.getTime() : 0;
   const incomePending = pendingIncome(rows, lastMs, season, now) + Number(incomeRow?.amount ?? 0);
   const upkeep = continuousUpkeep(rows, lastMs, now);
   const charRows = await db.select({ drachmae: playerCharacters.drachmae }).from(playerCharacters).where(eq(playerCharacters.playerId, ctx.playerId)).limit(1);

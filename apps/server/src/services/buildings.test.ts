@@ -169,6 +169,65 @@ suite("Ledger / building engine (integration)", () => {
     expect(await goodBalance("horse")).toBe(0); // waived → nothing consumed
   });
 
+  it("a PRIEST builds the Sanctuary; collect banks BOTH offering drachmae (wallet) and herbal (resources); upgrade raises both", async () => {
+    // The priest path rides the exact same generic engine as the landowner.
+    playerId = await freshPlayer(100, "priest");
+    const c = await ctx();
+
+    const built = await m.buildings.build("priest", c, "sanctuary", new Date(T0));
+    expect(built.ok).toBe(true);
+    if (built.ok) expect(built.cost).toBe(100);
+    expect(await wallet()).toBe(0);
+
+    // OFFLINE jump: constructs in 1 day, then ~1 day active (guarded → full output).
+    const collectAt = new Date(T0 + 2 * DAY);
+    const view = await m.buildings.mine("priest", c, collectAt);
+    expect(view.buildings[0]!.status).toBe("active");
+    expect(view.pendingGoods.herbal).toBeGreaterThan(3.5);
+    expect(view.pendingIncomeTotal).toBeGreaterThan(5.5); // offering drachmae pending
+
+    const collected = await m.buildings.collect(c, collectAt);
+    // Offering income banks into the integer wallet (income 6/day, T1 upkeep 0 → never negative).
+    expect(collected.collected).toBeGreaterThanOrEqual(5);
+    expect(collected.collected).toBeLessThanOrEqual(7);
+    expect(await wallet()).toBe(collected.collected);
+    // Herbal banks into resources like grain.
+    expect(collected.banked.herbal).toBeCloseTo(4, 0);
+    expect(await goodBalance("herbal")).toBeCloseTo(4, 0);
+
+    // Herbal sells on the vendor band (exists + trades, no deadlock).
+    const sell = await m.buildings.vendorTrade(c, "sell", "herbal", 4, collectAt);
+    expect(sell.ok).toBe(true);
+
+    // Upgrade to Temple Precinct (T2) lifts both yields on the curve.
+    await setWallet(300);
+    const up = await m.buildings.upgrade(c, "sanctuary", new Date(T0 + 5 * DAY));
+    expect(up.ok).toBe(true);
+    if (up.ok) expect(up.tier).toBe(2);
+    expect(await wallet()).toBe(50); // 300 − 250
+  });
+
+  it("the class gate is generic: a non-priest cannot build the Sanctuary, and a priest cannot build the Estate", async () => {
+    // Landowner barred from the priest's line.
+    const landCtx = await ctx();
+    const landTriesSanctuary = await m.buildings.build("landowner", landCtx, "sanctuary", new Date(T0));
+    expect(landTriesSanctuary.ok).toBe(false);
+    if (!landTriesSanctuary.ok) expect(landTriesSanctuary.code).toBe(403);
+
+    // Priest barred from the landowner's line.
+    playerId = await freshPlayer(100, "priest");
+    const priestCtx = await ctx();
+    const priestTriesEstate = await m.buildings.build("priest", priestCtx, "estate", new Date(T0));
+    expect(priestTriesEstate.ok).toBe(false);
+    if (!priestTriesEstate.ok) expect(priestTriesEstate.code).toBe(403);
+
+    // The priest's own class-section slot is the labelled "Rites" placeholder (Step 2 pilgrimages).
+    const priestMine = await m.buildings.mine("priest", priestCtx, new Date(T0));
+    expect(priestMine.classSection.label).toBe("Rites");
+    expect(priestMine.classSection.entries).toEqual([]);
+    expect(priestMine.classSection.comingSoon).toBe(true);
+  });
+
   it("slaves cannot build; the class-section slot is labelled+empty for non-landowners, null for the landowner", async () => {
     const c = await ctx();
     // Landowner: no class section (the land is the business).
