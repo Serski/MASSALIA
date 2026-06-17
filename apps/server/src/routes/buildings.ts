@@ -7,6 +7,7 @@ import {
   buildingContext,
   catalog,
   collect,
+  hirePops,
   mine,
   upgrade,
   vendorTrade,
@@ -114,6 +115,27 @@ export async function buildingRoutes(app: FastifyInstance) {
       return { error: "action ('buy'|'sell'), type, and qty are required." };
     }
     const result = await vendorTrade(a.ctx, body.action, body.type, body.qty, new Date());
+    if (!result.ok) {
+      reply.code(result.code);
+      return { error: result.error };
+    }
+    return result;
+  });
+
+  // Hire pops into the shared staffing pool (Phase 3). Body: { popType, count }.
+  app.post("/hire", async (request, reply) => {
+    const user = await requireAuth(request);
+    const a = await acting(user.id);
+    if ("error" in a) {
+      reply.code(a.code);
+      return { error: a.error };
+    }
+    const body = request.body as { popType?: string; count?: number } | undefined;
+    if (!body?.popType || body.count === undefined) {
+      reply.code(400);
+      return { error: "popType and count are required." };
+    }
+    const result = await hirePops(a.ctx, body.popType, body.count, new Date());
     if (!result.ok) {
       reply.code(result.code);
       return { error: result.error };

@@ -16,6 +16,7 @@ import {
   goodCategoryFor,
   goodPerDay,
   isGuarded,
+  materialCostForTier,
   MAX_TIER,
   parseBuildingsContent,
   parsePopsContent,
@@ -87,6 +88,7 @@ type ResolvedDef = {
   composurePerDay: number;
   storageBonus: number;
   staffing?: Partial<Record<PopType, number>>; // T1 pop requirement (scales via staffCountForTier)
+  buildCost?: { materials: Record<string, number> }; // T1 material bill (scales via materialCostForTier)
   cost(tier: number): number;
   buildDays(tier: number): number;
   upkeep(tier: number): number;
@@ -109,6 +111,7 @@ export function resolveDef(buildingId: string): ResolvedDef | null {
       composurePerDay: 0,
       storageBonus: 0,
       staffing: cls.staffing,
+      buildCost: cls.buildCost,
       cost: (tier) => buildingCost(tier),
       buildDays: (tier) => buildingBuildDays(tier),
       upkeep: (tier) => buildingUpkeep(tier),
@@ -126,6 +129,7 @@ export function resolveDef(buildingId: string): ResolvedDef | null {
       composurePerDay: common.composurePerDay ?? 0,
       storageBonus: common.storageBonus ?? 0,
       staffing: common.staffing,
+      buildCost: common.buildCost,
       cost: () => common.cost,
       buildDays: () => common.buildDays,
       upkeep: () => 0,
@@ -744,9 +748,65 @@ export async function mine(classId: string, ctx: ActingContext, now: Date): Prom
   };
 }
 
+// --- Construction spend (Phase 3) --------------------------------------------
+// Building/upgrading to a tier costs drachmae (the buildingCost curve, UNCHANGED)
+// AND materials (def.buildCost.materials scaled by materialCostForTier), and
+// requires the player to already OWN the staff (staffCountForTier per type) — pops
+// are a prerequisite, never spent. Everything is validated BEFORE any debit, so a
+// rejection mutates nothing; the debit runs inside the caller's transaction, so an
+// unexpected mid-debit failure rolls the whole build back (no half-charged builds).
+
+// Material bill (good -> qty) for a building at a tier, scaled on the curve.
+function materialsForTier(def: ResolvedDef, tier: number): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [good, base] of Object.entries(def.buildCost?.materials ?? {})) out[good] = materialCostForTier(base, tier);
+  return out;
+}
+
+type SpendError = { ok: false; code: number; error: string };
+
+// Within a tx: validate wallet + materials + the owned-staff prerequisite, then
+// debit drachmae + materials (pops untouched). Returns a SpendError to abort with
+// nothing mutated, or null after a successful atomic debit. `goods` is the player's
+// resource balances captured for the material checks; `owned` their pop counts.
+async function chargeConstruction(
+  tx: Exec,
+  ctx: ActingContext,
+  def: ResolvedDef,
+  tier: number,
+  drachmaeCost: number,
+  now: Date,
+): Promise<SpendError | null> {
+  const charRows = await tx.select({ drachmae: playerCharacters.drachmae }).from(playerCharacters).where(eq(playerCharacters.playerId, ctx.playerId)).limit(1);
+  const wallet = charRows[0]?.drachmae ?? 0;
+  if (wallet < drachmaeCost) return { ok: false, code: 402, error: `You need ${drachmaeCost} drachmae for this — you have ${wallet}.` };
+
+  const need = materialsForTier(def, tier);
+  const balByType = new Map((await resourceRows(tx, ctx.playerId)).map((r) => [r.type, Number(r.amount)]));
+  for (const [good, qty] of Object.entries(need)) {
+    const have = balByType.get(good) ?? 0;
+    if (have < qty) return { ok: false, code: 402, error: `You need ${qty} ${good} for this — you have ${Math.floor(have)} (short ${Math.ceil(qty - have)}).` };
+  }
+
+  const owned = await popCountsFor(tx, ctx.playerId);
+  for (const [type, qty] of Object.entries(staffNeed(def, tier)) as [PopType, number][]) {
+    const have = owned[type] ?? 0;
+    if (have < qty) return { ok: false, code: 409, error: `You must own ${qty} ${type} to staff this — you have ${have}. Hire more first.` };
+  }
+
+  // All checks passed → debit drachmae + every material (pops are NOT consumed).
+  await tx.update(playerCharacters).set({ drachmae: wallet - drachmaeCost }).where(eq(playerCharacters.playerId, ctx.playerId));
+  for (const [good, qty] of Object.entries(need)) {
+    if (qty <= 0) continue;
+    const row = await getOrCreateResource(tx, ctx.playerId, good, now);
+    await tx.update(resources).set({ amount: String(Number(row.amount) - qty) }).where(eq(resources.id, row.id));
+  }
+  return null;
+}
+
 // --- Build / upgrade ---------------------------------------------------------
 
-export type BuildResult = { ok: false; code: number; error: string } | { ok: true; buildingId: string; tier: number; completesAt: string; cost: number };
+export type BuildResult = { ok: false; code: number; error: string } | { ok: true; buildingId: string; tier: number; completesAt: string; cost: number; materials: Record<string, number> };
 
 export async function build(classId: string, ctx: ActingContext, buildingId: string, now: Date): Promise<BuildResult> {
   if (!canBuild(classId)) return { ok: false, code: 403, error: "A slave owns no land — earn your freedom first." };
@@ -762,12 +822,11 @@ export async function build(classId: string, ctx: ActingContext, buildingId: str
   return db.transaction(async (tx) => {
     const existing = await tx.select().from(playerBuildings).where(and(eq(playerBuildings.ownerPlayerId, ctx.playerId), eq(playerBuildings.buildingId, buildingId))).limit(1);
     if (existing[0]) return { ok: false as const, code: 409, error: "You already hold that building." };
-    const charRows = await tx.select({ drachmae: playerCharacters.drachmae }).from(playerCharacters).where(eq(playerCharacters.playerId, ctx.playerId)).limit(1);
-    const wallet = charRows[0]?.drachmae ?? 0;
-    if (wallet < cost) return { ok: false as const, code: 402, error: `You need ${cost} drachmae to build this.` };
-    await tx.update(playerCharacters).set({ drachmae: wallet - cost }).where(eq(playerCharacters.playerId, ctx.playerId));
+    // Validate + atomically debit drachmae + materials + assert the staff prereq.
+    const spend = await chargeConstruction(tx, ctx, def, 1, cost, now);
+    if (spend) return spend;
     await tx.insert(playerBuildings).values({ worldId: ctx.worldId, ownerPlayerId: ctx.playerId, buildingId, tier: 1, status: "constructing", completesAt });
-    return { ok: true as const, buildingId, tier: 1, completesAt: completesAt.toISOString(), cost };
+    return { ok: true as const, buildingId, tier: 1, completesAt: completesAt.toISOString(), cost, materials: materialsForTier(def, 1) };
   });
 }
 
@@ -784,13 +843,50 @@ export async function upgrade(ctx: ActingContext, buildingId: string, now: Date)
     if (row.tier >= def.maxTier) return { ok: false as const, code: 409, error: "Already at the highest tier." };
     const nextTier = row.tier + 1;
     const cost = def.cost(nextTier);
+    // Scaled material bill + the HIGHER staff requirement for the next tier.
+    const spend = await chargeConstruction(tx, ctx, def, nextTier, cost, now);
+    if (spend) return spend;
+    const completesAt = new Date(now.getTime() + buildMs(nextTier));
+    await tx.update(playerBuildings).set({ tier: nextTier, status: "constructing", completesAt }).where(eq(playerBuildings.id, row.id));
+    return { ok: true as const, buildingId, tier: nextTier, completesAt: completesAt.toISOString(), cost, materials: materialsForTier(def, nextTier) };
+  });
+}
+
+// --- Hiring (POST /api/buildings/hire) ---------------------------------------
+// Hire N pops of a type: debit hireCost × N (from pops.json) and increment the
+// player_pops count. Atomic; rejects if the wallet is short. Pops are owned, not
+// consumed — staffing/upkeep read this count. No sell-back/release in this phase.
+
+export type HireResult =
+  | { ok: false; code: number; error: string }
+  | { ok: true; popType: string; hired: number; unitCost: number; total: number; wallet: number; owned: number };
+
+export async function hirePops(ctx: ActingContext, popType: string, count: number, _now: Date): Promise<HireResult> {
+  if (!Number.isInteger(count) || count <= 0) return { ok: false, code: 400, error: "Hire a whole, positive number of people." };
+  const popsC = getPopsContent();
+  const def = popsC.pops[popType as PopType];
+  if (!def) return { ok: false, code: 404, error: "The agora hires no such people." };
+  const total = def.hireCost * count;
+
+  return db.transaction(async (tx) => {
     const charRows = await tx.select({ drachmae: playerCharacters.drachmae }).from(playerCharacters).where(eq(playerCharacters.playerId, ctx.playerId)).limit(1);
     const wallet = charRows[0]?.drachmae ?? 0;
-    if (wallet < cost) return { ok: false as const, code: 402, error: `You need ${cost} drachmae to upgrade.` };
-    const completesAt = new Date(now.getTime() + buildMs(nextTier));
-    await tx.update(playerCharacters).set({ drachmae: wallet - cost }).where(eq(playerCharacters.playerId, ctx.playerId));
-    await tx.update(playerBuildings).set({ tier: nextTier, status: "constructing", completesAt }).where(eq(playerBuildings.id, row.id));
-    return { ok: true as const, buildingId, tier: nextTier, completesAt: completesAt.toISOString(), cost };
+    if (wallet < total) return { ok: false as const, code: 402, error: `Hiring ${count} ${popType} costs ${total} drachmae — you have ${wallet}.` };
+    await tx.update(playerCharacters).set({ drachmae: wallet - total }).where(eq(playerCharacters.playerId, ctx.playerId));
+    const existing = await tx
+      .select()
+      .from(playerPops)
+      .where(and(eq(playerPops.worldId, ctx.worldId), eq(playerPops.ownerPlayerId, ctx.playerId), eq(playerPops.popType, popType)))
+      .limit(1);
+    let owned: number;
+    if (existing[0]) {
+      owned = existing[0].count + count;
+      await tx.update(playerPops).set({ count: owned }).where(eq(playerPops.id, existing[0].id));
+    } else {
+      owned = count;
+      await tx.insert(playerPops).values({ worldId: ctx.worldId, ownerPlayerId: ctx.playerId, popType, count });
+    }
+    return { ok: true as const, popType, hired: count, unitCost: def.hireCost, total, wallet: wallet - total, owned };
   });
 }
 

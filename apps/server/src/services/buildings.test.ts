@@ -29,18 +29,32 @@ suite("Ledger / building engine (integration)", () => {
   let worldId: string;
   let playerId: string;
 
-  // Phase 2: buildings now need staff (pops) to produce. By default seed a generous
-  // shared pool so existing production scenarios stay staffed; pass `pops` to control
-  // staffing precisely (e.g. {} to force under-staffing).
-  async function freshPlayer(drachmae = 100, classId = "landowner", pops: Record<string, number> = { slave: 10, freeman: 10, citizen: 10 }) {
-    const { users, players, playerCharacters, playerPops } = m.dbPkg;
+  // Phase 2: buildings need staff (pops) to produce. Phase 3: build/upgrade also
+  // spends materials + requires owning the staff. By default seed a generous pop
+  // pool AND a material stock so existing build/produce scenarios pass; pass `pops`
+  // / `materials` to control them (e.g. {} to force a shortfall).
+  async function freshPlayer(
+    drachmae = 100,
+    classId = "landowner",
+    pops: Record<string, number> = { slave: 10, freeman: 10, citizen: 10 },
+    materials: Record<string, number> = { timber: 500, stone: 500, iron: 500, marble: 500, wool: 500, leather: 500 },
+  ) {
+    const { users, players, playerCharacters, playerPops, resources } = m.dbPkg;
     const user = (await db.insert(users).values({ email: `u-${Math.random().toString(36).slice(2)}@t`, passwordHash: "x" }).returning())[0]!;
     const player = (await db.insert(players).values({ worldId, userId: user.id, name: "P", color: "#123456", houseSlug: "test-house" }).returning())[0]!;
     await db.insert(playerCharacters).values({ playerId: player.id, worldId, houseSlug: "test-house", classId, drachmae, startAge: 30, deathAge: 90 });
     for (const [popType, count] of Object.entries(pops)) {
       if (count > 0) await db.insert(playerPops).values({ worldId, ownerPlayerId: player.id, popType, count });
     }
+    for (const [type, amount] of Object.entries(materials)) {
+      if (amount > 0) await db.insert(resources).values({ scope: "player", scopeId: player.id, type, amount: String(amount), ratePerSecond: "0", lastUpdatedAt: new Date(T0) });
+    }
     return player.id;
+  }
+
+  async function popBalance(type: string) {
+    const rows = await db.select().from(m.dbPkg.playerPops).where(and(eq(m.dbPkg.playerPops.ownerPlayerId, playerId), eq(m.dbPkg.playerPops.popType, type))).limit(1);
+    return rows[0]?.count ?? 0;
   }
 
   async function ctx() {
@@ -394,13 +408,17 @@ suite("Ledger / building engine (integration)", () => {
   });
 
   it("(c) an under-staffed building idles — no income/yield — but still owes building upkeep", async () => {
-    // A landowner with NO pops can't staff the estate. Take it to T2 (upkeep 1 dr/day),
-    // then it idles: zero grain, zero income, but the flat building upkeep still bites.
-    playerId = await freshPlayer(400, "landowner", {}); // no pops at all
+    // Build + upgrade the estate to T2 (upkeep 1 dr/day) while owning the 2 slaves it
+    // needs. Then a slave is lost (freed/dead — simulated here by dropping the pool to
+    // 1). Now under-staffed, the estate idles: zero grain, zero income, but the flat
+    // building upkeep still bites.
+    playerId = await freshPlayer(500, "landowner", { slave: 2 });
     const c = await ctx();
     await m.buildings.build("landowner", c, "estate", new Date(T0));
     const up = await m.buildings.upgrade(c, "estate", new Date(T0 + 5 * DAY)); // → T2, completes T0+7
     expect(up.ok).toBe(true);
+    // Lose a slave: the pool (1) now falls short of the estate's T2 need (2).
+    await db.update(m.dbPkg.playerPops).set({ count: 1 }).where(and(eq(m.dbPkg.playerPops.ownerPlayerId, playerId), eq(m.dbPkg.playerPops.popType, "slave")));
 
     // The Ledger shows it idled: produces nothing, but its building upkeep is unchanged.
     const view = await m.buildings.mine("landowner", c, new Date(T0 + 10 * DAY));
@@ -418,5 +436,122 @@ suite("Ledger / building engine (integration)", () => {
     expect(collected.staffUpkeep).toBe(0); // idled → no crew to pay
     expect(collected.upkeep).toBeGreaterThan(0); // building upkeep still owed
     expect(collected.idled).toContain("estate");
+  });
+
+  // --- Phase 3: construction spend (materials + drachmae) + hiring -----------
+
+  it("(P3a) build is rejected — and nothing mutated — when drachmae, materials, OR pops are short", async () => {
+    const noBuilding = async () => (await db.select().from(m.dbPkg.playerBuildings).where(eq(m.dbPkg.playerBuildings.ownerPlayerId, playerId))).length === 0;
+
+    // (i) Insufficient drachmae: estate T1 costs 100; give 50. Materials + slaves are present.
+    playerId = await freshPlayer(50, "landowner");
+    let c = await ctx();
+    const poorWallet = await m.buildings.build("landowner", c, "estate", new Date(T0));
+    expect(poorWallet.ok).toBe(false);
+    if (!poorWallet.ok) expect(poorWallet.code).toBe(402);
+    expect(await wallet()).toBe(50); // not debited
+    expect(await goodBalance("timber")).toBe(500); // materials untouched
+    expect(await noBuilding()).toBe(true); // no row created (rolled back)
+
+    // (ii) Insufficient materials: plenty of drachmae + slaves, but no timber/stone.
+    playerId = await freshPlayer(1000, "landowner", { slave: 10, freeman: 10, citizen: 10 }, {});
+    c = await ctx();
+    const noMats = await m.buildings.build("landowner", c, "estate", new Date(T0));
+    expect(noMats.ok).toBe(false);
+    if (!noMats.ok) expect(noMats.code).toBe(402);
+    expect(await wallet()).toBe(1000); // drachmae NOT debited despite being sufficient
+    expect(await noBuilding()).toBe(true);
+
+    // (iii) Insufficient pops: plenty of drachmae + materials, but no slaves.
+    playerId = await freshPlayer(1000, "landowner", {});
+    c = await ctx();
+    const noPops = await m.buildings.build("landowner", c, "estate", new Date(T0));
+    expect(noPops.ok).toBe(false);
+    if (!noPops.ok) expect(noPops.code).toBe(409); // own-staff prerequisite
+    expect(await wallet()).toBe(1000); // nothing debited
+    expect(await goodBalance("timber")).toBe(500);
+    expect(await noBuilding()).toBe(true);
+  });
+
+  it("(P3b) happy build debits drachmae + exactly the right materials, creates the building, consumes NO pops", async () => {
+    playerId = await freshPlayer(100, "landowner"); // estate T1: 100dr, {timber:8, stone:6}, needs 2 slaves owned
+    const c = await ctx();
+    const slavesBefore = await popBalance("slave"); // 10
+
+    const built = await m.buildings.build("landowner", c, "estate", new Date(T0));
+    expect(built.ok).toBe(true);
+    if (built.ok) {
+      expect(built.cost).toBe(100);
+      expect(built.materials).toEqual({ timber: 8, stone: 6 }); // T1 material bill (content-driven)
+    }
+    expect(await wallet()).toBe(0); // 100 − 100
+    expect(await goodBalance("timber")).toBe(492); // 500 − 8
+    expect(await goodBalance("stone")).toBe(494); // 500 − 6
+    expect(await popBalance("slave")).toBe(slavesBefore); // pops are a prerequisite, NOT consumed
+    const rows = await db.select().from(m.dbPkg.playerBuildings).where(eq(m.dbPkg.playerBuildings.ownerPlayerId, playerId));
+    expect(rows).toHaveLength(1);
+  });
+
+  it("(P3c) upgrade debits the SCALED material cost and enforces the higher staff requirement", async () => {
+    // Estate T1→T2 scales materials by 1.8×: timber 8→14, stone 6→11 (rounded). T2
+    // still needs 2 slaves. Build with 2 slaves, then check the upgrade prereq bites
+    // when short, and the scaled spend when met.
+    playerId = await freshPlayer(1000, "landowner", { slave: 2 });
+    const c = await ctx();
+    await m.buildings.build("landowner", c, "estate", new Date(T0)); // T1: 100dr, 8 timber, 6 stone
+    const timberAfterBuild = await goodBalance("timber"); // 492
+    const stoneAfterBuild = await goodBalance("stone"); // 494
+    const walletAfterBuild = await wallet(); // 900
+
+    const up = await m.buildings.upgrade(c, "estate", new Date(T0 + 2 * DAY));
+    expect(up.ok).toBe(true);
+    if (up.ok) {
+      expect(up.tier).toBe(2);
+      expect(up.cost).toBe(250); // buildingCost(2)
+      expect(up.materials).toEqual({ timber: 14, stone: 11 }); // 8×1.8=14.4→14, 6×1.8=10.8→11
+    }
+    expect(await wallet()).toBe(walletAfterBuild - 250);
+    expect(await goodBalance("timber")).toBe(timberAfterBuild - 14);
+    expect(await goodBalance("stone")).toBe(stoneAfterBuild - 11);
+
+    // Now a tier whose staff need exceeds the pool: lose a slave, the T2→T3 upgrade
+    // (needs 3 slaves) is rejected on the staffing prerequisite — nothing mutated.
+    await db.update(m.dbPkg.playerPops).set({ count: 2 }).where(and(eq(m.dbPkg.playerPops.ownerPlayerId, playerId), eq(m.dbPkg.playerPops.popType, "slave")));
+    const walletBefore = await wallet();
+    const timberBefore = await goodBalance("timber");
+    const blocked = await m.buildings.upgrade(c, "estate", new Date(T0 + 10 * DAY)); // T2 active (completes T0+4)
+    expect(blocked.ok).toBe(false);
+    if (!blocked.ok) expect(blocked.code).toBe(409); // T3 needs 3 slaves, own 2
+    expect(await wallet()).toBe(walletBefore); // not debited
+    expect(await goodBalance("timber")).toBe(timberBefore); // materials untouched
+    const row = (await db.select().from(m.dbPkg.playerBuildings).where(eq(m.dbPkg.playerBuildings.ownerPlayerId, playerId)).limit(1))[0]!;
+    expect(row.tier).toBe(2); // still T2 — upgrade rolled back
+  });
+
+  it("(P3d) hire debits hireCost × N and increments the pop count; rejected when the wallet is short", async () => {
+    // slave hireCost is 49 (content). Hire 2 → 98 dr, +2 slaves.
+    playerId = await freshPlayer(100, "landowner", {}); // start with no slaves
+    const c = await ctx();
+    expect(await popBalance("slave")).toBe(0);
+
+    const hired = await m.buildings.hirePops(c, "slave", 2, new Date(T0));
+    expect(hired.ok).toBe(true);
+    if (hired.ok) {
+      expect(hired.unitCost).toBe(49); // from pops.json
+      expect(hired.total).toBe(98);
+      expect(hired.owned).toBe(2);
+    }
+    expect(await wallet()).toBe(2); // 100 − 98
+    expect(await popBalance("slave")).toBe(2);
+
+    // Hiring again increments the existing row (not a duplicate); rejected when short.
+    const broke = await m.buildings.hirePops(c, "slave", 1, new Date(T0)); // needs 49, have 2
+    expect(broke.ok).toBe(false);
+    if (!broke.ok) expect(broke.code).toBe(402);
+    expect(await wallet()).toBe(2); // unchanged
+    expect(await popBalance("slave")).toBe(2); // unchanged
+
+    const rows = await db.select().from(m.dbPkg.playerPops).where(and(eq(m.dbPkg.playerPops.ownerPlayerId, playerId), eq(m.dbPkg.playerPops.popType, "slave")));
+    expect(rows).toHaveLength(1); // single row, count incremented in place
   });
 });
