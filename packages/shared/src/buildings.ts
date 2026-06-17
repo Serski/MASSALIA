@@ -70,7 +70,20 @@ export type BuildingsContent = {
   commonBuildings: CommonBuildingDef[];
   vendor: Record<string, VendorBand>;
   seasonal: SeasonalConfig;
+  craft?: Record<string, CraftRecipe>;
+  goodLabels?: Record<string, string>; // display names for the market (IDs stay stable)
 };
+
+// A craftable shop good (trade-ship / galley): which building+tier unlocks it,
+// and the material recipe. By design the recipe's raw vendor-sell value sits
+// BELOW the good's own vendor sell price (crafting beats buying — see craftRawCost).
+export type CraftRecipe = { building: string; tier: number; recipe: Record<string, number> };
+
+// People market — pops you hire to staff buildings. Each carries a one-time hire
+// cost, a daily drachmae upkeep (the minus), and a daily food draw (foodGood).
+export type PopType = "slave" | "freeman" | "citizen";
+export type PopDef = { label: string; hireCost: number; upkeepPerDay: number; foodPerDay: number; civic: boolean };
+export type PopsContent = { foodGood: string; pops: Record<PopType, PopDef> };
 
 export type ClassBuildingTier = { tier: number; name: string; rank?: string };
 export type BuildingYieldDef = { good: string; base: number; fromTier?: number };
@@ -81,6 +94,8 @@ export type ClassBuildingDef = {
   tiers: ClassBuildingTier[];
   yields: BuildingYieldDef[];
   income?: number; // drachmae/day at tier 1 (scales with yield curve); 0/absent for goods lines
+  buildCost?: { materials: Record<string, number> }; // T1 material bill (scales via materialCostForTier)
+  staffing?: Partial<Record<PopType, number>>; // T1 pop requirement (scales via staffCountForTier)
   flavor?: string;
 };
 
@@ -93,6 +108,8 @@ export type CommonBuildingDef = {
   buildDays: number;
   yields: BuildingYieldDef[];
   income?: number; // drachmae/day (e.g. future trade buildings); 0/absent here
+  buildCost?: { materials: Record<string, number> };
+  staffing?: Partial<Record<PopType, number>>;
   composurePerDay?: number; // flat, never scales (Household Shrine)
   storageBonus?: number; // capacity contribution (Harbor Warehouse); light enforcement
   blurb: string;
@@ -115,6 +132,17 @@ const buildingCategory = z.enum(["agricultural", "yearround"]);
 const yieldDefSchema = z.object({ good: z.string(), base: z.number(), fromTier: z.number().int().positive().optional() }).strict();
 const seasonalCoeffSchema = z.object({ production: z.number(), price: z.number() }).strict();
 
+// Economy v2.1 — construction materials + pop staffing (content-driven, IDs stable).
+const materialsSchema = z.record(z.string(), z.number().int().positive());
+const buildCostSchema = z.object({ materials: materialsSchema }).strict();
+const staffingSchema = z
+  .object({
+    slave: z.number().int().nonnegative().optional(),
+    freeman: z.number().int().nonnegative().optional(),
+    citizen: z.number().int().nonnegative().optional(),
+  })
+  .strict();
+
 const classBuildingSchema = z
   .object({
     id: z.string(),
@@ -122,6 +150,8 @@ const classBuildingSchema = z
     tiers: z.array(z.object({ tier: z.number().int().positive(), name: z.string(), rank: z.string().optional() }).strict()).length(MAX_TIER),
     yields: z.array(yieldDefSchema),
     income: z.number().optional(),
+    buildCost: buildCostSchema.optional(),
+    staffing: staffingSchema.optional(),
     flavor: z.string().optional(),
   })
   .strict();
@@ -136,6 +166,8 @@ const commonBuildingSchema = z
     buildDays: z.number().int().positive(),
     yields: z.array(yieldDefSchema),
     income: z.number().optional(),
+    buildCost: buildCostSchema.optional(),
+    staffing: staffingSchema.optional(),
     composurePerDay: z.number().optional(),
     storageBonus: z.number().optional(),
     blurb: z.string(),
@@ -154,6 +186,13 @@ export const buildingsContentSchema = z
         coefficients: z.record(buildingCategory, z.record(seasonName, seasonalCoeffSchema)),
       })
       .strict(),
+    craft: z
+      .record(
+        z.string(),
+        z.object({ building: z.string(), tier: z.number().int().positive(), recipe: materialsSchema }).strict(),
+      )
+      .optional(),
+    goodLabels: z.record(z.string(), z.string()).optional(),
   })
   .strict();
 
@@ -336,4 +375,67 @@ export function classSectionLabel(classId: string): string | null {
 // Slaves cannot own player buildings (hard mode begins with nothing).
 export function canBuild(classId: string): boolean {
   return classId !== "slave";
+}
+
+// --- Materials, staffing & craft (Economy v2.1, pure) -----------------------
+// Material bills track the YIELD curve (a bigger building eats more to raise);
+// staffing adds a head at T3 and another at T4 — the rising payroll that makes
+// the deliberate T4 ROI dip emerge from the economy instead of a hand-tuned row.
+
+export const MATERIAL_GROWTH = YIELD_GROWTH;
+
+export function materialCostForTier(base: number, tier: number): number {
+  return Math.round(base * MATERIAL_GROWTH ** (tier - 1));
+}
+
+export function staffCountForTier(base: number, tier: number): number {
+  return base + (tier >= 3 ? 1 : 0) + (tier >= 4 ? 1 : 0);
+}
+
+// Raw vendor-sell value of a craft recipe (what the materials would cost at the
+// NPC ceiling). The design invariant: this is < the crafted good's own sell band,
+// so the shipbuilder always beats buying — proven in the test suite.
+export function craftRawCost(recipe: Record<string, number>, vendor: Record<string, VendorBand>): number {
+  return Object.entries(recipe).reduce((sum, [good, qty]) => sum + qty * (vendor[good]?.sell ?? 0), 0);
+}
+
+// --- People (pops) content --------------------------------------------------
+
+const popDefSchema = z
+  .object({
+    label: z.string(),
+    hireCost: z.number().int().nonnegative(),
+    upkeepPerDay: z.number().nonnegative(),
+    foodPerDay: z.number().nonnegative(),
+    civic: z.boolean(),
+  })
+  .strict();
+
+export const popsContentSchema = z
+  .object({
+    foodGood: z.string(),
+    pops: z.object({ slave: popDefSchema, freeman: popDefSchema, citizen: popDefSchema }).strict(),
+  })
+  .strict();
+
+export function parsePopsContent(data: unknown): PopsContent {
+  return popsContentSchema.parse(data) as PopsContent;
+}
+
+// Daily drachmae upkeep + food (in foodGood units) for a building's staff at a
+// tier. Pure — the accrual path will subtract these alongside building upkeep.
+export function staffDailyCost(
+  staffing: Partial<Record<PopType, number>> | undefined,
+  tier: number,
+  pops: PopsContent,
+): { upkeep: number; food: number } {
+  if (!staffing) return { upkeep: 0, food: 0 };
+  let upkeep = 0;
+  let food = 0;
+  for (const [type, base] of Object.entries(staffing) as [PopType, number][]) {
+    const n = staffCountForTier(base, tier);
+    upkeep += n * pops.pops[type].upkeepPerDay;
+    food += n * pops.pops[type].foodPerDay;
+  }
+  return { upkeep, food };
 }

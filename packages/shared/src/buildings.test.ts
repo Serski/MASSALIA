@@ -17,12 +17,21 @@ import {
   productionMultiplier,
   seasonAt,
   vendorUnitPrice,
+  craftRawCost,
+  materialCostForTier,
+  staffCountForTier,
+  staffDailyCost,
+  parsePopsContent,
   type BuildingsContent,
+  type PopsContent,
 } from "./buildings.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const content: BuildingsContent = parseBuildingsContent(
   JSON.parse(readFileSync(resolve(root, "content/buildings/buildings.json"), "utf8")),
+);
+const pops: PopsContent = parsePopsContent(
+  JSON.parse(readFileSync(resolve(root, "content/people/pops.json"), "utf8")),
 );
 const DAY = 86_400_000;
 const estate = content.classBuildings.landowner!;
@@ -172,11 +181,11 @@ describe("the priest's Sanctuary (a year-round, dual-yield class line on the sam
 
   it("yields BOTH offering drachmae (the income field → wallet) AND herbal (a good)", () => {
     // Drachmae rides the same income path as building_income (no second mechanism).
-    expect(sanctuary.income).toBe(6);
+    expect(sanctuary.income).toBe(7.2); // +20% pass
     const herbal = sanctuary.yields.find((y) => y.good === "herbal")!;
     expect(herbal.base).toBe(4);
     // Both scale on the shared yield curve, tier over tier.
-    expect(buildingYield(sanctuary.income!, 2)).toBeCloseTo(10.8, 6);
+    expect(buildingYield(sanctuary.income!, 2)).toBeCloseTo(12.96, 6);
     expect(goodPerDay(herbal, 2)).toBeCloseTo(7.2, 6);
   });
 
@@ -220,7 +229,7 @@ describe("the four remaining class lines (content-only, same generic frame)", ()
   it("trader: drachmae income 7 + wine stock from tier 2 (reuses the wine good, scales on the curve)", () => {
     expect(trader.id).toBe("emporion");
     expect(trader.category).toBe("yearround");
-    expect(trader.income).toBe(7);
+    expect(trader.income).toBe(9.6);
     const wine = trader.yields.find((y) => y.good === "wine")!;
     expect(wine.fromTier).toBe(2);
     expect(goodPerDay(wine, 1)).toBe(0); // dormant at tier 1
@@ -231,8 +240,8 @@ describe("the four remaining class lines (content-only, same generic frame)", ()
   it("philosopher & hetaira are income-only lines (no tradeable good); their STATS are never goods", () => {
     expect(philosopher.id).toBe("school");
     expect(hetaira.id).toBe("salon");
-    expect(philosopher.income).toBe(6);
-    expect(hetaira.income).toBe(6);
+    expect(philosopher.income).toBe(10.8);
+    expect(hetaira.income).toBe(10.8);
     expect(philosopher.yields).toEqual([]);
     expect(hetaira.yields).toEqual([]);
     // prestige / intelligence are STATS — never registered as tradeable goods.
@@ -242,25 +251,24 @@ describe("the four remaining class lines (content-only, same generic frame)", ()
     expect(seasonal.goodCategory.intelligence).toBeUndefined();
   });
 
-  it("shipbuilder: no passive income — produces the NEW 'ship' good, sailing-season (agricultural)", () => {
+  it("shipbuilder (reworked): earns drachmae income + makes naval-supplies (no longer 'builds ships')", () => {
     expect(shipbuilder.id).toBe("slipway");
-    expect(shipbuilder.category).toBe("agricultural");
-    expect(shipbuilder.income ?? 0).toBe(0);
-    const ship = shipbuilder.yields.find((y) => y.good === "ship")!;
-    expect(ship.base).toBe(1);
-    // Ships are valuable and swing with the season (agricultural production curve).
-    const agSwing = Math.abs(
-      coeffFor(seasonal, "agricultural", "Summer").production - coeffFor(seasonal, "agricultural", "Winter").production,
-    );
-    expect(agSwing).toBeGreaterThan(0.3);
+    expect(shipbuilder.income).toBe(8.4); // +20% pass; was 0
+    const ns = shipbuilder.yields.find((y) => y.good === "naval-supplies")!;
+    expect(ns.base).toBe(1);
+    expect(shipbuilder.yields.find((y) => y.good === "ship")).toBeUndefined(); // ship yield retired
+    expect(vendor.ship).toBeUndefined(); // 'ship' good removed; replaced by trade-ship/galley
   });
 
-  it("the new 'ship' good has a vendor band (high-value, ~2× floor, can't deadlock) and a seasonal category", () => {
-    const band = vendor.ship!;
-    expect(band.sell).toBe(40);
-    expect(band.buy).toBe(20);
-    expect(band.sell / band.buy).toBeLessThanOrEqual(3);
-    expect(seasonal.goodCategory.ship).toBe("agricultural");
+  it("trade-ship & galley are shop-standard goods with vendor bands (~2× floor)", () => {
+    for (const g of ["trade-ship", "galley", "naval-supplies"]) {
+      const band = vendor[g]!;
+      expect(band.sell).toBeGreaterThan(band.buy);
+      expect(band.sell / band.buy).toBeLessThanOrEqual(3);
+    }
+    expect(vendor["trade-ship"]!.sell).toBe(60);
+    expect(vendor.galley!.sell).toBe(120);
+    expect(seasonal.goodCategory["trade-ship"]).toBe("agricultural");
   });
 });
 
@@ -269,5 +277,54 @@ describe("upkeep is a tax, not a treadmill", () => {
     expect(buildingUpkeep(1)).toBe(0);
     // A day of T2 income (≈10.8 grain ≈ 10dr) dwarfs its 1dr/day upkeep.
     expect(buildingUpkeep(2)).toBeLessThan(buildingYield(6, 2) * vendor.grain!.buy);
+  });
+});
+
+
+describe("Economy v2.1 — materials, staffing, craft & pops", () => {
+  it("every class building carries a material bill and a pop requirement", () => {
+    for (const def of Object.values(content.classBuildings)) {
+      expect(def.buildCost?.materials).toBeTruthy();
+      expect(Object.keys(def.buildCost!.materials).length).toBeGreaterThan(0);
+      expect(def.staffing).toBeTruthy();
+      expect(Object.values(def.staffing!).reduce((a, b) => a + (b ?? 0), 0)).toBeGreaterThan(0);
+    }
+  });
+
+  it("material bills track the yield curve; staffing adds a head at T3 and T4", () => {
+    expect(materialCostForTier(8, 1)).toBe(8);
+    expect(materialCostForTier(8, 2)).toBe(14); // 8 × 1.8
+    expect(staffCountForTier(2, 1)).toBe(2);
+    expect(staffCountForTier(2, 3)).toBe(3);
+    expect(staffCountForTier(2, 4)).toBe(4);
+  });
+
+  it("CRAFT RULE — every craft recipe costs less than the good's own NPC sell price", () => {
+    for (const [good, c] of Object.entries(content.craft!)) {
+      expect(craftRawCost(c.recipe, vendor)).toBeLessThan(vendor[good]!.sell);
+    }
+    // shipbuilder-gated
+    expect(content.craft!["trade-ship"]!.building).toBe("slipway");
+    expect(content.craft!["trade-ship"]!.tier).toBe(3);
+    expect(content.craft!.galley!.tier).toBe(4);
+  });
+
+  it("pops: hire cost is the -30% set, all pops draw food, only freeman/citizen are civic", () => {
+    expect(pops.pops.slave.hireCost).toBe(49);
+    expect(pops.pops.freeman.hireCost).toBe(28);
+    expect(pops.pops.citizen.hireCost).toBe(84);
+    expect([pops.pops.slave, pops.pops.freeman, pops.pops.citizen].every((p) => p.foodPerDay === 1)).toBe(true);
+    expect(pops.pops.slave.civic).toBe(false);
+    expect(pops.foodGood).toBe("grain"); // wheat (display label)
+  });
+
+  it("staff daily cost scales with tier (the rising payroll that bites T4 ROI)", () => {
+    const estate = content.classBuildings.landowner!; // 2 slaves T1
+    const t1 = staffDailyCost(estate.staffing, 1, pops);
+    const t4 = staffDailyCost(estate.staffing, 4, pops);
+    expect(t1.upkeep).toBe(2); // 2 slaves × 1
+    expect(t1.food).toBe(2);
+    expect(t4.upkeep).toBe(4); // 4 slaves × 1 at T4
+    expect(t4.upkeep).toBeGreaterThan(t1.upkeep);
   });
 });

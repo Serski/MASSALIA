@@ -1,0 +1,26 @@
+{
+  "foodGood": "grain",
+  "pops": {
+    "slave": {
+      "label": "Slave",
+      "hireCost": 49,
+      "upkeepPerDay": 1,
+      "foodPerDay": 1,
+      "civic": false
+    },
+    "freeman": {
+      "label": "Freeman",
+      "hireCost": 28,
+      "upkeepPerDay": 2,
+      "foodPerDay": 1,
+      "civic": true
+    },
+    "citizen": {
+      "label": "Citizen",
+      "hireCost": 84,
+      "upkeepPerDay": 3,
+      "foodPerDay": 1,
+      "civic": true
+    }
+  }
+}

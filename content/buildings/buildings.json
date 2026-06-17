@@ -5,86 +5,257 @@
       "category": "agricultural",
       "flavor": "The land is your business — no ledger of clients, only the harvest.",
       "tiers": [
-        { "tier": 1, "name": "Farmstead", "rank": "@Georgos" },
-        { "tier": 2, "name": "Olive Groves", "rank": "@Ktematias" },
-        { "tier": 3, "name": "Great Estate", "rank": "@Protogeorgos" },
-        { "tier": 4, "name": "Chōra (Χώρα)", "rank": "@Mega Georgos" }
+        {
+          "tier": 1,
+          "name": "Farmstead",
+          "rank": "@Georgos"
+        },
+        {
+          "tier": 2,
+          "name": "Olive Groves",
+          "rank": "@Ktematias"
+        },
+        {
+          "tier": 3,
+          "name": "Great Estate",
+          "rank": "@Protogeorgos"
+        },
+        {
+          "tier": 4,
+          "name": "Chōra (Χώρα)",
+          "rank": "@Mega Georgos"
+        }
       ],
       "yields": [
-        { "good": "grain", "base": 6 },
-        { "good": "oliveoil", "base": 2, "fromTier": 3 }
-      ]
+        {
+          "good": "grain",
+          "base": 6
+        },
+        {
+          "good": "oliveoil",
+          "base": 2,
+          "fromTier": 3
+        }
+      ],
+      "income": 6.0,
+      "buildCost": {
+        "materials": {
+          "timber": 8,
+          "stone": 6
+        }
+      },
+      "staffing": {
+        "slave": 2
+      }
     },
     "priest": {
       "id": "sanctuary",
       "category": "yearround",
       "flavor": "The god's house and the physic-garden behind it — offerings fill the bowl, simples grow in the beds. No clients, only the faithful.",
       "tiers": [
-        { "tier": 1, "name": "Roadside Shrine", "rank": "@Neokoros" },
-        { "tier": 2, "name": "Temple Precinct", "rank": "@Hiereus" },
-        { "tier": 3, "name": "Sanctuary of Artemis", "rank": "@Archiereus" },
-        { "tier": 4, "name": "Oracle Seat", "rank": "@Hierophantes" }
+        {
+          "tier": 1,
+          "name": "Roadside Shrine",
+          "rank": "@Neokoros"
+        },
+        {
+          "tier": 2,
+          "name": "Temple Precinct",
+          "rank": "@Hiereus"
+        },
+        {
+          "tier": 3,
+          "name": "Sanctuary of Artemis",
+          "rank": "@Archiereus"
+        },
+        {
+          "tier": 4,
+          "name": "Oracle Seat",
+          "rank": "@Hierophantes"
+        }
       ],
-      "income": 6,
+      "income": 7.2,
       "yields": [
-        { "good": "herbal", "base": 4 }
-      ]
+        {
+          "good": "herbal",
+          "base": 4
+        }
+      ],
+      "buildCost": {
+        "materials": {
+          "marble": 6,
+          "stone": 10
+        }
+      },
+      "staffing": {
+        "citizen": 1
+      }
     },
     "trader": {
       "id": "emporion",
       "category": "yearround",
       "flavor": "A counting-house above the quay — ledgers, scales, and bales of goods carried in from beyond the sea.",
       "tiers": [
-        { "tier": 1, "name": "Market Stall", "rank": "@Kapelos" },
-        { "tier": 2, "name": "Counting House", "rank": "@Emporos" },
-        { "tier": 3, "name": "Trade House", "rank": "@Naukleros" },
-        { "tier": 4, "name": "Emporion of the West", "rank": "@Megemporos" }
+        {
+          "tier": 1,
+          "name": "Market Stall",
+          "rank": "@Kapelos"
+        },
+        {
+          "tier": 2,
+          "name": "Counting House",
+          "rank": "@Emporos"
+        },
+        {
+          "tier": 3,
+          "name": "Trade House",
+          "rank": "@Naukleros"
+        },
+        {
+          "tier": 4,
+          "name": "Emporion of the West",
+          "rank": "@Megemporos"
+        }
       ],
-      "income": 7,
+      "income": 9.6,
       "yields": [
-        { "good": "wine", "base": 2, "fromTier": 2 }
-      ]
+        {
+          "good": "wine",
+          "base": 2,
+          "fromTier": 2
+        }
+      ],
+      "buildCost": {
+        "materials": {
+          "timber": 10,
+          "stone": 6,
+          "iron": 3
+        }
+      },
+      "staffing": {
+        "freeman": 1
+      }
     },
     "philosopher": {
       "id": "school",
       "category": "yearround",
       "flavor": "A school of letters — tuition fills the purse while the arguments fill the agora and raise your name.",
       "tiers": [
-        { "tier": 1, "name": "Stoa Corner", "rank": "@Sophistes" },
-        { "tier": 2, "name": "Private School", "rank": "@Didaskalos" },
-        { "tier": 3, "name": "Academy", "rank": "@Scholarches" },
-        { "tier": 4, "name": "The Lyceum", "rank": "@Philosophos" }
+        {
+          "tier": 1,
+          "name": "Stoa Corner",
+          "rank": "@Sophistes"
+        },
+        {
+          "tier": 2,
+          "name": "Private School",
+          "rank": "@Didaskalos"
+        },
+        {
+          "tier": 3,
+          "name": "Academy",
+          "rank": "@Scholarches"
+        },
+        {
+          "tier": 4,
+          "name": "The Lyceum",
+          "rank": "@Philosophos"
+        }
       ],
-      "income": 6,
-      "yields": []
+      "income": 10.8,
+      "yields": [],
+      "buildCost": {
+        "materials": {
+          "marble": 5,
+          "timber": 6
+        }
+      },
+      "staffing": {
+        "citizen": 1
+      }
     },
     "hetaira": {
       "id": "salon",
       "category": "yearround",
       "flavor": "A salon of wit and company — coin and whispers both change hands across the wine.",
       "tiers": [
-        { "tier": 1, "name": "Rented Rooms", "rank": "@Auletris" },
-        { "tier": 2, "name": "The Salon", "rank": "@Hetaira" },
-        { "tier": 3, "name": "House of Muses", "rank": "@Megale Hetaira" },
-        { "tier": 4, "name": "The Symposion Court", "rank": "@Despoina" }
+        {
+          "tier": 1,
+          "name": "Rented Rooms",
+          "rank": "@Auletris"
+        },
+        {
+          "tier": 2,
+          "name": "The Salon",
+          "rank": "@Hetaira"
+        },
+        {
+          "tier": 3,
+          "name": "House of Muses",
+          "rank": "@Megale Hetaira"
+        },
+        {
+          "tier": 4,
+          "name": "The Symposion Court",
+          "rank": "@Despoina"
+        }
       ],
-      "income": 6,
-      "yields": []
+      "income": 10.8,
+      "yields": [],
+      "buildCost": {
+        "materials": {
+          "timber": 8,
+          "wool": 4,
+          "leather": 3
+        }
+      },
+      "staffing": {
+        "freeman": 1
+      }
     },
     "shipbuilder": {
       "id": "slipway",
-      "category": "agricultural",
+      "category": "yearround",
       "flavor": "A slipway by the harbor — timber becomes hulls, hulls become ships for sale when the sailing season opens.",
       "tiers": [
-        { "tier": 1, "name": "Boat Shed", "rank": "@Naupegos" },
-        { "tier": 2, "name": "Slipway", "rank": "@Architekton" },
-        { "tier": 3, "name": "Small Shipyard", "rank": "@Nauarchos" },
-        { "tier": 4, "name": "Great Shipyard", "rank": "@Meganaupegos" }
+        {
+          "tier": 1,
+          "name": "Boat Shed",
+          "rank": "@Naupegos"
+        },
+        {
+          "tier": 2,
+          "name": "Slipway",
+          "rank": "@Architekton"
+        },
+        {
+          "tier": 3,
+          "name": "Small Shipyard",
+          "rank": "@Nauarchos"
+        },
+        {
+          "tier": 4,
+          "name": "Great Shipyard",
+          "rank": "@Meganaupegos"
+        }
       ],
-      "income": 0,
+      "income": 8.4,
       "yields": [
-        { "good": "ship", "base": 1 }
-      ]
+        {
+          "good": "naval-supplies",
+          "base": 1
+        }
+      ],
+      "buildCost": {
+        "materials": {
+          "timber": 12,
+          "iron": 4,
+          "leather": 3
+        }
+      },
+      "staffing": {
+        "freeman": 2
+      }
     }
   },
   "commonBuildings": [
@@ -95,8 +266,22 @@
       "category": "yearround",
       "cost": 60,
       "buildDays": 1,
-      "yields": [{ "good": "chicken", "base": 2 }],
-      "blurb": "A clutch of hens and a watchful cock. Eggs, birds, and the altar's small needs."
+      "yields": [
+        {
+          "good": "chicken",
+          "base": 2
+        }
+      ],
+      "blurb": "A clutch of hens and a watchful cock. Eggs, birds, and the altar's small needs.",
+      "buildCost": {
+        "materials": {
+          "timber": 3,
+          "stone": 2
+        }
+      },
+      "staffing": {
+        "slave": 1
+      }
     },
     {
       "id": "vineyard",
@@ -105,8 +290,22 @@
       "category": "agricultural",
       "cost": 150,
       "buildDays": 1,
-      "yields": [{ "good": "wine", "base": 2 }],
-      "blurb": "Terraced vines above the harbor. The press runs hardest after the autumn pick."
+      "yields": [
+        {
+          "good": "wine",
+          "base": 2
+        }
+      ],
+      "blurb": "Terraced vines above the harbor. The press runs hardest after the autumn pick.",
+      "buildCost": {
+        "materials": {
+          "timber": 4,
+          "stone": 4
+        }
+      },
+      "staffing": {
+        "slave": 1
+      }
     },
     {
       "id": "timber-lot",
@@ -115,8 +314,21 @@
       "category": "agricultural",
       "cost": 150,
       "buildDays": 1,
-      "yields": [{ "good": "timber", "base": 3 }],
-      "blurb": "A managed stand of pine and oak — hulls, beams, and the shipwright's appetite."
+      "yields": [
+        {
+          "good": "timber",
+          "base": 3
+        }
+      ],
+      "blurb": "A managed stand of pine and oak — hulls, beams, and the shipwright's appetite.",
+      "buildCost": {
+        "materials": {
+          "stone": 4
+        }
+      },
+      "staffing": {
+        "slave": 1
+      }
     },
     {
       "id": "bull-farm",
@@ -125,8 +337,22 @@
       "category": "agricultural",
       "cost": 250,
       "buildDays": 2,
-      "yields": [{ "good": "bull", "base": 0.5 }],
-      "blurb": "Heavy beasts for the plough and the altar. Slow to raise, valued at market."
+      "yields": [
+        {
+          "good": "bull",
+          "base": 0.5
+        }
+      ],
+      "blurb": "Heavy beasts for the plough and the altar. Slow to raise, valued at market.",
+      "buildCost": {
+        "materials": {
+          "timber": 6,
+          "stone": 4
+        }
+      },
+      "staffing": {
+        "slave": 1
+      }
     },
     {
       "id": "horse-farm",
@@ -135,8 +361,22 @@
       "category": "agricultural",
       "cost": 300,
       "buildDays": 2,
-      "yields": [{ "good": "horse", "base": 0.5 }],
-      "blurb": "Paddocks beyond the wall. A horse is a rich man's animal, and the hills know it."
+      "yields": [
+        {
+          "good": "horse",
+          "base": 0.5
+        }
+      ],
+      "blurb": "Paddocks beyond the wall. A horse is a rich man's animal, and the hills know it.",
+      "buildCost": {
+        "materials": {
+          "timber": 6,
+          "stone": 6
+        }
+      },
+      "staffing": {
+        "slave": 1
+      }
     },
     {
       "id": "harbor-warehouse",
@@ -147,7 +387,17 @@
       "buildDays": 2,
       "yields": [],
       "storageBonus": 200,
-      "blurb": "Dry, guarded storage by the quay. Holds more goods against the day the market opens."
+      "blurb": "Dry, guarded storage by the quay. Holds more goods against the day the market opens.",
+      "buildCost": {
+        "materials": {
+          "timber": 8,
+          "stone": 8,
+          "iron": 2
+        }
+      },
+      "staffing": {
+        "freeman": 1
+      }
     },
     {
       "id": "household-shrine",
@@ -158,19 +408,93 @@
       "buildDays": 1,
       "yields": [],
       "composurePerDay": 1,
-      "blurb": "A hearth-altar to the household gods. A steady, modest calm — it never grows beyond it."
+      "blurb": "A hearth-altar to the household gods. A steady, modest calm — it never grows beyond it.",
+      "buildCost": {
+        "materials": {
+          "timber": 2,
+          "stone": 2
+        }
+      },
+      "staffing": {}
     }
   ],
   "vendor": {
-    "chicken": { "sell": 3, "buy": 1 },
-    "wine": { "sell": 5, "buy": 2 },
-    "grain": { "sell": 3, "buy": 1 },
-    "timber": { "sell": 4, "buy": 2 },
-    "bull": { "sell": 25, "buy": 12 },
-    "oliveoil": { "sell": 6, "buy": 3 },
-    "horse": { "sell": 30, "buy": 15 },
-    "herbal": { "sell": 5, "buy": 2 },
-    "ship": { "sell": 40, "buy": 20 }
+    "chicken": {
+      "sell": 3,
+      "buy": 1
+    },
+    "wine": {
+      "sell": 5,
+      "buy": 2
+    },
+    "grain": {
+      "sell": 3,
+      "buy": 1
+    },
+    "timber": {
+      "sell": 4,
+      "buy": 2
+    },
+    "bull": {
+      "sell": 25,
+      "buy": 12
+    },
+    "oliveoil": {
+      "sell": 6,
+      "buy": 3
+    },
+    "horse": {
+      "sell": 30,
+      "buy": 15
+    },
+    "herbal": {
+      "sell": 5,
+      "buy": 2
+    },
+    "stone": {
+      "sell": 4,
+      "buy": 2
+    },
+    "wool": {
+      "sell": 5,
+      "buy": 2
+    },
+    "salt": {
+      "sell": 6,
+      "buy": 3
+    },
+    "leather": {
+      "sell": 6,
+      "buy": 3
+    },
+    "lead": {
+      "sell": 7,
+      "buy": 3
+    },
+    "iron": {
+      "sell": 8,
+      "buy": 4
+    },
+    "marble": {
+      "sell": 12,
+      "buy": 6
+    },
+    "tin": {
+      "sell": 12,
+      "buy": 6
+    },
+    "naval-supplies": {
+      "sell": 14,
+      "buy": 7
+    },
+    "trade-ship": {
+      "sell": 60,
+      "buy": 30
+    },
+    "galley": {
+      "sell": 120,
+      "buy": 60
+    }
   },
   "seasonal": {
     "newPlayerGuardDays": 3,
@@ -183,21 +507,84 @@
       "horse": "agricultural",
       "chicken": "yearround",
       "herbal": "yearround",
-      "ship": "agricultural"
+      "stone": "yearround",
+      "iron": "yearround",
+      "lead": "yearround",
+      "tin": "yearround",
+      "marble": "yearround",
+      "salt": "yearround",
+      "wool": "agricultural",
+      "leather": "agricultural",
+      "naval-supplies": "yearround",
+      "trade-ship": "agricultural",
+      "galley": "agricultural"
     },
     "coefficients": {
       "agricultural": {
-        "Winter": { "production": 0.65, "price": 1.25 },
-        "Spring": { "production": 1.1, "price": 1.05 },
-        "Summer": { "production": 1.25, "price": 0.85 },
-        "Autumn": { "production": 1.0, "price": 0.95 }
+        "Winter": {
+          "production": 0.65,
+          "price": 1.25
+        },
+        "Spring": {
+          "production": 1.1,
+          "price": 1.05
+        },
+        "Summer": {
+          "production": 1.25,
+          "price": 0.85
+        },
+        "Autumn": {
+          "production": 1.0,
+          "price": 0.95
+        }
       },
       "yearround": {
-        "Winter": { "production": 0.95, "price": 1.05 },
-        "Spring": { "production": 1.0, "price": 1.0 },
-        "Summer": { "production": 1.05, "price": 0.98 },
-        "Autumn": { "production": 1.0, "price": 1.0 }
+        "Winter": {
+          "production": 0.95,
+          "price": 1.05
+        },
+        "Spring": {
+          "production": 1.0,
+          "price": 1.0
+        },
+        "Summer": {
+          "production": 1.05,
+          "price": 0.98
+        },
+        "Autumn": {
+          "production": 1.0,
+          "price": 1.0
+        }
       }
     }
+  },
+  "craft": {
+    "trade-ship": {
+      "building": "slipway",
+      "tier": 3,
+      "recipe": {
+        "naval-supplies": 2,
+        "timber": 5,
+        "leather": 1
+      }
+    },
+    "galley": {
+      "building": "slipway",
+      "tier": 4,
+      "recipe": {
+        "naval-supplies": 3,
+        "timber": 8,
+        "iron": 3
+      }
+    }
+  },
+  "goodLabels": {
+    "grain": "Wheat",
+    "timber": "Wood",
+    "herbal": "Herbs",
+    "oliveoil": "Olive Oil",
+    "naval-supplies": "Naval Supplies",
+    "trade-ship": "Trade Ship",
+    "galley": "Galley"
   }
 }
