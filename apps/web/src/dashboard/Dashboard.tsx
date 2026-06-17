@@ -1201,13 +1201,105 @@ function buildCountdown(iso: string | null): string {
   return hours < 24 ? `ready in ${hours}h` : `ready in ${Math.ceil(hours / 24)}d`;
 }
 
-function yieldSummary(yields: { good: string; perDay: number }[]): string {
-  return yields.map((y) => `${y.perDay >= 1 ? Math.round(y.perDay) : y.perDay.toFixed(1)} ${y.good}/day`).join(" · ");
+function formatPerDay(n: number): string {
+  return n >= 1 ? String(Math.round(n)) : n.toFixed(1);
+}
+
+// What a building provides per day: drachmae income first (income-only lines like
+// trader/philosopher/hetaira would otherwise read blank), then each good. Income
+// rides the same rounding as goods and is omitted when there is none (< 1/day).
+function yieldSummary(yields: { good: string; perDay: number }[], income = 0): string {
+  const parts: string[] = [];
+  if (income >= 1) parts.push(`${formatPerDay(income)} dr/day`);
+  for (const y of yields) parts.push(`${formatPerDay(y.perDay)} ${y.good}/day`);
+  return parts.join(" · ");
 }
 
 const GOOD_ICON: Record<string, string> = {
   grain: "🌾", oliveoil: "🫒", wine: "🍷", chicken: "🐔", timber: "🪵", bull: "🐂", horse: "🐎", herbal: "🌿",
 };
+
+// The class building's FULL tier ladder (Your Trade). Generic over every building
+// class — it renders catalog.classBuilding.tiers, so the player sees the whole
+// progression (built ✓ → current → next [BUILD/UPGRADE] → future, greyed) with
+// each tier's provides (income + goods), cost, build time, and upkeep. The
+// build/upgrade action sits on the one buildable "next" tier; the rest are
+// informational. (Hoplite/slave have no class building, so this never renders for
+// them — their Your Trade falls through to the profession/stub path.)
+function ClassBuildingLadder({
+  entry,
+  owned,
+  busy,
+  onBuild,
+  onUpgrade,
+}: {
+  entry: CatalogEntry;
+  owned?: OwnedBuilding;
+  busy: boolean;
+  onBuild: () => void;
+  onUpgrade: () => void;
+}) {
+  const currentTier = owned ? owned.tier : 0; // 0 = not yet built
+  const active = owned?.status === "active";
+  const constructing = owned?.status === "constructing";
+  const maxTier = entry.tiers.length;
+  // The single buildable tier right now: tier 1 if unbuilt; the next tier up if we
+  // own an active building below max; none while constructing or at max tier.
+  const nextTier = !owned ? 1 : active && currentTier < maxTier ? currentTier + 1 : null;
+
+  return (
+    <ol className="tier-ladder">
+      {entry.tiers.map((t) => {
+        const state =
+          t.tier < currentTier
+            ? "built"
+            : t.tier === currentTier
+              ? constructing
+                ? "constructing"
+                : "current"
+              : t.tier === nextTier
+                ? "next"
+                : "future";
+        const isBuilt = t.tier < currentTier || (t.tier === currentTier && active);
+        const provides = yieldSummary(t.yields, t.income) || "—";
+        const tag =
+          state === "built"
+            ? "Built"
+            : state === "current"
+              ? "Current"
+              : state === "constructing"
+                ? "Building"
+                : state === "future"
+                  ? "Locked"
+                  : null;
+        return (
+          <li key={t.tier} className={`tier-step tier-${state}`}>
+            <span className="tier-marker" aria-hidden="true">{isBuilt ? "✓" : t.tier}</span>
+            <div className="tier-body">
+              <div className="tier-head">
+                <span className="tier-name">
+                  Tier {t.tier} · {t.name ?? entry.name}{t.rank ? ` · ${t.rank}` : ""}
+                </span>
+                {tag ? <span className="tier-tag">{tag}</span> : null}
+              </div>
+              <div className="tier-provides">{provides}</div>
+              <div className="tier-meta">
+                {state === "constructing"
+                  ? `under construction · ${buildCountdown(owned?.completesAt ?? null)}`
+                  : `${t.cost}dr · ${t.buildDays}d${t.upkeep > 0 ? ` · upkeep ${t.upkeep}dr/day` : ""}`}
+              </div>
+            </div>
+            {state === "next" ? (
+              <button type="button" className="panel-btn" disabled={busy} onClick={owned ? onUpgrade : onBuild}>
+                {owned ? "Upgrade" : "Build"} · {t.cost}dr
+              </button>
+            ) : null}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
 
 // The class-section slot. Built to render a list of stateful, time-bound, stat-
 // gated entries (the hoplite's future contracts); for now every class's list is
@@ -1616,7 +1708,7 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
       sub={
         b.status === "constructing"
           ? `under construction · ${buildCountdown(b.completesAt)}`
-          : `${yieldSummary(b.yields)}${b.upkeepPerDay > 0 ? ` · upkeep ${b.upkeepPerDay}dr/day` : ""}`
+          : `${yieldSummary(b.yields, b.income)}${b.upkeepPerDay > 0 ? ` · upkeep ${b.upkeepPerDay}dr/day` : ""}`
       }
       tag={b.status === "constructing" ? "building" : undefined}
       action={
@@ -1635,7 +1727,7 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
       ? `+${entry.composurePerDay} composure/day (flat) · ${t1.cost}dr · ${t1.buildDays}d`
       : entry.storageBonus
         ? `+${entry.storageBonus} storage · ${t1.cost}dr · ${t1.buildDays}d`
-        : `${yieldSummary(t1.yields)} · ${t1.cost}dr · ${t1.buildDays}d`;
+        : `${yieldSummary(t1.yields, t1.income)} · ${t1.cost}dr · ${t1.buildDays}d`;
     return (
       <PanelRow
         key={entry.id}
@@ -1685,21 +1777,29 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
       ) : null}
 
       <div className="panel-label">Your Trade</div>
-      <div className="panel-grid2">
-        {classBuilding ? (
-          ownedClass ? ownedRow(ownedClass) : buildableRow(classBuilding)
-        ) : professionTier1 ? (
-          <PanelRow
-            icon="🏛️"
-            title={professionTier1.building}
-            sub={`${professionTier1.benefit} — your class line opens in a later build`}
-            dim
-            tag="soon"
-          />
-        ) : (
-          <PanelRow icon="🛠️" title="No trade line" sub="This path builds standing through the story, not buildings." />
-        )}
-      </div>
+      {classBuilding ? (
+        <ClassBuildingLadder
+          entry={classBuilding}
+          owned={ownedClass}
+          busy={busy}
+          onBuild={() => act(() => api.buildBuilding(classBuilding.id))}
+          onUpgrade={() => act(() => api.upgradeBuilding(classBuilding.id))}
+        />
+      ) : (
+        <div className="panel-grid2">
+          {professionTier1 ? (
+            <PanelRow
+              icon="🏛️"
+              title={professionTier1.building}
+              sub={`${professionTier1.benefit} — your class line opens in a later build`}
+              dim
+              tag="soon"
+            />
+          ) : (
+            <PanelRow icon="🛠️" title="No trade line" sub="This path builds standing through the story, not buildings." />
+          )}
+        </div>
+      )}
 
       <div className="panel-label">Common Buildings</div>
       <div className="panel-grid2">

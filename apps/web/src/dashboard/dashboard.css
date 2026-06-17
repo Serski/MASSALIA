@@ -2542,6 +2542,79 @@
   opacity: 0.55;
 }
 
+/* class building tier ladder (Your Trade) */
+.dashboard-shell .tier-ladder{
+  list-style: none;
+  margin: 0 0 9px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dashboard-shell .tier-step{
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 15px;
+  background: linear-gradient(180deg, rgba(34, 26, 20, 0.7), rgba(20, 15, 11, 0.7));
+  border: 1px solid var(--dash-line);
+  border-radius: 11px;
+}
+.dashboard-shell .tier-step.tier-future{ opacity: 0.5; }
+.dashboard-shell .tier-step.tier-built{ opacity: 0.8; }
+.dashboard-shell .tier-step.tier-current,
+.dashboard-shell .tier-step.tier-next{ border-color: rgba(181, 138, 69, 0.55); }
+.dashboard-shell .tier-marker{
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: 12px;
+  color: var(--dash-stone-dim);
+  background: rgba(181, 138, 69, 0.1);
+  border: 1px solid var(--dash-line);
+  border-radius: 50%;
+}
+.dashboard-shell .tier-built .tier-marker,
+.dashboard-shell .tier-current .tier-marker{
+  color: #1a1208;
+  background: linear-gradient(135deg, var(--dash-gold-bright), var(--dash-bronze));
+  border-color: transparent;
+}
+.dashboard-shell .tier-body{ flex: 1; min-width: 0; }
+.dashboard-shell .tier-head{
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.dashboard-shell .tier-name{
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.dashboard-shell .tier-tag{
+  flex: none;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dash-stone-dim);
+}
+.dashboard-shell .tier-current .tier-tag,
+.dashboard-shell .tier-next .tier-tag{ color: var(--dash-gold-bright); }
+.dashboard-shell .tier-provides{
+  margin-top: 3px;
+  color: var(--dash-stone);
+  font-size: 11px;
+}
+.dashboard-shell .tier-meta{
+  margin-top: 1px;
+  color: var(--dash-stone-dim);
+  font-size: 10.5px;
+}
+
 /* trait chips */
 .dashboard-shell .tchip{
   padding: 2px 8px;
