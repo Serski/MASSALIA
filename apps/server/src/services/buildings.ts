@@ -890,6 +890,63 @@ export async function hirePops(ctx: ActingContext, popType: string, count: numbe
   });
 }
 
+// --- People market (GET /api/buildings/people) -------------------------------
+// Read-only listing of the hireable pop types straight from content/people/pops.json
+// (the hire action itself is POST /api/buildings/hire). No DB read.
+
+export type PeopleView = {
+  foodGood: string;
+  pops: { type: string; label: string; hireCost: number; upkeepPerDay: number; foodPerDay: number; civic: boolean }[];
+};
+
+export function listPops(): PeopleView {
+  const p = getPopsContent();
+  return {
+    foodGood: p.foodGood,
+    pops: Object.entries(p.pops).map(([type, d]) => ({ type, label: d.label, hireCost: d.hireCost, upkeepPerDay: d.upkeepPerDay, foodPerDay: d.foodPerDay, civic: d.civic })),
+  };
+}
+
+// --- Craft (POST /api/buildings/craft) ---------------------------------------
+// Craft one of content.craft (trade-ship / galley): gate on the player owning the
+// recipe's building at tier >= the recipe tier, then consume the recipe materials
+// ATOMICALLY (validate-before-write, same as construction spend) and credit one
+// crafted good to the ledger. Recipes come from content.craft only.
+
+export type CraftResult =
+  | { ok: false; code: number; error: string }
+  | { ok: true; good: string; consumed: Record<string, number>; balance: number };
+
+export async function craft(ctx: ActingContext, good: string, now: Date): Promise<CraftResult> {
+  const c = getBuildingsContent();
+  const recipe = c.craft?.[good];
+  if (!recipe) return { ok: false, code: 404, error: "The yards craft no such thing." };
+
+  return db.transaction(async (tx) => {
+    // Gate: own the recipe's building at a high enough tier.
+    const row = (await tx.select().from(playerBuildings).where(and(eq(playerBuildings.ownerPlayerId, ctx.playerId), eq(playerBuildings.buildingId, recipe.building))).limit(1))[0];
+    if (!row) return { ok: false as const, code: 403, error: `You need a ${recipe.building} to craft a ${good}.` };
+    if (row.tier < recipe.tier) return { ok: false as const, code: 409, error: `Crafting a ${good} needs your ${recipe.building} at tier ${recipe.tier} — yours is tier ${row.tier}.` };
+
+    // Validate the whole recipe BEFORE consuming anything.
+    const balByType = new Map((await resourceRows(tx, ctx.playerId)).map((r) => [r.type, Number(r.amount)]));
+    for (const [g, qty] of Object.entries(recipe.recipe)) {
+      const have = balByType.get(g) ?? 0;
+      if (have < qty) return { ok: false as const, code: 402, error: `Crafting a ${good} needs ${qty} ${g} — you have ${Math.floor(have)} (short ${Math.ceil(qty - have)}).` };
+    }
+
+    // Consume the recipe, credit one crafted good.
+    for (const [g, qty] of Object.entries(recipe.recipe)) {
+      const r = await getOrCreateResource(tx, ctx.playerId, g, now);
+      await tx.update(resources).set({ amount: String(Number(r.amount) - qty) }).where(eq(resources.id, r.id));
+    }
+    const out = await getOrCreateResource(tx, ctx.playerId, good, now);
+    const balance = Number(out.amount) + 1;
+    await tx.update(resources).set({ amount: String(balance) }).where(eq(resources.id, out.id));
+    return { ok: true as const, good, consumed: recipe.recipe, balance };
+  });
+}
+
 // --- Collect (POST /api/buildings/collect) ----------------------------------
 // Sweep all owned buildings: bank goods into inventory, settle income − upkeep
 // into the wallet (clamped, owed-flagged), and apply the shrine's flat composure.

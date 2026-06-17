@@ -7,7 +7,9 @@ import {
   buildingContext,
   catalog,
   collect,
+  craft,
   hirePops,
+  listPops,
   mine,
   upgrade,
   vendorTrade,
@@ -115,6 +117,33 @@ export async function buildingRoutes(app: FastifyInstance) {
       return { error: "action ('buy'|'sell'), type, and qty are required." };
     }
     const result = await vendorTrade(a.ctx, body.action, body.type, body.qty, new Date());
+    if (!result.ok) {
+      reply.code(result.code);
+      return { error: result.error };
+    }
+    return result;
+  });
+
+  // The People market: list the hireable pop types + their content numbers (read).
+  app.get("/people", async (request) => {
+    await requireAuth(request);
+    return listPops();
+  });
+
+  // Craft a shop good from content.craft (Phase 4). Body: { good }.
+  app.post("/craft", async (request, reply) => {
+    const user = await requireAuth(request);
+    const a = await acting(user.id);
+    if ("error" in a) {
+      reply.code(a.code);
+      return { error: a.error };
+    }
+    const good = (request.body as { good?: string } | undefined)?.good;
+    if (!good) {
+      reply.code(400);
+      return { error: "A good to craft is required." };
+    }
+    const result = await craft(a.ctx, good, new Date());
     if (!result.ok) {
       reply.code(result.code);
       return { error: result.error };

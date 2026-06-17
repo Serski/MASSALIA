@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeAll, beforeEach } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
+import { craftRawCost, goodCategoryFor, seasonAt, vendorUnitPrice } from "@massalia/shared";
 
 // ---------------------------------------------------------------------------
 // The Ledger / player economy (Economy Build 1) — integration tests against a
@@ -368,25 +369,43 @@ suite("Ledger / building engine (integration)", () => {
 
   // --- Phase 2: staffing as the counterweight ------------------------------
 
-  it("(a) staff wages + food are a real cost: the shipbuilder's cash income alone can't cover its crew → owed > 0", async () => {
-    // The slipway needs 2 freemen (4 dr/day wages) and feeds them (2 food/day, bought
-    // from the NPC since it grows no grain). That daily cost exceeds its 8.4 dr/day
-    // cash income — the shipbuilder must SELL its naval-supplies to come out ahead.
-    playerId = await freshPlayer(100, "shipbuilder"); // plenty of freemen to staff it
+  it("(a) the rebalanced slipway (1 freeman) covers its own keep on cash income alone — staff + food < income", async () => {
+    // Phase 4 balance fix: the slipway now needs 1 freeman (2 dr/day wages + 1 food/day),
+    // so its 8.4 dr/day cash income covers its keep — naval-supplies are a bonus on top,
+    // matching every other class (was a 2-freeman cash deficit before).
+    playerId = await freshPlayer(100, "shipbuilder");
     const c = await ctx();
     await m.buildings.build("shipbuilder", c, "slipway", new Date(T0));
     expect(await wallet()).toBe(0);
 
-    // Collect a long window with an empty purse: income is banked, then staff wages +
-    // food eat all of it and more — the shortfall is forgiven as `owed`.
     const collected = await m.buildings.collect(c, new Date(T0 + 12 * DAY));
-    expect(collected.staffUpkeep).toBeGreaterThan(0); // crew wages charged
-    expect(collected.income).toBeGreaterThan(0); // gross cash income is positive…
-    // …yet staffing (wages + food) exceeds it, so net wallet is 0 and a shortfall is owed.
-    expect(collected.staffUpkeep + collected.foodCost).toBeGreaterThan(collected.income);
-    expect(collected.owed).toBeGreaterThan(0);
+    expect(collected.staffUpkeep).toBeGreaterThan(0); // crew wages still charged
+    expect(collected.income).toBeGreaterThan(0);
+    // …and the cash income now EXCEEDS wages + food (the keep is self-covering).
+    expect(collected.staffUpkeep + collected.foodCost).toBeLessThan(collected.income);
+    expect(collected.owed).toBe(0); // no shortfall
+    expect(await wallet()).toBeGreaterThan(0); // income net of keep is banked
+    expect(collected.banked["naval-supplies"]).toBeGreaterThan(0); // goods are a bonus on top
+  });
+
+  it("(a2) the deficit still bites a building that runs SHORT: an under-staffed estate with an empty purse owes building upkeep it can't pay (owed > 0)", async () => {
+    // Own the 2 slaves to build + upgrade the estate to T2 (1 dr/day upkeep), then lose
+    // one. Now under-staffed, it idles (no income/yield) — yet the flat building upkeep
+    // keeps accruing, and with an empty purse it can't be paid → forgiven as `owed`.
+    playerId = await freshPlayer(500, "landowner", { slave: 2 });
+    const c = await ctx();
+    await m.buildings.build("landowner", c, "estate", new Date(T0));
+    await m.buildings.upgrade(c, "estate", new Date(T0 + 5 * DAY)); // → T2, completes T0+7
+    await db.update(m.dbPkg.playerPops).set({ count: 1 }).where(and(eq(m.dbPkg.playerPops.ownerPlayerId, playerId), eq(m.dbPkg.playerPops.popType, "slave")));
+    await setWallet(0);
+
+    const collected = await m.buildings.collect(c, new Date(T0 + 27 * DAY)); // long window
+    expect(collected.idled).toContain("estate"); // under-staffed → idled
+    expect(collected.income).toBe(0); // no income
+    expect(collected.staffUpkeep).toBe(0); // idled → no crew to pay
+    expect(collected.upkeep).toBeGreaterThan(0); // building upkeep still accrues
+    expect(collected.owed).toBeGreaterThan(0); // can't pay it → forgiven shortfall
     expect(await wallet()).toBe(0); // never negative
-    expect(collected.banked["naval-supplies"]).toBeGreaterThan(0); // it still produced goods to sell
   });
 
   it("(b) food draws from wheat stock first, then auto-buys the shortfall from the NPC (wallet debited)", async () => {
@@ -553,5 +572,99 @@ suite("Ledger / building engine (integration)", () => {
 
     const rows = await db.select().from(m.dbPkg.playerPops).where(and(eq(m.dbPkg.playerPops.ownerPlayerId, playerId), eq(m.dbPkg.playerPops.popType, "slave")));
     expect(rows).toHaveLength(1); // single row, count incremented in place
+  });
+
+  // --- Phase 4: NPC market (all goods) + People surface + craft --------------
+
+  it("(P4-A) the NPC market trades EVERY vendor good generically — iron + naval-supplies, at vendorUnitPrice (ceiling buy / floor sell)", async () => {
+    const content = m.buildings.getBuildingsContent();
+    const season = seasonAt(T0, T0); // world started at T0 → opening Winter
+    playerId = await freshPlayer(500, "landowner"); // materials seeded (iron 500)
+    const c = await ctx();
+
+    // SELL iron at the seasonal FLOOR (the price comes straight from vendorUnitPrice).
+    const ironFloor = vendorUnitPrice(content.vendor.iron!, "sell", content.seasonal, goodCategoryFor(content.seasonal, "iron"), season);
+    const sell = await m.buildings.vendorTrade(c, "sell", "iron", 10, new Date(T0));
+    expect(sell.ok).toBe(true);
+    if (sell.ok) {
+      expect(sell.unitPrice).toBe(ironFloor);
+      expect(sell.total).toBe(ironFloor * 10);
+    }
+    expect(await goodBalance("iron")).toBe(490);
+
+    // BUY naval-supplies at the seasonal CEILING (a Phase-2 craft input good, fully tradeable).
+    const navalCeiling = vendorUnitPrice(content.vendor["naval-supplies"]!, "buy", content.seasonal, goodCategoryFor(content.seasonal, "naval-supplies"), season);
+    const buy = await m.buildings.vendorTrade(c, "buy", "naval-supplies", 2, new Date(T0));
+    expect(buy.ok).toBe(true);
+    if (buy.ok) {
+      expect(buy.unitPrice).toBe(navalCeiling);
+      expect(buy.unitPrice).toBeGreaterThan(ironFloor); // ceiling > floor, generically
+    }
+    expect(await goodBalance("naval-supplies")).toBe(2);
+  });
+
+  it("(P4-B) the People market lists all three pop types with the content numbers", () => {
+    const view = m.buildings.listPops();
+    expect(view.foodGood).toBe("grain");
+    expect(view.pops.map((p) => p.type).sort()).toEqual(["citizen", "freeman", "slave"]);
+    const slave = view.pops.find((p) => p.type === "slave")!;
+    expect(slave).toMatchObject({ label: "Slave", hireCost: 49, upkeepPerDay: 1, foodPerDay: 1, civic: false });
+    const citizen = view.pops.find((p) => p.type === "citizen")!;
+    expect(citizen).toMatchObject({ hireCost: 84, upkeepPerDay: 3, foodPerDay: 1, civic: true });
+  });
+
+  it("(P4-C0) every craft recipe is cheaper to make than to buy: craftRawCost < the good's vendor sell", () => {
+    const content = m.buildings.getBuildingsContent();
+    for (const [good, recipe] of Object.entries(content.craft ?? {})) {
+      expect(craftRawCost(recipe.recipe, content.vendor)).toBeLessThan(content.vendor[good]!.sell);
+    }
+  });
+
+  it("(P4-C) craft is gated by building+tier, consumes the recipe atomically, credits the good; rolls back on a shortfall", async () => {
+    // A non-shipbuilder owns no slipway → 403.
+    playerId = await freshPlayer(100, "landowner");
+    let c = await ctx();
+    const noYard = await m.buildings.craft(c, "trade-ship", new Date(T0));
+    expect(noYard.ok).toBe(false);
+    if (!noYard.ok) expect(noYard.code).toBe(403);
+
+    // A shipbuilder with only a tier-1 slipway is under tier (trade-ship needs T3) → 409,
+    // and nothing is consumed.
+    playerId = await freshPlayer(2000, "shipbuilder");
+    c = await ctx();
+    await m.buildings.build("shipbuilder", c, "slipway", new Date(T0));
+    await db.insert(m.dbPkg.resources).values({ scope: "player", scopeId: playerId, type: "naval-supplies", amount: "10", ratePerSecond: "0", lastUpdatedAt: new Date(T0) });
+    const navalBefore = await goodBalance("naval-supplies");
+    const underTier = await m.buildings.craft(c, "trade-ship", new Date(T0 + DAY));
+    expect(underTier.ok).toBe(false);
+    if (!underTier.ok) expect(underTier.code).toBe(409);
+    expect(await goodBalance("naval-supplies")).toBe(navalBefore); // nothing consumed
+
+    // Take the slipway to T3, then craft a trade-ship: consumes EXACTLY the recipe
+    // {naval-supplies:2, timber:5, leather:1} and credits one trade-ship.
+    await m.buildings.upgrade(c, "slipway", new Date(T0 + 2 * DAY)); // → T2 (completes T0+4)
+    await m.buildings.upgrade(c, "slipway", new Date(T0 + 6 * DAY)); // → T3 (completes T0+10)
+    const timberBefore = await goodBalance("timber");
+    const leatherBefore = await goodBalance("leather");
+    const crafted = await m.buildings.craft(c, "trade-ship", new Date(T0 + 20 * DAY));
+    expect(crafted.ok).toBe(true);
+    if (crafted.ok) {
+      expect(crafted.consumed).toEqual({ "naval-supplies": 2, timber: 5, leather: 1 });
+      expect(crafted.balance).toBe(1);
+    }
+    expect(await goodBalance("trade-ship")).toBe(1);
+    expect(await goodBalance("naval-supplies")).toBe(navalBefore - 2);
+    expect(await goodBalance("timber")).toBe(timberBefore - 5);
+    expect(await goodBalance("leather")).toBe(leatherBefore - 1);
+
+    // Rollback proof: drain naval-supplies, craft again → 402 and NOTHING consumed
+    // (validate-before-write — timber is untouched even though it was sufficient).
+    await db.update(m.dbPkg.resources).set({ amount: "0" }).where(and(eq(m.dbPkg.resources.scope, "player"), eq(m.dbPkg.resources.scopeId, playerId), eq(m.dbPkg.resources.type, "naval-supplies")));
+    const timberNow = await goodBalance("timber");
+    const short = await m.buildings.craft(c, "trade-ship", new Date(T0 + 21 * DAY));
+    expect(short.ok).toBe(false);
+    if (!short.ok) expect(short.code).toBe(402);
+    expect(await goodBalance("timber")).toBe(timberNow); // not consumed on the failed craft
+    expect(await goodBalance("trade-ship")).toBe(1); // still just the one
   });
 });
