@@ -88,21 +88,23 @@ suite("Ledger / building engine (integration)", () => {
     const collected = await m.buildings.collect(c, collectAt);
     expect(collected.banked.grain).toBeCloseTo(6, 1);
     expect(await goodBalance("grain")).toBeCloseTo(6, 1);
-    // T1 upkeep is 0 → wallet untouched, never negative.
-    expect(await wallet()).toBe(0);
+    // Economy v2.1: the landowner now earns 6 dr/day income (T1 upkeep 0), so one
+    // guarded day banks 6 dr into the wallet — still never negative.
+    expect(await wallet()).toBe(6);
   });
 
   it("vendor band trades are atomic (sell grain for floor, buy chicken at ceiling)", async () => {
     const c = await ctx();
     await m.buildings.build("landowner", c, "estate", new Date(T0));
     const t = new Date(T0 + 2 * DAY);
-    await m.buildings.collect(c, t); // bank ~6 grain
+    await m.buildings.collect(c, t); // banks ~6 grain into resources + 6 dr income into the wallet (v2.1)
 
     const sell = await m.buildings.vendorTrade(c, "sell", "grain", 5, t);
     expect(sell.ok).toBe(true);
     if (sell.ok) {
       expect(sell.total).toBe(sell.unitPrice * 5);
-      expect(await wallet()).toBe(sell.total);
+      // The collect already banked 6 dr of landowner income; the grain sale adds on top.
+      expect(await wallet()).toBe(6 + sell.total);
       expect(await goodBalance("grain")).toBeCloseTo(1, 1);
     }
 
@@ -127,14 +129,18 @@ suite("Ledger / building engine (integration)", () => {
     if (up.ok) expect(up.tier).toBe(2);
     expect(await wallet()).toBe(50); // 300 − 250
 
-    // First collect creates the wallet marker (upkeep 0). Drain the purse so the
-    // next collect's upkeep would go negative, and confirm it clamps at 0.
+    // First collect creates the wallet marker. Drain the purse, then collect after a
+    // long window. Under economy v2.1 the landowner's T2 income (10.8 dr/day) far
+    // exceeds the gentle 1 dr/day upkeep, so the net is positive: upkeep is still
+    // deducted, `owed` stays 0 (nothing forgiven), and the wallet never goes negative.
+    // (A non-zero `owed` is unreachable via any class building now — every line earns
+    // income above its upkeep at every tier — so the clamp stays a defensive guard.)
     await m.buildings.collect(c, new Date(T0 + 8 * DAY)); // T2 active (completes T0+7d)
     await setWallet(0);
     const collected = await m.buildings.collect(c, new Date(T0 + 28 * DAY));
-    expect(collected.upkeep).toBeGreaterThan(0); // ~20 days × 1dr/day
-    expect(collected.owed).toBeGreaterThan(0); // shortfall forgiven, not carried as debt
-    expect(await wallet()).toBe(0); // never negative
+    expect(collected.upkeep).toBeGreaterThan(0); // gentle tax still computed (~20 days × 1dr/day)
+    expect(collected.owed).toBe(0); // income covers upkeep → nothing forgiven
+    expect(await wallet()).toBeGreaterThan(0); // net income (after upkeep) banked; never negative
   });
 
   it("routine consumption: missing good rejects; fee credits the world treasury; waiver zeroes the cost", async () => {
@@ -265,7 +271,7 @@ suite("Ledger / building engine (integration)", () => {
     }
   });
 
-  it("a SHIPBUILDER earns no passive income but produces 'ship' goods into resources; ships trade on the vendor band", async () => {
+  it("a SHIPBUILDER earns passive income AND produces 'naval-supplies' goods into resources; they trade on the vendor band", async () => {
     playerId = await freshPlayer(100, "shipbuilder");
     const c = await ctx();
 
@@ -276,16 +282,16 @@ suite("Ledger / building engine (integration)", () => {
     const collectAt = new Date(T0 + 2 * DAY);
     const view = await m.buildings.mine("shipbuilder", c, collectAt);
     expect(view.buildings[0]!.status).toBe("active");
-    expect(view.pendingGoods.ship).toBeGreaterThan(0.8); // ~1 ship/day, guarded full output
-    expect(view.pendingIncomeTotal).toBeLessThan(1); // income 0 — no passive drachmae
+    expect(view.pendingGoods["naval-supplies"]).toBeGreaterThan(0.8); // ~1/day, guarded full output
+    expect(view.pendingIncomeTotal).toBeGreaterThan(8); // income 8.4/day → ~8.4 after one guarded day
 
     const collected = await m.buildings.collect(c, collectAt);
-    expect(collected.collected).toBe(0); // no income to bank
-    expect(collected.banked.ship).toBeCloseTo(1, 0);
-    expect(await goodBalance("ship")).toBeCloseTo(1, 0);
+    expect(collected.collected).toBe(8); // round(8.4 income − 0 upkeep)
+    expect(collected.banked["naval-supplies"]).toBeCloseTo(1, 0);
+    expect(await goodBalance("naval-supplies")).toBeCloseTo(1, 0);
 
-    // Ships sell to the vendor at the seasonal floor (exists + trades, no deadlock).
-    const sell = await m.buildings.vendorTrade(c, "sell", "ship", 1, collectAt);
+    // Naval supplies sell to the vendor at the seasonal floor (exists + trades, no deadlock).
+    const sell = await m.buildings.vendorTrade(c, "sell", "naval-supplies", 1, collectAt);
     expect(sell.ok).toBe(true);
     if (sell.ok) expect(sell.total).toBeGreaterThan(0);
   });
