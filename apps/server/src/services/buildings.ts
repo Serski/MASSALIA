@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, eq } from "drizzle-orm";
-import { createDb, playerBuildings, playerCharacters, resources, worldTreasury, worlds } from "@massalia/db";
+import { createDb, playerBuildings, playerCharacters, playerPops, resources, worldTreasury, worlds } from "@massalia/db";
 import {
   accruedUnits,
   buildingCost,
@@ -18,15 +18,20 @@ import {
   isGuarded,
   MAX_TIER,
   parseBuildingsContent,
+  parsePopsContent,
   productionMultiplier,
   ratePerSecond,
   seasonAt,
+  staffCountForTier,
+  staffDailyCost,
   vendorUnitPrice,
   wholeDaysBetween,
   type BuildingCategory,
   type BuildingsContent,
   type BuildingYieldDef,
   type ClassSection,
+  type PopsContent,
+  type PopType,
   type SeasonName,
   type VendorAction,
 } from "@massalia/shared";
@@ -39,10 +44,12 @@ type Exec = DbTx | typeof db;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../../..");
 const buildingsFile = path.join(repoRoot, "content/buildings/buildings.json");
+const popsFile = path.join(repoRoot, "content/people/pops.json");
 
 const MS_PER_DAY = 86_400_000;
 
 let content: BuildingsContent | null = null;
+let pops: PopsContent | null = null;
 
 // Validate the building catalog at boot (fail fast on a malformed file); memoized.
 export async function loadBuildingsContent(): Promise<BuildingsContent> {
@@ -53,6 +60,17 @@ export async function loadBuildingsContent(): Promise<BuildingsContent> {
 export function getBuildingsContent(): BuildingsContent {
   if (!content) throw new Error("Building content not loaded. Call loadBuildingsContent() at boot.");
   return content;
+}
+
+// The pops catalog (hireCost / upkeep / food per pop type) drives staffing costs.
+export async function loadPopsContent(): Promise<PopsContent> {
+  pops = parsePopsContent(JSON.parse(await fs.readFile(popsFile, "utf8")));
+  return pops;
+}
+
+export function getPopsContent(): PopsContent {
+  if (!pops) throw new Error("Pops content not loaded. Call loadPopsContent() at boot.");
+  return pops;
 }
 
 // --- Normalized definition resolution --------------------------------------
@@ -68,6 +86,7 @@ type ResolvedDef = {
   income: number; // drachmae/day at tier 1 (0 for goods/utility lines)
   composurePerDay: number;
   storageBonus: number;
+  staffing?: Partial<Record<PopType, number>>; // T1 pop requirement (scales via staffCountForTier)
   cost(tier: number): number;
   buildDays(tier: number): number;
   upkeep(tier: number): number;
@@ -89,6 +108,7 @@ export function resolveDef(buildingId: string): ResolvedDef | null {
       income: cls.income ?? 0,
       composurePerDay: 0,
       storageBonus: 0,
+      staffing: cls.staffing,
       cost: (tier) => buildingCost(tier),
       buildDays: (tier) => buildingBuildDays(tier),
       upkeep: (tier) => buildingUpkeep(tier),
@@ -105,6 +125,7 @@ export function resolveDef(buildingId: string): ResolvedDef | null {
       income: common.income ?? 0,
       composurePerDay: common.composurePerDay ?? 0,
       storageBonus: common.storageBonus ?? 0,
+      staffing: common.staffing,
       cost: () => common.cost,
       buildDays: () => common.buildDays,
       upkeep: () => 0,
@@ -172,6 +193,7 @@ function isActive(row: BuildingRow, now: Date): boolean {
 type ResourceRow = typeof resources.$inferSelect;
 const INCOME_TYPE = "building_income"; // wallet (income − upkeep) accrual marker
 const SHRINE_TYPE = "building_shrine"; // shrine composure (whole-day) marker
+const STAFF_TYPE = "building_staff"; // staff upkeep + food (whole-day) marker
 
 async function resourceRows(exec: Exec, playerId: string): Promise<ResourceRow[]> {
   return exec.select().from(resources).where(and(eq(resources.scope, "player"), eq(resources.scopeId, playerId)));
@@ -191,6 +213,73 @@ async function getOrCreateResource(exec: Exec, playerId: string, type: string, n
   return inserted[0]!;
 }
 
+// --- Staffing (Phase 2): shared-pool allocation + under-staffing -------------
+// Pops the player owns (player_pops) are a SHARED POOL across all their active
+// buildings. Each active building needs staffCountForTier(base, tier) of each pop
+// type (content-driven). When the pool can't cover everything, we keep the
+// highest NET-VALUE buildings staffed and idle the rest:
+//   net daily value = gross (income + Σ goods × vendor floor)
+//                     − costs (building upkeep + staff upkeep + food × wheat floor),
+// at the building's tier and the current season. Ranked descending; the pool is
+// allocated greedily top-down (ties broken by buildingId for determinism). A
+// building that can't be fully staffed from the remaining pool is IDLED — it
+// produces nothing this read (no goods, no income) but STILL owes building upkeep.
+
+async function popCountsFor(exec: Exec, playerId: string): Promise<Record<string, number>> {
+  const rows = await exec.select().from(playerPops).where(eq(playerPops.ownerPlayerId, playerId));
+  const out: Record<string, number> = {};
+  for (const r of rows) out[r.popType] = r.count;
+  return out;
+}
+
+// Per-type staff a building needs at a tier (empty when it has no staffing).
+function staffNeed(def: ResolvedDef, tier: number): Partial<Record<PopType, number>> {
+  const need: Partial<Record<PopType, number>> = {};
+  if (!def.staffing) return need;
+  for (const [type, base] of Object.entries(def.staffing) as [PopType, number][]) {
+    need[type] = staffCountForTier(base, tier);
+  }
+  return need;
+}
+
+// Gross-minus-cost daily value used only to RANK buildings for the shared pool
+// (season-adjusted, guard ignored — ranking, not accrual).
+function netDailyValue(def: ResolvedDef, tier: number, season: SeasonName): number {
+  const c = getBuildingsContent();
+  const prodMult = coeffFor(c.seasonal, def.category, season).production;
+  let gross = incomeAtTier(def, tier) * prodMult;
+  for (const y of def.yields) gross += goodPerDay(y, tier) * prodMult * (c.vendor[y.good]?.buy ?? 0);
+  const staff = staffDailyCost(def.staffing, tier, getPopsContent());
+  const wheatFloor = c.vendor[getPopsContent().foodGood]?.buy ?? 0;
+  return gross - (def.upkeep(tier) + staff.upkeep + staff.food * wheatFloor);
+}
+
+// The ids of active buildings that idle this read because the shared pop pool
+// can't staff them (highest net-value buildings keep the pops).
+function idledBuildingIds(activeRows: BuildingRow[], owned: Record<string, number>, season: SeasonName): Set<string> {
+  const pool: Record<string, number> = { ...owned };
+  const idled = new Set<string>();
+  const ranked = [...activeRows].sort((a, b) => {
+    const diff = netDailyValue(resolveDef(b.buildingId)!, b.tier, season) - netDailyValue(resolveDef(a.buildingId)!, a.tier, season);
+    return diff !== 0 ? diff : a.buildingId.localeCompare(b.buildingId);
+  });
+  for (const row of ranked) {
+    const need = staffNeed(resolveDef(row.buildingId)!, row.tier);
+    const canStaff = (Object.entries(need) as [PopType, number][]).every(([type, n]) => (pool[type] ?? 0) >= n);
+    if (canStaff) for (const [type, n] of Object.entries(need) as [PopType, number][]) pool[type] = (pool[type] ?? 0) - n;
+    else idled.add(row.id);
+  }
+  return idled;
+}
+
+// Resolve the idle set for a player at `now` (reads the shared pool once).
+async function staffingFor(exec: Exec, ctx: ActingContext, rows: BuildingRow[], now: Date): Promise<Set<string>> {
+  const active = rows.filter((r) => isActive(r, now));
+  if (active.length === 0) return new Set();
+  const owned = await popCountsFor(exec, ctx.playerId);
+  return idledBuildingIds(active, owned, seasonAt(now.getTime(), ctx.worldStartedMs));
+}
+
 // --- Goods accrual (banked on collect / vendor) ------------------------------
 // Aggregate pending output per good across all active buildings (each against its
 // own marker + completesAt + seasonal/guard), then write each good row once. The
@@ -204,11 +293,12 @@ function computeGoodsAccrual(
   byType: Map<string, ResourceRow>,
   season: SeasonName,
   now: Date,
+  idled: Set<string> = new Set(),
 ): Map<string, GoodAccrual> {
   const c = getBuildingsContent();
   const out = new Map<string, GoodAccrual>();
   for (const row of rows) {
-    if (!isActive(row, now)) continue;
+    if (!isActive(row, now) || idled.has(row.id)) continue; // under-staffed → produces nothing
     const def = resolveDef(row.buildingId);
     if (!def) continue;
     const prodMult = productionMultiplier(c.seasonal, def.category, season, row.completesAt.getTime(), now.getTime());
@@ -233,11 +323,12 @@ function computeGoodsAccrual(
 
 // Bank all pending goods into their resource rows (advances the goods markers).
 // Returns the per-good banked amount for the collect summary.
-export async function settleGoods(exec: Exec, ctx: ActingContext, rows: BuildingRow[], now: Date): Promise<Record<string, number>> {
+export async function settleGoods(exec: Exec, ctx: ActingContext, rows: BuildingRow[], now: Date, idled?: Set<string>): Promise<Record<string, number>> {
   const season = seasonAt(now.getTime(), ctx.worldStartedMs);
+  const idledIds = idled ?? (await staffingFor(exec, ctx, rows, now));
   const existing = await resourceRows(exec, ctx.playerId);
   const byType = new Map(existing.map((r) => [r.type, r]));
-  const accrual = computeGoodsAccrual(rows, byType, season, now);
+  const accrual = computeGoodsAccrual(rows, byType, season, now, idledIds);
   const banked: Record<string, number> = {};
   for (const [good, { banked: amount, baseRatePerSec }] of accrual) {
     const rowRes = byType.get(good) ?? (await getOrCreateResource(exec, ctx.playerId, good, now));
@@ -255,10 +346,11 @@ export async function settleGoods(exec: Exec, ctx: ActingContext, rows: Building
 export async function availableGood(ctx: ActingContext, goodType: string, now: Date): Promise<number> {
   const rows = await ownedRows(db, ctx.playerId);
   const season = seasonAt(now.getTime(), ctx.worldStartedMs);
+  const idled = await staffingFor(db, ctx, rows, now);
   const existing = await resourceRows(db, ctx.playerId);
   const byType = new Map(existing.map((r) => [r.type, r]));
   const banked = Number(byType.get(goodType)?.amount ?? 0);
-  const pending = computeGoodsAccrual(rows, byType, season, now).get(goodType)?.banked ?? 0;
+  const pending = computeGoodsAccrual(rows, byType, season, now, idled).get(goodType)?.banked ?? 0;
   return banked + pending;
 }
 
@@ -297,10 +389,10 @@ function continuousUpkeep(rows: BuildingRow[], lastMs: number, now: Date): numbe
     }, 0);
 }
 
-function pendingIncome(rows: BuildingRow[], lastMs: number, season: SeasonName, now: Date): number {
+function pendingIncome(rows: BuildingRow[], lastMs: number, season: SeasonName, now: Date, idled: Set<string> = new Set()): number {
   const c = getBuildingsContent();
   return rows
-    .filter((r) => isActive(r, now))
+    .filter((r) => isActive(r, now) && !idled.has(r.id)) // under-staffed → no income
     .reduce((sum, r) => {
       const def = resolveDef(r.buildingId);
       if (!def || def.income <= 0) return sum;
@@ -311,7 +403,7 @@ function pendingIncome(rows: BuildingRow[], lastMs: number, season: SeasonName, 
     }, 0);
 }
 
-async function settleWallet(exec: Exec, ctx: ActingContext, rows: BuildingRow[], now: Date): Promise<WalletSettle> {
+async function settleWallet(exec: Exec, ctx: ActingContext, rows: BuildingRow[], now: Date, idled: Set<string>): Promise<WalletSettle> {
   // Read the marker WITHOUT creating it: a fresh player has no row, so lastMs 0
   // lets each building backdate to its own completesAt (no lost first collect).
   const existing = (
@@ -323,7 +415,9 @@ async function settleWallet(exec: Exec, ctx: ActingContext, rows: BuildingRow[],
   )[0];
   const lastMs = existing ? existing.lastUpdatedAt.getTime() : 0;
   const season = seasonAt(now.getTime(), ctx.worldStartedMs);
-  const income = Number(existing?.amount ?? 0) + pendingIncome(rows, lastMs, season, now);
+  // Income only from STAFFED buildings; building upkeep is owed by every active
+  // building (staffed or idled) — the gentle flat tax doesn't pause when idle.
+  const income = Number(existing?.amount ?? 0) + pendingIncome(rows, lastMs, season, now, idled);
   const upkeep = continuousUpkeep(rows, lastMs, now);
   const net = income - upkeep;
 
@@ -344,15 +438,82 @@ async function settleWallet(exec: Exec, ctx: ActingContext, rows: BuildingRow[],
   return { income, upkeep, collected: Math.round(net), owed: Math.round(owed) };
 }
 
+// --- Staff upkeep + food settle (Phase 2) ------------------------------------
+// Staff costs accrue per WHOLE in-game day on their own marker (mirrors the shrine,
+// so the partial-day remainder carries and frequent collecting can't dodge them).
+// Only STAFFED buildings incur staff upkeep + food; idled ones owe building upkeep
+// only. FOOD v1 RULE: each day's food is drawn from the player's wheat (foodGood)
+// stock first; any shortfall is auto-bought from the NPC at the wheat SELL ceiling
+// (the price the player pays to buy) and the wallet is debited — bought food is
+// consumed at once, not added to stock. Staff drachmae + food-buy clamp the wallet
+// at 0; the forgiven shortfall is reported as `owed` (a tax, not a debt).
+
+type StaffSettle = { staffUpkeep: number; foodNeeded: number; foodDrawn: number; foodBought: number; foodCost: number; owed: number };
+
+async function settleStaffing(exec: Exec, ctx: ActingContext, rows: BuildingRow[], idled: Set<string>, now: Date): Promise<StaffSettle> {
+  const c = getBuildingsContent();
+  const popsC = getPopsContent();
+  const staffed = rows.filter((r) => isActive(r, now) && !idled.has(r.id));
+  const staffUpkeepPerDay = staffed.reduce((s, r) => s + staffDailyCost(resolveDef(r.buildingId)!.staffing, r.tier, popsC).upkeep, 0);
+  const foodPerDay = staffed.reduce((s, r) => s + staffDailyCost(resolveDef(r.buildingId)!.staffing, r.tier, popsC).food, 0);
+
+  const existing = (
+    await exec.select().from(resources).where(and(eq(resources.scope, "player"), eq(resources.scopeId, ctx.playerId), eq(resources.type, STAFF_TYPE))).limit(1)
+  )[0];
+  // First-ever settle backdates to the earliest staffed completion, so the opening
+  // window isn't free (matches the income/goods backdating).
+  const earliest = staffed.length ? Math.min(...staffed.map((r) => r.completesAt.getTime())) : now.getTime();
+  const lastMs = existing ? existing.lastUpdatedAt.getTime() : earliest;
+  const days = wholeDaysBetween(lastMs, now.getTime());
+
+  let staffUpkeep = 0;
+  let foodNeeded = 0;
+  let foodDrawn = 0;
+  let foodBought = 0;
+  let foodCost = 0;
+  let owed = 0;
+  if (days > 0) {
+    staffUpkeep = staffUpkeepPerDay * days;
+    foodNeeded = foodPerDay * days;
+    if (foodNeeded > 0) {
+      const wheatRow = await getOrCreateResource(exec, ctx.playerId, popsC.foodGood, now);
+      const wheat = Number(wheatRow.amount);
+      foodDrawn = Math.min(wheat, foodNeeded);
+      if (foodDrawn > 0) await exec.update(resources).set({ amount: String(wheat - foodDrawn) }).where(eq(resources.id, wheatRow.id));
+      foodBought = foodNeeded - foodDrawn;
+      const band = c.vendor[popsC.foodGood];
+      if (foodBought > 0 && band) {
+        const season = seasonAt(now.getTime(), ctx.worldStartedMs);
+        foodCost = foodBought * vendorUnitPrice(band, "buy", c.seasonal, goodCategoryFor(c.seasonal, popsC.foodGood), season);
+      }
+    }
+    const cost = staffUpkeep + foodCost;
+    if (cost > 0) {
+      const charRows = await exec.select({ drachmae: playerCharacters.drachmae }).from(playerCharacters).where(eq(playerCharacters.playerId, ctx.playerId)).limit(1);
+      const wallet = charRows[0]?.drachmae ?? 0;
+      let next = wallet - cost;
+      if (next < 0) {
+        owed = -next;
+        next = 0;
+      }
+      await exec.update(playerCharacters).set({ drachmae: Math.round(next) }).where(eq(playerCharacters.playerId, ctx.playerId));
+    }
+  }
+  const advancedMs = lastMs + days * MS_PER_DAY;
+  if (existing) await exec.update(resources).set({ lastUpdatedAt: new Date(advancedMs) }).where(eq(resources.id, existing.id));
+  else await exec.insert(resources).values({ scope: "player", scopeId: ctx.playerId, type: STAFF_TYPE, amount: "0", ratePerSecond: "0", lastUpdatedAt: new Date(advancedMs) });
+  return { staffUpkeep: Math.round(staffUpkeep), foodNeeded, foodDrawn, foodBought, foodCost: Math.round(foodCost), owed: Math.round(owed) };
+}
+
 // Shrine composure: +composurePerDay per WHOLE day, flat (never scales). Its own
 // marker advances only by whole days, so the partial-day remainder carries.
-async function settleShrine(exec: Exec, ctx: ActingContext, rows: BuildingRow[], now: Date): Promise<number> {
+async function settleShrine(exec: Exec, ctx: ActingContext, rows: BuildingRow[], idled: Set<string>, now: Date): Promise<number> {
   const shrineRow = await getOrCreateResource(exec, ctx.playerId, SHRINE_TYPE, now);
   const lastMs = shrineRow.lastUpdatedAt.getTime();
   const days = wholeDaysBetween(lastMs, now.getTime());
   if (days <= 0) return 0;
   const perDay = rows
-    .filter((r) => isActive(r, now))
+    .filter((r) => isActive(r, now) && !idled.has(r.id))
     .reduce((sum, r) => sum + (resolveDef(r.buildingId)?.composurePerDay ?? 0), 0);
   const advancedMs = lastMs + days * MS_PER_DAY;
   await exec.update(resources).set({ lastUpdatedAt: new Date(advancedMs) }).where(eq(resources.id, shrineRow.id));
@@ -468,9 +629,10 @@ export type OwnedBuilding = {
   category: BuildingCategory;
   // Current seasonally-adjusted output (per day) + uncollected pending.
   yields: { good: string; perDay: number; pending: number }[];
-  income: number; // drachmae/day at current tier+season
+  income: number; // drachmae/day at current tier+season (0 while idled)
   pendingIncome: number;
   upkeepPerDay: number;
+  idle: boolean; // under-staffed: produces nothing this read, still owes building upkeep
   // Next-tier preview for the upgrade CTA (null at max tier or for commons).
   upgrade: { tier: number; name?: string; cost: number; buildDays: number; newYields: { good: string; perDay: number }[] } | null;
 };
@@ -491,20 +653,24 @@ export async function mine(classId: string, ctx: ActingContext, now: Date): Prom
   const c = getBuildingsContent();
   const season = seasonAt(now.getTime(), ctx.worldStartedMs);
   const rows = await flipActivations(db, await ownedRows(db, ctx.playerId), now);
+  const idled = await staffingFor(db, ctx, rows, now);
   const existing = await resourceRows(db, ctx.playerId);
   const byType = new Map(existing.map((r) => [r.type, r]));
-  const accrual = computeGoodsAccrual(rows, byType, season, now);
+  const accrual = computeGoodsAccrual(rows, byType, season, now, idled);
 
   const buildings: OwnedBuilding[] = rows.map((row) => {
     const def = resolveDef(row.buildingId)!;
     const active = isActive(row, now);
-    const prodMult = active ? productionMultiplier(c.seasonal, def.category, season, row.completesAt.getTime(), now.getTime()) : 0;
+    const idle = active && idled.has(row.id); // under-staffed → produces nothing
+    const prodMult = active && !idle ? productionMultiplier(c.seasonal, def.category, season, row.completesAt.getTime(), now.getTime()) : 0;
     const classMeta = c.classBuildings[classId];
     const common = c.commonBuildings.find((b) => b.id === row.buildingId);
     const tierName = def.isClass ? classMeta?.tiers.find((t) => t.tier === row.tier)?.name : common?.name;
-    const yields = def.yields
-      .map((y) => ({ good: y.good, perDay: goodPerDay(y, row.tier) * prodMult, pending: 0 }))
-      .filter((y) => goodPerDay(def.yields.find((d) => d.good === y.good)!, row.tier) > 0);
+    const yields = idle
+      ? []
+      : def.yields
+          .map((y) => ({ good: y.good, perDay: goodPerDay(y, row.tier) * prodMult, pending: 0 }))
+          .filter((y) => goodPerDay(def.yields.find((d) => d.good === y.good)!, row.tier) > 0);
     // Distribute the aggregated pending back to this building's goods (1:1 in
     // practice — each good has a single source building).
     for (const y of yields) y.pending = accrual.get(y.good)?.banked ?? 0;
@@ -530,9 +696,10 @@ export async function mine(classId: string, ctx: ActingContext, now: Date): Prom
       completesAt: active ? null : row.completesAt.toISOString(),
       category: def.category,
       yields,
-      income: active ? ratePerSecond(incomeAtTier(def, row.tier)) * 86_400 * prodMult : 0,
+      income: active && !idle ? ratePerSecond(incomeAtTier(def, row.tier)) * 86_400 * prodMult : 0,
       pendingIncome: 0,
       upkeepPerDay: def.upkeep(row.tier),
+      idle,
       upgrade,
     };
   });
@@ -542,11 +709,24 @@ export async function mine(classId: string, ctx: ActingContext, now: Date): Prom
   // No marker yet → backdate per-building to completesAt (lastMs 0), so pending
   // offering income shows in the Ledger before the first collect, like goods do.
   const lastMs = incomeRow ? incomeRow.lastUpdatedAt.getTime() : 0;
-  const incomePending = pendingIncome(rows, lastMs, season, now) + Number(incomeRow?.amount ?? 0);
+  const incomePending = pendingIncome(rows, lastMs, season, now, idled) + Number(incomeRow?.amount ?? 0);
   const upkeep = continuousUpkeep(rows, lastMs, now);
   const charRows = await db.select({ drachmae: playerCharacters.drachmae }).from(playerCharacters).where(eq(playerCharacters.playerId, ctx.playerId)).limit(1);
   const wallet = charRows[0]?.drachmae ?? 0;
-  const owed = Math.max(0, upkeep - incomePending - wallet);
+
+  // Project pending staff upkeep + food (whole days on the staff marker) so the
+  // Ledger's "owed" reflects the staffing counterweight, not just building upkeep.
+  const staffed = rows.filter((r) => isActive(r, now) && !idled.has(r.id));
+  const popsC = getPopsContent();
+  const staffMarker = byType.get(STAFF_TYPE);
+  const staffEarliest = staffed.length ? Math.min(...staffed.map((r) => r.completesAt.getTime())) : now.getTime();
+  const staffDays = wholeDaysBetween(staffMarker ? staffMarker.lastUpdatedAt.getTime() : staffEarliest, now.getTime());
+  const staffUpkeepPending = staffed.reduce((s, r) => s + staffDailyCost(resolveDef(r.buildingId)!.staffing, r.tier, popsC).upkeep, 0) * staffDays;
+  const foodPending = staffed.reduce((s, r) => s + staffDailyCost(resolveDef(r.buildingId)!.staffing, r.tier, popsC).food, 0) * staffDays;
+  const wheatAvail = Number(byType.get(popsC.foodGood)?.amount ?? 0) + (accrual.get(popsC.foodGood)?.banked ?? 0);
+  const foodBand = c.vendor[popsC.foodGood];
+  const foodBuyCost = foodBand ? Math.max(0, foodPending - wheatAvail) * vendorUnitPrice(foodBand, "buy", c.seasonal, goodCategoryFor(c.seasonal, popsC.foodGood), season) : 0;
+  const owed = Math.max(0, upkeep + staffUpkeepPending + foodBuyCost - incomePending - wallet);
 
   const pendingGoods: Record<string, number> = {};
   for (const [good, a] of accrual) if (a.banked > 0) pendingGoods[good] = a.banked;
@@ -618,15 +798,33 @@ export async function upgrade(ctx: ActingContext, buildingId: string, now: Date)
 // Sweep all owned buildings: bank goods into inventory, settle income − upkeep
 // into the wallet (clamped, owed-flagged), and apply the shrine's flat composure.
 
-export type CollectResult = { banked: Record<string, number>; income: number; upkeep: number; collected: number; owed: number; composure: number };
+export type CollectResult = {
+  banked: Record<string, number>;
+  income: number;
+  upkeep: number; // building upkeep (drachmae)
+  staffUpkeep: number; // pop wages (drachmae)
+  foodDrawn: number; // food units pulled from wheat stock
+  foodBought: number; // food units auto-bought from the NPC on shortfall
+  foodCost: number; // drachmae paid for the auto-bought food
+  collected: number; // net banked to the wallet from income − building upkeep (staff/food debited separately)
+  owed: number; // total forgiven shortfall (building + staff + food)
+  composure: number;
+  idled: string[]; // building ids that idled this collect (under-staffed)
+};
 
 export async function collect(ctx: ActingContext, now: Date): Promise<CollectResult> {
   const result = await db.transaction(async (tx) => {
     const rows = await flipActivations(tx, await ownedRows(tx, ctx.playerId), now);
-    const banked = await settleGoods(tx, ctx, rows, now);
-    const wallet = await settleWallet(tx, ctx, rows, now);
-    const composureDays = await settleShrine(tx, ctx, rows, now);
-    return { banked, wallet, composureDays };
+    // Resolve the shared-pool staffing ONCE, then drive every settle from it:
+    // goods + income come only from staffed buildings; building upkeep from all.
+    const idled = await staffingFor(tx, ctx, rows, now);
+    const banked = await settleGoods(tx, ctx, rows, now, idled);
+    const wallet = await settleWallet(tx, ctx, rows, now, idled);
+    const staff = await settleStaffing(tx, ctx, rows, idled, now); // after income is banked, before composure
+    const composureDays = await settleShrine(tx, ctx, rows, idled, now);
+    // Report idled buildings by their content id (not the row uuid) for consumers.
+    const idledBuildings = rows.filter((r) => idled.has(r.id)).map((r) => r.buildingId);
+    return { banked, wallet, staff, composureDays, idled: idledBuildings };
   });
   // Composure goes through the break-aware service (clamps to the cap), after tx.
   let composure = 0;
@@ -634,7 +832,19 @@ export async function collect(ctx: ActingContext, now: Date): Promise<CollectRes
     await applyComposureDelta(await characterIdFor(ctx.playerId), result.composureDays, "building:shrine", now);
     composure = result.composureDays;
   }
-  return { banked: result.banked, income: result.wallet.income, upkeep: result.wallet.upkeep, collected: result.wallet.collected, owed: result.wallet.owed, composure };
+  return {
+    banked: result.banked,
+    income: result.wallet.income,
+    upkeep: result.wallet.upkeep,
+    staffUpkeep: result.staff.staffUpkeep,
+    foodDrawn: result.staff.foodDrawn,
+    foodBought: result.staff.foodBought,
+    foodCost: result.staff.foodCost,
+    collected: result.wallet.collected,
+    owed: result.wallet.owed + result.staff.owed,
+    composure,
+    idled: result.idled,
+  };
 }
 
 async function characterIdFor(playerId: string): Promise<string> {

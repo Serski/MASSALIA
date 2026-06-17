@@ -70,6 +70,7 @@ suite("Hoplite re-class (integration)", () => {
     await m.service.loadRanksContent();
     await m.age.loadAgeConfig();
     await m.buildings.loadBuildingsContent();
+    await m.buildings.loadPopsContent();
     await m.merc.loadContractsContent();
   });
 

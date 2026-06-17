@@ -22,7 +22,7 @@ import { oligarchyRoutes } from "./routes/oligarchy.js";
 import { electionRoutes } from "./routes/elections.js";
 import { officeRoutes } from "./routes/offices.js";
 import { buildingRoutes } from "./routes/buildings.js";
-import { loadBuildingsContent } from "./services/buildings.js";
+import { loadBuildingsContent, loadPopsContent } from "./services/buildings.js";
 import { serviceRoutes } from "./routes/service.js";
 import { loadRanksContent } from "./services/service.js";
 import { mercRoutes } from "./routes/merc.js";
@@ -67,6 +67,7 @@ await loadCalendarConfig();
 await loadPoliticsConfig();
 await loadAgendaContent();
 await loadBuildingsContent();
+await loadPopsContent();
 await loadRanksContent();
 await loadContractsContent();
 // Fail fast on a malformed election block (Politics Prompt 2).
