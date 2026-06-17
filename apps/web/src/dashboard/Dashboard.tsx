@@ -126,7 +126,7 @@ const placeholderPlayerState: PlayerDashboardState = {
   composure: 70,
   withdrawn: false,
   stats: { prestige: 12, devotion: 0, militia: 0, intelligence: 0 },
-  balances: { wine: 36, wheat: 130, tin: 60, iron: 40 },
+  balances: {},
   currentAge: 30,
   lifeStage: "Prime",
   deceased: false,
@@ -3067,21 +3067,31 @@ const resourceIcons: Record<string, string> = {
   favor: "🤝",
 };
 
-// Goods catalog for the inventory Resources tab. Amounts come from the real
-// /me/state balances map; goods absent from it render as 0 (dimmed, not hidden).
-const goodsCatalog: { type: string; label: string; icon: string }[] = [
-  { type: "wheat", label: "Wheat", icon: "🌾" },
-  { type: "tin", label: "Tin", icon: "🪨" },
-  { type: "iron", label: "Iron", icon: "⚙️" },
-  { type: "salt", label: "Salt", icon: "🧂" },
-  { type: "marble", label: "Marble", icon: "🏛️" },
-  { type: "lead", label: "Lead", icon: "🔩" },
-  { type: "stone", label: "Stone", icon: "🧱" },
-  { type: "wood", label: "Wood", icon: "🪵" },
-  { type: "leather", label: "Leather", icon: "🥾" },
-  { type: "wool", label: "Wool", icon: "🧶" },
-  { type: "horse", label: "Horse", icon: "🐎" },
-];
+// Display metadata for the REAL tradeable goods (mirrors the buildings/vendor
+// registry). The inventory's Goods list is driven by what the player actually
+// HOLDS (non-zero /me/state balances), not by this map — this only supplies a
+// label + icon. Browsing the full goods space belongs to the vendor/market.
+const goodsMeta: Record<string, { label: string; icon: string }> = {
+  grain: { label: "Grain", icon: "🌾" },
+  oliveoil: { label: "Olive Oil", icon: "🫒" },
+  wine: { label: "Wine", icon: "🍷" },
+  herbal: { label: "Herbal", icon: "🌿" },
+  timber: { label: "Timber", icon: "🪵" },
+  chicken: { label: "Chicken", icon: "🐔" },
+  bull: { label: "Bull", icon: "🐂" },
+  horse: { label: "Horse", icon: "🐎" },
+  ship: { label: "Ship", icon: "⛵" },
+};
+
+// Non-good resource rows that may sit in the balances map but must never show in
+// the Goods list (internal accrual markers + abstract class "stores" like prestige
+// / influence / militia / freedom that are stats, not tradeable goods).
+function goodLabel(type: string): string {
+  return goodsMeta[type]?.label ?? type.charAt(0).toUpperCase() + type.slice(1);
+}
+function goodIcon(type: string): string {
+  return goodsMeta[type]?.icon ?? "📦";
+}
 
 const statDefs: { key: keyof FourStats; label: string }[] = [
   { key: "prestige", label: "Prestige" },
@@ -3361,6 +3371,13 @@ function BottomSheet({
 
 function InventoryResources({ player }: { player: PlayerDashboardView }) {
   const classType = player.classResource?.type ?? null;
+  // "What I have": only REAL tradeable goods the player actually holds (non-zero),
+  // excluding the class good already shown under Coin & Class stores. Internal
+  // markers (building_income/shrine) and abstract class stores (prestige, influence,
+  // militia, freedom…) are filtered out by keying on the real-goods registry.
+  const heldGoods = Object.entries(player.balances)
+    .filter(([type, amount]) => amount > 0 && type !== classType && type in goodsMeta)
+    .sort((a, b) => goodLabel(a[0]).localeCompare(goodLabel(b[0])));
   return (
     <div role="tabpanel">
       <div className="cap-banner">
@@ -3402,22 +3419,20 @@ function InventoryResources({ player }: { player: PlayerDashboardView }) {
       <p className="sheet-todo">TODO: per-day production rates are placeholders until the Phase 2 tick lands.</p>
 
       <SheetLabel>Goods</SheetLabel>
-      {goodsCatalog
-        .filter((good) => good.type !== classType)
-        .map((good) => {
-          const amount = player.balances[good.type] ?? 0;
-          return (
-            <ResRow
-              key={good.type}
-              icon={good.icon}
-              name={good.label}
-              amount={amount.toLocaleString()}
-              rate="—"
-              rateTone="zero"
-              dim={amount === 0}
-            />
-          );
-        })}
+      {heldGoods.length === 0 ? (
+        <p className="sheet-todo">No goods yet — produce or buy them.</p>
+      ) : (
+        heldGoods.map(([type, amount]) => (
+          <ResRow
+            key={type}
+            icon={goodIcon(type)}
+            name={goodLabel(type)}
+            amount={amount.toLocaleString()}
+            rate="—"
+            rateTone="zero"
+          />
+        ))
+      )}
     </div>
   );
 }
