@@ -672,6 +672,24 @@ export const playerBuildings = pgTable("player_buildings", {
   ownerIdx: index("player_buildings_owner_idx").on(table.worldId, table.ownerPlayerId),
 }));
 
+// Pops a player owns (Phase 1 economy rebalance — STORAGE ONLY). One row per
+// (world, owner, pop type); `count` is adjusted in place, so the UNIQUE key forbids
+// duplicates. `pop_type` is free-form text (content-driven: slave / freeman /
+// citizen come from content/people/pops.json via @massalia/shared parsePopsContent),
+// mirroring the string-keyed `resources.type`. Pop economics (hireCost / upkeep /
+// food) live in content, NOT here. No upkeep/food/hiring/staffing logic yet.
+export const playerPops = pgTable("player_pops", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  ownerPlayerId: uuid("owner_player_id").references(() => players.id).notNull(),
+  popType: text("pop_type").notNull(),
+  count: integer("count").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  onePerOwnerType: uniqueIndex("player_pops_owner_type_idx").on(table.worldId, table.ownerPlayerId, table.popType),
+  ownerIdx: index("player_pops_owner_idx").on(table.worldId, table.ownerPlayerId),
+}));
+
 // Stub treasury sink: routine fees accrue here (one row per world). NO spending
 // in this build — a counter the future treasury system will read.
 export const worldTreasury = pgTable("world_treasury", {
