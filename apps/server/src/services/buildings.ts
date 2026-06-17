@@ -526,7 +526,18 @@ async function settleShrine(exec: Exec, ctx: ActingContext, rows: BuildingRow[],
 
 // --- Catalog (GET /api/buildings) -------------------------------------------
 
-export type CatalogTier = { tier: number; name?: string; rank?: string; cost: number; buildDays: number; upkeep: number; yields: { good: string; perDay: number }[]; income: number };
+export type CatalogTier = {
+  tier: number;
+  name?: string;
+  rank?: string;
+  cost: number;
+  buildDays: number;
+  upkeep: number;
+  yields: { good: string; perDay: number }[];
+  income: number;
+  materials: Record<string, number>; // build/upgrade material bill at this tier (materialCostForTier)
+  staffing: Partial<Record<PopType, number>>; // pops required at this tier (staffCountForTier)
+};
 export type CatalogEntry = {
   id: string;
   kind: "class" | "common";
@@ -552,6 +563,8 @@ function catalogTiers(def: ResolvedDef, names: { tier: number; name?: string; ra
       upkeep: def.upkeep(t),
       income: incomeAtTier(def, t),
       yields: def.yields.map((y) => ({ good: y.good, perDay: goodPerDay(y, t) })).filter((y) => y.perDay > 0),
+      materials: materialsForTier(def, t),
+      staffing: staffNeed(def, t),
     });
   }
   return tiers;
@@ -567,6 +580,8 @@ export type CatalogView = {
   // Seasonally-adjusted band: `buy` = what the player pays (ceiling), `sell` =
   // what the player receives (floor).
   vendor: VendorPrice[];
+  goodLabels: Record<string, string>; // display names for every good (IDs stay stable)
+  craft: Record<string, { building: string; tier: number; recipe: Record<string, number> }>; // content.craft
 };
 
 export function catalog(classId: string, ctx: ActingContext, now: Date): CatalogView {
@@ -617,6 +632,8 @@ export function catalog(classId: string, ctx: ActingContext, now: Date): Catalog
     commons,
     classSectionLabel: classSectionLabel(classId),
     vendor,
+    goodLabels: c.goodLabels ?? {},
+    craft: c.craft ?? {},
   };
 }
 
@@ -649,6 +666,7 @@ export type MineView = {
   pendingGoods: Record<string, number>;
   storageCap: number;
   classSection: ClassSection;
+  pops: Record<string, number>; // pops the player owns (the shared staffing pool)
 };
 
 const BASE_STORAGE_CAP = 100;
@@ -745,6 +763,7 @@ export async function mine(classId: string, ctx: ActingContext, now: Date): Prom
     pendingGoods,
     storageCap,
     classSection: { label: classSectionLabel(classId), comingSoon: classSectionLabel(classId) !== null, flavor: c.classBuildings[classId]?.flavor, entries: [] },
+    pops: await popCountsFor(db, ctx.playerId),
   };
 }
 

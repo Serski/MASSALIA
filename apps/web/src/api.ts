@@ -285,6 +285,10 @@ export const api = {
   collectBuildings: () => apiFetch<CollectResult>("/api/buildings/collect", { method: "POST" }),
   vendorTrade: (action: "buy" | "sell", type: string, qty: number) =>
     apiFetch<VendorResult>("/api/buildings/vendor", { method: "POST", body: { action, type, qty } }),
+  people: () => apiFetch<PeopleView>("/api/buildings/people"),
+  hirePeople: (popType: string, count: number) =>
+    apiFetch<HireResult>("/api/buildings/hire", { method: "POST", body: { popType, count } }),
+  craftGood: (good: string) => apiFetch<CraftResult>("/api/buildings/craft", { method: "POST", body: { good } }),
   // The hoplite's home army (Hoplite Step 1): rank ladder + daily salary.
   service: () => apiFetch<ServiceView>("/api/service"),
   enlistService: () => apiFetch<ServiceActionResult>("/api/service/enlist", { method: "POST" }),
@@ -719,7 +723,12 @@ export type CatalogTier = {
   upkeep: number;
   income: number;
   yields: { good: string; perDay: number }[];
+  materials: Record<string, number>;
+  staffing: Partial<Record<PopType, number>>;
 };
+
+export type PopType = "slave" | "freeman" | "citizen";
+export type CraftRecipe = { building: string; tier: number; recipe: Record<string, number> };
 
 export type CatalogEntry = {
   id: string;
@@ -742,6 +751,8 @@ export type BuildingsCatalog = {
   commons: CatalogEntry[];
   classSectionLabel: string | null;
   vendor: VendorPrice[];
+  goodLabels: Record<string, string>;
+  craft: Record<string, CraftRecipe>;
 };
 
 export type OwnedBuilding = {
@@ -757,6 +768,7 @@ export type OwnedBuilding = {
   income: number;
   pendingIncome: number;
   upkeepPerDay: number;
+  idle: boolean;
   upgrade: { tier: number; name?: string; cost: number; buildDays: number; newYields: { good: string; perDay: number }[] } | null;
 };
 
@@ -790,7 +802,16 @@ export type BuildingsMine = {
   pendingGoods: Record<string, number>;
   storageCap: number;
   classSection: ClassSection;
+  pops: Record<string, number>;
 };
+
+export type PeopleView = {
+  foodGood: string;
+  pops: { type: PopType; label: string; hireCost: number; upkeepPerDay: number; foodPerDay: number; civic: boolean }[];
+};
+
+export type HireResult = { ok: true; popType: string; hired: number; unitCost: number; total: number; wallet: number; owned: number };
+export type CraftResult = { ok: true; good: string; consumed: Record<string, number>; balance: number };
 
 export type VendorResult = {
   ok: true;
@@ -807,9 +828,14 @@ export type CollectResult = {
   banked: Record<string, number>;
   income: number;
   upkeep: number;
+  staffUpkeep: number;
+  foodDrawn: number;
+  foodBought: number;
+  foodCost: number;
   collected: number;
   owed: number;
   composure: number;
+  idled: string[];
 };
 
 // --- The hoplite's home army: ranks + salary (Hoplite Step 1) ---------------

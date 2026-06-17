@@ -667,4 +667,27 @@ suite("Ledger / building engine (integration)", () => {
     expect(await goodBalance("timber")).toBe(timberNow); // not consumed on the failed craft
     expect(await goodBalance("trade-ship")).toBe(1); // still just the one
   });
+
+  it("(P5) catalog + mine expose the additive Phase 5 fields from content + player_pops", async () => {
+    const c = await ctx(); // default landowner, pops 10/10/10
+    const cat = m.buildings.catalog("landowner", c, new Date(T0));
+
+    // goodLabels straight from content (IDs stay stable; names come from goodLabels).
+    expect(cat.goodLabels.grain).toBe("Wheat");
+    expect(cat.goodLabels.timber).toBe("Wood");
+
+    // Per-tier material bill + staffing on the class line, scaled by the shared helpers.
+    const t1 = cat.classBuilding!.tiers.find((t) => t.tier === 1)!;
+    const t2 = cat.classBuilding!.tiers.find((t) => t.tier === 2)!;
+    expect(t1.materials).toEqual({ timber: 8, stone: 6 }); // T1 base bill
+    expect(t1.staffing).toEqual({ slave: 2 });
+    expect(t2.materials).toEqual({ timber: 14, stone: 11 }); // 8×1.8→14, 6×1.8→11
+
+    // Craft recipes from content.craft.
+    expect(cat.craft["trade-ship"]).toEqual({ building: "slipway", tier: 3, recipe: { "naval-supplies": 2, timber: 5, leather: 1 } });
+
+    // Owned pop counts on mine, from player_pops.
+    const mineV = await m.buildings.mine("landowner", c, new Date(T0));
+    expect(mineV.pops).toMatchObject({ slave: 10, freeman: 10, citizen: 10 });
+  });
 });

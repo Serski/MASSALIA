@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type AgendaScopeView, type BuildingsCatalog, type BuildingsMine, type CatalogEntry, type OwnedBuilding, type ClassSection, type VendorPrice, type ServiceView, type MercBoard, type RiskOutcome } from "../api.js";
+import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type AgendaScopeView, type BuildingsCatalog, type BuildingsMine, type CatalogEntry, type CatalogTier, type OwnedBuilding, type ClassSection, type VendorPrice, type PeopleView, type ServiceView, type MercBoard, type RiskOutcome } from "../api.js";
 import { assetPath, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
@@ -1226,18 +1226,30 @@ const GOOD_ICON: Record<string, string> = {
 // build/upgrade action sits on the one buildable "next" tier; the rest are
 // informational. (Hoplite/slave have no class building, so this never renders for
 // them — their Your Trade falls through to the profession/stub path.)
+// Capitalised pop-type name for the staffing line (pops aren't goods, so they have
+// no goodLabels entry — Slave / Freeman / Citizen).
+function popName(type: string): string {
+  return type[0]!.toUpperCase() + type.slice(1);
+}
+
 function ClassBuildingLadder({
   entry,
   owned,
   busy,
   onBuild,
   onUpgrade,
+  goodLabels,
+  pops,
+  balances,
 }: {
   entry: CatalogEntry;
   owned?: OwnedBuilding;
   busy: boolean;
   onBuild: () => void;
   onUpgrade: () => void;
+  goodLabels: Record<string, string>;
+  pops: Record<string, number>; // owned (the shared staffing pool)
+  balances: Record<string, number>; // material holdings
 }) {
   const currentTier = owned ? owned.tier : 0; // 0 = not yet built
   const active = owned?.status === "active";
@@ -1246,6 +1258,7 @@ function ClassBuildingLadder({
   // The single buildable tier right now: tier 1 if unbuilt; the next tier up if we
   // own an active building below max; none while constructing or at max tier.
   const nextTier = !owned ? 1 : active && currentTier < maxTier ? currentTier + 1 : null;
+  const label = (good: string) => goodLabels[good] ?? good[0]!.toUpperCase() + good.slice(1);
 
   return (
     <ol className="tier-ladder">
@@ -1261,9 +1274,11 @@ function ClassBuildingLadder({
                 ? "next"
                 : "future";
         const isBuilt = t.tier < currentTier || (t.tier === currentTier && active);
+        const idle = state === "current" && Boolean(owned?.idle);
         const provides = yieldSummary(t.yields, t.income) || "—";
-        const tag =
-          state === "built"
+        const tag = idle
+          ? "Idle"
+          : state === "built"
             ? "Built"
             : state === "current"
               ? "Current"
@@ -1272,8 +1287,25 @@ function ClassBuildingLadder({
                 : state === "future"
                   ? "Locked"
                   : null;
+
+        // The build/upgrade gate for the buildable tier: materials + owned staff.
+        const bill = state === "next";
+        const matBill = Object.entries(t.materials).map(([g, q]) => `${q} ${label(g)}`).join(" · ");
+        const staffBill = Object.entries(t.staffing).map(([ty, q]) => `${q} ${popName(ty)}`).join(" · ");
+        const shortfalls = bill
+          ? [
+              ...Object.entries(t.materials)
+                .filter(([g, q]) => (balances[g] ?? 0) < q)
+                .map(([g, q]) => `${Math.ceil(q - (balances[g] ?? 0))} ${label(g)}`),
+              ...Object.entries(t.staffing)
+                .filter(([ty, q]) => (pops[ty] ?? 0) < (q ?? 0))
+                .map(([ty, q]) => `${(q ?? 0) - (pops[ty] ?? 0)} more ${popName(ty)}`),
+            ]
+          : [];
+        const blocked = shortfalls.length > 0;
+
         return (
-          <li key={t.tier} className={`tier-step tier-${state}`}>
+          <li key={t.tier} className={`tier-step tier-${state}${idle ? " tier-idle" : ""}`}>
             <span className="tier-marker" aria-hidden="true">{isBuilt ? "✓" : t.tier}</span>
             <div className="tier-body">
               <div className="tier-head">
@@ -1288,9 +1320,18 @@ function ClassBuildingLadder({
                   ? `under construction · ${buildCountdown(owned?.completesAt ?? null)}`
                   : `${t.cost}dr · ${t.buildDays}d${t.upkeep > 0 ? ` · upkeep ${t.upkeep}dr/day` : ""}`}
               </div>
+              {idle ? (
+                <div className="tier-gate">Idle — under-staffed. Your pops are stretched across your buildings; hire more in the Market.</div>
+              ) : null}
+              {bill ? (
+                <>
+                  <div className="tier-meta">Needs: {matBill || "—"}{staffBill ? ` · staff ${staffBill}` : ""}</div>
+                  {blocked ? <div className="tier-gate">Short: {shortfalls.join(", ")}</div> : null}
+                </>
+              ) : null}
             </div>
             {state === "next" ? (
-              <button type="button" className="panel-btn" disabled={busy} onClick={owned ? onUpgrade : onBuild}>
+              <button type="button" className="panel-btn" disabled={busy || blocked} onClick={owned ? onUpgrade : onBuild}>
                 {owned ? "Upgrade" : "Build"} · {t.cost}dr
               </button>
             ) : null}
@@ -1647,6 +1688,65 @@ function VendorDrawer({ catalog, onTrade, busy }: { catalog: BuildingsCatalog; o
   );
 }
 
+// The shipbuilder's craft bench (content.craft): each good shows its recipe + the
+// building-tier gate, with a Craft action. Gated/blocked when under-tier or short
+// on the recipe materials (the server is the source of truth — this mirrors it).
+function CraftPanel({
+  catalog,
+  owned,
+  balances,
+  busy,
+  onCraft,
+}: {
+  catalog: BuildingsCatalog;
+  owned?: OwnedBuilding;
+  balances: Record<string, number>;
+  busy: boolean;
+  onCraft: (good: string) => void;
+}) {
+  const recipes = Object.entries(catalog.craft);
+  if (recipes.length === 0) return null;
+  const label = (good: string) => catalog.goodLabels[good] ?? good[0]!.toUpperCase() + good.slice(1);
+  return (
+    <>
+      <div className="panel-label">Shipwright's Craft</div>
+      <div className="panel-grid2">
+        {recipes.map(([good, recipe]) => {
+          const haveTier = owned && owned.id === recipe.building ? owned.tier : 0;
+          const tierOk = haveTier >= recipe.tier;
+          const shortfalls = Object.entries(recipe.recipe)
+            .filter(([g, q]) => (balances[g] ?? 0) < q)
+            .map(([g, q]) => `${Math.ceil(q - (balances[g] ?? 0))} ${label(g)}`);
+          const blocked = !tierOk || shortfalls.length > 0;
+          const recipeStr = Object.entries(recipe.recipe).map(([g, q]) => `${q} ${label(g)}`).join(" · ");
+          return (
+            <PanelRow
+              key={good}
+              icon={GOOD_ICON[good] ?? "⛵"}
+              title={label(good)}
+              sub={
+                `${recipeStr} · needs ${buildingDisplay(catalog, recipe.building)} T${recipe.tier}` +
+                (!tierOk ? ` (you have T${haveTier})` : "") +
+                (shortfalls.length ? ` · short ${shortfalls.join(", ")}` : "")
+              }
+              dim={blocked}
+              action={
+                <button type="button" className="panel-btn" disabled={busy || blocked} onClick={() => onCraft(good)}>
+                  Craft
+                </button>
+              }
+            />
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+function buildingDisplay(catalog: BuildingsCatalog, id: string): string {
+  return catalog.classBuilding?.id === id ? catalog.classBuilding.name : catalog.commons.find((b) => b.id === id)?.name ?? id;
+}
+
 function LedgerPanel({ player, onRefresh }: PanelProps) {
   const [catalog, setCatalog] = useState<BuildingsCatalog | null>(null);
   const [mine, setMine] = useState<BuildingsMine | null>(null);
@@ -1699,6 +1799,36 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
   const ownedClass = classBuilding ? ownedById.get(classBuilding.id) : undefined;
   const pendingGoods = Object.entries(mine.pendingGoods);
   const hasPending = pendingGoods.length > 0 || mine.pendingIncomeTotal >= 1;
+  // Names always come from content.goodLabels (never a raw id).
+  const label = (good: string) => catalog.goodLabels[good] ?? good[0]!.toUpperCase() + good.slice(1);
+  const buildingName = (id: string) =>
+    catalog.classBuilding?.id === id ? catalog.classBuilding.name : catalog.commons.find((b) => b.id === id)?.name ?? id;
+  // Shipbuilder only: the class building is a craft building (data-derived).
+  const canCraft = Boolean(classBuilding && Object.values(catalog.craft).some((r) => r.building === classBuilding.id));
+
+  // Collect, then surface the full economy receipt (income, goods, wages, food, idle).
+  const doCollect = async () => {
+    setBusy(true);
+    setNote("");
+    try {
+      const r = await api.collectBuildings();
+      await load();
+      onRefresh();
+      const parts: string[] = [];
+      if (r.collected) parts.push(`+${r.collected}dr income`);
+      for (const [good, amt] of Object.entries(r.banked)) parts.push(`+${Math.floor(amt)} ${label(good)}`);
+      if (r.staffUpkeep) parts.push(`−${r.staffUpkeep}dr wages`);
+      if (r.foodCost) parts.push(`−${r.foodCost}dr food`);
+      else if (r.foodDrawn) parts.push(`${r.foodDrawn} food from stock`);
+      if (r.owed) parts.push(`${r.owed}dr unpaid (forgiven)`);
+      if (r.idled.length) parts.push(`idle: ${r.idled.map(buildingName).join(", ")}`);
+      setNote(parts.length ? `Collected — ${parts.join(" · ")}` : "Collected — nothing due yet.");
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "That could not be done.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const ownedRow = (b: OwnedBuilding) => (
     <PanelRow
@@ -1765,12 +1895,12 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
           <div>
             <strong>Ready to collect</strong>
             <div className="pr-s">
-              {pendingGoods.map(([good, amt]) => `${Math.floor(amt)} ${good}`).join(" · ") || "—"}
+              {pendingGoods.map(([good, amt]) => `${Math.floor(amt)} ${label(good)}`).join(" · ") || "—"}
               {mine.pendingIncomeTotal >= 1 ? ` · ${Math.floor(mine.pendingIncomeTotal)}dr income` : ""}
-              {mine.upkeepOwed > 0 ? ` · upkeep owed ${Math.round(mine.upkeepOwed)}dr` : ""}
+              {mine.upkeepOwed > 0 ? ` · upkeep + wages owed ${Math.round(mine.upkeepOwed)}dr` : ""}
             </div>
           </div>
-          <button type="button" className="primary-cta" disabled={busy} onClick={() => act(() => api.collectBuildings(), "Collected.")}>
+          <button type="button" className="primary-cta" disabled={busy} onClick={doCollect}>
             Collect
           </button>
         </div>
@@ -1784,6 +1914,9 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
           busy={busy}
           onBuild={() => act(() => api.buildBuilding(classBuilding.id))}
           onUpgrade={() => act(() => api.upgradeBuilding(classBuilding.id))}
+          goodLabels={catalog.goodLabels}
+          pops={mine.pops}
+          balances={player.balances}
         />
       ) : (
         <div className="panel-grid2">
@@ -1800,6 +1933,10 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
           )}
         </div>
       )}
+
+      {canCraft ? (
+        <CraftPanel catalog={catalog} owned={ownedClass} balances={player.balances} busy={busy} onCraft={(good) => act(() => api.craftGood(good), `Crafted a ${label(good)}.`)} />
+      ) : null}
 
       <div className="panel-label">Common Buildings</div>
       <div className="panel-grid2">
@@ -1823,97 +1960,139 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
   );
 }
 
-function MarketPanel() {
-  const [cat, setCat] = useState<"all" | MarketCat>("all");
-  const [query, setQuery] = useState("");
-  const [note, setNote] = useState("");
-  const q = query.trim().toLowerCase();
-  const visible = placeholderListings.filter(
-    (listing) => (cat === "all" || listing.cat === cat) && (!q || listing.name.toLowerCase().includes(q)),
-  );
+// Display-only grouping for the agora. The goods LIST is derived from the vendor
+// data (so future goods appear automatically); only the bucket is a hint. The nine
+// raw materials are a stable content concept; the naval line is derived from the
+// craft outputs; anything else falls under "Goods".
+const RAW_MATERIALS = new Set(["timber", "stone", "iron", "marble", "wool", "salt", "leather", "lead", "tin"]);
+const POP_ICON: Record<string, string> = { slave: "⛓️", freeman: "🧑", citizen: "🏛️" };
 
-  return (
-    <section className="dashboard-panel" aria-labelledby="market-title">
-      <div className="market-head">
+function marketGroup(good: string, craft: Record<string, unknown>): "Naval & ships" | "Materials" | "Goods" {
+  if (good in craft || good === "naval-supplies") return "Naval & ships";
+  if (RAW_MATERIALS.has(good)) return "Materials";
+  return "Goods";
+}
+
+function MarketPanel({ onRefresh }: PanelProps) {
+  const [catalog, setCatalog] = useState<BuildingsCatalog | null>(null);
+  const [mine, setMine] = useState<BuildingsMine | null>(null);
+  const [people, setPeople] = useState<PeopleView | null>(null);
+  const [tab, setTab] = useState<"goods" | "people">("goods");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    const [c, m, p] = await Promise.all([api.buildingsCatalog(), api.buildingsMine(), api.people()]);
+    setCatalog(c);
+    setMine(m);
+    setPeople(p);
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    load().catch((err) => !cancelled && setNote(err instanceof ApiError ? err.message : "Unable to open the agora."));
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
+
+  const act = async (fn: () => Promise<unknown>, ok?: string) => {
+    setBusy(true);
+    setNote("");
+    try {
+      await fn();
+      await load();
+      onRefresh();
+      if (ok) setNote(ok);
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "That could not be done.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!catalog || !mine || !people) {
+    return (
+      <section className="dashboard-panel" aria-labelledby="market-title">
         <div className="dashboard-panel-heading">
           <p className="section-eyebrow">Agora</p>
           <h1 id="market-title">The Agora — Market</h1>
-          <p>Buy from players or the Agora itself · list your goods · post what you seek.</p>
         </div>
-        <div className="market-head-actions">
-          <StubButton message="TODO: listing items for sale is a stub until the market service exists." onStub={setNote}>+ List to sell</StubButton>
-          <StubButton ghost message="TODO: posting buy orders is a stub until the market service exists." onStub={setNote}>Post buy order</StubButton>
-        </div>
+        <p className="dashboard-todo">{note || "Opening the agora…"}</p>
+      </section>
+    );
+  }
+
+  // Names always come from content.goodLabels — never a raw id.
+  const label = (good: string) => catalog.goodLabels[good] ?? good[0]!.toUpperCase() + good.slice(1);
+  const groups: Record<string, VendorPrice[]> = { Goods: [], Materials: [], "Naval & ships": [] };
+  for (const price of [...catalog.vendor].sort((a, b) => label(a.good).localeCompare(label(b.good)))) {
+    groups[marketGroup(price.good, catalog.craft)]!.push(price);
+  }
+
+  return (
+    <section className="dashboard-panel" aria-labelledby="market-title">
+      <div className="dashboard-panel-heading">
+        <p className="section-eyebrow">Agora · {catalog.season}</p>
+        <h1 id="market-title">The Agora — Market</h1>
+        <p>The NPC agora buys and sells every good at a seasonal band — it sells dear and buys cheap, so the market never deadlocks. Hire hands in the People market.</p>
       </div>
       <PanelBanner scene="the agora at midday" />
+      <SheetTabs<"goods" | "people">
+        tabs={[
+          { id: "goods", label: "Goods" },
+          { id: "people", label: "People" },
+        ]}
+        active={tab}
+        onSelect={setTab}
+      />
 
-      <div className="market-filterbar">
-        <input
-          className="market-search"
-          placeholder="Search by name…"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          aria-label="Search listings"
-        />
-        {marketFilters.map((filter) => (
-          <button
-            key={filter.id}
-            type="button"
-            className={`fchip${cat === filter.id ? " on" : ""}`}
-            aria-pressed={cat === filter.id}
-            onClick={() => setCat(filter.id)}
-          >
-            {filter.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="panel-label">For sale</div>
-      <div className="mkt-table" role="table" aria-label="Listings for sale">
-        <div className="mkt-row mkt-h" role="row">
-          <span role="columnheader">Listing</span>
-          <span role="columnheader">Price</span>
-          <span role="columnheader">Seller</span>
-          <span role="columnheader" className="mkt-act-head">Action</span>
-        </div>
-        {visible.map((listing) => (
-          <div className="mkt-row" role="row" key={listing.id}>
-            <div className="mkt-good" role="cell">
-              <span className="mkt-gic" aria-hidden="true">{listing.icon}</span>
-              <span className="mkt-gn">{listing.name}</span>
+      {tab === "goods" ? (
+        Object.entries(groups)
+          .filter(([, list]) => list.length > 0)
+          .map(([group, list]) => (
+            <div key={group}>
+              <div className="panel-label">{group}</div>
+              <div className="panel-grid2">
+                {list.map((price) => (
+                  <PanelRow
+                    key={price.good}
+                    icon={GOOD_ICON[price.good] ?? "📦"}
+                    title={label(price.good)}
+                    sub={`buy ${price.buy}dr · sell ${price.sell}dr`}
+                    action={
+                      <span style={{ display: "flex", gap: 6 }}>
+                        <button type="button" className="panel-btn ghost" disabled={busy} onClick={() => act(() => api.vendorTrade("buy", price.good, 1))}>Buy 1</button>
+                        <button type="button" className="panel-btn" disabled={busy} onClick={() => act(() => api.vendorTrade("sell", price.good, 1))}>Sell 1</button>
+                      </span>
+                    }
+                  />
+                ))}
+              </div>
             </div>
-            <span className="mkt-price" role="cell">{listing.price}</span>
-            <span className={`mkt-seller${listing.sellerIsGame ? " game" : ""}`} role="cell">{listing.seller}</span>
-            <div className="mkt-act" role="cell">
-              <StubButton message={`TODO: ${listing.action} is a stub until the market service exists.`} onStub={setNote}>
-                {listing.action}
-              </StubButton>
-            </div>
+          ))
+      ) : (
+        <>
+          <div className="panel-label">Hire hands for your buildings</div>
+          <div className="panel-grid2">
+            {people.pops.map((pop) => (
+              <PanelRow
+                key={pop.type}
+                icon={POP_ICON[pop.type] ?? "👤"}
+                title={`${pop.label} · you own ${mine.pops[pop.type] ?? 0}`}
+                sub={`hire ${pop.hireCost}dr · upkeep ${pop.upkeepPerDay}dr/day · eats ${pop.foodPerDay} ${label(people.foodGood)}/day`}
+                action={
+                  <button type="button" className="panel-btn" disabled={busy} onClick={() => act(() => api.hirePeople(pop.type, 1), `Hired a ${pop.label}.`)}>
+                    Hire 1 · {pop.hireCost}dr
+                  </button>
+                }
+              />
+            ))}
           </div>
-        ))}
-        {visible.length === 0 ? <div className="mkt-empty">No listings match your search.</div> : null}
-      </div>
-      <p className="dashboard-todo">“People” are contract hires — guards, tutors, and other services. Never persons as property.</p>
+          <p className="dashboard-todo">“People” are contract hires — guards, tutors, hands for your trade. Never persons as property.</p>
+        </>
+      )}
 
-      <div className="panel-label">Seeking to buy</div>
-      <div className="panel-grid2">
-        {placeholderBuyOrders.map((order) => (
-          <PanelRow
-            key={order.id}
-            icon={order.icon}
-            title={order.title}
-            sub={order.sub}
-            action={
-              order.mine ? (
-                <StubButton ghost message="TODO: cancelling an order is a stub until the market service exists." onStub={setNote}>Cancel</StubButton>
-              ) : (
-                <StubButton message="TODO: fulfilling an order is a stub until the market service exists." onStub={setNote}>Fulfill</StubButton>
-              )
-            }
-          />
-        ))}
-      </div>
-      <p className="dashboard-todo">TODO: all market listings and orders are placeholders until the market service exists.</p>
+      <p className="dashboard-todo">A player-to-player market (listings &amp; buy orders) arrives in a later build.</p>
       {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
     </section>
   );

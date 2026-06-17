@@ -2614,6 +2614,14 @@
   color: var(--dash-stone-dim);
   font-size: 10.5px;
 }
+/* Phase 5: build/upgrade shortfall + under-staffed idle warning. */
+.dashboard-shell .tier-gate{
+  margin-top: 3px;
+  color: #d49a86;
+  font-size: 10.5px;
+}
+.dashboard-shell .tier-step.tier-idle{ border-color: rgba(212, 154, 134, 0.5); }
+.dashboard-shell .tier-idle .tier-tag{ color: #d49a86; }
 
 /* trait chips */
 .dashboard-shell .tchip{
