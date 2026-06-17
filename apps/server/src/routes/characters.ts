@@ -25,13 +25,15 @@ type CharacterPayload = {
   name?: string;
 };
 
+// Mirror of the map in routes/me.ts — keep in sync. Real goods for producing
+// classes (grain/wine/herbal/ship); a stat for the income-only/stat classes
+// (the client only renders the class-store row for real goods).
 const classResourceByProfession: Record<string, string | null> = {
-  landowner: "wheat",
+  landowner: "grain",
   trader: "wine",
   priest: "herbal",
   philosopher: "prestige",
-  // Shipbuilders' trade pays drachmae directly — no separate class resource.
-  shipbuilder: null,
+  shipbuilder: "ship",
   hetaira: "intelligence",
   hoplite: "militia",
   slave: "freedom",

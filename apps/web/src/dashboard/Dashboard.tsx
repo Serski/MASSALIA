@@ -3403,11 +3403,14 @@ function InventoryResources({ player }: { player: PlayerDashboardView }) {
         rateTone="up"
         rateTitle={PLACEHOLDER_RATE_TITLE}
       />
-      {/* Some paths (e.g. Shipbuilder) earn drachmae directly and have no separate
-          class resource — render the class store row only when one exists. */}
-      {player.classResource ? (
+      {/* Show the "· your trade" store ONLY when the class resource is a REAL
+          tradeable good (in the goods registry). Classes whose "class resource" is
+          a STAT (philosopher → prestige, hetaira → intelligence, hoplite → militia,
+          slave → freedom) show no store row — a stat is not a held good. Reuses the
+          same goodsMeta the Goods list uses, so the two can't drift. */}
+      {player.classResource && player.classResource.type in goodsMeta ? (
         <ResRow
-          icon={resourceIcons[player.classResource.type] ?? "🏺"}
+          icon={goodIcon(player.classResource.type)}
           name={player.classResource.label}
           sub="your trade"
           amount={player.classResource.amount.toLocaleString()}

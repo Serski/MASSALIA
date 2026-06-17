@@ -16,13 +16,17 @@ import { syncElections } from "../services/elections.js";
 
 const db = createDb();
 
+// Each class's signature "store" resource. Real tradeable GOODS for the producing
+// classes (grain/wine/herbal/ship); a STAT for the income-only/stat classes
+// (prestige/intelligence/militia/freedom) until their stat-trickle systems land —
+// the client shows the "· your trade" store row only for real goods, so those stats
+// never render as a held good.
 const classResourceByProfession: Record<string, string | null> = {
-  landowner: "wheat",
+  landowner: "grain",
   trader: "wine",
   priest: "herbal",
   philosopher: "prestige",
-  // Shipbuilders' trade pays drachmae directly — no separate class resource.
-  shipbuilder: null,
+  shipbuilder: "ship",
   hetaira: "intelligence",
   hoplite: "militia",
   slave: "freedom",
