@@ -3223,11 +3223,6 @@ function AtlasPanel() {
 // Top-bar + slide-up sheets (Inventory / Character) ported from the v8 mockup.
 // ---------------------------------------------------------------------------
 
-// Placeholder per-day production rates shown on the gold pill and store rows.
-// TODO: real rates land with the Phase 2 production tick; flagged until then.
-const PLACEHOLDER_GOLD_RATE = "+30 / day";
-const PLACEHOLDER_CLASS_RATE = "+10 / day";
-const PLACEHOLDER_RATE_TITLE = "Placeholder rate — real production lands in Phase 2.";
 // TODO: real "new items" badge once the items system exists. 0 = nothing to show.
 const PLACEHOLDER_NEW_ITEM_COUNT = 0;
 // Everyone starts at Tier 1; real tier tracking lands with profession progression.
@@ -4187,7 +4182,6 @@ export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () =
             <span className="vital-v">{player.drachmae.toLocaleString()}</span>
             <span className="vital-meta">
               <span className="vital-k">Drachmae</span>
-              <span className="vital-d placeholder" title={PLACEHOLDER_RATE_TITLE}>{PLACEHOLDER_GOLD_RATE}</span>
             </span>
           </button>
           <button
