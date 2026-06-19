@@ -1208,10 +1208,12 @@ function formatPerDay(n: number): string {
 // What a building provides per day: drachmae income first (income-only lines like
 // trader/philosopher/hetaira would otherwise read blank), then each good. Income
 // rides the same rounding as goods and is omitted when there is none (< 1/day).
-function yieldSummary(yields: { good: string; perDay: number }[], income = 0): string {
+// Good names go through content goodLabels (grain → "Wheat"); never the raw id.
+function yieldSummary(yields: { good: string; perDay: number }[], income = 0, goodLabels: Record<string, string> = {}): string {
+  const name = (good: string) => goodLabels[good] ?? good.charAt(0).toUpperCase() + good.slice(1);
   const parts: string[] = [];
   if (income >= 1) parts.push(`${formatPerDay(income)} dr/day`);
-  for (const y of yields) parts.push(`${formatPerDay(y.perDay)} ${y.good}/day`);
+  for (const y of yields) parts.push(`${formatPerDay(y.perDay)} ${name(y.good)}/day`);
   return parts.join(" · ");
 }
 
@@ -1275,7 +1277,7 @@ function ClassBuildingLadder({
                 : "future";
         const isBuilt = t.tier < currentTier || (t.tier === currentTier && active);
         const idle = state === "current" && Boolean(owned?.idle);
-        const provides = yieldSummary(t.yields, t.income) || "—";
+        const provides = yieldSummary(t.yields, t.income, goodLabels) || "—";
         const tag = idle
           ? "Idle"
           : state === "built"
@@ -1838,7 +1840,7 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
       sub={
         b.status === "constructing"
           ? `under construction · ${buildCountdown(b.completesAt)}`
-          : `${yieldSummary(b.yields, b.income)}${b.upkeepPerDay > 0 ? ` · upkeep ${b.upkeepPerDay}dr/day` : ""}`
+          : `${yieldSummary(b.yields, b.income, catalog.goodLabels)}${b.upkeepPerDay > 0 ? ` · upkeep ${b.upkeepPerDay}dr/day` : ""}`
       }
       tag={b.status === "constructing" ? "building" : undefined}
       action={
@@ -1857,7 +1859,7 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
       ? `+${entry.composurePerDay} composure/day (flat) · ${t1.cost}dr · ${t1.buildDays}d`
       : entry.storageBonus
         ? `+${entry.storageBonus} storage · ${t1.cost}dr · ${t1.buildDays}d`
-        : `${yieldSummary(t1.yields, t1.income)} · ${t1.cost}dr · ${t1.buildDays}d`;
+        : `${yieldSummary(t1.yields, t1.income, catalog.goodLabels)} · ${t1.cost}dr · ${t1.buildDays}d`;
     return (
       <PanelRow
         key={entry.id}
@@ -3241,20 +3243,18 @@ const resourceIcons: Record<string, string> = {
   favor: "🤝",
 };
 
-// Display metadata for the REAL tradeable goods (mirrors the buildings/vendor
-// registry). The inventory's Goods list is driven by what the player actually
-// HOLDS (non-zero /me/state balances), not by this map — this only supplies a
-// label + icon. Browsing the full goods space belongs to the vendor/market.
-const goodsMeta: Record<string, { label: string; icon: string }> = {
-  grain: { label: "Grain", icon: "🌾" },
-  oliveoil: { label: "Olive Oil", icon: "🫒" },
-  wine: { label: "Wine", icon: "🍷" },
-  herbal: { label: "Herbal", icon: "🌿" },
-  timber: { label: "Timber", icon: "🪵" },
-  chicken: { label: "Chicken", icon: "🐔" },
-  bull: { label: "Bull", icon: "🐂" },
-  horse: { label: "Horse", icon: "🐎" },
-  ship: { label: "Ship", icon: "⛵" },
+// Emoji icons for the goods. Display NAMES come from content goodLabels (the same
+// source the market uses) — never this map; this only supplies an icon.
+const goodsMeta: Record<string, { icon: string }> = {
+  grain: { icon: "🌾" },
+  oliveoil: { icon: "🫒" },
+  wine: { icon: "🍷" },
+  herbal: { icon: "🌿" },
+  timber: { icon: "🪵" },
+  chicken: { icon: "🐔" },
+  bull: { icon: "🐂" },
+  horse: { icon: "🐎" },
+  ship: { icon: "⛵" },
 };
 
 // Resource rows that are NOT tradeable goods and must never show under Goods:
@@ -3274,9 +3274,6 @@ const NON_GOODS = new Set<string>([
   "devotion",
 ]);
 
-function goodLabel(type: string): string {
-  return goodsMeta[type]?.label ?? type.charAt(0).toUpperCase() + type.slice(1);
-}
 function goodIcon(type: string): string {
   return goodsMeta[type]?.icon ?? "📦";
 }
@@ -3647,7 +3644,8 @@ function InventoryItems() {
   );
 }
 
-function InventoryUnits({ household }: { household: { pops: Record<string, number>; people: PeopleView } | null }) {
+function InventoryUnits({ household, goodLabels }: { household: { pops: Record<string, number>; people: PeopleView } | null; goodLabels: Record<string, string> | null }) {
+  const foodName = household ? goodLabels?.[household.people.foodGood] ?? household.people.foodGood.charAt(0).toUpperCase() + household.people.foodGood.slice(1) : "";
   // Owned pops (the household workforce) you hired in the Market — real data from
   // mine.pops + the people catalog (labels/upkeep/food). Only types you own show.
   const owned = household ? household.people.pops.filter((pop) => (household.pops[pop.type] ?? 0) > 0) : [];
@@ -3661,7 +3659,7 @@ function InventoryUnits({ household }: { household: { pops: Record<string, numbe
               key={pop.type}
               icon={POP_ICON[pop.type] ?? "👤"}
               name={`${pop.label} × ${household!.pops[pop.type]}`}
-              sub={`upkeep ${pop.upkeepPerDay}dr/day · ${pop.foodPerDay} ${goodLabel(household!.people.foodGood)}/day each`}
+              sub={`upkeep ${pop.upkeepPerDay}dr/day · ${pop.foodPerDay} ${foodName}/day each`}
               tag="owned"
             />
           ))}
@@ -3728,7 +3726,7 @@ function InventorySheet({
       />
       {tab === "resources" ? <InventoryResources player={player} goodLabels={goodLabels} /> : null}
       {tab === "items" ? <InventoryItems /> : null}
-      {tab === "units" ? <InventoryUnits household={household} /> : null}
+      {tab === "units" ? <InventoryUnits household={household} goodLabels={goodLabels} /> : null}
     </BottomSheet>
   );
 }
