@@ -3642,9 +3642,26 @@ function InventoryItems() {
   );
 }
 
-function InventoryUnits() {
+function InventoryUnits({ household }: { household: { pops: Record<string, number>; people: PeopleView } | null }) {
+  // Owned pops (the household workforce) you hired in the Market — real data from
+  // mine.pops + the people catalog (labels/upkeep/food). Only types you own show.
+  const owned = household ? household.people.pops.filter((pop) => (household.pops[pop.type] ?? 0) > 0) : [];
   return (
     <div role="tabpanel">
+      {owned.length > 0 ? (
+        <>
+          <SheetLabel>Household · {owned.reduce((n, pop) => n + (household!.pops[pop.type] ?? 0), 0)}</SheetLabel>
+          {owned.map((pop) => (
+            <DetailRow
+              key={pop.type}
+              icon={POP_ICON[pop.type] ?? "👤"}
+              name={`${pop.label} × ${household!.pops[pop.type]}`}
+              sub={`upkeep ${pop.upkeepPerDay}dr/day · ${pop.foodPerDay} ${goodLabel(household!.people.foodGood)}/day each`}
+              tag="owned"
+            />
+          ))}
+        </>
+      ) : null}
       <SheetLabel>Your units</SheetLabel>
       {placeholderUnits.map((unit) => (
         <DetailRow key={unit.id} icon={unit.icon} name={unit.name} sub={unit.line} tag={unit.tag} dim={unit.dim} />
@@ -3652,7 +3669,7 @@ function InventoryUnits() {
       <div className="slot-empty">
         Hire guards for protection — or befriend a Dekarchos. Armies are a Military Leader&apos;s trade.
       </div>
-      <p className="sheet-todo">TODO: units are placeholder rows until the units system exists.</p>
+      <p className="sheet-todo">TODO: guards &amp; armies are placeholder rows until the units system exists.</p>
     </div>
   );
 }
@@ -3669,6 +3686,24 @@ function InventorySheet({
   player: PlayerDashboardView;
 }) {
   const [tab, setTab] = useState<InventoryTab>("resources");
+  // Owned pops live on the buildings/mine payload (not /me/state). Fetch them — plus
+  // the people catalog for labels/upkeep/food — when the sheet opens, for the Units
+  // tab's Household section. Display-only; existing endpoints.
+  const [household, setHousehold] = useState<{ pops: Record<string, number>; people: PeopleView } | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    Promise.all([api.buildingsMine(), api.people()])
+      .then(([m, p]) => {
+        if (!cancelled) setHousehold({ pops: m.pops, people: p });
+      })
+      .catch(() => {
+        /* leave the Household section hidden on error */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
   return (
     <BottomSheet open={open} onClose={onClose} labelledBy="inventory-sheet-title" title="Inventory">
       <SheetTabs<InventoryTab>
@@ -3682,7 +3717,7 @@ function InventorySheet({
       />
       {tab === "resources" ? <InventoryResources player={player} /> : null}
       {tab === "items" ? <InventoryItems /> : null}
-      {tab === "units" ? <InventoryUnits /> : null}
+      {tab === "units" ? <InventoryUnits household={household} /> : null}
     </BottomSheet>
   );
 }
