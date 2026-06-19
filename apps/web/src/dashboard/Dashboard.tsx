@@ -3414,7 +3414,7 @@ function ResRow({
   name: string;
   sub?: string;
   amount: string;
-  rate: string;
+  rate?: string; // omitted → no rate pill (no invented per-day number)
   rateTone?: "up" | "zero";
   rateTitle?: string;
   dim?: boolean;
@@ -3427,9 +3427,11 @@ function ResRow({
         {sub ? <span className="res-sub"> · {sub}</span> : null}
       </div>
       <span className="res-amt">{amount}</span>
-      <span className={`res-rate ${rateTone}${rateTitle ? " placeholder" : ""}`} title={rateTitle}>
-        {rate}
-      </span>
+      {rate !== undefined ? (
+        <span className={`res-rate ${rateTone}${rateTitle ? " placeholder" : ""}`} title={rateTitle}>
+          {rate}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -3574,14 +3576,9 @@ function InventoryResources({ player }: { player: PlayerDashboardView }) {
       <p className="sheet-todo">TODO: warehouse capacity is a placeholder until storage limits exist.</p>
 
       <SheetLabel>Coin &amp; class stores</SheetLabel>
-      <ResRow
-        icon="🪙"
-        name="Drachmae"
-        amount={player.drachmae.toLocaleString()}
-        rate={PLACEHOLDER_GOLD_RATE}
-        rateTone="up"
-        rateTitle={PLACEHOLDER_RATE_TITLE}
-      />
+      {/* No per-day rate pill: accrual is lazy/closed-form (no tick), and the real
+          income rate isn't on this /me/state payload — so we show no invented number. */}
+      <ResRow icon="🪙" name="Drachmae" amount={player.drachmae.toLocaleString()} />
       {/* Show the "· your trade" store ONLY when the class resource is a REAL
           tradeable good (in the goods registry). Classes whose "class resource" is
           a STAT (philosopher → prestige, hetaira → intelligence, hoplite → militia,
@@ -3593,12 +3590,8 @@ function InventoryResources({ player }: { player: PlayerDashboardView }) {
           name={player.classResource.label}
           sub="your trade"
           amount={player.classResource.amount.toLocaleString()}
-          rate={PLACEHOLDER_CLASS_RATE}
-          rateTone="up"
-          rateTitle={PLACEHOLDER_RATE_TITLE}
         />
       ) : null}
-      <p className="sheet-todo">TODO: per-day production rates are placeholders until the Phase 2 tick lands.</p>
 
       <SheetLabel>Goods</SheetLabel>
       {heldGoods.length === 0 ? (
