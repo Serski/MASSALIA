@@ -3662,42 +3662,147 @@ function InventoryUnits({ household, goodLabels }: { household: { pops: Record<s
   );
 }
 
-type InventoryTab = "resources" | "items" | "units";
+// The per-day economy breakdown (panel A): what you EARN and SPEND each day at the
+// CURRENT buildings + staff + season, derived from the mine/catalog/people payloads
+// the modal already fetches — no persisted history, no invented numbers. Diagnostic
+// cases (idle buildings, owed shortfall) surface inline. Food is shown correctly per
+// the own-grain-first rule: wheat UNITS consumed, with drachmae only for the portion
+// that has to be bought (own-harvest food costs 0 dr — never a second hit on grain
+// that already counts as income at floor).
+function InventoryEconomy({ data, goodLabels }: { data: { mine: BuildingsMine; people: PeopleView; catalog: BuildingsCatalog } | null; goodLabels: Record<string, string> | null }) {
+  if (!data) return <div role="tabpanel"><p className="sheet-todo">Reckoning your day's books…</p></div>;
+  const { mine, people, catalog } = data;
+  const label = (g: string) => goodLabels?.[g] ?? g.charAt(0).toUpperCase() + g.slice(1);
+  const floor = (g: string) => catalog.vendor.find((v) => v.good === g)?.sell ?? 0; // vendor floor (what you receive)
+  const popUpkeep = (t: string) => people.pops.find((p) => p.type === t)?.upkeepPerDay ?? 0;
+  const popFood = (t: string) => people.pops.find((p) => p.type === t)?.foodPerDay ?? 0;
+  const staffingFor = (b: OwnedBuilding) => {
+    const tiers = b.kind === "class" ? catalog.classBuilding?.tiers : catalog.commons.find((c) => c.id === b.id)?.tiers;
+    return tiers?.find((t) => t.tier === b.tier)?.staffing ?? {};
+  };
+  const dr = (n: number) => `${n >= 0 ? "+" : "−"}${Math.abs(Math.round(n))} dr`;
+
+  const active = mine.buildings.filter((b) => b.status === "active");
+  const producing = active.filter((b) => !b.idle); // idle → no income, no wages/food
+
+  // INCOME per source: building income + goods produced valued at the vendor floor.
+  const incomeRows = producing
+    .map((b) => {
+      const goodsVal = b.yields.reduce((s, y) => s + y.perDay * floor(y.good), 0);
+      return { id: b.id, name: b.name, icon: b.icon ?? "🏛️", income: b.income, yields: b.yields, total: b.income + goodsVal };
+    })
+    .filter((r) => r.total > 0 || r.yields.length > 0);
+  const incomeTotal = incomeRows.reduce((s, r) => s + r.total, 0);
+
+  // EXPENSES: wages per pop type, food (wheat units; drachmae only for bought), upkeep.
+  const staffAgg: Record<string, number> = {};
+  let foodUnits = 0;
+  for (const b of producing) {
+    for (const [type, n] of Object.entries(staffingFor(b)) as [string, number][]) {
+      staffAgg[type] = (staffAgg[type] ?? 0) + n;
+      foodUnits += n * popFood(type);
+    }
+  }
+  const wages = Object.entries(staffAgg).map(([type, count]) => ({ type, count, drCost: count * popUpkeep(type) }));
+  const wagesTotal = wages.reduce((s, w) => s + w.drCost, 0);
+  // Food drawn from your own wheat production first; only the shortfall is bought.
+  const foodGood = people.foodGood;
+  const foodCeiling = catalog.vendor.find((v) => v.good === foodGood)?.buy ?? 0; // what you pay to buy
+  const wheatProduced = producing.reduce((s, b) => s + b.yields.filter((y) => y.good === foodGood).reduce((a, y) => a + y.perDay, 0), 0);
+  const foodDrawn = Math.min(foodUnits, wheatProduced);
+  const foodBought = Math.max(0, foodUnits - wheatProduced);
+  const foodCost = foodBought * foodCeiling;
+  const upkeepTotal = active.reduce((s, b) => s + b.upkeepPerDay, 0); // building upkeep (idle still owes)
+
+  const net = incomeTotal - wagesTotal - foodCost - upkeepTotal;
+  const idledNames = active.filter((b) => b.idle).map((b) => b.name);
+  const owed = Math.round(mine.upkeepOwed);
+  const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+  return (
+    <div role="tabpanel">
+      <SheetLabel>Per day · at your buildings, staff &amp; season</SheetLabel>
+      {idledNames.map((n) => (
+        <p key={n} className="sheet-gate">⚠ {n} idle — under-staffed (earning nothing)</p>
+      ))}
+      {owed > 0 ? <p className="sheet-gate">Owed: {owed} dr — your purse couldn't cover upkeep + wages.</p> : null}
+
+      <SheetLabel>Income</SheetLabel>
+      {incomeRows.length === 0 ? (
+        <p className="sheet-todo">No production yet — build and staff your trade.</p>
+      ) : (
+        incomeRows.map((r) => (
+          <ResRow
+            key={r.id}
+            icon={r.icon}
+            name={r.name}
+            sub={[r.income >= 1 ? `+${Math.round(r.income)} dr` : null, ...r.yields.map((y) => `${formatPerDay(y.perDay)} ${label(y.good)}`)].filter(Boolean).join(" · ")}
+            amount={dr(r.total)}
+          />
+        ))
+      )}
+
+      <SheetLabel>Expenses</SheetLabel>
+      {wages.length === 0 && foodUnits === 0 && upkeepTotal === 0 ? <p className="sheet-todo">No wages, food, or upkeep yet.</p> : null}
+      {wages.map((w) => (
+        <ResRow key={`wage-${w.type}`} icon={POP_ICON[w.type] ?? "👤"} name={`${cap(w.type)} wages × ${w.count}`} amount={dr(-w.drCost)} />
+      ))}
+      {foodUnits > 0 ? (
+        <ResRow
+          icon="🌾"
+          name="Food"
+          sub={`${formatPerDay(foodUnits)} ${label(foodGood)}/day${foodDrawn > 0 ? ` · ${formatPerDay(foodDrawn)} from your harvest` : ""}${foodBought > 0 ? ` · ${formatPerDay(foodBought)} bought` : ""}`}
+          amount={foodCost > 0 ? dr(-foodCost) : "0 dr"}
+        />
+      ) : null}
+      {upkeepTotal > 0 ? <ResRow icon="🏛️" name="Building upkeep" amount={dr(-upkeepTotal)} /> : null}
+
+      <div className={`econ-net ${net >= 0 ? "pos" : "neg"}`}>
+        <span>Net / day</span>
+        <strong>{dr(net)}</strong>
+      </div>
+    </div>
+  );
+}
+
+type InventoryTab = "resources" | "economy" | "items" | "units";
 
 function InventorySheet({
   open,
   onClose,
   player,
+  initialTab = "resources",
 }: {
   open: boolean;
   onClose: () => void;
   player: PlayerDashboardView;
+  initialTab?: InventoryTab;
 }) {
-  const [tab, setTab] = useState<InventoryTab>("resources");
-  // Owned pops live on the buildings/mine payload (not /me/state). Fetch them — plus
-  // the people catalog for labels/upkeep/food — when the sheet opens, for the Units
-  // tab's Household section. Display-only; existing endpoints.
-  const [household, setHousehold] = useState<{ pops: Record<string, number>; people: PeopleView } | null>(null);
-  // Content goodLabels (grain→Wheat, timber→Wood, naval-supplies→Naval Supplies, …)
-  // for the Resources tab — same source the Market uses, so names never drift.
-  const [goodLabels, setGoodLabels] = useState<Record<string, string> | null>(null);
+  const [tab, setTab] = useState<InventoryTab>(initialTab);
+  // Open to the requested tab each time the sheet opens (Resources for the inventory
+  // button, Economy for the top-bar drachmae pill).
+  useEffect(() => {
+    if (open) setTab(initialTab);
+  }, [open, initialTab]);
+  // The mine / people / catalog payloads (not on /me/state) feed the Units household,
+  // Resources names, and the Economy breakdown. Fetched once when the sheet opens.
+  const [data, setData] = useState<{ mine: BuildingsMine; people: PeopleView; catalog: BuildingsCatalog } | null>(null);
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     Promise.all([api.buildingsMine(), api.people(), api.buildingsCatalog()])
-      .then(([m, p, c]) => {
-        if (!cancelled) {
-          setHousehold({ pops: m.pops, people: p });
-          setGoodLabels(c.goodLabels);
-        }
+      .then(([mine, people, catalog]) => {
+        if (!cancelled) setData({ mine, people, catalog });
       })
       .catch(() => {
-        /* leave the Household section / content labels absent on error */
+        /* leave the fetched sections absent on error */
       });
     return () => {
       cancelled = true;
     };
   }, [open]);
+  const goodLabels = data?.catalog.goodLabels ?? null;
+  const household = data ? { pops: data.mine.pops, people: data.people } : null;
   return (
     <BottomSheet open={open} onClose={onClose} labelledBy="inventory-sheet-title" title="Inventory">
       <SheetTabs<InventoryTab>
@@ -3705,11 +3810,13 @@ function InventorySheet({
         onSelect={setTab}
         tabs={[
           { id: "resources", label: "Resources" },
+          { id: "economy", label: "Economy" },
           { id: "items", label: "Items", badge: placeholderItems.length },
           { id: "units", label: "Units" },
         ]}
       />
       {tab === "resources" ? <InventoryResources player={player} goodLabels={goodLabels} /> : null}
+      {tab === "economy" ? <InventoryEconomy data={data} goodLabels={goodLabels} /> : null}
       {tab === "items" ? <InventoryItems /> : null}
       {tab === "units" ? <InventoryUnits household={household} goodLabels={goodLabels} /> : null}
     </BottomSheet>
@@ -4097,6 +4204,9 @@ export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () =
   const [activeSection, setActiveSection] = useState<DashboardSection>("court");
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [activeSheet, setActiveSheet] = useState<"inventory" | "character" | null>(null);
+  // Which Inventory tab to open on: the drachmae pill opens Economy, the inventory
+  // button opens Resources (default).
+  const [inventoryTab, setInventoryTab] = useState<InventoryTab>("resources");
   const [playerState, setPlayerState] = useState<PlayerState | null>(null);
   const [courtRemaining, setCourtRemaining] = useState(0);
   const [loadError, setLoadError] = useState("");
@@ -4181,8 +4291,11 @@ export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () =
           <button
             className="topbar-vital"
             type="button"
-            onClick={() => setActiveSheet("inventory")}
-            title="Open your inventory"
+            onClick={() => {
+              setInventoryTab("economy");
+              setActiveSheet("inventory");
+            }}
+            title="Open your economy — income & expenses per day"
           >
             <span className="vital-ic" aria-hidden="true">🪙</span>
             <span className="vital-v">{player.drachmae.toLocaleString()}</span>
@@ -4193,7 +4306,10 @@ export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () =
           <button
             className="topbar-vital inventory-vital"
             type="button"
-            onClick={() => setActiveSheet("inventory")}
+            onClick={() => {
+              setInventoryTab("resources");
+              setActiveSheet("inventory");
+            }}
             title="Open your inventory"
           >
             <span className="vital-ic" aria-hidden="true">🏺</span>
@@ -4321,7 +4437,7 @@ export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () =
         </div>
       ) : null}
 
-      <InventorySheet open={activeSheet === "inventory"} onClose={closeSheet} player={player} />
+      <InventorySheet open={activeSheet === "inventory"} onClose={closeSheet} player={player} initialTab={inventoryTab} />
       <CharacterSheet open={activeSheet === "character"} onClose={closeSheet} player={player} onLogout={handleLogout} />
     </main>
   );
