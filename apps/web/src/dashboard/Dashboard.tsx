@@ -3557,16 +3557,14 @@ function BottomSheet({
 }
 
 function InventoryResources({ player, goodLabels }: { player: PlayerDashboardView; goodLabels: Record<string, string> | null }) {
-  const classType = player.classResource?.type ?? null;
   // Names via content goodLabels (never a raw id); capitalise as a fallback for goods
   // with no override and before the labels load.
   const label = (type: string) => goodLabels?.[type] ?? type.charAt(0).toUpperCase() + type.slice(1);
-  // "What I have": EVERY good the player holds (non-zero), minus the class good
-  // (shown under Coin & Class stores) and non-goods (markers/stats). Derived from the
-  // data via a deny-list — materials, the naval line, and crafted ships all appear,
-  // and future goods show automatically (no hardcoded allow-list).
+  // "What I have": EVERY good the player holds (non-zero), minus non-goods
+  // (markers/stats). Post-v2.1 the class good is just a good — it shows here like the
+  // rest. Derived via a deny-list, so future goods appear automatically.
   const heldGoods = Object.entries(player.balances)
-    .filter(([type, amount]) => amount > 0 && type !== classType && !NON_GOODS.has(type))
+    .filter(([type, amount]) => amount > 0 && !NON_GOODS.has(type))
     .sort((a, b) => label(a[0]).localeCompare(label(b[0])));
   return (
     <div role="tabpanel">
@@ -3584,23 +3582,10 @@ function InventoryResources({ player, goodLabels }: { player: PlayerDashboardVie
       </div>
       <p className="sheet-todo">TODO: warehouse capacity is a placeholder until storage limits exist.</p>
 
-      <SheetLabel>Coin &amp; class stores</SheetLabel>
+      <SheetLabel>Coin</SheetLabel>
       {/* No per-day rate pill: accrual is lazy/closed-form (no tick), and the real
           income rate isn't on this /me/state payload — so we show no invented number. */}
       <ResRow icon="🪙" name="Drachmae" amount={player.drachmae.toLocaleString()} />
-      {/* Show the "· your trade" store ONLY when the class resource is a REAL
-          tradeable good. Classes whose "class resource" is a STAT (philosopher →
-          prestige, hetaira → intelligence, hoplite → militia, slave → freedom) show
-          no store row — a stat is not a held good. Same deny-list the Goods list
-          uses, so the two can't drift. */}
-      {player.classResource && !NON_GOODS.has(player.classResource.type) ? (
-        <ResRow
-          icon={goodIcon(player.classResource.type)}
-          name={label(player.classResource.type)}
-          sub="your trade"
-          amount={player.classResource.amount.toLocaleString()}
-        />
-      ) : null}
 
       <SheetLabel>Goods</SheetLabel>
       {heldGoods.length === 0 ? (
