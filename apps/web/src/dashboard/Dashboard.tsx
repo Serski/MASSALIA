@@ -2076,19 +2076,28 @@ function MarketPanel({ onRefresh }: PanelProps) {
         <>
           <div className="panel-label">Hire hands for your buildings</div>
           <div className="panel-grid2">
-            {people.pops.map((pop) => (
-              <PanelRow
-                key={pop.type}
-                icon={POP_ICON[pop.type] ?? "👤"}
-                title={`${pop.label} · you own ${mine.pops[pop.type] ?? 0}`}
-                sub={`hire ${pop.hireCost}dr · upkeep ${pop.upkeepPerDay}dr/day · eats ${pop.foodPerDay} ${label(people.foodGood)}/day`}
-                action={
-                  <button type="button" className="panel-btn" disabled={busy} onClick={() => act(() => api.hirePeople(pop.type, 1), `Hired a ${pop.label}.`)}>
-                    Hire 1 · {pop.hireCost}dr
-                  </button>
-                }
-              />
-            ))}
+            {people.pops.map((pop) => {
+              const owned = mine.pops[pop.type] ?? 0;
+              return (
+                <PanelRow
+                  key={pop.type}
+                  icon={POP_ICON[pop.type] ?? "👤"}
+                  title={`${pop.label} · you own ${owned}`}
+                  sub={`hire ${pop.hireCost}dr · upkeep ${pop.upkeepPerDay}dr/day · eats ${pop.foodPerDay} ${label(people.foodGood)}/day`}
+                  action={
+                    <span style={{ display: "flex", gap: 6 }}>
+                      {/* Dismiss has NO refund — it only stops the upkeep + food. */}
+                      <button type="button" className="panel-btn ghost" disabled={busy || owned <= 0} onClick={() => act(() => api.dismissPeople(pop.type, 1), `${pop.dismissLabel} — one ${pop.label} let go.`)}>
+                        {pop.dismissLabel} 1
+                      </button>
+                      <button type="button" className="panel-btn" disabled={busy} onClick={() => act(() => api.hirePeople(pop.type, 1), `Hired a ${pop.label}.`)}>
+                        Hire 1 · {pop.hireCost}dr
+                      </button>
+                    </span>
+                  }
+                />
+              );
+            })}
           </div>
           <p className="dashboard-todo">“People” are contract hires — guards, tutors, hands for your trade. Never persons as property.</p>
         </>
@@ -3629,8 +3638,33 @@ function InventoryItems() {
   );
 }
 
-function InventoryUnits({ household, goodLabels }: { household: { pops: Record<string, number>; people: PeopleView } | null; goodLabels: Record<string, string> | null }) {
+function InventoryUnits({
+  household,
+  goodLabels,
+  onChanged,
+}: {
+  household: { pops: Record<string, number>; people: PeopleView } | null;
+  goodLabels: Record<string, string> | null;
+  onChanged?: () => Promise<void> | void;
+}) {
   const foodName = household ? goodLabels?.[household.people.foodGood] ?? household.people.foodGood.charAt(0).toUpperCase() + household.people.foodGood.slice(1) : "";
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  // Dismiss/disband one owned pop — no refund, just stops the upkeep. Reloads the
+  // sheet payload so the count drops immediately.
+  const dismiss = async (type: string, dismissLabel: string, popLabel: string) => {
+    setBusy(true);
+    setNote("");
+    try {
+      await api.dismissPeople(type, 1);
+      await onChanged?.();
+      setNote(`${dismissLabel} — one ${popLabel} let go.`);
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "That could not be done.");
+    } finally {
+      setBusy(false);
+    }
+  };
   // Owned pops (the household workforce) you hired in the Market — real data from
   // mine.pops + the people catalog (labels/upkeep/food). Only types you own show.
   const owned = household ? household.people.pops.filter((pop) => (household.pops[pop.type] ?? 0) > 0) : [];
@@ -3645,9 +3679,14 @@ function InventoryUnits({ household, goodLabels }: { household: { pops: Record<s
               icon={POP_ICON[pop.type] ?? "👤"}
               name={`${pop.label} × ${household!.pops[pop.type]}`}
               sub={`upkeep ${pop.upkeepPerDay}dr/day · ${pop.foodPerDay} ${foodName}/day each`}
-              tag="owned"
+              action={
+                <button type="button" className="panel-btn ghost" disabled={busy} onClick={() => dismiss(pop.type, pop.dismissLabel, pop.label)}>
+                  {pop.dismissLabel} 1
+                </button>
+              }
             />
           ))}
+          {note ? <p className="sheet-todo">{note}</p> : null}
         </>
       ) : null}
       <SheetLabel>Your units</SheetLabel>
@@ -3779,20 +3818,16 @@ function InventorySheet({
   // The mine / people / catalog payloads (not on /me/state) feed the Units household,
   // Resources names, and the Economy breakdown. Fetched once when the sheet opens.
   const [data, setData] = useState<{ mine: BuildingsMine; people: PeopleView; catalog: BuildingsCatalog } | null>(null);
+  const reload = useCallback(async () => {
+    const [mine, people, catalog] = await Promise.all([api.buildingsMine(), api.people(), api.buildingsCatalog()]);
+    setData({ mine, people, catalog });
+  }, []);
   useEffect(() => {
     if (!open) return;
-    let cancelled = false;
-    Promise.all([api.buildingsMine(), api.people(), api.buildingsCatalog()])
-      .then(([mine, people, catalog]) => {
-        if (!cancelled) setData({ mine, people, catalog });
-      })
-      .catch(() => {
-        /* leave the fetched sections absent on error */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open]);
+    reload().catch(() => {
+      /* leave the fetched sections absent on error */
+    });
+  }, [open, reload]);
   const goodLabels = data?.catalog.goodLabels ?? null;
   const household = data ? { pops: data.mine.pops, people: data.people } : null;
   return (
@@ -3810,7 +3845,7 @@ function InventorySheet({
       {tab === "resources" ? <InventoryResources player={player} goodLabels={goodLabels} /> : null}
       {tab === "economy" ? <InventoryEconomy data={data} goodLabels={goodLabels} /> : null}
       {tab === "items" ? <InventoryItems /> : null}
-      {tab === "units" ? <InventoryUnits household={household} goodLabels={goodLabels} /> : null}
+      {tab === "units" ? <InventoryUnits household={household} goodLabels={goodLabels} onChanged={reload} /> : null}
     </BottomSheet>
   );
 }

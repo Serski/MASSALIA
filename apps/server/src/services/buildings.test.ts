@@ -615,6 +615,48 @@ suite("Ledger / building engine (integration)", () => {
     expect(rows).toHaveLength(1); // single row, count incremented in place
   });
 
+  it("(P3e) dismiss decrements the owned count (no refund) and the upkeep drops on the NEXT settle", async () => {
+    // Own 3 slaves but build an estate that staffs 2. The first collect charges all 3
+    // (owned-based wages). Dismiss 2 — no refund, the wallet is untouched by the act —
+    // and the next collect charges only the 1 that remains.
+    playerId = await freshPlayer(500, "landowner", { slave: 3 });
+    const c = await ctx();
+    await m.buildings.build("landowner", c, "estate", new Date(T0)); // T1 active T0+1, staffs 2
+
+    const first = await m.buildings.collect(c, new Date(T0 + 6 * DAY)); // 5 whole days × 3 slaves
+    expect(first.staffUpkeep).toBe(15); // 3 owned × 1 dr/day × 5 days
+
+    // Dismiss 2 slaves: count floors toward 0, no drachmae refunded.
+    const walletBefore = await wallet();
+    const res = await m.buildings.dismissPops(c, "slave", 2, new Date(T0 + 6 * DAY));
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.dismissed).toBe(2);
+      expect(res.owned).toBe(1); // 3 − 2
+    }
+    expect(await popBalance("slave")).toBe(1); // decremented in place
+    expect(await wallet()).toBe(walletBefore); // NO refund — dismissing is a sunk cost
+
+    // Next settle charges only the 1 remaining slave (upkeep dropped from 15 → 5).
+    const second = await m.buildings.collect(c, new Date(T0 + 11 * DAY)); // another 5 whole days
+    expect(second.staffUpkeep).toBe(5); // 1 owned × 1 dr/day × 5 days
+    expect(second.staffUpkeep).toBeLessThan(first.staffUpkeep);
+  });
+
+  it("(P3f) dismissing MORE than you own is rejected — nothing mutated", async () => {
+    playerId = await freshPlayer(500, "landowner", { slave: 2 }); // own 2
+    const c = await ctx();
+    const tooMany = await m.buildings.dismissPops(c, "slave", 5, new Date(T0));
+    expect(tooMany.ok).toBe(false);
+    if (!tooMany.ok) expect(tooMany.code).toBe(409);
+    expect(await popBalance("slave")).toBe(2); // unchanged
+
+    // Dismissing a type you own none of is likewise rejected.
+    const none = await m.buildings.dismissPops(c, "citizen", 1, new Date(T0));
+    expect(none.ok).toBe(false);
+    if (!none.ok) expect(none.code).toBe(409);
+  });
+
   // --- Phase 4: NPC market (all goods) + People surface + craft --------------
 
   it("(P4-A) the NPC market trades EVERY vendor good generically — iron + naval-supplies, at vendorUnitPrice (ceiling buy / floor sell)", async () => {
@@ -649,9 +691,9 @@ suite("Ledger / building engine (integration)", () => {
     expect(view.foodGood).toBe("grain");
     expect(view.pops.map((p) => p.type).sort()).toEqual(["citizen", "freeman", "slave"]);
     const slave = view.pops.find((p) => p.type === "slave")!;
-    expect(slave).toMatchObject({ label: "Slave", hireCost: 49, upkeepPerDay: 1, foodPerDay: 1, civic: false });
+    expect(slave).toMatchObject({ label: "Slave", dismissLabel: "Free / Sell", hireCost: 49, upkeepPerDay: 1, foodPerDay: 1, civic: false });
     const citizen = view.pops.find((p) => p.type === "citizen")!;
-    expect(citizen).toMatchObject({ hireCost: 84, upkeepPerDay: 3, foodPerDay: 1, civic: true });
+    expect(citizen).toMatchObject({ label: "Citizen", dismissLabel: "Release", hireCost: 84, upkeepPerDay: 3, foodPerDay: 1, civic: true });
   });
 
   it("(P4-C0) every craft recipe is cheaper to make than to buy: craftRawCost < the good's vendor sell", () => {

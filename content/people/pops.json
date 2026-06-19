@@ -3,6 +3,7 @@
   "pops": {
     "slave": {
       "label": "Slave",
+      "dismissLabel": "Free / Sell",
       "hireCost": 49,
       "upkeepPerDay": 1,
       "foodPerDay": 1,
@@ -10,6 +11,7 @@
     },
     "freeman": {
       "label": "Freeman",
+      "dismissLabel": "Dismiss",
       "hireCost": 28,
       "upkeepPerDay": 2,
       "foodPerDay": 1,
@@ -17,6 +19,7 @@
     },
     "citizen": {
       "label": "Citizen",
+      "dismissLabel": "Release",
       "hireCost": 84,
       "upkeepPerDay": 3,
       "foodPerDay": 1,

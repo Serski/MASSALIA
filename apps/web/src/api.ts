@@ -288,6 +288,8 @@ export const api = {
   people: () => apiFetch<PeopleView>("/api/buildings/people"),
   hirePeople: (popType: string, count: number) =>
     apiFetch<HireResult>("/api/buildings/hire", { method: "POST", body: { popType, count } }),
+  dismissPeople: (popType: string, count: number) =>
+    apiFetch<DismissResult>("/api/buildings/dismiss", { method: "POST", body: { popType, count } }),
   craftGood: (good: string) => apiFetch<CraftResult>("/api/buildings/craft", { method: "POST", body: { good } }),
   // The hoplite's home army (Hoplite Step 1): rank ladder + daily salary.
   service: () => apiFetch<ServiceView>("/api/service"),
@@ -807,10 +809,11 @@ export type BuildingsMine = {
 
 export type PeopleView = {
   foodGood: string;
-  pops: { type: PopType; label: string; hireCost: number; upkeepPerDay: number; foodPerDay: number; civic: boolean }[];
+  pops: { type: PopType; label: string; dismissLabel: string; hireCost: number; upkeepPerDay: number; foodPerDay: number; civic: boolean }[];
 };
 
 export type HireResult = { ok: true; popType: string; hired: number; unitCost: number; total: number; wallet: number; owned: number };
+export type DismissResult = { ok: true; popType: string; dismissed: number; owned: number };
 export type CraftResult = { ok: true; good: string; consumed: Record<string, number>; balance: number };
 
 export type VendorResult = {

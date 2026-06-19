@@ -924,20 +924,51 @@ export async function hirePops(ctx: ActingContext, popType: string, count: numbe
   });
 }
 
+// --- Dismiss / disband (POST /api/buildings/dismiss) -------------------------
+// Free / sell / release N owned pops of a type: decrement player_pops, floor at 0,
+// reject if the player owns fewer than count. NO refund — hiring is a sunk cost;
+// dismissing only stops the upkeep + food from the next settle. Atomic, same
+// transaction pattern as hire. DECOUPLED from staffing: dropping below a building's
+// requirement is allowed — the building idles per the existing under-staffing rule
+// (no new special case).
+
+export type DismissResult =
+  | { ok: false; code: number; error: string }
+  | { ok: true; popType: string; dismissed: number; owned: number };
+
+export async function dismissPops(ctx: ActingContext, popType: string, count: number, _now: Date): Promise<DismissResult> {
+  if (!Number.isInteger(count) || count <= 0) return { ok: false, code: 400, error: "Dismiss a whole, positive number of people." };
+  const popsC = getPopsContent();
+  if (!popsC.pops[popType as PopType]) return { ok: false, code: 404, error: "You keep no such people." };
+
+  return db.transaction(async (tx) => {
+    const existing = await tx
+      .select()
+      .from(playerPops)
+      .where(and(eq(playerPops.worldId, ctx.worldId), eq(playerPops.ownerPlayerId, ctx.playerId), eq(playerPops.popType, popType)))
+      .limit(1);
+    const have = existing[0]?.count ?? 0;
+    if (have < count) return { ok: false as const, code: 409, error: `You own ${have} ${popType} — you cannot dismiss ${count}.` };
+    const owned = have - count; // floored at 0 by the reject above; no refund
+    await tx.update(playerPops).set({ count: owned }).where(eq(playerPops.id, existing[0]!.id));
+    return { ok: true as const, popType, dismissed: count, owned };
+  });
+}
+
 // --- People market (GET /api/buildings/people) -------------------------------
 // Read-only listing of the hireable pop types straight from content/people/pops.json
-// (the hire action itself is POST /api/buildings/hire). No DB read.
+// (the hire/dismiss actions are POST /api/buildings/hire | /dismiss). No DB read.
 
 export type PeopleView = {
   foodGood: string;
-  pops: { type: string; label: string; hireCost: number; upkeepPerDay: number; foodPerDay: number; civic: boolean }[];
+  pops: { type: string; label: string; dismissLabel: string; hireCost: number; upkeepPerDay: number; foodPerDay: number; civic: boolean }[];
 };
 
 export function listPops(): PeopleView {
   const p = getPopsContent();
   return {
     foodGood: p.foodGood,
-    pops: Object.entries(p.pops).map(([type, d]) => ({ type, label: d.label, hireCost: d.hireCost, upkeepPerDay: d.upkeepPerDay, foodPerDay: d.foodPerDay, civic: d.civic })),
+    pops: Object.entries(p.pops).map(([type, d]) => ({ type, label: d.label, dismissLabel: d.dismissLabel, hireCost: d.hireCost, upkeepPerDay: d.upkeepPerDay, foodPerDay: d.foodPerDay, civic: d.civic })),
   };
 }
 

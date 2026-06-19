@@ -8,6 +8,7 @@ import {
   catalog,
   collect,
   craft,
+  dismissPops,
   hirePops,
   listPops,
   mine,
@@ -165,6 +166,27 @@ export async function buildingRoutes(app: FastifyInstance) {
       return { error: "popType and count are required." };
     }
     const result = await hirePops(a.ctx, body.popType, body.count, new Date());
+    if (!result.ok) {
+      reply.code(result.code);
+      return { error: result.error };
+    }
+    return result;
+  });
+
+  // Dismiss/disband owned pops (no refund — stops upkeep). Body: { popType, count }.
+  app.post("/dismiss", async (request, reply) => {
+    const user = await requireAuth(request);
+    const a = await acting(user.id);
+    if ("error" in a) {
+      reply.code(a.code);
+      return { error: a.error };
+    }
+    const body = request.body as { popType?: string; count?: number } | undefined;
+    if (!body?.popType || body.count === undefined) {
+      reply.code(400);
+      return { error: "popType and count are required." };
+    }
+    const result = await dismissPops(a.ctx, body.popType, body.count, new Date());
     if (!result.ok) {
       reply.code(result.code);
       return { error: result.error };
