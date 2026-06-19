@@ -3676,10 +3676,6 @@ function InventoryEconomy({ data, goodLabels }: { data: { mine: BuildingsMine; p
   const floor = (g: string) => catalog.vendor.find((v) => v.good === g)?.sell ?? 0; // vendor floor (what you receive)
   const popUpkeep = (t: string) => people.pops.find((p) => p.type === t)?.upkeepPerDay ?? 0;
   const popFood = (t: string) => people.pops.find((p) => p.type === t)?.foodPerDay ?? 0;
-  const staffingFor = (b: OwnedBuilding) => {
-    const tiers = b.kind === "class" ? catalog.classBuilding?.tiers : catalog.commons.find((c) => c.id === b.id)?.tiers;
-    return tiers?.find((t) => t.tier === b.tier)?.staffing ?? {};
-  };
   const dr = (n: number) => `${n >= 0 ? "+" : "−"}${Math.abs(Math.round(n))} dr`;
 
   const active = mine.buildings.filter((b) => b.status === "active");
@@ -3694,17 +3690,13 @@ function InventoryEconomy({ data, goodLabels }: { data: { mine: BuildingsMine; p
     .filter((r) => r.total > 0 || r.yields.length > 0);
   const incomeTotal = incomeRows.reduce((s, r) => s + r.total, 0);
 
-  // EXPENSES: wages per pop type, food (wheat units; drachmae only for bought), upkeep.
-  const staffAgg: Record<string, number> = {};
-  let foodUnits = 0;
-  for (const b of producing) {
-    for (const [type, n] of Object.entries(staffingFor(b)) as [string, number][]) {
-      staffAgg[type] = (staffAgg[type] ?? 0) + n;
-      foodUnits += n * popFood(type);
-    }
-  }
-  const wages = Object.entries(staffAgg).map(([type, count]) => ({ type, count, drCost: count * popUpkeep(type) }));
+  // EXPENSES: wages + food are charged on every OWNED pop (hiring = paying wages + feeding
+  // them, staffed or not), independent of how many a building requires.
+  const wages = Object.entries(mine.pops)
+    .filter(([, count]) => count > 0)
+    .map(([type, count]) => ({ type, count, drCost: count * popUpkeep(type) }));
   const wagesTotal = wages.reduce((s, w) => s + w.drCost, 0);
+  const foodUnits = Object.entries(mine.pops).reduce((s, [type, count]) => s + count * popFood(type), 0);
   // Food drawn from your own wheat production first; only the shortfall is bought.
   const foodGood = people.foodGood;
   const foodCeiling = catalog.vendor.find((v) => v.good === foodGood)?.buy ?? 0; // what you pay to buy

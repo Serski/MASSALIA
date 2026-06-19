@@ -37,7 +37,11 @@ suite("Ledger / building engine (integration)", () => {
   async function freshPlayer(
     drachmae = 100,
     classId = "landowner",
-    pops: Record<string, number> = { slave: 10, freeman: 10, citizen: 10 },
+    // Default: own exactly the class building's T1 staffing requirement, so OWNED == required.
+    // (Wages/food are now charged on every owned pop, so seeding more than required would
+    // distort the per-day arithmetic these tests assert. Tests that need a surplus or a
+    // higher-tier prereq pass an explicit pops map.)
+    pops: Record<string, number> = (m.buildings.getBuildingsContent().classBuildings[classId]?.staffing ?? {}) as Record<string, number>,
     materials: Record<string, number> = { timber: 500, stone: 500, iron: 500, marble: 500, wool: 500, leather: 500 },
   ) {
     const { users, players, playerCharacters, playerPops, resources } = m.dbPkg;
@@ -402,9 +406,9 @@ suite("Ledger / building engine (integration)", () => {
     const collected = await m.buildings.collect(c, new Date(T0 + 27 * DAY)); // long window
     expect(collected.idled).toContain("estate"); // under-staffed → idled
     expect(collected.income).toBe(0); // no income
-    expect(collected.staffUpkeep).toBe(0); // idled → no crew to pay
+    expect(collected.staffUpkeep).toBeGreaterThan(0); // the 1 owned slave is still fed + paid, building idle or not
     expect(collected.upkeep).toBeGreaterThan(0); // building upkeep still accrues
-    expect(collected.owed).toBeGreaterThan(0); // can't pay it → forgiven shortfall
+    expect(collected.owed).toBeGreaterThan(0); // empty purse can't cover wages + upkeep → forgiven shortfall
     expect(await wallet()).toBe(0); // never negative
   });
 
@@ -447,14 +451,51 @@ suite("Ledger / building engine (integration)", () => {
     expect(estate.income).toBe(0);
     expect(estate.upkeepPerDay).toBe(1); // T2 building upkeep — still owed
 
-    // Collecting confirms it: no goods, no income, no staff cost (it idled), yet
-    // building upkeep was charged.
+    // Collecting confirms it: no goods, no income — yet the owned slave's wages AND the
+    // flat building upkeep are both charged (wages are owned-based, not staffing-based).
     const collected = await m.buildings.collect(c, new Date(T0 + 10 * DAY));
     expect(Object.keys(collected.banked)).toHaveLength(0); // produced nothing
     expect(collected.income).toBe(0);
-    expect(collected.staffUpkeep).toBe(0); // idled → no crew to pay
+    expect(collected.staffUpkeep).toBeGreaterThan(0); // the owned slave is still paid even though the estate idles
     expect(collected.upkeep).toBeGreaterThan(0); // building upkeep still owed
     expect(collected.idled).toContain("estate");
+  });
+
+  it("(d) wages + food are charged on ALL owned pops, not just the staffing requirement", async () => {
+    // Own 5 slaves but build an estate that only requires 2. Hiring is the commitment:
+    // every owned slave draws wages + food, working a building or not. So the bill is
+    // 5 slaves' worth (25 dr over 5 days), NOT the 2 the estate staffs (which would be 10).
+    playerId = await freshPlayer(500, "landowner", { slave: 5 });
+    const c = await ctx();
+    await m.buildings.build("landowner", c, "estate", new Date(T0)); // T1 active T0+1, staffs 2
+
+    const collected = await m.buildings.collect(c, new Date(T0 + 6 * DAY)); // 5 whole staffed days
+    expect(collected.idled).toEqual([]); // 5 owned ≥ 2 required → fully staffed, not idled
+    expect(collected.staffUpkeep).toBe(25); // 5 owned × 1 dr/day × 5 days (required-only would be 10)
+    expect(collected.foodDrawn + collected.foodBought).toBe(25); // all 5 are fed each day
+    expect(collected.owed).toBe(0); // the estate's income + grain cover the bill
+  });
+
+  it("(e) owning pops with NO staffed building still runs the wages + food clock from when they were hired", async () => {
+    // The edge case: hire pops, build nothing. Wages + food are charged anyway — hiring
+    // means paying and feeding them, idle or not. With no building completion to anchor
+    // the first settle, it falls back to the pops' createdAt (set to T0 so the simulated
+    // clock applies).
+    playerId = await freshPlayer(500, "landowner", {}); // empty purse-staffing: no pops, no building
+    await db.insert(m.dbPkg.playerPops).values({ worldId, ownerPlayerId: playerId, popType: "slave", count: 3, createdAt: new Date(T0) });
+    const c = await ctx();
+
+    const view = await m.buildings.mine("landowner", c, new Date(T0 + 5 * DAY));
+    expect(view.buildings).toHaveLength(0); // owns no buildings at all
+
+    const collected = await m.buildings.collect(c, new Date(T0 + 5 * DAY));
+    expect(collected.income).toBe(0); // earns nothing
+    expect(collected.collected).toBe(0); // no income, no building upkeep
+    expect(collected.staffUpkeep).toBe(15); // 3 slaves × 1 dr/day × 5 days, anchored at hire time (T0)
+    expect(collected.foodBought).toBe(15); // grows no grain → all 15 food auto-bought
+    expect(collected.foodCost).toBeGreaterThan(0); // wallet paid for the food
+    expect(collected.owed).toBe(0); // 500 dr covers wages + food
+    expect(await wallet()).toBe(500 - collected.staffUpkeep - collected.foodCost); // debited, never negative
   });
 
   // --- Phase 3: construction spend (materials + drachmae) + hiring -----------
@@ -495,7 +536,7 @@ suite("Ledger / building engine (integration)", () => {
   it("(P3b) happy build debits drachmae + exactly the right materials, creates the building, consumes NO pops", async () => {
     playerId = await freshPlayer(100, "landowner"); // estate T1: 100dr, {timber:8, stone:6}, needs 2 slaves owned
     const c = await ctx();
-    const slavesBefore = await popBalance("slave"); // 10
+    const slavesBefore = await popBalance("slave"); // 2 (default = estate T1 staffing)
 
     const built = await m.buildings.build("landowner", c, "estate", new Date(T0));
     expect(built.ok).toBe(true);
@@ -629,8 +670,8 @@ suite("Ledger / building engine (integration)", () => {
     if (!noYard.ok) expect(noYard.code).toBe(403);
 
     // A shipbuilder with only a tier-1 slipway is under tier (trade-ship needs T3) → 409,
-    // and nothing is consumed.
-    playerId = await freshPlayer(2000, "shipbuilder");
+    // and nothing is consumed. Seed 2 freemen — the slipway's T3 staffing prerequisite.
+    playerId = await freshPlayer(2000, "shipbuilder", { freeman: 2 });
     c = await ctx();
     await m.buildings.build("shipbuilder", c, "slipway", new Date(T0));
     await db.insert(m.dbPkg.resources).values({ scope: "player", scopeId: playerId, type: "naval-supplies", amount: "10", ratePerSecond: "0", lastUpdatedAt: new Date(T0) });
@@ -669,7 +710,7 @@ suite("Ledger / building engine (integration)", () => {
   });
 
   it("(P5) catalog + mine expose the additive Phase 5 fields from content + player_pops", async () => {
-    const c = await ctx(); // default landowner, pops 10/10/10
+    const c = await ctx(); // default landowner, owns its estate T1 staffing (slave: 2)
     const cat = m.buildings.catalog("landowner", c, new Date(T0));
 
     // goodLabels straight from content (IDs stay stable; names come from goodLabels).
@@ -686,8 +727,8 @@ suite("Ledger / building engine (integration)", () => {
     // Craft recipes from content.craft.
     expect(cat.craft["trade-ship"]).toEqual({ building: "slipway", tier: 3, recipe: { "naval-supplies": 2, timber: 5, leather: 1 } });
 
-    // Owned pop counts on mine, from player_pops.
+    // Owned pop counts on mine, from player_pops (the default seeds the estate's T1 staffing).
     const mineV = await m.buildings.mine("landowner", c, new Date(T0));
-    expect(mineV.pops).toMatchObject({ slave: 10, freeman: 10, citizen: 10 });
+    expect(mineV.pops).toMatchObject({ slave: 2 });
   });
 });
