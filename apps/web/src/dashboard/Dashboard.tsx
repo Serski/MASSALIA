@@ -3257,9 +3257,23 @@ const goodsMeta: Record<string, { label: string; icon: string }> = {
   ship: { label: "Ship", icon: "⛵" },
 };
 
-// Non-good resource rows that may sit in the balances map but must never show in
-// the Goods list (internal accrual markers + abstract class "stores" like prestige
-// / influence / militia / freedom that are stats, not tradeable goods).
+// Resource rows that are NOT tradeable goods and must never show under Goods:
+// internal accrual markers + abstract stat "stores". Everything else the player
+// holds IS a good, so new goods (the nine materials, the naval line, ships) appear
+// automatically — a deny-list, not a hardcoded allow-list of known goods.
+const NON_GOODS = new Set<string>([
+  "building_income",
+  "building_shrine",
+  "building_staff",
+  "prestige",
+  "influence",
+  "favor",
+  "freedom",
+  "intelligence",
+  "militia",
+  "devotion",
+]);
+
 function goodLabel(type: string): string {
   return goodsMeta[type]?.label ?? type.charAt(0).toUpperCase() + type.slice(1);
 }
@@ -3545,15 +3559,18 @@ function BottomSheet({
   );
 }
 
-function InventoryResources({ player }: { player: PlayerDashboardView }) {
+function InventoryResources({ player, goodLabels }: { player: PlayerDashboardView; goodLabels: Record<string, string> | null }) {
   const classType = player.classResource?.type ?? null;
-  // "What I have": only REAL tradeable goods the player actually holds (non-zero),
-  // excluding the class good already shown under Coin & Class stores. Internal
-  // markers (building_income/shrine) and abstract class stores (prestige, influence,
-  // militia, freedom…) are filtered out by keying on the real-goods registry.
+  // Names via content goodLabels (never a raw id); capitalise as a fallback for goods
+  // with no override and before the labels load.
+  const label = (type: string) => goodLabels?.[type] ?? type.charAt(0).toUpperCase() + type.slice(1);
+  // "What I have": EVERY good the player holds (non-zero), minus the class good
+  // (shown under Coin & Class stores) and non-goods (markers/stats). Derived from the
+  // data via a deny-list — materials, the naval line, and crafted ships all appear,
+  // and future goods show automatically (no hardcoded allow-list).
   const heldGoods = Object.entries(player.balances)
-    .filter(([type, amount]) => amount > 0 && type !== classType && type in goodsMeta)
-    .sort((a, b) => goodLabel(a[0]).localeCompare(goodLabel(b[0])));
+    .filter(([type, amount]) => amount > 0 && type !== classType && !NON_GOODS.has(type))
+    .sort((a, b) => label(a[0]).localeCompare(label(b[0])));
   return (
     <div role="tabpanel">
       <div className="cap-banner">
@@ -3575,14 +3592,14 @@ function InventoryResources({ player }: { player: PlayerDashboardView }) {
           income rate isn't on this /me/state payload — so we show no invented number. */}
       <ResRow icon="🪙" name="Drachmae" amount={player.drachmae.toLocaleString()} />
       {/* Show the "· your trade" store ONLY when the class resource is a REAL
-          tradeable good (in the goods registry). Classes whose "class resource" is
-          a STAT (philosopher → prestige, hetaira → intelligence, hoplite → militia,
-          slave → freedom) show no store row — a stat is not a held good. Reuses the
-          same goodsMeta the Goods list uses, so the two can't drift. */}
-      {player.classResource && player.classResource.type in goodsMeta ? (
+          tradeable good. Classes whose "class resource" is a STAT (philosopher →
+          prestige, hetaira → intelligence, hoplite → militia, slave → freedom) show
+          no store row — a stat is not a held good. Same deny-list the Goods list
+          uses, so the two can't drift. */}
+      {player.classResource && !NON_GOODS.has(player.classResource.type) ? (
         <ResRow
           icon={goodIcon(player.classResource.type)}
-          name={player.classResource.label}
+          name={label(player.classResource.type)}
           sub="your trade"
           amount={player.classResource.amount.toLocaleString()}
         />
@@ -3596,7 +3613,7 @@ function InventoryResources({ player }: { player: PlayerDashboardView }) {
           <ResRow
             key={type}
             icon={goodIcon(type)}
-            name={goodLabel(type)}
+            name={label(type)}
             amount={amount.toLocaleString()}
             rate="—"
             rateTone="zero"
@@ -3678,15 +3695,21 @@ function InventorySheet({
   // the people catalog for labels/upkeep/food — when the sheet opens, for the Units
   // tab's Household section. Display-only; existing endpoints.
   const [household, setHousehold] = useState<{ pops: Record<string, number>; people: PeopleView } | null>(null);
+  // Content goodLabels (grain→Wheat, timber→Wood, naval-supplies→Naval Supplies, …)
+  // for the Resources tab — same source the Market uses, so names never drift.
+  const [goodLabels, setGoodLabels] = useState<Record<string, string> | null>(null);
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    Promise.all([api.buildingsMine(), api.people()])
-      .then(([m, p]) => {
-        if (!cancelled) setHousehold({ pops: m.pops, people: p });
+    Promise.all([api.buildingsMine(), api.people(), api.buildingsCatalog()])
+      .then(([m, p, c]) => {
+        if (!cancelled) {
+          setHousehold({ pops: m.pops, people: p });
+          setGoodLabels(c.goodLabels);
+        }
       })
       .catch(() => {
-        /* leave the Household section hidden on error */
+        /* leave the Household section / content labels absent on error */
       });
     return () => {
       cancelled = true;
@@ -3703,7 +3726,7 @@ function InventorySheet({
           { id: "units", label: "Units" },
         ]}
       />
-      {tab === "resources" ? <InventoryResources player={player} /> : null}
+      {tab === "resources" ? <InventoryResources player={player} goodLabels={goodLabels} /> : null}
       {tab === "items" ? <InventoryItems /> : null}
       {tab === "units" ? <InventoryUnits household={household} /> : null}
     </BottomSheet>
