@@ -352,6 +352,28 @@ function PanelRow({
   );
 }
 
+// A compact −/N/+ stepper for choosing a quantity (hire/dismiss N at once). Clamps
+// to [min, max]; max is optional (hiring is bounded by the wallet, not a count).
+function QtyStepper({ value, setValue, min = 1, max }: { value: number; setValue: (n: number) => void; min?: number; max?: number }) {
+  const clamp = (n: number) => Math.max(min, max !== undefined ? Math.min(max, n) : n);
+  return (
+    <span className="qty-stepper" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <button type="button" className="panel-btn ghost" disabled={value <= min} onClick={() => setValue(clamp(value - 1))} aria-label="decrease quantity">−</button>
+      <input
+        type="number"
+        className="qty-input"
+        value={value}
+        min={min}
+        max={max}
+        onChange={(e) => setValue(clamp(parseInt(e.target.value, 10) || min))}
+        style={{ width: 46, textAlign: "center" }}
+        aria-label="quantity"
+      />
+      <button type="button" className="panel-btn ghost" disabled={max !== undefined && value >= max} onClick={() => setValue(clamp(value + 1))} aria-label="increase quantity">+</button>
+    </span>
+  );
+}
+
 function StubButton({
   children,
   ghost = false,
@@ -1234,6 +1256,32 @@ function popName(type: string): string {
   return type[0]!.toUpperCase() + type.slice(1);
 }
 
+// The pop types a building is SHORT for staffing, given the owned pool — e.g.
+// "1 Slave · 1 Freeman", or "" when owned counts cover the requirement. Staffing is
+// a shared pool, so this names a HARD shortfall (you own fewer than required of a
+// type); when it returns "" but the building is still idle, the pops are simply
+// spread across other buildings (callers say so).
+function shortStaff(staffing: Record<string, number>, pops: Record<string, number>): string {
+  return Object.entries(staffing)
+    .filter(([ty, q]) => (pops[ty] ?? 0) < (q ?? 0))
+    .map(([ty, q]) => `${(q ?? 0) - (pops[ty] ?? 0)} ${popName(ty)}`)
+    .join(" · ");
+}
+
+// Why a building earns nothing: a hard pop shortfall by name, else the shared-pool case.
+function idleReason(staffing: Record<string, number>, pops: Record<string, number>): string {
+  const missing = shortStaff(staffing, pops);
+  return missing ? `needs ${missing} you don't own` : "your pops are staffing other buildings — hire more";
+}
+
+// A building's full staffing requirement as a readable line ("1 Slave"), or "".
+function staffReqLine(staffing: Record<string, number>): string {
+  return Object.entries(staffing)
+    .filter(([, q]) => (q ?? 0) > 0)
+    .map(([ty, q]) => `${q} ${popName(ty)}`)
+    .join(" · ");
+}
+
 function ClassBuildingLadder({
   entry,
   owned,
@@ -1322,8 +1370,11 @@ function ClassBuildingLadder({
                   ? `under construction · ${buildCountdown(owned?.completesAt ?? null)}`
                   : `${t.cost}dr · ${t.buildDays}d${t.upkeep > 0 ? ` · upkeep ${t.upkeep}dr/day` : ""}`}
               </div>
+              {(state === "current" || state === "built") && staffReqLine(t.staffing) ? (
+                <div className="tier-meta">Staff: {staffReqLine(t.staffing)}</div>
+              ) : null}
               {idle ? (
-                <div className="tier-gate">Idle — under-staffed. Your pops are stretched across your buildings; hire more in the Market.</div>
+                <div className="tier-gate">Idle — {idleReason(t.staffing, pops)}.</div>
               ) : null}
               {bill ? (
                 <>
@@ -1832,7 +1883,11 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
     }
   };
 
-  const ownedRow = (b: OwnedBuilding) => (
+  const ownedRow = (b: OwnedBuilding) => {
+    const entry = b.kind === "class" ? catalog.classBuilding : catalog.commons.find((c) => c.id === b.id);
+    const staffing = (entry?.tiers[b.tier - 1]?.staffing ?? {}) as Record<string, number>;
+    const staffLine = staffReqLine(staffing);
+    return (
     <PanelRow
       key={b.id}
       icon={b.icon ?? "🏛️"}
@@ -1840,7 +1895,14 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
       sub={
         b.status === "constructing"
           ? `under construction · ${buildCountdown(b.completesAt)}`
-          : `${yieldSummary(b.yields, b.income, catalog.goodLabels)}${b.upkeepPerDay > 0 ? ` · upkeep ${b.upkeepPerDay}dr/day` : ""}`
+          : (
+            <>
+              {yieldSummary(b.yields, b.income, catalog.goodLabels) || (b.idle ? "earns nothing while idle" : "—")}
+              {b.upkeepPerDay > 0 ? ` · upkeep ${b.upkeepPerDay}dr/day` : ""}
+              {staffLine ? <><br />Staff: {staffLine}</> : null}
+              {b.idle ? <><br />⚠ Idle — {idleReason(staffing, mine.pops)}</> : null}
+            </>
+          )
       }
       tag={b.status === "constructing" ? "building" : undefined}
       action={
@@ -1851,7 +1913,8 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
         ) : undefined
       }
     />
-  );
+    );
+  };
 
   const buildableRow = (entry: CatalogEntry, disabled?: string) => {
     const t1 = entry.tiers[0]!;
@@ -1860,12 +1923,16 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
       : entry.storageBonus
         ? `+${entry.storageBonus} storage · ${t1.cost}dr · ${t1.buildDays}d`
         : `${yieldSummary(t1.yields, t1.income, catalog.goodLabels)} · ${t1.cost}dr · ${t1.buildDays}d`;
+    // FEATURE 3: what it takes to build — material bill + staffing requirement.
+    const matBill = Object.entries(t1.materials).map(([g, q]) => `${q} ${label(g)}`).join(" · ");
+    const staffBill = staffReqLine(t1.staffing as Record<string, number>);
+    const needLine = [matBill, staffBill ? `staff ${staffBill}` : ""].filter(Boolean).join(" · ");
     return (
       <PanelRow
         key={entry.id}
         icon={entry.icon ?? "🏛️"}
         title={entry.name}
-        sub={disabled ? disabled : sub}
+        sub={disabled ? disabled : <>{sub}{needLine ? <><br />Needs: {needLine}</> : null}</>}
         dim={Boolean(disabled)}
         tag={disabled ? "soon" : undefined}
         action={
@@ -1975,6 +2042,46 @@ function marketGroup(good: string, craft: Record<string, unknown>): "Naval & shi
   return "Goods";
 }
 
+// One People-market row with a quantity stepper: hire N (wallet-bounded) or
+// dismiss/disband N (clamped to owned — the endpoint also rejects over-dismiss).
+function PeopleMarketRow({
+  pop,
+  owned,
+  busy,
+  foodLabel,
+  onHire,
+  onDismiss,
+}: {
+  pop: PeopleView["pops"][number];
+  owned: number;
+  busy: boolean;
+  foodLabel: string;
+  onHire: (n: number) => void;
+  onDismiss: (n: number) => void;
+}) {
+  const [qty, setQty] = useState(1);
+  const dismissN = Math.min(qty, owned); // never dismiss more than owned
+  return (
+    <PanelRow
+      icon={POP_ICON[pop.type] ?? "👤"}
+      title={`${pop.label} · you own ${owned}`}
+      sub={`hire ${pop.hireCost}dr · upkeep ${pop.upkeepPerDay}dr/day · eats ${pop.foodPerDay} ${foodLabel}/day`}
+      action={
+        <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <QtyStepper value={qty} setValue={setQty} min={1} />
+          {/* Dismiss has NO refund — it only stops the upkeep + food. */}
+          <button type="button" className="panel-btn ghost" disabled={busy || owned <= 0} onClick={() => onDismiss(dismissN)}>
+            {pop.dismissLabel} {dismissN}
+          </button>
+          <button type="button" className="panel-btn" disabled={busy} onClick={() => onHire(qty)}>
+            Hire {qty} · {pop.hireCost * qty}dr
+          </button>
+        </span>
+      }
+    />
+  );
+}
+
 function MarketPanel({ onRefresh }: PanelProps) {
   const [catalog, setCatalog] = useState<BuildingsCatalog | null>(null);
   const [mine, setMine] = useState<BuildingsMine | null>(null);
@@ -2076,28 +2183,17 @@ function MarketPanel({ onRefresh }: PanelProps) {
         <>
           <div className="panel-label">Hire hands for your buildings</div>
           <div className="panel-grid2">
-            {people.pops.map((pop) => {
-              const owned = mine.pops[pop.type] ?? 0;
-              return (
-                <PanelRow
-                  key={pop.type}
-                  icon={POP_ICON[pop.type] ?? "👤"}
-                  title={`${pop.label} · you own ${owned}`}
-                  sub={`hire ${pop.hireCost}dr · upkeep ${pop.upkeepPerDay}dr/day · eats ${pop.foodPerDay} ${label(people.foodGood)}/day`}
-                  action={
-                    <span style={{ display: "flex", gap: 6 }}>
-                      {/* Dismiss has NO refund — it only stops the upkeep + food. */}
-                      <button type="button" className="panel-btn ghost" disabled={busy || owned <= 0} onClick={() => act(() => api.dismissPeople(pop.type, 1), `${pop.dismissLabel} — one ${pop.label} let go.`)}>
-                        {pop.dismissLabel} 1
-                      </button>
-                      <button type="button" className="panel-btn" disabled={busy} onClick={() => act(() => api.hirePeople(pop.type, 1), `Hired a ${pop.label}.`)}>
-                        Hire 1 · {pop.hireCost}dr
-                      </button>
-                    </span>
-                  }
-                />
-              );
-            })}
+            {people.pops.map((pop) => (
+              <PeopleMarketRow
+                key={pop.type}
+                pop={pop}
+                owned={mine.pops[pop.type] ?? 0}
+                busy={busy}
+                foodLabel={label(people.foodGood)}
+                onHire={(n) => act(() => api.hirePeople(pop.type, n), `Hired ${n} ${pop.label}.`)}
+                onDismiss={(n) => act(() => api.dismissPeople(pop.type, n), `${pop.dismissLabel} — ${n} ${pop.label} let go.`)}
+              />
+            ))}
           </div>
           <p className="dashboard-todo">“People” are contract hires — guards, tutors, hands for your trade. Never persons as property.</p>
         </>
@@ -3281,6 +3377,10 @@ const NON_GOODS = new Set<string>([
   "intelligence",
   "militia",
   "devotion",
+  // `gold` is pre-rebalance legacy currency-as-item — the wallet is drachmae now.
+  // Current code never seeds it; only stale rows on old accounts carry it. Hide it
+  // everywhere (a DB cleanup of those rows would be a separate, flagged migration).
+  "gold",
 ]);
 
 function goodIcon(type: string): string {
@@ -3638,6 +3738,39 @@ function InventoryItems() {
   );
 }
 
+// One Household row with a quantity stepper: dismiss/disband N (clamped to owned).
+function HouseholdRow({
+  pop,
+  count,
+  foodName,
+  busy,
+  onDismiss,
+}: {
+  pop: PeopleView["pops"][number];
+  count: number;
+  foodName: string;
+  busy: boolean;
+  onDismiss: (n: number) => void;
+}) {
+  const [qty, setQty] = useState(1);
+  const n = Math.min(qty, count);
+  return (
+    <DetailRow
+      icon={POP_ICON[pop.type] ?? "👤"}
+      name={`${pop.label} × ${count}`}
+      sub={`upkeep ${pop.upkeepPerDay}dr/day · ${pop.foodPerDay} ${foodName}/day each`}
+      action={
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <QtyStepper value={qty} setValue={setQty} min={1} max={count} />
+          <button type="button" className="panel-btn ghost" disabled={busy || count <= 0} onClick={() => onDismiss(n)}>
+            {pop.dismissLabel} {n}
+          </button>
+        </span>
+      }
+    />
+  );
+}
+
 function InventoryUnits({
   household,
   goodLabels,
@@ -3650,15 +3783,16 @@ function InventoryUnits({
   const foodName = household ? goodLabels?.[household.people.foodGood] ?? household.people.foodGood.charAt(0).toUpperCase() + household.people.foodGood.slice(1) : "";
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
-  // Dismiss/disband one owned pop — no refund, just stops the upkeep. Reloads the
+  // Dismiss/disband N owned pops — no refund, just stops the upkeep. Reloads the
   // sheet payload so the count drops immediately.
-  const dismiss = async (type: string, dismissLabel: string, popLabel: string) => {
+  const dismiss = async (type: string, dismissLabel: string, popLabel: string, count: number) => {
+    if (count <= 0) return;
     setBusy(true);
     setNote("");
     try {
-      await api.dismissPeople(type, 1);
+      await api.dismissPeople(type, count);
       await onChanged?.();
-      setNote(`${dismissLabel} — one ${popLabel} let go.`);
+      setNote(`${dismissLabel} — ${count} ${popLabel} let go.`);
     } catch (err) {
       setNote(err instanceof ApiError ? err.message : "That could not be done.");
     } finally {
@@ -3674,16 +3808,13 @@ function InventoryUnits({
         <>
           <SheetLabel>Household · {owned.reduce((n, pop) => n + (household!.pops[pop.type] ?? 0), 0)}</SheetLabel>
           {owned.map((pop) => (
-            <DetailRow
+            <HouseholdRow
               key={pop.type}
-              icon={POP_ICON[pop.type] ?? "👤"}
-              name={`${pop.label} × ${household!.pops[pop.type]}`}
-              sub={`upkeep ${pop.upkeepPerDay}dr/day · ${pop.foodPerDay} ${foodName}/day each`}
-              action={
-                <button type="button" className="panel-btn ghost" disabled={busy} onClick={() => dismiss(pop.type, pop.dismissLabel, pop.label)}>
-                  {pop.dismissLabel} 1
-                </button>
-              }
+              pop={pop}
+              count={household!.pops[pop.type] ?? 0}
+              foodName={foodName}
+              busy={busy}
+              onDismiss={(n) => dismiss(pop.type, pop.dismissLabel, pop.label, n)}
             />
           ))}
           {note ? <p className="sheet-todo">{note}</p> : null}
@@ -3703,31 +3834,54 @@ function InventoryUnits({
 
 // The per-day economy breakdown (panel A): what you EARN and SPEND each day at the
 // CURRENT buildings + staff + season, derived from the mine/catalog/people payloads
-// the modal already fetches — no persisted history, no invented numbers. Diagnostic
-// cases (idle buildings, owed shortfall) surface inline. Food is shown correctly per
-// the own-grain-first rule: wheat UNITS consumed, with drachmae only for the portion
-// that has to be bought (own-harvest food costs 0 dr — never a second hit on grain
-// that already counts as income at floor).
+// the modal already fetches — no persisted history, no invented numbers. INCOME is
+// actual drachmae ONLY; produced goods are listed separately (units/day) and never
+// priced into income or net — wood isn't money until sold. Diagnostic cases (idle
+// buildings with the missing-staff reason, owed shortfall) surface inline. Food
+// follows the own-grain-first rule: wheat UNITS consumed, drachmae only for the
+// shortfall that must be bought.
 function InventoryEconomy({ data, goodLabels }: { data: { mine: BuildingsMine; people: PeopleView; catalog: BuildingsCatalog } | null; goodLabels: Record<string, string> | null }) {
   if (!data) return <div role="tabpanel"><p className="sheet-todo">Reckoning your day's books…</p></div>;
   const { mine, people, catalog } = data;
   const label = (g: string) => goodLabels?.[g] ?? g.charAt(0).toUpperCase() + g.slice(1);
-  const floor = (g: string) => catalog.vendor.find((v) => v.good === g)?.sell ?? 0; // vendor floor (what you receive)
   const popUpkeep = (t: string) => people.pops.find((p) => p.type === t)?.upkeepPerDay ?? 0;
   const popFood = (t: string) => people.pops.find((p) => p.type === t)?.foodPerDay ?? 0;
   const dr = (n: number) => `${n >= 0 ? "+" : "−"}${Math.abs(Math.round(n))} dr`;
 
   const active = mine.buildings.filter((b) => b.status === "active");
-  const producing = active.filter((b) => !b.idle); // idle → no income, no wages/food
+  const producing = active.filter((b) => !b.idle); // idle → no income, no goods, no wages
+  // A building's catalog tier (nominal income + staffing requirement). Unlike
+  // mine.buildings.income (which the server zeroes when idle), this is staffing-
+  // agnostic, so we can show an idle building's POTENTIAL income and what it lacks.
+  const tierDef = (b: OwnedBuilding) => {
+    const entry = b.kind === "class" ? catalog.classBuilding : catalog.commons.find((c) => c.id === b.id);
+    return entry?.tiers[b.tier - 1];
+  };
 
-  // INCOME per source: building income + goods produced valued at the vendor floor.
-  const incomeRows = producing
+  // INCOME — actual DRACHMAE only. Goods are NOT money until sold (shown separately
+  // below, never converted to a dr figure). Every active income-earning building
+  // appears — class AND common — including idle ones (which earn 0 until staffed).
+  const incomeRows = active
     .map((b) => {
-      const goodsVal = b.yields.reduce((s, y) => s + y.perDay * floor(y.good), 0);
-      return { id: b.id, name: b.name, icon: b.icon ?? "🏛️", income: b.income, yields: b.yields, total: b.income + goodsVal };
+      const td = tierDef(b);
+      return {
+        id: b.id,
+        name: b.name,
+        icon: b.icon ?? "🏛️",
+        income: Math.round(b.income), // 0 while idle (server-zeroed)
+        nominal: Math.round(td?.income ?? 0), // potential at this tier
+        idle: b.idle,
+        staffing: (td?.staffing ?? {}) as Record<string, number>,
+      };
     })
-    .filter((r) => r.total > 0 || r.yields.length > 0);
-  const incomeTotal = incomeRows.reduce((s, r) => s + r.total, 0);
+    .filter((r) => r.nominal > 0 || r.income > 0); // income-earning lines only (goods-only excluded)
+  const incomeTotal = incomeRows.reduce((s, r) => s + r.income, 0); // drachmae only
+
+  // GOODS produced — units/day per good, aggregated across producing buildings.
+  // Shown as goods, never priced into income or net.
+  const goodsAgg: Record<string, number> = {};
+  for (const b of producing) for (const y of b.yields) goodsAgg[y.good] = (goodsAgg[y.good] ?? 0) + y.perDay;
+  const goodsRows = Object.entries(goodsAgg).sort((a, b) => label(a[0]).localeCompare(label(b[0])));
 
   // EXPENSES: wages + food are charged on every OWNED pop (hiring = paying wages + feeding
   // them, staffed or not), independent of how many a building requires.
@@ -3745,33 +3899,43 @@ function InventoryEconomy({ data, goodLabels }: { data: { mine: BuildingsMine; p
   const foodCost = foodBought * foodCeiling;
   const upkeepTotal = active.reduce((s, b) => s + b.upkeepPerDay, 0); // building upkeep (idle still owes)
 
+  // Net is DRACHMAE income − drachmae expenses. Goods-at-floor are NOT folded in.
   const net = incomeTotal - wagesTotal - foodCost - upkeepTotal;
-  const idledNames = active.filter((b) => b.idle).map((b) => b.name);
+  const idledRows = active.filter((b) => b.idle).map((b) => ({ id: b.id, name: b.name, staffing: (tierDef(b)?.staffing ?? {}) as Record<string, number> }));
   const owed = Math.round(mine.upkeepOwed);
   const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
   return (
     <div role="tabpanel">
       <SheetLabel>Per day · at your buildings, staff &amp; season</SheetLabel>
-      {idledNames.map((n) => (
-        <p key={n} className="sheet-gate">⚠ {n} idle — under-staffed (earning nothing)</p>
+      {idledRows.map((r) => (
+        <p key={r.id} className="sheet-gate">⚠ {r.name} idle — {idleReason(r.staffing, mine.pops)}</p>
       ))}
       {owed > 0 ? <p className="sheet-gate">Owed: {owed} dr — your purse couldn't cover upkeep + wages.</p> : null}
 
-      <SheetLabel>Income</SheetLabel>
+      <SheetLabel>Income · drachmae</SheetLabel>
       {incomeRows.length === 0 ? (
-        <p className="sheet-todo">No production yet — build and staff your trade.</p>
+        <p className="sheet-todo">No drachmae income yet — build and staff an income trade.</p>
       ) : (
         incomeRows.map((r) => (
           <ResRow
             key={r.id}
             icon={r.icon}
             name={r.name}
-            sub={[r.income >= 1 ? `+${Math.round(r.income)} dr` : null, ...r.yields.map((y) => `${formatPerDay(y.perDay)} ${label(y.good)}`)].filter(Boolean).join(" · ")}
-            amount={dr(r.total)}
+            sub={r.idle ? `idle — ${idleReason(r.staffing, mine.pops)} · would earn ${r.nominal} dr/day` : undefined}
+            amount={r.idle ? "0 dr" : dr(r.income)}
           />
         ))
       )}
+
+      {goodsRows.length > 0 ? (
+        <>
+          <SheetLabel>Goods produced</SheetLabel>
+          {goodsRows.map(([good, perDay]) => (
+            <ResRow key={`good-${good}`} icon={goodIcon(good)} name={label(good)} amount={`+${formatPerDay(perDay)}/day`} />
+          ))}
+        </>
+      ) : null}
 
       <SheetLabel>Expenses</SheetLabel>
       {wages.length === 0 && foodUnits === 0 && upkeepTotal === 0 ? <p className="sheet-todo">No wages, food, or upkeep yet.</p> : null}

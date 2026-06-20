@@ -2561,6 +2561,20 @@
   opacity: 0.55;
 }
 
+/* Quantity stepper (hire/dismiss N): themed number field between two ghost buttons. */
+.dashboard-shell .qty-input{
+  padding: 6px 4px;
+  color: var(--dash-parchment);
+  font-family: var(--font-display);
+  font-size: 11px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--dash-line);
+  border-radius: 6px;
+}
+.dashboard-shell .qty-stepper .panel-btn{
+  padding: 6px 10px;
+}
+
 /* class building tier ladder (Your Trade) */
 .dashboard-shell .tier-ladder{
   list-style: none;
