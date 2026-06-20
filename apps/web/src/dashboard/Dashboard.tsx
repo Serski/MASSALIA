@@ -1185,7 +1185,11 @@ function CourtPanel({ player, onRefresh }: PanelProps) {
         <h1 id="court-title">Court</h1>
         <p>Messages, petitions, and decisions waiting for your return.</p>
       </div>
-      <PanelBanner scene="the court of Massalia" />
+      <PanelBanner
+        scene="the court of Massalia"
+        art={assetPath("assets/Court.webp")}
+        className="banner-hero"
+      />
       <div className="court-grid">
         <div className="decision-column">
           {player.manumission?.eligible ? <FreedomPanel onRefresh={onRefresh} /> : null}
@@ -2000,7 +2004,11 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
         <h1 id="ledger-title">Your Ledger</h1>
         <p>Massalia · your trade, your buildings, and their income.</p>
       </div>
-      <PanelBanner scene="your quarter of the city" />
+      <PanelBanner
+        scene="your quarter of the city"
+        art={assetPath("assets/Quarter.webp")}
+        className="banner-hero"
+      />
 
       {hasPending || mine.upkeepOwed > 0 ? (
         <div className="ledger-collect">
@@ -2444,7 +2452,11 @@ function FamilyPanel({ onRefresh }: PanelProps) {
         <h1 id="family-title">House &amp; Family</h1>
         <p>Your blood, your heirs, and the matches that bind the Houses.</p>
       </div>
-      <PanelBanner scene="the oikos" />
+      <PanelBanner
+        scene="the oikos"
+        art={assetPath("assets/Oikos.webp")}
+        className="banner-hero"
+      />
 
       {state?.dynasty ? (
         <div className="dynasty-head">
