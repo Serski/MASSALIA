@@ -307,11 +307,11 @@ function ListRow({ children, action }: { children: ReactNode; action?: ReactNode
 // Background art for festival & Olympic events, keyed by festivalId / eventId.
 // Events absent from this map fall back to the PanelBanner placeholder.
 const EVENT_ART: Record<string, string> = {
-  "fest-dionysia": "/assets/Dionysia.webp",
-  "fest-artemisia": "/assets/Artemisia.webp",
-  "fest-apollo": "/assets/Apollonia.webp",
-  "olympic-nominate": "/assets/Olympic.webp",
-  "olympic-games": "/assets/Olympic.webp",
+  "fest-dionysia": assetPath("assets/Dionysia.webp"),
+  "fest-artemisia": assetPath("assets/Artemisia.webp"),
+  "fest-apollo": assetPath("assets/Apollonia.webp"),
+  "olympic-nominate": assetPath("assets/Olympic.webp"),
+  "olympic-games": assetPath("assets/Olympic.webp"),
 };
 
 // Scene-art banner slot. Real art is swappable later via the `art` prop; until
