@@ -2006,7 +2006,7 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
       </div>
       <PanelBanner
         scene="your quarter of the city"
-        art={assetPath("assets/Quarter.webp")}
+        art={assetPath("assets/Ledger.webp")}
         className="banner-hero"
       />
 
@@ -2454,7 +2454,7 @@ function FamilyPanel({ onRefresh }: PanelProps) {
       </div>
       <PanelBanner
         scene="the oikos"
-        art={assetPath("assets/Oikos.webp")}
+        art={assetPath("assets/Family.webp")}
         className="banner-hero"
       />
 
