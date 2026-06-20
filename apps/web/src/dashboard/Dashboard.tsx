@@ -304,6 +304,16 @@ function ListRow({ children, action }: { children: ReactNode; action?: ReactNode
 // Reusable panel building blocks ported from the v8 mockup.
 // ---------------------------------------------------------------------------
 
+// Background art for festival & Olympic events, keyed by festivalId / eventId.
+// Events absent from this map fall back to the PanelBanner placeholder.
+const EVENT_ART: Record<string, string> = {
+  "fest-dionysia": "/assets/Dionysia.webp",
+  "fest-artemisia": "/assets/Artemisia.webp",
+  "fest-apollo": "/assets/Apollonia.webp",
+  "olympic-nominate": "/assets/Olympic.webp",
+  "olympic-games": "/assets/Olympic.webp",
+};
+
 // Scene-art banner slot. Real art is swappable later via the `art` prop; until
 // then it renders the gradient placeholder + dashed "scene art" tag.
 function PanelBanner({ scene, art, className = "" }: { scene: string; art?: string; className?: string }) {
@@ -857,6 +867,7 @@ function FestivalBanner({ festival, onRefresh, onClose }: { festival: FestivalLi
   return (
     <DashboardCard className={`festival-card${outcome ? " card-resolved" : ""}`}>
       <CardClose onClose={onClose} />
+      <PanelBanner scene={festival.event.scene} art={EVENT_ART[festival.festivalId]} />
       <div className="event-body">
         <span className="dashboard-label festival-kicker">🎭 Festival · free civic event</span>
         <h3>{festival.event.scene}</h3>
@@ -933,6 +944,7 @@ function OlympicBanner({ live, onRefresh, onClose }: { live: NonNullable<Olympia
   return (
     <DashboardCard className={`olympic-card${outcome ? " card-resolved" : ""}`}>
       <CardClose onClose={onClose} />
+      <PanelBanner scene={live.event.scene} art={EVENT_ART[live.eventId]} />
       <div className="event-body">
         <span className="dashboard-label olympic-kicker">{isGames ? "🏛️ The Olympic Games" : "🏛️ The Olympiad · the assembly nominates"}</span>
         <h3>{live.event.scene}</h3>
