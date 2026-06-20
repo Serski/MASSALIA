@@ -1804,7 +1804,11 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
   const [catalog, setCatalog] = useState<BuildingsCatalog | null>(null);
   const [mine, setMine] = useState<BuildingsMine | null>(null);
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
+  // `pending` is the id of the ONE action in flight (a building id, or "collect" /
+  // "vendor"); null when idle. Per-building buttons key their loading/disabled state
+  // off this id, so clicking one Build only spins that row's button — not every row.
+  const [pending, setPending] = useState<string | null>(null);
+  const busy = pending !== null; // any action in flight (singletons: collect/vendor/craft)
 
   const load = useCallback(async () => {
     const [c, m] = await Promise.all([api.buildingsCatalog(), api.buildingsMine()]);
@@ -1820,8 +1824,11 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
     };
   }, [load]);
 
-  const act = async (fn: () => Promise<unknown>, ok?: string) => {
-    setBusy(true);
+  // `id` scopes the loading state to the button that fired (default "action" for the
+  // panel-wide singletons). On failure the REAL server message is surfaced verbatim.
+  const act = async (fn: () => Promise<unknown>, ok?: string, id = "action") => {
+    if (pending) return; // one action at a time — ignore stray clicks while busy
+    setPending(id);
     setNote("");
     try {
       await fn();
@@ -1831,7 +1838,7 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
     } catch (err) {
       setNote(err instanceof ApiError ? err.message : "That could not be done.");
     } finally {
-      setBusy(false);
+      setPending(null);
     }
   };
 
@@ -1861,7 +1868,8 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
 
   // Collect, then surface the full economy receipt (income, goods, wages, food, idle).
   const doCollect = async () => {
-    setBusy(true);
+    if (pending) return;
+    setPending("collect");
     setNote("");
     try {
       const r = await api.collectBuildings();
@@ -1879,7 +1887,7 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
     } catch (err) {
       setNote(err instanceof ApiError ? err.message : "That could not be done.");
     } finally {
-      setBusy(false);
+      setPending(null);
     }
   };
 
@@ -1907,8 +1915,8 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
       tag={b.status === "constructing" ? "building" : undefined}
       action={
         b.status === "active" && b.upgrade ? (
-          <button type="button" className="panel-btn" disabled={busy} onClick={() => act(() => api.upgradeBuilding(b.id))}>
-            Upgrade → {b.upgrade.name} · {b.upgrade.cost}dr
+          <button type="button" className="panel-btn" disabled={pending === b.id} onClick={() => act(() => api.upgradeBuilding(b.id), undefined, b.id)}>
+            {pending === b.id ? "Upgrading…" : `Upgrade → ${b.upgrade.name} · ${b.upgrade.cost}dr`}
           </button>
         ) : undefined
       }
@@ -1927,18 +1935,37 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
     const matBill = Object.entries(t1.materials).map(([g, q]) => `${q} ${label(g)}`).join(" · ");
     const staffBill = staffReqLine(t1.staffing as Record<string, number>);
     const needLine = [matBill, staffBill ? `staff ${staffBill}` : ""].filter(Boolean).join(" · ");
+    // BUG B: pre-check affordability (drachmae + materials + the owned-staff prereq) so
+    // the player isn't allowed to click into an opaque server rejection. The shortfall
+    // names exactly what's missing; the Build button is disabled until it's met. (The
+    // server still validates — its message is surfaced verbatim if anything slips by.)
+    const shortfalls = [
+      player.drachmae < t1.cost ? `${t1.cost - player.drachmae} dr` : null,
+      ...Object.entries(t1.materials).filter(([g, q]) => (player.balances[g] ?? 0) < q).map(([g, q]) => `${Math.ceil(q - (player.balances[g] ?? 0))} ${label(g)}`),
+      ...Object.entries(t1.staffing as Record<string, number>).filter(([ty, q]) => (mine.pops[ty] ?? 0) < q).map(([ty, q]) => `${q - (mine.pops[ty] ?? 0)} ${popName(ty)} to staff it`),
+    ].filter(Boolean) as string[];
+    const blocked = shortfalls.length > 0;
+    const loading = pending === entry.id;
     return (
       <PanelRow
         key={entry.id}
         icon={entry.icon ?? "🏛️"}
         title={entry.name}
-        sub={disabled ? disabled : <>{sub}{needLine ? <><br />Needs: {needLine}</> : null}</>}
+        sub={
+          disabled ? disabled : (
+            <>
+              {sub}
+              {needLine ? <><br />Needs: {needLine}</> : null}
+              {blocked ? <><br />⚠ Short: {shortfalls.join(" · ")}</> : null}
+            </>
+          )
+        }
         dim={Boolean(disabled)}
         tag={disabled ? "soon" : undefined}
         action={
           disabled ? undefined : (
-            <button type="button" className="panel-btn" disabled={busy} onClick={() => act(() => api.buildBuilding(entry.id))}>
-              Build · {t1.cost}dr
+            <button type="button" className="panel-btn" disabled={loading || blocked} onClick={() => act(() => api.buildBuilding(entry.id), undefined, entry.id)}>
+              {loading ? "Building…" : `Build · ${t1.cost}dr`}
             </button>
           )
         }
