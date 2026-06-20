@@ -2188,7 +2188,11 @@ function MarketPanel({ onRefresh }: PanelProps) {
         <h1 id="market-title">The Agora — Market</h1>
         <p>The NPC agora buys and sells every good at a seasonal band — it sells dear and buys cheap, so the market never deadlocks. Hire hands in the People market.</p>
       </div>
-      <PanelBanner scene="the agora at midday" />
+      <PanelBanner
+        scene="the agora at midday"
+        art={assetPath("assets/Market.webp")}
+        className="banner-hero"
+      />
       <SheetTabs<"goods" | "people">
         tabs={[
           { id: "goods", label: "Goods" },

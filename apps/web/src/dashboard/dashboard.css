@@ -2421,6 +2421,10 @@
   border-radius: 12px;
 }
 
+.dashboard-shell .panel-banner.banner-hero{
+  height: 170px;
+}
+
 .dashboard-shell .panel-banner::before{
   position: absolute;
   inset: 0;
