@@ -3886,23 +3886,28 @@ function InventoryEconomy({ data, goodLabels }: { data: { mine: BuildingsMine; p
   };
 
   // INCOME — actual DRACHMAE only. Goods are NOT money until sold (shown separately
-  // below, never converted to a dr figure). Every active income-earning building
-  // appears — class AND common — including idle ones (which earn 0 until staffed).
-  const incomeRows = active
+  // below, never converted to a dr figure). Every owned income-earning building
+  // appears — class AND common — whether active (earning), idle (0 until staffed),
+  // or still CONSTRUCTING (0 until done). Showing the constructing row prevents the
+  // "built but the panel says no income" blank when a payload predates completion.
+  const incomeRows = mine.buildings
+    .filter((b) => b.status === "active" || b.status === "constructing")
     .map((b) => {
       const td = tierDef(b);
       return {
         id: b.id,
         name: b.name,
         icon: b.icon ?? "🏛️",
-        income: Math.round(b.income), // 0 while idle (server-zeroed)
+        income: Math.round(b.income), // 0 while idle or constructing (server-zeroed)
         nominal: Math.round(td?.income ?? 0), // potential at this tier
         idle: b.idle,
+        constructing: b.status === "constructing",
+        completesAt: b.completesAt,
         staffing: (td?.staffing ?? {}) as Record<string, number>,
       };
     })
     .filter((r) => r.nominal > 0 || r.income > 0); // income-earning lines only (goods-only excluded)
-  const incomeTotal = incomeRows.reduce((s, r) => s + r.income, 0); // drachmae only
+  const incomeTotal = incomeRows.reduce((s, r) => s + r.income, 0); // drachmae only (idle/constructing contribute 0)
 
   // GOODS produced — units/day per good, aggregated across producing buildings.
   // Shown as goods, never priced into income or net.
@@ -3949,8 +3954,14 @@ function InventoryEconomy({ data, goodLabels }: { data: { mine: BuildingsMine; p
             key={r.id}
             icon={r.icon}
             name={r.name}
-            sub={r.idle ? `idle — ${idleReason(r.staffing, mine.pops)} · would earn ${r.nominal} dr/day` : undefined}
-            amount={r.idle ? "0 dr" : dr(r.income)}
+            sub={
+              r.constructing
+                ? `under construction · ${buildCountdown(r.completesAt)} — will earn ${r.nominal} dr/day`
+                : r.idle
+                  ? `idle — ${idleReason(r.staffing, mine.pops)} · would earn ${r.nominal} dr/day`
+                  : undefined
+            }
+            amount={r.constructing || r.idle ? "0 dr" : dr(r.income)}
           />
         ))
       )}
@@ -4019,6 +4030,27 @@ function InventorySheet({
       /* leave the fetched sections absent on error */
     });
   }, [open, reload]);
+  // Staleness guard: refetch-on-open (above) handles a fresh open, but a build
+  // completes via LAZY activation (only observed on the next mine() call), so a
+  // panel left OPEN across a completion would keep showing the stale "constructing"
+  // payload. If the loaded payload still has a constructing building, refetch when
+  // it lands (one-shot timer) — or immediately if its completion already passed
+  // (a payload fetched while building, opened/seen after it finished).
+  useEffect(() => {
+    if (!open || !data) return;
+    const dueAt = data.mine.buildings
+      .filter((b) => b.status === "constructing" && b.completesAt)
+      .map((b) => new Date(b.completesAt as string).getTime());
+    if (dueAt.length === 0) return;
+    const soonest = Math.min(...dueAt);
+    const delay = soonest - Date.now();
+    if (delay <= 0) {
+      reload().catch(() => {}); // already done server-side → flip it to active
+      return;
+    }
+    const t = setTimeout(() => reload().catch(() => {}), delay + 500);
+    return () => clearTimeout(t);
+  }, [open, data, reload]);
   const goodLabels = data?.catalog.goodLabels ?? null;
   const household = data ? { pops: data.mine.pops, people: data.people } : null;
   return (
