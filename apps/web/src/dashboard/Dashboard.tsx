@@ -3880,7 +3880,10 @@ function InventoryEconomy({ data, goodLabels }: { data: { mine: BuildingsMine; p
   const dr = (n: number) => `${n >= 0 ? "+" : "−"}${Math.abs(Math.round(n))} dr`;
 
   const active = mine.buildings.filter((b) => b.status === "active");
-  const producing = active.filter((b) => !b.idle); // idle → no income, no goods, no wages
+  // Live producers: active non-idle buildings AND upgrade-in-progress lines, which
+  // keep producing their PRIOR tier's goods while constructing (mine() fills b.yields
+  // with the live tier's output, so a non-empty yields list = producing now).
+  const producing = mine.buildings.filter((b) => !b.idle && b.yields.length > 0);
   // A building's catalog tier (nominal income + staffing requirement). Unlike
   // mine.buildings.income (which the server zeroes when idle), this is staffing-
   // agnostic, so we can show an idle building's POTENTIAL income and what it lacks.
@@ -3891,27 +3894,30 @@ function InventoryEconomy({ data, goodLabels }: { data: { mine: BuildingsMine; p
 
   // INCOME — actual DRACHMAE only. Goods are NOT money until sold (shown separately
   // below, never converted to a dr figure). Every owned income-earning building
-  // appears — class AND common — whether active (earning), idle (0 until staffed),
-  // or still CONSTRUCTING (0 until done). Showing the constructing row prevents the
-  // "built but the panel says no income" blank when a payload predates completion.
+  // appears — class AND common — active (earning), idle (0 until staffed), upgrading
+  // (still earning its PRIOR tier live until the new one completes), or a fresh build
+  // (0 until done). b.income from mine() is already the LIVE rate (prior tier mid-
+  // upgrade), so an upgrading line contributes its real current income to the total.
   const incomeRows = mine.buildings
     .filter((b) => b.status === "active" || b.status === "constructing")
     .map((b) => {
       const td = tierDef(b);
+      const income = Math.round(b.income); // live now: real when active, prior-tier while upgrading, 0 for a fresh build
       return {
         id: b.id,
         name: b.name,
         icon: b.icon ?? "🏛️",
-        income: Math.round(b.income), // 0 while idle or constructing (server-zeroed)
-        nominal: Math.round(td?.income ?? 0), // potential at this tier
+        income,
+        nominal: Math.round(td?.income ?? 0), // this tier's full rate ("when done" for an upgrade)
         idle: b.idle,
         constructing: b.status === "constructing",
+        upgrading: b.status === "constructing" && income > 0, // earning prior tier mid-upgrade
         completesAt: b.completesAt,
         staffing: (td?.staffing ?? {}) as Record<string, number>,
       };
     })
     .filter((r) => r.nominal > 0 || r.income > 0); // income-earning lines only (goods-only excluded)
-  const incomeTotal = incomeRows.reduce((s, r) => s + r.income, 0); // drachmae only (idle/constructing contribute 0)
+  const incomeTotal = incomeRows.reduce((s, r) => s + r.income, 0); // drachmae only (idle / fresh-build contribute 0)
 
   // GOODS produced — units/day per good, aggregated across producing buildings.
   // Shown as goods, never priced into income or net.
@@ -3959,13 +3965,15 @@ function InventoryEconomy({ data, goodLabels }: { data: { mine: BuildingsMine; p
             icon={r.icon}
             name={r.name}
             sub={
-              r.constructing
-                ? `under construction · ${buildCountdown(r.completesAt)} — will earn ${r.nominal} dr/day`
-                : r.idle
-                  ? `idle — ${idleReason(r.staffing, mine.pops)} · would earn ${r.nominal} dr/day`
-                  : undefined
+              r.upgrading
+                ? `upgrading · ${buildCountdown(r.completesAt)} — earning ${r.income} dr/day now, ${r.nominal} when done`
+                : r.constructing
+                  ? `under construction · ${buildCountdown(r.completesAt)} — will earn ${r.nominal} dr/day`
+                  : r.idle
+                    ? `idle — ${idleReason(r.staffing, mine.pops)} · would earn ${r.nominal} dr/day`
+                    : undefined
             }
-            amount={r.constructing || r.idle ? "0 dr" : dr(r.income)}
+            amount={r.idle || (r.constructing && !r.upgrading) ? "0 dr" : dr(r.income)}
           />
         ))
       )}

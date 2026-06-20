@@ -4,7 +4,6 @@ import { fileURLToPath } from "node:url";
 import { and, eq } from "drizzle-orm";
 import { createDb, playerBuildings, playerCharacters, playerPops, resources, worldTreasury, worlds } from "@massalia/db";
 import {
-  accruedUnits,
   buildingCost,
   buildingBuildDays,
   buildingUpkeep,
@@ -284,6 +283,85 @@ async function staffingFor(exec: Exec, ctx: ActingContext, rows: BuildingRow[], 
   return idledBuildingIds(active, owned, seasonAt(now.getTime(), ctx.worldStartedMs));
 }
 
+// --- Upgrade-aware tier-split accrual (Option A) -----------------------------
+// During an UPGRADE the building keeps running at its PRIOR tier (row.tier − 1)
+// until completesAt, then switches to the new tier. A fresh tier-1 build has NO
+// prior tier, so it earns nothing before completion (unchanged). A lazy accrual
+// window [lastMs, now] is therefore split at the tier boundary (completesAt) into
+// two closed-form segments — prior-tier BEFORE, new-tier AFTER — each scaled by the
+// season of its OWN end instant (O(1), no loop/tick; reuses the existing helpers).
+// The prior segment is bounded below by upgradeStart (= completesAt − buildMs(tier),
+// when construction began), which is ≥ the prior tier's own completion, so it can
+// never pay for time the prior tier wasn't operational. The prior tier is
+// established, so its segment uses the plain seasonal coefficient (no new-player
+// guard — that anchors to the NEW tier's completion). Building upkeep stays gated to
+// completed (active) buildings; an upgrade-in-progress owes no extra upkeep here.
+
+// What a building earns RIGHT NOW (per-day rate's tier + multiplier) for the mine()
+// display: new tier once complete, prior tier mid-upgrade, none for a fresh build
+// still constructing (or an idled building → caller passes null).
+function liveRates(def: ResolvedDef, row: BuildingRow, worldStartedMs: number, now: Date): { tier: number; mult: number } | null {
+  const c = getBuildingsContent();
+  const C = row.completesAt.getTime();
+  const nowMs = now.getTime();
+  const season = seasonAt(nowMs, worldStartedMs);
+  if (nowMs >= C) return { tier: row.tier, mult: productionMultiplier(c.seasonal, def.category, season, C, nowMs) };
+  if (row.tier >= 2) return { tier: row.tier - 1, mult: coeffFor(c.seasonal, def.category, season).production }; // upgrade in progress
+  return null; // fresh build, still constructing → earns nothing yet
+}
+
+// Drachmae a building accrues over [lastMs, now], split at the tier boundary.
+function incomeAccrued(def: ResolvedDef, row: BuildingRow, lastMs: number, worldStartedMs: number, now: Date): number {
+  const c = getBuildingsContent();
+  const C = row.completesAt.getTime();
+  const nowMs = now.getTime();
+  let total = 0;
+  // NEW tier: [max(lastMs, completesAt), now] — guard anchored to the new completion.
+  const newRate = incomeAtTier(def, row.tier);
+  const newStart = Math.max(lastMs, C);
+  if (newRate > 0 && nowMs > newStart) {
+    const mult = productionMultiplier(c.seasonal, def.category, seasonAt(nowMs, worldStartedMs), C, nowMs);
+    total += ratePerSecond(newRate) * ((nowMs - newStart) / 1000) * mult;
+  }
+  // PRIOR tier (upgrade straddle): [max(lastMs, upgradeStart), min(now, completesAt)].
+  if (row.tier >= 2) {
+    const priorRate = incomeAtTier(def, row.tier - 1);
+    const upgradeStart = C - buildMs(row.tier);
+    const priorStart = Math.max(lastMs, upgradeStart);
+    const priorEnd = Math.min(nowMs, C);
+    if (priorRate > 0 && priorEnd > priorStart) {
+      const mult = coeffFor(c.seasonal, def.category, seasonAt(priorEnd, worldStartedMs)).production;
+      total += ratePerSecond(priorRate) * ((priorEnd - priorStart) / 1000) * mult;
+    }
+  }
+  return total;
+}
+
+// Units of ONE yield a building accrues over [lastMs, now], split at the tier boundary.
+function goodUnitsAccrued(def: ResolvedDef, row: BuildingRow, y: BuildingYieldDef, lastMs: number, worldStartedMs: number, now: Date): number {
+  const c = getBuildingsContent();
+  const C = row.completesAt.getTime();
+  const nowMs = now.getTime();
+  let total = 0;
+  const newPerDay = goodPerDay(y, row.tier);
+  const newStart = Math.max(lastMs, C);
+  if (newPerDay > 0 && nowMs > newStart) {
+    const mult = productionMultiplier(c.seasonal, def.category, seasonAt(nowMs, worldStartedMs), C, nowMs);
+    total += ratePerSecond(newPerDay) * Math.floor((nowMs - newStart) / 1000) * mult;
+  }
+  if (row.tier >= 2) {
+    const priorPerDay = goodPerDay(y, row.tier - 1);
+    const upgradeStart = C - buildMs(row.tier);
+    const priorStart = Math.max(lastMs, upgradeStart);
+    const priorEnd = Math.min(nowMs, C);
+    if (priorPerDay > 0 && priorEnd > priorStart) {
+      const mult = coeffFor(c.seasonal, def.category, seasonAt(priorEnd, worldStartedMs)).production;
+      total += ratePerSecond(priorPerDay) * Math.floor((priorEnd - priorStart) / 1000) * mult;
+    }
+  }
+  return total;
+}
+
 // --- Goods accrual (banked on collect / vendor) ------------------------------
 // Aggregate pending output per good across all active buildings (each against its
 // own marker + completesAt + seasonal/guard), then write each good row once. The
@@ -295,31 +373,25 @@ type GoodAccrual = { banked: number; baseRatePerSec: number };
 function computeGoodsAccrual(
   rows: BuildingRow[],
   byType: Map<string, ResourceRow>,
-  season: SeasonName,
+  worldStartedMs: number,
   now: Date,
   idled: Set<string> = new Set(),
 ): Map<string, GoodAccrual> {
-  const c = getBuildingsContent();
   const out = new Map<string, GoodAccrual>();
   for (const row of rows) {
-    if (!isActive(row, now) || idled.has(row.id)) continue; // under-staffed → produces nothing
+    if (idled.has(row.id)) continue; // under-staffed active → produces nothing
     const def = resolveDef(row.buildingId);
     if (!def) continue;
-    const prodMult = productionMultiplier(c.seasonal, def.category, season, row.completesAt.getTime(), now.getTime());
+    // LIVE tier (prior while upgrading, new once complete, none while a fresh build
+    // constructs) drives the displayed base rate; the accrual itself spans both tiers.
+    const live = liveRates(def, row, worldStartedMs, now);
     for (const y of def.yields) {
-      const perDay = goodPerDay(y, row.tier);
-      if (perDay <= 0) continue;
-      const existing = byType.get(y.good);
-      const lastMs = existing ? existing.lastUpdatedAt.getTime() : row.completesAt.getTime();
-      const accrued = accruedUnits({
-        perDay,
-        lastMs,
-        completesAtMs: row.completesAt.getTime(),
-        nowMs: now.getTime(),
-        productionMult: prodMult,
-      });
+      const lastMs = byType.get(y.good)?.lastUpdatedAt.getTime() ?? 0; // segment backstops bound it
+      const accrued = goodUnitsAccrued(def, row, y, lastMs, worldStartedMs, now);
+      const livePerDay = live ? goodPerDay(y, live.tier) : 0;
+      if (accrued <= 0 && livePerDay <= 0) continue;
       const prev = out.get(y.good) ?? { banked: 0, baseRatePerSec: 0 };
-      out.set(y.good, { banked: prev.banked + accrued, baseRatePerSec: prev.baseRatePerSec + ratePerSecond(perDay) });
+      out.set(y.good, { banked: prev.banked + accrued, baseRatePerSec: prev.baseRatePerSec + ratePerSecond(livePerDay) });
     }
   }
   return out;
@@ -328,11 +400,10 @@ function computeGoodsAccrual(
 // Bank all pending goods into their resource rows (advances the goods markers).
 // Returns the per-good banked amount for the collect summary.
 export async function settleGoods(exec: Exec, ctx: ActingContext, rows: BuildingRow[], now: Date, idled?: Set<string>): Promise<Record<string, number>> {
-  const season = seasonAt(now.getTime(), ctx.worldStartedMs);
   const idledIds = idled ?? (await staffingFor(exec, ctx, rows, now));
   const existing = await resourceRows(exec, ctx.playerId);
   const byType = new Map(existing.map((r) => [r.type, r]));
-  const accrual = computeGoodsAccrual(rows, byType, season, now, idledIds);
+  const accrual = computeGoodsAccrual(rows, byType, ctx.worldStartedMs, now, idledIds);
   const banked: Record<string, number> = {};
   for (const [good, { banked: amount, baseRatePerSec }] of accrual) {
     const rowRes = byType.get(good) ?? (await getOrCreateResource(exec, ctx.playerId, good, now));
@@ -349,12 +420,11 @@ export async function settleGoods(exec: Exec, ctx: ActingContext, rows: Building
 // Live (no-write) available balance of a good: banked amount + pending accrual.
 export async function availableGood(ctx: ActingContext, goodType: string, now: Date): Promise<number> {
   const rows = await ownedRows(db, ctx.playerId);
-  const season = seasonAt(now.getTime(), ctx.worldStartedMs);
   const idled = await staffingFor(db, ctx, rows, now);
   const existing = await resourceRows(db, ctx.playerId);
   const byType = new Map(existing.map((r) => [r.type, r]));
   const banked = Number(byType.get(goodType)?.amount ?? 0);
-  const pending = computeGoodsAccrual(rows, byType, season, now, idled).get(goodType)?.banked ?? 0;
+  const pending = computeGoodsAccrual(rows, byType, ctx.worldStartedMs, now, idled).get(goodType)?.banked ?? 0;
   return banked + pending;
 }
 
@@ -393,18 +463,17 @@ function continuousUpkeep(rows: BuildingRow[], lastMs: number, now: Date): numbe
     }, 0);
 }
 
-function pendingIncome(rows: BuildingRow[], lastMs: number, season: SeasonName, now: Date, idled: Set<string> = new Set()): number {
-  const c = getBuildingsContent();
-  return rows
-    .filter((r) => isActive(r, now) && !idled.has(r.id)) // under-staffed → no income
-    .reduce((sum, r) => {
-      const def = resolveDef(r.buildingId);
-      if (!def || def.income <= 0) return sum;
-      const start = Math.max(lastMs, r.completesAt.getTime());
-      const elapsedSec = Math.max(0, (now.getTime() - start) / 1000);
-      const prodMult = productionMultiplier(c.seasonal, def.category, season, r.completesAt.getTime(), now.getTime());
-      return sum + ratePerSecond(incomeAtTier(def, r.tier)) * elapsedSec * prodMult;
-    }, 0);
+// Income across all buildings over [lastMs, now]. Each building's accrual is tier-
+// split (prior tier during an upgrade, new tier after) via incomeAccrued — no
+// isActive filter, since a constructing UPGRADE still earns its prior tier. Active
+// under-staffed (idled) buildings earn nothing.
+function pendingIncome(rows: BuildingRow[], lastMs: number, worldStartedMs: number, now: Date, idled: Set<string> = new Set()): number {
+  return rows.reduce((sum, r) => {
+    if (idled.has(r.id)) return sum; // under-staffed active → no income
+    const def = resolveDef(r.buildingId);
+    if (!def) return sum;
+    return sum + incomeAccrued(def, r, lastMs, worldStartedMs, now);
+  }, 0);
 }
 
 async function settleWallet(exec: Exec, ctx: ActingContext, rows: BuildingRow[], now: Date, idled: Set<string>): Promise<WalletSettle> {
@@ -418,10 +487,9 @@ async function settleWallet(exec: Exec, ctx: ActingContext, rows: BuildingRow[],
       .limit(1)
   )[0];
   const lastMs = existing ? existing.lastUpdatedAt.getTime() : 0;
-  const season = seasonAt(now.getTime(), ctx.worldStartedMs);
   // Income only from STAFFED buildings; building upkeep is owed by every active
   // building (staffed or idled) — the gentle flat tax doesn't pause when idle.
-  const income = Number(existing?.amount ?? 0) + pendingIncome(rows, lastMs, season, now, idled);
+  const income = Number(existing?.amount ?? 0) + pendingIncome(rows, lastMs, ctx.worldStartedMs, now, idled);
   const upkeep = continuousUpkeep(rows, lastMs, now);
   const net = income - upkeep;
 
@@ -689,21 +757,24 @@ export async function mine(classId: string, ctx: ActingContext, now: Date): Prom
   const idled = await staffingFor(db, ctx, rows, now);
   const existing = await resourceRows(db, ctx.playerId);
   const byType = new Map(existing.map((r) => [r.type, r]));
-  const accrual = computeGoodsAccrual(rows, byType, season, now, idled);
+  const accrual = computeGoodsAccrual(rows, byType, ctx.worldStartedMs, now, idled);
 
   const buildings: OwnedBuilding[] = rows.map((row) => {
     const def = resolveDef(row.buildingId)!;
     const active = isActive(row, now);
     const idle = active && idled.has(row.id); // under-staffed → produces nothing
-    const prodMult = active && !idle ? productionMultiplier(c.seasonal, def.category, season, row.completesAt.getTime(), now.getTime()) : 0;
+    // What the building earns RIGHT NOW: new tier once complete, PRIOR tier while an
+    // upgrade is in progress, nothing for a fresh build still constructing or an idled
+    // building. So an upgrading line shows live prior-tier income/yields, not 0.
+    const live = idle ? null : liveRates(def, row, ctx.worldStartedMs, now);
     const classMeta = c.classBuildings[classId];
     const common = c.commonBuildings.find((b) => b.id === row.buildingId);
     const tierName = def.isClass ? classMeta?.tiers.find((t) => t.tier === row.tier)?.name : common?.name;
-    const yields = idle
-      ? []
-      : def.yields
-          .map((y) => ({ good: y.good, perDay: goodPerDay(y, row.tier) * prodMult, pending: 0 }))
-          .filter((y) => goodPerDay(def.yields.find((d) => d.good === y.good)!, row.tier) > 0);
+    const yields = live
+      ? def.yields
+          .filter((y) => goodPerDay(y, live.tier) > 0)
+          .map((y) => ({ good: y.good, perDay: goodPerDay(y, live.tier) * live.mult, pending: 0 }))
+      : [];
     // Distribute the aggregated pending back to this building's goods (1:1 in
     // practice — each good has a single source building).
     for (const y of yields) y.pending = accrual.get(y.good)?.banked ?? 0;
@@ -729,7 +800,7 @@ export async function mine(classId: string, ctx: ActingContext, now: Date): Prom
       completesAt: active ? null : row.completesAt.toISOString(),
       category: def.category,
       yields,
-      income: active && !idle ? ratePerSecond(incomeAtTier(def, row.tier)) * 86_400 * prodMult : 0,
+      income: live ? incomeAtTier(def, live.tier) * live.mult : 0,
       pendingIncome: 0,
       upkeepPerDay: def.upkeep(row.tier),
       idle,
@@ -742,7 +813,7 @@ export async function mine(classId: string, ctx: ActingContext, now: Date): Prom
   // No marker yet → backdate per-building to completesAt (lastMs 0), so pending
   // offering income shows in the Ledger before the first collect, like goods do.
   const lastMs = incomeRow ? incomeRow.lastUpdatedAt.getTime() : 0;
-  const incomePending = pendingIncome(rows, lastMs, season, now, idled) + Number(incomeRow?.amount ?? 0);
+  const incomePending = pendingIncome(rows, lastMs, ctx.worldStartedMs, now, idled) + Number(incomeRow?.amount ?? 0);
   const upkeep = continuousUpkeep(rows, lastMs, now);
   const charRows = await db.select({ drachmae: playerCharacters.drachmae }).from(playerCharacters).where(eq(playerCharacters.playerId, ctx.playerId)).limit(1);
   const wallet = charRows[0]?.drachmae ?? 0;

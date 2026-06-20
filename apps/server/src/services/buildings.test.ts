@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeAll, beforeEach } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
-import { craftRawCost, goodCategoryFor, seasonAt, vendorUnitPrice } from "@massalia/shared";
+import { buildingYield, coeffFor, craftRawCost, goodCategoryFor, seasonAt, vendorUnitPrice } from "@massalia/shared";
 
 // ---------------------------------------------------------------------------
 // The Ledger / player economy (Economy Build 1) — integration tests against a
@@ -496,6 +496,85 @@ suite("Ledger / building engine (integration)", () => {
     expect(collected.foodCost).toBeGreaterThan(0); // wallet paid for the food
     expect(collected.owed).toBe(0); // 500 dr covers wages + food
     expect(await wallet()).toBe(500 - collected.staffUpkeep - collected.foodCost); // debited, never negative
+  });
+
+  // --- Upgrade-in-progress earns the PRIOR tier (Option A) -------------------
+
+  it("(U1) an upgrade-in-progress keeps earning its PRIOR tier's income during construction (not 0)", async () => {
+    playerId = await freshPlayer(5000, "trader"); // default pops cover the emporion's staffing
+    const c = await ctx();
+    await m.buildings.build("trader", c, "emporion", new Date(T0)); // Market Stall T1, completes T0+1
+    await m.buildings.collect(c, new Date(T0 + 2 * DAY)); // T1 active; income marker → T0+2
+    await m.buildings.upgrade(c, "emporion", new Date(T0 + 2 * DAY)); // → T2 (Counting House), completes T0+4
+
+    // Mid-construction read at T0+3: the prior tier (T1) is still operating.
+    const at = new Date(T0 + 3 * DAY);
+    const view = await m.buildings.mine("trader", c, at);
+    const emp = view.buildings.find((b) => b.id === "emporion")!;
+    expect(emp.status).toBe("constructing");
+    expect(emp.income).toBeGreaterThan(0); // the fix: prior-tier income, not 0
+
+    // Exactly T1 rate × 1 day × the season's yearround coefficient (prior tier, no guard).
+    const content = m.buildings.getBuildingsContent();
+    const t1 = buildingYield(content.classBuildings.trader!.income!, 1);
+    const coeff = coeffFor(content.seasonal, "yearround", seasonAt(T0 + 3 * DAY, T0)).production;
+    const expected = t1 * 1 * coeff;
+    expect(emp.income).toBeCloseTo(expected, 2); // mine() display rate
+    const collected = await m.buildings.collect(c, at);
+    expect(collected.income).toBeCloseTo(expected, 2); // collect applies the SAME amount (projection == actual)
+  });
+
+  it("(U2) a window straddling completesAt splits: PRIOR rate before, NEW rate after, each with its own season", async () => {
+    playerId = await freshPlayer(5000, "trader");
+    const c = await ctx();
+    await m.buildings.build("trader", c, "emporion", new Date(T0)); // T1 completes T0+1
+    await m.buildings.collect(c, new Date(T0 + 6 * DAY)); // income marker → T0+6
+    await m.buildings.upgrade(c, "emporion", new Date(T0 + 6 * DAY)); // → T2, completes T0+8 (buildMs(2)=2d)
+
+    // Collect at T0+14: window [T0+6, T0+14] straddles completion (T0+8) AND a season
+    // boundary. Prior segment [T0+6,T0+8] = 2d; new segment [T0+8,T0+14] = 6d (past the
+    // 3-day guard → seasonal). The two segments fall in DIFFERENT seasons.
+    const at = new Date(T0 + 14 * DAY);
+    const content = m.buildings.getBuildingsContent();
+    const priorRate = buildingYield(content.classBuildings.trader!.income!, 1);
+    const newRate = buildingYield(content.classBuildings.trader!.income!, 2);
+    const priorCoeff = coeffFor(content.seasonal, "yearround", seasonAt(T0 + 8 * DAY, T0)).production; // Winter
+    const newCoeff = coeffFor(content.seasonal, "yearround", seasonAt(T0 + 14 * DAY, T0)).production; // Summer
+    expect(priorCoeff).not.toBe(newCoeff); // the test is only meaningful if the seasons differ
+    const expectedSplit = priorRate * 2 * priorCoeff + newRate * 6 * newCoeff;
+    const expectedSingleSeason = (priorRate * 2 + newRate * 6) * newCoeff; // the WRONG one-rate-for-the-window answer
+
+    const projected = (await m.buildings.mine("trader", c, at)).pendingIncomeTotal; // mine() projection
+    const collected = await m.buildings.collect(c, at);
+    expect(collected.income).toBeCloseTo(expectedSplit, 1); // split with the right coeff per segment
+    expect(collected.income).not.toBeCloseTo(expectedSingleSeason, 1); // NOT one season for the whole window
+    expect(projected).toBeCloseTo(collected.income, 4); // mine() projection == what collect applied
+  });
+
+  it("(U3) a fresh tier-1 build still earns 0 while constructing (no prior tier)", async () => {
+    playerId = await freshPlayer(5000, "trader");
+    const c = await ctx();
+    await m.buildings.build("trader", c, "emporion", new Date(T0)); // T1, completes T0+1
+    const at = new Date(T0 + DAY / 2); // before completion
+    const view = await m.buildings.mine("trader", c, at);
+    const emp = view.buildings.find((b) => b.id === "emporion")!;
+    expect(emp.status).toBe("constructing");
+    expect(emp.income).toBe(0); // no prior tier → nothing yet
+    const collected = await m.buildings.collect(c, at);
+    expect(collected.income).toBe(0);
+  });
+
+  it("(U4) prior-tier GOODS also accrue during an upgrade (estate grain keeps flowing)", async () => {
+    playerId = await freshPlayer(5000, "landowner"); // estate yields grain at T1
+    const c = await ctx();
+    await m.buildings.build("landowner", c, "estate", new Date(T0)); // T1 completes T0+1
+    await m.buildings.collect(c, new Date(T0 + 2 * DAY)); // bank T1 grain; markers → T0+2
+    await m.buildings.upgrade(c, "estate", new Date(T0 + 2 * DAY)); // → T2, completes T0+4
+    const grainBefore = await goodBalance("grain");
+    // Mid-construction collect: the prior tier (T1) keeps producing grain.
+    const collected = await m.buildings.collect(c, new Date(T0 + 3 * DAY));
+    expect(collected.banked.grain ?? 0).toBeGreaterThan(0); // prior-tier goods flow during the upgrade
+    expect(await goodBalance("grain")).toBeGreaterThan(grainBefore);
   });
 
   // --- Phase 3: construction spend (materials + drachmae) + hiring -----------
