@@ -1857,7 +1857,11 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
   const ownedById = new Map<string, OwnedBuilding>(mine.buildings.map((b) => [b.id, b]));
   const classBuilding = catalog.classBuilding;
   const ownedClass = classBuilding ? ownedById.get(classBuilding.id) : undefined;
-  const pendingGoods = Object.entries(mine.pendingGoods);
+  // Only WHOLE units are worth collecting: a good accrues continuously (closed-form
+  // from its marker), so sub-1 amounts would display as "0 Wine" yet keep COLLECT
+  // enabled. Gate on floor ≥ 1 (or ≥1 dr income / any owed) — the fractional remainder
+  // is not lost, it keeps accruing until it crosses 1.
+  const pendingGoods = Object.entries(mine.pendingGoods).filter(([, amt]) => Math.floor(amt) >= 1);
   const hasPending = pendingGoods.length > 0 || mine.pendingIncomeTotal >= 1;
   // Names always come from content.goodLabels (never a raw id).
   const label = (good: string) => catalog.goodLabels[good] ?? good[0]!.toUpperCase() + good.slice(1);
