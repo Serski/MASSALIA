@@ -38,8 +38,23 @@ function numberAmount(value: string | number | null | undefined) {
 
 export async function meRoutes(app: FastifyInstance) {
   app.get("/state", async (request, reply) => {
+    // TEMP profiling (revert after reading numbers): per-step timing of the
+    // /me/state boot path. lap(key) records the ms delta since the previous await;
+    // the finally emits one structured pino line per request — even on the
+    // 503/404 early returns or a throw — so `total` is fully accounted for.
+    const tStart = Date.now();
+    let tPrev = tStart;
+    const timing: Record<string, number> = {};
+    const lap = (key: string) => {
+      const now = Date.now();
+      timing[key] = now - tPrev;
+      tPrev = now;
+    };
+    try {
     const user = await requireAuth(request);
+    lap("auth");
     const worldRows = await db.select().from(worlds).where(eq(worlds.status, "active")).limit(1);
+    lap("worldLookup");
     const world = worldRows[0];
     if (!world) {
       reply.code(503);
@@ -57,6 +72,7 @@ export async function meRoutes(app: FastifyInstance) {
       .innerJoin(houses, eq(houses.slug, players.houseSlug))
       .where(and(eq(players.userId, user.id), eq(players.worldId, world.id), eq(players.isActive, true)))
       .limit(1);
+    lap("playerRow");
 
     const state = rows[0];
     if (!state) {
@@ -66,49 +82,67 @@ export async function meRoutes(app: FastifyInstance) {
 
     // Canonical character sheet (stats, ideology, party, currency, actions).
     const ensured = await ensureCharacterRow(state.player, world.id);
+    lap("ensure");
     // Resolve any expired censure first (it may flip party), then read the row.
     const censure = await activeCensure(ensured.id);
+    lap("censure");
     await recoverComposure(ensured.id);
+    lap("composure");
     // Lazy old-age decay on the same read path (accrues stat decline; no loop).
     await decayCharacter(ensured.id);
+    lap("decay");
     // Death enforcement + regency handoff (lazy on read; same callable path future
     // assassination/battle reuse). May flip status to 'deceased' -> opens succession.
     await enforceDeathAndHandoff(ensured.id);
+    lap("death");
     const character = (await findCharacterRow(ensured.playerId, ensured.worldId)) ?? ensured;
+    lap("findCharacter");
 
     // A pending succession blocks normal play until the player picks an heir.
     const succession = await successionInfo(character);
+    lap("succession");
     const regent = await regentBadge(character);
+    lap("regent");
     // A regency handoff (during this read) renames the slot — re-read the player
     // identity so the response reflects the heir, not the previous holder.
     const refreshedPlayer = await db.select({ name: players.name, faceId: players.faceId }).from(players).where(eq(players.id, state.player.id)).limit(1);
+    lap("refreshPlayer");
     const slotName = refreshedPlayer[0]?.name ?? state.player.name;
     const slotFaceId = refreshedPlayer[0]?.faceId ?? state.player.faceId;
 
     // Annual festivals (Prompt 7): lazy fire any festival live this season + close
     // any whose season has passed, then surface the live one for the HUD banner.
     await closeDueFestivals();
+    lap("festivalsClose");
     await fireFestivalsForCharacter(character);
+    lap("festivalFire");
     const festival = await liveFestivalForCharacter(character);
+    lap("festivalLive");
 
     // Olympiad (Prompt 8): advance any due cycle + deliver the nominate card lazily,
     // then surface the cycle status (phase, badges, live event, city-wide victor).
     await syncOlympiadForCharacter(character);
+    lap("olympiadSync");
     const olympiad = await olympiadStatus(character);
+    lap("olympiadStatus");
 
     // Elections (Politics Prompt 2): open due declarations, advance phases, and
     // reconcile office vacancies (death cascade + defection forfeit) on the same
     // lazy-on-read net the worker sweep also drives.
     await syncElections();
+    lap("elections");
 
     // The Agenda & three governments (Politics Prompt 3): accrue treasuries, seat
     // the party leaders, and advance the league + party agenda cycles, lazily.
     await syncAgenda();
+    lap("agenda");
 
     // Manumission (the slave's path out): is this a slave who has earned freedom?
     const manumission = await manumissionStatus(character);
+    lap("manumission");
 
     const resourceRows = await db.select().from(resources).where(and(eq(resources.scope, "player"), eq(resources.scopeId, state.player.id)));
+    lap("resources");
     const resourceMap = new Map(resourceRows.map((resource) => [resource.type, numberAmount(resource.amount)]));
     // A known slug maps to its resource (or null = no class resource, e.g. shipbuilder);
     // "favor" stays a defensive default only for a genuinely unknown slug.
@@ -126,6 +160,7 @@ export async function meRoutes(app: FastifyInstance) {
       .from(users)
       .where(eq(users.id, user.id))
       .limit(1);
+    lap("userRow");
 
     // Written in-game date, derived from the world's DB start instant.
     const worldGameDate = gameDate(Date.now(), world.startedAt.getTime());
@@ -217,6 +252,11 @@ export async function meRoutes(app: FastifyInstance) {
         intelligence: character.intelligence,
       },
     };
+    } finally {
+      // TEMP profiling: one structured line per request for Railway stdout.
+      timing.total = Date.now() - tStart;
+      request.log.info({ scope: "me/state.timing", ...timing }, "me/state timing");
+    }
   });
 
   // The Player Chronicle (Timeline): a dated, generation-tagged projection of the
