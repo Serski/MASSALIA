@@ -1,0 +1,13 @@
+{
+  "cities": [
+    { "id": "massalia", "name": "Massalia", "group": "metropolis", "start": { "population": 20000, "tax": 1200, "stability": 90, "fortifications": 4, "garrison": 1000 } },
+    { "id": "nikaia", "name": "Nikaia", "group": "eastern", "start": { "population": 4000, "tax": 280, "stability": 80, "fortifications": 3, "garrison": 150 } },
+    { "id": "antipolis", "name": "Antipolis", "group": "eastern", "start": { "population": 2000, "tax": 240, "stability": 68, "fortifications": 2, "garrison": 100 } },
+    { "id": "olbia", "name": "Olbia", "group": "eastern", "start": { "population": 5000, "tax": 300, "stability": 85, "fortifications": 3, "garrison": 150 } },
+    { "id": "athinopolis", "name": "Athinopolis", "group": "eastern", "start": { "population": 1000, "tax": 100, "stability": 72, "fortifications": 1, "garrison": 50 } },
+    { "id": "monoikos", "name": "Monoikos", "group": "eastern", "start": { "population": 500, "tax": 50, "stability": 68, "fortifications": 1, "garrison": 30 } },
+    { "id": "agathe", "name": "Agathe", "group": "western", "start": { "population": 3000, "tax": 200, "stability": 76, "fortifications": 2, "garrison": 100 } },
+    { "id": "emporion", "name": "Emporion", "group": "western", "start": { "population": 7000, "tax": 320, "stability": 72, "fortifications": 3, "garrison": 250 } },
+    { "id": "rhoda", "name": "Rhoda", "group": "western", "start": { "population": 3000, "tax": 100, "stability": 60, "fortifications": 2, "garrison": 120 } }
+  ]
+}

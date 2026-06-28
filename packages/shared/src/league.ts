@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export type Alignment = "conservative" | "centrist" | "reformist";
 
 
@@ -227,3 +229,120 @@ export const nobleHouses: House[] = [
   { kind: "house", slug: "philon", initial: "P", image: "assets/Philon.png", name: "Philon", alignment: "reformist", stance: "Reformist to Centrist", motto: "Healing hands, merging wisdom.", patron: "Panacea", ancestor: "Chrysippus Philon, 550-492 BC", crest: "Serpent on staff", history: "Medical house blending Greek technique with Gaulish herbal knowledge.", moment: "Opened the first Greek and Gaulish clinic around 550 BC." },
   { kind: "house", slug: "leonidas", initial: "L", image: "assets/Leonidas.png", name: "Leonidas", alignment: "conservative", stance: "Very Conservative", motto: "In tradition, we trust.", patron: "Aeolus", ancestor: "Alexandros Leonidas, 600-528 BC", crest: "Roaring lion", history: "Old aristocratic house committed to pure Hellenic continuity.", moment: "Built the temple of Apollo in 600 BC." },
 ];
+
+// ---------------------------------------------------------------------------
+// World-state data layers (Atlas Phase 2a): the nine League colonies and the
+// nineteen neighbouring factions. Content carries the STABLE ids, display names,
+// grouping, and the seeded starting values; current per-world values live in DB
+// (league_cities / faction_relations), seeded from these defaults on first read.
+// Values are static this phase — no growth, drift, or accrual (that is 2b).
+// ---------------------------------------------------------------------------
+
+// --- The diplomatic stance scale (7 rungs, war .. allied) -------------------
+// Stored as the string id for stability; the numeric ordering belongs here, not
+// in the data, so the scale can be reordered/extended without rewriting content.
+export const STANCE_SCALE = [
+  { id: "war", value: -3, label: "War" },
+  { id: "hostile", value: -2, label: "Hostile" },
+  { id: "unfriendly", value: -1, label: "Unfriendly" },
+  { id: "neutral", value: 0, label: "Neutral" },
+  { id: "friendly", value: 1, label: "Friendly" },
+  { id: "cordial", value: 2, label: "Cordial" },
+  { id: "allied", value: 3, label: "Allied" },
+] as const;
+
+export type StanceId = (typeof STANCE_SCALE)[number]["id"];
+export type StanceMeta = { id: StanceId; value: number; label: string };
+
+// A non-empty tuple of the ids, for z.enum and exhaustive iteration.
+export const STANCE_IDS = STANCE_SCALE.map((s) => s.id) as [StanceId, ...StanceId[]];
+
+const STANCE_BY_ID = new Map<StanceId, StanceMeta>(STANCE_SCALE.map((s) => [s.id, s]));
+
+export function stanceMeta(id: StanceId): StanceMeta {
+  const meta = STANCE_BY_ID.get(id);
+  if (!meta) throw new Error(`Unknown diplomatic stance: ${id}`);
+  return meta;
+}
+
+// The numeric rung of a stance (war = -3 .. allied = +3) — for ordering/colour.
+export function stanceValue(id: StanceId): number {
+  return stanceMeta(id).value;
+}
+
+function assertUniqueIds(ids: string[], kind: string): void {
+  const seen = new Set<string>();
+  for (const id of ids) {
+    if (seen.has(id)) throw new Error(`Duplicate ${kind} id: ${id}`);
+    seen.add(id);
+  }
+}
+
+// --- League cities ----------------------------------------------------------
+
+export const CITY_GROUPS = ["metropolis", "eastern", "western"] as const;
+export type CityGroup = (typeof CITY_GROUPS)[number];
+
+const cityStartSchema = z
+  .object({
+    population: z.number().int().nonnegative(),
+    tax: z.number().int().nonnegative(),
+    stability: z.number().int().min(0).max(100),
+    fortifications: z.number().int().min(1).max(5),
+    garrison: z.number().int().nonnegative(),
+  })
+  .strict();
+
+const citySchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    group: z.enum(CITY_GROUPS),
+    start: cityStartSchema,
+  })
+  .strict();
+
+export const citiesContentSchema = z.object({ cities: z.array(citySchema).min(1) }).strict();
+
+export type CityStart = z.infer<typeof cityStartSchema>;
+export type CityDef = z.infer<typeof citySchema>;
+export type CitiesContent = z.infer<typeof citiesContentSchema>;
+
+export function parseCitiesContent(data: unknown): CitiesContent {
+  const parsed = citiesContentSchema.parse(data);
+  assertUniqueIds(parsed.cities.map((c) => c.id), "city");
+  return parsed;
+}
+
+// --- Diplomacy factions -----------------------------------------------------
+
+export const FACTION_GROUPS = ["gauls", "celto-ligurian", "ligurian", "aquitani", "iberian", "major-powers"] as const;
+export type FactionGroup = (typeof FACTION_GROUPS)[number];
+
+const factionStartSchema = z
+  .object({
+    stance: z.enum(STANCE_IDS),
+    vassal: z.boolean(),
+  })
+  .strict();
+
+const factionSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    group: z.enum(FACTION_GROUPS),
+    start: factionStartSchema,
+  })
+  .strict();
+
+export const factionsContentSchema = z.object({ factions: z.array(factionSchema).min(1) }).strict();
+
+export type FactionStart = z.infer<typeof factionStartSchema>;
+export type FactionDef = z.infer<typeof factionSchema>;
+export type FactionsContent = z.infer<typeof factionsContentSchema>;
+
+export function parseFactionsContent(data: unknown): FactionsContent {
+  const parsed = factionsContentSchema.parse(data);
+  assertUniqueIds(parsed.factions.map((f) => f.id), "faction");
+  return parsed;
+}

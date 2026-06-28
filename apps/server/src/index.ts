@@ -22,6 +22,7 @@ import { oligarchyRoutes } from "./routes/oligarchy.js";
 import { electionRoutes } from "./routes/elections.js";
 import { officeRoutes } from "./routes/offices.js";
 import { standingsRoutes } from "./routes/standings.js";
+import { leagueRoutes, loadLeagueContent } from "./routes/league.js";
 import { buildingRoutes } from "./routes/buildings.js";
 import { loadBuildingsContent, loadPopsContent } from "./services/buildings.js";
 import { serviceRoutes } from "./routes/service.js";
@@ -73,6 +74,8 @@ await loadRanksContent();
 await loadContractsContent();
 // Fail fast on a malformed election block (Politics Prompt 2).
 electionConfig(getCalendarConfig());
+// Atlas Phase 2a: validate the cities + factions content at boot.
+await loadLeagueContent();
 
 app.get("/health", async () => ({ ok: true }));
 await app.register(authRoutes, { prefix: "/auth" });
@@ -92,6 +95,7 @@ await app.register(oligarchyRoutes, { prefix: "/api/oligarchy" });
 await app.register(electionRoutes, { prefix: "/api/elections" });
 await app.register(officeRoutes, { prefix: "/api/offices" });
 await app.register(standingsRoutes, { prefix: "/api/standings" });
+await app.register(leagueRoutes, { prefix: "/api/league" });
 await app.register(buildingRoutes, { prefix: "/api/buildings" });
 await app.register(serviceRoutes, { prefix: "/api/service" });
 await app.register(mercRoutes, { prefix: "/api/merc" });

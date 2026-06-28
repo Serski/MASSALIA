@@ -1,0 +1,23 @@
+{
+  "factions": [
+    { "id": "cadurci", "name": "Cadurci", "group": "gauls", "start": { "stance": "unfriendly", "vassal": false } },
+    { "id": "ruteni", "name": "Ruteni", "group": "gauls", "start": { "stance": "neutral", "vassal": false } },
+    { "id": "helvii", "name": "Helvii", "group": "gauls", "start": { "stance": "friendly", "vassal": false } },
+    { "id": "gabali", "name": "Gabali", "group": "gauls", "start": { "stance": "neutral", "vassal": false } },
+    { "id": "volcae", "name": "Volcae", "group": "gauls", "start": { "stance": "hostile", "vassal": false } },
+    { "id": "allobroges", "name": "Allobroges", "group": "celto-ligurian", "start": { "stance": "unfriendly", "vassal": false } },
+    { "id": "cavares", "name": "Cavares", "group": "celto-ligurian", "start": { "stance": "friendly", "vassal": false } },
+    { "id": "vocontii", "name": "Vocontii", "group": "celto-ligurian", "start": { "stance": "neutral", "vassal": false } },
+    { "id": "saluvii", "name": "Saluvii", "group": "celto-ligurian", "start": { "stance": "unfriendly", "vassal": false } },
+    { "id": "veltanii", "name": "Veltanii", "group": "celto-ligurian", "start": { "stance": "neutral", "vassal": false } },
+    { "id": "ligurians", "name": "Ligurians", "group": "ligurian", "start": { "stance": "friendly", "vassal": false } },
+    { "id": "ausci", "name": "Ausci", "group": "aquitani", "start": { "stance": "neutral", "vassal": false } },
+    { "id": "convenae", "name": "Convenae", "group": "aquitani", "start": { "stance": "neutral", "vassal": false } },
+    { "id": "tarusates", "name": "Tarusates", "group": "aquitani", "start": { "stance": "unfriendly", "vassal": false } },
+    { "id": "ilergetae", "name": "Ilergetae", "group": "iberian", "start": { "stance": "friendly", "vassal": false } },
+    { "id": "lacetani", "name": "Lacetani", "group": "iberian", "start": { "stance": "cordial", "vassal": false } },
+    { "id": "rome", "name": "Rome", "group": "major-powers", "start": { "stance": "cordial", "vassal": false } },
+    { "id": "carthage", "name": "Carthage", "group": "major-powers", "start": { "stance": "hostile", "vassal": false } },
+    { "id": "syracuse", "name": "Syracuse", "group": "major-powers", "start": { "stance": "friendly", "vassal": false } }
+  ]
+}

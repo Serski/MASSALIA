@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { api, ApiError, contentUrl, type ChronicleEntry, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type AgendaScopeView, type BuildingsCatalog, type BuildingsMine, type CatalogEntry, type CatalogTier, type OwnedBuilding, type ClassSection, type VendorPrice, type PeopleView, type ServiceView, type MercBoard, type RiskOutcome, type StandingsResponse, type StandingsBoard, type StandingRow } from "../api.js";
+import { api, ApiError, contentUrl, type ChronicleEntry, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type AgendaScopeView, type BuildingsCatalog, type BuildingsMine, type CatalogEntry, type CatalogTier, type OwnedBuilding, type ClassSection, type VendorPrice, type PeopleView, type ServiceView, type MercBoard, type RiskOutcome, type StandingsResponse, type StandingsBoard, type StandingRow, type CityView, type CityGroup, type FactionView, type FactionGroup } from "../api.js";
 import { assetPath, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
@@ -3657,9 +3657,176 @@ function StandingsView() {
   );
 }
 
+// --- League Cities & Diplomacy (Atlas Phase 2a) ----------------------------
+
+const CITY_GROUP_META: { id: CityGroup; label: string }[] = [
+  { id: "metropolis", label: "Metropolis" },
+  { id: "eastern", label: "Eastern Colonies" },
+  { id: "western", label: "Western Colonies" },
+];
+
+const FACTION_GROUP_META: { id: FactionGroup; label: string }[] = [
+  { id: "gauls", label: "Gauls" },
+  { id: "celto-ligurian", label: "Celto-Ligurian" },
+  { id: "ligurian", label: "Ligurian" },
+  { id: "aquitani", label: "Aquitani" },
+  { id: "iberian", label: "Iberian" },
+  { id: "major-powers", label: "Major Powers" },
+];
+
+const cityRowStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1.4fr 0.8fr 0.7fr 0.9fr 0.9fr 0.9fr",
+  gap: 8,
+  alignItems: "center",
+  padding: "7px 4px",
+  borderBottom: "1px solid var(--dash-line)",
+};
+const cityHeadStyle: CSSProperties = {
+  ...cityRowStyle,
+  color: "var(--dash-stone-dim)",
+  fontSize: "0.78em",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+};
+const numCellStyle: CSSProperties = { textAlign: "right", fontVariantNumeric: "tabular-nums", color: "var(--dash-parchment)" };
+
+// 1..5 fortification level as filled/empty pips.
+function fortPips(level: number): string {
+  const n = Math.max(0, Math.min(5, level));
+  return "■".repeat(n) + "□".repeat(5 - n);
+}
+
+function CitiesView() {
+  const [data, setData] = useState<CityView[] | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .leagueCities()
+      .then((res) => !cancelled && setData(res.cities))
+      .catch((err) => !cancelled && setError(err instanceof ApiError ? err.message : "The cities could not be read."));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (error) return <p className="dashboard-todo" role="status">{error}</p>;
+  if (!data) return <p className="dashboard-todo">Reading the colonies…</p>;
+
+  return (
+    <>
+      {CITY_GROUP_META.map((group) => {
+        const inGroup = data.filter((c) => c.group === group.id);
+        if (inGroup.length === 0) return null;
+        return (
+          <DashboardCard key={group.id}>
+            <div className="panel-label">{group.label}</div>
+            <div style={cityHeadStyle}>
+              <span>City</span>
+              <span style={{ textAlign: "right" }}>Pop.</span>
+              <span style={{ textAlign: "right" }}>Tax</span>
+              <span style={{ textAlign: "right" }}>Stability</span>
+              <span style={{ textAlign: "right" }}>Forts</span>
+              <span style={{ textAlign: "right" }}>Garrison</span>
+            </div>
+            {inGroup.map((c) => (
+              <div key={c.id} style={cityRowStyle}>
+                <span style={{ color: "var(--dash-parchment)", fontWeight: 600 }}>{c.name}</span>
+                <span style={numCellStyle}>{c.population.toLocaleString()}</span>
+                <span style={numCellStyle}>{c.tax.toLocaleString()}</span>
+                <span style={numCellStyle}>{c.stability}</span>
+                <span style={{ ...numCellStyle, color: "var(--dash-gold)", letterSpacing: "1px" }} title={`${c.fortifications}/5`}>
+                  {fortPips(c.fortifications)}
+                </span>
+                <span style={numCellStyle}>{c.garrison.toLocaleString()}</span>
+              </div>
+            ))}
+          </DashboardCard>
+        );
+      })}
+    </>
+  );
+}
+
+// Colour a stance along the war(−3) → allied(+3) spectrum.
+function stanceColor(value: number): string {
+  if (value <= -2) return "var(--dash-bad)";
+  if (value === -1) return "#c98b6a";
+  if (value === 0) return "var(--dash-stone)";
+  if (value === 1) return "#9bb87a";
+  return "var(--dash-good)";
+}
+
+const factionRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  padding: "8px 4px",
+  borderBottom: "1px solid var(--dash-line)",
+};
+
+function DiplomacyView() {
+  const [data, setData] = useState<FactionView[] | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .diplomacy()
+      .then((res) => !cancelled && setData(res.factions))
+      .catch((err) => !cancelled && setError(err instanceof ApiError ? err.message : "Diplomacy could not be read."));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (error) return <p className="dashboard-todo" role="status">{error}</p>;
+  if (!data) return <p className="dashboard-todo">Reading the embassies…</p>;
+
+  return (
+    <>
+      {FACTION_GROUP_META.map((group) => {
+        const inGroup = data.filter((f) => f.group === group.id);
+        if (inGroup.length === 0) return null;
+        return (
+          <DashboardCard key={group.id}>
+            <div className="panel-label">{group.label}</div>
+            {inGroup.map((f) => (
+              <div key={f.id} style={factionRowStyle}>
+                <span style={{ color: "var(--dash-parchment)", fontWeight: 600 }}>
+                  {f.name}
+                  {f.vassal ? (
+                    <span style={{ marginLeft: 8, fontSize: "0.75em", color: "var(--dash-gold-bright)" }} title="Vassal of Massalia">
+                      ⛓ Vassal
+                    </span>
+                  ) : null}
+                </span>
+                <span
+                  style={{
+                    color: stanceColor(f.stanceValue),
+                    fontWeight: 700,
+                    fontSize: "0.85em",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  {f.stanceLabel}
+                </span>
+              </div>
+            ))}
+          </DashboardCard>
+        );
+      })}
+    </>
+  );
+}
+
 function AtlasPanel() {
   // Atlas is a sub-tabbed container. Map is the existing campaign map; Standings
-  // is the live leaderboards; Cities and Diplomacy are reserved placeholders.
+  // is the live leaderboards; Cities and Diplomacy are live world-state readouts.
   const [tab, setTab] = useState<"map" | "standings" | "cities" | "diplomacy">("map");
   return (
     <section className="dashboard-panel atlas-dashboard-panel" aria-labelledby="atlas-dashboard-title">
@@ -3690,15 +3857,10 @@ function AtlasPanel() {
         </DashboardCard>
       ) : tab === "standings" ? (
         <StandingsView />
+      ) : tab === "cities" ? (
+        <CitiesView />
       ) : (
-        <DashboardCard>
-          <div className="panel-label">Coming soon</div>
-          <p className="dashboard-todo">
-            {tab === "cities"
-              ? "Cities — the League's settlements and the holdings within them — arrive in a later chapter."
-              : "Diplomacy — pacts, rivalries, and the standing between Houses — arrives in a later chapter."}
-          </p>
-        </DashboardCard>
+        <DiplomacyView />
       )}
     </section>
   );

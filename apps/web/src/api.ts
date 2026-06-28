@@ -287,6 +287,10 @@ export const api = {
     apiFetch<{ ok: true }>("/api/offices/appoint-strategos", { method: "POST", body: { candidateCharacterId } }),
   // Player Standings (Atlas Phase 1): five rank-only leaderboards for the world.
   standings: () => apiFetch<StandingsResponse>("/api/standings"),
+  // Atlas Phase 2a: the nine League colonies (with five stats each) and the
+  // nineteen neighbouring factions (stance + vassal). Static seeded values.
+  leagueCities: () => apiFetch<LeagueCitiesResponse>("/api/league/cities"),
+  diplomacy: () => apiFetch<DiplomacyResponse>("/api/league/diplomacy"),
   // The Agenda & three governments (Politics Prompt 3).
   agenda: () => apiFetch<AgendaView>("/api/agenda"),
   draftAgenda: (scope: AgendaScope, cardId: string) =>
@@ -445,6 +449,41 @@ export type StandingRow = {
 export type StandingsResponse = {
   boards: Record<StandingsBoard, StandingRow[]>;
 };
+
+// --- League world-state (Atlas Phase 2a) ------------------------------------
+
+export type CityGroup = "metropolis" | "eastern" | "western";
+
+// A colony with its five current stats (real values; not rank-hidden).
+export type CityView = {
+  id: string;
+  name: string;
+  group: CityGroup;
+  population: number;
+  tax: number;
+  stability: number;
+  // 1..5 fortification level (display-only this phase).
+  fortifications: number;
+  garrison: number;
+};
+
+export type LeagueCitiesResponse = { cities: CityView[] };
+
+export type FactionGroup = "gauls" | "celto-ligurian" | "ligurian" | "aquitani" | "iberian" | "major-powers";
+
+// A neighbouring faction with its current diplomatic stance + vassal flag.
+export type FactionView = {
+  id: string;
+  name: string;
+  group: FactionGroup;
+  stance: string;
+  // The numeric rung (war = -3 .. allied = +3) + display label, for colour/order.
+  stanceValue: number;
+  stanceLabel: string;
+  vassal: boolean;
+};
+
+export type DiplomacyResponse = { factions: FactionView[] };
 
 // --- The Oligarchy Chamber (Politics Prompt 1) -------------------------------
 
