@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Queue, Worker, type Job } from "bullmq";
 import { completionDelayMs, parseAgeConfig, parseAgendaFile, parseCalendarConfig, parseContractsContent, parseFamilyConfig, parsePoliticsConfig, parseTraitsFile, type AgeConfig, type AgendaScope, type CalendarConfig, type ContractsContent, type FamilyConfig, type PoliticsConfig, type Trait } from "@massalia/shared";
-import { accrueTreasuries, advanceAgendaCycles, advanceElections, advanceOlympiads, closeDueChamberVotes, closeDueFestivals, deliverOlympicNominationToAll, drawFamilyCandidates, ensurePartyLeaders, fireFestivalsForAll, openAgendaCycleIfDue, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, sweepMercenaryContracts, sweepSpouseDeaths, type AgendaPools, type MercContractCfgMap } from "@massalia/db";
+import { accrueLeagueCities, accrueTreasuries, advanceAgendaCycles, advanceElections, advanceOlympiads, closeDueChamberVotes, closeDueFestivals, deliverOlympicNominationToAll, drawFamilyCandidates, ensurePartyLeaders, fireFestivalsForAll, openAgendaCycleIfDue, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, sweepMercenaryContracts, sweepSpouseDeaths, type AgendaPools, type MercContractCfgMap } from "@massalia/db";
 
 const redisUrl = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
 const connection = {
@@ -88,6 +88,9 @@ const ELECTION_SWEEP_MS = 60 * 60 * 1000;
 // Agenda sweep cadence: drafting/voting windows are seasons (real days) long; an
 // hourly tick catches the season boundaries (and accrues the per-season levy/dues).
 const AGENDA_SWEEP_MS = 60 * 60 * 1000;
+// League-drift sweep cadence: city growth is once per game year (4 real days); an
+// hourly tick applies it promptly at each year boundary and is a no-op otherwise.
+const LEAGUE_DRIFT_SWEEP_MS = 60 * 60 * 1000;
 
 // --- Recurring sweeps: self-healing job SCHEDULERS --------------------------
 // Each sweep runs on a fixed cadence via a BullMQ job scheduler. The scheduler
@@ -178,6 +181,17 @@ const SWEEPS: Sweep[] = [
       await closeDueChamberVotes(politics);
       const adv = await advanceAgendaCycles(calendar, politics, pools);
       return `Agenda sweep: accrued ${accrued ? "yes" : "—"}, ${leaders} leader(s) seated, opened ${opened}, ${adv.toVoting.length} to vote, resolved ${adv.resolved.length}`;
+    },
+  },
+  {
+    // League city drift (Atlas Phase 2b-i): grow each city once per game year
+    // (population/garrison +%, stability toward baseline). Idempotent per
+    // (world, city, year); tax + fortifications and all diplomacy are untouched.
+    name: "league-drift-sweep",
+    every: LEAGUE_DRIFT_SWEEP_MS,
+    run: async () => {
+      const { grew, year } = await accrueLeagueCities(await calendarConfig());
+      return `League-drift sweep: grew ${grew} cities into year ${year ?? "—"}`;
     },
   },
 ];

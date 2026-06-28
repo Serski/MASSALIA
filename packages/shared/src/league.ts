@@ -346,3 +346,57 @@ export function parseFactionsContent(data: unknown): FactionsContent {
   assertUniqueIds(parsed.factions.map((f) => f.id), "faction");
   return parsed;
 }
+
+// --- League city drift (Atlas Phase 2b-i): gentle once-per-game-year growth ---
+// Cities evolve slowly over time. Constants are deliberately small and named here
+// so they are trivially tunable (balance deferred to evidence). Diplomacy stances
+// do NOT drift this phase; only cities. Pure + DB-free so it is unit-tested.
+
+// +2% population per game year (rounded) — larger cities gain more in absolute terms.
+export const CITY_POP_GROWTH = 0.02;
+// +2% garrison per game year (rounded) — gentle creep alongside population.
+export const CITY_GARRISON_GROWTH = 0.02;
+// Stability drifts toward this baseline so it self-settles rather than runs away.
+export const CITY_STABILITY_BASELINE = 70;
+// ±1 per game year toward the baseline (capped so it never overshoots).
+export const CITY_STABILITY_STEP = 1;
+
+export type CityDriftStats = {
+  population: number;
+  tax: number;
+  stability: number;
+  fortifications: number;
+  garrison: number;
+};
+
+// One pure once-per-year drift step. Idempotent via lastGrowthYear: if the city
+// has already grown in (or after) `currentYear`, it is returned unchanged. A city
+// that is behind grows exactly one step (it does NOT replay every missed year —
+// it jumps to the current year) and the caller stamps lastGrowthYear = currentYear.
+// tax is left FLAT (it is not a function of population — content ratios vary
+// 3.3%–12%); fortifications NEVER auto-grow (1..5, Archon-upgraded in a later phase).
+export function driftCity(
+  city: CityDriftStats & { lastGrowthYear: number | null },
+  currentYear: number,
+): { changed: boolean; next: CityDriftStats & { lastGrowthYear: number | null } } {
+  if (city.lastGrowthYear !== null && city.lastGrowthYear >= currentYear) {
+    return { changed: false, next: { ...city } };
+  }
+  let stability = city.stability;
+  if (stability < CITY_STABILITY_BASELINE) {
+    stability = Math.min(CITY_STABILITY_BASELINE, stability + CITY_STABILITY_STEP);
+  } else if (stability > CITY_STABILITY_BASELINE) {
+    stability = Math.max(CITY_STABILITY_BASELINE, stability - CITY_STABILITY_STEP);
+  }
+  return {
+    changed: true,
+    next: {
+      population: Math.round(city.population * (1 + CITY_POP_GROWTH)),
+      tax: city.tax, // flat — not derived from population
+      stability,
+      fortifications: city.fortifications, // never auto-grows
+      garrison: Math.round(city.garrison * (1 + CITY_GARRISON_GROWTH)),
+      lastGrowthYear: currentYear,
+    },
+  };
+}

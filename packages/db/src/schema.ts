@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { boolean, date, index, integer, jsonb, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, date, index, integer, jsonb, numeric, pgTable, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const worlds = pgTable("worlds", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -724,6 +724,47 @@ export const eventsLog = pgTable("events_log", {
   resultText: text("result_text").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// --- League world-state (Atlas Phase 2a/2b-i) -------------------------------
+// These two tables are created by the hand-written SQL migration 0030 (and 0031
+// adds league_cities.last_growth_year). The defs below describe the LIVE tables
+// AS-IS for typed access (the city-drift sweep + future reads). They are NOT
+// drizzle-kit managed — the SQL migrations remain the source of truth; the
+// constraint names mirror what Postgres generated so the description matches.
+export const leagueCities = pgTable("league_cities", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  cityId: text("city_id").notNull(),
+  population: integer("population").notNull(),
+  // tax is an independent stat (NOT derived from population — content ratios vary
+  // 3.3%–12%); it does not drift this phase.
+  tax: integer("tax").notNull(),
+  stability: integer("stability").notNull(),
+  // 1..5 fortification level — Archon-upgraded in a later phase; never auto-grows.
+  fortifications: integer("fortifications").notNull(),
+  garrison: integer("garrison").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  // Once-per-game-year drift guard (migration 0031): the yearInGame this city last
+  // grew. NULL = never grown (legacy/freshly-seeded). Nullable + additive.
+  lastGrowthYear: integer("last_growth_year"),
+}, (table) => ({
+  oneCityPerWorld: unique("league_cities_world_id_city_id_key").on(table.worldId, table.cityId),
+  worldIdx: index("league_cities_world_idx").on(table.worldId),
+}));
+
+export const factionRelations = pgTable("faction_relations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  factionId: text("faction_id").notNull(),
+  // The diplomatic stance, stored as the scale string id (war .. allied); the
+  // numeric ordering lives in @massalia/shared. Static this phase (no drift).
+  stance: text("stance").notNull(),
+  vassal: boolean("vassal").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  oneFactionPerWorld: unique("faction_relations_world_id_faction_id_key").on(table.worldId, table.factionId),
+  worldIdx: index("faction_relations_world_idx").on(table.worldId),
+}));
 
 export const provinceRelations = relations(provinces, ({ one, many }) => ({
   owner: one(players, { fields: [provinces.ownerPlayerId], references: [players.id] }),
