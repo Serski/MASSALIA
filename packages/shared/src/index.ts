@@ -4,6 +4,7 @@ export * from "./events.js";
 export * from "./league.js";
 export * from "./character.js";
 export * from "./calendar.js";
+export * from "./chronicle.js";
 export * from "./routines.js";
 export * from "./age.js";
 export * from "./family.js";

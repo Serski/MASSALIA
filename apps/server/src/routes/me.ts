@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { and, eq } from "drizzle-orm";
-import { createDb, houses, players, professions, resources, users, worlds } from "@massalia/db";
+import { createDb, gatherChronicleForCharacter, houses, players, professions, resources, users, worlds } from "@massalia/db";
 import { currentAge, decayBandFor, formatGameDate, gameDate, isDeceased, isWithdrawn, lifeStage, portraitFor } from "@massalia/shared";
 import { requireAuth } from "../services/auth.js";
 import { ensureCharacterRow, findCharacterRow } from "../services/character.js";
@@ -217,6 +217,39 @@ export async function meRoutes(app: FastifyInstance) {
         intelligence: character.intelligence,
       },
     };
+  });
+
+  // The Player Chronicle (Timeline): a dated, generation-tagged projection of the
+  // house's life-events (marriages, births, the Megas Choregos win, festival
+  // patronage, Olympic selection). A dedicated read so the hot /state stays lean;
+  // the structured entries are rendered into prose by the client.
+  app.get("/chronicle", async (request, reply) => {
+    const user = await requireAuth(request);
+    const worldRows = await db.select({ id: worlds.id }).from(worlds).where(eq(worlds.status, "active")).limit(1);
+    const world = worldRows[0];
+    if (!world) {
+      reply.code(503);
+      return { error: "No active world exists." };
+    }
+
+    const playerRows = await db
+      .select({ id: players.id })
+      .from(players)
+      .where(and(eq(players.userId, user.id), eq(players.worldId, world.id), eq(players.isActive, true)))
+      .limit(1);
+    const player = playerRows[0];
+    if (!player) {
+      reply.code(404);
+      return { error: "No active character found." };
+    }
+
+    const character = await findCharacterRow(player.id, world.id);
+    if (!character) {
+      reply.code(404);
+      return { error: "No active character found." };
+    }
+
+    return { entries: await gatherChronicleForCharacter(character.id) };
   });
 
   // Wire the Settings newsletter toggle to the real users.newsletter_opt_in column.

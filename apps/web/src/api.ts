@@ -187,6 +187,23 @@ export type PlayerState = {
   };
 };
 
+// The Player Chronicle (Timeline): a dated, generation-tagged life-event, with a
+// structured payload the client renders into prose (see renderChronicleEntry).
+export type ChronicleType =
+  | "marriage"
+  | "birth"
+  | "megas_choregos"
+  | "festival_participation"
+  | "olympic_selection";
+
+export type ChronicleEntry = {
+  seasonIndex: number;
+  label: string;
+  generation: number;
+  type: ChronicleType;
+  payload: Record<string, unknown>;
+};
+
 async function authenticate(path: string, body: Record<string, unknown>): Promise<AuthResponse> {
   const result = await apiFetch<AuthResponse>(path, { method: "POST", body });
   if (result.token) {
@@ -209,6 +226,8 @@ export const api = {
   me: () => apiFetch<AuthResponse>("/auth/me"),
   createCharacter: (payload: CreationRequest) => apiFetch("/characters", { method: "POST", body: payload }),
   state: () => apiFetch<PlayerState>("/me/state"),
+  // The Player Chronicle (Timeline): the house's dated, generation-tagged history.
+  chronicle: () => apiFetch<{ entries: ChronicleEntry[] }>("/me/chronicle"),
   setNewsletter: (optIn: boolean) =>
     apiFetch<{ ok: true; newsletterOptIn: boolean }>("/me/newsletter", { method: "POST", body: { optIn } }),
   joinParty: (party: "dynatoi" | "palaioi") =>

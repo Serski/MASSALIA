@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { api, ApiError, contentUrl, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type AgendaScopeView, type BuildingsCatalog, type BuildingsMine, type CatalogEntry, type CatalogTier, type OwnedBuilding, type ClassSection, type VendorPrice, type PeopleView, type ServiceView, type MercBoard, type RiskOutcome } from "../api.js";
+import { api, ApiError, contentUrl, type ChronicleEntry, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type AgendaScopeView, type BuildingsCatalog, type BuildingsMine, type CatalogEntry, type CatalogTier, type OwnedBuilding, type ClassSection, type VendorPrice, type PeopleView, type ServiceView, type MercBoard, type RiskOutcome } from "../api.js";
 import { assetPath, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
 import "./dashboard.css";
 
-type DashboardSection = "court" | "ledger" | "market" | "family" | "politics" | "atlas";
+type DashboardSection = "court" | "ledger" | "market" | "family" | "timeline" | "politics" | "atlas";
 
-type IconName = "court" | "ledger" | "market" | "family" | "politics" | "atlas";
+type IconName = "court" | "ledger" | "market" | "family" | "timeline" | "politics" | "atlas";
 
 type DashboardNavItem = {
   id: DashboardSection;
@@ -89,6 +89,7 @@ const dashboardNav: DashboardNavItem[] = [
   { id: "ledger", label: "Ledger", icon: "ledger" },
   { id: "market", label: "Market", icon: "market" },
   { id: "family", label: "Family", icon: "family", badge: placeholderFamilyEventCount },
+  { id: "timeline", label: "Timeline", icon: "timeline" },
   { id: "politics", label: "Politics", icon: "politics" },
   { id: "atlas", label: "Atlas", icon: "atlas" },
 ];
@@ -98,7 +99,7 @@ const mobilePrimaryNav: DashboardNavItem[] = dashboardNav.filter((item) =>
 );
 
 const mobileMoreNav: DashboardNavItem[] = dashboardNav.filter((item) =>
-  ["politics", "atlas"].includes(item.id),
+  ["timeline", "politics", "atlas"].includes(item.id),
 );
 
 // TODO: Replace with authenticated player profile/session state once auth is connected.
@@ -248,6 +249,18 @@ function iconPath(icon: IconName) {
           <path d="M13 15c1-.8 2-1.2 3-1.2 2 0 3.5 1.8 4 5.2" />
         </>
       );
+    case "timeline":
+      return (
+        <>
+          <path d="M12 4v16" />
+          <circle cx="12" cy="7" r="1.6" />
+          <circle cx="12" cy="13" r="1.6" />
+          <circle cx="12" cy="18" r="1.4" />
+          <path d="M13.6 7H19" />
+          <path d="M13.6 13H18" />
+          <path d="M5 7h5.4" />
+        </>
+      );
     case "politics":
       return (
         <>
@@ -313,6 +326,19 @@ const EVENT_ART: Record<string, string> = {
   "olympic-nominate": assetPath("assets/Olympic.webp"),
   "olympic-games": assetPath("assets/Olympic.webp"),
 };
+
+// Festival display names, keyed by the calendar-config festival id. The content
+// has no clean name field (only scene prose), so the human label lives here in the
+// presentation layer alongside EVENT_ART, where the rest of the festival chrome is.
+const FESTIVAL_NAMES: Record<string, string> = {
+  "fest-dionysia": "Dionysia",
+  "fest-artemisia": "Artemisia",
+  "fest-apollo": "Apollonia",
+};
+
+function festivalName(festivalId: string): string {
+  return FESTIVAL_NAMES[festivalId] ?? "festival";
+}
 
 // Scene-art banner slot. Real art is swappable later via the `art` prop; until
 // then it renders the gradient placeholder + dashed "scene art" tag.
@@ -3370,6 +3396,93 @@ function PoliticsPanel({ player, onRefresh }: PanelProps) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// The Player Chronicle (Timeline).
+// ---------------------------------------------------------------------------
+
+const GENERATION_WORDS = ["", "First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth", "Tenth"];
+
+function generationHeading(n: number): string {
+  return `${GENERATION_WORDS[n] ?? ordinalGeneration(n)} Generation`;
+}
+
+// The ONLY place chronicle prose lives: a registry keyed by the structured
+// entry.type, turning a payload into a sentence. The server stores no prose.
+const chronicleRenderers: Record<ChronicleEntry["type"], (payload: Record<string, unknown>) => string> = {
+  marriage: (p) => `Wed ${p.spouseName}.`,
+  birth: (p) => `A ${p.sex === "female" ? "daughter" : "son"}, ${p.childName}, was born.`,
+  megas_choregos: (p) => `Named Megas Choregos of the ${festivalName(String(p.festivalId))}.`,
+  festival_participation: (p) =>
+    p.choregos
+      ? `Served as choregos at the ${festivalName(String(p.festivalId))}.`
+      : `Took part in the ${festivalName(String(p.festivalId))}.`,
+  olympic_selection: (p) =>
+    p.sent ? `Chosen to compete at Olympia (${p.yearBC} BC).` : `Stood for selection to Olympia.`,
+};
+
+function renderChronicleEntry(entry: ChronicleEntry): string {
+  const render = chronicleRenderers[entry.type];
+  return render ? render(entry.payload) : "";
+}
+
+// On-demand panel: fetches the dated house chronicle on open and renders it
+// oldest→newest, grouped under a heading per dynasty generation.
+function TimelinePanel() {
+  const [entries, setEntries] = useState<ChronicleEntry[] | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    api
+      .chronicle()
+      .then((res) => setEntries(res.entries))
+      .catch((err) => setError(err instanceof ApiError ? err.message : "The chronicle could not be read."));
+  }, []);
+
+  // Bucket by generation, preserving the server's oldest→newest order within each.
+  const groups: { generation: number; entries: ChronicleEntry[] }[] = [];
+  for (const entry of entries ?? []) {
+    let group = groups.find((g) => g.generation === entry.generation);
+    if (!group) {
+      group = { generation: entry.generation, entries: [] };
+      groups.push(group);
+    }
+    group.entries.push(entry);
+  }
+  groups.sort((a, b) => a.generation - b.generation);
+
+  return (
+    <section className="dashboard-panel timeline-dashboard-panel" aria-labelledby="timeline-dashboard-title">
+      <div className="dashboard-panel-heading">
+        <p className="section-eyebrow">House chronicle</p>
+        <h1 id="timeline-dashboard-title">Timeline</h1>
+        <p>The dated history of your house, generation by generation.</p>
+      </div>
+      {error ? <p className="dashboard-todo" role="status">{error}</p> : null}
+      {entries === null && !error ? <p className="dashboard-todo">Reading the chronicle…</p> : null}
+      {entries !== null && entries.length === 0 ? (
+        <DashboardCard>
+          <p className="dashboard-todo">
+            No chronicled events yet. Marry, raise children, and earn the city's honors — your history fills in here.
+          </p>
+        </DashboardCard>
+      ) : null}
+      {groups.map((group) => (
+        <DashboardCard key={group.generation} className="timeline-gen-card">
+          <span className="dashboard-label">{generationHeading(group.generation)}</span>
+          <ul className="timeline-list">
+            {group.entries.map((entry, index) => (
+              <li key={`${entry.type}-${entry.seasonIndex}-${index}`} className="timeline-row">
+                <span className="timeline-date">{entry.label}</span>
+                <span className="timeline-prose">{renderChronicleEntry(entry)}</span>
+              </li>
+            ))}
+          </ul>
+        </DashboardCard>
+      ))}
+    </section>
+  );
+}
+
 function AtlasPanel() {
   return (
     <section className="dashboard-panel atlas-dashboard-panel" aria-labelledby="atlas-dashboard-title">
@@ -4486,6 +4599,7 @@ const panelComponents: Record<DashboardSection, (props: PanelProps) => ReactNode
   ledger: LedgerPanel,
   market: MarketPanel,
   family: FamilyPanel,
+  timeline: TimelinePanel,
   politics: PoliticsPanel,
   atlas: AtlasPanel,
 };
