@@ -354,7 +354,8 @@ function PanelRow({
   tag,
   dim = false,
 }: {
-  icon: string;
+  // ReactNode so a row can show an image emblem (e.g. a pop crest), not just an emoji.
+  icon: ReactNode;
   title: ReactNode;
   sub?: ReactNode;
   action?: ReactNode;
@@ -2100,6 +2101,72 @@ function LedgerPanel({ player, onRefresh }: PanelProps) {
 const RAW_MATERIALS = new Set(["timber", "stone", "iron", "marble", "wool", "salt", "leather", "lead", "tin"]);
 const POP_ICON: Record<string, string> = { slave: "⛓️", freeman: "🧑", citizen: "🏛️" };
 
+// --- Identity / stat icons (visual polish) ---------------------------------
+// Wire the on-disk image assets into their natural places. assetPath() does not
+// encode spaces, so encode them here for the " CLEAR.webp" assets. Every icon
+// degrades gracefully (AssetIcon hides on error / renders a fallback) so a missing
+// file never shows a broken-image glyph. EXACT on-disk filenames — do not rename.
+function assetIconUrl(file: string): string {
+  return assetPath(`assets/${file}`).replace(/ /g, "%20");
+}
+
+function AssetIcon({
+  file,
+  alt,
+  className = "asset-icon",
+  fallback = null,
+}: {
+  file: string;
+  alt: string;
+  className?: string;
+  fallback?: ReactNode;
+}) {
+  const [ok, setOk] = useState(true);
+  if (!ok) return <>{fallback}</>;
+  return <img src={assetIconUrl(file)} alt={alt} className={className} loading="lazy" onError={() => setOk(false)} />;
+}
+
+// Standings board → stat icon. "wealth" has no icon asset (a coin glyph stands in).
+const STAT_ICON: Partial<Record<StandingsBoard, string>> = {
+  prestige: "PRESTIGE.webp",
+  devotion: "DEVOTION.webp",
+  militia: "Militia.webp",
+  intelligence: "Intrigue.webp",
+};
+// House display-name (lowercased) → crest file. Two files differ from the slug
+// spelling (Mitliades / Xanthipos); a house without a crest falls back to nothing.
+const HOUSE_CREST: Record<string, string> = {
+  kleitos: "Kleitos.png",
+  miltiades: "Mitliades.png",
+  xanthippos: "Xanthipos.png",
+  iason: "Iason.png",
+  timon: "Timon.png",
+  aristeides: "Aristeides.png",
+  herakleides: "Herakleides.png",
+  nicanor: "Nicanor.png",
+  philon: "Philon.png",
+  leonidas: "Leonidas.png",
+};
+// Only Rome & Carthage have emblems yet; the other factions render text-only.
+const FACTION_ICON: Record<string, string> = { rome: "ROME CLEAR.webp", carthage: "CARTHAGE CLEAR.webp" };
+const PARTY_ICON: Record<string, string> = { dynatoi: "DYNATOI CLEAR.webp", palaioi: "PALAIOI CLEAR.webp" };
+const POP_WEBP: Record<string, string> = { citizen: "CITIZEN CLEAR.webp", freeman: "FREEMAN CLEAR.webp", slave: "SLAVE CLEAR.webp" };
+
+// A pop/people-unit glyph: the new emblem when present, else the emoji fallback.
+function PopGlyph({ type }: { type: string }) {
+  const emoji = <span aria-hidden="true">{POP_ICON[type] ?? "👤"}</span>;
+  const file = POP_WEBP[type];
+  if (!file) return emoji;
+  return <AssetIcon file={file} alt="" className="asset-icon pop-glyph" fallback={emoji} />;
+}
+
+// A house crest for a standings row, keyed by the row's house display name.
+function HouseCrest({ house }: { house: string }) {
+  const file = HOUSE_CREST[house.toLowerCase()];
+  if (!file) return null;
+  return <AssetIcon file={file} alt={`House ${house}`} className="asset-icon crest-icon" />;
+}
+
 function marketGroup(good: string, craft: Record<string, unknown>): "Naval & ships" | "Materials" | "Goods" {
   if (good in craft || good === "naval-supplies") return "Naval & ships";
   if (RAW_MATERIALS.has(good)) return "Materials";
@@ -2127,7 +2194,7 @@ function PeopleMarketRow({
   const dismissN = Math.min(qty, owned); // never dismiss more than owned
   return (
     <PanelRow
-      icon={POP_ICON[pop.type] ?? "👤"}
+      icon={<PopGlyph type={pop.type} />}
       title={`${pop.label} · you own ${owned}`}
       sub={`hire ${pop.hireCost}dr · upkeep ${pop.upkeepPerDay}dr/day · eats ${pop.foodPerDay} ${foodLabel}/day`}
       action={
@@ -3292,7 +3359,7 @@ function PoliticsPanel({ player, onRefresh }: PanelProps) {
           Oligarchy Council
         </button>
         <button type="button" role="tab" aria-selected={tab === "party"} className={`cs-tab${tab === "party" ? " on" : ""}`} onClick={() => setTab("party")}>
-          Your Party {joined ? <span className="party-tab-tag">· {player.party}</span> : <span className="party-tab-lock" aria-label="locked">🔒</span>}
+          Your Party {joined ? <span className="party-tab-tag">{PARTY_ICON[player.party.toLowerCase()] ? <AssetIcon file={PARTY_ICON[player.party.toLowerCase()]!} alt="" className="asset-icon party-icon" /> : null} · {player.party}</span> : <span className="party-tab-lock" aria-label="locked">🔒</span>}
         </button>
       </div>
 
@@ -3542,9 +3609,10 @@ const standingsPagerStyle: CSSProperties = {
 
 function StandingsRowItem({ row }: { row: StandingRow }) {
   return (
-    <li style={row.isViewer ? standingsViewerRowStyle : standingsRowStyle}>
+    <li className="atlas-row" style={row.isViewer ? standingsViewerRowStyle : standingsRowStyle}>
       <span style={standingsRankStyle}>#{row.rank}</span>
       <span style={standingsNameStyle}>
+        <HouseCrest house={row.house} />
         {row.name}
         {row.isViewer ? <strong style={{ color: "var(--dash-gold)" }}> · You</strong> : null}
       </span>
@@ -3605,6 +3673,11 @@ function StandingsView() {
             className={`cs-tab${board === b.id ? " on" : ""}`}
             onClick={() => setBoard(b.id)}
           >
+            {STAT_ICON[b.id] ? (
+              <AssetIcon file={STAT_ICON[b.id]!} alt="" className="asset-icon stat-tab-icon" />
+            ) : (
+              <span className="stat-tab-icon stat-tab-coin" aria-hidden="true">🪙</span>
+            )}
             {b.label}
           </button>
         ))}
@@ -3732,7 +3805,7 @@ function CitiesView() {
               <span style={{ textAlign: "right" }}>Garrison</span>
             </div>
             {inGroup.map((c) => (
-              <div key={c.id} style={cityRowStyle}>
+              <div key={c.id} className="atlas-row" style={cityRowStyle}>
                 <span style={{ color: "var(--dash-parchment)", fontWeight: 600 }}>{c.name}</span>
                 <span style={numCellStyle}>{c.population.toLocaleString()}</span>
                 <span style={numCellStyle}>{c.tax.toLocaleString()}</span>
@@ -3795,8 +3868,9 @@ function DiplomacyView() {
           <DashboardCard key={group.id}>
             <div className="panel-label">{group.label}</div>
             {inGroup.map((f) => (
-              <div key={f.id} style={factionRowStyle}>
+              <div key={f.id} className="atlas-row" style={factionRowStyle}>
                 <span style={{ color: "var(--dash-parchment)", fontWeight: 600 }}>
+                  {FACTION_ICON[f.id] ? <AssetIcon file={FACTION_ICON[f.id]!} alt="" className="asset-icon faction-icon" /> : null}
                   {f.name}
                   {f.vassal ? (
                     <span style={{ marginLeft: 8, fontSize: "0.75em", color: "var(--dash-gold-bright)" }} title="Vassal of Massalia">
@@ -4031,7 +4105,8 @@ function DetailRow({
   action,
   dim = false,
 }: {
-  icon: string;
+  // ReactNode so a row can show an image emblem (e.g. a pop crest), not just an emoji.
+  icon: ReactNode;
   name: ReactNode;
   sub?: ReactNode;
   tag?: string;
@@ -4296,7 +4371,7 @@ function HouseholdRow({
   const n = Math.min(qty, count);
   return (
     <DetailRow
-      icon={POP_ICON[pop.type] ?? "👤"}
+      icon={<PopGlyph type={pop.type} />}
       name={`${pop.label} × ${count}`}
       sub={`upkeep ${pop.upkeepPerDay}dr/day · ${pop.foodPerDay} ${foodName}/day each`}
       action={
