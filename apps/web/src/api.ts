@@ -285,6 +285,8 @@ export const api = {
     apiFetch<{ ok: true }>("/api/offices/appoint-ephor", { method: "POST", body: { side, candidateCharacterId } }),
   appointStrategos: (candidateCharacterId: string) =>
     apiFetch<{ ok: true }>("/api/offices/appoint-strategos", { method: "POST", body: { candidateCharacterId } }),
+  // Player Standings (Atlas Phase 1): five rank-only leaderboards for the world.
+  standings: () => apiFetch<StandingsResponse>("/api/standings"),
   // The Agenda & three governments (Politics Prompt 3).
   agenda: () => apiFetch<AgendaView>("/api/agenda"),
   draftAgenda: (scope: AgendaScope, cardId: string) =>
@@ -423,6 +425,26 @@ export type AgendaView = {
 };
 
 export type OfficeAppointee = { characterId: string; name: string; houseName: string; party: string };
+
+// --- Player Standings (Atlas Phase 1) ---------------------------------------
+
+// The five leaderboards. "wealth" ranks by drachmae; the rest by the named stat.
+export type StandingsBoard = "prestige" | "wealth" | "devotion" | "militia" | "intelligence";
+
+// A leaderboard row — rank position only, by design. The server never sends the
+// underlying stat value.
+export type StandingRow = {
+  rank: number;
+  playerId: string;
+  name: string;
+  house: string;
+  classId: string;
+  isViewer: boolean;
+};
+
+export type StandingsResponse = {
+  boards: Record<StandingsBoard, StandingRow[]>;
+};
 
 // --- The Oligarchy Chamber (Politics Prompt 1) -------------------------------
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { api, ApiError, contentUrl, type ChronicleEntry, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type AgendaScopeView, type BuildingsCatalog, type BuildingsMine, type CatalogEntry, type CatalogTier, type OwnedBuilding, type ClassSection, type VendorPrice, type PeopleView, type ServiceView, type MercBoard, type RiskOutcome } from "../api.js";
+import { api, ApiError, contentUrl, type ChronicleEntry, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type AgendaScopeView, type BuildingsCatalog, type BuildingsMine, type CatalogEntry, type CatalogTier, type OwnedBuilding, type ClassSection, type VendorPrice, type PeopleView, type ServiceView, type MercBoard, type RiskOutcome, type StandingsResponse, type StandingsBoard, type StandingRow } from "../api.js";
 import { assetPath, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
@@ -3489,17 +3489,217 @@ function TimelinePanel() {
   );
 }
 
+// --- Player Standings (Atlas Phase 1) --------------------------------------
+
+const STANDINGS_BOARD_META: { id: StandingsBoard; label: string }[] = [
+  { id: "prestige", label: "Prestige" },
+  { id: "wealth", label: "Wealth" },
+  { id: "devotion", label: "Devotion" },
+  { id: "militia", label: "Militia" },
+  { id: "intelligence", label: "Intelligence" },
+];
+
+const STANDINGS_PAGE_SIZE = 20;
+
+// Rank-only by design — these rows carry a position, never a stat value.
+const standingsRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "baseline",
+  gap: 12,
+  padding: "8px 4px",
+  borderBottom: "1px solid var(--dash-line)",
+};
+const standingsViewerRowStyle: CSSProperties = {
+  ...standingsRowStyle,
+  background: "var(--dash-panel-soft)",
+  borderRadius: 6,
+  borderBottom: "1px solid var(--dash-gold)",
+};
+const standingsRankStyle: CSSProperties = {
+  minWidth: 44,
+  color: "var(--dash-gold-bright)",
+  fontWeight: 700,
+  fontVariantNumeric: "tabular-nums",
+};
+const standingsNameStyle: CSSProperties = { flex: 1, color: "var(--dash-parchment)" };
+const standingsMetaStyle: CSSProperties = { color: "var(--dash-stone-dim)", fontSize: "0.85em" };
+const standingsBarStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  margin: "10px 0",
+  color: "var(--dash-stone)",
+};
+const standingsPagerStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 12,
+  marginTop: 12,
+  color: "var(--dash-stone)",
+};
+
+function StandingsRowItem({ row }: { row: StandingRow }) {
+  return (
+    <li style={row.isViewer ? standingsViewerRowStyle : standingsRowStyle}>
+      <span style={standingsRankStyle}>#{row.rank}</span>
+      <span style={standingsNameStyle}>
+        {row.name}
+        {row.isViewer ? <strong style={{ color: "var(--dash-gold)" }}> · You</strong> : null}
+      </span>
+      <span style={standingsMetaStyle}>
+        {titleCase(row.house)}
+        {row.classId ? ` · ${titleCase(row.classId)}` : ""}
+      </span>
+    </li>
+  );
+}
+
+function StandingsView() {
+  const [data, setData] = useState<StandingsResponse | null>(null);
+  const [error, setError] = useState("");
+  const [board, setBoard] = useState<StandingsBoard>("prestige");
+  const [page, setPage] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .standings()
+      .then((res) => !cancelled && setData(res))
+      .catch((err) => !cancelled && setError(err instanceof ApiError ? err.message : "The standings could not be read."));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Switching boards resets to the first page (ranks are independent per board).
+  useEffect(() => {
+    setPage(0);
+  }, [board]);
+
+  if (error) return <p className="dashboard-todo" role="status">{error}</p>;
+  if (!data) return <p className="dashboard-todo">Reading the standings…</p>;
+
+  const rows = data.boards[board];
+  const pageCount = Math.max(1, Math.ceil(rows.length / STANDINGS_PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const start = safePage * STANDINGS_PAGE_SIZE;
+  const pageRows = rows.slice(start, start + STANDINGS_PAGE_SIZE);
+  const viewerRow = rows.find((r) => r.isViewer) ?? null;
+  const viewerOnPage = viewerRow !== null && viewerRow.rank - 1 >= start && viewerRow.rank - 1 < start + STANDINGS_PAGE_SIZE;
+  const boardLabel = STANDINGS_BOARD_META.find((b) => b.id === board)!.label;
+  const jumpToViewer = () => {
+    if (viewerRow) setPage(Math.floor((viewerRow.rank - 1) / STANDINGS_PAGE_SIZE));
+  };
+
+  return (
+    <>
+      <div className="cs-tabs" role="tablist" aria-label="Leaderboards">
+        {STANDINGS_BOARD_META.map((b) => (
+          <button
+            key={b.id}
+            type="button"
+            role="tab"
+            aria-selected={board === b.id}
+            className={`cs-tab${board === b.id ? " on" : ""}`}
+            onClick={() => setBoard(b.id)}
+          >
+            {b.label}
+          </button>
+        ))}
+      </div>
+
+      {viewerRow ? (
+        <div style={standingsBarStyle}>
+          <span>
+            You rank <strong style={{ color: "var(--dash-gold-bright)" }}>#{viewerRow.rank}</strong> of {rows.length} in {boardLabel}.
+          </span>
+          {!viewerOnPage ? (
+            <button type="button" className="panel-btn ghost" onClick={jumpToViewer}>
+              Jump to my rank
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      <DashboardCard>
+        {rows.length === 0 ? (
+          <p className="dashboard-todo">No players are ranked yet.</p>
+        ) : (
+          <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>
+            {pageRows.map((row) => (
+              <StandingsRowItem key={row.playerId} row={row} />
+            ))}
+          </ol>
+        )}
+        {viewerRow && !viewerOnPage ? (
+          <ol style={{ listStyle: "none", margin: "8px 0 0", padding: 0 }}>
+            <StandingsRowItem row={viewerRow} />
+          </ol>
+        ) : null}
+      </DashboardCard>
+
+      {pageCount > 1 ? (
+        <div style={standingsPagerStyle}>
+          <button type="button" className="panel-btn ghost" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>
+            Prev
+          </button>
+          <span>
+            Page {safePage + 1} of {pageCount}
+          </span>
+          <button type="button" className="panel-btn ghost" disabled={safePage >= pageCount - 1} onClick={() => setPage(safePage + 1)}>
+            Next
+          </button>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function AtlasPanel() {
+  // Atlas is a sub-tabbed container. Map is the existing campaign map; Standings
+  // is the live leaderboards; Cities and Diplomacy are reserved placeholders.
+  const [tab, setTab] = useState<"map" | "standings" | "cities" | "diplomacy">("map");
   return (
     <section className="dashboard-panel atlas-dashboard-panel" aria-labelledby="atlas-dashboard-title">
       <div className="dashboard-panel-heading">
         <p className="section-eyebrow">League map</p>
         <h1 id="atlas-dashboard-title">Atlas</h1>
-        <p>The existing campaign map, embedded as the Atlas tab.</p>
+        <p>The campaign map, the city standings, and the wider world to come.</p>
       </div>
-      <DashboardCard className="dashboard-map-card">
-        <MapCanvas />
-      </DashboardCard>
+
+      <div className="cs-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={tab === "map"} className={`cs-tab${tab === "map" ? " on" : ""}`} onClick={() => setTab("map")}>
+          Map
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "standings"} className={`cs-tab${tab === "standings" ? " on" : ""}`} onClick={() => setTab("standings")}>
+          Standings
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "cities"} className={`cs-tab${tab === "cities" ? " on" : ""}`} onClick={() => setTab("cities")}>
+          Cities
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "diplomacy"} className={`cs-tab${tab === "diplomacy" ? " on" : ""}`} onClick={() => setTab("diplomacy")}>
+          Diplomacy
+        </button>
+      </div>
+
+      {tab === "map" ? (
+        <DashboardCard className="dashboard-map-card">
+          <MapCanvas />
+        </DashboardCard>
+      ) : tab === "standings" ? (
+        <StandingsView />
+      ) : (
+        <DashboardCard>
+          <div className="panel-label">Coming soon</div>
+          <p className="dashboard-todo">
+            {tab === "cities"
+              ? "Cities — the League's settlements and the holdings within them — arrive in a later chapter."
+              : "Diplomacy — pacts, rivalries, and the standing between Houses — arrives in a later chapter."}
+          </p>
+        </DashboardCard>
+      )}
     </section>
   );
 }
