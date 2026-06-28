@@ -12,6 +12,7 @@ import {
   type EventChoice,
   type EventDefinition,
 } from "./events.js";
+import { applyCityStat, shiftStance } from "./league.js";
 
 function event(over: Partial<EventDefinition> & { id: string }): EventDefinition {
   return {
@@ -219,5 +220,70 @@ describe("describeChoiceCosts — up-front mechanical preview", () => {
       ]),
     );
     expect(costs).toEqual([]);
+  });
+});
+
+describe("world-scoped event effects (Atlas Phase 2b-ii)", () => {
+  // A minimal single-event file carrying one choice with the given effects.
+  const fileWith = (effects: unknown[]) => ({
+    id: "evt-world",
+    weight: 1,
+    scene: "x",
+    choices: [{ id: "c", label: "c", effects, resultText: "r" }],
+  });
+
+  it("parses the three new effect variants", () => {
+    const events = parseEventFile(
+      fileWith([
+        { type: "change_city_stat", cityId: "antipolis", stat: "population", amount: -150 },
+        { type: "change_faction_stance", factionId: "rome", amount: 1 },
+        { type: "set_faction_vassal", factionId: "ligurians", vassal: true },
+      ]),
+    );
+    expect(events[0]!.choices[0]!.effects).toHaveLength(3);
+  });
+
+  it("rejects change_city_stat with fortifications (Archon-only, not a CityStat)", () => {
+    expect(() => parseEventFile(fileWith([{ type: "change_city_stat", cityId: "massalia", stat: "fortifications", amount: 1 }]))).toThrow();
+  });
+
+  it("rejects malformed world effects at parse time", () => {
+    expect(() => parseEventFile(fileWith([{ type: "change_faction_stance", factionId: "rome" }]))).toThrow(); // missing amount
+    expect(() => parseEventFile(fileWith([{ type: "set_faction_vassal", factionId: "rome", vassal: "yes" }]))).toThrow(); // vassal not boolean
+    expect(() => parseEventFile(fileWith([{ type: "change_city_stat", cityId: "rome", stat: "population" }]))).toThrow(); // missing amount
+  });
+});
+
+describe("shiftStance (clamped to war..allied)", () => {
+  it("shifts by signed rungs", () => {
+    expect(shiftStance("neutral", 2)).toBe("cordial");
+    expect(shiftStance("neutral", -1)).toBe("unfriendly");
+    expect(shiftStance("hostile", 1)).toBe("unfriendly");
+  });
+  it("clamps at both ends of the scale", () => {
+    expect(shiftStance("allied", 2)).toBe("allied");
+    expect(shiftStance("cordial", 5)).toBe("allied");
+    expect(shiftStance("war", -3)).toBe("war");
+    expect(shiftStance("unfriendly", -5)).toBe("war");
+  });
+  it("rounds a fractional nudge", () => {
+    expect(shiftStance("neutral", 1.4)).toBe("friendly");
+  });
+});
+
+describe("applyCityStat (clamped)", () => {
+  it("floors population/tax/garrison at 0 (never negative)", () => {
+    expect(applyCityStat("population", 100, -500)).toBe(0);
+    expect(applyCityStat("garrison", 10, -50)).toBe(0);
+    expect(applyCityStat("tax", 50, -999)).toBe(0);
+  });
+  it("bounds stability to 0..100", () => {
+    expect(applyCityStat("stability", 95, 20)).toBe(100);
+    expect(applyCityStat("stability", 5, -20)).toBe(0);
+    expect(applyCityStat("stability", 70, 5)).toBe(75);
+  });
+  it("applies a normal positive delta and rounds to an integer", () => {
+    expect(applyCityStat("population", 1000, 200)).toBe(1200);
+    expect(applyCityStat("garrison", 100, 2.6)).toBe(103);
   });
 });

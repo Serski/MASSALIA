@@ -1,0 +1,22 @@
+[
+  { "id": "gen-helvii-pact", "weight": 6, "scene": "Helvii envoys from the upper Rhone arrive seeking a grain-for-amber pact. Their chieftain awaits your word in the agora.",
+    "choices": [
+      { "id": "befriend", "label": "Seal the pact with a feast", "tags": ["reformist_act", "feast"], "effects": [{ "type": "change_faction_stance", "factionId": "helvii", "amount": 1 }, { "type": "change_drachmae", "amount": -15 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "Amber and goodwill flow down the river. The Helvii warm to Massalia." },
+      { "id": "rebuff", "label": "Demand humiliating terms", "tags": ["traditionalist_act"], "effects": [{ "type": "change_faction_stance", "factionId": "helvii", "amount": -1 }, { "type": "change_drachmae", "amount": 20 }], "resultText": "You squeeze a hard bargain. The envoys ride home stone-faced." }
+    ] },
+  { "id": "gen-salyes-raid", "weight": 5, "scene": "Salyes raiders have burned the farms outside Antipolis. Refugees crowd toward the colony's walls.",
+    "choices": [
+      { "id": "relieve", "label": "Send grain and a relief column", "tags": ["mercy", "frontline"], "effects": [{ "type": "change_city_stat", "cityId": "antipolis", "stat": "stability", "amount": 5 }, { "type": "change_drachmae", "amount": -20 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "Your grain steadies Antipolis, and the colony remembers who answered." },
+      { "id": "ignore", "label": "Let the colony fend for itself", "tags": ["refuse_aid"], "effects": [{ "type": "change_city_stat", "cityId": "antipolis", "stat": "population", "amount": -150 }, { "type": "change_city_stat", "cityId": "antipolis", "stat": "stability", "amount": -8 }], "resultText": "The raids go unanswered. Antipolis empties, and resentment simmers behind its walls." }
+    ] },
+  { "id": "gen-roman-treaty", "weight": 4, "scene": "A Roman delegation proposes a treaty of friendship against the Etruscan pirates. Carthage, they note, need not be told.",
+    "choices": [
+      { "id": "sign", "label": "Sign the treaty of friendship", "tags": ["reformist_act"], "effects": [{ "type": "change_faction_stance", "factionId": "rome", "amount": 1 }, { "type": "change_faction_stance", "factionId": "carthage", "amount": -1 }, { "type": "change_stat", "stat": "prestige", "amount": 2 }], "resultText": "Rome toasts the friendship of Massalia. Carthaginian factors in the harbor grow cold." },
+      { "id": "neutral", "label": "Keep your hands free between the powers", "tags": ["judge_fairly"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }], "resultText": "You send the Romans off with courtesies and no signature. Both powers note your caution." }
+    ] },
+  { "id": "gen-ligurian-oath", "weight": 3, "scene": "Hard-pressed Ligurian chieftains offer an oath of submission to Massalia in return for protection from the Salyes.",
+    "choices": [
+      { "id": "accept", "label": "Accept their oath of vassalage", "tags": ["reformist_act"], "effects": [{ "type": "set_faction_vassal", "factionId": "ligurians", "vassal": true }, { "type": "change_faction_stance", "factionId": "ligurians", "amount": 1 }, { "type": "change_stat", "stat": "prestige", "amount": 2 }], "resultText": "The Ligurians bend the knee. Their warriors now answer the city's call." },
+      { "id": "trade", "label": "Offer trade, not protection", "tags": ["profit"], "effects": [{ "type": "change_drachmae", "amount": 15 }], "resultText": "You keep them at arm's length — useful, but never yours." }
+    ] }
+]

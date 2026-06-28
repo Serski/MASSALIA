@@ -400,3 +400,34 @@ export function driftCity(
     },
   };
 }
+
+// --- World-scoped event-effect verbs (Atlas Phase 2b-ii) --------------------
+// Pure, trigger-agnostic helpers shared by the player-event resolver now and a
+// future autonomous world tick. They take the target's CURRENT value plus a
+// delta and return the clamped new value — they do NOT know who or what caused
+// the change (the target is always explicit at the call site).
+
+// The city stats an event may move. fortifications is deliberately EXCLUDED
+// (1..5, Archon-upgraded in a later phase) — events never touch it.
+export type CityStat = "population" | "tax" | "stability" | "garrison";
+
+// Apply a delta to a city stat, clamped sensibly: stability is bounded 0..100;
+// population/tax/garrison floor at 0 (never negative). Integer-rounded to match
+// the integer columns.
+export function applyCityStat(stat: CityStat, current: number, amount: number): number {
+  const raw = Math.round(current + amount);
+  if (stat === "stability") return Math.max(0, Math.min(100, raw));
+  return Math.max(0, raw);
+}
+
+const STANCE_MIN_VALUE = Math.min(...STANCE_SCALE.map((s) => s.value));
+const STANCE_MAX_VALUE = Math.max(...STANCE_SCALE.map((s) => s.value));
+const STANCE_BY_VALUE = new Map<number, StanceId>(STANCE_SCALE.map((s) => [s.value, s.id]));
+
+// Shift a stance by a signed (integer) number of rungs along the war..allied
+// scale, clamped to the ends. e.g. shiftStance("neutral", 2) === "cordial";
+// shiftStance("allied", 5) === "allied".
+export function shiftStance(current: StanceId, amount: number): StanceId {
+  const next = Math.max(STANCE_MIN_VALUE, Math.min(STANCE_MAX_VALUE, stanceValue(current) + Math.round(amount)));
+  return STANCE_BY_VALUE.get(next)!;
+}

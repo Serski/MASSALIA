@@ -1,16 +1,21 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
+  applyCityStat,
   applyStatGrowth,
   capStat,
   clampIdeology,
+  parseCitiesContent,
   parseEventFile,
+  parseFactionsContent,
+  shiftStance,
   type EventChoice,
   type EventDefinition,
+  type StanceId,
 } from "@massalia/shared";
-import { createDb, effectLog, eventHistory, partyFavor, playerCharacters } from "@massalia/db";
+import { createDb, effectLog, eventHistory, factionRelations, leagueCities, partyFavor, playerCharacters, worlds } from "@massalia/db";
 import { broadcastState, resolveOwnerToken, setProvinceOwner } from "./worldState.js";
 import { applyChangeTrait, TraitRuleError } from "./traits.js";
 import { onIdeologyChanged } from "./politics.js";
@@ -21,6 +26,29 @@ const db = createDb();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../../..");
 const eventsDir = path.join(repoRoot, "content/events");
+const citiesFile = path.join(repoRoot, "content/cities/cities.json");
+const factionsFile = path.join(repoRoot, "content/diplomacy/factions.json");
+
+// Content START values for the world-scoped effects' ensure-on-read (mirrors the
+// /api/league route's seed-on-read): a city/faction the effect targets may have no
+// row yet, so we insert the content default first, then apply the change on top.
+// Memoized; an unknown id is absent here and the effect skips it (no throw).
+let cityDefaults: Map<string, { population: number; tax: number; stability: number; fortifications: number; garrison: number }> | null = null;
+let factionDefaults: Map<string, { stance: string; vassal: boolean }> | null = null;
+async function getCityDefaults() {
+  if (!cityDefaults) {
+    const content = parseCitiesContent(JSON.parse(await fs.readFile(citiesFile, "utf8")));
+    cityDefaults = new Map(content.cities.map((c) => [c.id, c.start]));
+  }
+  return cityDefaults;
+}
+async function getFactionDefaults() {
+  if (!factionDefaults) {
+    const content = parseFactionsContent(JSON.parse(await fs.readFile(factionsFile, "utf8")));
+    factionDefaults = new Map(content.factions.map((f) => [f.id, f.start]));
+  }
+  return factionDefaults;
+}
 
 // Load every event file. Files may be a single event or an array of events
 // (category packs). Validated against the Zod schema — fail loudly at boot.
@@ -59,7 +87,20 @@ export async function applyChoiceEffects(actingCharacterId: string, eventId: str
   let ideologyTouched = false;
   const traitEffects = choice.effects.filter((e) => e.type === "change_trait");
 
+  // World-scoped effects (Atlas Phase 2b-ii) are explicitly-targeted; resolve their
+  // content defaults outside the tx (file IO) only when this choice actually uses one.
+  const hasWorldEffect = choice.effects.some(
+    (e) => e.type === "change_city_stat" || e.type === "change_faction_stance" || e.type === "set_faction_vassal",
+  );
+  const cityDef = hasWorldEffect ? await getCityDefaults() : null;
+  const factionDef = hasWorldEffect ? await getFactionDefaults() : null;
+
   await db.transaction(async (tx) => {
+    // The world a world-scoped effect targets is the active world (NOT read from the
+    // acting player — keeps these effects reusable by a future player-less trigger).
+    const worldId = hasWorldEffect
+      ? (await tx.select({ id: worlds.id }).from(worlds).where(eq(worlds.status, "active")).limit(1))[0]?.id ?? null
+      : null;
     for (const effect of choice.effects) {
       switch (effect.type) {
         case "change_stat": {
@@ -112,6 +153,79 @@ export async function applyChoiceEffects(actingCharacterId: string, eventId: str
         case "set_province_owner":
           setProvinceOwner(effect.provinceId, resolveOwnerToken(effect.ownerPlayerId));
           break;
+        // --- World-scoped effects (Atlas Phase 2b-ii) --------------------------
+        // Explicitly-targeted (target is in the payload, never the acting player).
+        // Ensure-on-read from content defaults, apply the CLAMPED change via the
+        // typed table, log under the triggering character with the world target +
+        // before/after in detail. An unknown id is skipped + warned (a bad content
+        // id must not blow up the player's whole resolution).
+        case "change_city_stat": {
+          if (!worldId || !cityDef) break;
+          const def = cityDef.get(effect.cityId);
+          if (!def) {
+            console.warn(`change_city_stat: unknown cityId "${effect.cityId}" — skipped`);
+            break;
+          }
+          await tx.insert(leagueCities).values({ worldId, cityId: effect.cityId, ...def }).onConflictDoNothing();
+          const rows = await tx
+            .select()
+            .from(leagueCities)
+            .where(and(eq(leagueCities.worldId, worldId), eq(leagueCities.cityId, effect.cityId)))
+            .limit(1);
+          const row = rows[0];
+          if (!row) break;
+          const next = applyCityStat(effect.stat, row[effect.stat], effect.amount);
+          await tx.update(leagueCities).set({ [effect.stat]: next }).where(eq(leagueCities.id, row.id));
+          await tx.insert(effectLog).values({
+            characterId: actingCharacterId,
+            kind: "change_city_stat",
+            detail: { cityId: effect.cityId, stat: effect.stat, amount: effect.amount, from: row[effect.stat], to: next, source: "event", eventId },
+          });
+          break;
+        }
+        case "change_faction_stance": {
+          if (!worldId || !factionDef) break;
+          const def = factionDef.get(effect.factionId);
+          if (!def) {
+            console.warn(`change_faction_stance: unknown factionId "${effect.factionId}" — skipped`);
+            break;
+          }
+          await tx.insert(factionRelations).values({ worldId, factionId: effect.factionId, stance: def.stance, vassal: def.vassal }).onConflictDoNothing();
+          const rows = await tx
+            .select()
+            .from(factionRelations)
+            .where(and(eq(factionRelations.worldId, worldId), eq(factionRelations.factionId, effect.factionId)))
+            .limit(1);
+          const row = rows[0];
+          if (!row) break;
+          const next = shiftStance(row.stance as StanceId, effect.amount);
+          await tx.update(factionRelations).set({ stance: next }).where(eq(factionRelations.id, row.id));
+          await tx.insert(effectLog).values({
+            characterId: actingCharacterId,
+            kind: "change_faction_stance",
+            detail: { factionId: effect.factionId, amount: effect.amount, from: row.stance, to: next, source: "event", eventId },
+          });
+          break;
+        }
+        case "set_faction_vassal": {
+          if (!worldId || !factionDef) break;
+          const def = factionDef.get(effect.factionId);
+          if (!def) {
+            console.warn(`set_faction_vassal: unknown factionId "${effect.factionId}" — skipped`);
+            break;
+          }
+          await tx.insert(factionRelations).values({ worldId, factionId: effect.factionId, stance: def.stance, vassal: def.vassal }).onConflictDoNothing();
+          await tx
+            .update(factionRelations)
+            .set({ vassal: effect.vassal })
+            .where(and(eq(factionRelations.worldId, worldId), eq(factionRelations.factionId, effect.factionId)));
+          await tx.insert(effectLog).values({
+            characterId: actingCharacterId,
+            kind: "set_faction_vassal",
+            detail: { factionId: effect.factionId, vassal: effect.vassal, source: "event", eventId },
+          });
+          break;
+        }
         case "change_composure":
         case "change_trait":
         case "spawn_army":

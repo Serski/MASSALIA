@@ -10,6 +10,13 @@ export type EventCondition =
 export type EventEffect =
   | { type: "gain_resource"; scope: "player" | "province"; id: string; resource: string; amount: number }
   | { type: "set_province_owner"; provinceId: string; ownerPlayerId: string }
+  // World-scoped, explicitly-targeted effects (Atlas Phase 2b-ii). Trigger-agnostic:
+  // the target city/faction is named in the payload — these NEVER read the acting
+  // player to pick a target, so a future autonomous world tick can invoke them
+  // unchanged. fortifications is intentionally excluded (Archon-only, phase 3).
+  | { type: "change_city_stat"; cityId: string; stat: "population" | "tax" | "stability" | "garrison"; amount: number }
+  | { type: "change_faction_stance"; factionId: string; amount: number }
+  | { type: "set_faction_vassal"; factionId: string; vassal: boolean }
   | { type: "change_trait"; traitId: string; operation: "add" | "remove"; characterId?: string }
   | { type: "change_ideology"; amount: number; characterId?: string }
   | { type: "change_stat"; stat: keyof CharacterStats; amount: number }
@@ -68,10 +75,15 @@ const conditionSchema = z.discriminatedUnion("type", [
 ]);
 
 const statName = z.enum(["prestige", "devotion", "militia", "intelligence"]);
+// World-scoped city stats an event may move (fortifications excluded — Archon-only).
+const cityStatName = z.enum(["population", "tax", "stability", "garrison"]);
 
 const effectSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("gain_resource"), scope: z.enum(["player", "province"]), id: z.string(), resource: z.string(), amount: z.number() }),
   z.object({ type: z.literal("set_province_owner"), provinceId: z.string(), ownerPlayerId: z.string() }),
+  z.object({ type: z.literal("change_city_stat"), cityId: z.string(), stat: cityStatName, amount: z.number() }),
+  z.object({ type: z.literal("change_faction_stance"), factionId: z.string(), amount: z.number() }),
+  z.object({ type: z.literal("set_faction_vassal"), factionId: z.string(), vassal: z.boolean() }),
   z.object({ type: z.literal("change_trait"), traitId: z.string(), operation: z.enum(["add", "remove"]), characterId: z.string().optional() }),
   z.object({ type: z.literal("change_ideology"), amount: z.number(), characterId: z.string().optional() }),
   z.object({ type: z.literal("change_stat"), stat: statName, amount: z.number() }),
