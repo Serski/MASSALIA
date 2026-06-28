@@ -142,7 +142,14 @@ export function buildChronicle(input: ChronicleInput): ChronicleEntry[] {
   for (const c of input.choregos) {
     staged.push(stage(c.id, c.closedAt, "megas_choregos", { festivalId: c.festivalId, gameYear: c.gameYear }, input));
   }
+  // Festival lines are trimmed to at most one per instance, and only when worth
+  // recording. Passive attendance (choregos: false) is dropped. A funded patron
+  // who was crowned Megas Choregos is told only by that line, so the paired
+  // "served as choregos" entry is suppressed for the same festivalId+gameYear.
+  const wonInstances = new Set(input.choregos.map((c) => `${c.festivalId}|${c.gameYear}`));
   for (const f of input.festivals) {
+    if (!f.choregos) continue;
+    if (wonInstances.has(`${f.festivalId}|${f.gameYear}`)) continue;
     staged.push(
       stage(f.id, f.createdAt, "festival_participation", { festivalId: f.festivalId, gameYear: f.gameYear, choregos: f.choregos }, input),
     );

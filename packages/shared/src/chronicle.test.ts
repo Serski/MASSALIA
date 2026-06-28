@@ -103,7 +103,7 @@ describe("buildChronicle", () => {
       births: [],
       choregos: [],
       festivals: [
-        { id: "f-b", createdAt: 6 * S, festivalId: "fest-artemisia", gameYear: 1, choregos: false },
+        { id: "f-b", createdAt: 6 * S, festivalId: "fest-artemisia", gameYear: 1, choregos: true },
         { id: "f-a", createdAt: 6 * S, festivalId: "fest-dionysia", gameYear: 1, choregos: true },
       ],
       olympics: [],
@@ -140,5 +140,72 @@ describe("buildChronicle", () => {
         olympics: [],
       }),
     ).toEqual([]);
+  });
+});
+
+// A bare input with only the fields a case overrides — keeps the festival-trimming
+// cases focused on the festival/choregos interaction.
+function festivalCase(over: Partial<ChronicleInput>): ChronicleInput {
+  return {
+    startedMs: 0,
+    successionBoundariesMs: [],
+    marriages: [],
+    births: [],
+    choregos: [],
+    festivals: [],
+    olympics: [],
+    ...over,
+  };
+}
+
+describe("buildChronicle — festival trimming", () => {
+  it("drops passive participation (choregos: false) entirely", () => {
+    const out = buildChronicle(
+      festivalCase({
+        festivals: [{ id: "f1", createdAt: 6 * S, festivalId: "fest-dionysia", gameYear: 1, choregos: false }],
+      }),
+    );
+    expect(out).toEqual([]);
+  });
+
+  it("keeps a funded patron who did not win (choregos: true, no matching Megas Choregos)", () => {
+    const out = buildChronicle(
+      festivalCase({
+        festivals: [{ id: "f1", createdAt: 6 * S, festivalId: "fest-dionysia", gameYear: 1, choregos: true }],
+      }),
+    );
+    expect(out.map((e) => e.type)).toEqual(["festival_participation"]);
+    expect(out[0]!.payload).toMatchObject({ festivalId: "fest-dionysia", gameYear: 1, choregos: true });
+  });
+
+  it("suppresses the paired participation when the same instance was won — only the Megas Choregos line remains", () => {
+    const out = buildChronicle(
+      festivalCase({
+        choregos: [{ id: "c1", closedAt: 6 * S, festivalId: "fest-dionysia", gameYear: 1 }],
+        festivals: [
+          // Same festivalId + gameYear as the win → suppressed.
+          { id: "f1", createdAt: 6 * S, festivalId: "fest-dionysia", gameYear: 1, choregos: true },
+          // Same festival, different year → key differs, so this one survives.
+          { id: "f2", createdAt: 10 * S, festivalId: "fest-dionysia", gameYear: 2, choregos: true },
+        ],
+      }),
+    );
+    expect(out.map((e) => e.type)).toEqual(["megas_choregos", "festival_participation"]);
+    // The surviving participation is the unwon, later-year instance — not the won one.
+    expect(out.find((e) => e.type === "festival_participation")!.payload).toMatchObject({
+      festivalId: "fest-dionysia",
+      gameYear: 2,
+    });
+  });
+
+  it("renders a Megas Choregos win that has no participation partner (the win never depends on one)", () => {
+    const out = buildChronicle(
+      festivalCase({
+        choregos: [{ id: "c1", closedAt: 6 * S, festivalId: "fest-artemisia", gameYear: 3 }],
+        festivals: [], // no choregos:true row for this instance at all
+      }),
+    );
+    expect(out.map((e) => e.type)).toEqual(["megas_choregos"]);
+    expect(out[0]!.payload).toMatchObject({ festivalId: "fest-artemisia", gameYear: 3 });
   });
 });
