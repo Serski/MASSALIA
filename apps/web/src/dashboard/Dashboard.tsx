@@ -5,9 +5,9 @@ import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
 import "./dashboard.css";
 
-type DashboardSection = "court" | "ledger" | "market" | "family" | "timeline" | "politics" | "atlas";
+type DashboardSection = "court" | "ledger" | "market" | "family" | "politics" | "atlas";
 
-type IconName = "court" | "ledger" | "market" | "family" | "timeline" | "politics" | "atlas";
+type IconName = "court" | "ledger" | "market" | "family" | "politics" | "atlas";
 
 type DashboardNavItem = {
   id: DashboardSection;
@@ -89,7 +89,6 @@ const dashboardNav: DashboardNavItem[] = [
   { id: "ledger", label: "Ledger", icon: "ledger" },
   { id: "market", label: "Market", icon: "market" },
   { id: "family", label: "Family", icon: "family", badge: placeholderFamilyEventCount },
-  { id: "timeline", label: "Timeline", icon: "timeline" },
   { id: "politics", label: "Politics", icon: "politics" },
   { id: "atlas", label: "Atlas", icon: "atlas" },
 ];
@@ -99,7 +98,7 @@ const mobilePrimaryNav: DashboardNavItem[] = dashboardNav.filter((item) =>
 );
 
 const mobileMoreNav: DashboardNavItem[] = dashboardNav.filter((item) =>
-  ["timeline", "politics", "atlas"].includes(item.id),
+  ["politics", "atlas"].includes(item.id),
 );
 
 // TODO: Replace with authenticated player profile/session state once auth is connected.
@@ -247,18 +246,6 @@ function iconPath(icon: IconName) {
           <circle cx="16" cy="9" r="2.5" />
           <path d="M4 20c.8-4 2.7-6 5-6s4.2 2 5 6" />
           <path d="M13 15c1-.8 2-1.2 3-1.2 2 0 3.5 1.8 4 5.2" />
-        </>
-      );
-    case "timeline":
-      return (
-        <>
-          <path d="M12 4v16" />
-          <circle cx="12" cy="7" r="1.6" />
-          <circle cx="12" cy="13" r="1.6" />
-          <circle cx="12" cy="18" r="1.4" />
-          <path d="M13.6 7H19" />
-          <path d="M13.6 13H18" />
-          <path d="M5 7h5.4" />
         </>
       );
     case "politics":
@@ -2417,6 +2404,9 @@ function SpouseDeathCard({ notice }: { notice: SpouseDeathNotice }) {
 }
 
 function FamilyPanel({ onRefresh }: PanelProps) {
+  // Two tabs: the household management view (default) and the dated house
+  // chronicle (the existing TimelinePanel, mounted as-is).
+  const [tab, setTab] = useState<"household" | "chronicle">("household");
   const [state, setState] = useState<FamilyState | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -2478,6 +2468,20 @@ function FamilyPanel({ onRefresh }: PanelProps) {
         <h1 id="family-title">House &amp; Family</h1>
         <p>Your blood, your heirs, and the matches that bind the Houses.</p>
       </div>
+
+      <div className="cs-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={tab === "household"} className={`cs-tab${tab === "household" ? " on" : ""}`} onClick={() => setTab("household")}>
+          Household
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "chronicle"} className={`cs-tab${tab === "chronicle" ? " on" : ""}`} onClick={() => setTab("chronicle")}>
+          Chronicle
+        </button>
+      </div>
+
+      {tab === "chronicle" ? (
+        <TimelinePanel />
+      ) : (
+      <>
       <PanelBanner
         scene="the oikos"
         art={assetPath("assets/Family.webp")}
@@ -2597,6 +2601,8 @@ function FamilyPanel({ onRefresh }: PanelProps) {
         </>
       )}
       {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
+      </>
+      )}
     </section>
   );
 }
@@ -4599,7 +4605,6 @@ const panelComponents: Record<DashboardSection, (props: PanelProps) => ReactNode
   ledger: LedgerPanel,
   market: MarketPanel,
   family: FamilyPanel,
-  timeline: TimelinePanel,
   politics: PoliticsPanel,
   atlas: AtlasPanel,
 };
