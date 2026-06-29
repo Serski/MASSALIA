@@ -3823,7 +3823,7 @@ function CitiesView() {
   );
 }
 
-// Colour a stance along the war(−3) → allied(+3) spectrum.
+// Colour a relation by its display band's −2..+2 value (hostile → cordial).
 function stanceColor(value: number): string {
   if (value <= -2) return "var(--dash-bad)";
   if (value === -1) return "#c98b6a";
@@ -3833,13 +3833,43 @@ function stanceColor(value: number): string {
 }
 
 const factionRowStyle: CSSProperties = {
-  display: "flex",
+  display: "grid",
+  gridTemplateColumns: "1.2fr 1.4fr",
   alignItems: "center",
-  justifyContent: "space-between",
   gap: 12,
   padding: "8px 4px",
   borderBottom: "1px solid var(--dash-line)",
 };
+
+// A status badge (At War / Allied / Vassal) shown only when the flag is set.
+function StatusBadge({ label, title, color }: { label: string; title: string; color: string }) {
+  return (
+    <span
+      title={title}
+      style={{ marginLeft: 8, fontSize: "0.72em", fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.03em" }}
+    >
+      {label}
+    </span>
+  );
+}
+
+// The −200..+200 opinion bar: a track with a centre (zero) marker and a fill that
+// runs from the centre toward the current opinion, coloured by the display band.
+function OpinionBar({ opinion, color }: { opinion: number; color: string }) {
+  const clamped = Math.max(-200, Math.min(200, opinion));
+  const pct = (clamped / 200) * 50; // ±50% from centre
+  const left = clamped >= 0 ? 50 : 50 + pct;
+  const width = Math.abs(pct);
+  return (
+    <div
+      style={{ position: "relative", flex: 1, height: 8, borderRadius: 4, background: "var(--dash-line)", overflow: "hidden" }}
+      aria-hidden="true"
+    >
+      <div style={{ position: "absolute", left: `${left}%`, width: `${width}%`, top: 0, bottom: 0, background: color }} />
+      <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, background: "var(--dash-stone-dim)" }} />
+    </div>
+  );
+}
 
 function DiplomacyView() {
   const [data, setData] = useState<FactionView[] | null>(null);
@@ -3867,30 +3897,42 @@ function DiplomacyView() {
         return (
           <DashboardCard key={group.id}>
             <div className="panel-label">{group.label}</div>
-            {inGroup.map((f) => (
-              <div key={f.id} className="atlas-row" style={factionRowStyle}>
-                <span style={{ color: "var(--dash-parchment)", fontWeight: 600 }}>
-                  {FACTION_ICON[f.id] ? <AssetIcon file={FACTION_ICON[f.id]!} alt="" className="asset-icon faction-icon" /> : null}
-                  {f.name}
-                  {f.vassal ? (
-                    <span style={{ marginLeft: 8, fontSize: "0.75em", color: "var(--dash-gold-bright)" }} title="Vassal of Massalia">
-                      ⛓ Vassal
+            {inGroup.map((f) => {
+              const color = stanceColor(f.bandValue);
+              return (
+                <div key={f.id} className="atlas-row" style={factionRowStyle}>
+                  <span style={{ color: "var(--dash-parchment)", fontWeight: 600 }}>
+                    {FACTION_ICON[f.id] ? <AssetIcon file={FACTION_ICON[f.id]!} alt="" className="asset-icon faction-icon" /> : null}
+                    {f.name}
+                    {f.atWar ? <StatusBadge label="⚔ War" title="At war with Massalia" color="var(--dash-bad)" /> : null}
+                    {f.allied ? <StatusBadge label="🤝 Allied" title="Allied with Massalia" color="var(--dash-good)" /> : null}
+                    {f.vassal ? <StatusBadge label="⛓ Vassal" title="Vassal of Massalia" color="var(--dash-gold-bright)" /> : null}
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <OpinionBar opinion={f.opinion} color={color} />
+                    <span
+                      style={{
+                        flex: "0 0 auto",
+                        minWidth: 78,
+                        textAlign: "right",
+                        color,
+                        fontWeight: 700,
+                        fontSize: "0.85em",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.04em",
+                      }}
+                      title={`Opinion ${f.opinion >= 0 ? "+" : ""}${f.opinion}`}
+                    >
+                      {f.bandLabel}
+                      <span style={{ marginLeft: 6, color: "var(--dash-stone-dim)", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
+                        {f.opinion >= 0 ? "+" : ""}
+                        {f.opinion}
+                      </span>
                     </span>
-                  ) : null}
-                </span>
-                <span
-                  style={{
-                    color: stanceColor(f.stanceValue),
-                    fontWeight: 700,
-                    fontSize: "0.85em",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.04em",
-                  }}
-                >
-                  {f.stanceLabel}
-                </span>
-              </div>
-            ))}
+                  </span>
+                </div>
+              );
+            })}
           </DashboardCard>
         );
       })}

@@ -270,6 +270,64 @@ export function stanceValue(id: StanceId): number {
   return stanceMeta(id).value;
 }
 
+// --- The diplomatic opinion bar (Diplomacy D1) ------------------------------
+// EU4-style numeric relation, −200..+200, that REPLACES the stance value as the
+// source of truth. The five middle stances become display bands of this number;
+// War (−200) and Allied (+200) are latched status FLAGS (atWar / allied), not
+// bands — D1 stores/displays them but never sets them from opinion (a later
+// phase adds the war/alliance actions that flip the flag and snap to the edge).
+export const OPINION_MIN = -200;
+export const OPINION_MAX = 200;
+
+// Display bands over the bar. Edges are deliberately INCLUSIVE of ±200 so an
+// event that drives opinion to the extreme still renders a band (Hostile/Cordial)
+// even though the war/allied flag is unset — an accepted D1 limitation. The ids
+// reuse the matching STANCE_SCALE ids so existing colour-coding keys still work.
+export type OpinionBandId = "hostile" | "unfriendly" | "neutral" | "friendly" | "cordial";
+export type OpinionBand = { id: OpinionBandId; label: string; min: number; max: number };
+export const OPINION_BANDS: readonly OpinionBand[] = [
+  { id: "hostile", label: "Hostile", min: -200, max: -76 },
+  { id: "unfriendly", label: "Unfriendly", min: -75, max: -16 },
+  { id: "neutral", label: "Neutral", min: -15, max: 15 },
+  { id: "friendly", label: "Friendly", min: 16, max: 75 },
+  { id: "cordial", label: "Cordial", min: 76, max: 200 },
+] as const;
+
+// The display band for any opinion value (clamped into range first, so out-of-
+// bound inputs still resolve). Pure — used by the route, the event resolver, and
+// the UI so the band is computed in exactly one place.
+export function opinionBand(opinion: number): { id: OpinionBandId; label: string } {
+  const clamped = Math.max(OPINION_MIN, Math.min(OPINION_MAX, Math.round(opinion)));
+  // The bands tile the whole −200..+200 range, so a clamped value always matches;
+  // the neutral fallback only guards an (impossible) gap to satisfy the type.
+  const band = OPINION_BANDS.find((b) => clamped >= b.min && clamped <= b.max);
+  return band ? { id: band.id, label: band.label } : { id: "neutral", label: "Neutral" };
+}
+
+// Apply a signed delta to an opinion value, clamped to −200..+200 and integer-
+// rounded (mirrors applyCityStat). The event effect's `amount` is now POINTS of
+// opinion, not rungs of stance.
+export function applyOpinion(current: number, amount: number): number {
+  return Math.max(OPINION_MIN, Math.min(OPINION_MAX, Math.round(current + amount)));
+}
+
+// Map a legacy 7-rung stance id to a starting opinion (the band midpoint, so the
+// migration backfill and the content seed produce no visible jump). war/allied
+// map to the extremes AND imply the corresponding latched flag (see the 0032
+// backfill); the five middle rungs map to their band midpoints.
+const STANCE_OPINION_MIDPOINT: Record<StanceId, number> = {
+  war: -200,
+  hostile: -137,
+  unfriendly: -45,
+  neutral: 0,
+  friendly: 45,
+  cordial: 137,
+  allied: 200,
+};
+export function stanceToOpinion(id: StanceId): number {
+  return STANCE_OPINION_MIDPOINT[id];
+}
+
 function assertUniqueIds(ids: string[], kind: string): void {
   const seen = new Set<string>();
   for (const id of ids) {
@@ -321,7 +379,12 @@ export type FactionGroup = (typeof FACTION_GROUPS)[number];
 
 const factionStartSchema = z
   .object({
-    stance: z.enum(STANCE_IDS),
+    // The source of truth (Diplomacy D1): a −200..+200 opinion bar. The five
+    // middle stances are display bands of this number (see opinionBand); War and
+    // Allied are latched status flags, not bands.
+    opinion: z.number().int().min(OPINION_MIN).max(OPINION_MAX),
+    atWar: z.boolean(),
+    allied: z.boolean(),
     vassal: z.boolean(),
   })
   .strict();

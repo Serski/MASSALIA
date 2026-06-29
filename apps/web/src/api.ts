@@ -471,15 +471,19 @@ export type LeagueCitiesResponse = { cities: CityView[] };
 
 export type FactionGroup = "gauls" | "celto-ligurian" | "ligurian" | "aquitani" | "iberian" | "major-powers";
 
-// A neighbouring faction with its current diplomatic stance + vassal flag.
+// A neighbouring faction with its −200..+200 opinion bar (Diplomacy D1). The five
+// middle stances are display bands of `opinion`; War/Allied are latched flags.
 export type FactionView = {
   id: string;
   name: string;
   group: FactionGroup;
-  stance: string;
-  // The numeric rung (war = -3 .. allied = +3) + display label, for colour/order.
-  stanceValue: number;
-  stanceLabel: string;
+  opinion: number;
+  // Display band computed from opinion + a −2..+2 value for colour/order.
+  band: string;
+  bandLabel: string;
+  bandValue: number;
+  atWar: boolean;
+  allied: boolean;
   vassal: boolean;
 };
 

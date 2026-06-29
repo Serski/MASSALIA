@@ -4,14 +4,15 @@ import { fileURLToPath } from "node:url";
 import type { FastifyInstance } from "fastify";
 import { sql } from "drizzle-orm";
 import {
+  opinionBand,
   parseCitiesContent,
   parseFactionsContent,
-  stanceMeta,
+  stanceValue,
   type CitiesContent,
   type CityGroup,
   type FactionGroup,
   type FactionsContent,
-  type StanceId,
+  type OpinionBandId,
 } from "@massalia/shared";
 
 // @massalia/db opens a connection at module load, so it is pulled in lazily inside
@@ -62,10 +63,15 @@ export type FactionView = {
   id: string;
   name: string;
   group: FactionGroup;
-  stance: StanceId;
-  // The numeric rung (war = -3 .. allied = +3) + display label, for colour/order.
-  stanceValue: number;
-  stanceLabel: string;
+  // The −200..+200 opinion bar (Diplomacy D1) — the source of truth.
+  opinion: number;
+  // The display band computed from opinion, plus a −2..+2 value for colour/order.
+  band: OpinionBandId;
+  bandLabel: string;
+  bandValue: number;
+  // Latched status flags (data-only in D1; default false for every faction).
+  atWar: boolean;
+  allied: boolean;
   vassal: boolean;
 };
 
@@ -139,34 +145,46 @@ export async function leagueRoutes(app: FastifyInstance) {
     }
 
     const content = getFactions();
+    // Ensure-on-read: seed the world's rows from content defaults if missing. The
+    // legacy `stance` column is NOT NULL, so it is seeded as the opinion's display
+    // band id (derived) — `opinion` is the source of truth.
     await db.execute(sql`
-      INSERT INTO faction_relations (world_id, faction_id, stance, vassal)
+      INSERT INTO faction_relations (world_id, faction_id, stance, opinion, at_war, allied, vassal)
       VALUES ${sql.join(
-        content.factions.map((f) => sql`(${worldId}, ${f.id}, ${f.start.stance}, ${f.start.vassal})`),
+        content.factions.map(
+          (f) =>
+            sql`(${worldId}, ${f.id}, ${opinionBand(f.start.opinion).id}, ${f.start.opinion}, ${f.start.atWar}, ${f.start.allied}, ${f.start.vassal})`,
+        ),
         sql`, `,
       )}
       ON CONFLICT (world_id, faction_id) DO NOTHING
     `);
 
     const result = await db.execute(sql`
-      SELECT faction_id, stance, vassal FROM faction_relations WHERE world_id = ${worldId}
+      SELECT faction_id, opinion, at_war, allied, vassal FROM faction_relations WHERE world_id = ${worldId}
     `);
     const byId = new Map(
-      (result.rows as { faction_id: string; stance: string; vassal: boolean }[]).map((r) => [r.faction_id, r]),
+      (result.rows as { faction_id: string; opinion: number; at_war: boolean; allied: boolean; vassal: boolean }[]).map(
+        (r) => [r.faction_id, r],
+      ),
     );
 
     const out: FactionView[] = content.factions.map((f) => {
       const row = byId.get(f.id);
-      // The stored stance is a scale id; stanceMeta validates it and yields value+label.
-      const stance = (row?.stance as StanceId | undefined) ?? f.start.stance;
-      const meta = stanceMeta(stance);
+      const opinion = row?.opinion ?? f.start.opinion;
+      // The display band is computed from opinion in @massalia/shared (one place).
+      const band = opinionBand(opinion);
       return {
         id: f.id,
         name: f.name,
         group: f.group,
-        stance: meta.id,
-        stanceValue: meta.value,
-        stanceLabel: meta.label,
+        opinion,
+        band: band.id,
+        bandLabel: band.label,
+        // Reuse the matching stance rung's numeric value for the existing colour scale.
+        bandValue: stanceValue(band.id),
+        atWar: row?.at_war ?? f.start.atWar,
+        allied: row?.allied ?? f.start.allied,
         vassal: row?.vassal ?? f.start.vassal,
       };
     });

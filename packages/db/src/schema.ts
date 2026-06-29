@@ -756,9 +756,18 @@ export const factionRelations = pgTable("faction_relations", {
   id: uuid("id").primaryKey().defaultRandom(),
   worldId: uuid("world_id").references(() => worlds.id).notNull(),
   factionId: text("faction_id").notNull(),
-  // The diplomatic stance, stored as the scale string id (war .. allied); the
-  // numeric ordering lives in @massalia/shared. Static this phase (no drift).
+  // Legacy 7-rung stance id (war .. allied). As of Diplomacy D1 this is DERIVED
+  // (kept in sync with the opinion band on seed) and no longer the source of
+  // truth — `opinion` is. Retained to minimise migration risk; safe to drop later.
   stance: text("stance").notNull(),
+  // The source of truth (Diplomacy D1): a −200..+200 opinion bar. The five middle
+  // stances are display bands of this number (see opinionBand in @massalia/shared).
+  opinion: integer("opinion").notNull().default(0),
+  // Latched status flags (like `vassal`): War = opinion pinned to −200, Allied =
+  // +200. D1 stores/displays them but never sets them from opinion — a later phase
+  // adds the war/alliance actions that flip the flag. Default false for every faction.
+  atWar: boolean("at_war").notNull().default(false),
+  allied: boolean("allied").notNull().default(false),
   vassal: boolean("vassal").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({

@@ -4,16 +4,16 @@ import { fileURLToPath } from "node:url";
 import { and, eq, sql } from "drizzle-orm";
 import {
   applyCityStat,
+  applyOpinion,
   applyStatGrowth,
   capStat,
   clampIdeology,
+  opinionBand,
   parseCitiesContent,
   parseEventFile,
   parseFactionsContent,
-  shiftStance,
   type EventChoice,
   type EventDefinition,
-  type StanceId,
 } from "@massalia/shared";
 import { createDb, effectLog, eventHistory, factionRelations, leagueCities, partyFavor, playerCharacters, worlds } from "@massalia/db";
 import { broadcastState, resolveOwnerToken, setProvinceOwner } from "./worldState.js";
@@ -34,7 +34,7 @@ const factionsFile = path.join(repoRoot, "content/diplomacy/factions.json");
 // row yet, so we insert the content default first, then apply the change on top.
 // Memoized; an unknown id is absent here and the effect skips it (no throw).
 let cityDefaults: Map<string, { population: number; tax: number; stability: number; fortifications: number; garrison: number }> | null = null;
-let factionDefaults: Map<string, { stance: string; vassal: boolean }> | null = null;
+let factionDefaults: Map<string, { opinion: number; atWar: boolean; allied: boolean; vassal: boolean }> | null = null;
 async function getCityDefaults() {
   if (!cityDefaults) {
     const content = parseCitiesContent(JSON.parse(await fs.readFile(citiesFile, "utf8")));
@@ -190,7 +190,10 @@ export async function applyChoiceEffects(actingCharacterId: string, eventId: str
             console.warn(`change_faction_stance: unknown factionId "${effect.factionId}" — skipped`);
             break;
           }
-          await tx.insert(factionRelations).values({ worldId, factionId: effect.factionId, stance: def.stance, vassal: def.vassal }).onConflictDoNothing();
+          await tx
+            .insert(factionRelations)
+            .values({ worldId, factionId: effect.factionId, stance: opinionBand(def.opinion).id, opinion: def.opinion, atWar: def.atWar, allied: def.allied, vassal: def.vassal })
+            .onConflictDoNothing();
           const rows = await tx
             .select()
             .from(factionRelations)
@@ -198,12 +201,18 @@ export async function applyChoiceEffects(actingCharacterId: string, eventId: str
             .limit(1);
           const row = rows[0];
           if (!row) break;
-          const next = shiftStance(row.stance as StanceId, effect.amount);
-          await tx.update(factionRelations).set({ stance: next }).where(eq(factionRelations.id, row.id));
+          // `amount` is now POINTS of opinion (not rungs). Reaching ±200 does NOT
+          // latch the at_war/allied flag in D1 — declaring war/alliance is a later
+          // action; opinion can sit at the edge with the flag false.
+          const next = applyOpinion(row.opinion, effect.amount);
+          await tx
+            .update(factionRelations)
+            .set({ opinion: next, stance: opinionBand(next).id })
+            .where(eq(factionRelations.id, row.id));
           await tx.insert(effectLog).values({
             characterId: actingCharacterId,
             kind: "change_faction_stance",
-            detail: { factionId: effect.factionId, amount: effect.amount, from: row.stance, to: next, source: "event", eventId },
+            detail: { factionId: effect.factionId, amount: effect.amount, from: row.opinion, to: next, source: "event", eventId },
           });
           break;
         }
@@ -214,7 +223,10 @@ export async function applyChoiceEffects(actingCharacterId: string, eventId: str
             console.warn(`set_faction_vassal: unknown factionId "${effect.factionId}" — skipped`);
             break;
           }
-          await tx.insert(factionRelations).values({ worldId, factionId: effect.factionId, stance: def.stance, vassal: def.vassal }).onConflictDoNothing();
+          await tx
+            .insert(factionRelations)
+            .values({ worldId, factionId: effect.factionId, stance: opinionBand(def.opinion).id, opinion: def.opinion, atWar: def.atWar, allied: def.allied, vassal: def.vassal })
+            .onConflictDoNothing();
           await tx
             .update(factionRelations)
             .set({ vassal: effect.vassal })

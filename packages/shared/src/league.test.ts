@@ -6,12 +6,17 @@ import {
   CITY_GROUPS,
   CITY_STABILITY_BASELINE,
   FACTION_GROUPS,
+  OPINION_MAX,
+  OPINION_MIN,
   STANCE_IDS,
   STANCE_SCALE,
+  applyOpinion,
   driftCity,
+  opinionBand,
   parseCitiesContent,
   parseFactionsContent,
   stanceMeta,
+  stanceToOpinion,
   stanceValue,
   type CitiesContent,
   type CityDriftStats,
@@ -83,20 +88,78 @@ describe("content/diplomacy/factions.json", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("every stance is a valid scale member and every group is known", () => {
+  it("every opinion is within the −200..+200 bar and every group is known", () => {
     for (const f of factions.factions) {
-      expect(STANCE_IDS).toContain(f.start.stance);
+      expect(f.start.opinion).toBeGreaterThanOrEqual(OPINION_MIN);
+      expect(f.start.opinion).toBeLessThanOrEqual(OPINION_MAX);
+      expect(Number.isInteger(f.start.opinion)).toBe(true);
       expect(FACTION_GROUPS).toContain(f.group);
     }
   });
 
-  it("all factions start un-vassalized", () => {
+  it("all factions start un-vassalized and with war/allied flags unset (D1)", () => {
     expect(factions.factions.every((f) => f.start.vassal === false)).toBe(true);
+    expect(factions.factions.every((f) => f.start.atWar === false)).toBe(true);
+    expect(factions.factions.every((f) => f.start.allied === false)).toBe(true);
   });
 
-  it("rejects an unknown stance id", () => {
-    const bad = { factions: [{ ...factions.factions[0]!, start: { stance: "smitten", vassal: false } }] };
-    expect(() => parseFactionsContent(bad)).toThrow();
+  it("seeds the expected anchors (Carthage hostile, Rome cordial)", () => {
+    const byId = new Map(factions.factions.map((f) => [f.id, f]));
+    expect(opinionBand(byId.get("carthage")!.start.opinion).id).toBe("hostile");
+    expect(opinionBand(byId.get("rome")!.start.opinion).id).toBe("cordial");
+  });
+
+  it("rejects an out-of-range opinion and a missing flag", () => {
+    const base = factions.factions[0]!;
+    expect(() => parseFactionsContent({ factions: [{ ...base, start: { ...base.start, opinion: 999 } }] })).toThrow();
+    expect(() => parseFactionsContent({ factions: [{ ...base, start: { opinion: 0, atWar: false, vassal: false } }] })).toThrow();
+  });
+});
+
+describe("the opinion bar (Diplomacy D1)", () => {
+  it("computes the display band at every boundary", () => {
+    const band = (n: number) => opinionBand(n).id;
+    expect(band(-200)).toBe("hostile");
+    expect(band(-151)).toBe("hostile");
+    expect(band(-76)).toBe("hostile");
+    expect(band(-75)).toBe("unfriendly");
+    expect(band(-16)).toBe("unfriendly");
+    expect(band(-15)).toBe("neutral");
+    expect(band(0)).toBe("neutral");
+    expect(band(15)).toBe("neutral");
+    expect(band(16)).toBe("friendly");
+    expect(band(75)).toBe("friendly");
+    expect(band(76)).toBe("cordial");
+    expect(band(151)).toBe("cordial");
+    expect(band(200)).toBe("cordial");
+  });
+
+  it("clamps out-of-range opinion into the extreme bands", () => {
+    expect(opinionBand(-500).id).toBe("hostile");
+    expect(opinionBand(500).id).toBe("cordial");
+  });
+
+  it("applyOpinion adds points and clamps to ±200", () => {
+    expect(applyOpinion(0, 40)).toBe(40);
+    expect(applyOpinion(40, -40)).toBe(0);
+    expect(applyOpinion(180, 40)).toBe(200);
+    expect(applyOpinion(-180, -40)).toBe(-200);
+    expect(applyOpinion(200, 50)).toBe(200);
+    expect(applyOpinion(0, 1.6)).toBe(2); // integer-rounded
+  });
+
+  it("stanceToOpinion maps each legacy rung to its band midpoint / extreme", () => {
+    expect(stanceToOpinion("war")).toBe(-200);
+    expect(stanceToOpinion("hostile")).toBe(-137);
+    expect(stanceToOpinion("unfriendly")).toBe(-45);
+    expect(stanceToOpinion("neutral")).toBe(0);
+    expect(stanceToOpinion("friendly")).toBe(45);
+    expect(stanceToOpinion("cordial")).toBe(137);
+    expect(stanceToOpinion("allied")).toBe(200);
+    // the five middle rungs land back in their own display band
+    for (const id of ["hostile", "unfriendly", "neutral", "friendly", "cordial"] as const) {
+      expect(opinionBand(stanceToOpinion(id)).id).toBe(id);
+    }
   });
 });
 
