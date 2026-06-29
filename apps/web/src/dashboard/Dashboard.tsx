@@ -3855,14 +3855,15 @@ function StatusBadge({ label, title, color }: { label: string; title: string; co
 
 // The −200..+200 opinion bar: a track with a centre (zero) marker and a fill that
 // runs from the centre toward the current opinion, coloured by the display band.
-function OpinionBar({ opinion, color }: { opinion: number; color: string }) {
+// `height` lets the detail panel reuse the exact same treatment, just bigger.
+function OpinionBar({ opinion, color, height = 8 }: { opinion: number; color: string; height?: number }) {
   const clamped = Math.max(-200, Math.min(200, opinion));
   const pct = (clamped / 200) * 50; // ±50% from centre
   const left = clamped >= 0 ? 50 : 50 + pct;
   const width = Math.abs(pct);
   return (
     <div
-      style={{ position: "relative", flex: 1, height: 8, borderRadius: 4, background: "var(--dash-line)", overflow: "hidden" }}
+      style={{ position: "relative", flex: 1, height, borderRadius: height / 2, background: "var(--dash-line)", overflow: "hidden" }}
       aria-hidden="true"
     >
       <div style={{ position: "absolute", left: `${left}%`, width: `${width}%`, top: 0, bottom: 0, background: color }} />
@@ -3871,9 +3872,77 @@ function OpinionBar({ opinion, color }: { opinion: number; color: string }) {
   );
 }
 
+// The list row, as a button — clicking/tapping opens the faction's detail panel.
+// Resets native button chrome but keeps the D1 grid layout + .atlas-row hover.
+const factionButtonStyle: CSSProperties = {
+  ...factionRowStyle,
+  width: "100%",
+  textAlign: "left",
+  font: "inherit",
+  color: "inherit",
+  background: "none",
+  border: "none",
+  cursor: "pointer",
+};
+
+// Signed opinion value, e.g. "+45" / "−137" (en-dash for the minus to match copy).
+function signedOpinion(n: number): string {
+  return n >= 0 ? `+${n}` : `−${Math.abs(n)}`;
+}
+
+function FactionStatusBadges({ faction }: { faction: FactionView }) {
+  return (
+    <>
+      {faction.atWar ? <StatusBadge label="⚔ War" title="At war with Massalia" color="var(--dash-bad)" /> : null}
+      {faction.allied ? <StatusBadge label="🤝 Allied" title="Allied with Massalia" color="var(--dash-good)" /> : null}
+      {faction.vassal ? <StatusBadge label="⛓ Vassal" title="Vassal of Massalia" color="var(--dash-gold-bright)" /> : null}
+    </>
+  );
+}
+
+// Read-only detail panel (Diplomacy D2): name, group, durable lore blurb, a larger
+// opinion bar with the same band colour, band label + signed value, and status
+// badges. Reuses the BottomSheet modal (Escape / backdrop-tap / focus-trap / mobile
+// bottom-sheet). Display only — no rulers/rivals (D3), no actions (D4).
+function FactionDetail({ faction, onClose }: { faction: FactionView | null; onClose: () => void }) {
+  const groupLabel = faction ? FACTION_GROUP_META.find((g) => g.id === faction.group)?.label ?? faction.group : "";
+  const color = faction ? stanceColor(faction.bandValue) : "var(--dash-stone)";
+  return (
+    <BottomSheet open={!!faction} onClose={onClose} labelledBy="faction-detail-title" title={faction?.name}>
+      {faction ? (
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+            {FACTION_ICON[faction.id] ? <AssetIcon file={FACTION_ICON[faction.id]!} alt="" className="asset-icon faction-icon" /> : null}
+            <span style={{ color: "var(--dash-stone-dim)", textTransform: "uppercase", letterSpacing: "0.05em", fontSize: "0.78em", fontWeight: 700 }}>
+              {groupLabel}
+            </span>
+            <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <FactionStatusBadges faction={faction} />
+            </span>
+          </div>
+
+          <p style={{ color: "var(--dash-parchment)", lineHeight: 1.55, margin: "0 0 18px" }}>{faction.blurb}</p>
+
+          <OpinionBar opinion={faction.opinion} color={color} height={14} />
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, color: "var(--dash-stone-dim)", fontSize: "0.72em", fontVariantNumeric: "tabular-nums" }}>
+            <span>−200</span>
+            <span>0</span>
+            <span>+200</span>
+          </div>
+          <div style={{ marginTop: 12, color, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            {faction.bandLabel}
+            <span style={{ marginLeft: 8, color: "var(--dash-stone-dim)", fontVariantNumeric: "tabular-nums" }}>{signedOpinion(faction.opinion)}</span>
+          </div>
+        </>
+      ) : null}
+    </BottomSheet>
+  );
+}
+
 function DiplomacyView() {
   const [data, setData] = useState<FactionView[] | null>(null);
   const [error, setError] = useState("");
+  const [selected, setSelected] = useState<FactionView | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -3900,13 +3969,18 @@ function DiplomacyView() {
             {inGroup.map((f) => {
               const color = stanceColor(f.bandValue);
               return (
-                <div key={f.id} className="atlas-row" style={factionRowStyle}>
+                <button
+                  key={f.id}
+                  type="button"
+                  className="atlas-row"
+                  style={factionButtonStyle}
+                  onClick={() => setSelected(f)}
+                  aria-label={`${f.name} — ${f.bandLabel}, opinion ${signedOpinion(f.opinion)}. Open details.`}
+                >
                   <span style={{ color: "var(--dash-parchment)", fontWeight: 600 }}>
                     {FACTION_ICON[f.id] ? <AssetIcon file={FACTION_ICON[f.id]!} alt="" className="asset-icon faction-icon" /> : null}
                     {f.name}
-                    {f.atWar ? <StatusBadge label="⚔ War" title="At war with Massalia" color="var(--dash-bad)" /> : null}
-                    {f.allied ? <StatusBadge label="🤝 Allied" title="Allied with Massalia" color="var(--dash-good)" /> : null}
-                    {f.vassal ? <StatusBadge label="⛓ Vassal" title="Vassal of Massalia" color="var(--dash-gold-bright)" /> : null}
+                    <FactionStatusBadges faction={f} />
                   </span>
                   <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <OpinionBar opinion={f.opinion} color={color} />
@@ -3921,21 +3995,21 @@ function DiplomacyView() {
                         textTransform: "uppercase",
                         letterSpacing: "0.04em",
                       }}
-                      title={`Opinion ${f.opinion >= 0 ? "+" : ""}${f.opinion}`}
+                      title={`Opinion ${signedOpinion(f.opinion)}`}
                     >
                       {f.bandLabel}
                       <span style={{ marginLeft: 6, color: "var(--dash-stone-dim)", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
-                        {f.opinion >= 0 ? "+" : ""}
-                        {f.opinion}
+                        {signedOpinion(f.opinion)}
                       </span>
                     </span>
                   </span>
-                </div>
+                </button>
               );
             })}
           </DashboardCard>
         );
       })}
+      <FactionDetail faction={selected} onClose={() => setSelected(null)} />
     </>
   );
 }

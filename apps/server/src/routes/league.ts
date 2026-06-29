@@ -63,6 +63,9 @@ export type FactionView = {
   id: string;
   name: string;
   group: FactionGroup;
+  // Durable, identity-only lore blurb from content (Diplomacy D2) — static, not
+  // per-world state. Describes who the faction is, never their stance toward Massalia.
+  blurb: string;
   // The −200..+200 opinion bar (Diplomacy D1) — the source of truth.
   opinion: number;
   // The display band computed from opinion, plus a −2..+2 value for colour/order.
@@ -178,6 +181,7 @@ export async function leagueRoutes(app: FastifyInstance) {
         id: f.id,
         name: f.name,
         group: f.group,
+        blurb: f.blurb,
         opinion,
         band: band.id,
         bandLabel: band.label,

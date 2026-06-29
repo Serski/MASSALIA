@@ -477,6 +477,8 @@ export type FactionView = {
   id: string;
   name: string;
   group: FactionGroup;
+  // Durable identity-only lore blurb (Diplomacy D2) — static content, not stance.
+  blurb: string;
   opinion: number;
   // Display band computed from opinion + a −2..+2 value for colour/order.
   band: string;

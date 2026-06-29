@@ -394,6 +394,11 @@ const factionSchema = z
     id: z.string().min(1),
     name: z.string().min(1),
     group: z.enum(FACTION_GROUPS),
+    // A durable, identity-only lore blurb (who the faction IS — geography, what
+    // they are known for) — NOT their relationship to Massalia (that is the live
+    // opinion bar, which changes). Static content; travels content → route → view,
+    // never stored per-world. Placeholder copy the design team will refine.
+    blurb: z.string().min(1).max(280),
     start: factionStartSchema,
   })
   .strict();

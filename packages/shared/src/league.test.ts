@@ -114,6 +114,21 @@ describe("content/diplomacy/factions.json", () => {
     expect(() => parseFactionsContent({ factions: [{ ...base, start: { ...base.start, opinion: 999 } }] })).toThrow();
     expect(() => parseFactionsContent({ factions: [{ ...base, start: { opinion: 0, atWar: false, vassal: false } }] })).toThrow();
   });
+
+  it("every faction has a non-empty identity blurb (Diplomacy D2)", () => {
+    for (const f of factions.factions) {
+      expect(typeof f.blurb).toBe("string");
+      expect(f.blurb.trim().length).toBeGreaterThan(0);
+      expect(f.blurb.length).toBeLessThanOrEqual(280);
+    }
+  });
+
+  it("rejects a missing or over-long blurb", () => {
+    const base = factions.factions[0]!;
+    const { blurb: _omit, ...noBlurb } = base;
+    expect(() => parseFactionsContent({ factions: [noBlurb] })).toThrow();
+    expect(() => parseFactionsContent({ factions: [{ ...base, blurb: "x".repeat(281) }] })).toThrow();
+  });
 });
 
 describe("the opinion bar (Diplomacy D1)", () => {
