@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { api, ApiError, contentUrl, type ChronicleEntry, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type AgendaScopeView, type BuildingsCatalog, type BuildingsMine, type CatalogEntry, type CatalogTier, type OwnedBuilding, type ClassSection, type VendorPrice, type PeopleView, type ServiceView, type MercBoard, type RiskOutcome, type StandingsResponse, type StandingsBoard, type StandingRow, type CityView, type CityGroup, type FactionView, type FactionGroup } from "../api.js";
+import { api, ApiError, contentUrl, type ChronicleEntry, type PlayerState, type CharacterSheet as CharacterSheetData, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type SuccessionState, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type AgendaScopeView, type BuildingsCatalog, type BuildingsMine, type CatalogEntry, type CatalogTier, type OwnedBuilding, type ClassSection, type VendorPrice, type PeopleView, type ServiceView, type MercBoard, type RiskOutcome, type StandingsResponse, type StandingsBoard, type StandingRow, type CityView, type CityGroup, type FactionView, type FactionGroup, type FactionCharacterView, type FactionRefView } from "../api.js";
 import { assetPath, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 import { MapCanvas } from "../map/MapCanvas.js";
@@ -3900,10 +3900,69 @@ function FactionStatusBadges({ faction }: { faction: FactionView }) {
   );
 }
 
-// Read-only detail panel (Diplomacy D2): name, group, durable lore blurb, a larger
-// opinion bar with the same band colour, band label + signed value, and status
-// badges. Reuses the BottomSheet modal (Escape / backdrop-tap / focus-trap / mobile
-// bottom-sheet). Display only — no rulers/rivals (D3), no actions (D4).
+// Small uppercase section heading inside the detail panel.
+function PanelSectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <div style={{ color: "var(--dash-gold)", textTransform: "uppercase", letterSpacing: "0.12em", fontSize: "0.72em", fontWeight: 700, margin: "0 0 4px" }}>
+      {children}
+    </div>
+  );
+}
+
+// One stat as a labelled pill (raw 0..100 number — NPC scouting intel, deliberately
+// unlike the player's rank-only display).
+function StatPip({ label, value }: { label: string; value: number }) {
+  return (
+    <span style={{ display: "inline-flex", gap: 5, alignItems: "baseline", padding: "2px 8px", borderRadius: 6, background: "var(--dash-panel-soft)", fontSize: "0.78em" }}>
+      <span style={{ color: "var(--dash-stone-dim)" }}>{label}</span>
+      <span style={{ color: "var(--dash-parchment)", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{value}</span>
+    </span>
+  );
+}
+
+// A ruler / heir / war-chief: name + role-relative descriptor + live age + 4 stats.
+function CharacterBlock({ role, secondary, char }: { role: string; secondary: string; char: FactionCharacterView }) {
+  return (
+    <div style={{ padding: "10px 0", borderTop: "1px solid var(--dash-line)" }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+        <span>
+          <span style={{ color: "var(--dash-gold-bright)", fontWeight: 700 }}>{char.name}</span>
+          <span style={{ color: "var(--dash-stone-dim)", fontSize: "0.85em" }}> · {secondary}</span>
+        </span>
+        <span style={{ color: "var(--dash-stone-dim)", fontSize: "0.8em", whiteSpace: "nowrap" }}>
+          {role} · age {char.age}
+        </span>
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
+        <StatPip label="Prestige" value={char.prestige} />
+        <StatPip label="Devotion" value={char.devotion} />
+        <StatPip label="Militia" value={char.militia} />
+        <StatPip label="Intelligence" value={char.intelligence} />
+      </div>
+    </div>
+  );
+}
+
+// Rivals / Allies as a comma-separated name list, or "None".
+function FactionRefList({ label, refs }: { label: string; refs: FactionRefView[] }) {
+  return (
+    <div style={{ marginTop: 6 }}>
+      <span style={{ color: "var(--dash-stone-dim)", textTransform: "uppercase", letterSpacing: "0.05em", fontSize: "0.72em", fontWeight: 700, marginRight: 8 }}>{label}</span>
+      <span style={{ color: "var(--dash-parchment)" }}>{refs.length ? refs.map((r) => r.name).join(", ") : "None"}</span>
+    </div>
+  );
+}
+
+// Capitalise a relationship descriptor (e.g. "son" → "Son") for display.
+function relLabel(rel: string): string {
+  return rel.charAt(0).toUpperCase() + rel.slice(1);
+}
+
+// Read-only detail panel (Diplomacy D2 + D3): name, group, durable lore blurb, a
+// larger opinion bar, band label + signed value, status badges, and — new in D3 —
+// the faction's ruler / heir / war-chief (with live age + stats) or its council
+// label, plus rival/ally name lists. Reuses the BottomSheet modal (Escape /
+// backdrop-tap / focus-trap / mobile bottom-sheet). Display only — no actions (D4).
 function FactionDetail({ faction, onClose }: { faction: FactionView | null; onClose: () => void }) {
   const groupLabel = faction ? FACTION_GROUP_META.find((g) => g.id === faction.group)?.label ?? faction.group : "";
   const color = faction ? stanceColor(faction.bandValue) : "var(--dash-stone)";
@@ -3932,6 +3991,26 @@ function FactionDetail({ faction, onClose }: { faction: FactionView | null; onCl
           <div style={{ marginTop: 12, color, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
             {faction.bandLabel}
             <span style={{ marginLeft: 8, color: "var(--dash-stone-dim)", fontVariantNumeric: "tabular-nums" }}>{signedOpinion(faction.opinion)}</span>
+          </div>
+
+          {faction.governance === "institutional" ? (
+            <div style={{ marginTop: 20 }}>
+              <PanelSectionLabel>Government</PanelSectionLabel>
+              <p style={{ color: "var(--dash-parchment)", margin: 0 }}>{faction.institutionLabel}</p>
+            </div>
+          ) : (
+            <div style={{ marginTop: 20 }}>
+              <PanelSectionLabel>Leadership</PanelSectionLabel>
+              {faction.ruler ? <CharacterBlock role="Ruler" secondary={faction.ruler.title} char={faction.ruler} /> : null}
+              {faction.heir ? <CharacterBlock role="Heir" secondary={relLabel(faction.heir.rel)} char={faction.heir} /> : null}
+              {faction.warChief ? <CharacterBlock role="War-chief" secondary={faction.warChief.title} char={faction.warChief} /> : null}
+            </div>
+          )}
+
+          <div style={{ marginTop: 18 }}>
+            <PanelSectionLabel>Relations</PanelSectionLabel>
+            <FactionRefList label="Rivals" refs={faction.rivals} />
+            <FactionRefList label="Allies" refs={faction.allies} />
           </div>
         </>
       ) : null}

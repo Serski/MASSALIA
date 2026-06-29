@@ -4,12 +4,15 @@ import { fileURLToPath } from "node:url";
 import type { FastifyInstance } from "fastify";
 import { sql } from "drizzle-orm";
 import {
+  gameDate,
+  liveAge,
   opinionBand,
   parseCitiesContent,
   parseFactionsContent,
   stanceValue,
   type CitiesContent,
   type CityGroup,
+  type FactionGovernance,
   type FactionGroup,
   type FactionsContent,
   type OpinionBandId,
@@ -59,6 +62,22 @@ export type CityView = {
   garrison: number;
 };
 
+// A faction character (Diplomacy D3) with live age derived from the calendar.
+// Stats are raw 0..100 (NPC scouting intel — shown as numbers, unlike the player).
+export type FactionCharacterView = {
+  name: string;
+  sex: "M" | "F";
+  age: number;
+  prestige: number;
+  devotion: number;
+  militia: number;
+  intelligence: number;
+};
+export type RulerView = FactionCharacterView & { title: string };
+export type HeirView = FactionCharacterView & { rel: string };
+// A resolved rival/ally reference: the faction id plus its display name.
+export type FactionRefView = { id: string; name: string };
+
 export type FactionView = {
   id: string;
   name: string;
@@ -76,6 +95,15 @@ export type FactionView = {
   atWar: boolean;
   allied: boolean;
   vassal: boolean;
+  // Governance + people (Diplomacy D3). personal ⇒ ruler/heir (+ warChief or null);
+  // institutional ⇒ institutionLabel, no people. Ages are live (read-time derived).
+  governance: FactionGovernance;
+  institutionLabel?: string;
+  ruler?: RulerView;
+  heir?: HeirView;
+  warChief?: RulerView | null;
+  rivals: FactionRefView[];
+  allies: FactionRefView[];
 };
 
 export async function leagueRoutes(app: FastifyInstance) {
@@ -172,6 +200,33 @@ export async function leagueRoutes(app: FastifyInstance) {
       ),
     );
 
+    // Live ages are a pure function of the calendar at read time (no per-world
+    // state, no aging worker): whole game-years elapsed since the world started.
+    const startedRows = await db.execute(sql`SELECT started_at FROM worlds WHERE id = ${worldId} LIMIT 1`);
+    const startedAt = (startedRows.rows as { started_at: string | Date }[])[0]?.started_at;
+    const startedMs = startedAt ? new Date(startedAt).getTime() : Date.now();
+    const elapsedYears = gameDate(Date.now(), startedMs).yearInGame;
+
+    const nameById = new Map(content.factions.map((cf) => [cf.id, cf.name] as const));
+    const refs = (ids: string[]): FactionRefView[] => ids.map((id) => ({ id, name: nameById.get(id) ?? id }));
+    const charView = (c: {
+      name: string;
+      sex: "M" | "F";
+      bornAge: number;
+      prestige: number;
+      devotion: number;
+      militia: number;
+      intelligence: number;
+    }): FactionCharacterView => ({
+      name: c.name,
+      sex: c.sex,
+      age: liveAge(c.bornAge, elapsedYears),
+      prestige: c.prestige,
+      devotion: c.devotion,
+      militia: c.militia,
+      intelligence: c.intelligence,
+    });
+
     const out: FactionView[] = content.factions.map((f) => {
       const row = byId.get(f.id);
       const opinion = row?.opinion ?? f.start.opinion;
@@ -190,6 +245,15 @@ export async function leagueRoutes(app: FastifyInstance) {
         atWar: row?.at_war ?? f.start.atWar,
         allied: row?.allied ?? f.start.allied,
         vassal: row?.vassal ?? f.start.vassal,
+        governance: f.governance,
+        institutionLabel: f.institutionLabel,
+        ruler: f.ruler ? { ...charView(f.ruler), title: f.ruler.title } : undefined,
+        heir: f.heir ? { ...charView(f.heir), rel: f.heir.rel } : undefined,
+        // null only for a personal faction whose ruler is the war-leader (Syracuse);
+        // undefined for institutional factions (no war-chief concept).
+        warChief: f.governance === "personal" ? (f.warChief ? { ...charView(f.warChief), title: f.warChief.title } : null) : undefined,
+        rivals: refs(f.rivals),
+        allies: refs(f.allies),
       };
     });
     return { factions: out };

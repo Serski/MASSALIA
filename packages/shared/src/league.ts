@@ -389,6 +389,35 @@ const factionStartSchema = z
   })
   .strict();
 
+// --- Faction characters (Diplomacy D3) --------------------------------------
+// Rulers, heirs, and war-chiefs are STATIC content. They age once per game year
+// (a pure function of the calendar at read time — see liveAge), but never die or
+// get succeeded this phase. Stats are 0..100 (shown to the player as raw numbers
+// — NPC scouting intel, deliberately unlike the player's rank-only display rule).
+export const FACTION_SEXES = ["M", "F"] as const;
+
+const factionStatSchema = z.number().int().min(0).max(100);
+// Shared character fields. bornAge is the character's age at world start (year 0);
+// live age is derived as bornAge + game-years-elapsed.
+const factionCharBase = {
+  name: z.string().min(1),
+  sex: z.enum(FACTION_SEXES),
+  bornAge: z.number().int().min(0).max(120),
+  prestige: factionStatSchema,
+  devotion: factionStatSchema,
+  militia: factionStatSchema,
+  intelligence: factionStatSchema,
+};
+
+const rulerSchema = z.object({ ...factionCharBase, title: z.string().min(1) }).strict();
+const heirSchema = z.object({ ...factionCharBase, rel: z.string().min(1) }).strict();
+// War-chiefs carry a title like rulers; a faction whose ruler IS the war-leader
+// (e.g. Syracuse / Agathocles) stores null.
+const warChiefSchema = z.object({ ...factionCharBase, title: z.string().min(1) }).strict();
+
+export const FACTION_GOVERNANCE = ["personal", "institutional"] as const;
+export type FactionGovernance = (typeof FACTION_GOVERNANCE)[number];
+
 const factionSchema = z
   .object({
     id: z.string().min(1),
@@ -399,19 +428,61 @@ const factionSchema = z
     // opinion bar, which changes). Static content; travels content → route → view,
     // never stored per-world. Placeholder copy the design team will refine.
     blurb: z.string().min(1).max(280),
+    // personal = ruler/heir/war-chief; institutional = a council label, no people.
+    governance: z.enum(FACTION_GOVERNANCE),
     start: factionStartSchema,
+    // NPC-to-NPC, one-directional static lists of OTHER faction ids (validated to
+    // resolve in parseFactionsContent). Not an opinion matrix — just flavour lists.
+    rivals: z.array(z.string()).default([]),
+    allies: z.array(z.string()).default([]),
+    // Personal-only: ruler + heir required, warChief object OR null (key present).
+    ruler: rulerSchema.optional(),
+    heir: heirSchema.optional(),
+    warChief: warChiefSchema.nullable().optional(),
+    // Institutional-only: the governing-body label (no ruler/heir/war-chief).
+    institutionLabel: z.string().min(1).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((f, ctx) => {
+    if (f.governance === "institutional") {
+      if (!f.institutionLabel) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["institutionLabel"], message: "institutional faction requires institutionLabel" });
+      if (f.ruler || f.heir || f.warChief !== undefined) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["ruler"], message: "institutional faction must not have ruler/heir/warChief" });
+      }
+    } else {
+      if (!f.ruler) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["ruler"], message: "personal faction requires a ruler" });
+      if (!f.heir) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["heir"], message: "personal faction requires an heir" });
+      if (f.warChief === undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["warChief"], message: "personal faction requires warChief (object or null)" });
+      if (f.institutionLabel) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["institutionLabel"], message: "personal faction must not have institutionLabel" });
+    }
+  });
 
 export const factionsContentSchema = z.object({ factions: z.array(factionSchema).min(1) }).strict();
 
+export type FactionRuler = z.infer<typeof rulerSchema>;
+export type FactionHeir = z.infer<typeof heirSchema>;
+export type FactionWarChief = z.infer<typeof warChiefSchema>;
 export type FactionStart = z.infer<typeof factionStartSchema>;
 export type FactionDef = z.infer<typeof factionSchema>;
 export type FactionsContent = z.infer<typeof factionsContentSchema>;
 
+// Live age = age at world start + whole game-years elapsed. Pure (the caller
+// supplies the elapsed count from the calendar); nobody dies — age just rises.
+export function liveAge(bornAge: number, gameYearsElapsed: number): number {
+  return bornAge + Math.max(0, Math.floor(gameYearsElapsed));
+}
+
 export function parseFactionsContent(data: unknown): FactionsContent {
   const parsed = factionsContentSchema.parse(data);
   assertUniqueIds(parsed.factions.map((f) => f.id), "faction");
+  // Every rival/ally id must reference a real faction — a dangling id is a content
+  // bug, so fail loudly at parse/boot rather than render a broken name.
+  const ids = new Set(parsed.factions.map((f) => f.id));
+  for (const f of parsed.factions) {
+    for (const ref of [...f.rivals, ...f.allies]) {
+      if (!ids.has(ref)) throw new Error(`Faction ${f.id} references unknown faction id: ${ref}`);
+    }
+  }
   return parsed;
 }
 

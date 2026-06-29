@@ -471,6 +471,21 @@ export type LeagueCitiesResponse = { cities: CityView[] };
 
 export type FactionGroup = "gauls" | "celto-ligurian" | "ligurian" | "aquitani" | "iberian" | "major-powers";
 
+// A faction character (Diplomacy D3) with a live, calendar-derived age. Stats are
+// raw 0..100 (NPC scouting intel — shown as numbers, unlike the player's own sheet).
+export type FactionCharacterView = {
+  name: string;
+  sex: "M" | "F";
+  age: number;
+  prestige: number;
+  devotion: number;
+  militia: number;
+  intelligence: number;
+};
+export type RulerView = FactionCharacterView & { title: string };
+export type HeirView = FactionCharacterView & { rel: string };
+export type FactionRefView = { id: string; name: string };
+
 // A neighbouring faction with its −200..+200 opinion bar (Diplomacy D1). The five
 // middle stances are display bands of `opinion`; War/Allied are latched flags.
 export type FactionView = {
@@ -487,6 +502,15 @@ export type FactionView = {
   atWar: boolean;
   allied: boolean;
   vassal: boolean;
+  // Governance + people (Diplomacy D3). personal ⇒ ruler/heir (+ warChief or null);
+  // institutional ⇒ institutionLabel, no people.
+  governance: "personal" | "institutional";
+  institutionLabel?: string;
+  ruler?: RulerView;
+  heir?: HeirView;
+  warChief?: RulerView | null;
+  rivals: FactionRefView[];
+  allies: FactionRefView[];
 };
 
 export type DiplomacyResponse = { factions: FactionView[] };

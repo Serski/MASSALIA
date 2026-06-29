@@ -12,6 +12,7 @@ import {
   STANCE_SCALE,
   applyOpinion,
   driftCity,
+  liveAge,
   opinionBand,
   parseCitiesContent,
   parseFactionsContent,
@@ -128,6 +129,96 @@ describe("content/diplomacy/factions.json", () => {
     const { blurb: _omit, ...noBlurb } = base;
     expect(() => parseFactionsContent({ factions: [noBlurb] })).toThrow();
     expect(() => parseFactionsContent({ factions: [{ ...base, blurb: "x".repeat(281) }] })).toThrow();
+  });
+
+  it("declares a known governance with the right shape per kind (Diplomacy D3)", () => {
+    for (const f of factions.factions) {
+      expect(["personal", "institutional"]).toContain(f.governance);
+      if (f.governance === "institutional") {
+        expect(typeof f.institutionLabel).toBe("string");
+        expect(f.ruler).toBeUndefined();
+        expect(f.heir).toBeUndefined();
+        expect(f.warChief).toBeUndefined();
+      } else {
+        expect(f.ruler).toBeTruthy();
+        expect(f.heir).toBeTruthy();
+        expect(f.warChief !== undefined).toBe(true); // key present: object OR null
+      }
+    }
+  });
+
+  it("Rome and Carthage are institutional (label, no people)", () => {
+    const byId = new Map(factions.factions.map((f) => [f.id, f]));
+    for (const id of ["rome", "carthage"]) {
+      const f = byId.get(id)!;
+      expect(f.governance).toBe("institutional");
+      expect(f.institutionLabel!.length).toBeGreaterThan(0);
+      expect(f.ruler).toBeUndefined();
+    }
+  });
+
+  it("Syracuse: Agathocles ruler (P80, others 50–60, bornAge 61) with warChief === null", () => {
+    const syr = factions.factions.find((f) => f.id === "syracuse")!;
+    expect(syr.governance).toBe("personal");
+    expect(syr.warChief).toBeNull();
+    expect(syr.ruler!.name).toBe("Agathocles");
+    expect(syr.ruler!.bornAge).toBe(61);
+    expect(syr.ruler!.prestige).toBe(80);
+    for (const stat of [syr.ruler!.devotion, syr.ruler!.militia, syr.ruler!.intelligence]) {
+      expect(stat).toBeGreaterThanOrEqual(50);
+      expect(stat).toBeLessThanOrEqual(60);
+    }
+  });
+
+  it("all character stats are integers within 0..100", () => {
+    const chars = factions.factions.flatMap((f) => [f.ruler, f.heir, f.warChief]).filter(Boolean) as {
+      prestige: number;
+      devotion: number;
+      militia: number;
+      intelligence: number;
+    }[];
+    for (const c of chars) {
+      for (const s of [c.prestige, c.devotion, c.militia, c.intelligence]) {
+        expect(Number.isInteger(s)).toBe(true);
+        expect(s).toBeGreaterThanOrEqual(0);
+        expect(s).toBeLessThanOrEqual(100);
+      }
+    }
+  });
+
+  it("every rival/ally id resolves to a real faction", () => {
+    const ids = new Set(factions.factions.map((f) => f.id));
+    for (const f of factions.factions) {
+      for (const ref of [...f.rivals, ...f.allies]) expect(ids.has(ref)).toBe(true);
+    }
+  });
+
+  it("rejects a dangling rival/ally id", () => {
+    const syr = factions.factions.find((f) => f.id === "syracuse")!;
+    expect(() => parseFactionsContent({ factions: [{ ...syr, rivals: ["atlantis"] }] })).toThrow();
+  });
+
+  it("rejects governance-shape violations and out-of-range stats", () => {
+    const personal = factions.factions.find((f) => f.id === "cadurci")!;
+    const inst = factions.factions.find((f) => f.id === "rome")!;
+    const { ruler: _r, ...noRuler } = personal;
+    expect(() => parseFactionsContent({ factions: [noRuler] })).toThrow(); // personal w/o ruler
+    expect(() => parseFactionsContent({ factions: [{ ...inst, ruler: personal.ruler }] })).toThrow(); // institutional w/ ruler
+    const { institutionLabel: _l, ...noLabel } = inst;
+    expect(() => parseFactionsContent({ factions: [noLabel] })).toThrow(); // institutional w/o label
+    expect(() => parseFactionsContent({ factions: [{ ...personal, ruler: { ...personal.ruler!, prestige: 101 } }] })).toThrow(); // stat > 100
+  });
+});
+
+describe("liveAge (Diplomacy D3 — derived, nobody dies)", () => {
+  it("adds whole game-years elapsed to the birth age", () => {
+    expect(liveAge(61, 0)).toBe(61);
+    expect(liveAge(61, 5)).toBe(66);
+    expect(liveAge(40, 12)).toBe(52);
+  });
+  it("never subtracts and floors a fractional elapsed", () => {
+    expect(liveAge(50, -3)).toBe(50);
+    expect(liveAge(50, 2.9)).toBe(52);
   });
 });
 

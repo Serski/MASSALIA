@@ -1,23 +1,837 @@
 {
   "factions": [
-    { "id": "cadurci", "name": "Cadurci", "group": "gauls", "blurb": "A Gaulish people of the rugged uplands of the interior, known for their ironworking and fine linen.", "start": { "opinion": -45, "atWar": false, "allied": false, "vassal": false } },
-    { "id": "ruteni", "name": "Ruteni", "group": "gauls", "blurb": "A Gaulish tribe of the southern highlands, dwelling among the hills and river valleys inland from the coast.", "start": { "opinion": 0, "atWar": false, "allied": false, "vassal": false } },
-    { "id": "helvii", "name": "Helvii", "group": "gauls", "blurb": "A Gaulish people settled along the upper Rhône, at the edge of the great river route into the interior.", "start": { "opinion": 45, "atWar": false, "allied": false, "vassal": false } },
-    { "id": "gabali", "name": "Gabali", "group": "gauls", "blurb": "A Gaulish tribe of the high inland plateaus, herders and miners of the mountain country.", "start": { "opinion": 0, "atWar": false, "allied": false, "vassal": false } },
-    { "id": "volcae", "name": "Volcae", "group": "gauls", "blurb": "A large and widespread Gaulish confederation of the lands west of the Rhône.", "start": { "opinion": -137, "atWar": false, "allied": false, "vassal": false } },
-    { "id": "allobroges", "name": "Allobroges", "group": "celto-ligurian", "blurb": "A populous people of the Rhône and Isère valleys, settled between the river and the Alpine foothills.", "start": { "opinion": -45, "atWar": false, "allied": false, "vassal": false } },
-    { "id": "cavares", "name": "Cavares", "group": "celto-ligurian", "blurb": "A Celto-Ligurian people of the lower Rhône, dwelling along the river's eastern bank.", "start": { "opinion": 45, "atWar": false, "allied": false, "vassal": false } },
-    { "id": "vocontii", "name": "Vocontii", "group": "celto-ligurian", "blurb": "A Celto-Ligurian people of the pre-Alpine valleys to the east.", "start": { "opinion": 0, "atWar": false, "allied": false, "vassal": false } },
-    { "id": "saluvii", "name": "Saluvii", "group": "celto-ligurian", "blurb": "A Celto-Ligurian confederation of the coastal hinterland inland from the sea.", "start": { "opinion": -45, "atWar": false, "allied": false, "vassal": false } },
-    { "id": "veltanii", "name": "Veltanii", "group": "celto-ligurian", "blurb": "A small Celto-Ligurian community of the coastal hinterland.", "start": { "opinion": 0, "atWar": false, "allied": false, "vassal": false } },
-    { "id": "ligurians", "name": "Ligurians", "group": "ligurian", "blurb": "The hardy hill and coast peoples of the mountainous shore east of the Rhône.", "start": { "opinion": 45, "atWar": false, "allied": false, "vassal": false } },
-    { "id": "ausci", "name": "Ausci", "group": "aquitani", "blurb": "An Aquitanian people of the southwestern plains stretching toward the Pyrenees.", "start": { "opinion": 0, "atWar": false, "allied": false, "vassal": false } },
-    { "id": "convenae", "name": "Convenae", "group": "aquitani", "blurb": "An Aquitanian people of the Pyrenean foothills in the far southwest.", "start": { "opinion": 0, "atWar": false, "allied": false, "vassal": false } },
-    { "id": "tarusates", "name": "Tarusates", "group": "aquitani", "blurb": "An Aquitanian people of the wooded lowlands of the southwest.", "start": { "opinion": -45, "atWar": false, "allied": false, "vassal": false } },
-    { "id": "ilergetae", "name": "Ilergetae", "group": "iberian", "blurb": "An Iberian people of the inland plains south of the Pyrenees.", "start": { "opinion": 45, "atWar": false, "allied": false, "vassal": false } },
-    { "id": "lacetani", "name": "Lacetani", "group": "iberian", "blurb": "An Iberian people of the hill country of the northeastern peninsula.", "start": { "opinion": 137, "atWar": false, "allied": false, "vassal": false } },
-    { "id": "rome", "name": "Rome", "group": "major-powers", "blurb": "A rising republic of central Italy, steadily extending its power across the peninsula.", "start": { "opinion": 137, "atWar": false, "allied": false, "vassal": false } },
-    { "id": "carthage", "name": "Carthage", "group": "major-powers", "blurb": "The great Punic maritime and trading power of the western Mediterranean, mistress of a far-flung commercial network.", "start": { "opinion": -137, "atWar": false, "allied": false, "vassal": false } },
-    { "id": "syracuse", "name": "Syracuse", "group": "major-powers", "blurb": "The foremost Greek city of Sicily, a wealthy and influential power of the central Mediterranean.", "start": { "opinion": 45, "atWar": false, "allied": false, "vassal": false } }
+    {
+      "id": "cadurci",
+      "name": "Cadurci",
+      "group": "gauls",
+      "blurb": "A Gaulish people of the rugged uplands of the interior, known for their ironworking and fine linen.",
+      "governance": "personal",
+      "start": {
+        "opinion": -45,
+        "atWar": false,
+        "allied": false,
+        "vassal": false
+      },
+      "rivals": [
+        "volcae"
+      ],
+      "allies": [
+        "ruteni"
+      ],
+      "ruler": {
+        "name": "Lugotorix",
+        "sex": "M",
+        "bornAge": 52,
+        "prestige": 41,
+        "devotion": 33,
+        "militia": 48,
+        "intelligence": 37,
+        "title": "King of the Cadurci"
+      },
+      "heir": {
+        "name": "Diviciacos",
+        "sex": "M",
+        "bornAge": 19,
+        "prestige": 22,
+        "devotion": 28,
+        "militia": 35,
+        "intelligence": 44,
+        "rel": "son"
+      },
+      "warChief": {
+        "name": "Eporedorix",
+        "sex": "M",
+        "bornAge": 38,
+        "prestige": 30,
+        "devotion": 19,
+        "militia": 63,
+        "intelligence": 25,
+        "title": "War-leader of the Cadurci"
+      }
+    },
+    {
+      "id": "ruteni",
+      "name": "Ruteni",
+      "group": "gauls",
+      "blurb": "A Gaulish tribe of the southern highlands, dwelling among the hills and river valleys inland from the coast.",
+      "governance": "personal",
+      "start": {
+        "opinion": 0,
+        "atWar": false,
+        "allied": false,
+        "vassal": false
+      },
+      "rivals": [
+        "gabali"
+      ],
+      "allies": [
+        "cadurci"
+      ],
+      "ruler": {
+        "name": "Catumandus",
+        "sex": "M",
+        "bornAge": 47,
+        "prestige": 38,
+        "devotion": 45,
+        "militia": 40,
+        "intelligence": 31,
+        "title": "King of the Ruteni"
+      },
+      "heir": {
+        "name": "Senorix",
+        "sex": "M",
+        "bornAge": 14,
+        "prestige": 18,
+        "devotion": 24,
+        "militia": 22,
+        "intelligence": 33,
+        "rel": "son"
+      },
+      "warChief": {
+        "name": "Drappes",
+        "sex": "M",
+        "bornAge": 44,
+        "prestige": 26,
+        "devotion": 22,
+        "militia": 58,
+        "intelligence": 29,
+        "title": "War-leader of the Ruteni"
+      }
+    },
+    {
+      "id": "helvii",
+      "name": "Helvii",
+      "group": "gauls",
+      "blurb": "A Gaulish people settled along the upper Rhone, at the edge of the great river route into the interior.",
+      "governance": "personal",
+      "start": {
+        "opinion": 45,
+        "atWar": false,
+        "allied": false,
+        "vassal": false
+      },
+      "rivals": [
+        "allobroges"
+      ],
+      "allies": [],
+      "ruler": {
+        "name": "Donnotaurus",
+        "sex": "M",
+        "bornAge": 59,
+        "prestige": 55,
+        "devotion": 38,
+        "militia": 34,
+        "intelligence": 49,
+        "title": "King of the Helvii"
+      },
+      "heir": {
+        "name": "Adiatuanos",
+        "sex": "M",
+        "bornAge": 23,
+        "prestige": 31,
+        "devotion": 27,
+        "militia": 40,
+        "intelligence": 36,
+        "rel": "son"
+      },
+      "warChief": {
+        "name": "Vertiscos",
+        "sex": "M",
+        "bornAge": 33,
+        "prestige": 24,
+        "devotion": 16,
+        "militia": 61,
+        "intelligence": 38,
+        "title": "War-leader of the Helvii"
+      }
+    },
+    {
+      "id": "gabali",
+      "name": "Gabali",
+      "group": "gauls",
+      "blurb": "A Gaulish tribe of the high inland plateaus, herders and miners of the mountain country.",
+      "governance": "personal",
+      "start": {
+        "opinion": 0,
+        "atWar": false,
+        "allied": false,
+        "vassal": false
+      },
+      "rivals": [
+        "ruteni"
+      ],
+      "allies": [],
+      "ruler": {
+        "name": "Teutomatos",
+        "sex": "M",
+        "bornAge": 43,
+        "prestige": 29,
+        "devotion": 51,
+        "militia": 36,
+        "intelligence": 28,
+        "title": "King of the Gabali"
+      },
+      "heir": {
+        "name": "Cingetos",
+        "sex": "M",
+        "bornAge": 11,
+        "prestige": 14,
+        "devotion": 30,
+        "militia": 18,
+        "intelligence": 21,
+        "rel": "son"
+      },
+      "warChief": {
+        "name": "Litaviccos",
+        "sex": "M",
+        "bornAge": 49,
+        "prestige": 33,
+        "devotion": 25,
+        "militia": 55,
+        "intelligence": 31,
+        "title": "War-leader of the Gabali"
+      }
+    },
+    {
+      "id": "volcae",
+      "name": "Volcae",
+      "group": "gauls",
+      "blurb": "A large and widespread Gaulish confederation of the lands west of the Rhone.",
+      "governance": "personal",
+      "start": {
+        "opinion": -137,
+        "atWar": false,
+        "allied": false,
+        "vassal": false
+      },
+      "rivals": [
+        "cadurci",
+        "saluvii"
+      ],
+      "allies": [],
+      "ruler": {
+        "name": "Bituitos",
+        "sex": "M",
+        "bornAge": 56,
+        "prestige": 64,
+        "devotion": 35,
+        "militia": 58,
+        "intelligence": 47,
+        "title": "High King of the Volcae"
+      },
+      "heir": {
+        "name": "Congonnetiacos",
+        "sex": "M",
+        "bornAge": 25,
+        "prestige": 39,
+        "devotion": 26,
+        "militia": 52,
+        "intelligence": 33,
+        "rel": "son"
+      },
+      "warChief": {
+        "name": "Acco",
+        "sex": "M",
+        "bornAge": 41,
+        "prestige": 42,
+        "devotion": 20,
+        "militia": 68,
+        "intelligence": 36,
+        "title": "War-leader of the Volcae"
+      }
+    },
+    {
+      "id": "allobroges",
+      "name": "Allobroges",
+      "group": "celto-ligurian",
+      "blurb": "A populous people of the Rhone and Isere valleys, settled between the river and the Alpine foothills.",
+      "governance": "personal",
+      "start": {
+        "opinion": -45,
+        "atWar": false,
+        "allied": false,
+        "vassal": false
+      },
+      "rivals": [
+        "helvii"
+      ],
+      "allies": [
+        "vocontii"
+      ],
+      "ruler": {
+        "name": "Comontorios",
+        "sex": "M",
+        "bornAge": 50,
+        "prestige": 48,
+        "devotion": 30,
+        "militia": 53,
+        "intelligence": 39,
+        "title": "King of the Allobroges"
+      },
+      "heir": {
+        "name": "Brancus",
+        "sex": "M",
+        "bornAge": 21,
+        "prestige": 27,
+        "devotion": 22,
+        "militia": 44,
+        "intelligence": 30,
+        "rel": "son"
+      },
+      "warChief": {
+        "name": "Catugnatos",
+        "sex": "M",
+        "bornAge": 46,
+        "prestige": 35,
+        "devotion": 18,
+        "militia": 66,
+        "intelligence": 28,
+        "title": "War-leader of the Allobroges"
+      }
+    },
+    {
+      "id": "cavares",
+      "name": "Cavares",
+      "group": "celto-ligurian",
+      "blurb": "A Celto-Ligurian people of the lower Rhone, dwelling along the river's eastern bank.",
+      "governance": "personal",
+      "start": {
+        "opinion": 45,
+        "atWar": false,
+        "allied": false,
+        "vassal": false
+      },
+      "rivals": [],
+      "allies": [
+        "vocontii"
+      ],
+      "ruler": {
+        "name": "Ategnatos",
+        "sex": "M",
+        "bornAge": 44,
+        "prestige": 36,
+        "devotion": 41,
+        "militia": 32,
+        "intelligence": 43,
+        "title": "Chief of the Cavares"
+      },
+      "heir": {
+        "name": "Nammeios",
+        "sex": "M",
+        "bornAge": 16,
+        "prestige": 19,
+        "devotion": 25,
+        "militia": 27,
+        "intelligence": 34,
+        "rel": "son"
+      },
+      "warChief": {
+        "name": "Boduognatos",
+        "sex": "M",
+        "bornAge": 36,
+        "prestige": 23,
+        "devotion": 17,
+        "militia": 57,
+        "intelligence": 30,
+        "title": "War-leader of the Cavares"
+      }
+    },
+    {
+      "id": "vocontii",
+      "name": "Vocontii",
+      "group": "celto-ligurian",
+      "blurb": "A Celto-Ligurian people of the pre-Alpine valleys to the east.",
+      "governance": "personal",
+      "start": {
+        "opinion": 0,
+        "atWar": false,
+        "allied": false,
+        "vassal": false
+      },
+      "rivals": [],
+      "allies": [
+        "allobroges",
+        "cavares"
+      ],
+      "ruler": {
+        "name": "Lucterios",
+        "sex": "M",
+        "bornAge": 48,
+        "prestige": 40,
+        "devotion": 37,
+        "militia": 38,
+        "intelligence": 46,
+        "title": "Chief of the Vocontii"
+      },
+      "heir": {
+        "name": "Segovax",
+        "sex": "M",
+        "bornAge": 18,
+        "prestige": 24,
+        "devotion": 23,
+        "militia": 31,
+        "intelligence": 35,
+        "rel": "son"
+      },
+      "warChief": {
+        "name": "Camulogenos",
+        "sex": "M",
+        "bornAge": 52,
+        "prestige": 38,
+        "devotion": 24,
+        "militia": 60,
+        "intelligence": 41,
+        "title": "War-leader of the Vocontii"
+      }
+    },
+    {
+      "id": "saluvii",
+      "name": "Saluvii",
+      "group": "celto-ligurian",
+      "blurb": "A Celto-Ligurian confederation of the coastal hinterland inland from the sea, centred on the oppidum of Entremont.",
+      "governance": "personal",
+      "start": {
+        "opinion": -45,
+        "atWar": false,
+        "allied": false,
+        "vassal": false
+      },
+      "rivals": [
+        "veltanii"
+      ],
+      "allies": [],
+      "ruler": {
+        "name": "Teutomalios",
+        "sex": "M",
+        "bornAge": 54,
+        "prestige": 51,
+        "devotion": 33,
+        "militia": 55,
+        "intelligence": 35,
+        "title": "King of the Saluvii"
+      },
+      "heir": {
+        "name": "Craton",
+        "sex": "M",
+        "bornAge": 24,
+        "prestige": 30,
+        "devotion": 21,
+        "militia": 47,
+        "intelligence": 29,
+        "rel": "son"
+      },
+      "warChief": {
+        "name": "Ipsosthen",
+        "sex": "M",
+        "bornAge": 39,
+        "prestige": 34,
+        "devotion": 19,
+        "militia": 64,
+        "intelligence": 32,
+        "title": "War-leader of the Saluvii"
+      }
+    },
+    {
+      "id": "veltanii",
+      "name": "Veltanii",
+      "group": "celto-ligurian",
+      "blurb": "A small Celto-Ligurian community of the coastal hinterland.",
+      "governance": "personal",
+      "start": {
+        "opinion": 0,
+        "atWar": false,
+        "allied": false,
+        "vassal": false
+      },
+      "rivals": [],
+      "allies": [],
+      "ruler": {
+        "name": "Adventos",
+        "sex": "M",
+        "bornAge": 41,
+        "prestige": 26,
+        "devotion": 44,
+        "militia": 29,
+        "intelligence": 33,
+        "title": "Chief of the Veltanii"
+      },
+      "heir": {
+        "name": "Ollovico",
+        "sex": "M",
+        "bornAge": 13,
+        "prestige": 15,
+        "devotion": 27,
+        "militia": 16,
+        "intelligence": 24,
+        "rel": "son"
+      },
+      "warChief": {
+        "name": "Suros",
+        "sex": "M",
+        "bornAge": 35,
+        "prestige": 20,
+        "devotion": 15,
+        "militia": 52,
+        "intelligence": 26,
+        "title": "War-leader of the Veltanii"
+      }
+    },
+    {
+      "id": "ligurians",
+      "name": "Ligurians",
+      "group": "ligurian",
+      "blurb": "The hardy hill and coast peoples of the mountainous shore east of the Rhone.",
+      "governance": "personal",
+      "start": {
+        "opinion": 45,
+        "atWar": false,
+        "allied": false,
+        "vassal": false
+      },
+      "rivals": [],
+      "allies": [],
+      "ruler": {
+        "name": "Cottios",
+        "sex": "M",
+        "bornAge": 57,
+        "prestige": 45,
+        "devotion": 39,
+        "militia": 49,
+        "intelligence": 36,
+        "title": "Lord of the Ligurian Hills"
+      },
+      "heir": {
+        "name": "Donnos",
+        "sex": "M",
+        "bornAge": 22,
+        "prestige": 28,
+        "devotion": 24,
+        "militia": 42,
+        "intelligence": 31,
+        "rel": "son"
+      },
+      "warChief": {
+        "name": "Belosten",
+        "sex": "M",
+        "bornAge": 43,
+        "prestige": 31,
+        "devotion": 21,
+        "militia": 62,
+        "intelligence": 27,
+        "title": "War-leader of the Ligurians"
+      }
+    },
+    {
+      "id": "ausci",
+      "name": "Ausci",
+      "group": "aquitani",
+      "blurb": "An Aquitanian people of the southwestern plains stretching toward the Pyrenees.",
+      "governance": "personal",
+      "start": {
+        "opinion": 0,
+        "atWar": false,
+        "allied": false,
+        "vassal": false
+      },
+      "rivals": [
+        "convenae"
+      ],
+      "allies": [
+        "tarusates"
+      ],
+      "ruler": {
+        "name": "Harsko",
+        "sex": "M",
+        "bornAge": 46,
+        "prestige": 34,
+        "devotion": 42,
+        "militia": 37,
+        "intelligence": 40,
+        "title": "Chief of the Ausci"
+      },
+      "heir": {
+        "name": "Belex",
+        "sex": "M",
+        "bornAge": 17,
+        "prestige": 20,
+        "devotion": 26,
+        "militia": 28,
+        "intelligence": 32,
+        "rel": "son"
+      },
+      "warChief": {
+        "name": "Andoxos",
+        "sex": "M",
+        "bornAge": 37,
+        "prestige": 25,
+        "devotion": 18,
+        "militia": 56,
+        "intelligence": 30,
+        "title": "War-leader of the Ausci"
+      }
+    },
+    {
+      "id": "convenae",
+      "name": "Convenae",
+      "group": "aquitani",
+      "blurb": "An Aquitanian people of the Pyrenean foothills in the far southwest.",
+      "governance": "personal",
+      "start": {
+        "opinion": 0,
+        "atWar": false,
+        "allied": false,
+        "vassal": false
+      },
+      "rivals": [
+        "ausci"
+      ],
+      "allies": [],
+      "ruler": {
+        "name": "Oxsko",
+        "sex": "M",
+        "bornAge": 49,
+        "prestige": 37,
+        "devotion": 35,
+        "militia": 41,
+        "intelligence": 38,
+        "title": "Chief of the Convenae"
+      },
+      "heir": {
+        "name": "Hanno-Ausc",
+        "sex": "M",
+        "bornAge": 20,
+        "prestige": 23,
+        "devotion": 22,
+        "militia": 33,
+        "intelligence": 29,
+        "rel": "son"
+      },
+      "warChief": {
+        "name": "Sembe",
+        "sex": "M",
+        "bornAge": 40,
+        "prestige": 28,
+        "devotion": 17,
+        "militia": 59,
+        "intelligence": 31,
+        "title": "War-leader of the Convenae"
+      }
+    },
+    {
+      "id": "tarusates",
+      "name": "Tarusates",
+      "group": "aquitani",
+      "blurb": "An Aquitanian people of the wooded lowlands of the southwest.",
+      "governance": "personal",
+      "start": {
+        "opinion": -45,
+        "atWar": false,
+        "allied": false,
+        "vassal": false
+      },
+      "rivals": [],
+      "allies": [
+        "ausci"
+      ],
+      "ruler": {
+        "name": "Adiatunno",
+        "sex": "M",
+        "bornAge": 45,
+        "prestige": 33,
+        "devotion": 40,
+        "militia": 35,
+        "intelligence": 34,
+        "title": "Chief of the Tarusates"
+      },
+      "heir": {
+        "name": "Lonco",
+        "sex": "M",
+        "bornAge": 15,
+        "prestige": 17,
+        "devotion": 25,
+        "militia": 23,
+        "intelligence": 27,
+        "rel": "son"
+      },
+      "warChief": {
+        "name": "Bidux",
+        "sex": "M",
+        "bornAge": 42,
+        "prestige": 27,
+        "devotion": 16,
+        "militia": 54,
+        "intelligence": 28,
+        "title": "War-leader of the Tarusates"
+      }
+    },
+    {
+      "id": "ilergetae",
+      "name": "Ilergetae",
+      "group": "iberian",
+      "blurb": "An Iberian people of the inland plains south of the Pyrenees.",
+      "governance": "personal",
+      "start": {
+        "opinion": 45,
+        "atWar": false,
+        "allied": false,
+        "vassal": false
+      },
+      "rivals": [
+        "lacetani"
+      ],
+      "allies": [],
+      "ruler": {
+        "name": "Indibilis",
+        "sex": "M",
+        "bornAge": 51,
+        "prestige": 49,
+        "devotion": 31,
+        "militia": 52,
+        "intelligence": 42,
+        "title": "Chief of the Ilergetae"
+      },
+      "heir": {
+        "name": "Mandonios",
+        "sex": "M",
+        "bornAge": 38,
+        "prestige": 35,
+        "devotion": 23,
+        "militia": 46,
+        "intelligence": 37,
+        "rel": "brother"
+      },
+      "warChief": {
+        "name": "Edeco",
+        "sex": "M",
+        "bornAge": 44,
+        "prestige": 36,
+        "devotion": 19,
+        "militia": 65,
+        "intelligence": 33,
+        "title": "War-leader of the Ilergetae"
+      }
+    },
+    {
+      "id": "lacetani",
+      "name": "Lacetani",
+      "group": "iberian",
+      "blurb": "An Iberian people of the hill country of the northeastern peninsula.",
+      "governance": "personal",
+      "start": {
+        "opinion": 137,
+        "atWar": false,
+        "allied": false,
+        "vassal": false
+      },
+      "rivals": [
+        "ilergetae"
+      ],
+      "allies": [],
+      "ruler": {
+        "name": "Bilistage",
+        "sex": "M",
+        "bornAge": 47,
+        "prestige": 43,
+        "devotion": 34,
+        "militia": 44,
+        "intelligence": 39,
+        "title": "Chief of the Lacetani"
+      },
+      "heir": {
+        "name": "Audax",
+        "sex": "M",
+        "bornAge": 19,
+        "prestige": 26,
+        "devotion": 24,
+        "militia": 36,
+        "intelligence": 30,
+        "rel": "son"
+      },
+      "warChief": {
+        "name": "Retogenes",
+        "sex": "M",
+        "bornAge": 38,
+        "prestige": 29,
+        "devotion": 20,
+        "militia": 60,
+        "intelligence": 34,
+        "title": "War-leader of the Lacetani"
+      }
+    },
+    {
+      "id": "rome",
+      "name": "Rome",
+      "group": "major-powers",
+      "blurb": "A rising republic of central Italy, steadily extending its power across the peninsula.",
+      "governance": "institutional",
+      "start": {
+        "opinion": 137,
+        "atWar": false,
+        "allied": false,
+        "vassal": false
+      },
+      "rivals": [
+        "carthage"
+      ],
+      "allies": [],
+      "institutionLabel": "The Roman Senate and People"
+    },
+    {
+      "id": "carthage",
+      "name": "Carthage",
+      "group": "major-powers",
+      "blurb": "The great Punic maritime and trading power of the western Mediterranean, mistress of a far-flung commercial network.",
+      "governance": "institutional",
+      "start": {
+        "opinion": -137,
+        "atWar": false,
+        "allied": false,
+        "vassal": false
+      },
+      "rivals": [
+        "rome",
+        "syracuse"
+      ],
+      "allies": [],
+      "institutionLabel": "The Council of Carthage (the Hundred and Four)"
+    },
+    {
+      "id": "syracuse",
+      "name": "Syracuse",
+      "group": "major-powers",
+      "blurb": "The foremost Greek city of Sicily, a wealthy and influential power of the central Mediterranean.",
+      "governance": "personal",
+      "start": {
+        "opinion": 45,
+        "atWar": false,
+        "allied": false,
+        "vassal": false
+      },
+      "rivals": [
+        "carthage"
+      ],
+      "allies": [],
+      "ruler": {
+        "name": "Agathocles",
+        "sex": "M",
+        "bornAge": 61,
+        "prestige": 80,
+        "devotion": 52,
+        "militia": 58,
+        "intelligence": 56,
+        "title": "Tyrant and King of Syracuse"
+      },
+      "heir": {
+        "name": "Archagathus",
+        "sex": "M",
+        "bornAge": 35,
+        "prestige": 54,
+        "devotion": 50,
+        "militia": 60,
+        "intelligence": 53,
+        "rel": "son"
+      },
+      "warChief": null
+    }
   ]
 }
