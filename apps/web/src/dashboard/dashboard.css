@@ -3316,6 +3316,16 @@
 }
 .dashboard-shell .crest-icon{ width: 17px; height: 17px; margin-right: 6px; opacity: 0.95; }
 .dashboard-shell .faction-icon{ width: 18px; height: 18px; margin-right: 7px; vertical-align: -4px; }
+/* Ruler / heir / war-chief portrait in the Diplomacy detail panel: a framed square. */
+.dashboard-shell .faction-portrait{
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  object-fit: cover;
+  vertical-align: top;
+  border: 1px solid var(--dash-line);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
 .dashboard-shell .party-icon{ width: 14px; height: 14px; margin-right: 2px; vertical-align: -2px; }
 .dashboard-shell .pop-glyph{ width: 22px; height: 22px; vertical-align: middle; }
 .dashboard-shell .stat-tab-icon{ width: 15px; height: 15px; margin-right: 6px; vertical-align: -3px; }

@@ -3920,24 +3920,46 @@ function StatPip({ label, value }: { label: string; value: number }) {
   );
 }
 
-// A ruler / heir / war-chief: name + role-relative descriptor + live age + 4 stats.
-function CharacterBlock({ role, secondary, char }: { role: string; secondary: string; char: FactionCharacterView }) {
+// A ruler / heir / war-chief: framed portrait + name + role-relative descriptor +
+// live age + 4 stats. The portrait file is <factionId>_<roleKey>.webp under
+// assets/portraits/diplomacy; AssetIcon hides gracefully when one is missing
+// (e.g. factions whose art has not landed), so the row simply renders text-only.
+function CharacterBlock({
+  factionId,
+  roleKey,
+  role,
+  secondary,
+  char,
+}: {
+  factionId: string;
+  roleKey: "ruler" | "heir" | "warchief";
+  role: string;
+  secondary: string;
+  char: FactionCharacterView;
+}) {
   return (
-    <div style={{ padding: "10px 0", borderTop: "1px solid var(--dash-line)" }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
-        <span>
-          <span style={{ color: "var(--dash-gold-bright)", fontWeight: 700 }}>{char.name}</span>
-          <span style={{ color: "var(--dash-stone-dim)", fontSize: "0.85em" }}> · {secondary}</span>
-        </span>
-        <span style={{ color: "var(--dash-stone-dim)", fontSize: "0.8em", whiteSpace: "nowrap" }}>
-          {role} · age {char.age}
-        </span>
-      </div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
-        <StatPip label="Prestige" value={char.prestige} />
-        <StatPip label="Devotion" value={char.devotion} />
-        <StatPip label="Militia" value={char.militia} />
-        <StatPip label="Intelligence" value={char.intelligence} />
+    <div style={{ display: "flex", gap: 12, padding: "10px 0", borderTop: "1px solid var(--dash-line)" }}>
+      <AssetIcon
+        file={`portraits/diplomacy/${factionId}_${roleKey}.webp`}
+        alt={char.name}
+        className="asset-icon faction-portrait"
+      />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+          <span>
+            <span style={{ color: "var(--dash-gold-bright)", fontWeight: 700 }}>{char.name}</span>
+            <span style={{ color: "var(--dash-stone-dim)", fontSize: "0.85em" }}> · {secondary}</span>
+          </span>
+          <span style={{ color: "var(--dash-stone-dim)", fontSize: "0.8em", whiteSpace: "nowrap" }}>
+            {role} · age {char.age}
+          </span>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
+          <StatPip label="Prestige" value={char.prestige} />
+          <StatPip label="Devotion" value={char.devotion} />
+          <StatPip label="Militia" value={char.militia} />
+          <StatPip label="Intelligence" value={char.intelligence} />
+        </div>
       </div>
     </div>
   );
@@ -4001,9 +4023,9 @@ function FactionDetail({ faction, onClose }: { faction: FactionView | null; onCl
           ) : (
             <div style={{ marginTop: 20 }}>
               <PanelSectionLabel>Leadership</PanelSectionLabel>
-              {faction.ruler ? <CharacterBlock role="Ruler" secondary={faction.ruler.title} char={faction.ruler} /> : null}
-              {faction.heir ? <CharacterBlock role="Heir" secondary={relLabel(faction.heir.rel)} char={faction.heir} /> : null}
-              {faction.warChief ? <CharacterBlock role="War-chief" secondary={faction.warChief.title} char={faction.warChief} /> : null}
+              {faction.ruler ? <CharacterBlock factionId={faction.id} roleKey="ruler" role="Ruler" secondary={faction.ruler.title} char={faction.ruler} /> : null}
+              {faction.heir ? <CharacterBlock factionId={faction.id} roleKey="heir" role="Heir" secondary={relLabel(faction.heir.rel)} char={faction.heir} /> : null}
+              {faction.warChief ? <CharacterBlock factionId={faction.id} roleKey="warchief" role="War-chief" secondary={faction.warChief.title} char={faction.warChief} /> : null}
             </div>
           )}
 
