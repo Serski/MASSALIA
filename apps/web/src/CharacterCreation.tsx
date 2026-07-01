@@ -302,14 +302,12 @@ function SummaryCard({
         </span>
       </div>
       <h2>{name.trim() || "Unnamed"}</h2>
-      <p>{selectedClass ? `${selectedClass.rank} · ${selectedClass.name}` : "— · class"}</p>
+      <p>{selectedClass ? selectedClass.name : "class"}</p>
       <dl>
         <div><dt>Origin</dt><dd>Massalia · the capital</dd></div>
         <div><dt>House</dt><dd>{selectedHouse ? selectedHouse.name : "— not yet —"}</dd></div>
         <div><dt>Party</dt><dd className="muted">chosen in-game</dd></div>
-        <div><dt>Epithet</dt><dd className="muted">earned later</dd></div>
       </dl>
-      <small>Ring, sigil, and name are drawn in code over the portrait. No per-player art.</small>
     </aside>
   );
 }
@@ -497,9 +495,9 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
                   >
                     <strong>{option.label}</strong>
                     <span className="creation-age-note">{option.note}</span>
-                    <span className={`creation-age-bonus${Object.keys(option.startBonus).length ? "" : " muted"}`}>
-                      Head start: {headStartLabel(option)}
-                    </span>
+                    {Object.keys(option.startBonus).length ? (
+                      <span className="creation-age-bonus">Head start: {headStartLabel(option)}</span>
+                    ) : null}
                   </button>
                 ))}
               </div>
@@ -524,10 +522,6 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
                 <label>
                   <span>Name</span>
                   <input type="text" value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" required />
-                </label>
-                <label>
-                  <span>Epithet</span>
-                  <input type="text" value="earned later — locked" disabled />
                 </label>
               </div>
             </div>
