@@ -344,7 +344,8 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
 
   // The five avatars for the chosen age (20 -> young faces, 30 -> prime faces).
   const avatarsForAge = useMemo(
-    () => (ageConfig && selectedAge !== null ? ageConfig.avatars.filter((avatar) => avatar.startAge === selectedAge) : []),
+    // Player faces only — the female wife pool (startAge 20) must never appear in signup.
+    () => (ageConfig && selectedAge !== null ? ageConfig.avatars.filter((avatar) => avatar.startAge === selectedAge && avatar.sex !== "female") : []),
     [ageConfig, selectedAge],
   );
   const selectedAvatar = useMemo(() => avatarsForAge.find((avatar) => avatar.id === selectedFace), [avatarsForAge, selectedFace]);

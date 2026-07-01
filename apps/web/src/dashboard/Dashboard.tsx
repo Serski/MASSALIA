@@ -432,23 +432,34 @@ function PersonFaceIcon() {
   );
 }
 
+// A person's face: real portrait when present (and loads), else the line-art icon.
+// Mirrors ChildPortrait's graceful-fallback pattern so a missing/broken img never shows.
+function PersonFace({ portrait }: { portrait?: string | null }) {
+  const [ok, setOk] = useState(true);
+  const src = portrait ? contentUrl(portrait) : undefined;
+  if (!src || !ok) return <PersonFaceIcon />;
+  return <img src={src} alt="" loading="lazy" onError={() => setOk(false)} />;
+}
+
 function PersonRow({
   name,
   nameSuffix,
   role,
   traits,
   right,
+  portrait,
 }: {
   name: string;
   nameSuffix?: ReactNode;
   role: string;
   traits: { label: string; tone?: TraitTone }[];
   right?: ReactNode;
+  portrait?: string | null;
 }) {
   return (
     <div className="person-row">
       <span className="person-face">
-        <PersonFaceIcon />
+        <PersonFace portrait={portrait} />
       </span>
       <div className="person-meta">
         <div className="person-name">
@@ -2595,6 +2606,7 @@ function FamilyPanel({ onRefresh }: PanelProps) {
                 role={`Age ${state.spouse.age} · ${state.spouse.houseName}`}
                 traits={state.spouse.trait ? [{ label: state.spouse.trait.name, tone: "good" }] : []}
                 right={<CandidateStatChips stats={state.spouse.stats} />}
+                portrait={state.spouse.portrait}
               />
               {state.spouse.pastChildbearing ? (
                 <p className="composure-note muted spouse-fertility-note">She is past her childbearing years.</p>
@@ -2622,7 +2634,12 @@ function FamilyPanel({ onRefresh }: PanelProps) {
                   return (
                     <DashboardCard className="prospect-card" key={candidate.id}>
                       <div className="event-body">
-                        <span className="dashboard-label">{candidate.name} of House {candidate.houseName}</span>
+                        <div className="prospect-head">
+                          <span className="person-face prospect-face">
+                            <PersonFace portrait={candidate.portrait} />
+                          </span>
+                          <span className="dashboard-label">{candidate.name} of House {candidate.houseName}</span>
+                        </div>
                         <p>Age {candidate.age}{candidate.trait ? ` · ${candidate.trait.name}` : ""}{candidate.dowry > 0 ? ` · dowry ${candidate.dowry}g` : ""}</p>
                         <CandidateStatChips stats={candidate.stats} />
                         {penalty ? <p className="composure-note neg">{penalty}</p> : <p className="composure-note pos">No ideological cost — a comfortable match.</p>}
@@ -2659,6 +2676,7 @@ function FamilyPanel({ onRefresh }: PanelProps) {
                     role={`Age ${candidate.age}${candidate.trait ? ` · ${candidate.trait.name}` : ""}`}
                     traits={candidate.trait ? [{ label: candidate.trait.name, tone: "good" }] : []}
                     right={<CandidateStatChips stats={candidate.stats} />}
+                    portrait={candidate.portrait}
                   />
                 ))
               )}

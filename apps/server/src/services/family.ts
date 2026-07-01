@@ -25,12 +25,13 @@ import {
   isOfAge,
   marriagePenalty,
   parseFamilyConfig,
+  portraitFor,
   REAL_MS_PER_SEASON,
   rollSpouseDeathAge,
   spouseCurrentAge,
   type FamilyConfig,
 } from "@massalia/shared";
-import { getAgeConfig } from "./age.js";
+import { getAgeConfig, portraitUrl } from "./age.js";
 import { broadcastState } from "./worldState.js";
 import { onIdeologyChanged } from "./politics.js";
 import { enqueueChildRoll, enqueueFamilyDraw } from "./queue.js";
@@ -99,6 +100,8 @@ function candidateView(cand: CandidateRow, cfg: FamilyConfig, houseLabel: string
     stats: { prestige: cand.prestige, devotion: cand.devotion, militia: cand.militia, intelligence: cand.intelligence },
     trait: trait ? { id: trait.id, name: trait.name, description: trait.description } : null,
     dowry: trait?.dowryDrachmae ?? 0,
+    // Her age-stage portrait (matches the player's own resolution in character.ts).
+    portrait: portraitUrl(portraitFor(cand.avatarId ?? "", cand.age, getAgeConfig())),
   };
 }
 
@@ -222,6 +225,8 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
       spouse = {
         ...candidateView(rows[0], cfg, await houseName(rows[0].houseSlug)),
         age: currentAge,
+        // Re-resolve at her CURRENT age so the portrait ages as she does.
+        portrait: portraitUrl(portraitFor(rows[0].avatarId ?? "", currentAge, getAgeConfig())),
         fertile: isFertile(currentAge, cfg),
         pastChildbearing: currentAge > cfg.spouse.fertilityWindow.to,
       };

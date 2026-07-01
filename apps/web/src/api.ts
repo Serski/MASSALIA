@@ -689,6 +689,8 @@ export type FamilyCandidate = {
   stats: FamilyStats;
   trait: { id: string; name: string; description: string } | null;
   dowry: number;
+  // Her age-stage portrait path (null until art resolves); ages with her.
+  portrait: string | null;
 };
 
 export type MarriageCandidate = FamilyCandidate & {

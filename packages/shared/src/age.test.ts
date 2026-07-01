@@ -128,6 +128,12 @@ describe("avatar -> startAge + start bonus", () => {
     expect(cfg.avatars.filter((a) => a.sex === "male" && a.startAge === 30)).toHaveLength(5);
     expect(cfg.avatars.filter((a) => a.sex === "female")).toHaveLength(34);
   });
+  it("signup face filter (startAge + not female) yields only male player faces, no wives", () => {
+    // Mirrors CharacterCreation.tsx avatarsForAge — wives must never appear in signup.
+    const signupFaces = cfg.avatars.filter((a) => a.startAge === 20 && a.sex !== "female");
+    expect(signupFaces).toHaveLength(5);
+    expect(signupFaces.some((a) => a.id.startsWith("wife-"))).toBe(false);
+  });
 });
 
 describe("stageFor / portraitFor", () => {
