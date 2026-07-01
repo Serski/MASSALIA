@@ -111,9 +111,13 @@
     "maxChildren": 4,
     "sexRatioBoys": 0.5,
     "portraits": {
-      "boy": "family/avatars/child-boy.png",
-      "girl": "family/avatars/child-girl.png"
-    }
+      "boy": { "infant": "family/avatars/child-boy-infant.webp", "child": "family/avatars/child-boy-child.webp" },
+      "girl": { "infant": "family/avatars/child-girl-infant.webp", "child": "family/avatars/child-girl-child.webp" }
+    },
+    "portraitStages": [
+      { "fromAge": 0, "stage": "infant" },
+      { "fromAge": 3, "stage": "child" }
+    ]
   },
   "succession": {
     "prestigeCarryover": {

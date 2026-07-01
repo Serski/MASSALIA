@@ -58,7 +58,11 @@ export const familyConfigSchema = z.object({
     birthDeathRisk: z.number(),
     maxChildren: z.number(),
     sexRatioBoys: z.number(),
-    portraits: z.object({ boy: z.string(), girl: z.string() }),
+    portraits: z.object({
+      boy: z.object({ infant: z.string(), child: z.string() }),
+      girl: z.object({ infant: z.string(), child: z.string() }),
+    }),
+    portraitStages: z.array(z.object({ fromAge: z.number(), stage: z.string() })),
   }),
   succession: z
     .object({

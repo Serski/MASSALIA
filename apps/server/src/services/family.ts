@@ -119,8 +119,16 @@ export async function advanceSpouseDeath(characterId: string, now: Date = new Da
   if (death) await broadcastState();
 }
 
-function childPortrait(sex: string, cfg: FamilyConfig): string {
-  return `/content/${sex === "male" ? cfg.children.portraits.boy : cfg.children.portraits.girl}`;
+// Highest fromAge threshold that is <= age wins (same rule as the adult stageFor).
+function childStageFor(age: number, cfg: FamilyConfig): "infant" | "child" {
+  let stage = cfg.children.portraitStages[0]!.stage;
+  for (const s of cfg.children.portraitStages) if (age >= s.fromAge) stage = s.stage;
+  return stage as "infant" | "child";
+}
+
+function childPortrait(sex: string, age: number, cfg: FamilyConfig): string {
+  const set = sex === "male" ? cfg.children.portraits.boy : cfg.children.portraits.girl;
+  return `/content/${set[childStageFor(age, cfg)]}`;
 }
 
 // Children list (+ lazy coming-of-age) and the pending birth event (the newest
@@ -148,7 +156,7 @@ async function childrenSection(character: CharacterRow, now: Date) {
       name: child.name,
       sex: child.sex,
       age,
-      portrait: childPortrait(child.sex, cfg),
+      portrait: childPortrait(child.sex, age, cfg),
       comingOfAge: cfg.comingOfAge,
       yearsToComingOfAge: Math.max(0, cfg.comingOfAge - age),
       heirEligible: ofAge,
