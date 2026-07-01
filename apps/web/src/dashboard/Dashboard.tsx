@@ -3857,14 +3857,32 @@ function stanceColor(value: number): string {
   return "var(--dash-good)";
 }
 
-const factionRowStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1.2fr 1.4fr",
-  alignItems: "center",
-  gap: 12,
-  padding: "8px 4px",
-  borderBottom: "1px solid var(--dash-line)",
-};
+// Faint stance-tinted background for the list pill, matching stanceColor's bands.
+function stanceTint(value: number): string {
+  if (value <= -2) return "rgba(187, 106, 82, 0.16)";
+  if (value === -1) return "rgba(201, 139, 106, 0.14)";
+  if (value === 0) return "rgba(184, 168, 144, 0.10)";
+  if (value === 1) return "rgba(155, 184, 122, 0.14)";
+  return "rgba(126, 163, 106, 0.16)";
+}
+
+// Compact ±4-pip relation meter: pips fill from the centre outward toward the
+// opinion's sign, one pip per 50 points (mirrors OpinionBar's ±200 scale).
+function PipMeter({ opinion, color }: { opinion: number; color: string }) {
+  const filled = Math.min(4, Math.round(Math.abs(opinion) / 50));
+  const neg = opinion < 0;
+  const pos = opinion > 0;
+  const pip = (on: boolean, key: string) => (
+    <span key={key} style={{ width: 6, height: 11, borderRadius: 1, background: on ? color : "var(--dash-line)" }} />
+  );
+  return (
+    <span aria-hidden="true" style={{ display: "flex", alignItems: "center", gap: 3, flex: "0 0 auto" }}>
+      {[4, 3, 2, 1].map((rank) => pip(neg && rank <= filled, `l${rank}`))}
+      <span style={{ width: 1, height: 14, background: "var(--dash-stone-dim)", margin: "0 2px" }} />
+      {[1, 2, 3, 4].map((rank) => pip(pos && rank <= filled, `r${rank}`))}
+    </span>
+  );
+}
 
 // A status badge (At War / Allied / Vassal) shown only when the flag is set.
 function StatusBadge({ label, title, color }: { label: string; title: string; color: string }) {
@@ -3898,15 +3916,20 @@ function OpinionBar({ opinion, color, height = 8 }: { opinion: number; color: st
 }
 
 // The list row, as a button — clicking/tapping opens the faction's detail panel.
-// Resets native button chrome but keeps the D1 grid layout + .atlas-row hover.
+// A flex roster row (emblem · name/ruler · spacer · pip meter · stance pill);
+// resets native button chrome but keeps the .atlas-row hover.
 const factionButtonStyle: CSSProperties = {
-  ...factionRowStyle,
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+  padding: "10px 14px 10px 0",
   width: "100%",
   textAlign: "left",
   font: "inherit",
   color: "inherit",
   background: "none",
   border: "none",
+  borderBottom: "1px solid var(--dash-line)",
   cursor: "pointer",
 };
 
@@ -3934,12 +3957,19 @@ function PanelSectionLabel({ children }: { children: ReactNode }) {
   );
 }
 
-// One stat as a labelled pill (raw 0..100 number — NPC scouting intel, deliberately
-// unlike the player's rank-only display).
-function StatPip({ label, value }: { label: string; value: number }) {
+// Stat icon files for the leadership pills (mirrors STAT_ICON without widening its
+// StandingsBoard key type — these four are the only stats a CharacterBlock shows).
+const STAT_PIP_ICON: Record<"prestige" | "devotion" | "militia" | "intelligence", string> = {
+  prestige: "PRESTIGE.webp", devotion: "DEVOTION.webp", militia: "Militia.webp", intelligence: "Intrigue.webp",
+};
+
+// One leadership stat: icon + value, icon-only with the name in title/alt for a11y.
+function StatPip({ stat, value }: { stat: "prestige" | "devotion" | "militia" | "intelligence"; value: number }) {
+  const label = stat.charAt(0).toUpperCase() + stat.slice(1);
+  const icon = STAT_PIP_ICON[stat];
   return (
-    <span style={{ display: "inline-flex", gap: 5, alignItems: "baseline", padding: "2px 8px", borderRadius: 6, background: "var(--dash-panel-soft)", fontSize: "0.78em" }}>
-      <span style={{ color: "var(--dash-stone-dim)" }}>{label}</span>
+    <span title={label} style={{ display: "inline-flex", gap: 5, alignItems: "center", padding: "2px 8px", borderRadius: 6, background: "var(--dash-panel-soft)", fontSize: "0.78em" }}>
+      {icon ? <AssetIcon file={icon} alt={label} className="asset-icon stat-pip-icon" /> : <span style={{ color: "var(--dash-stone-dim)" }}>{label}</span>}
       <span style={{ color: "var(--dash-parchment)", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{value}</span>
     </span>
   );
@@ -3980,10 +4010,10 @@ function CharacterBlock({
           </span>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
-          <StatPip label="Prestige" value={char.prestige} />
-          <StatPip label="Devotion" value={char.devotion} />
-          <StatPip label="Militia" value={char.militia} />
-          <StatPip label="Intelligence" value={char.intelligence} />
+          <StatPip stat="prestige" value={char.prestige} />
+          <StatPip stat="devotion" value={char.devotion} />
+          <StatPip stat="militia" value={char.militia} />
+          <StatPip stat="intelligence" value={char.intelligence} />
         </div>
       </div>
     </div>
@@ -4103,31 +4133,24 @@ function DiplomacyView() {
                   onClick={() => setSelected(f)}
                   aria-label={`${f.name} — ${f.bandLabel}, opinion ${signedOpinion(f.opinion)}. Open details.`}
                 >
-                  <span style={{ color: "var(--dash-parchment)", fontWeight: 600 }}>
-                    {FACTION_ICON[f.id] ? <AssetIcon file={FACTION_ICON[f.id]!} alt="" className="asset-icon faction-icon" /> : null}
-                    {f.name}
-                    <FactionStatusBadges faction={f} />
-                  </span>
-                  <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <OpinionBar opinion={f.opinion} color={color} />
-                    <span
-                      style={{
-                        flex: "0 0 auto",
-                        minWidth: 78,
-                        textAlign: "right",
-                        color,
-                        fontWeight: 700,
-                        fontSize: "0.85em",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.04em",
-                      }}
-                      title={`Opinion ${signedOpinion(f.opinion)}`}
-                    >
-                      {f.bandLabel}
-                      <span style={{ marginLeft: 6, color: "var(--dash-stone-dim)", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
-                        {signedOpinion(f.opinion)}
-                      </span>
+                  <span aria-hidden="true" style={{ width: 3, alignSelf: "stretch", background: color, borderRadius: 0 }} />
+                  {FACTION_ICON[f.id] ? <AssetIcon file={FACTION_ICON[f.id]!} alt="" className="asset-icon faction-emblem" /> : <span className="faction-emblem" aria-hidden="true" />}
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 2, color: "var(--dash-parchment)", fontFamily: "var(--font-display)", fontSize: "1.05rem", lineHeight: 1.15 }}>
+                      {f.name}
+                      <FactionStatusBadges faction={f} />
                     </span>
+                    {(f.ruler?.name ?? f.institutionLabel) ? (
+                      <span style={{ display: "block", color: "var(--dash-stone-dim)", fontSize: "0.8em", marginTop: 2 }}>
+                        {f.ruler?.name ?? f.institutionLabel}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span style={{ flex: 1 }} />
+                  <PipMeter opinion={f.opinion} color={color} />
+                  <span style={{ background: stanceTint(f.bandValue), color, fontWeight: 700, fontSize: "0.8em", textTransform: "uppercase", letterSpacing: "0.04em", padding: "5px 12px", borderRadius: 20, whiteSpace: "nowrap", flex: "0 0 auto" }}>
+                    {f.bandLabel}
+                    <span style={{ marginLeft: 6, color: "var(--dash-stone-dim)", fontVariantNumeric: "tabular-nums" }}>{signedOpinion(f.opinion)}</span>
                   </span>
                 </button>
               );
