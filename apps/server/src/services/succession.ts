@@ -34,10 +34,13 @@ function deadStats(row: CharacterRow): StatBlock {
 }
 
 function randomAdultAvatar(sex: Sex): string | null {
-  // Match the heir/regent's sex; fall back to the whole pool only if that sex has
-  // no art yet (keeps handoff working before a sex's portraits land).
+  // Draw a player face for the heir/regent: a female heir is a hetaira (the only
+  // female player faces), a male heir uses the "player" pool. Filter by pool, not
+  // sex, so wife portraits are never assigned to an heir. Fall back to the whole
+  // set only if the wanted pool is empty (keeps handoff working before art lands).
   const avatars = getAgeConfig().avatars;
-  const pool = avatars.filter((a) => a.sex === sex);
+  const wantPool = sex === "female" ? "hetaira" : "player";
+  const pool = avatars.filter((a) => a.pool === wantPool);
   const from = pool.length ? pool : avatars;
   return from.length ? from[Math.floor(Math.random() * from.length)]!.id : null;
 }

@@ -342,12 +342,14 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
     };
   }, []);
 
-  // The five avatars for the chosen age (20 -> young faces, 30 -> prime faces).
-  const avatarsForAge = useMemo(
-    // Player faces only — the female wife pool (startAge 20) must never appear in signup.
-    () => (ageConfig && selectedAge !== null ? ageConfig.avatars.filter((avatar) => avatar.startAge === selectedAge && avatar.sex !== "female") : []),
-    [ageConfig, selectedAge],
-  );
+  // The faces for the chosen age, scoped to the class's face pool: hetaira draw
+  // from the female hetaira pool, every other class from the male player pool.
+  // Wife portraits (pool "wife") are never a signup face.
+  const avatarsForAge = useMemo(() => {
+    if (!ageConfig || selectedAge === null) return [];
+    const facePool = selectedClass?.slug === "hetaira" ? "hetaira" : "player";
+    return ageConfig.avatars.filter((avatar) => avatar.startAge === selectedAge && (avatar.pool ?? "player") === facePool);
+  }, [ageConfig, selectedAge, selectedClass]);
   const selectedAvatar = useMemo(() => avatarsForAge.find((avatar) => avatar.id === selectedFace), [avatarsForAge, selectedFace]);
 
   const canContinue =

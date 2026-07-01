@@ -38,6 +38,11 @@ export const ageConfigSchema = z
         // Sex-tags the pool so marriage/succession draws can match by sex. Optional
         // with a "male" default so the pre-existing male entries (no field) validate.
         sex: z.enum(["male", "female"]).default("male"),
+        // Which draw pool this face belongs to — sex alone is no longer specific
+        // enough (wives and hetairai are both female). player = male signup faces,
+        // wife = spouse portraits, hetaira = female player faces. Defaults to
+        // "player" so the pre-existing male entries (no field) stay signup faces.
+        pool: z.enum(["player", "wife", "hetaira"]).default("player"),
         startAge: z.number(),
         label: z.string(),
         portraits: z.record(z.string(), z.string()),

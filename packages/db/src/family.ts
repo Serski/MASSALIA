@@ -37,12 +37,15 @@ export async function drawFamilyCandidates(characterId: string, args: DrawArgs):
   if (isFamilyLocked(character.classId, familyCfg)) return []; // slave: nothing is drawn
 
   const houseRows = await db.select({ slug: houses.slug, ideology: houses.startIdeology }).from(houses);
-  // Pool avatars by sex so each candidate draws a same-sex portrait. Fall back to
-  // the male pool if a sex pool is empty (keeps working before art for a sex lands).
-  const avatarsBySex = { male: [] as string[], female: [] as string[] };
-  for (const a of ageCfg.avatars) (avatarsBySex[a.sex] ?? avatarsBySex.male).push(a.id);
+  // Pool avatars by draw pool, not sex — wives and hetairai are both female, so a
+  // marriage candidate (always female) must draw only from the "wife" pool, never a
+  // hetaira player-face. Male picks use the "player" pool. Fall back to "player" if
+  // the wanted pool is empty (keeps working before a pool's art lands).
+  const avatarsByPool = { player: [] as string[], wife: [] as string[], hetaira: [] as string[] };
+  for (const a of ageCfg.avatars) (avatarsByPool[a.pool] ?? avatarsByPool.player).push(a.id);
   const pickAvatarFor = (sex: "male" | "female") => {
-    const pool = avatarsBySex[sex]?.length ? avatarsBySex[sex] : avatarsBySex.male;
+    const wanted = sex === "female" ? avatarsByPool.wife : avatarsByPool.player;
+    const pool = wanted.length ? wanted : avatarsByPool.player;
     return pool.length ? pool[Math.floor(Math.random() * pool.length)]! : null;
   };
 

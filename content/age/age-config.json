@@ -122,6 +122,7 @@
     },
     {
       "id": "wife-01",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -133,6 +134,7 @@
     },
     {
       "id": "wife-02",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -144,6 +146,7 @@
     },
     {
       "id": "wife-03",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -155,6 +158,7 @@
     },
     {
       "id": "wife-04",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -166,6 +170,7 @@
     },
     {
       "id": "wife-05",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -177,6 +182,7 @@
     },
     {
       "id": "wife-06",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -188,6 +194,7 @@
     },
     {
       "id": "wife-07",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -199,6 +206,7 @@
     },
     {
       "id": "wife-08",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -210,6 +218,7 @@
     },
     {
       "id": "wife-09",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -221,6 +230,7 @@
     },
     {
       "id": "wife-10",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -232,6 +242,7 @@
     },
     {
       "id": "wife-11",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -243,6 +254,7 @@
     },
     {
       "id": "wife-12",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -254,6 +266,7 @@
     },
     {
       "id": "wife-13",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -265,6 +278,7 @@
     },
     {
       "id": "wife-14",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -276,6 +290,7 @@
     },
     {
       "id": "wife-15",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -287,6 +302,7 @@
     },
     {
       "id": "wife-16",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -298,6 +314,7 @@
     },
     {
       "id": "wife-17",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -309,6 +326,7 @@
     },
     {
       "id": "wife-18",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -320,6 +338,7 @@
     },
     {
       "id": "wife-19",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -331,6 +350,7 @@
     },
     {
       "id": "wife-20",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -342,6 +362,7 @@
     },
     {
       "id": "wife-21",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -353,6 +374,7 @@
     },
     {
       "id": "wife-22",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -364,6 +386,7 @@
     },
     {
       "id": "wife-23",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -375,6 +398,7 @@
     },
     {
       "id": "wife-24",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -386,6 +410,7 @@
     },
     {
       "id": "wife-25",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -397,6 +422,7 @@
     },
     {
       "id": "wife-26",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -408,6 +434,7 @@
     },
     {
       "id": "wife-27",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -419,6 +446,7 @@
     },
     {
       "id": "wife-28",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -430,6 +458,7 @@
     },
     {
       "id": "wife-29",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -441,6 +470,7 @@
     },
     {
       "id": "wife-30",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -452,6 +482,7 @@
     },
     {
       "id": "wife-31",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -463,6 +494,7 @@
     },
     {
       "id": "wife-32",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -474,6 +506,7 @@
     },
     {
       "id": "wife-33",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -485,6 +518,7 @@
     },
     {
       "id": "wife-34",
+      "pool": "wife",
       "sex": "female",
       "startAge": 20,
       "label": "Marriageable woman",
@@ -492,6 +526,121 @@
         "young": "avatars/wife-34-young.webp",
         "prime": "avatars/wife-34-prime.webp",
         "old": "avatars/wife-34-old.webp"
+      }
+    },
+    {
+      "id": "hetaira-20-1",
+      "pool": "hetaira",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Hetaira · Young (20)",
+      "portraits": {
+        "young": "avatars/hetaira-20-1-young.webp",
+        "prime": "avatars/hetaira-20-1-prime.webp",
+        "old": "avatars/hetaira-20-1-old.webp"
+      }
+    },
+    {
+      "id": "hetaira-20-2",
+      "pool": "hetaira",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Hetaira · Young (20)",
+      "portraits": {
+        "young": "avatars/hetaira-20-2-young.webp",
+        "prime": "avatars/hetaira-20-2-prime.webp",
+        "old": "avatars/hetaira-20-2-old.webp"
+      }
+    },
+    {
+      "id": "hetaira-20-3",
+      "pool": "hetaira",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Hetaira · Young (20)",
+      "portraits": {
+        "young": "avatars/hetaira-20-3-young.webp",
+        "prime": "avatars/hetaira-20-3-prime.webp",
+        "old": "avatars/hetaira-20-3-old.webp"
+      }
+    },
+    {
+      "id": "hetaira-20-4",
+      "pool": "hetaira",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Hetaira · Young (20)",
+      "portraits": {
+        "young": "avatars/hetaira-20-4-young.webp",
+        "prime": "avatars/hetaira-20-4-prime.webp",
+        "old": "avatars/hetaira-20-4-old.webp"
+      }
+    },
+    {
+      "id": "hetaira-20-5",
+      "pool": "hetaira",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Hetaira · Young (20)",
+      "portraits": {
+        "young": "avatars/hetaira-20-5-young.webp",
+        "prime": "avatars/hetaira-20-5-prime.webp",
+        "old": "avatars/hetaira-20-5-old.webp"
+      }
+    },
+    {
+      "id": "hetaira-30-1",
+      "pool": "hetaira",
+      "sex": "female",
+      "startAge": 30,
+      "label": "Hetaira · Established (30)",
+      "portraits": {
+        "prime": "avatars/hetaira-30-1-prime.webp",
+        "old": "avatars/hetaira-30-1-old.webp"
+      }
+    },
+    {
+      "id": "hetaira-30-2",
+      "pool": "hetaira",
+      "sex": "female",
+      "startAge": 30,
+      "label": "Hetaira · Established (30)",
+      "portraits": {
+        "prime": "avatars/hetaira-30-2-prime.webp",
+        "old": "avatars/hetaira-30-2-old.webp"
+      }
+    },
+    {
+      "id": "hetaira-30-3",
+      "pool": "hetaira",
+      "sex": "female",
+      "startAge": 30,
+      "label": "Hetaira · Established (30)",
+      "portraits": {
+        "prime": "avatars/hetaira-30-3-prime.webp",
+        "old": "avatars/hetaira-30-3-old.webp"
+      }
+    },
+    {
+      "id": "hetaira-30-4",
+      "pool": "hetaira",
+      "sex": "female",
+      "startAge": 30,
+      "label": "Hetaira · Established (30)",
+      "portraits": {
+        "prime": "avatars/hetaira-30-4-prime.webp",
+        "old": "avatars/hetaira-30-4-old.webp"
+      }
+    },
+    {
+      "id": "hetaira-30-5",
+      "pool": "hetaira",
+      "sex": "female",
+      "startAge": 30,
+      "label": "Hetaira · Established (30)",
+      "portraits": {
+        "prime": "avatars/hetaira-30-5-prime.webp",
+        "old": "avatars/hetaira-30-5-old.webp"
       }
     }
   ],

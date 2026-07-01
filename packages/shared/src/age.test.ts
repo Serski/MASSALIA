@@ -123,16 +123,25 @@ describe("avatar -> startAge + start bonus", () => {
     expect(startBonusForAge(30, cfg)).toEqual({ prestige: 3, intelligence: 2 });
     expect(startAgeForAvatar("nope", cfg)).toBeNull();
   });
-  it("has 10 male start-age avatars (5 per age) + the female wife pool", () => {
-    expect(cfg.avatars.filter((a) => a.sex === "male" && a.startAge === 20)).toHaveLength(5);
-    expect(cfg.avatars.filter((a) => a.sex === "male" && a.startAge === 30)).toHaveLength(5);
-    expect(cfg.avatars.filter((a) => a.sex === "female")).toHaveLength(34);
+  it("splits into player (10), wife (34), and hetaira (10) pools", () => {
+    expect(cfg.avatars.filter((a) => a.pool === "player" && a.startAge === 20)).toHaveLength(5);
+    expect(cfg.avatars.filter((a) => a.pool === "player" && a.startAge === 30)).toHaveLength(5);
+    expect(cfg.avatars.filter((a) => a.pool === "wife")).toHaveLength(34);
+    expect(cfg.avatars.filter((a) => a.pool === "hetaira")).toHaveLength(10);
+    // Every wife/hetaira face is female; every player face is male.
+    expect(cfg.avatars.filter((a) => a.pool !== "player").every((a) => a.sex === "female")).toBe(true);
+    expect(cfg.avatars.filter((a) => a.pool === "player").every((a) => a.sex === "male")).toBe(true);
   });
-  it("signup face filter (startAge + not female) yields only male player faces, no wives", () => {
-    // Mirrors CharacterCreation.tsx avatarsForAge — wives must never appear in signup.
-    const signupFaces = cfg.avatars.filter((a) => a.startAge === 20 && a.sex !== "female");
-    expect(signupFaces).toHaveLength(5);
-    expect(signupFaces.some((a) => a.id.startsWith("wife-"))).toBe(false);
+  it("signup face filter (startAge + class pool) scopes faces to the right pool", () => {
+    // Mirrors CharacterCreation.tsx avatarsForAge — the class's pool picks the faces.
+    const forPool = (pool: string, age: number) => cfg.avatars.filter((a) => a.startAge === age && (a.pool ?? "player") === pool);
+    // A male class @20 -> the 5 male player faces, no wives, no hetairai.
+    const playerFaces = forPool("player", 20);
+    expect(playerFaces).toHaveLength(5);
+    expect(playerFaces.some((a) => a.id.startsWith("wife-") || a.id.startsWith("hetaira-"))).toBe(false);
+    // Hetaira class @20 -> exactly the 5 hetaira-20-* faces.
+    const hetairaFaces = forPool("hetaira", 20);
+    expect(hetairaFaces.map((a) => a.id).sort()).toEqual(["hetaira-20-1", "hetaira-20-2", "hetaira-20-3", "hetaira-20-4", "hetaira-20-5"]);
   });
 });
 
@@ -152,15 +161,18 @@ describe("stageFor / portraitFor", () => {
     expect(portraitFor("wife-01", 20, cfg)).toBe("avatars/wife-01-young.webp");
     expect(portraitFor("wife-01", 35, cfg)).toBe("avatars/wife-01-prime.webp");
     expect(portraitFor("wife-01", 55, cfg)).toBe("avatars/wife-01-old.webp");
+    // A 30-start hetaira only ever resolves prime (30-49) / old (50+) — never young.
+    expect(portraitFor("hetaira-30-1", 35, cfg)).toBe("avatars/hetaira-30-1-prime.webp");
+    expect(portraitFor("hetaira-30-1", 55, cfg)).toBe("avatars/hetaira-30-1-old.webp");
   });
   it("falls back to the nearest earlier available stage when art is missing", () => {
     // A synthetic avatar whose 'old' stage has no image -> should fall back to 'prime'.
     const partial: AgeConfig = {
       ...cfg,
-      avatars: [{ id: "a-x", sex: "male", startAge: 30, label: "x", portraits: { young: "y.png", prime: "p.png" } }],
+      avatars: [{ id: "a-x", sex: "male", pool: "player", startAge: 30, label: "x", portraits: { young: "y.png", prime: "p.png" } }],
     };
     expect(portraitFor("a-x", 60, partial)).toBe("p.png"); // old missing -> prime
-    const youngOnly: AgeConfig = { ...cfg, avatars: [{ id: "a-y", sex: "male", startAge: 30, label: "y", portraits: { young: "y.png" } }] };
+    const youngOnly: AgeConfig = { ...cfg, avatars: [{ id: "a-y", sex: "male", pool: "player", startAge: 30, label: "y", portraits: { young: "y.png" } }] };
     expect(portraitFor("a-y", 60, youngOnly)).toBe("y.png"); // old + prime missing -> young
   });
 });
@@ -183,13 +195,16 @@ describe("death age + isDeceased (helper only)", () => {
 });
 
 describe("config sanity", () => {
-  it("config loaded, 44 avatars (10 male + 34 female), all 3 portrait slots each", () => {
-    expect(cfg.avatars).toHaveLength(44);
+  it("config loaded, 54 avatars (10 player + 34 wife + 10 hetaira)", () => {
+    expect(cfg.avatars).toHaveLength(54);
+    // Portrait slots: player 10×3 + wife 34×3 + hetaira-20 5×3 + hetaira-30 5×2 = 157.
     const refs = cfg.avatars.flatMap((a) => Object.values(a.portraits));
-    expect(refs).toHaveLength(132);
+    expect(refs).toHaveLength(157);
     expect(avatarById("avatar-30-1", cfg)?.startAge).toBe(30);
-    // The wife pool is sex-tagged female (males default to "male" with no field).
-    expect(avatarById("wife-01", cfg)?.sex).toBe("female");
-    expect(avatarById("avatar-20-1", cfg)?.sex).toBe("male");
+    expect(avatarById("wife-01", cfg)?.pool).toBe("wife");
+    expect(avatarById("avatar-20-1", cfg)?.pool).toBe("player");
+    expect(avatarById("hetaira-20-1", cfg)?.pool).toBe("hetaira");
+    // The 30-start hetaira has only prime/old — a young stage is never requested.
+    expect(Object.keys(avatarById("hetaira-30-1", cfg)!.portraits).sort()).toEqual(["old", "prime"]);
   });
 });
