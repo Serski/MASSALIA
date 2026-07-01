@@ -2159,7 +2159,14 @@ const HOUSE_CREST: Record<string, string> = {
   leonidas: "Leonidas.png",
 };
 // Only Rome & Carthage have emblems yet; the other factions render text-only.
-const FACTION_ICON: Record<string, string> = { rome: "ROME CLEAR.webp", carthage: "CARTHAGE CLEAR.webp" };
+const FACTION_ICON: Record<string, string> = {
+  rome: "rome.webp", carthage: "carthage.webp", syracuse: "syracuse.webp",
+  cadurci: "cadurci.webp", ruteni: "ruteni.webp", helvii: "helvii.webp", gabali: "gabali.webp",
+  volcae: "volcae.webp", allobroges: "allobroges.webp", cavares: "cavares.webp",
+  vocontii: "vocontii.webp", saluvii: "saluvii.webp", veltanii: "veltanii.webp",
+  ligurians: "ligurians.webp", ausci: "ausci.webp", convenae: "convenae.webp",
+  tarusates: "tarusates.webp", ilergetae: "ilergetae.webp", lacetani: "lacetani.webp",
+};
 const PARTY_ICON: Record<string, string> = { dynatoi: "DYNATOI CLEAR.webp", palaioi: "PALAIOI CLEAR.webp" };
 const POP_WEBP: Record<string, string> = { citizen: "CITIZEN CLEAR.webp", freeman: "FREEMAN CLEAR.webp", slave: "SLAVE CLEAR.webp" };
 
