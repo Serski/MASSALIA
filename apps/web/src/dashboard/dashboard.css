@@ -3349,6 +3349,11 @@
   flex: none;
 }
 .dashboard-shell .stat-pip-icon{ width: 15px; height: 15px; vertical-align: middle; }
+/* Mobile: hide the diplomacy pip meter (redundant with the stance pill) so the
+   row fits and the name column can truncate instead of overflowing. */
+@media (max-width: 620px){
+  .dashboard-shell .dl-pips{ display: none; }
+}
 /* Ruler / heir / war-chief portrait in the Diplomacy detail panel: a framed square. */
 .dashboard-shell .faction-portrait{
   width: 56px;

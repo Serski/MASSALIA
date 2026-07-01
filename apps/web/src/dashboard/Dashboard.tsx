@@ -3876,7 +3876,7 @@ function PipMeter({ opinion, color }: { opinion: number; color: string }) {
     <span key={key} style={{ width: 6, height: 11, borderRadius: 1, background: on ? color : "var(--dash-line)" }} />
   );
   return (
-    <span aria-hidden="true" style={{ display: "flex", alignItems: "center", gap: 3, flex: "0 0 auto" }}>
+    <span aria-hidden="true" className="dl-pips" style={{ display: "flex", alignItems: "center", gap: 3, flex: "0 0 auto" }}>
       {[4, 3, 2, 1].map((rank) => pip(neg && rank <= filled, `l${rank}`))}
       <span style={{ width: 1, height: 14, background: "var(--dash-stone-dim)", margin: "0 2px" }} />
       {[1, 2, 3, 4].map((rank) => pip(pos && rank <= filled, `r${rank}`))}
@@ -3924,6 +3924,7 @@ const factionButtonStyle: CSSProperties = {
   gap: 12,
   padding: "10px 14px 10px 0",
   width: "100%",
+  minWidth: 0,
   textAlign: "left",
   font: "inherit",
   color: "inherit",
@@ -4135,18 +4136,17 @@ function DiplomacyView() {
                 >
                   <span aria-hidden="true" style={{ width: 3, alignSelf: "stretch", background: color, borderRadius: 0 }} />
                   {FACTION_ICON[f.id] ? <AssetIcon file={FACTION_ICON[f.id]!} alt="" className="asset-icon faction-emblem" /> : <span className="faction-emblem" aria-hidden="true" />}
-                  <span style={{ minWidth: 0 }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: 2, color: "var(--dash-parchment)", fontFamily: "var(--font-display)", fontSize: "1.05rem", lineHeight: 1.15 }}>
-                      {f.name}
+                  <span style={{ minWidth: 0, flex: 1 }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 2, minWidth: 0, color: "var(--dash-parchment)", fontFamily: "var(--font-display)", fontSize: "1.05rem", lineHeight: 1.15 }}>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{f.name}</span>
                       <FactionStatusBadges faction={f} />
                     </span>
                     {(f.ruler?.name ?? f.institutionLabel) ? (
-                      <span style={{ display: "block", color: "var(--dash-stone-dim)", fontSize: "0.8em", marginTop: 2 }}>
+                      <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--dash-stone-dim)", fontSize: "0.8em", marginTop: 2 }}>
                         {f.ruler?.name ?? f.institutionLabel}
                       </span>
                     ) : null}
                   </span>
-                  <span style={{ flex: 1 }} />
                   <PipMeter opinion={f.opinion} color={color} />
                   <span style={{ background: stanceTint(f.bandValue), color, fontWeight: 700, fontSize: "0.8em", textTransform: "uppercase", letterSpacing: "0.04em", padding: "5px 12px", borderRadius: 20, whiteSpace: "nowrap", flex: "0 0 auto" }}>
                     {f.bandLabel}
