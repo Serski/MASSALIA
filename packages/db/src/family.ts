@@ -37,8 +37,14 @@ export async function drawFamilyCandidates(characterId: string, args: DrawArgs):
   if (isFamilyLocked(character.classId, familyCfg)) return []; // slave: nothing is drawn
 
   const houseRows = await db.select({ slug: houses.slug, ideology: houses.startIdeology }).from(houses);
-  const avatarIds = ageCfg.avatars.map((avatar) => avatar.id);
-  const pickAvatar = () => (avatarIds.length ? avatarIds[Math.floor(Math.random() * avatarIds.length)]! : null);
+  // Pool avatars by sex so each candidate draws a same-sex portrait. Fall back to
+  // the male pool if a sex pool is empty (keeps working before art for a sex lands).
+  const avatarsBySex = { male: [] as string[], female: [] as string[] };
+  for (const a of ageCfg.avatars) (avatarsBySex[a.sex] ?? avatarsBySex.male).push(a.id);
+  const pickAvatarFor = (sex: "male" | "female") => {
+    const pool = avatarsBySex[sex]?.length ? avatarsBySex[sex] : avatarsBySex.male;
+    return pool.length ? pool[Math.floor(Math.random() * pool.length)]! : null;
+  };
 
   const purposes: { purpose: "marriage" | "adoption"; count: number; womenOnly: boolean }[] = [];
   if (canMarry(character.classId, familyCfg) && !character.spouseCandidateId) {
@@ -71,9 +77,7 @@ export async function drawFamilyCandidates(characterId: string, args: DrawArgs):
           militia: draft.militia,
           intelligence: draft.intelligence,
           traitId: draft.traitId,
-          // Art is generic male placeholders for now; pick any adult avatar (matched
-          // to sex once female art lands — see content/age avatars).
-          avatarId: pickAvatar(),
+          avatarId: pickAvatarFor(draft.sex),
           ideology: draft.ideology,
         })
         .returning();

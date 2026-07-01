@@ -35,6 +35,9 @@ export const ageConfigSchema = z
     avatars: z.array(
       z.object({
         id: z.string(),
+        // Sex-tags the pool so marriage/succession draws can match by sex. Optional
+        // with a "male" default so the pre-existing male entries (no field) validate.
+        sex: z.enum(["male", "female"]).default("male"),
         startAge: z.number(),
         label: z.string(),
         portraits: z.record(z.string(), z.string()),

@@ -123,9 +123,10 @@ describe("avatar -> startAge + start bonus", () => {
     expect(startBonusForAge(30, cfg)).toEqual({ prestige: 3, intelligence: 2 });
     expect(startAgeForAvatar("nope", cfg)).toBeNull();
   });
-  it("there are 10 avatars (5 per age)", () => {
-    expect(cfg.avatars.filter((a) => a.startAge === 20)).toHaveLength(5);
-    expect(cfg.avatars.filter((a) => a.startAge === 30)).toHaveLength(5);
+  it("has 10 male start-age avatars (5 per age) + the female wife pool", () => {
+    expect(cfg.avatars.filter((a) => a.sex === "male" && a.startAge === 20)).toHaveLength(5);
+    expect(cfg.avatars.filter((a) => a.sex === "male" && a.startAge === 30)).toHaveLength(5);
+    expect(cfg.avatars.filter((a) => a.sex === "female")).toHaveLength(34);
   });
 });
 
@@ -141,15 +142,19 @@ describe("stageFor / portraitFor", () => {
     expect(portraitFor("avatar-20-1", 35, cfg)).toBe("avatars/avatar-20-1-prime.png");
     expect(portraitFor("avatar-20-1", 60, cfg)).toBe("avatars/avatar-20-1-old.png");
     expect(portraitFor("missing", 30, cfg)).toBeNull();
+    // A wife ages through the same stage machinery to her real .webp art.
+    expect(portraitFor("wife-01", 20, cfg)).toBe("avatars/wife-01-young.webp");
+    expect(portraitFor("wife-01", 35, cfg)).toBe("avatars/wife-01-prime.webp");
+    expect(portraitFor("wife-01", 55, cfg)).toBe("avatars/wife-01-old.webp");
   });
   it("falls back to the nearest earlier available stage when art is missing", () => {
     // A synthetic avatar whose 'old' stage has no image -> should fall back to 'prime'.
     const partial: AgeConfig = {
       ...cfg,
-      avatars: [{ id: "a-x", startAge: 30, label: "x", portraits: { young: "y.png", prime: "p.png" } }],
+      avatars: [{ id: "a-x", sex: "male", startAge: 30, label: "x", portraits: { young: "y.png", prime: "p.png" } }],
     };
     expect(portraitFor("a-x", 60, partial)).toBe("p.png"); // old missing -> prime
-    const youngOnly: AgeConfig = { ...cfg, avatars: [{ id: "a-y", startAge: 30, label: "y", portraits: { young: "y.png" } }] };
+    const youngOnly: AgeConfig = { ...cfg, avatars: [{ id: "a-y", sex: "male", startAge: 30, label: "y", portraits: { young: "y.png" } }] };
     expect(portraitFor("a-y", 60, youngOnly)).toBe("y.png"); // old + prime missing -> young
   });
 });
@@ -172,10 +177,13 @@ describe("death age + isDeceased (helper only)", () => {
 });
 
 describe("config sanity", () => {
-  it("config loaded, 10 avatars, all 30 portrait slots referenced", () => {
-    expect(cfg.avatars).toHaveLength(10);
+  it("config loaded, 44 avatars (10 male + 34 female), all 3 portrait slots each", () => {
+    expect(cfg.avatars).toHaveLength(44);
     const refs = cfg.avatars.flatMap((a) => Object.values(a.portraits));
-    expect(refs).toHaveLength(30);
+    expect(refs).toHaveLength(132);
     expect(avatarById("avatar-30-1", cfg)?.startAge).toBe(30);
+    // The wife pool is sex-tagged female (males default to "male" with no field).
+    expect(avatarById("wife-01", cfg)?.sex).toBe("female");
+    expect(avatarById("avatar-20-1", cfg)?.sex).toBe("male");
   });
 });

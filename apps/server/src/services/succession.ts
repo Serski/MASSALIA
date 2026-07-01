@@ -33,10 +33,13 @@ function deadStats(row: CharacterRow): StatBlock {
   return { prestige: row.prestige, devotion: row.devotion, militia: row.militia, intelligence: row.intelligence };
 }
 
-function randomAdultAvatar(): string | null {
+function randomAdultAvatar(sex: Sex): string | null {
+  // Match the heir/regent's sex; fall back to the whole pool only if that sex has
+  // no art yet (keeps handoff working before a sex's portraits land).
   const avatars = getAgeConfig().avatars;
-  // Art is generic placeholder; pick any adult avatar (matched to sex once female art lands).
-  return avatars.length ? avatars[Math.floor(Math.random() * avatars.length)]!.id : null;
+  const pool = avatars.filter((a) => a.sex === sex);
+  const from = pool.length ? pool : avatars;
+  return from.length ? from[Math.floor(Math.random() * from.length)]!.id : null;
 }
 
 async function childInfos(characterId: string, now: Date) {
@@ -155,7 +158,7 @@ export async function enforceDeathAndHandoff(characterId: string, now: Date = ne
       const stats = bloodStats(deadStats(row), cfg, cfg.succession.prestigeCarryover.regent);
       await becomeHeir(
         row,
-        { name: ward.name, sex: ward.sex as Sex, age: cfg.succession.heirStartAge, avatarId: randomAdultAvatar(), stats, isRegent: false, regentForChildId: null },
+        { name: ward.name, sex: ward.sex as Sex, age: cfg.succession.heirStartAge, avatarId: randomAdultAvatar(ward.sex as Sex), stats, isRegent: false, regentForChildId: null },
         "regent_handoff",
         now,
         ward.id,
@@ -242,7 +245,7 @@ export async function resolveSuccession(row: CharacterRow, candidateId: string |
   if (plan.kind === "blood") {
     const heir = kids.find((k) => k.id === plan.heirChildId)!;
     const stats = inheritance(dead, "blood", cfg, { rng: Math.random });
-    await becomeHeir(row, { name: heir.name, sex: heir.sex, age: cfg.succession.heirStartAge, avatarId: randomAdultAvatar(), stats }, "blood", now, heir.id);
+    await becomeHeir(row, { name: heir.name, sex: heir.sex, age: cfg.succession.heirStartAge, avatarId: randomAdultAvatar(heir.sex), stats }, "blood", now, heir.id);
     return { ok: true, heirName: heir.name, kind: "blood" };
   }
 
@@ -260,7 +263,7 @@ export async function resolveSuccession(row: CharacterRow, candidateId: string |
     // The regent governs in trust: their OWN stats, holding the oligarch seat for the ward.
     await becomeHeir(
       row,
-      { name: regent.name, sex: regent.sex, age: regent.age, avatarId: randomAdultAvatar(), stats: { prestige: regent.prestige, devotion: regent.devotion, militia: regent.militia, intelligence: regent.intelligence }, isRegent: true, regentForChildId: ward.id },
+      { name: regent.name, sex: regent.sex, age: regent.age, avatarId: randomAdultAvatar(regent.sex), stats: { prestige: regent.prestige, devotion: regent.devotion, militia: regent.militia, intelligence: regent.intelligence }, isRegent: true, regentForChildId: ward.id },
       null, // a regency does not advance the generation — that waits for the handoff
       now,
     );
@@ -292,7 +295,7 @@ export async function resolveSuccession(row: CharacterRow, candidateId: string |
     militia: r.militia[0] + Math.floor(Math.random() * (r.militia[1] - r.militia[0] + 1)),
     intelligence: r.intelligence[0] + Math.floor(Math.random() * (r.intelligence[1] - r.intelligence[0] + 1)),
   };
-  await becomeHeir(row, { name, sex: row.sex as Sex, age: cfg.succession.heirStartAge, avatarId: randomAdultAvatar(), stats: fresh, drachmae: 10, isCouncilor: false }, "fresh", now);
+  await becomeHeir(row, { name, sex: row.sex as Sex, age: cfg.succession.heirStartAge, avatarId: randomAdultAvatar(row.sex as Sex), stats: fresh, drachmae: 10, isCouncilor: false }, "fresh", now);
   return { ok: true, heirName: name, kind: "fresh" };
 }
 

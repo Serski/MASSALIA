@@ -119,6 +119,380 @@
         "prime": "avatars/avatar-30-5-prime.png",
         "old": "avatars/avatar-30-5-old.png"
       }
+    },
+    {
+      "id": "wife-01",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-01-young.webp",
+        "prime": "avatars/wife-01-prime.webp",
+        "old": "avatars/wife-01-old.webp"
+      }
+    },
+    {
+      "id": "wife-02",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-02-young.webp",
+        "prime": "avatars/wife-02-prime.webp",
+        "old": "avatars/wife-02-old.webp"
+      }
+    },
+    {
+      "id": "wife-03",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-03-young.webp",
+        "prime": "avatars/wife-03-prime.webp",
+        "old": "avatars/wife-03-old.webp"
+      }
+    },
+    {
+      "id": "wife-04",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-04-young.webp",
+        "prime": "avatars/wife-04-prime.webp",
+        "old": "avatars/wife-04-old.webp"
+      }
+    },
+    {
+      "id": "wife-05",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-05-young.webp",
+        "prime": "avatars/wife-05-prime.webp",
+        "old": "avatars/wife-05-old.webp"
+      }
+    },
+    {
+      "id": "wife-06",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-06-young.webp",
+        "prime": "avatars/wife-06-prime.webp",
+        "old": "avatars/wife-06-old.webp"
+      }
+    },
+    {
+      "id": "wife-07",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-07-young.webp",
+        "prime": "avatars/wife-07-prime.webp",
+        "old": "avatars/wife-07-old.webp"
+      }
+    },
+    {
+      "id": "wife-08",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-08-young.webp",
+        "prime": "avatars/wife-08-prime.webp",
+        "old": "avatars/wife-08-old.webp"
+      }
+    },
+    {
+      "id": "wife-09",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-09-young.webp",
+        "prime": "avatars/wife-09-prime.webp",
+        "old": "avatars/wife-09-old.webp"
+      }
+    },
+    {
+      "id": "wife-10",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-10-young.webp",
+        "prime": "avatars/wife-10-prime.webp",
+        "old": "avatars/wife-10-old.webp"
+      }
+    },
+    {
+      "id": "wife-11",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-11-young.webp",
+        "prime": "avatars/wife-11-prime.webp",
+        "old": "avatars/wife-11-old.webp"
+      }
+    },
+    {
+      "id": "wife-12",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-12-young.webp",
+        "prime": "avatars/wife-12-prime.webp",
+        "old": "avatars/wife-12-old.webp"
+      }
+    },
+    {
+      "id": "wife-13",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-13-young.webp",
+        "prime": "avatars/wife-13-prime.webp",
+        "old": "avatars/wife-13-old.webp"
+      }
+    },
+    {
+      "id": "wife-14",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-14-young.webp",
+        "prime": "avatars/wife-14-prime.webp",
+        "old": "avatars/wife-14-old.webp"
+      }
+    },
+    {
+      "id": "wife-15",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-15-young.webp",
+        "prime": "avatars/wife-15-prime.webp",
+        "old": "avatars/wife-15-old.webp"
+      }
+    },
+    {
+      "id": "wife-16",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-16-young.webp",
+        "prime": "avatars/wife-16-prime.webp",
+        "old": "avatars/wife-16-old.webp"
+      }
+    },
+    {
+      "id": "wife-17",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-17-young.webp",
+        "prime": "avatars/wife-17-prime.webp",
+        "old": "avatars/wife-17-old.webp"
+      }
+    },
+    {
+      "id": "wife-18",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-18-young.webp",
+        "prime": "avatars/wife-18-prime.webp",
+        "old": "avatars/wife-18-old.webp"
+      }
+    },
+    {
+      "id": "wife-19",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-19-young.webp",
+        "prime": "avatars/wife-19-prime.webp",
+        "old": "avatars/wife-19-old.webp"
+      }
+    },
+    {
+      "id": "wife-20",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-20-young.webp",
+        "prime": "avatars/wife-20-prime.webp",
+        "old": "avatars/wife-20-old.webp"
+      }
+    },
+    {
+      "id": "wife-21",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-21-young.webp",
+        "prime": "avatars/wife-21-prime.webp",
+        "old": "avatars/wife-21-old.webp"
+      }
+    },
+    {
+      "id": "wife-22",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-22-young.webp",
+        "prime": "avatars/wife-22-prime.webp",
+        "old": "avatars/wife-22-old.webp"
+      }
+    },
+    {
+      "id": "wife-23",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-23-young.webp",
+        "prime": "avatars/wife-23-prime.webp",
+        "old": "avatars/wife-23-old.webp"
+      }
+    },
+    {
+      "id": "wife-24",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-24-young.webp",
+        "prime": "avatars/wife-24-prime.webp",
+        "old": "avatars/wife-24-old.webp"
+      }
+    },
+    {
+      "id": "wife-25",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-25-young.webp",
+        "prime": "avatars/wife-25-prime.webp",
+        "old": "avatars/wife-25-old.webp"
+      }
+    },
+    {
+      "id": "wife-26",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-26-young.webp",
+        "prime": "avatars/wife-26-prime.webp",
+        "old": "avatars/wife-26-old.webp"
+      }
+    },
+    {
+      "id": "wife-27",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-27-young.webp",
+        "prime": "avatars/wife-27-prime.webp",
+        "old": "avatars/wife-27-old.webp"
+      }
+    },
+    {
+      "id": "wife-28",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-28-young.webp",
+        "prime": "avatars/wife-28-prime.webp",
+        "old": "avatars/wife-28-old.webp"
+      }
+    },
+    {
+      "id": "wife-29",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-29-young.webp",
+        "prime": "avatars/wife-29-prime.webp",
+        "old": "avatars/wife-29-old.webp"
+      }
+    },
+    {
+      "id": "wife-30",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-30-young.webp",
+        "prime": "avatars/wife-30-prime.webp",
+        "old": "avatars/wife-30-old.webp"
+      }
+    },
+    {
+      "id": "wife-31",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-31-young.webp",
+        "prime": "avatars/wife-31-prime.webp",
+        "old": "avatars/wife-31-old.webp"
+      }
+    },
+    {
+      "id": "wife-32",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-32-young.webp",
+        "prime": "avatars/wife-32-prime.webp",
+        "old": "avatars/wife-32-old.webp"
+      }
+    },
+    {
+      "id": "wife-33",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-33-young.webp",
+        "prime": "avatars/wife-33-prime.webp",
+        "old": "avatars/wife-33-old.webp"
+      }
+    },
+    {
+      "id": "wife-34",
+      "sex": "female",
+      "startAge": 20,
+      "label": "Marriageable woman",
+      "portraits": {
+        "young": "avatars/wife-34-young.webp",
+        "prime": "avatars/wife-34-prime.webp",
+        "old": "avatars/wife-34-old.webp"
+      }
     }
   ],
   "portraitStages": [
