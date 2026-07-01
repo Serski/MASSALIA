@@ -3352,7 +3352,7 @@
 /* Mobile: hide the diplomacy pip meter (redundant with the stance pill) so the
    row fits and the name column can truncate instead of overflowing. */
 @media (max-width: 620px){
-  .dashboard-shell .dl-pips{ display: none; }
+  .dashboard-shell .dl-pips{ display: none !important; }
 }
 /* Ruler / heir / war-chief portrait in the Diplomacy detail panel: a framed square. */
 .dashboard-shell .faction-portrait{
