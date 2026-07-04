@@ -1,16 +1,16 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ComponentType, type LazyExoticComponent, type ReactNode } from "react";
 import { api, ApiError, type PlayerState } from "../api.js";
 import { assetPath, nobleHouses, professions, type House } from "../data/league.js";
 import { DashboardCard, type DashboardSection, type IconName, MoreIcon, type PanelProps, type PlayerDashboardState, type PlayerDashboardView, SvgIcon, playerFromState } from "./shared.js";
 import { AvatarImage, CharacterSheet, InventorySheet, type InventoryTab } from "./sheets.js";
 import { SuccessionScreen } from "./SuccessionScreen.js";
 import "./dashboard.css";
-import CourtPanel from "./panels/CourtPanel.js";
-import LedgerPanel from "./panels/LedgerPanel.js";
-import MarketPanel from "./panels/MarketPanel.js";
-import FamilyPanel from "./panels/FamilyPanel.js";
-import PoliticsPanel from "./panels/PoliticsPanel.js";
-import AtlasPanel from "./panels/AtlasPanel.js";
+const CourtPanel = lazy(() => import("./panels/CourtPanel.js"));
+const LedgerPanel = lazy(() => import("./panels/LedgerPanel.js"));
+const MarketPanel = lazy(() => import("./panels/MarketPanel.js"));
+const FamilyPanel = lazy(() => import("./panels/FamilyPanel.js"));
+const PoliticsPanel = lazy(() => import("./panels/PoliticsPanel.js"));
+const AtlasPanel = lazy(() => import("./panels/AtlasPanel.js"));
 
 type DashboardNavItem = {
   id: DashboardSection;
@@ -94,7 +94,7 @@ function seasonIcon(seasonName: string): string {
 
 // TODO: real "new items" badge once the items system exists. 0 = nothing to show.
 const PLACEHOLDER_NEW_ITEM_COUNT = 0;
-const panelComponents: Record<DashboardSection, (props: PanelProps) => ReactNode> = {
+const panelComponents: Record<DashboardSection, LazyExoticComponent<ComponentType<PanelProps>>> = {
   court: CourtPanel,
   ledger: LedgerPanel,
   market: MarketPanel,
@@ -281,7 +281,9 @@ export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () =
               </DashboardCard>
             </section>
           ) : playerState ? (
-            <ActivePanel player={player} onRefresh={refreshState} />
+            <Suspense fallback={<div className="dashboard-panel-loading" aria-busy="true" />}>
+              <ActivePanel player={player} onRefresh={refreshState} />
+            </Suspense>
           ) : (
             <section className="dashboard-panel">
               <DashboardCard>
