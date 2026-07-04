@@ -42,7 +42,10 @@ import { electionConfig } from "@massalia/shared";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../..");
 
-const app = Fastify({ logger: true });
+// trustProxy: 1 trusts exactly one hop (Railway's edge proxy) — NOT `true`, which
+// would trust arbitrary client-supplied X-Forwarded-For chains and let an attacker
+// spoof their IP to bypass per-IP rate limiting.
+const app = Fastify({ logger: true, trustProxy: 1 });
 const sessionSecret = process.env.SESSION_SECRET;
 
 if (!sessionSecret || sessionSecret.length < 32) {

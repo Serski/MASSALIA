@@ -1,18 +1,37 @@
 import bcrypt from "bcryptjs";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
+import rateLimit from "@fastify/rate-limit";
+import Redis from "ioredis";
 import { and, eq } from "drizzle-orm";
 import { createDb, players, users, worlds } from "@massalia/db";
 import { clearSession, createSession, getAuthUser } from "../services/auth.js";
 
 const db = createDb();
 
+// Redis client backing the auth rate limiter. Mirrors services/queue.ts fail-fast
+// options so a Redis blip never blocks request handlers; when REDIS_URL is unset
+// (dev/tests) the limiter falls back to @fastify/rate-limit's in-memory store.
+function createLimiterRedis(): Redis | undefined {
+  const url = process.env.REDIS_URL;
+  if (!url) return undefined;
+  const client = new Redis(url, {
+    enableOfflineQueue: false,
+    connectTimeout: 1000,
+    maxRetriesPerRequest: null,
+    retryStrategy: (times: number) => (times > 3 ? null : Math.min(times * 100, 500)),
+  });
+  // Never crash the server because Redis blinked — the limiter fails open (skipOnError).
+  client.on("error", (error: Error) => {
+    console.warn(`Auth rate-limit Redis error (failing open): ${error.message}`);
+  });
+  return client;
+}
+
 type AuthPayload = {
   email?: string;
   password?: string;
   newsletterOptIn?: boolean;
 };
-
-const authAttempts = new Map<string, { count: number; resetAt: number }>();
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -34,22 +53,6 @@ function assertAuthPayload(payload: AuthPayload) {
   return { email, password };
 }
 
-function checkRateLimit(request: FastifyRequest) {
-  const key = `${request.ip}:${request.url}`;
-  const now = Date.now();
-  const current = authAttempts.get(key);
-  if (!current || current.resetAt < now) {
-    authAttempts.set(key, { count: 1, resetAt: now + 60_000 });
-    return;
-  }
-  current.count += 1;
-  if (current.count > 8) {
-    const error = new Error("Too many attempts. Try again shortly.");
-    (error as Error & { statusCode?: number }).statusCode = 429;
-    throw error;
-  }
-}
-
 async function hasCharacter(userId: string) {
   const activeWorld = await db.select().from(worlds).where(eq(worlds.status, "active")).limit(1);
   const world = activeWorld[0];
@@ -63,8 +66,25 @@ async function hasCharacter(userId: string) {
 }
 
 export async function authRoutes(app: FastifyInstance) {
-  app.post("/register", async (request, reply) => {
-    checkRateLimit(request);
+  // Per-client-IP limiter, scoped to this auth plugin (global: false) so only the
+  // register/login routes below opt in — /logout, /me and everything else stay
+  // unlimited. Redis store in prod (shared across instances, survives deploys),
+  // in-memory otherwise. skipOnError fails open: a Redis error lets the request
+  // through rather than blocking auth (matches queue.ts best-effort-Redis policy).
+  const limiterRedis = createLimiterRedis();
+  await app.register(rateLimit, {
+    global: false,
+    max: 8,
+    timeWindow: 60_000,
+    skipOnError: true,
+    ...(limiterRedis ? { redis: limiterRedis } : {}),
+    // @fastify/rate-limit throws whatever this returns; include statusCode so
+    // Fastify responds 429 (not 500), and expose `error` so the web client (api.ts)
+    // shows the friendly message instead of Fastify's generic "Too Many Requests".
+    errorResponseBuilder: () => ({ statusCode: 429, error: "Too many attempts. Try again shortly." }),
+  });
+
+  app.post("/register", { config: { rateLimit: { max: 8, timeWindow: 60_000 } } }, async (request, reply) => {
     const { email, password } = assertAuthPayload(request.body as AuthPayload);
     const newsletterOptIn = (request.body as AuthPayload).newsletterOptIn === true;
     const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
@@ -83,8 +103,7 @@ export async function authRoutes(app: FastifyInstance) {
     return { user, hasCharacter: false, token };
   });
 
-  app.post("/login", async (request, reply) => {
-    checkRateLimit(request);
+  app.post("/login", { config: { rateLimit: { max: 8, timeWindow: 60_000 } } }, async (request, reply) => {
     const { email, password } = assertAuthPayload(request.body as AuthPayload);
     const found = await db.select().from(users).where(eq(users.email, email)).limit(1);
     const user = found[0];
