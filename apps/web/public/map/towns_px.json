@@ -1,0 +1,240 @@
+{
+ "width": 2400,
+ "height": 1991,
+ "towns": [
+  {
+   "name": "Massalia",
+   "lon": 5.37,
+   "lat": 43.3,
+   "polity": "massalia",
+   "approx": false,
+   "x": 1248.7,
+   "y": 841.9
+  },
+  {
+   "name": "Arelate",
+   "lon": 4.63,
+   "lat": 43.68,
+   "polity": "massalia",
+   "approx": false,
+   "x": 1201.5,
+   "y": 809.4
+  },
+  {
+   "name": "Agathe",
+   "lon": 3.46,
+   "lat": 43.31,
+   "polity": "massalia",
+   "approx": false,
+   "x": 1127.4,
+   "y": 841.6
+  },
+  {
+   "name": "Olbia",
+   "lon": 6.13,
+   "lat": 43.09,
+   "polity": "massalia",
+   "approx": false,
+   "x": 1297.4,
+   "y": 859.2
+  },
+  {
+   "name": "Athinopolis",
+   "lon": 6.55,
+   "lat": 43.28,
+   "polity": "massalia",
+   "approx": true,
+   "x": 1323.6,
+   "y": 841.9
+  },
+  {
+   "name": "Antipolis",
+   "lon": 7.13,
+   "lat": 43.58,
+   "polity": "massalia",
+   "approx": false,
+   "x": 1359.5,
+   "y": 814.7
+  },
+  {
+   "name": "Nikaia",
+   "lon": 7.27,
+   "lat": 43.7,
+   "polity": "massalia",
+   "approx": false,
+   "x": 1368.0,
+   "y": 803.9
+  },
+  {
+   "name": "Monoikos",
+   "lon": 7.42,
+   "lat": 43.73,
+   "polity": "massalia",
+   "approx": false,
+   "x": 1377.3,
+   "y": 800.9
+  },
+  {
+   "name": "Rhoda",
+   "lon": 3.18,
+   "lat": 42.26,
+   "polity": "massalia",
+   "approx": false,
+   "x": 1108.8,
+   "y": 932.7
+  },
+  {
+   "name": "Emporion",
+   "lon": 3.12,
+   "lat": 42.13,
+   "polity": "massalia",
+   "approx": false,
+   "x": 1104.8,
+   "y": 944.0
+  },
+  {
+   "name": "Philonis",
+   "lon": 2.82,
+   "lat": 41.68,
+   "polity": "massalia",
+   "approx": true,
+   "x": 1084.9,
+   "y": 982.8
+  },
+  {
+   "name": "Aleria",
+   "lon": 9.51,
+   "lat": 42.1,
+   "polity": "massalia",
+   "approx": false,
+   "x": 1517.9,
+   "y": 935.6
+  },
+  {
+   "name": "Herouxopolis",
+   "lon": 9.35,
+   "lat": 42.95,
+   "polity": "massalia",
+   "approx": true,
+   "x": 1503.1,
+   "y": 862.5
+  },
+  {
+   "name": "Entermont",
+   "lon": 5.44,
+   "lat": 43.55,
+   "polity": "saluvii",
+   "approx": false,
+   "x": 1252.8,
+   "y": 820.1
+  },
+  {
+   "name": "Stalia",
+   "lon": 8.55,
+   "lat": 44.33,
+   "polity": "ligurians",
+   "approx": true,
+   "x": 1445.8,
+   "y": 745.5
+  },
+  {
+   "name": "Montlares",
+   "lon": 3.0,
+   "lat": 43.21,
+   "polity": "elisyces",
+   "approx": false,
+   "x": 1098.1,
+   "y": 850.0
+  },
+  {
+   "name": "Pechmaho",
+   "lon": 2.98,
+   "lat": 43.03,
+   "polity": "elisyces",
+   "approx": false,
+   "x": 1096.7,
+   "y": 865.7
+  },
+  {
+   "name": "Nemausus",
+   "lon": 4.36,
+   "lat": 43.84,
+   "polity": "volcae",
+   "approx": false,
+   "x": 1184.4,
+   "y": 795.6
+  },
+  {
+   "name": "Mailhac",
+   "lon": 2.83,
+   "lat": 43.3,
+   "polity": "volcae",
+   "approx": false,
+   "x": 1087.4,
+   "y": 842.1
+  },
+  {
+   "name": "Carsac",
+   "lon": 2.32,
+   "lat": 43.19,
+   "polity": "volcae",
+   "approx": false,
+   "x": 1054.8,
+   "y": 851.1
+  },
+  {
+   "name": "Tolosa",
+   "lon": 1.44,
+   "lat": 43.6,
+   "polity": "volcae",
+   "approx": false,
+   "x": 999.9,
+   "y": 814.1
+  },
+  {
+   "name": "Albi",
+   "lon": 2.15,
+   "lat": 43.93,
+   "polity": "volcae",
+   "approx": false,
+   "x": 1045.4,
+   "y": 786.5
+  },
+  {
+   "name": "Vaison",
+   "lon": 5.07,
+   "lat": 44.24,
+   "polity": "cavares",
+   "approx": false,
+   "x": 1228.6,
+   "y": 760.4
+  },
+  {
+   "name": "Velleron",
+   "lon": 4.96,
+   "lat": 43.96,
+   "polity": "cavares",
+   "approx": false,
+   "x": 1222.0,
+   "y": 784.8
+  },
+  {
+   "name": "Arnaud",
+   "lon": 5.5,
+   "lat": 44.42,
+   "polity": "vocontii",
+   "approx": true,
+   "x": 1255.3,
+   "y": 744.3
+  },
+  {
+   "name": "Ramasse",
+   "lon": 3.55,
+   "lat": 44.32,
+   "polity": "gabati",
+   "approx": true,
+   "x": 1133.6,
+   "y": 753.8
+  }
+ ]
+}

@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { boolean, date, index, integer, jsonb, numeric, pgTable, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, date, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const worlds = pgTable("worlds", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -780,3 +780,85 @@ export const provinceRelations = relations(provinces, ({ one, many }) => ({
   faction: one(factions, { fields: [provinces.factionId], references: [factions.id] }),
   buildings: many(buildings),
 }));
+
+// --- Province/map system (map_ prefix) --------------------------------------
+// The NEW geographic province mesh (Western Mediterranean, 300 BC) — distinct
+// from the economy `provinces` table above. These six tables are created by the
+// hand-written SQL migration 0034; the defs below describe the LIVE tables AS-IS
+// for typed access (seed + map API). They are NOT drizzle-kit managed — the SQL
+// migration is the source of truth; constraint/index names mirror 0034.
+//
+// Geometry + reference tables (mapProvinces, mapProvinceAdjacency, mapPolities,
+// mapTowns) are global. Only the ownership tables (mapProvinceState,
+// mapProvinceHistory) carry worldId — a plain text scope key defaulting to
+// 'season-1' (no worlds FK for this system yet), so a second season needs no
+// retrofit. Every query scopes by it from day one.
+
+export const mapPolities = pgTable("map_polities", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  color: text("color").notNull(),
+});
+
+export const mapProvinces = pgTable("map_provinces", {
+  id: text("id").primaryKey(),
+  // 'land' | 'sea' | 'wasteland'
+  type: text("type").notNull(),
+  terrain: text("terrain").notNull(),
+  coastal: boolean("coastal").notNull().default(false),
+});
+
+// Undirected border pairs, stored one direction only (province_a is the low id of
+// the PK; province_b is indexed for reverse-direction neighbour lookups).
+export const mapProvinceAdjacency = pgTable("map_province_adjacency", {
+  provinceA: text("province_a").references(() => mapProvinces.id).notNull(),
+  provinceB: text("province_b").references(() => mapProvinces.id).notNull(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.provinceA, table.provinceB] }),
+  bIdx: index("map_province_adjacency_b_idx").on(table.provinceB),
+  // Canonical one-direction form is structural — a pair can't be stored both ways.
+  canonical: check("map_province_adjacency_canonical", sql`${table.provinceA} < ${table.provinceB}`),
+}));
+
+// owner vs controller kept separate ON PURPOSE: controller = wartime occupation,
+// owner = peacetime annexation. One row per (world, province); land only (sea and
+// wasteland have no row); owner may be null (unclaimed).
+export const mapProvinceState = pgTable("map_province_state", {
+  worldId: text("world_id").notNull().default("season-1"),
+  provinceId: text("province_id").references(() => mapProvinces.id).notNull(),
+  ownerPolityId: text("owner_polity_id").references(() => mapPolities.id),
+  controllerPolityId: text("controller_polity_id").references(() => mapPolities.id),
+  sinceTick: integer("since_tick").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.worldId, table.provinceId] }),
+}));
+
+// Append-only ownership log for season replays. change_type: 'seed' | 'owner' |
+// 'controller'; polity_id null = became unclaimed.
+export const mapProvinceHistory = pgTable("map_province_history", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: text("world_id").notNull().default("season-1"),
+  provinceId: text("province_id").references(() => mapProvinces.id).notNull(),
+  polityId: text("polity_id").references(() => mapPolities.id),
+  changeType: text("change_type").notNull(),
+  tick: integer("tick").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  worldProvinceIdx: index("map_province_history_world_province_idx").on(table.worldId, table.provinceId),
+  // Replay reads a whole world in tick order.
+  worldTickIdx: index("map_province_history_world_tick_idx").on(table.worldId, table.tick),
+}));
+
+// Named settlements. province_id resolved at seed time (point-in-polygon, nearest-
+// land fallback). lon/lat WGS84; px_x/px_y the shared 2400x1991 pixel space.
+export const mapTowns = pgTable("map_towns", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  provinceId: text("province_id").references(() => mapProvinces.id),
+  polityId: text("polity_id").references(() => mapPolities.id),
+  lon: numeric("lon").notNull(),
+  lat: numeric("lat").notNull(),
+  pxX: numeric("px_x").notNull(),
+  pxY: numeric("px_y").notNull(),
+});
