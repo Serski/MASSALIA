@@ -195,6 +195,9 @@ export async function mapRoutes(app: FastifyInstance) {
     // hook — so echo the CORS headers here or the browser blocks the cross-origin
     // EventSource/fetch. The preflight (handled by @fastify/cors) already enforced
     // the allowed origin, so echoing request.origin here is safe.
+    // KEEP IN SYNC with the @fastify/cors config in apps/server/src/index.ts: because
+    // this path opts out of the plugin, any change there (allowed origin, credentials)
+    // must be mirrored here by hand — the plugin will NOT cover this response.
     const origin = request.headers.origin;
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream",
