@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type R
 import { api, apiErrorMessage } from "./api.js";
 import { CharacterCreation } from "./CharacterCreation.js";
 import { Dashboard } from "./dashboard/Dashboard.js";
+import { ProvinceMap } from "./map/ProvinceMap.js";
 import { assetPath, nobleHouses, professions, type Alignment, type House, type Profession } from "./data/league.js";
 
 type DetailKind = "profession" | "house" | "party" | "city";
@@ -556,6 +557,12 @@ export function App() {
 
   if (pathname === "/game") {
     return <Dashboard onExit={() => navigateTo("/")} onRequireLogin={() => navigateTo("/login")} onRequireCharacter={() => navigateTo("/create")} />;
+  }
+
+  // Dev route for the province/map system — open /map to see the seeded 300 BC map
+  // with live conquest (requires a logged-in session, like the rest of the app).
+  if (pathname === "/map") {
+    return <ProvinceMap />;
   }
 
   if (authRouteMode) {

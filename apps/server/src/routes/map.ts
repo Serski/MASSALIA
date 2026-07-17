@@ -191,10 +191,16 @@ export async function mapRoutes(app: FastifyInstance) {
     const db = (_db ??= createDb());
     await requireAuth(request);
 
+    // The stream writes to reply.raw directly, which bypasses @fastify/cors' onSend
+    // hook — so echo the CORS headers here or the browser blocks the cross-origin
+    // EventSource/fetch. The preflight (handled by @fastify/cors) already enforced
+    // the allowed origin, so echoing request.origin here is safe.
+    const origin = request.headers.origin;
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
+      ...(origin ? { "Access-Control-Allow-Origin": origin, "Access-Control-Allow-Credentials": "true", Vary: "Origin" } : {}),
     });
 
     // Initial snapshot (full state) — the only full-state push per connection.

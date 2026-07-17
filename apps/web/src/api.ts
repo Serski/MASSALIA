@@ -212,6 +212,74 @@ async function authenticate(path: string, body: Record<string, unknown>): Promis
   return result;
 }
 
+// --- Province/map system (map API) ------------------------------------------
+export type MapPolity = { id: string; name: string; color: string };
+export type MapStateProvince = {
+  provinceId: string;
+  type: string;
+  terrain: string;
+  coastal: boolean;
+  ownerPolityId: string | null;
+  controllerPolityId: string | null;
+  sinceTick: number;
+};
+export type MapTown = { id: string; name: string; provinceId: string | null; polityId: string | null; lon: number; lat: number; pxX: number; pxY: number };
+export type MapState = { worldId: string; tick: number; polities: MapPolity[]; provinces: MapStateProvince[]; towns: MapTown[] };
+export type MapChangeType = "occupy" | "annex";
+export type MapProvinceChange = {
+  provinceId: string;
+  ownerPolityId: string | null;
+  controllerPolityId: string | null;
+  sinceTick: number;
+  tick: number;
+  changeType: string;
+};
+
+// Subscribe to the map realtime stream. EventSource can't send the Authorization
+// header (and the dev cookie is cross-site SameSite=lax, so it wouldn't flow
+// either), so we consume the SSE with fetch streaming + the Bearer token instead.
+// onState fires once with the initial snapshot; onChange fires per conquest.
+// Returns an unsubscribe function that aborts the request.
+export function streamMap(handlers: { onState?: (state: MapState) => void; onChange?: (change: MapProvinceChange) => void; onError?: (error: unknown) => void }): () => void {
+  const controller = new AbortController();
+  const token = getStoredToken();
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  (async () => {
+    const response = await fetch(`${apiBaseUrl}/api/map/stream`, { headers, credentials: "include", signal: controller.signal });
+    if (!response.ok || !response.body) throw new ApiError("Map stream failed", response.status);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      // SSE frames are separated by a blank line.
+      let sep;
+      while ((sep = buffer.indexOf("\n\n")) !== -1) {
+        const frame = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        let event = "message";
+        let data = "";
+        for (const line of frame.split("\n")) {
+          if (line.startsWith("event:")) event = line.slice(6).trim();
+          else if (line.startsWith("data:")) data += line.slice(5).trim();
+        }
+        if (!data) continue;
+        const parsed = JSON.parse(data);
+        if (event === "state") handlers.onState?.(parsed as MapState);
+        else if (event === "change") handlers.onChange?.(parsed as MapProvinceChange);
+      }
+    }
+  })().catch((error) => {
+    if (!controller.signal.aborted) handlers.onError?.(error);
+  });
+
+  return () => controller.abort();
+}
+
 export const api = {
   register: (email: string, password: string, newsletterOptIn = false) =>
     authenticate("/auth/register", { email, password, newsletterOptIn }),
@@ -328,6 +396,11 @@ export const api = {
   takeContract: (contractId: string) => apiFetch<MercActionResult>("/api/merc/take", { method: "POST", body: { contractId } }),
   cancelContract: () => apiFetch<MercActionResult>("/api/merc/cancel", { method: "POST" }),
   collectForeign: () => apiFetch<MercActionResult>("/api/merc/collect", { method: "POST" }),
+  // Province/map system: full ownership state, and a conquest ('occupy' takes
+  // control only; 'annex' takes owner + control). Live updates arrive via streamMap.
+  mapState: () => apiFetch<MapState>("/api/map/state"),
+  conquerProvince: (provinceId: string, polityId: string, changeType: MapChangeType) =>
+    apiFetch<{ ok: true; change: MapProvinceChange }>(`/api/map/state/${provinceId}`, { method: "POST", body: { polityId, changeType } }),
 };
 
 // --- Archon & Ephor elections (Politics Prompt 2) ---------------------------
