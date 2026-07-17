@@ -1,0 +1,74 @@
+{
+ "massalia": {
+  "name": "Massalia",
+  "color": "#d4a24a"
+ },
+ "saluvii": {
+  "name": "Saluvii",
+  "color": "#6b4f5b"
+ },
+ "ligurians": {
+  "name": "Ligurians",
+  "color": "#7d5a6b"
+ },
+ "elisyces": {
+  "name": "Elisyces",
+  "color": "#75566b"
+ },
+ "volcae": {
+  "name": "Volcae",
+  "color": "#3e5e3a"
+ },
+ "cavares": {
+  "name": "Cavares",
+  "color": "#57764d"
+ },
+ "vocontii": {
+  "name": "Vocontii",
+  "color": "#42603d"
+ },
+ "helvii": {
+  "name": "Helvii",
+  "color": "#5d7a52"
+ },
+ "allobriges": {
+  "name": "Allobriges",
+  "color": "#68855c"
+ },
+ "veltanii": {
+  "name": "Veltanii",
+  "color": "#4c6b45"
+ },
+ "gabati": {
+  "name": "Gabati",
+  "color": "#5a7850"
+ },
+ "ruteni": {
+  "name": "Ruteni",
+  "color": "#637f56"
+ },
+ "cadurci": {
+  "name": "Cadurci",
+  "color": "#6e8a60"
+ },
+ "trusates": {
+  "name": "Trusates",
+  "color": "#607c54"
+ },
+ "ausci": {
+  "name": "Ausci",
+  "color": "#6a865c"
+ },
+ "convenae": {
+  "name": "Convenae",
+  "color": "#597550"
+ },
+ "llergetae": {
+  "name": "Llergetae",
+  "color": "#7a8a55"
+ },
+ "lacetani": {
+  "name": "Lacetani",
+  "color": "#84925e"
+ }
+}
