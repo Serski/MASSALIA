@@ -551,6 +551,30 @@ export function PopGlyph({ type }: { type: string }) {
   return <AssetIcon file={file} alt="" className="asset-icon pop-glyph" fallback={emoji} />;
 }
 
+// Building art lives in assets/buildings/. Class buildings carry one image per
+// tier (<id>-<tier>.webp, e.g. estate-1.webp); commons have a single image
+// (<id>.webp, e.g. vineyard.webp). EXACT on-disk filenames — do not rename.
+export function buildingArtFile(id: string, kind: "class" | "common", tier = 1): string {
+  return kind === "class" ? `buildings/${id}-${tier}.webp` : `buildings/${id}.webp`;
+}
+
+// A building emblem for a row's icon slot: the tier's art when present, else the
+// building's emoji icon (AssetIcon degrades gracefully if the file is missing).
+export function BuildingGlyph({
+  id,
+  kind,
+  tier = 1,
+  icon,
+}: {
+  id: string;
+  kind: "class" | "common";
+  tier?: number;
+  icon?: string;
+}) {
+  const emoji = <span aria-hidden="true">{icon ?? "🏛️"}</span>;
+  return <AssetIcon file={buildingArtFile(id, kind, tier)} alt="" className="asset-icon building-glyph" fallback={emoji} />;
+}
+
 // A house crest for a standings row, keyed by the row's house display name.
 export function HouseCrest({ house }: { house: string }) {
   const file = HOUSE_CREST[house.toLowerCase()];

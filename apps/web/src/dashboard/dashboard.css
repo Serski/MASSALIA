@@ -3366,6 +3366,18 @@
 }
 .dashboard-shell .party-icon{ width: 14px; height: 14px; margin-right: 2px; vertical-align: -2px; }
 .dashboard-shell .pop-glyph{ width: 22px; height: 22px; vertical-align: middle; }
+/* Building emblem in a row's icon slot: fills the 36px .pr-ic box as a thumbnail. */
+.dashboard-shell .building-glyph{ width: 34px; height: 34px; border-radius: 7px; object-fit: cover; vertical-align: middle; }
+/* Class-building tier-ladder art: a framed thumbnail per tier step. */
+.dashboard-shell .tier-art{
+  width: 54px;
+  height: 54px;
+  flex: none;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid var(--dash-line);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
 .dashboard-shell .stat-tab-icon{ width: 15px; height: 15px; margin-right: 6px; vertical-align: -3px; }
 .dashboard-shell .stat-tab-coin{ display: inline-block; margin-right: 5px; font-size: 13px; line-height: 1; filter: saturate(0.85); }
 

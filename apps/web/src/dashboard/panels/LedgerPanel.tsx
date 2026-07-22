@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type BuildingsCatalog, type BuildingsMine, type CatalogEntry, type OwnedBuilding, type ClassSection, type VendorPrice, type ServiceView, type MercBoard, type RiskOutcome } from "../../api.js";
 import { assetPath } from "../../data/league.js";
-import { GOOD_ICON, PanelBanner, type PanelProps, PanelRow, buildCountdown, formatPerDay, idleReason, popName } from "../shared.js";
+import { AssetIcon, BuildingGlyph, GOOD_ICON, PanelBanner, type PanelProps, PanelRow, buildCountdown, buildingArtFile, formatPerDay, idleReason, popName } from "../shared.js";
 
 // What a building provides per day: drachmae income first (income-only lines like
 // trader/philosopher/hetaira would otherwise read blank), then each good. Income
@@ -98,6 +98,7 @@ function ClassBuildingLadder({
         return (
           <li key={t.tier} className={`tier-step tier-${state}${idle ? " tier-idle" : ""}`}>
             <span className="tier-marker" aria-hidden="true">{isBuilt ? "✓" : t.tier}</span>
+            <AssetIcon file={buildingArtFile(entry.id, "class", t.tier)} alt="" className="tier-art" fallback={null} />
             <div className="tier-body">
               <div className="tier-head">
                 <span className="tier-name">
@@ -643,7 +644,7 @@ export default function LedgerPanel({ player, onRefresh }: PanelProps) {
     return (
     <PanelRow
       key={b.id}
-      icon={b.icon ?? "🏛️"}
+      icon={<BuildingGlyph id={b.id} kind={b.kind} tier={b.tier} icon={b.icon} />}
       title={`${b.name}${b.kind === "class" ? ` · Tier ${b.tier}` : ""}`}
       sub={
         b.status === "constructing"
@@ -694,7 +695,7 @@ export default function LedgerPanel({ player, onRefresh }: PanelProps) {
     return (
       <PanelRow
         key={entry.id}
-        icon={entry.icon ?? "🏛️"}
+        icon={<BuildingGlyph id={entry.id} kind={entry.kind} icon={entry.icon} />}
         title={entry.name}
         sub={
           disabled ? disabled : (
