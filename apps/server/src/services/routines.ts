@@ -19,9 +19,11 @@ import {
   type CharacterStats,
   type RoutineCard,
   type RoutinesConfig,
+  type Trait,
 } from "@massalia/shared";
 import { applyComposureDelta, getComposureConfig, recoverComposure } from "./composure.js";
 import { getAgeConfig } from "./age.js";
+import { livingSpousePersonalityTraits } from "./family.js";
 import { addTrait, getHeldTraits, removeTrait, TraitRuleError } from "./traits.js";
 import { utcDayString } from "./dailyDecisions.js";
 import { eligibleForCampaign, grantCampaignFavor } from "./elections.js";
@@ -160,6 +162,10 @@ export function previewRoutine(
   row: Pick<CharacterRow, "classId" | "growthMultiplier">,
   traits: Parameters<typeof describeComposureDelta>[0],
   ownedBuildingIds: Set<string> = new Set(),
+  // Living-spouse personality (resolved by the caller via
+  // livingSpousePersonalityTraits) — [] when unmarried/widowed. Threaded in as a
+  // param so this stays a pure, sync preview; the apply path resolves its own.
+  spouseTraits: Trait[] = [],
 ): RoutinePreview {
   const cfg = getRoutinesConfig();
   const resolved = applyClassMods(card, row.classId, cfg);
@@ -169,7 +175,7 @@ export function previewRoutine(
     effect.type === "change_stat" ? { ...effect, amount: applyStatGrowth(effect.amount, growth) } : effect,
   );
 
-  const tag = describeComposureDelta(traits, card.tags, 0, getComposureConfig());
+  const tag = describeComposureDelta(traits, card.tags, 0, getComposureConfig(), spouseTraits);
   const composureFromEffects = resolved.effects
     .filter((effect): effect is Extract<typeof effect, { type: "change_composure" }> => effect.type === "change_composure")
     .reduce((sum, effect) => sum + effect.amount, 0);
@@ -293,7 +299,10 @@ export async function resolveRoutine(row: CharacterRow, routineId: string, now: 
 
   // Combined composure delta (tag pipeline + explicit change_composure + classMods bonus).
   const traits = await getHeldTraits(row.id);
-  const tag = describeComposureDelta(traits, card.tags, 0, getComposureConfig());
+  // The apply path resolves the spouse itself (same helper the preview route uses,
+  // so the two never disagree about whether she is alive).
+  const spouseTraits = await livingSpousePersonalityTraits(row, now);
+  const tag = describeComposureDelta(traits, card.tags, 0, getComposureConfig(), spouseTraits);
   const composureFromEffects = resolved.effects
     .filter((effect): effect is Extract<typeof effect, { type: "change_composure" }> => effect.type === "change_composure")
     .reduce((sum, effect) => sum + effect.amount, 0);

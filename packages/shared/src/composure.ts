@@ -16,12 +16,19 @@ export const composureConfigSchema = z
     breakResetValue: z.number(),
     maxCopingTraits: z.number().int(),
     copingPool: z.array(z.string()),
+    // How heavily a spouse's personality weighs versus the player's own nature
+    // (family pack). Her conflict cost / embrace gain are multiplied by this
+    // before joining the total. Optional; defaults to SPOUSE_WEIGHT_DEFAULT.
+    spouseWeight: z.number().optional(),
     // Optional tunables from the content pack (accepted; behaviour may use them later).
     startingComposure: z.number().optional(),
     breakLockoutDays: z.number().optional(),
     escalation: z.object({ fromBreakNumber: z.number(), prestigePenalty: z.number() }).optional(),
   })
   .strict();
+
+// A spouse's nature must not weigh as heavily as the player's own convictions.
+export const SPOUSE_WEIGHT_DEFAULT = 0.45;
 
 export type ComposureConfig = z.infer<typeof composureConfigSchema>;
 
@@ -47,6 +54,7 @@ export function computeComposureDelta(
   choiceTags: string[],
   ideologyDelta: number,
   config: ComposureConfig,
+  spouseTraits: Trait[] = [],
 ): number {
   const tags = new Set(choiceTags);
   let delta = 0;
@@ -64,6 +72,16 @@ export function computeComposureDelta(
     delta -= Math.abs(ideologyDelta) * config.driftCostFactor;
   }
 
+  // A living spouse reacts to the same tags at a reduced weight — she is not the
+  // player, so her nature moves the number less. Excluded from the ideology-drift
+  // clause above (that models the player's own convictions). Added into the same
+  // running total so the clamp + single round below apply to the COMBINED result.
+  const spouseWeight = config.spouseWeight ?? SPOUSE_WEIGHT_DEFAULT;
+  for (const trait of spouseTraits) {
+    if (intersects(trait.opposes, tags)) delta -= config.costPerConflict * spouseWeight;
+    if (intersects(trait.embraces, tags)) delta += config.gainPerEmbrace * spouseWeight;
+  }
+
   // Clamp the positive total only — losses are unbounded.
   if (delta > config.maxGainPerAction) delta = config.maxGainPerAction;
   return Math.round(delta);
@@ -76,18 +94,25 @@ export function describeComposureDelta(
   choiceTags: string[],
   ideologyDelta: number,
   config: ComposureConfig,
+  spouseTraits: Trait[] = [],
 ): { delta: number; reason: string } {
-  const delta = computeComposureDelta(heldTraits, choiceTags, ideologyDelta, config);
+  const delta = computeComposureDelta(heldTraits, choiceTags, ideologyDelta, config, spouseTraits);
   const tags = new Set(choiceTags);
   const conflicts = heldTraits.filter((t) => intersects(t.opposes, tags)).map((t) => t.name);
   const embraces = heldTraits.filter((t) => intersects(t.embraces, tags)).map((t) => t.name);
   const heldIds = new Set(heldTraits.map((t) => t.id));
   const drifts =
     (heldIds.has("traditionalist") && ideologyDelta > 0) || (heldIds.has("syncretist") && ideologyDelta < 0);
+  // Her contribution is named separately — never let the player pay a hidden cost
+  // (or bank a hidden gain) that is really his wife reacting.
+  const spouseConflicts = spouseTraits.filter((t) => intersects(t.opposes, tags)).map((t) => t.name);
+  const spouseEmbraces = spouseTraits.filter((t) => intersects(t.embraces, tags)).map((t) => t.name);
 
   const parts: string[] = [];
   if (conflicts.length) parts.push(`troubles your ${conflicts.join(", ")} nature`);
   if (embraces.length) parts.push(`suits your ${embraces.join(", ")} nature`);
+  if (spouseConflicts.length) parts.push(`troubles your wife's ${spouseConflicts.join(", ")} nature`);
+  if (spouseEmbraces.length) parts.push(`suits your wife's ${spouseEmbraces.join(", ")} nature`);
   if (drifts) parts.push("strains your convictions");
   const reason = parts.length ? parts.join("; ") : "no effect on your composure";
   return { delta, reason };

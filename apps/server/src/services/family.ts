@@ -24,6 +24,7 @@ import {
   isFamilyLocked,
   isFertile,
   isOfAge,
+  isSpouseDeceased,
   marriagePenalty,
   parseFamilyConfig,
   portraitFor,
@@ -31,6 +32,7 @@ import {
   rollSpouseDeathAge,
   spouseCurrentAge,
   type FamilyConfig,
+  type Trait,
 } from "@massalia/shared";
 import { getAgeConfig, portraitUrl } from "./age.js";
 import { getAllTraitDefs, getTraitDef } from "./traits.js";
@@ -57,6 +59,42 @@ export async function loadFamilyConfig(): Promise<FamilyConfig> {
 export function getFamilyConfig(): FamilyConfig {
   if (!config) throw new Error("Family config not loaded. Call loadFamilyConfig() at boot.");
   return config;
+}
+
+// The LIVING spouse's personality resolved as composure-ready traits, or [] when
+// the character is unmarried, widowed, or the wife has no personality (legacy /
+// pre-pack rows). Gated on spouseCandidateId FIRST so unmarried characters incur
+// zero DB reads. One joined query (candidate + her active marriage); aliveness
+// reuses the shared spouseCurrentAge / isSpouseDeceased math — never re-derived —
+// so a wife dead of old age but not yet swept still counts as gone. Only her
+// opposes/embraces tags feed composure; statMod is never read.
+export async function livingSpousePersonalityTraits(
+  character: Pick<CharacterRow, "id" | "spouseCandidateId">,
+  now: Date = new Date(),
+): Promise<Trait[]> {
+  if (!character.spouseCandidateId) return []; // unmarried — no DB read
+  const rows = await db
+    .select({
+      personalityTraitId: familyCandidates.personalityTraitId,
+      age: familyCandidates.age,
+      createdAt: familyCandidates.createdAt,
+      spouseDeathAge: marriages.spouseDeathAge,
+    })
+    .from(familyCandidates)
+    .leftJoin(
+      marriages,
+      and(eq(marriages.candidateId, familyCandidates.id), eq(marriages.characterId, character.id), isNull(marriages.endedAt)),
+    )
+    .where(eq(familyCandidates.id, character.spouseCandidateId))
+    .limit(1);
+  const row = rows[0];
+  if (!row || !row.personalityTraitId) return []; // gone, or no personality
+  if (row.spouseDeathAge !== null) {
+    const wifeAge = spouseCurrentAge(row.age, row.createdAt.getTime(), now.getTime(), getAgeConfig().realMsPerGameYear);
+    if (isSpouseDeceased(wifeAge, row.spouseDeathAge)) return []; // widowed, not yet swept
+  }
+  const def = getTraitDef(row.personalityTraitId);
+  return def ? [def] : [];
 }
 
 type CharacterRow = typeof playerCharacters.$inferSelect;

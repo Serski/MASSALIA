@@ -3,6 +3,7 @@ import {
   applyComposureRecovery,
   clampComposure,
   computeComposureDelta,
+  describeComposureDelta,
   isWithdrawn,
   nextUtcDayBoundary,
   recoveryPerDay,
@@ -79,6 +80,71 @@ describe("computeComposureDelta — clamp", () => {
   });
   it("does not clamp losses", () => {
     expect(computeComposureDelta([honest, honest], ["bribery"], 0, config)).toBe(-30);
+  });
+});
+
+describe("computeComposureDelta — spouse personality (family pack)", () => {
+  // config has no spouseWeight -> the SPOUSE_WEIGHT_DEFAULT (0.45) applies.
+  it("married + conflicting tag: her nature costs, at reduced weight", () => {
+    // -costPerConflict * 0.45 = -15 * 0.45 = -6.75 -> round -7
+    expect(computeComposureDelta([], ["bribery"], 0, config, [honest])).toBe(-7);
+  });
+
+  it("married + embraced tag: her nature gains, at reduced weight", () => {
+    // +gainPerEmbrace * 0.45 = 8 * 0.45 = 3.6 -> round 4
+    expect(computeComposureDelta([], ["war"], 0, config, [zealot])).toBe(4);
+  });
+
+  it("unmarried (empty spouse array) adds nothing — held-only, unchanged", () => {
+    expect(computeComposureDelta([honest], ["bribery"], 0, config, [])).toBe(-15);
+    // and the 4-arg call still behaves identically (backward compatible)
+    expect(computeComposureDelta([honest], ["bribery"], 0, config)).toBe(-15);
+  });
+
+  it("spouse traits are excluded from the ideology-drift clause", () => {
+    // A held traditionalist pays drift on positive shift (-5); a SPOUSE
+    // traditionalist does not — drift models the player's own convictions.
+    expect(computeComposureDelta([traditionalist], [], 10, config)).toBe(-5);
+    expect(computeComposureDelta([], [], 10, config, [traditionalist])).toBe(0);
+  });
+
+  it("the clamp applies to the COMBINED total, not per source", () => {
+    // held 2 zealots = +16, spouse 2 zealots = +7.2 -> combined 23.2, clamped to 20.
+    // Neither source alone reaches the cap, so this proves the clamp is on the sum.
+    expect(computeComposureDelta([zealot, zealot], ["war"], 0, config, [zealot, zealot])).toBe(20);
+  });
+
+  it("weight asymmetry: the same conflicting tag costs STRICTLY less via a spouse trait", () => {
+    const heldCost = computeComposureDelta([honest], ["bribery"], 0, config); // -15
+    const spouseCost = computeComposureDelta([], ["bribery"], 0, config, [honest]); // -7
+    expect(spouseCost).toBeGreaterThan(heldCost); // -7 > -15 => strictly less cost
+    expect(Math.abs(spouseCost)).toBeLessThan(Math.abs(heldCost));
+  });
+});
+
+describe("describeComposureDelta — spouse attribution", () => {
+  it("names her separately for a conflict", () => {
+    const { delta, reason } = describeComposureDelta([], ["bribery"], 0, config, [honest]);
+    expect(delta).toBe(-7);
+    expect(reason).toContain("troubles your wife's Honest nature");
+  });
+
+  it("names her separately for an embrace (verb: 'suits', mirroring held traits)", () => {
+    const { reason } = describeComposureDelta([], ["war"], 0, config, [zealot]);
+    expect(reason).toContain("suits your wife's Zealot nature");
+  });
+
+  it("distinguishes the player's own nature from his wife's in one reason", () => {
+    // honest is HELD (troubles you), zealot is the WIFE (suits her).
+    const { reason } = describeComposureDelta([honest], ["bribery", "war"], 0, config, [zealot]);
+    expect(reason).toContain("troubles your Honest nature");
+    expect(reason).toContain("suits your wife's Zealot nature");
+    expect(reason).not.toContain("suits your wife's Honest");
+  });
+
+  it("no wife line when she does not move the number", () => {
+    const { reason } = describeComposureDelta([honest], ["bribery"], 0, config, [zealot]);
+    expect(reason).not.toContain("wife");
   });
 });
 

@@ -9,5 +9,6 @@
   "breakLockoutDays": 1,
   "maxCopingTraits": 2,
   "copingPool": ["drunkard", "recluse", "flagellant"],
-  "escalation": { "fromBreakNumber": 3, "prestigePenalty": 5 }
+  "escalation": { "fromBreakNumber": 3, "prestigePenalty": 5 },
+  "spouseWeight": 0.45
 }

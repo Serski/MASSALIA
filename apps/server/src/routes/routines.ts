@@ -6,6 +6,7 @@ import { requireAuth } from "../services/auth.js";
 import { ensureCharacterRow, getActivePlayer, getActiveWorldId, type CharacterRow } from "../services/character.js";
 import { recoverComposure } from "../services/composure.js";
 import { getHeldTraits } from "../services/traits.js";
+import { livingSpousePersonalityTraits } from "../services/family.js";
 import { ownedBuildingIds } from "../services/buildings.js";
 import { utcDayString } from "../services/dailyDecisions.js";
 import {
@@ -43,6 +44,9 @@ export async function routineRoutes(app: FastifyInstance) {
 
     const cfg = getRoutinesConfig();
     const traits = await getHeldTraits(acting.row.id);
+    // Resolve the living spouse ONCE for the whole preview (not per card) — same
+    // helper the apply path uses, so preview and apply agree on her reaction.
+    const spouseTraits = await livingSpousePersonalityTraits(acting.row, now);
     const owned = await ownedBuildingIds(acting.row.playerId);
     // Source pool: the abroad contract pool while sworn, else the home class pool.
     const pool = activePoolCards(acting.row);
@@ -63,7 +67,7 @@ export async function routineRoutes(app: FastifyInstance) {
       dailyPicks: cfg.dailyPicks,
       withdrawn: isWithdrawn(acting.row.breakUntil, now),
       pickedRoutineId,
-      cards: cards.map((card) => previewRoutine(card, acting.row, traits, owned)),
+      cards: cards.map((card) => previewRoutine(card, acting.row, traits, owned, spouseTraits)),
       ladders: ladderStates(acting.row),
     };
   });
