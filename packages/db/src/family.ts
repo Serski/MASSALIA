@@ -80,6 +80,7 @@ export async function drawFamilyCandidates(characterId: string, args: DrawArgs):
           militia: draft.militia,
           intelligence: draft.intelligence,
           traitId: draft.traitId,
+          personalityTraitId: draft.personalityTraitId,
           avatarId: pickAvatarFor(draft.sex),
           ideology: draft.ideology,
         })

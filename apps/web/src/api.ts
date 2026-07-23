@@ -761,6 +761,9 @@ export type FamilyCandidate = {
   ideology: number;
   stats: FamilyStats;
   trait: { id: string; name: string; description: string } | null;
+  // Wife personality (from traits.json): shown where her stat row used to be.
+  // Null for adoption candidates and legacy/pre-pack wives (no line rendered).
+  personality: { id: string; name: string; description: string } | null;
   dowry: number;
   // Her age-stage portrait path (null until art resolves); ages with her.
   portrait: string | null;

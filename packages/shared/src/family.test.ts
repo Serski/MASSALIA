@@ -102,6 +102,49 @@ describe("generateCandidates", () => {
   });
 });
 
+describe("generateCandidates — wife personality", () => {
+  const pool = cfg.candidates.personalityPool;
+
+  it("marriage candidates get a personality id from the pool (shipped chance 1.0)", () => {
+    const cands = generateCandidates(Math.random, "marriage", 50, cfg, HOUSES);
+    for (const c of cands) {
+      expect(c.personalityTraitId).not.toBeNull();
+      expect(pool).toContain(c.personalityTraitId);
+    }
+  });
+
+  it("adoption candidates never get a personality (null)", () => {
+    const cands = generateCandidates(Math.random, "adoption", 50, cfg, HOUSES);
+    expect(cands.every((c) => c.personalityTraitId === null)).toBe(true);
+  });
+
+  it("women-only adoption candidates also get null (regency/adoption path)", () => {
+    const cands = generateCandidates(Math.random, "adoption", 50, cfg, HOUSES, true);
+    expect(cands.every((c) => c.personalityTraitId === null)).toBe(true);
+  });
+
+  it("personalityChance 0 → always null, even for marriage", () => {
+    const zero: FamilyConfig = { ...cfg, candidates: { ...cfg.candidates, personalityChance: 0 } };
+    const cands = generateCandidates(Math.random, "marriage", 50, zero, HOUSES);
+    expect(cands.every((c) => c.personalityTraitId === null)).toBe(true);
+  });
+
+  it("personalityChance 1.0 → always set for marriage", () => {
+    const one: FamilyConfig = { ...cfg, candidates: { ...cfg.candidates, personalityChance: 1 } };
+    const cands = generateCandidates(Math.random, "marriage", 50, one, HOUSES);
+    for (const c of cands) {
+      expect(c.personalityTraitId).not.toBeNull();
+      expect(pool).toContain(c.personalityTraitId);
+    }
+  });
+
+  it("draws uniformly from the pool — deterministic rng lands on the indexed id", () => {
+    // seqRng([0]) → chance roll 0 < 1.0 passes; pick indexes pool[0].
+    const cands = generateCandidates(seqRng([0]), "marriage", 1, cfg, HOUSES);
+    expect(cands[0]!.personalityTraitId).toBe(pool[0]);
+  });
+});
+
 describe("marriagePenalty", () => {
   const threshold = cfg.marriage.crossIdeologyPenalty.threshold; // 30
   const shift = cfg.marriage.crossIdeologyPenalty.ideologyShift; // 4

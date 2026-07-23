@@ -33,6 +33,18 @@ function CandidateStatChips({ stats }: { stats: FourStats }) {
   );
 }
 
+// Her personality (family pack) — name + description, shown where the stat row
+// was. Renders nothing for legacy/pre-pack wives (null personality): no line,
+// no placeholder. She reacts to your choices; this only names her nature.
+function PersonalityLine({ personality }: { personality: { name: string; description: string } | null }) {
+  if (!personality) return null;
+  return (
+    <p className="composure-note muted">
+      <strong>{personality.name}</strong> — {personality.description}
+    </p>
+  );
+}
+
 // Human-readable cross-house penalty preview for a marriage candidate.
 function penaltyText(candidate: MarriageCandidate): string | null {
   const { ideologyShift, partyFavorLoss } = candidate.penalty;
@@ -254,6 +266,7 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
                 traits={state.spouse.trait ? [{ label: state.spouse.trait.name, tone: "good" }] : []}
                 portrait={state.spouse.portrait}
               />
+              <PersonalityLine personality={state.spouse.personality} />
               {state.spouse.pastChildbearing ? (
                 <p className="composure-note muted spouse-fertility-note">She is past her childbearing years.</p>
               ) : null}
@@ -287,6 +300,7 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
                           <span className="dashboard-label">{candidate.name} of House {candidate.houseName}</span>
                         </div>
                         <p>Age {candidate.age}{candidate.trait ? ` · ${candidate.trait.name}` : ""}{candidate.dowry > 0 ? ` · dowry ${candidate.dowry}g` : ""}</p>
+                        <PersonalityLine personality={candidate.personality} />
                         {penalty ? <p className="composure-note neg">{penalty}</p> : <p className="composure-note pos">No ideological cost — a comfortable match.</p>}
                         {confirmId === candidate.id ? (
                           <div className="event-choice-stack">

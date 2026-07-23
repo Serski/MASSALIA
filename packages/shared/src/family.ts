@@ -136,6 +136,10 @@ export type CandidateDraft = {
   militia: number;
   intelligence: number;
   traitId: string | null;
+  // Wife personality: a player trait id (from cfg.candidates.personalityPool),
+  // rolled for marriage candidates only — null for adoption. Only its
+  // opposes/embraces tags are ever consumed (composure); its statMod is not.
+  personalityTraitId: string | null;
   ideology: number;
 };
 
@@ -193,6 +197,13 @@ export function generateCandidates(
       intelligence: randInt(rng, ranges.intelligence[0], ranges.intelligence[1]),
       traitId,
       ideology: house.ideology,
+      // Wife personality: marriage candidates only, gated by personalityChance.
+      // Rolled last so it never shifts the other candidate rolls. Only the id is
+      // stored here — statMod is never read (see composure wiring, later phase).
+      personalityTraitId:
+        purpose === "marriage" && rng() < cfg.candidates.personalityChance
+          ? pick(rng, cfg.candidates.personalityPool)
+          : null,
     });
   }
   return drafts;

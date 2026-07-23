@@ -33,7 +33,7 @@ import {
   type FamilyConfig,
 } from "@massalia/shared";
 import { getAgeConfig, portraitUrl } from "./age.js";
-import { getAllTraitDefs } from "./traits.js";
+import { getAllTraitDefs, getTraitDef } from "./traits.js";
 import { broadcastState } from "./worldState.js";
 import { onIdeologyChanged } from "./politics.js";
 import { enqueueChildRoll, enqueueFamilyDraw } from "./queue.js";
@@ -95,6 +95,11 @@ async function houseName(slug: string): Promise<string> {
 
 function candidateView(cand: CandidateRow, cfg: FamilyConfig, houseLabel: string) {
   const trait = candidateTrait(cfg, cand.traitId);
+  // Wife personality: display name + description only, resolved from traits.json
+  // by id. Null for adoption/legacy rows. statMod is deliberately NOT read here —
+  // her personality only reacts to the player's choices (composure), it does not
+  // buff him.
+  const personalityDef = cand.personalityTraitId ? getTraitDef(cand.personalityTraitId) : undefined;
   return {
     id: cand.id,
     name: cand.name,
@@ -105,6 +110,7 @@ function candidateView(cand: CandidateRow, cfg: FamilyConfig, houseLabel: string
     ideology: cand.ideology,
     stats: { prestige: cand.prestige, devotion: cand.devotion, militia: cand.militia, intelligence: cand.intelligence },
     trait: trait ? { id: trait.id, name: trait.name, description: trait.description } : null,
+    personality: personalityDef ? { id: personalityDef.id, name: personalityDef.name, description: personalityDef.description } : null,
     dowry: trait?.dowryDrachmae ?? 0,
     // Her age-stage portrait (matches the player's own resolution in character.ts).
     portrait: portraitUrl(portraitFor(cand.avatarId ?? "", cand.age, getAgeConfig())),
