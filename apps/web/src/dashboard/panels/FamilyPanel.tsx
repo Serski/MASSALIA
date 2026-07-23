@@ -252,7 +252,6 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
                 nameSuffix={<span className="person-suffix"> · your wife</span>}
                 role={`Age ${state.spouse.age} · ${state.spouse.houseName}`}
                 traits={state.spouse.trait ? [{ label: state.spouse.trait.name, tone: "good" }] : []}
-                right={<CandidateStatChips stats={state.spouse.stats} />}
                 portrait={state.spouse.portrait}
               />
               {state.spouse.pastChildbearing ? (
@@ -288,7 +287,6 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
                           <span className="dashboard-label">{candidate.name} of House {candidate.houseName}</span>
                         </div>
                         <p>Age {candidate.age}{candidate.trait ? ` · ${candidate.trait.name}` : ""}{candidate.dowry > 0 ? ` · dowry ${candidate.dowry}g` : ""}</p>
-                        <CandidateStatChips stats={candidate.stats} />
                         {penalty ? <p className="composure-note neg">{penalty}</p> : <p className="composure-note pos">No ideological cost — a comfortable match.</p>}
                         {confirmId === candidate.id ? (
                           <div className="event-choice-stack">
