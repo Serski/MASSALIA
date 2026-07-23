@@ -264,6 +264,11 @@ export const familyCandidates = pgTable("family_candidates", {
   militia: integer("militia").notNull().default(0),
   intelligence: integer("intelligence").notNull().default(0),
   traitId: text("trait_id"),
+  // Wife personality (family pack: wife personality). A player trait id from
+  // content/traits.json, drawn for marriage candidates only. NULL = no
+  // personality (pre-migration rows / non-marriage candidates); reacts to the
+  // player's choices via composure, never applies its statMod to the player.
+  personalityTraitId: text("personality_trait_id"),
   avatarId: text("avatar_id"),
   ideology: integer("ideology").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

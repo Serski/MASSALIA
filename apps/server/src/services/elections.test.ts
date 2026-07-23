@@ -25,10 +25,11 @@ async function loadModules() {
   const oligarchy = await import("./oligarchy.js");
   const festival = await import("./festival.js");
   const age = await import("./age.js");
+  const traits = await import("./traits.js");
   const family = await import("./family.js");
   const composure = await import("./composure.js");
   const routines = await import("./routines.js");
-  return { dbPkg, elections, oligarchy, festival, age, family, composure, routines };
+  return { dbPkg, elections, oligarchy, festival, age, traits, family, composure, routines };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -63,6 +64,7 @@ suite("Archon & Ephor elections (integration)", () => {
     m = await loadModules();
     db = m.dbPkg.createDb();
     await m.age.loadAgeConfig();
+    await m.traits.loadTraitDefs();
     await m.family.loadFamilyConfig();
     await m.composure.loadComposureConfig();
     await m.festival.loadCalendarConfig();

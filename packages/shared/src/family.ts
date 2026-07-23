@@ -39,6 +39,12 @@ export const familyConfigSchema = z.object({
     statRanges: z.object({ prestige: range, devotion: range, militia: range, intelligence: range }),
     traitChance: z.number(),
     traitPool: z.array(z.string()),
+    // Wife personality: a pool of player trait ids (content/traits.json) drawn
+    // for marriage candidates at personalityChance. Separate axis from the
+    // mechanical traitPool above; only the drawn trait's opposes/embraces tags
+    // are consumed (via composure), never its statMod.
+    personalityPool: z.array(z.string()),
+    personalityChance: z.number(),
     houseWeighting: z.string(),
   }),
   candidateTraits: z.array(candidateTraitSchema),
@@ -92,6 +98,21 @@ export type FamilyConfig = z.infer<typeof familyConfigSchema>;
 
 export function parseFamilyConfig(data: unknown): FamilyConfig {
   return familyConfigSchema.parse(data);
+}
+
+// Boot-time guard: every personalityPool id must resolve to a real loaded trait.
+// The wife's personality reuses player traits by id, so a typo'd or removed id
+// would silently roll wives with no resolvable personality — fail loudly at boot
+// instead. `knownTraitIds` is the id set of the loaded traits.json catalog.
+export function assertPersonalityPoolResolves(cfg: FamilyConfig, knownTraitIds: Iterable<string>): void {
+  const known = new Set(knownTraitIds);
+  const missing = cfg.candidates.personalityPool.filter((id) => !known.has(id));
+  if (missing.length > 0) {
+    throw new Error(
+      `family-config personalityPool references unknown trait id(s): ${missing.join(", ")}. ` +
+        "Every id must exist in content/traits/traits.json.",
+    );
+  }
 }
 
 // Trait lookup (dowry, stat bonus) by id.

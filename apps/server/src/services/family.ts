@@ -16,6 +16,7 @@ import {
   rollChildrenDue,
 } from "@massalia/db";
 import {
+  assertPersonalityPoolResolves,
   canMarry,
   candidateTrait,
   childAge,
@@ -32,6 +33,7 @@ import {
   type FamilyConfig,
 } from "@massalia/shared";
 import { getAgeConfig, portraitUrl } from "./age.js";
+import { getAllTraitDefs } from "./traits.js";
 import { broadcastState } from "./worldState.js";
 import { onIdeologyChanged } from "./politics.js";
 import { enqueueChildRoll, enqueueFamilyDraw } from "./queue.js";
@@ -45,6 +47,10 @@ let config: FamilyConfig | null = null;
 
 export async function loadFamilyConfig(): Promise<FamilyConfig> {
   config = parseFamilyConfig(JSON.parse(await fs.readFile(configFile, "utf8")));
+  // Boot-time guard: the wife personality pool references trait ids by string;
+  // every one must resolve against the loaded traits.json catalog. loadTraitDefs()
+  // runs before loadFamilyConfig() at boot (see apps/server/src/index.ts).
+  assertPersonalityPoolResolves(config, getAllTraitDefs().map((trait) => trait.id));
   return config;
 }
 

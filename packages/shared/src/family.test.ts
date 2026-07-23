@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   adoptionWomenOnly,
+  assertPersonalityPoolResolves,
   canMarry,
   childAge,
   childRoll,
@@ -366,5 +367,33 @@ describe("rollSpouseDeathAge", () => {
   it("covers both ends of the band (uniform, inclusive)", () => {
     expect(rollSpouseDeathAge(cfg, () => 0)).toBe(60); // min
     expect(rollSpouseDeathAge(cfg, () => 0.9999)).toBe(70); // max
+  });
+});
+
+describe("wife personality config", () => {
+  it("the shipped config carries a non-empty personalityPool and a personalityChance", () => {
+    expect(cfg.candidates.personalityPool.length).toBeGreaterThan(0);
+    expect(typeof cfg.candidates.personalityChance).toBe("number");
+  });
+
+  it("the shipped pool has the 24 personality trait ids and no mechanical-pool bleed", () => {
+    expect(cfg.candidates.personalityPool).toHaveLength(24);
+    // The mechanical axis (traitPool) stays separate — no id appears in both.
+    const mechanical = new Set(cfg.candidates.traitPool);
+    expect(cfg.candidates.personalityPool.some((id) => mechanical.has(id))).toBe(false);
+  });
+});
+
+describe("assertPersonalityPoolResolves", () => {
+  it("passes when every pool id is in the known trait catalog", () => {
+    expect(() => assertPersonalityPoolResolves(cfg, cfg.candidates.personalityPool)).not.toThrow();
+  });
+
+  it("throws loudly, naming the missing id(s), when a pool id is unknown", () => {
+    const broken: FamilyConfig = {
+      ...cfg,
+      candidates: { ...cfg.candidates, personalityPool: ["brave", "not-a-real-trait"] },
+    };
+    expect(() => assertPersonalityPoolResolves(broken, ["brave", "craven"])).toThrow(/not-a-real-trait/);
   });
 });

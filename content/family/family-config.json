@@ -30,6 +30,33 @@
       "stern",
       "frail"
     ],
+    "personalityPool": [
+      "brave",
+      "craven",
+      "pious",
+      "skeptic",
+      "traditionalist",
+      "syncretist",
+      "generous",
+      "greedy",
+      "gregarious",
+      "reserved",
+      "honest",
+      "cunning",
+      "diligent",
+      "indolent",
+      "temperate",
+      "hedonist",
+      "ambitious",
+      "content-soul",
+      "just",
+      "ruthless",
+      "patient",
+      "hotblooded",
+      "humble",
+      "proud"
+    ],
+    "personalityChance": 1.0,
     "houseWeighting": "uniform"
   },
   "candidateTraits": [

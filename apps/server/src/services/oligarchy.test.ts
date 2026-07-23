@@ -24,9 +24,10 @@ async function loadModules() {
   const succession = await import("./succession.js");
   const daily = await import("./dailyDecisions.js");
   const age = await import("./age.js");
+  const traits = await import("./traits.js");
   const family = await import("./family.js");
   const composure = await import("./composure.js");
-  return { dbPkg, oligarchy, succession, daily, age, family, composure };
+  return { dbPkg, oligarchy, succession, daily, age, traits, family, composure };
 }
 
 suite("the Oligarchy Chamber (integration)", () => {
@@ -69,6 +70,7 @@ suite("the Oligarchy Chamber (integration)", () => {
     db = m.dbPkg.createDb();
 
     await m.age.loadAgeConfig();
+    await m.traits.loadTraitDefs();
     await m.family.loadFamilyConfig();
     await m.composure.loadComposureConfig();
     const politics = await m.oligarchy.loadPoliticsConfig();
