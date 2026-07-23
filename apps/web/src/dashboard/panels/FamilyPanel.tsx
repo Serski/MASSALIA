@@ -33,15 +33,26 @@ function CandidateStatChips({ stats }: { stats: FourStats }) {
   );
 }
 
-// Her personality (family pack) — name + description, shown where the stat row
-// was. Renders nothing for legacy/pre-pack wives (null personality): no line,
-// no placeholder. She reacts to your choices; this only names her nature.
-function PersonalityLine({ personality }: { personality: { name: string; description: string } | null }) {
-  if (!personality) return null;
+// The trait chips shared by the spouse + prospect cards: the mechanical trait
+// first, her personality second, each omitted when null. Both use the tone-good
+// pill (the styling PersonRow's Tchip uses); the personality chip carries its
+// description as a hover tooltip — its mechanical sibling has no description on
+// the wire and needs none. Renders nothing when both are null.
+function TraitChips({
+  trait,
+  personality,
+}: {
+  trait: { name: string } | null;
+  personality: { name: string; description: string } | null;
+}) {
+  if (!trait && !personality) return null;
   return (
-    <p className="composure-note muted">
-      <strong>{personality.name}</strong> — {personality.description}
-    </p>
+    <div className="person-traits">
+      {trait ? <span className="tchip tone-good">{trait.name}</span> : null}
+      {personality ? (
+        <span className="tchip tone-good" title={personality.description}>{personality.name}</span>
+      ) : null}
+    </div>
   );
 }
 
@@ -263,10 +274,10 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
                 name={`${state.spouse.name} of House ${state.spouse.houseName}`}
                 nameSuffix={<span className="person-suffix"> · your wife</span>}
                 role={`Age ${state.spouse.age} · ${state.spouse.houseName}`}
-                traits={state.spouse.trait ? [{ label: state.spouse.trait.name, tone: "good" }] : []}
+                traits={[]}
                 portrait={state.spouse.portrait}
               />
-              <PersonalityLine personality={state.spouse.personality} />
+              <TraitChips trait={state.spouse.trait} personality={state.spouse.personality} />
               {state.spouse.pastChildbearing ? (
                 <p className="composure-note muted spouse-fertility-note">She is past her childbearing years.</p>
               ) : null}
@@ -299,8 +310,8 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
                           </span>
                           <span className="dashboard-label">{candidate.name} of House {candidate.houseName}</span>
                         </div>
-                        <p>Age {candidate.age}{candidate.trait ? ` · ${candidate.trait.name}` : ""}{candidate.dowry > 0 ? ` · dowry ${candidate.dowry}g` : ""}</p>
-                        <PersonalityLine personality={candidate.personality} />
+                        <p>Age {candidate.age}{candidate.dowry > 0 ? ` · dowry ${candidate.dowry}g` : ""}</p>
+                        <TraitChips trait={candidate.trait} personality={candidate.personality} />
                         {penalty ? <p className="composure-note neg">{penalty}</p> : <p className="composure-note pos">No ideological cost — a comfortable match.</p>}
                         {confirmId === candidate.id ? (
                           <div className="event-choice-stack">
