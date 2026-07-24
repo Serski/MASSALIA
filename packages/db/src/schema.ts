@@ -291,8 +291,20 @@ export const marriages = pgTable("marriages", {
   spouseDeathAge: integer("spouse_death_age"),
   // Philia: the 0–100 bond with the spouse (default 50). Moved by family-event
   // change_philia effects + a daily spouse-reaction coupling; gates fertility and
-  // exposes band modifiers at its extremes. Nothing consumes it yet.
+  // exposes band modifiers at its extremes.
   philia: integer("philia").notNull().default(50),
+  // Lover plot (pack B). loverState is code-enforced 'none' | 'active' | 'fallen'
+  // (repo convention: text(), not a pgEnum). loverStartedAt when the plot begins;
+  // loverFellAt / loverDiscoveredAt anchor the one-shot notices (windowed like the
+  // spouse-death notice). All nullable — the plot is opt-in.
+  loverState: text("lover_state").notNull().default("none"),
+  loverStartedAt: timestamp("lover_started_at", { withTimezone: true }),
+  loverFellAt: timestamp("lover_fell_at", { withTimezone: true }),
+  loverDiscoveredAt: timestamp("lover_discovered_at", { withTimezone: true }),
+  // Per-game-year action tracking (yearInGame at the last gift / symposium) —
+  // gift diminishes and symposium is capped within the same game year. Nullable.
+  lastGiftYear: integer("last_gift_year"),
+  lastSymposiumYear: integer("last_symposium_year"),
 });
 
 // Children of a played character. Age derives lazily from born_at (1 game year /
@@ -308,6 +320,9 @@ export const children = pgTable("children", {
   named: boolean("named").notNull().default(false),
   comeOfAgeAt: timestamp("came_of_age_at", { withTimezone: true }),
   heirCharacterId: uuid("heir_character_id"),
+  // Rumor of another father — set when a child is born while the lover plot is
+  // active (pack B). Stored only; nothing consumes it yet.
+  rumor: boolean("rumor").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   parentIdx: index("children_parent_idx").on(table.parentCharacterId),
