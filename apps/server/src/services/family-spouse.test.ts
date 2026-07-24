@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // livingSpousePersonalityTraits integration tests — run against a REAL Postgres,
@@ -172,6 +172,92 @@ suite("livingSpousePersonalityTraits (integration)", () => {
       const c = await createCharacter("Lonely");
       await setComposure(c.id, 50, dayAgo);
       expect(await m.composure.recoverComposure(c.id, now)).toBe(55);
+    });
+  });
+
+  describe("gift + symposium actions (pack B)", () => {
+    const gameYearMs = () => m.age.getAgeConfig().realMsPerGameYear;
+    const setDrachmae = (id: string, amount: number) =>
+      db.update(m.dbPkg.playerCharacters).set({ drachmae: amount }).where(eq(m.dbPkg.playerCharacters.id, id));
+    const fresh = async (id: string) => (await db.select().from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.id, id)).limit(1))[0]!;
+    const philiaOf = async (marriageId: string) => (await db.select({ p: m.dbPkg.marriages.philia }).from(m.dbPkg.marriages).where(eq(m.dbPkg.marriages.id, marriageId)).limit(1))[0]!.p;
+    const drachmaeOf = async (id: string) => (await fresh(id)).drachmae;
+    const logs = async (id: string, kind: string, source: string) =>
+      (await db.select().from(m.dbPkg.effectLog).where(and(eq(m.dbPkg.effectLog.characterId, id), eq(m.dbPkg.effectLog.kind, kind)))).filter((r) => (r.detail as { source?: string }).source === source);
+
+    async function setupMarried(name: string, opts: { personalityTraitId?: string | null; drachmae?: number; philia?: number } = {}) {
+      const c = await createCharacter(name);
+      await marryTo(c.id, { personalityTraitId: opts.personalityTraitId ?? null, spouseDeathAge: 70, candidateAge: 30, philia: opts.philia });
+      await setDrachmae(c.id, opts.drachmae ?? 500);
+      const mid = (await db.select({ id: m.dbPkg.marriages.id }).from(m.dbPkg.marriages).where(eq(m.dbPkg.marriages.characterId, c.id)).limit(1))[0]!.id;
+      return { id: c.id, marriageId: mid };
+    }
+
+    it("gift: fresh year +5, same year +1 (diminished), next year +5 again", async () => {
+      const s = await setupMarried("Gifter");
+      const r1 = await m.family.giveGift(await fresh(s.id), now);
+      expect(r1).toMatchObject({ ok: true, delta: 5, diminished: false });
+      expect(await philiaOf(s.marriageId)).toBe(55);
+      expect(await drachmaeOf(s.id)).toBe(475);
+
+      const r2 = await m.family.giveGift(await fresh(s.id), now); // same game year
+      expect(r2).toMatchObject({ ok: true, delta: 1, diminished: true });
+      expect(await philiaOf(s.marriageId)).toBe(56);
+
+      const nextYear = new Date(now.getTime() + gameYearMs());
+      const r3 = await m.family.giveGift(await fresh(s.id), nextYear);
+      expect(r3).toMatchObject({ ok: true, delta: 5, diminished: false });
+      expect(await philiaOf(s.marriageId)).toBe(61);
+      // two full-price + one diminished = three drachmae spends, three philia logs.
+      expect((await logs(s.id, "change_philia", "action:gift")).length).toBe(3);
+      expect((await logs(s.id, "change_drachmae", "action:gift")).length).toBe(3);
+    });
+
+    it("gift: insufficient drachmae → 409, philia + drachmae untouched (atomic)", async () => {
+      const s = await setupMarried("Poor", { drachmae: 10 });
+      const r = await m.family.giveGift(await fresh(s.id), now);
+      expect(r).toMatchObject({ ok: false, code: 409 });
+      expect(await philiaOf(s.marriageId)).toBe(50); // untouched
+      expect(await drachmaeOf(s.id)).toBe(10); // untouched
+      expect((await logs(s.id, "change_philia", "action:gift")).length).toBe(0);
+    });
+
+    it("gift: unmarried → 409", async () => {
+      const c = await createCharacter("Single");
+      const r = await m.family.giveGift(await fresh(c.id), now);
+      expect(r).toMatchObject({ ok: false, code: 409 });
+    });
+
+    it("symposium: base +8, +1 prestige applied and logged", async () => {
+      const s = await setupMarried("Host");
+      const before = (await fresh(s.id)).prestige;
+      const r = await m.family.holdSymposium(await fresh(s.id), now);
+      expect(r).toMatchObject({ ok: true, delta: 8, prestige: 1 });
+      expect(await philiaOf(s.marriageId)).toBe(58);
+      expect(await drachmaeOf(s.id)).toBe(465);
+      expect((await fresh(s.id)).prestige).toBe(before + 1);
+      const stat = await logs(s.id, "change_stat", "action:symposium");
+      expect(stat.length).toBe(1);
+      expect(stat[0]!.detail).toMatchObject({ stat: "prestige", applied: 1 });
+    });
+
+    it("symposium: gregarious +10, reserved +5", async () => {
+      const g = await setupMarried("Greg", { personalityTraitId: "gregarious" });
+      expect(await m.family.holdSymposium(await fresh(g.id), now)).toMatchObject({ ok: true, delta: 10 });
+      expect(await philiaOf(g.marriageId)).toBe(60);
+
+      const r = await setupMarried("Res", { personalityTraitId: "reserved" });
+      expect(await m.family.holdSymposium(await fresh(r.id), now)).toMatchObject({ ok: true, delta: 5 });
+      expect(await philiaOf(r.marriageId)).toBe(55);
+    });
+
+    it("symposium: same game year → 409, no second spend", async () => {
+      const s = await setupMarried("Twice");
+      await m.family.holdSymposium(await fresh(s.id), now);
+      const drachmaeAfterFirst = await drachmaeOf(s.id);
+      const r = await m.family.holdSymposium(await fresh(s.id), now);
+      expect(r).toMatchObject({ ok: false, code: 409 });
+      expect(await drachmaeOf(s.id)).toBe(drachmaeAfterFirst); // no second deduct
     });
   });
 });

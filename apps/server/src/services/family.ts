@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
 import {
   checkSpouseDeath,
   children,
@@ -14,13 +14,18 @@ import {
   partyFavor,
   playerCharacters,
   rollChildrenDue,
+  worlds,
 } from "@massalia/db";
 import {
+  applyStatGrowth,
   assertPersonalityPoolResolves,
   canMarry,
   candidateTrait,
+  capStat,
   childAge,
   clampIdeology,
+  clampPhilia,
+  gameDate,
   isFamilyLocked,
   isFertile,
   isOfAge,
@@ -466,4 +471,111 @@ export async function marry(character: CharacterRow, candidateId: string, now: D
     partyFavorLoss: applyFavorLoss ? penalty.partyFavorLoss : 0,
     party: favorParty ?? "none",
   };
+}
+
+// --- Philia actions (pack B) ------------------------------------------------
+// This pack specifies the costs/deltas literally, so they live as named constants
+// local to the actions (not in family-config.json).
+const GIFT_COST = 25;
+const GIFT_PHILIA = 5;
+const GIFT_PHILIA_REPEAT = 1; // a second gift within the same game year
+const SYMPOSIUM_COST = 35;
+const SYMPOSIUM_PHILIA = 8;
+const SYMPOSIUM_PHILIA_GREGARIOUS = 10;
+const SYMPOSIUM_PHILIA_RESERVED = 5;
+const SYMPOSIUM_PRESTIGE = 1;
+
+// The world's start instant (ms), for game-year math via gameDate().
+async function worldStartedMs(worldId: string): Promise<number> {
+  const rows = await db.select({ startedAt: worlds.startedAt }).from(worlds).where(eq(worlds.id, worldId)).limit(1);
+  return rows[0] ? rows[0].startedAt.getTime() : Date.now();
+}
+
+export type GiftResult = { ok: true; philia: number; delta: number; diminished: boolean } | { ok: false; code: number; error: string };
+
+// Give her a gift: −25 drachmae, +5 philia — +1 instead if already gifted this
+// game year. Costs deduct atomically (buySeat pattern); philia clamps 0..100.
+export async function giveGift(character: CharacterRow, now: Date = new Date()): Promise<GiftResult> {
+  const spouse = await livingSpouseState(character, now);
+  if (!spouse || spouse.marriageId === null) return { ok: false, code: 409, error: "You have no wife to give to." };
+  if (character.drachmae < GIFT_COST) return { ok: false, code: 409, error: `A gift costs ${GIFT_COST} drachmae — you cannot afford it.` };
+  const marriageId = spouse.marriageId;
+  const year = gameDate(now.getTime(), await worldStartedMs(character.worldId)).yearInGame;
+
+  try {
+    const out = await db.transaction(async (tx) => {
+      const paid = await tx
+        .update(playerCharacters)
+        .set({ drachmae: sql`${playerCharacters.drachmae} - ${GIFT_COST}` })
+        .where(and(eq(playerCharacters.id, character.id), gte(playerCharacters.drachmae, GIFT_COST)))
+        .returning({ drachmae: playerCharacters.drachmae });
+      if (!paid.length) throw new Error("cannot_afford");
+      // Read the marriage fresh inside the tx — philia may have moved since.
+      const mRows = await tx.select({ philia: marriages.philia, lastGiftYear: marriages.lastGiftYear }).from(marriages).where(eq(marriages.id, marriageId)).limit(1);
+      const m = mRows[0]!;
+      const diminished = m.lastGiftYear === year;
+      const delta = diminished ? GIFT_PHILIA_REPEAT : GIFT_PHILIA;
+      const philia = clampPhilia(m.philia + delta);
+      await tx.update(marriages).set({ philia, lastGiftYear: year }).where(eq(marriages.id, marriageId));
+      await tx.insert(effectLog).values({ characterId: character.id, kind: "change_philia", detail: { amount: delta, source: "action:gift" } });
+      await tx.insert(effectLog).values({ characterId: character.id, kind: "change_drachmae", detail: { amount: -GIFT_COST, value: paid[0]!.drachmae, source: "action:gift" } });
+      return { philia, delta, diminished };
+    });
+    await broadcastState();
+    return { ok: true, ...out };
+  } catch (error) {
+    if (error instanceof Error && error.message === "cannot_afford") return { ok: false, code: 409, error: `A gift costs ${GIFT_COST} drachmae — you cannot afford it.` };
+    throw error;
+  }
+}
+
+export type SymposiumResult = { ok: true; philia: number; delta: number; prestige: number } | { ok: false; code: number; error: string };
+
+// Hold a symposium in her honor: −35 drachmae, +8 philia (+10 gregarious / +5
+// reserved), +1 prestige — hard once per game year.
+export async function holdSymposium(character: CharacterRow, now: Date = new Date()): Promise<SymposiumResult> {
+  const spouse = await livingSpouseState(character, now);
+  if (!spouse || spouse.marriageId === null) return { ok: false, code: 409, error: "You have no wife to honor." };
+  if (character.drachmae < SYMPOSIUM_COST) return { ok: false, code: 409, error: `A symposium costs ${SYMPOSIUM_COST} drachmae — you cannot afford it.` };
+  const marriageId = spouse.marriageId;
+  const year = gameDate(now.getTime(), await worldStartedMs(character.worldId)).yearInGame;
+
+  const preRows = await db.select({ lastSymposiumYear: marriages.lastSymposiumYear }).from(marriages).where(eq(marriages.id, marriageId)).limit(1);
+  if (preRows[0]?.lastSymposiumYear === year) return { ok: false, code: 409, error: "You have already honored her this year." };
+
+  const personalityId = spouse.personalityTraits[0]?.id ?? null;
+  const delta = personalityId === "gregarious" ? SYMPOSIUM_PHILIA_GREGARIOUS : personalityId === "reserved" ? SYMPOSIUM_PHILIA_RESERVED : SYMPOSIUM_PHILIA;
+
+  try {
+    const out = await db.transaction(async (tx) => {
+      const paid = await tx
+        .update(playerCharacters)
+        .set({ drachmae: sql`${playerCharacters.drachmae} - ${SYMPOSIUM_COST}` })
+        .where(and(eq(playerCharacters.id, character.id), gte(playerCharacters.drachmae, SYMPOSIUM_COST)))
+        .returning({ drachmae: playerCharacters.drachmae, prestige: playerCharacters.prestige, growth: playerCharacters.growthMultiplier });
+      if (!paid.length) throw new Error("cannot_afford");
+      // Re-guard the once-per-year cap inside the tx (double-submit race).
+      const mRows = await tx.select({ philia: marriages.philia, lastSymposiumYear: marriages.lastSymposiumYear }).from(marriages).where(eq(marriages.id, marriageId)).limit(1);
+      const m = mRows[0]!;
+      if (m.lastSymposiumYear === year) throw new Error("already_honored");
+
+      // Prestige +1 through the same growth+cap the change_stat effect uses.
+      const applied = applyStatGrowth(SYMPOSIUM_PRESTIGE, Number(paid[0]!.growth));
+      const nextPrestige = capStat(paid[0]!.prestige + applied, getAgeConfig());
+      await tx.update(playerCharacters).set({ prestige: nextPrestige }).where(eq(playerCharacters.id, character.id));
+      await tx.insert(effectLog).values({ characterId: character.id, kind: "change_stat", detail: { stat: "prestige", requested: SYMPOSIUM_PRESTIGE, applied, source: "action:symposium" } });
+
+      const philia = clampPhilia(m.philia + delta);
+      await tx.update(marriages).set({ philia, lastSymposiumYear: year }).where(eq(marriages.id, marriageId));
+      await tx.insert(effectLog).values({ characterId: character.id, kind: "change_philia", detail: { amount: delta, source: "action:symposium" } });
+      await tx.insert(effectLog).values({ characterId: character.id, kind: "change_drachmae", detail: { amount: -SYMPOSIUM_COST, value: paid[0]!.drachmae, source: "action:symposium" } });
+      return { philia, delta, prestige: applied };
+    });
+    await broadcastState();
+    return { ok: true, ...out };
+  } catch (error) {
+    if (error instanceof Error && error.message === "cannot_afford") return { ok: false, code: 409, error: `A symposium costs ${SYMPOSIUM_COST} drachmae — you cannot afford it.` };
+    if (error instanceof Error && error.message === "already_honored") return { ok: false, code: 409, error: "You have already honored her this year." };
+    throw error;
+  }
 }
