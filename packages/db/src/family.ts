@@ -137,8 +137,18 @@ export async function rollChildrenDue(characterId: string, args: { familyCfg: Fa
       if (!isFertile(wifeAge, familyCfg)) continue;
     }
 
+    // Philia scales the fertility chance (see childRoll). Read from the active
+    // marriage; a married character always has one — 50 (neutral) is a defensive
+    // fallback only.
+    const marriageRows = await db
+      .select({ philia: marriages.philia })
+      .from(marriages)
+      .where(and(eq(marriages.characterId, characterId), eq(marriages.candidateId, character.spouseCandidateId), isNull(marriages.endedAt)))
+      .limit(1);
+    const philia = marriageRows[0]?.philia ?? 50;
+
     const existing = await db.select({ id: children.id }).from(children).where(eq(children.parentCharacterId, characterId));
-    const outcome = childRoll(Math.random, { active: true }, existing.length, spouseTrait, familyCfg);
+    const outcome = childRoll(Math.random, { active: true }, existing.length, spouseTrait, familyCfg, philia);
     if (!outcome.born) continue;
 
     const inserted = (await db

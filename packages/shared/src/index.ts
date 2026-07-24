@@ -8,6 +8,7 @@ export * from "./chronicle.js";
 export * from "./routines.js";
 export * from "./age.js";
 export * from "./family.js";
+export * from "./philia.js";
 export * from "./manumission.js";
 export * from "./festival.js";
 export * from "./ballot.js";

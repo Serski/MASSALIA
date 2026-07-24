@@ -2,6 +2,7 @@ import { z } from "zod";
 import { REAL_MS_PER_SEASON, SEASONS_PER_YEAR } from "./calendar.js";
 import { scoreTraitTags } from "./composure.js";
 import { manumissionConfigSchema } from "./manumission.js";
+import { philiaFertilityMultiplier } from "./philia.js";
 import type { Trait } from "./traits.js";
 
 // One game year in real milliseconds (4 real days) — the same clock as character
@@ -250,13 +251,6 @@ export function childAge(bornAtMs: number, nowMs: number, realMsPerGameYear: num
   return Math.max(0, Math.floor((nowMs - bornAtMs) / realMsPerGameYear));
 }
 
-// Philia: the 0–100 spouse bond. Moved by family-event change_philia effects.
-export const PHILIA_MIN = 0;
-export const PHILIA_MAX = 100;
-export function clampPhilia(value: number): number {
-  return Math.max(PHILIA_MIN, Math.min(PHILIA_MAX, value));
-}
-
 // The daily spouse-reaction philia delta: −1 per tag the spouse's traits oppose,
 // +1 per tag they embrace, summed and clamped to ±PHILIA_DAILY_CAP per apply.
 // Reuses scoreTraitTags — the SAME conflict/embrace matching composure scores
@@ -405,12 +399,17 @@ export function childRoll(
   existingChildrenCount: number,
   spouseTrait: SpouseTrait,
   cfg: FamilyConfig,
+  // The spouse bond scales the final chance by min(philia/50, 1.2). Defaults to 50
+  // (multiplier 1.0 — today's neutral behaviour) so callers/tests without philia are
+  // unchanged; the schema default (50) covers real marriages.
+  philia = 50,
 ): ChildRollOutcome {
   if (!marriage.active) return { born: false };
   if (existingChildrenCount >= cfg.children.maxChildren) return { born: false };
 
   const base = existingChildrenCount < 2 ? cfg.children.yearlyChildChance : cfg.children.thirdPlusChildChance;
-  const chance = base + (spouseTrait?.childChanceBonus ?? 0);
+  // Philia scales the chance AFTER the trait bonuses (fertile/frail), just before the roll.
+  const chance = (base + (spouseTrait?.childChanceBonus ?? 0)) * philiaFertilityMultiplier(philia);
   if (rng() >= chance) return { born: false };
 
   const sex: Sex = rng() < cfg.children.sexRatioBoys ? "male" : "female";

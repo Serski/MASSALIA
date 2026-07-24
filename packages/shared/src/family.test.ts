@@ -391,6 +391,34 @@ describe("isFertile (window 18–35 inclusive)", () => {
   });
 });
 
+describe("childRoll — philia fertility multiplier", () => {
+  const married = { active: true };
+  const base = cfg.children.yearlyChildChance; // count 0, no trait
+  const born = (rngVal: number, philia?: number) =>
+    childRoll(() => rngVal, married, 0, null, cfg, philia).born;
+
+  it("philia 0 → 0× → never born, even with rng 0", () => {
+    expect(born(0, 0)).toBe(false);
+  });
+  it("philia 50 → 1.0× → exactly today's chance", () => {
+    expect(born(base - 0.001, 50)).toBe(true); // just below base
+    expect(born(base + 0.001, 50)).toBe(false); // just above base
+  });
+  it("philia 25 → 0.5× → half the chance", () => {
+    expect(born(base * 0.5 - 0.001, 25)).toBe(true);
+    expect(born(base * 0.5 + 0.001, 25)).toBe(false);
+  });
+  it("philia 100 → 1.2× → born at a roll the default (1.0×) would reject", () => {
+    const rngVal = base * 1.1; // between base and base*1.2
+    expect(born(rngVal, 50)).toBe(false); // rejected at 1.0×
+    expect(born(rngVal, 100)).toBe(true); // accepted at 1.2×
+  });
+  it("omitted philia defaults to 50 (1.0×) — behaviour unchanged", () => {
+    expect(born(base - 0.001)).toBe(true);
+    expect(born(base + 0.001)).toBe(false);
+  });
+});
+
 describe("childRoll is unchanged inside the window", () => {
   // The fertility GATE lives in the DB roll (rollChildrenDue); the pure childRoll
   // itself is unaffected — a guaranteed-chance roll still produces a birth.

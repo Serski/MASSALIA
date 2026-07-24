@@ -7,11 +7,13 @@ import {
   applyComposureRecovery,
   clampComposure,
   parseComposureConfig,
+  philiaModifiers,
   recoveryPerDay,
   resolveBreak,
   type ComposureConfig,
 } from "@massalia/shared";
 import { getHeldTraits } from "./traits.js";
+import { livingSpouseState } from "./family.js";
 
 const db = createDb();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -45,7 +47,12 @@ export async function recoverComposure(characterId: string, now: Date = new Date
   const row = await loadRow(characterId);
   if (!row) return 0;
   const traits = await getHeldTraits(characterId);
-  const perDay = recoveryPerDay(traits, getComposureConfig());
+  // A living spouse in the DEVOTED philia band lifts the daily recovery rate. Lives
+  // inside the recovery computation so every recoverComposure caller inherits it
+  // without edits. Gated on spouseCandidateId — unmarried pays zero reads.
+  const spouse = await livingSpouseState(row, now);
+  const philiaBonus = spouse && spouse.philia !== null ? philiaModifiers(spouse.philia).composureRecoveryBonus : 0;
+  const perDay = recoveryPerDay(traits, getComposureConfig()) + philiaBonus;
   const accrued = applyComposureRecovery(row.composure, row.lastComposureUpdate, now, perDay);
   if (accrued.composure !== row.composure || row.lastComposureUpdate === null) {
     await db

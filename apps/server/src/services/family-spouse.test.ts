@@ -19,7 +19,8 @@ async function loadModules() {
   const age = await import("./age.js");
   const traits = await import("./traits.js");
   const family = await import("./family.js");
-  return { dbPkg, age, traits, family };
+  const composure = await import("./composure.js");
+  return { dbPkg, age, traits, family, composure };
 }
 
 suite("livingSpousePersonalityTraits (integration)", () => {
@@ -41,7 +42,7 @@ suite("livingSpousePersonalityTraits (integration)", () => {
   // trait + death age.
   async function marryTo(
     charId: string,
-    opts: { personalityTraitId: string | null; traitId?: string | null; spouseDeathAge: number | null; candidateAge?: number },
+    opts: { personalityTraitId: string | null; traitId?: string | null; spouseDeathAge: number | null; candidateAge?: number; philia?: number },
   ) {
     const { familyCandidates, marriages, playerCharacters } = m.dbPkg;
     const cand = (
@@ -50,7 +51,8 @@ suite("livingSpousePersonalityTraits (integration)", () => {
         houseSlug: "test-house", age: opts.candidateAge ?? 30, personalityTraitId: opts.personalityTraitId, traitId: opts.traitId ?? null,
       }).returning()
     )[0]!;
-    await db.insert(marriages).values({ characterId: charId, candidateId: cand.id, spouseDeathAge: opts.spouseDeathAge });
+    const marriageValues = { characterId: charId, candidateId: cand.id, spouseDeathAge: opts.spouseDeathAge, ...(opts.philia !== undefined ? { philia: opts.philia } : {}) };
+    await db.insert(marriages).values(marriageValues);
     await db.update(playerCharacters).set({ spouseCandidateId: cand.id }).where(eq(playerCharacters.id, charId));
     return cand;
   }
@@ -61,6 +63,7 @@ suite("livingSpousePersonalityTraits (integration)", () => {
     await m.age.loadAgeConfig();
     await m.traits.loadTraitDefs();
     await m.family.loadFamilyConfig();
+    await m.composure.loadComposureConfig();
 
     await db.execute(sql`
       TRUNCATE TABLE daily_routines, effect_log, character_traits, children, successions,
@@ -140,5 +143,35 @@ suite("livingSpousePersonalityTraits (integration)", () => {
     const slaveFresh = (await db.select().from(playerCharacters).where(eq(playerCharacters.id, slave.id)).limit(1))[0]!;
     const slaveFam = await m.family.familyEligibilityContext(slaveFresh, now);
     expect(slaveFam).toEqual({ married: false, spouseTraitIds: [], livingChildren: [] });
+  });
+
+  describe("recoverComposure — devoted-band philia recovery bonus (base 5)", () => {
+    const dayAgo = new Date(now.getTime() - 86_400_000);
+    const setComposure = (charId: string, composure: number, lastUpdate: Date) =>
+      db.update(m.dbPkg.playerCharacters).set({ composure, lastComposureUpdate: lastUpdate }).where(eq(m.dbPkg.playerCharacters.id, charId));
+
+    it("devoted + living spouse → +2/day (50 + (5+2) over one day = 57)", async () => {
+      const c = await createCharacter("Devoted");
+      await marryTo(c.id, { personalityTraitId: null, philia: 90, spouseDeathAge: 70, candidateAge: 30 });
+      await setComposure(c.id, 50, dayAgo);
+      expect(await m.composure.recoverComposure(c.id, now)).toBe(57);
+    });
+    it("devoted but spouse dead (past spouseDeathAge) → no bonus (55)", async () => {
+      const c = await createCharacter("DeadDevoted");
+      await marryTo(c.id, { personalityTraitId: null, philia: 90, spouseDeathAge: 60, candidateAge: 65 });
+      await setComposure(c.id, 50, dayAgo);
+      expect(await m.composure.recoverComposure(c.id, now)).toBe(55);
+    });
+    it("warm band (philia 75) → no bonus (55)", async () => {
+      const c = await createCharacter("Warm");
+      await marryTo(c.id, { personalityTraitId: null, philia: 75, spouseDeathAge: 70, candidateAge: 30 });
+      await setComposure(c.id, 50, dayAgo);
+      expect(await m.composure.recoverComposure(c.id, now)).toBe(55);
+    });
+    it("unmarried → no bonus (55)", async () => {
+      const c = await createCharacter("Lonely");
+      await setComposure(c.id, 50, dayAgo);
+      expect(await m.composure.recoverComposure(c.id, now)).toBe(55);
+    });
   });
 });
