@@ -27,6 +27,7 @@ import {
   isSpouseDeceased,
   marriagePenalty,
   parseFamilyConfig,
+  philiaBand,
   portraitFor,
   REAL_MS_PER_SEASON,
   rollSpouseDeathAge,
@@ -336,6 +337,14 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
     if (rows[0]) {
       // She ages over time — surface her CURRENT age and a quiet fertility hint.
       const currentAge = spouseCurrentAge(rows[0].age, rows[0].createdAt.getTime(), now.getTime(), getAgeConfig().realMsPerGameYear);
+      // Philia + its band for the bond bar. Every active marriage has philia via
+      // the schema default; null only if no marriage row exists (→ no bar client-side).
+      const marriageRows = await db
+        .select({ philia: marriages.philia })
+        .from(marriages)
+        .where(and(eq(marriages.characterId, character.id), eq(marriages.candidateId, character.spouseCandidateId), isNull(marriages.endedAt)))
+        .limit(1);
+      const philia = marriageRows[0]?.philia ?? null;
       spouse = {
         ...candidateView(rows[0], cfg, await houseName(rows[0].houseSlug)),
         age: currentAge,
@@ -343,6 +352,8 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
         portrait: portraitUrl(portraitFor(rows[0].avatarId ?? "", currentAge, getAgeConfig())),
         fertile: isFertile(currentAge, cfg),
         pastChildbearing: currentAge > cfg.spouse.fertilityWindow.to,
+        philia,
+        philiaBand: philia !== null ? philiaBand(philia) : null,
       };
     }
   }

@@ -9,6 +9,7 @@ const ARENA_LABELS: Record<string, string> = {
   general: "Massalia",
   council: "Oligarchy Council",
   party: "Your Party",
+  family: "Household",
 };
 
 // The curated daily decision set: one card per arena, each resolvable once, with

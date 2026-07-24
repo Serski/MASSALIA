@@ -802,6 +802,10 @@ export type SpouseView = FamilyCandidate & {
   fertile: boolean;
   // True once she is past the childbearing window — a quiet note, nothing loud.
   pastChildbearing: boolean;
+  // The philia bond (0–100) + its band name. Null only if no marriage row exists
+  // (→ the client renders no bar rather than a broken one).
+  philia: number | null;
+  philiaBand: string | null;
 };
 
 // A spouse-death-of-old-age notice (surfaces for one season, then auto-clears).

@@ -33,6 +33,22 @@ function CandidateStatChips({ stats }: { stats: FourStats }) {
   );
 }
 
+// The philia bond bar (family pack), reusing the child growth-bar treatment — a
+// 0–100 fill with a caption below (the child pattern's caption carries a number,
+// so we show philia's). Renders nothing when philia is null (no marriage row):
+// no bar rather than a broken one.
+function PhiliaBar({ philia, band }: { philia: number | null; band: string | null }) {
+  if (philia === null || band === null) return null;
+  return (
+    <>
+      <div className="child-grow-bar" aria-label={`Philia ${philia} of 100`}>
+        <span style={{ width: `${philia}%` }} />
+      </div>
+      <div className="child-grow">{titleCase(band)} · {philia}</div>
+    </>
+  );
+}
+
 // The trait chips shared by the spouse + prospect cards: the mechanical trait
 // first, her personality second, each omitted when null. Both use the tone-good
 // pill (the styling PersonRow's Tchip uses); the personality chip carries its
@@ -278,6 +294,7 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
                 portrait={state.spouse.portrait}
               />
               <TraitChips trait={state.spouse.trait} personality={state.spouse.personality} />
+              <PhiliaBar philia={state.spouse.philia} band={state.spouse.philiaBand} />
               {state.spouse.pastChildbearing ? (
                 <p className="composure-note muted spouse-fertility-note">She is past her childbearing years.</p>
               ) : null}
