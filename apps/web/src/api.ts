@@ -314,6 +314,10 @@ export const api = {
   ageConfig: () => apiFetch<AgeConfig>("/content/age/age-config.json"),
   family: () => apiFetch<FamilyState>("/api/family"),
   marry: (candidateId: string) => apiFetch<MarryResult>("/api/family/marry", { method: "POST", body: { candidateId } }),
+  giveGift: () => apiFetch<{ ok: true; philia: number; delta: number; diminished: boolean }>("/api/family/gift", { method: "POST" }),
+  holdSymposium: () => apiFetch<{ ok: true; philia: number; delta: number; prestige: number }>("/api/family/symposium", { method: "POST" }),
+  divorce: () => apiFetch<{ ok: true; tier: "full" | "fallen"; penalties: { prestige: number; devotion: number; composure: number; partyFavor: number; drachmae: number } }>("/api/family/divorce", { method: "POST" }),
+  startLoverPlot: () => apiFetch<{ ok: true; loverState: string }>("/api/family/lover", { method: "POST" }),
   nameChild: (childId: string, name: string) =>
     apiFetch<{ ok: boolean; name: string }>(`/api/family/children/${childId}/name`, { method: "POST", body: { name } }),
   succeed: (candidateId?: string) =>
@@ -807,11 +811,22 @@ export type SpouseView = FamilyCandidate & {
   // (→ the client renders no bar rather than a broken one).
   philia: number | null;
   philiaBand: string | null;
+  // Action availability, computed server-side (so the client never re-derives the
+  // game-year math): a gift is +1 this year (diminished); a symposium is spent.
+  giftDiminished: boolean;
+  symposiumAvailable: boolean;
+  loverState: string; // 'none' | 'active' | 'fallen'
 };
 
 // A spouse-death-of-old-age notice (surfaces for one season, then auto-clears).
 export type SpouseDeathNotice = {
   lateWifeName: string | null;
+  yearsMarried: number;
+};
+
+// A divorce-aftermath notice (surfaces for one season on the ended marriage).
+export type DivorceNotice = {
+  formerWifeName: string | null;
   yearsMarried: number;
 };
 
@@ -824,6 +839,10 @@ export type FamilyState = {
   characterIdeology: number;
   spouse: SpouseView | null;
   spouseDeath: SpouseDeathNotice | null;
+  // Lover-plot + divorce notices, derived server-side for one season each.
+  divorceNotice: DivorceNotice | null;
+  fellNotice: boolean;
+  discoveredNotice: boolean;
   candidates: { marriage: MarriageCandidate[]; adoption: FamilyCandidate[] };
   children: FamilyChild[];
   birthEvent: BirthEvent | null;

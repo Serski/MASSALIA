@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, contentUrl, type ChronicleEntry, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice } from "../../api.js";
+import { api, ApiError, contentUrl, type ChronicleEntry, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type DivorceNotice } from "../../api.js";
 import { assetPath, type House } from "../../data/league.js";
 import { DashboardCard, type FourStats, PanelBanner, type PanelProps, PersonFace, PersonRow, festivalName, titleCase } from "../shared.js";
 
@@ -167,6 +167,49 @@ function SpouseDeathCard({ notice }: { notice: SpouseDeathNotice }) {
   );
 }
 
+// Divorce aftermath — somber, brief. The marriage is ended; prospects return.
+function DivorceAftermathCard({ notice }: { notice: DivorceNotice }) {
+  const name = notice.formerWifeName ?? "Your wife";
+  const years = notice.yearsMarried;
+  return (
+    <DashboardCard className="birth-card mourning-card">
+      <div className="event-body">
+        <span className="dashboard-label event-kicker">The marriage is ended</span>
+        <h3>You have divorced {name}.</h3>
+        <p className="composure-note neg">
+          {name}, your wife of {years} year{years === 1 ? "" : "s"}, is put from your house. The matter is closed.
+        </p>
+      </div>
+    </DashboardCard>
+  );
+}
+
+// She has fallen — delivered as a whisper the player receives. No choice.
+function FellCard({ wifeName }: { wifeName: string }) {
+  return (
+    <DashboardCard className="birth-card">
+      <div className="event-body">
+        <span className="dashboard-label event-kicker">A whisper reaches you</span>
+        <h3>{wifeName} has taken a lover.</h3>
+        <p className="composure-note muted">What you set in motion has run its course; she is his now, in all but name.</p>
+      </div>
+    </DashboardCard>
+  );
+}
+
+// The city knows — the −3 prestige is already applied; the card explains why.
+function DiscoveredCard() {
+  return (
+    <DashboardCard className="birth-card mourning-card">
+      <div className="event-body">
+        <span className="dashboard-label event-kicker">The city talks</span>
+        <h3>The affair is known.</h3>
+        <p className="composure-note neg">Word of the lover has reached the agora. Your name is diminished by it (−3 prestige).</p>
+      </div>
+    </DashboardCard>
+  );
+}
+
 export default function FamilyPanel({ onRefresh }: PanelProps) {
   // Two tabs: the household management view (default) and the dated house
   // chronicle (the existing TimelinePanel, mounted as-is).
@@ -220,6 +263,68 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
       onRefresh();
     } catch (err) {
       setNote(err instanceof ApiError ? err.message : "The child could not be named.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const giveGift = async () => {
+    setBusy(true);
+    setNote("");
+    try {
+      const r = await api.giveGift();
+      setNote(r.diminished ? `A small gift — she has come to expect them (+${r.delta} philia, −25 drachmae).` : `A gift given (+${r.delta} philia, −25 drachmae).`);
+      load();
+      onRefresh();
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "The gift could not be given.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const holdSymposium = async () => {
+    setBusy(true);
+    setNote("");
+    try {
+      const r = await api.holdSymposium();
+      setNote(`A symposium in her honor (+${r.delta} philia, +${r.prestige} prestige, −35 drachmae).`);
+      load();
+      onRefresh();
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "The symposium could not be held.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const startLoverPlot = async () => {
+    setBusy(true);
+    setNote("");
+    try {
+      await api.startLoverPlot();
+      setConfirmId(null);
+      setNote("A certain officer has been introduced to the household.");
+      load();
+      onRefresh();
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "The scheme could not be set in motion.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const divorce = async () => {
+    setBusy(true);
+    setNote("");
+    try {
+      const r = await api.divorce();
+      setConfirmId(null);
+      setNote(r.tier === "fallen" ? "The marriage is dissolved. Few will blame you." : "The marriage is dissolved. The city will remember it.");
+      load();
+      onRefresh();
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "The divorce could not be granted.");
     } finally {
       setBusy(false);
     }
@@ -283,6 +388,12 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
 
           {state.spouseDeath ? <SpouseDeathCard notice={state.spouseDeath} /> : null}
 
+          {state.divorceNotice ? <DivorceAftermathCard notice={state.divorceNotice} /> : null}
+
+          {state.fellNotice && state.spouse ? <FellCard wifeName={state.spouse.name} /> : null}
+
+          {state.discoveredNotice ? <DiscoveredCard /> : null}
+
           {state.spouse ? (
             <>
               <div className="panel-label">Your spouse</div>
@@ -298,6 +409,49 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
               {state.spouse.pastChildbearing ? (
                 <p className="composure-note muted spouse-fertility-note">She is past her childbearing years.</p>
               ) : null}
+
+              <div className="event-choice-stack">
+                <button className="event-choice-button" type="button" disabled={busy} onClick={giveGift}>
+                  {state.spouse.giftDiminished ? "Give a gift · she expects it now (−25 dr)" : "Give a gift (−25 dr)"}
+                </button>
+                <button
+                  className="event-choice-button"
+                  type="button"
+                  disabled={busy || !state.spouse.symposiumAvailable}
+                  title={state.spouse.symposiumAvailable ? undefined : "Already honored her this year"}
+                  onClick={holdSymposium}
+                >
+                  Hold a symposium (−35 dr)
+                </button>
+
+                {state.spouse.loverState === "none" ? (
+                  confirmId === "lover" ? (
+                    <div className="event-choice-stack">
+                      <button className="event-choice-button" type="button" disabled={busy} onClick={startLoverPlot}>
+                        <strong>Confirm — set the scheme in motion</strong>
+                      </button>
+                      <button className="dashboard-ghost-button" type="button" disabled={busy} onClick={() => setConfirmId(null)}>Cancel</button>
+                    </div>
+                  ) : (
+                    <button className="event-choice-button" type="button" disabled={busy} onClick={() => setConfirmId("lover")}>Push her toward a lover</button>
+                  )
+                ) : state.spouse.loverState === "active" ? (
+                  <p className="composure-note muted"><em>A certain officer has been introduced to the household.</em></p>
+                ) : (
+                  <p className="composure-note muted"><em>She has a lover.</em></p>
+                )}
+
+                {confirmId === "divorce" ? (
+                  <div className="event-choice-stack">
+                    <button className="event-choice-button" type="button" disabled={busy} onClick={divorce}>
+                      <strong>{state.spouse.loverState === "fallen" ? "Confirm — none will blame you" : "Confirm — the city will not forgive it"}</strong>
+                    </button>
+                    <button className="dashboard-ghost-button" type="button" disabled={busy} onClick={() => setConfirmId(null)}>Cancel</button>
+                  </div>
+                ) : (
+                  <button className="dashboard-ghost-button" type="button" disabled={busy} onClick={() => setConfirmId("divorce")}>Divorce her</button>
+                )}
+              </div>
             </>
           ) : null}
 

@@ -343,14 +343,17 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
     if (rows[0]) {
       // She ages over time — surface her CURRENT age and a quiet fertility hint.
       const currentAge = spouseCurrentAge(rows[0].age, rows[0].createdAt.getTime(), now.getTime(), getAgeConfig().realMsPerGameYear);
-      // Philia + its band for the bond bar. Every active marriage has philia via
-      // the schema default; null only if no marriage row exists (→ no bar client-side).
+      // Philia (for the bond bar) + the action-availability flags, computed
+      // server-side so the client never re-derives calendar math. Every active
+      // marriage has a row via the schema default; null philia only if none.
       const marriageRows = await db
-        .select({ philia: marriages.philia })
+        .select({ philia: marriages.philia, lastGiftYear: marriages.lastGiftYear, lastSymposiumYear: marriages.lastSymposiumYear, loverState: marriages.loverState })
         .from(marriages)
         .where(and(eq(marriages.characterId, character.id), eq(marriages.candidateId, character.spouseCandidateId), isNull(marriages.endedAt)))
         .limit(1);
-      const philia = marriageRows[0]?.philia ?? null;
+      const marriageRow = marriageRows[0];
+      const philia = marriageRow?.philia ?? null;
+      const year = gameDate(now.getTime(), await worldStartedMs(character.worldId)).yearInGame;
       spouse = {
         ...candidateView(rows[0], cfg, await houseName(rows[0].houseSlug)),
         age: currentAge,
@@ -360,6 +363,11 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
         pastChildbearing: currentAge > cfg.spouse.fertilityWindow.to,
         philia,
         philiaBand: philia !== null ? philiaBand(philia) : null,
+        // A gift this game year already → the next is +1 (diminished). Symposium is
+        // once per game year.
+        giftDiminished: marriageRow?.lastGiftYear === year,
+        symposiumAvailable: marriageRow?.lastSymposiumYear !== year,
+        loverState: marriageRow?.loverState ?? "none",
       };
     }
   }
@@ -404,8 +412,8 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
   // Lover-plot notices on the CURRENT marriage: she has fallen / the city knows,
   // each windowed on its timestamp like the other one-shot notices. Derivation
   // only — the cards render in a later phase.
-  let loverFellNotice = false;
-  let loverDiscoveredNotice = false;
+  let fellNotice = false;
+  let discoveredNotice = false;
   if (!locked && character.spouseCandidateId) {
     const rows = await db
       .select({ loverFellAt: marriages.loverFellAt, loverDiscoveredAt: marriages.loverDiscoveredAt })
@@ -413,8 +421,8 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
       .where(and(eq(marriages.characterId, character.id), eq(marriages.candidateId, character.spouseCandidateId), isNull(marriages.endedAt)))
       .limit(1);
     const row = rows[0];
-    if (row?.loverFellAt && now.getTime() - row.loverFellAt.getTime() < REAL_MS_PER_SEASON) loverFellNotice = true;
-    if (row?.loverDiscoveredAt && now.getTime() - row.loverDiscoveredAt.getTime() < REAL_MS_PER_SEASON) loverDiscoveredNotice = true;
+    if (row?.loverFellAt && now.getTime() - row.loverFellAt.getTime() < REAL_MS_PER_SEASON) fellNotice = true;
+    if (row?.loverDiscoveredAt && now.getTime() - row.loverDiscoveredAt.getTime() < REAL_MS_PER_SEASON) discoveredNotice = true;
   }
 
   const { children: childList, birthEvent } = locked ? { children: [], birthEvent: null } : await childrenSection(character, now);
@@ -428,8 +436,8 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
     spouse,
     spouseDeath,
     divorceNotice,
-    loverFellNotice,
-    loverDiscoveredNotice,
+    fellNotice,
+    discoveredNotice,
     candidates: { marriage: marriageOffers, adoption: adoptionOffers },
     children: childList,
     birthEvent,
