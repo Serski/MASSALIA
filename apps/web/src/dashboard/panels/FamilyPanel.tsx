@@ -39,13 +39,15 @@ function CandidateStatChips({ stats }: { stats: FourStats }) {
 // no bar rather than a broken one.
 function PhiliaBar({ philia, band }: { philia: number | null; band: string | null }) {
   if (philia === null || band === null) return null;
+  // Own class (philia-bar) so the bond reads as affection, not child-growth
+  // progress; the estranged band flips the fill to a warning red.
   return (
-    <>
-      <div className="child-grow-bar" aria-label={`Philia ${philia} of 100`}>
+    <div className="philia-block">
+      <div className={`philia-bar${band === "estranged" ? " estranged" : ""}`} aria-label={`Philia ${philia} of 100`}>
         <span style={{ width: `${philia}%` }} />
       </div>
       <div className="child-grow">{titleCase(band)} · {philia}</div>
-    </>
+    </div>
   );
 }
 
@@ -397,61 +399,66 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
           {state.spouse ? (
             <>
               <div className="panel-label">Your spouse</div>
-              <PersonRow
-                name={`${state.spouse.name} of House ${state.spouse.houseName}`}
-                nameSuffix={<span className="person-suffix"> · your wife</span>}
-                role={`Age ${state.spouse.age} · ${state.spouse.houseName}`}
-                traits={[]}
-                portrait={state.spouse.portrait}
-              />
-              <TraitChips trait={state.spouse.trait} personality={state.spouse.personality} />
-              <PhiliaBar philia={state.spouse.philia} band={state.spouse.philiaBand} />
-              {state.spouse.pastChildbearing ? (
-                <p className="composure-note muted spouse-fertility-note">She is past her childbearing years.</p>
-              ) : null}
+              <DashboardCard className="spouse-card">
+                <PersonRow
+                  name={`${state.spouse.name} of House ${state.spouse.houseName}`}
+                  nameSuffix={<span className="person-suffix"> · your wife</span>}
+                  role={`Age ${state.spouse.age} · ${state.spouse.houseName}`}
+                  traits={[]}
+                  portrait={state.spouse.portrait}
+                />
+                <TraitChips trait={state.spouse.trait} personality={state.spouse.personality} />
+                <PhiliaBar philia={state.spouse.philia} band={state.spouse.philiaBand} />
+                {state.spouse.pastChildbearing ? (
+                  <p className="composure-note muted spouse-fertility-note">She is past her childbearing years.</p>
+                ) : null}
 
-              <div className="event-choice-stack">
-                <button className="event-choice-button" type="button" disabled={busy} onClick={giveGift}>
-                  {state.spouse.giftDiminished ? "Give a gift · she expects it now (−25 dr)" : "Give a gift (−25 dr)"}
-                </button>
-                <button
-                  className="event-choice-button"
-                  type="button"
-                  disabled={busy || !state.spouse.symposiumAvailable}
-                  title={state.spouse.symposiumAvailable ? undefined : "Already honored her this year"}
-                  onClick={holdSymposium}
-                >
-                  Hold a symposium (−35 dr)
-                </button>
+                {/* Plot marker line — the passive state of an active/fallen scheme. */}
+                {state.spouse.loverState === "active" ? (
+                  <p className="composure-note muted"><em>A certain officer has been introduced to the household.</em></p>
+                ) : state.spouse.loverState === "fallen" ? (
+                  <p className="composure-note muted"><em>She has a lover.</em></p>
+                ) : null}
 
-                {state.spouse.loverState === "none" ? (
-                  confirmId === "lover" ? (
+                <div className="spouse-actions">
+                  <button className="event-choice-button" type="button" disabled={busy} onClick={giveGift}>
+                    {state.spouse.giftDiminished ? "Give a gift · she expects it now (−25 dr)" : "Give a gift (−25 dr)"}
+                  </button>
+                  <button
+                    className="event-choice-button"
+                    type="button"
+                    disabled={busy || !state.spouse.symposiumAvailable}
+                    title={state.spouse.symposiumAvailable ? undefined : "Already honored her this year"}
+                    onClick={holdSymposium}
+                  >
+                    Hold a symposium (−35 dr)
+                  </button>
+
+                  {state.spouse.loverState === "none" ? (
+                    confirmId === "lover" ? (
+                      <div className="event-choice-stack">
+                        <button className="event-choice-button" type="button" disabled={busy} onClick={startLoverPlot}>
+                          <strong>Confirm — set the scheme in motion</strong>
+                        </button>
+                        <button className="dashboard-ghost-button" type="button" disabled={busy} onClick={() => setConfirmId(null)}>Cancel</button>
+                      </div>
+                    ) : (
+                      <button className="event-choice-button" type="button" disabled={busy} onClick={() => setConfirmId("lover")}>Push her toward a lover</button>
+                    )
+                  ) : null}
+
+                  {confirmId === "divorce" ? (
                     <div className="event-choice-stack">
-                      <button className="event-choice-button" type="button" disabled={busy} onClick={startLoverPlot}>
-                        <strong>Confirm — set the scheme in motion</strong>
+                      <button className="event-choice-button" type="button" disabled={busy} onClick={divorce}>
+                        <strong>{state.spouse.loverState === "fallen" ? "Confirm — none will blame you" : "Confirm — the city will not forgive it"}</strong>
                       </button>
                       <button className="dashboard-ghost-button" type="button" disabled={busy} onClick={() => setConfirmId(null)}>Cancel</button>
                     </div>
                   ) : (
-                    <button className="event-choice-button" type="button" disabled={busy} onClick={() => setConfirmId("lover")}>Push her toward a lover</button>
-                  )
-                ) : state.spouse.loverState === "active" ? (
-                  <p className="composure-note muted"><em>A certain officer has been introduced to the household.</em></p>
-                ) : (
-                  <p className="composure-note muted"><em>She has a lover.</em></p>
-                )}
-
-                {confirmId === "divorce" ? (
-                  <div className="event-choice-stack">
-                    <button className="event-choice-button" type="button" disabled={busy} onClick={divorce}>
-                      <strong>{state.spouse.loverState === "fallen" ? "Confirm — none will blame you" : "Confirm — the city will not forgive it"}</strong>
-                    </button>
-                    <button className="dashboard-ghost-button" type="button" disabled={busy} onClick={() => setConfirmId(null)}>Cancel</button>
-                  </div>
-                ) : (
-                  <button className="dashboard-ghost-button" type="button" disabled={busy} onClick={() => setConfirmId("divorce")}>Divorce her</button>
-                )}
-              </div>
+                    <button className="dashboard-ghost-button" type="button" disabled={busy} onClick={() => setConfirmId("divorce")}>Divorce her</button>
+                  )}
+                </div>
+              </DashboardCard>
             </>
           ) : null}
 
