@@ -191,6 +191,7 @@ export type PlayerState = {
 // structured payload the client renders into prose (see renderChronicleEntry).
 export type ChronicleType =
   | "marriage"
+  | "divorce"
   | "birth"
   | "megas_choregos"
   | "festival_participation"

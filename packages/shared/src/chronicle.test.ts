@@ -209,3 +209,31 @@ describe("buildChronicle — festival trimming", () => {
     expect(out[0]!.payload).toMatchObject({ festivalId: "fest-artemisia", gameYear: 3 });
   });
 });
+
+describe("buildChronicle — divorce (pack B)", () => {
+  const base = { startedMs: 0, successionBoundariesMs: [] as number[], births: [], choregos: [], festivals: [], olympics: [] };
+
+  it("a divorced marriage emits a divorce entry at endedAt; an intact one does not", () => {
+    const input: ChronicleInput = {
+      ...base,
+      marriages: [
+        { id: "m1", marriedAt: 5 * S, spouseName: "Aristomache", endedAt: 12 * S, endReason: "divorced" },
+        { id: "m2", marriedAt: 20 * S, spouseName: "Theano" }, // intact
+      ],
+    };
+    const entries = buildChronicle(input);
+    const divorces = entries.filter((e) => e.type === "divorce");
+    expect(divorces).toHaveLength(1);
+    expect(divorces[0]!.payload).toEqual({ spouseName: "Aristomache" });
+    expect(divorces[0]!.seasonIndex).toBe(12); // dated at endedAt, not marriedAt
+    expect(entries.filter((e) => e.type === "marriage")).toHaveLength(2); // both marriages still shown
+  });
+
+  it("a spouse_died end does not emit a divorce entry", () => {
+    const input: ChronicleInput = {
+      ...base,
+      marriages: [{ id: "m1", marriedAt: 5 * S, spouseName: "X", endedAt: 12 * S, endReason: "spouse_died" }],
+    };
+    expect(buildChronicle(input).filter((e) => e.type === "divorce")).toHaveLength(0);
+  });
+});

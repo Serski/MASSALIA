@@ -42,6 +42,7 @@ import {
 } from "@massalia/shared";
 import { getAgeConfig, portraitUrl } from "./age.js";
 import { getAllTraitDefs, getTraitDef } from "./traits.js";
+import { applyComposureDelta } from "./composure.js";
 import { broadcastState } from "./worldState.js";
 import { onIdeologyChanged } from "./politics.js";
 import { enqueueChildRoll, enqueueFamilyDraw } from "./queue.js";
@@ -381,6 +382,25 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
     }
   }
 
+  // A divorce notice: a marriage the player ended within the last season (derived
+  // exactly like the spouse-death notice; auto-acknowledged once the season passes).
+  // The card renders in a later phase — this is server-side derivation only.
+  let divorceNotice = null;
+  if (!locked) {
+    const ended = await db
+      .select()
+      .from(marriages)
+      .where(and(eq(marriages.characterId, character.id), eq(marriages.endReason, "divorced")))
+      .orderBy(desc(marriages.endedAt))
+      .limit(1);
+    const row = ended[0];
+    if (row && row.endedAt && now.getTime() - row.endedAt.getTime() < REAL_MS_PER_SEASON) {
+      const wife = await db.select({ name: familyCandidates.name }).from(familyCandidates).where(eq(familyCandidates.id, row.candidateId)).limit(1);
+      const yearsMarried = Math.max(0, Math.floor((row.endedAt.getTime() - row.marriedAt.getTime()) / getAgeConfig().realMsPerGameYear));
+      divorceNotice = { formerWifeName: wife[0]?.name ?? null, yearsMarried };
+    }
+  }
+
   const { children: childList, birthEvent } = locked ? { children: [], birthEvent: null } : await childrenSection(character, now);
 
   return {
@@ -391,6 +411,7 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
     characterIdeology: character.ideology,
     spouse,
     spouseDeath,
+    divorceNotice,
     candidates: { marriage: marriageOffers, adoption: adoptionOffers },
     children: childList,
     birthEvent,
@@ -578,4 +599,87 @@ export async function holdSymposium(character: CharacterRow, now: Date = new Dat
     if (error instanceof Error && error.message === "already_honored") return { ok: false, code: 409, error: "You have already honored her this year." };
     throw error;
   }
+}
+
+// --- Divorce (pack B) -------------------------------------------------------
+// Penalty tiers. FULL applies for any non-fallen marriage (including an active
+// plot — starting the plot buys nothing until she falls). FALLEN is a quarter
+// tier: divorcing a wife who has already strayed costs far less, and no dowry.
+const DIVORCE_FULL = { prestige: -12, devotion: -10, composure: -50, favor: 30, dowry: 60 };
+const DIVORCE_FALLEN = { prestige: -3, devotion: -2, composure: -12, favor: 8, dowry: 0 };
+
+export type DivorcePenalties = { prestige: number; devotion: number; composure: number; partyFavor: number; drachmae: number };
+export type DivorceResult = { ok: true; tier: "full" | "fallen"; penalties: DivorcePenalties } | { ok: false; code: number; error: string };
+
+// End the marriage on the player's initiative. Mirrors checkSpouseDeath (endedAt/
+// endReason + spouseCandidateId null) and the marriage-penalty pattern. Prospects
+// reopen via the widower's lazy ensureFreshDraw on the next family read (the
+// spouseCandidateId=null gate) — nothing extra here.
+export async function divorce(character: CharacterRow, now: Date = new Date()): Promise<DivorceResult> {
+  const spouse = await livingSpouseState(character, now);
+  if (!spouse || spouse.marriageId === null) return { ok: false, code: 409, error: "You have no wife to divorce." };
+  const marriageId = spouse.marriageId;
+
+  const mRows = await db.select({ loverState: marriages.loverState }).from(marriages).where(eq(marriages.id, marriageId)).limit(1);
+  const fallen = (mRows[0]?.loverState ?? "none") === "fallen";
+  const tier = fallen ? DIVORCE_FALLEN : DIVORCE_FULL;
+  const returnsDowry = tier.dowry > 0 && spouse.spouseTraitId === "dowried";
+  const favorParty = character.party === "palaioi" || character.party === "dynatoi" ? character.party : null;
+
+  let prestigeApplied = 0;
+  let devotionApplied = 0;
+  let drachmaeApplied = 0;
+  let favorApplied = 0;
+
+  await db.transaction(async (tx) => {
+    const cur = (
+      await tx
+        .select({ prestige: playerCharacters.prestige, devotion: playerCharacters.devotion, drachmae: playerCharacters.drachmae, growth: playerCharacters.growthMultiplier })
+        .from(playerCharacters)
+        .where(eq(playerCharacters.id, character.id))
+        .limit(1)
+    )[0]!;
+    // Stats through the same growth+cap the change_stat effect uses (applyStatGrowth
+    // returns negatives unscaled; capStat floors at 0).
+    prestigeApplied = applyStatGrowth(tier.prestige, Number(cur.growth));
+    devotionApplied = applyStatGrowth(tier.devotion, Number(cur.growth));
+    const nextPrestige = capStat(cur.prestige + prestigeApplied, getAgeConfig());
+    const nextDevotion = capStat(cur.devotion + devotionApplied, getAgeConfig());
+    const updates: Partial<typeof playerCharacters.$inferInsert> = { prestige: nextPrestige, devotion: nextDevotion, spouseCandidateId: null };
+    if (returnsDowry) {
+      // Drachmae floors at 0 (the same as every change_drachmae effect path).
+      const nextDrachmae = Math.max(0, cur.drachmae - tier.dowry);
+      drachmaeApplied = nextDrachmae - cur.drachmae;
+      updates.drachmae = nextDrachmae;
+    }
+    await tx.update(playerCharacters).set(updates).where(eq(playerCharacters.id, character.id));
+    await tx.update(marriages).set({ endedAt: now, endReason: "divorced" }).where(eq(marriages.id, marriageId));
+
+    await tx.insert(effectLog).values({ characterId: character.id, kind: "change_stat", detail: { stat: "prestige", requested: tier.prestige, applied: prestigeApplied, source: "divorce" } });
+    await tx.insert(effectLog).values({ characterId: character.id, kind: "change_stat", detail: { stat: "devotion", requested: tier.devotion, applied: devotionApplied, source: "divorce" } });
+    // Composure's audit intent (the actual clamp + break run via applyComposureDelta
+    // after the tx — the existing composure-delta application, which owns composureLog).
+    await tx.insert(effectLog).values({ characterId: character.id, kind: "change_composure", detail: { amount: tier.composure, source: "divorce" } });
+    if (returnsDowry) {
+      await tx.insert(effectLog).values({ characterId: character.id, kind: "change_drachmae", detail: { amount: drachmaeApplied, value: updates.drachmae, source: "divorce" } });
+    }
+    if (favorParty) {
+      favorApplied = -tier.favor;
+      await tx
+        .insert(partyFavor)
+        .values({ characterId: character.id, party: favorParty, favor: -tier.favor })
+        .onConflictDoUpdate({ target: [partyFavor.characterId, partyFavor.party], set: { favor: sql`${partyFavor.favor} - ${tier.favor}` } });
+      await tx.insert(effectLog).values({ characterId: character.id, kind: "change_party_favor", detail: { party: favorParty, amount: -tier.favor, source: "divorce" } });
+    }
+  });
+
+  // Composure via the break-aware service (clamps at 0, may trigger a break).
+  await applyComposureDelta(character.id, tier.composure, "divorce", now);
+  await broadcastState();
+
+  return {
+    ok: true,
+    tier: fallen ? "fallen" : "full",
+    penalties: { prestige: prestigeApplied, devotion: devotionApplied, composure: tier.composure, partyFavor: favorApplied, drachmae: drachmaeApplied },
+  };
 }

@@ -394,6 +394,7 @@ function generationHeading(n: number): string {
 // entry.type, turning a payload into a sentence. The server stores no prose.
 const chronicleRenderers: Record<ChronicleEntry["type"], (payload: Record<string, unknown>) => string> = {
   marriage: (p) => `Wed ${p.spouseName}.`,
+  divorce: (p) => `Divorced ${p.spouseName}.`,
   birth: (p) => `A ${p.sex === "female" ? "daughter" : "son"}, ${p.childName}, was born.`,
   megas_choregos: (p) => `Named Megas Choregos of the ${festivalName(String(p.festivalId))}.`,
   festival_participation: (p) =>

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../services/auth.js";
 import { ensureCharacterRow, findCharacterRow, getActivePlayer, getActiveWorldId, type CharacterRow } from "../services/character.js";
-import { advanceChildren, advanceSpouseDeath, ensureFreshDraw, familyState, giveGift, holdSymposium, marry, nameChild } from "../services/family.js";
+import { advanceChildren, advanceSpouseDeath, divorce, ensureFreshDraw, familyState, giveGift, holdSymposium, marry, nameChild } from "../services/family.js";
 import { adopt, dynastyInfo, regentBadge, resolveSuccession, successionInfo } from "../services/succession.js";
 
 async function actingRow(userId: string): Promise<{ row: CharacterRow } | { error: string; code: number }> {
@@ -134,6 +134,21 @@ export async function familyRoutes(app: FastifyInstance) {
       return { error: acting.error };
     }
     const result = await holdSymposium(acting.row, new Date());
+    if (!result.ok) {
+      reply.code(result.code);
+      return { error: result.error };
+    }
+    return result;
+  });
+
+  app.post("/divorce", async (request, reply) => {
+    const user = await requireAuth(request);
+    const acting = await actingRow(user.id);
+    if ("error" in acting) {
+      reply.code(acting.code);
+      return { error: acting.error };
+    }
+    const result = await divorce(acting.row, new Date());
     if (!result.ok) {
       reply.code(result.code);
       return { error: result.error };

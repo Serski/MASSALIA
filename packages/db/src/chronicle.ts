@@ -67,7 +67,7 @@ export async function gatherChronicleForCharacter(characterId: string): Promise<
 
   // Marriages (spouse display name via the consumed family candidate).
   const marriageRows = await db
-    .select({ id: marriages.id, marriedAt: marriages.marriedAt, spouseName: familyCandidates.name })
+    .select({ id: marriages.id, marriedAt: marriages.marriedAt, spouseName: familyCandidates.name, endedAt: marriages.endedAt, endReason: marriages.endReason })
     .from(marriages)
     .innerJoin(familyCandidates, eq(familyCandidates.id, marriages.candidateId))
     .where(eq(marriages.characterId, slot.id));
@@ -167,7 +167,7 @@ export async function gatherChronicleForCharacter(characterId: string): Promise<
   return buildChronicle({
     startedMs,
     successionBoundariesMs,
-    marriages: marriageRows.map((row) => ({ id: row.id, marriedAt: row.marriedAt.getTime(), spouseName: row.spouseName })),
+    marriages: marriageRows.map((row) => ({ id: row.id, marriedAt: row.marriedAt.getTime(), spouseName: row.spouseName, endedAt: row.endedAt ? row.endedAt.getTime() : null, endReason: row.endReason })),
     births: birthRows.map((row) => ({ id: row.id, bornAt: row.bornAt.getTime(), childName: row.childName, sex: row.sex })),
     choregos: choregosRows.map((row) => ({ id: row.id, closedAt: row.closedAt.getTime(), festivalId: row.festivalId, gameYear: row.gameYear })),
     festivals,

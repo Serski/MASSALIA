@@ -14,6 +14,7 @@ import { formatGameDate, gameDate } from "./calendar.js";
 
 export type ChronicleType =
   | "marriage"
+  | "divorce"
   | "birth"
   | "megas_choregos"
   | "festival_participation"
@@ -39,6 +40,10 @@ export type ChronicleMarriageRow = {
   id: string;
   marriedAt: number;
   spouseName: string;
+  // Present once the marriage has ended; a "divorced" endReason emits a divorce
+  // entry dated at endedAt (pack B).
+  endedAt?: number | null;
+  endReason?: string | null;
 };
 
 export type ChronicleBirthRow = {
@@ -95,6 +100,7 @@ const TYPE_ORDER: Record<ChronicleType, number> = {
   megas_choregos: 2,
   festival_participation: 3,
   olympic_selection: 4,
+  divorce: 5,
 };
 
 // generation = 1 + (boundaries that occurred at or before the event). An event at
@@ -135,6 +141,9 @@ export function buildChronicle(input: ChronicleInput): ChronicleEntry[] {
 
   for (const m of input.marriages) {
     staged.push(stage(m.id, m.marriedAt, "marriage", { spouseName: m.spouseName }, input));
+    if (m.endReason === "divorced" && m.endedAt != null) {
+      staged.push(stage(`${m.id}:divorce`, m.endedAt, "divorce", { spouseName: m.spouseName }, input));
+    }
   }
   for (const b of input.births) {
     staged.push(stage(b.id, b.bornAt, "birth", { childName: b.childName, sex: b.sex }, input));

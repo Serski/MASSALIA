@@ -49,6 +49,9 @@ suite("livingSpousePersonalityTraits (integration)", () => {
       await db.insert(familyCandidates).values({
         worldId, forCharacterId: charId, purpose: "marriage", name: "Wife", sex: "female",
         houseSlug: "test-house", age: opts.candidateAge ?? 30, personalityTraitId: opts.personalityTraitId, traitId: opts.traitId ?? null,
+        // The real marry() consumes the chosen candidate; mirror it so a post-divorce
+        // redraw's delete-unconsumed doesn't hit the marriages FK.
+        consumedAt: now,
       }).returning()
     )[0]!;
     const marriageValues = { characterId: charId, candidateId: cand.id, spouseDeathAge: opts.spouseDeathAge, ...(opts.philia !== undefined ? { philia: opts.philia } : {}) };
@@ -258,6 +261,103 @@ suite("livingSpousePersonalityTraits (integration)", () => {
       const r = await m.family.holdSymposium(await fresh(s.id), now);
       expect(r).toMatchObject({ ok: false, code: 409 });
       expect(await drachmaeOf(s.id)).toBe(drachmaeAfterFirst); // no second deduct
+    });
+  });
+  describe("divorce (pack B)", () => {
+    const fresh = async (id: string) => (await db.select().from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.id, id)).limit(1))[0]!;
+    const marriageRow = async (charId: string) => (await db.select().from(m.dbPkg.marriages).where(eq(m.dbPkg.marriages.characterId, charId)).limit(1))[0]!;
+    const favorRow = async (id: string, party: string) => (await db.select().from(m.dbPkg.partyFavor).where(and(eq(m.dbPkg.partyFavor.characterId, id), eq(m.dbPkg.partyFavor.party, party))).limit(1))[0];
+    const divorceLogs = async (id: string, kind: string) =>
+      (await db.select().from(m.dbPkg.effectLog).where(and(eq(m.dbPkg.effectLog.characterId, id), eq(m.dbPkg.effectLog.kind, kind)))).filter((r) => (r.detail as { source?: string }).source === "divorce");
+
+    type SetupOpts = { party?: string; prestige?: number; devotion?: number; composure?: number; drachmae?: number; dowried?: boolean; loverState?: string };
+    async function setup(name: string, opts: SetupOpts = {}) {
+      const c = await createCharacter(name);
+      await db.update(m.dbPkg.playerCharacters).set({
+        party: opts.party ?? "none", prestige: opts.prestige ?? 50, devotion: opts.devotion ?? 50,
+        composure: opts.composure ?? 70, drachmae: opts.drachmae ?? 100, lastComposureUpdate: now,
+      }).where(eq(m.dbPkg.playerCharacters.id, c.id));
+      await marryTo(c.id, { personalityTraitId: null, traitId: opts.dowried ? "dowried" : null, spouseDeathAge: 70, candidateAge: 30 });
+      const mr = await marriageRow(c.id);
+      if (opts.loverState) await db.update(m.dbPkg.marriages).set({ loverState: opts.loverState }).where(eq(m.dbPkg.marriages.id, mr.id));
+      return c.id;
+    }
+
+    it("full tier (partied, non-dowried): stats/composure/favor applied + logged, marriage ended, spouse null", async () => {
+      const id = await setup("Full", { party: "palaioi" });
+      const r = await m.family.divorce(await fresh(id), now);
+      expect(r).toMatchObject({ ok: true, tier: "full" });
+      const row = await fresh(id);
+      expect(row.prestige).toBe(38); // 50 - 12
+      expect(row.devotion).toBe(40); // 50 - 10
+      expect(row.composure).toBe(20); // 70 - 50
+      expect(row.spouseCandidateId).toBeNull();
+      expect((await favorRow(id, "palaioi"))!.favor).toBe(-30);
+      const mr = await marriageRow(id);
+      expect(mr.endReason).toBe("divorced");
+      expect(mr.endedAt).not.toBeNull();
+      expect((await divorceLogs(id, "change_stat")).length).toBe(2); // prestige + devotion
+      expect((await divorceLogs(id, "change_composure")).length).toBe(1);
+      expect((await divorceLogs(id, "change_party_favor")).length).toBe(1);
+      expect((await divorceLogs(id, "change_drachmae")).length).toBe(0); // not dowried
+    });
+
+    it("dowried full tier: -60 drachmae, and floors at 0 (never negative)", async () => {
+      const id = await setup("Dowried", { party: "dynatoi", dowried: true, drachmae: 100 });
+      await m.family.divorce(await fresh(id), now);
+      expect((await fresh(id)).drachmae).toBe(40); // 100 - 60
+      expect((await divorceLogs(id, "change_drachmae"))[0]!.detail).toMatchObject({ amount: -60 });
+
+      const poor = await setup("DowriedPoor", { dowried: true, drachmae: 40 });
+      await m.family.divorce(await fresh(poor), now);
+      expect((await fresh(poor)).drachmae).toBe(0); // floored, not -20
+      expect((await divorceLogs(poor, "change_drachmae"))[0]!.detail).toMatchObject({ amount: -40 }); // floored delta
+    });
+
+    it("fallen tier: quarter amounts, no dowry return even when dowried", async () => {
+      const id = await setup("Fallen", { party: "palaioi", dowried: true, loverState: "fallen", drachmae: 100 });
+      const r = await m.family.divorce(await fresh(id), now);
+      expect(r).toMatchObject({ ok: true, tier: "fallen" });
+      const row = await fresh(id);
+      expect(row.prestige).toBe(47); // 50 - 3
+      expect(row.devotion).toBe(48); // 50 - 2
+      expect(row.composure).toBe(58); // 70 - 12
+      expect(row.drachmae).toBe(100); // no dowry return
+      expect((await favorRow(id, "palaioi"))!.favor).toBe(-8);
+      expect((await divorceLogs(id, "change_drachmae")).length).toBe(0);
+    });
+
+    it("active-but-not-fallen plot → full tier", async () => {
+      const id = await setup("Active", { loverState: "active" });
+      const r = await m.family.divorce(await fresh(id), now);
+      expect(r).toMatchObject({ ok: true, tier: "full" });
+      expect((await fresh(id)).prestige).toBe(38);
+    });
+
+    it("unmarried → 409, nothing written", async () => {
+      const c = await createCharacter("Nobody");
+      await db.update(m.dbPkg.playerCharacters).set({ prestige: 50 }).where(eq(m.dbPkg.playerCharacters.id, c.id));
+      const r = await m.family.divorce(await fresh(c.id), now);
+      expect(r).toMatchObject({ ok: false, code: 409 });
+      expect((await fresh(c.id)).prestige).toBe(50);
+      expect((await divorceLogs(c.id, "change_stat")).length).toBe(0);
+    });
+
+    it("partyless: no favor row, everything else applies", async () => {
+      const id = await setup("Loner", { party: "none" });
+      await m.family.divorce(await fresh(id), now);
+      expect(await favorRow(id, "palaioi")).toBeUndefined();
+      expect(await favorRow(id, "dynatoi")).toBeUndefined();
+      expect((await fresh(id)).prestige).toBe(38); // still applied
+      expect((await divorceLogs(id, "change_party_favor")).length).toBe(0);
+    });
+
+    it("prospects redraw after divorce (a draw yields marriage-purpose candidates)", async () => {
+      const id = await setup("Redraw");
+      await m.family.divorce(await fresh(id), now);
+      await m.dbPkg.drawFamilyCandidates(id, { familyCfg: m.family.getFamilyConfig(), ageCfg: m.age.getAgeConfig(), now });
+      const cands = await db.select().from(m.dbPkg.familyCandidates).where(and(eq(m.dbPkg.familyCandidates.forCharacterId, id), eq(m.dbPkg.familyCandidates.purpose, "marriage")));
+      expect(cands.length).toBeGreaterThan(0);
     });
   });
 });
