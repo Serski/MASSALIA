@@ -403,13 +403,16 @@ export function childRoll(
   // (multiplier 1.0 — today's neutral behaviour) so callers/tests without philia are
   // unchanged; the schema default (50) covers real marriages.
   philia = 50,
+  // An active/fallen lover plot adds +0.10 to the chance, composed with the trait
+  // bonus (before the philia multiplier), matching how the trait bonus composes.
+  plotActive = false,
 ): ChildRollOutcome {
   if (!marriage.active) return { born: false };
   if (existingChildrenCount >= cfg.children.maxChildren) return { born: false };
 
   const base = existingChildrenCount < 2 ? cfg.children.yearlyChildChance : cfg.children.thirdPlusChildChance;
-  // Philia scales the chance AFTER the trait bonuses (fertile/frail), just before the roll.
-  const chance = (base + (spouseTrait?.childChanceBonus ?? 0)) * philiaFertilityMultiplier(philia);
+  // Trait + plot bonuses compose additively, THEN philia scales the whole thing.
+  const chance = (base + (spouseTrait?.childChanceBonus ?? 0) + (plotActive ? 0.1 : 0)) * philiaFertilityMultiplier(philia);
   if (rng() >= chance) return { born: false };
 
   const sex: Sex = rng() < cfg.children.sexRatioBoys ? "male" : "female";

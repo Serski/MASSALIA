@@ -1,19 +1,24 @@
 import { and, eq, isNull } from "drizzle-orm";
 import {
   adoptionWomenOnly,
+  applyStatGrowth,
   canMarry,
   candidateTrait,
+  capStat,
   childRoll,
   defaultChildName,
   generateCandidates,
   isFamilyLocked,
   isFertile,
+  LOVER_DISCOVERY_CHANCE,
+  LOVER_DISCOVERY_PRESTIGE,
+  loverFallChance,
   spouseCurrentAge,
   type AgeConfig,
   type FamilyConfig,
 } from "@massalia/shared";
 import { createDb } from "./client.js";
-import { children, familyCandidates, houses, marriages, playerCharacters } from "./schema.js";
+import { children, effectLog, familyCandidates, houses, marriages, playerCharacters } from "./schema.js";
 
 const db = createDb();
 
@@ -101,10 +106,16 @@ export type ChildBirth = { child: ChildRow; motherDied: boolean; lateWifeName: s
 // default name (named=false -> the birth event awaits naming). If the mother dies
 // the marriage ends ('death_in_childbirth') and the spouse link clears, but the
 // child survives — the widower may remarry from future draws.
-export async function rollChildrenDue(characterId: string, args: { familyCfg: FamilyConfig; ageCfg: AgeConfig; now?: Date }): Promise<ChildBirth[]> {
+export async function rollChildrenDue(
+  characterId: string,
+  // `rng` drives the lover fall/discovery rolls only (default Math.random); the
+  // child roll keeps its own Math.random.
+  args: { familyCfg: FamilyConfig; ageCfg: AgeConfig; now?: Date; rng?: () => number },
+): Promise<ChildBirth[]> {
   const { familyCfg, ageCfg } = args;
   const now = args.now ?? new Date();
   const gameYearMs = ageCfg.realMsPerGameYear;
+  const loverRng = args.rng ?? Math.random;
 
   const load = async () => (await db.select().from(playerCharacters).where(eq(playerCharacters.id, characterId)).limit(1))[0];
   let character = await load();
@@ -125,10 +136,45 @@ export async function rollChildrenDue(characterId: string, args: { familyCfg: Fa
   for (let i = 0; i < rolls; i++) {
     character = await load();
     if (!character || !character.spouseCandidateId) break; // widowed -> no more rolls until remarriage
+    // "That year's" roll timestamp — anchors the lover fell/discovered notices.
+    const yearTimestamp = new Date(anchorStart.getTime() + (i + 1) * gameYearMs);
 
     const spouseRows = await db.select().from(familyCandidates).where(eq(familyCandidates.id, character.spouseCandidateId)).limit(1);
     const spouse = spouseRows[0];
     const spouseTrait = candidateTrait(familyCfg, spouse?.traitId ?? null);
+
+    // The active marriage — philia + lover-plot state. Read ABOVE the fertility
+    // gate so the lover rolls fire every year regardless of the fertility window.
+    const marriageRows = await db
+      .select({ id: marriages.id, philia: marriages.philia, loverState: marriages.loverState, loverDiscoveredAt: marriages.loverDiscoveredAt })
+      .from(marriages)
+      .where(and(eq(marriages.characterId, characterId), eq(marriages.candidateId, character.spouseCandidateId), isNull(marriages.endedAt)))
+      .limit(1);
+    const marriage = marriageRows[0];
+    const philia = marriage?.philia ?? 50;
+    let loverState = marriage?.loverState ?? "none";
+    let loverDiscovered = marriage?.loverDiscoveredAt != null;
+
+    // --- Lover plot yearly rolls (piggybacked on the child cadence) ---------
+    if (loverState !== "none" && marriage) {
+      // Fall roll — only while active. Fallen is permanent (no further fall rolls).
+      if (loverState === "active" && loverRng() < loverFallChance(spouse?.personalityTraitId ?? null)) {
+        loverState = "fallen";
+        await db.update(marriages).set({ loverState: "fallen", loverFellAt: yearTimestamp }).where(eq(marriages.id, marriage.id));
+        await db.insert(effectLog).values({ characterId, kind: "lover_plot", detail: { action: "fell" } });
+      }
+      // Discovery roll — active AND fallen years both risk it, at most once.
+      if (!loverDiscovered && loverRng() < LOVER_DISCOVERY_CHANCE) {
+        loverDiscovered = true;
+        const applied = applyStatGrowth(LOVER_DISCOVERY_PRESTIGE, Number(character.growthMultiplier));
+        const nextPrestige = capStat(character.prestige + applied, ageCfg);
+        await db.update(marriages).set({ loverDiscoveredAt: yearTimestamp }).where(eq(marriages.id, marriage.id));
+        await db.update(playerCharacters).set({ prestige: nextPrestige }).where(eq(playerCharacters.id, characterId));
+        await db.insert(effectLog).values({ characterId, kind: "lover_plot", detail: { action: "discovered" } });
+        await db.insert(effectLog).values({ characterId, kind: "change_stat", detail: { stat: "prestige", requested: LOVER_DISCOVERY_PRESTIGE, applied, source: "lover_plot:discovered" } });
+      }
+    }
+    const plotActive = loverState !== "none";
 
     // Fertility window: outside [from, to] no roll fires — the marriage simply
     // bears no more children (it continues; she may yet die of old age later).
@@ -137,23 +183,13 @@ export async function rollChildrenDue(characterId: string, args: { familyCfg: Fa
       if (!isFertile(wifeAge, familyCfg)) continue;
     }
 
-    // Philia scales the fertility chance (see childRoll). Read from the active
-    // marriage; a married character always has one — 50 (neutral) is a defensive
-    // fallback only.
-    const marriageRows = await db
-      .select({ philia: marriages.philia })
-      .from(marriages)
-      .where(and(eq(marriages.characterId, characterId), eq(marriages.candidateId, character.spouseCandidateId), isNull(marriages.endedAt)))
-      .limit(1);
-    const philia = marriageRows[0]?.philia ?? 50;
-
     const existing = await db.select({ id: children.id }).from(children).where(eq(children.parentCharacterId, characterId));
-    const outcome = childRoll(Math.random, { active: true }, existing.length, spouseTrait, familyCfg, philia);
+    const outcome = childRoll(Math.random, { active: true }, existing.length, spouseTrait, familyCfg, philia, plotActive);
     if (!outcome.born) continue;
 
     const inserted = (await db
       .insert(children)
-      .values({ parentCharacterId: characterId, worldId: character.worldId, name: defaultChildName(outcome.sex), sex: outcome.sex, bornAt: now, named: false })
+      .values({ parentCharacterId: characterId, worldId: character.worldId, name: defaultChildName(outcome.sex), sex: outcome.sex, bornAt: now, named: false, rumor: plotActive })
       .returning())[0]!;
 
     let lateWifeName: string | null = null;

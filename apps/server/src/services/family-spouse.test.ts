@@ -297,7 +297,7 @@ suite("livingSpousePersonalityTraits (integration)", () => {
       expect(mr.endReason).toBe("divorced");
       expect(mr.endedAt).not.toBeNull();
       expect((await divorceLogs(id, "change_stat")).length).toBe(2); // prestige + devotion
-      expect((await divorceLogs(id, "change_composure")).length).toBe(1);
+      expect((await divorceLogs(id, "change_composure")).length).toBe(0); // composure lives in composureLog, not effectLog
       expect((await divorceLogs(id, "change_party_favor")).length).toBe(1);
       expect((await divorceLogs(id, "change_drachmae")).length).toBe(0); // not dowried
     });
@@ -358,6 +358,131 @@ suite("livingSpousePersonalityTraits (integration)", () => {
       await m.dbPkg.drawFamilyCandidates(id, { familyCfg: m.family.getFamilyConfig(), ageCfg: m.age.getAgeConfig(), now });
       const cands = await db.select().from(m.dbPkg.familyCandidates).where(and(eq(m.dbPkg.familyCandidates.forCharacterId, id), eq(m.dbPkg.familyCandidates.purpose, "marriage")));
       expect(cands.length).toBeGreaterThan(0);
+    });
+  });
+  describe("lover plot (pack B)", () => {
+    const gameYearMs = () => m.age.getAgeConfig().realMsPerGameYear;
+    const rollArgs = (rng?: () => number) => ({ familyCfg: m.family.getFamilyConfig(), ageCfg: m.age.getAgeConfig(), now, rng });
+    const seqRng = (vals: number[]) => { let i = 0; return () => vals[i++ % vals.length]!; };
+    const marriageRow = async (charId: string) => (await db.select().from(m.dbPkg.marriages).where(eq(m.dbPkg.marriages.characterId, charId)).limit(1))[0]!;
+    const fresh = async (id: string) => (await db.select().from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.id, id)).limit(1))[0]!;
+    const loverLogs = async (id: string, action: string) =>
+      (await db.select().from(m.dbPkg.effectLog).where(and(eq(m.dbPkg.effectLog.characterId, id), eq(m.dbPkg.effectLog.kind, "lover_plot")))).filter((r) => (r.detail as { action?: string }).action === action);
+    const setAnchor = (id: string, yearsBack: number) =>
+      db.update(m.dbPkg.playerCharacters).set({ lastChildRollAt: new Date(now.getTime() - yearsBack * gameYearMs()) }).where(eq(m.dbPkg.playerCharacters.id, id));
+
+    // A married character; wife age 40 keeps her OUT of the fertility window so the
+    // child roll never fires (no births/mother-death noise) — the lover rolls fire
+    // above the fertility gate regardless. personalityTraitId picks the fall tier.
+    async function setupPlot(name: string, opts: { loverState?: string; personalityTraitId?: string | null; candidateAge?: number } = {}) {
+      const c = await createCharacter(name);
+      await db.update(m.dbPkg.playerCharacters).set({ prestige: 50 }).where(eq(m.dbPkg.playerCharacters.id, c.id));
+      await marryTo(c.id, { personalityTraitId: opts.personalityTraitId ?? null, spouseDeathAge: 999, candidateAge: opts.candidateAge ?? 40 });
+      const mr = await marriageRow(c.id);
+      if (opts.loverState) await db.update(m.dbPkg.marriages).set({ loverState: opts.loverState }).where(eq(m.dbPkg.marriages.id, mr.id));
+      return c.id;
+    }
+
+    it("startLoverPlot: unmarried → 409; success → active + loverStartedAt; already active → 409", async () => {
+      const single = await createCharacter("SinglePlot");
+      expect(await m.family.startLoverPlot(await fresh(single.id), now)).toMatchObject({ ok: false, code: 409 });
+
+      const id = await setupPlot("Starter");
+      expect(await m.family.startLoverPlot(await fresh(id), now)).toMatchObject({ ok: true, loverState: "active" });
+      const mr = await marriageRow(id);
+      expect(mr.loverState).toBe("active");
+      expect(mr.loverStartedAt).not.toBeNull();
+      expect(await m.family.startLoverPlot(await fresh(id), now)).toMatchObject({ ok: false, code: 409 });
+      expect((await loverLogs(id, "started")).length).toBe(1);
+    });
+
+    it("fall roll: succeeds below the chance (base 25%) → fallen + loverFellAt + log", async () => {
+      const id = await setupPlot("Falls", { loverState: "active" });
+      await setAnchor(id, 1);
+      await m.dbPkg.rollChildrenDue(id, rollArgs(seqRng([0.0, 0.99]))); // fall wins, discovery misses
+      const mr = await marriageRow(id);
+      expect(mr.loverState).toBe("fallen");
+      expect(mr.loverFellAt).not.toBeNull();
+      expect(mr.loverDiscoveredAt).toBeNull();
+      expect((await loverLogs(id, "fell")).length).toBe(1);
+    });
+
+    it("fall roll: misses above the chance → stays active", async () => {
+      const id = await setupPlot("Holds", { loverState: "active", personalityTraitId: "pious" }); // 10%
+      await setAnchor(id, 1);
+      await m.dbPkg.rollChildrenDue(id, rollArgs(seqRng([0.5, 0.99]))); // 0.5 > 0.10 → no fall
+      expect((await marriageRow(id)).loverState).toBe("active");
+      expect((await loverLogs(id, "fell")).length).toBe(0);
+    });
+
+    it("fallen is terminal: a later winning fall roll does not re-fire; discovery still rolls", async () => {
+      const id = await setupPlot("Terminal", { loverState: "active" });
+      await setAnchor(id, 2); // two years
+      // year1: fall 0.0 (falls), discovery 0.99 (miss). year2: fallen → no fall roll; discovery 0.0 (hits).
+      await m.dbPkg.rollChildrenDue(id, rollArgs(seqRng([0.0, 0.99, 0.0])));
+      const mr = await marriageRow(id);
+      expect(mr.loverState).toBe("fallen");
+      expect((await loverLogs(id, "fell")).length).toBe(1); // only once
+      expect(mr.loverDiscoveredAt).not.toBeNull(); // discovery fired during the fallen year
+      expect((await fresh(id)).prestige).toBe(47); // 50 - 3
+    });
+
+    it("discovery: 15% sets timestamp + prestige −3 + logs exactly once (second winning year is a no-op)", async () => {
+      const id = await setupPlot("Caught", { loverState: "fallen" });
+      await setAnchor(id, 2);
+      // year1: fallen → no fall; discovery 0.0 (hits). year2: already discovered → guarded, rng not consumed.
+      await m.dbPkg.rollChildrenDue(id, rollArgs(seqRng([0.0, 0.0, 0.0])));
+      const mr = await marriageRow(id);
+      expect(mr.loverDiscoveredAt).not.toBeNull();
+      expect((await loverLogs(id, "discovered")).length).toBe(1);
+      expect((await fresh(id)).prestige).toBe(47); // exactly one −3, not −6
+      const stat = (await db.select().from(m.dbPkg.effectLog).where(and(eq(m.dbPkg.effectLog.characterId, id), eq(m.dbPkg.effectLog.kind, "change_stat")))).filter((r) => (r.detail as { source?: string }).source === "lover_plot:discovered");
+      expect(stat.length).toBe(1);
+    });
+
+    it("discovery keeps rolling through fallen-undivorced years until it hits", async () => {
+      const id = await setupPlot("Lingers", { loverState: "fallen" });
+      await setAnchor(id, 3);
+      // fallen every year → discovery-only rolls: miss, miss, hit.
+      await m.dbPkg.rollChildrenDue(id, rollArgs(seqRng([0.99, 0.99, 0.0])));
+      expect((await marriageRow(id)).loverDiscoveredAt).not.toBeNull();
+      expect((await loverLogs(id, "discovered")).length).toBe(1);
+    });
+
+    it("plot state is fresh on remarriage after a fallen divorce", async () => {
+      const id = await setupPlot("Rebound", { loverState: "fallen", candidateAge: 30 });
+      await m.family.divorce(await fresh(id), now);
+      await m.dbPkg.drawFamilyCandidates(id, { familyCfg: m.family.getFamilyConfig(), ageCfg: m.age.getAgeConfig(), now });
+      const cand = (await db.select().from(m.dbPkg.familyCandidates).where(and(eq(m.dbPkg.familyCandidates.forCharacterId, id), eq(m.dbPkg.familyCandidates.purpose, "marriage"), sql`consumed_at IS NULL`)).limit(1))[0]!;
+      const r = await m.family.marry(await fresh(id), cand.id, now);
+      expect(r.ok).toBe(true);
+      const newMarriage = (await db.select().from(m.dbPkg.marriages).where(and(eq(m.dbPkg.marriages.characterId, id), sql`ended_at IS NULL`)).limit(1))[0]!;
+      expect(newMarriage.loverState).toBe("none");
+      expect(newMarriage.loverFellAt).toBeNull();
+    });
+
+    it("rumor: children born during an active plot carry rumor=true; without a plot, false", async () => {
+      // A FERTILE wife (age 30). Loop with a no-op lover rng (never fall/discover)
+      // until a birth lands — near-certain within a few rolls.
+      const withPlot = await setupPlot("Rumored", { loverState: "active", candidateAge: 30 });
+      let bornWith: { child: { rumor: boolean } } | null = null;
+      for (let a = 0; a < 60 && !bornWith; a++) {
+        await setAnchor(withPlot, 1);
+        const births = await m.dbPkg.rollChildrenDue(withPlot, rollArgs(() => 0.99));
+        if (births.length > 0) bornWith = births[0]!;
+      }
+      expect(bornWith).not.toBeNull();
+      expect(bornWith!.child.rumor).toBe(true);
+
+      const noPlot = await setupPlot("Faithful", { candidateAge: 30 }); // loverState default none
+      let bornNo: { child: { rumor: boolean } } | null = null;
+      for (let a = 0; a < 60 && !bornNo; a++) {
+        await setAnchor(noPlot, 1);
+        const births = await m.dbPkg.rollChildrenDue(noPlot, rollArgs(() => 0.99));
+        if (births.length > 0) bornNo = births[0]!;
+      }
+      expect(bornNo).not.toBeNull();
+      expect(bornNo!.child.rumor).toBe(false);
     });
   });
 });

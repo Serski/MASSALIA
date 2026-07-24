@@ -417,6 +417,14 @@ describe("childRoll — philia fertility multiplier", () => {
     expect(born(base - 0.001)).toBe(true);
     expect(born(base + 0.001)).toBe(false);
   });
+
+  it("an active lover plot adds +0.10 to the chance (composed before the philia multiplier)", () => {
+    // philia 50 (mult 1.0): a roll between base and base+0.10 is rejected without
+    // the plot, accepted with it.
+    const rngVal = base + 0.05;
+    expect(childRoll(() => rngVal, married, 0, null, cfg, 50, false).born).toBe(false);
+    expect(childRoll(() => rngVal, married, 0, null, cfg, 50, true).born).toBe(true);
+  });
 });
 
 describe("childRoll is unchanged inside the window", () => {

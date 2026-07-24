@@ -401,6 +401,22 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
     }
   }
 
+  // Lover-plot notices on the CURRENT marriage: she has fallen / the city knows,
+  // each windowed on its timestamp like the other one-shot notices. Derivation
+  // only — the cards render in a later phase.
+  let loverFellNotice = false;
+  let loverDiscoveredNotice = false;
+  if (!locked && character.spouseCandidateId) {
+    const rows = await db
+      .select({ loverFellAt: marriages.loverFellAt, loverDiscoveredAt: marriages.loverDiscoveredAt })
+      .from(marriages)
+      .where(and(eq(marriages.characterId, character.id), eq(marriages.candidateId, character.spouseCandidateId), isNull(marriages.endedAt)))
+      .limit(1);
+    const row = rows[0];
+    if (row?.loverFellAt && now.getTime() - row.loverFellAt.getTime() < REAL_MS_PER_SEASON) loverFellNotice = true;
+    if (row?.loverDiscoveredAt && now.getTime() - row.loverDiscoveredAt.getTime() < REAL_MS_PER_SEASON) loverDiscoveredNotice = true;
+  }
+
   const { children: childList, birthEvent } = locked ? { children: [], birthEvent: null } : await childrenSection(character, now);
 
   return {
@@ -412,6 +428,8 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
     spouse,
     spouseDeath,
     divorceNotice,
+    loverFellNotice,
+    loverDiscoveredNotice,
     candidates: { marriage: marriageOffers, adoption: adoptionOffers },
     children: childList,
     birthEvent,
@@ -657,9 +675,6 @@ export async function divorce(character: CharacterRow, now: Date = new Date()): 
 
     await tx.insert(effectLog).values({ characterId: character.id, kind: "change_stat", detail: { stat: "prestige", requested: tier.prestige, applied: prestigeApplied, source: "divorce" } });
     await tx.insert(effectLog).values({ characterId: character.id, kind: "change_stat", detail: { stat: "devotion", requested: tier.devotion, applied: devotionApplied, source: "divorce" } });
-    // Composure's audit intent (the actual clamp + break run via applyComposureDelta
-    // after the tx — the existing composure-delta application, which owns composureLog).
-    await tx.insert(effectLog).values({ characterId: character.id, kind: "change_composure", detail: { amount: tier.composure, source: "divorce" } });
     if (returnsDowry) {
       await tx.insert(effectLog).values({ characterId: character.id, kind: "change_drachmae", detail: { amount: drachmaeApplied, value: updates.drachmae, source: "divorce" } });
     }
@@ -682,4 +697,22 @@ export async function divorce(character: CharacterRow, now: Date = new Date()): 
     tier: fallen ? "fallen" : "full",
     penalties: { prestige: prestigeApplied, devotion: devotionApplied, composure: tier.composure, partyFavor: favorApplied, drachmae: drachmaeApplied },
   };
+}
+
+// --- Lover plot (pack B) ----------------------------------------------------
+export type LoverPlotResult = { ok: true; loverState: string } | { ok: false; code: number; error: string };
+
+// Push the wife toward a lover. No cost, no other effects here — the yearly fall
+// and discovery rolls (rollChildrenDue) and the fertility coupling do the rest.
+export async function startLoverPlot(character: CharacterRow, now: Date = new Date()): Promise<LoverPlotResult> {
+  const spouse = await livingSpouseState(character, now);
+  if (!spouse || spouse.marriageId === null) return { ok: false, code: 409, error: "You have no wife." };
+  const marriageId = spouse.marriageId;
+  const mRows = await db.select({ loverState: marriages.loverState }).from(marriages).where(eq(marriages.id, marriageId)).limit(1);
+  if ((mRows[0]?.loverState ?? "none") !== "none") return { ok: false, code: 409, error: "A lover is already in play." };
+
+  await db.update(marriages).set({ loverState: "active", loverStartedAt: now }).where(eq(marriages.id, marriageId));
+  await db.insert(effectLog).values({ characterId: character.id, kind: "lover_plot", detail: { action: "started" } });
+  await broadcastState();
+  return { ok: true, loverState: "active" };
 }
