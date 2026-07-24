@@ -43,8 +43,19 @@ export function clampComposure(value: number): number {
   return Math.max(COMPOSURE_MIN, Math.min(COMPOSURE_MAX, Math.round(value)));
 }
 
-function intersects(a: string[] | undefined, tagSet: Set<string>): boolean {
-  return !!a && a.some((tag) => tagSet.has(tag));
+// Per-trait tag reaction: which of the choice's tags each trait opposes / embraces.
+export type TraitTagReaction = { trait: Trait; conflictTags: string[]; embraceTags: string[] };
+
+// The single source of truth for conflict/embrace matching. Composure scoring AND
+// the philia spouse-reaction coupling both consume this, so they can never diverge
+// on what counts as a conflict or an embrace.
+export function scoreTraitTags(traits: Trait[], choiceTags: string[]): TraitTagReaction[] {
+  const tags = new Set(choiceTags);
+  return traits.map((trait) => ({
+    trait,
+    conflictTags: (trait.opposes ?? []).filter((tag) => tags.has(tag)),
+    embraceTags: (trait.embraces ?? []).filter((tag) => tags.has(tag)),
+  }));
 }
 
 // The heart: composure change for an action, given the actor's traits, the
@@ -56,12 +67,11 @@ export function computeComposureDelta(
   config: ComposureConfig,
   spouseTraits: Trait[] = [],
 ): number {
-  const tags = new Set(choiceTags);
   let delta = 0;
 
-  for (const trait of heldTraits) {
-    if (intersects(trait.opposes, tags)) delta -= config.costPerConflict;
-    if (intersects(trait.embraces, tags)) delta += config.gainPerEmbrace;
+  for (const r of scoreTraitTags(heldTraits, choiceTags)) {
+    if (r.conflictTags.length > 0) delta -= config.costPerConflict;
+    if (r.embraceTags.length > 0) delta += config.gainPerEmbrace;
   }
 
   const heldIds = new Set(heldTraits.map((trait) => trait.id));
@@ -77,9 +87,9 @@ export function computeComposureDelta(
   // clause above (that models the player's own convictions). Added into the same
   // running total so the clamp + single round below apply to the COMBINED result.
   const spouseWeight = config.spouseWeight ?? SPOUSE_WEIGHT_DEFAULT;
-  for (const trait of spouseTraits) {
-    if (intersects(trait.opposes, tags)) delta -= config.costPerConflict * spouseWeight;
-    if (intersects(trait.embraces, tags)) delta += config.gainPerEmbrace * spouseWeight;
+  for (const r of scoreTraitTags(spouseTraits, choiceTags)) {
+    if (r.conflictTags.length > 0) delta -= config.costPerConflict * spouseWeight;
+    if (r.embraceTags.length > 0) delta += config.gainPerEmbrace * spouseWeight;
   }
 
   // Clamp the positive total only — losses are unbounded.
@@ -97,16 +107,17 @@ export function describeComposureDelta(
   spouseTraits: Trait[] = [],
 ): { delta: number; reason: string } {
   const delta = computeComposureDelta(heldTraits, choiceTags, ideologyDelta, config, spouseTraits);
-  const tags = new Set(choiceTags);
-  const conflicts = heldTraits.filter((t) => intersects(t.opposes, tags)).map((t) => t.name);
-  const embraces = heldTraits.filter((t) => intersects(t.embraces, tags)).map((t) => t.name);
+  const heldReactions = scoreTraitTags(heldTraits, choiceTags);
+  const conflicts = heldReactions.filter((r) => r.conflictTags.length > 0).map((r) => r.trait.name);
+  const embraces = heldReactions.filter((r) => r.embraceTags.length > 0).map((r) => r.trait.name);
   const heldIds = new Set(heldTraits.map((t) => t.id));
   const drifts =
     (heldIds.has("traditionalist") && ideologyDelta > 0) || (heldIds.has("syncretist") && ideologyDelta < 0);
   // Her contribution is named separately — never let the player pay a hidden cost
   // (or bank a hidden gain) that is really his wife reacting.
-  const spouseConflicts = spouseTraits.filter((t) => intersects(t.opposes, tags)).map((t) => t.name);
-  const spouseEmbraces = spouseTraits.filter((t) => intersects(t.embraces, tags)).map((t) => t.name);
+  const spouseReactions = scoreTraitTags(spouseTraits, choiceTags);
+  const spouseConflicts = spouseReactions.filter((r) => r.conflictTags.length > 0).map((r) => r.trait.name);
+  const spouseEmbraces = spouseReactions.filter((r) => r.embraceTags.length > 0).map((r) => r.trait.name);
 
   const parts: string[] = [];
   if (conflicts.length) parts.push(`troubles your ${conflicts.join(", ")} nature`);

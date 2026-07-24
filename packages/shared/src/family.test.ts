@@ -7,6 +7,7 @@ import {
   assertPersonalityPoolResolves,
   canMarry,
   clampPhilia,
+  spouseReactionPhiliaDelta,
   childAge,
   childRoll,
   defaultChildName,
@@ -24,6 +25,7 @@ import {
   successionPlan,
   type ChildInfo,
   type FamilyConfig,
+  type Trait,
 } from "./index.js";
 
 // One game year = 4 real days (the season clock); used for the lazy spouse-age math.
@@ -439,6 +441,35 @@ describe("clampPhilia — 0..100 spouse bond", () => {
     expect(clampPhilia(50)).toBe(50);
     expect(clampPhilia(0)).toBe(0);
     expect(clampPhilia(100)).toBe(100);
+  });
+});
+
+describe("spouseReactionPhiliaDelta — daily coupling (±1 per tag, clamp ±2)", () => {
+  const t = (over: Partial<Trait> & { id: string }): Trait => ({ name: over.id, description: "x", category: "personality", ...over });
+  const brave = t({ id: "brave", opposes: ["flee", "back_down"], embraces: ["duel", "frontline", "hunt"] });
+  const opp3 = t({ id: "opp3", opposes: ["a", "b", "c"], embraces: [] });
+  const emb3 = t({ id: "emb3", opposes: [], embraces: ["x", "y", "z"] });
+
+  it("−1 per conflicting tag", () => {
+    expect(spouseReactionPhiliaDelta([brave], ["flee"])).toBe(-1);
+  });
+  it("+1 per embraced tag", () => {
+    expect(spouseReactionPhiliaDelta([brave], ["duel"])).toBe(1);
+  });
+  it("mixed conflict + embrace nets out", () => {
+    expect(spouseReactionPhiliaDelta([brave], ["flee", "duel"])).toBe(0);
+  });
+  it("clamps at −2 (3 conflicting tags → −3 → −2)", () => {
+    expect(spouseReactionPhiliaDelta([opp3], ["a", "b", "c"])).toBe(-2);
+  });
+  it("clamps at +2 (3 embraced tags → +3 → +2)", () => {
+    expect(spouseReactionPhiliaDelta([emb3], ["x", "y", "z"])).toBe(2);
+  });
+  it("no traits (unmarried) → 0", () => {
+    expect(spouseReactionPhiliaDelta([], ["flee", "duel"])).toBe(0);
+  });
+  it("no tag intersection → 0", () => {
+    expect(spouseReactionPhiliaDelta([brave], ["study", "labor"])).toBe(0);
   });
 });
 

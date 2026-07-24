@@ -8,8 +8,10 @@ import {
   nextUtcDayBoundary,
   recoveryPerDay,
   resolveBreak,
+  scoreTraitTags,
   type ComposureConfig,
 } from "./composure.js";
+import { spouseReactionPhiliaDelta } from "./family.js";
 import type { Trait } from "./traits.js";
 
 const config: ComposureConfig = {
@@ -119,6 +121,37 @@ describe("computeComposureDelta — spouse personality (family pack)", () => {
     const spouseCost = computeComposureDelta([], ["bribery"], 0, config, [honest]); // -7
     expect(spouseCost).toBeGreaterThan(heldCost); // -7 > -15 => strictly less cost
     expect(Math.abs(spouseCost)).toBeLessThan(Math.abs(heldCost));
+  });
+});
+
+describe("scoreTraitTags — the shared matching source of truth (no divergence)", () => {
+  it("reports the per-trait opposed/embraced tags of a choice", () => {
+    const r = scoreTraitTags([honest, zealot], ["bribery", "war"]);
+    expect(r[0]).toMatchObject({ conflictTags: ["bribery"], embraceTags: [] });
+    expect(r[1]).toMatchObject({ conflictTags: [], embraceTags: ["war"] });
+  });
+
+  it("composure scoring and philia coupling never disagree on conflict/embrace", () => {
+    // For each (trait, tags) pair, whenever scoreTraitTags marks a conflict the
+    // composure delta drops AND philia goes negative; an embrace lifts both.
+    const cases: { trait: Trait; tags: string[] }[] = [
+      { trait: honest, tags: ["bribery"] }, // conflict
+      { trait: zealot, tags: ["war"] }, // embrace
+      { trait: honest, tags: ["valor"] }, // neither
+    ];
+    for (const { trait, tags } of cases) {
+      const [reaction] = scoreTraitTags([trait], tags);
+      const conflicted = reaction!.conflictTags.length > 0;
+      const embraced = reaction!.embraceTags.length > 0;
+      // composure as a HELD trait
+      const composure = computeComposureDelta([trait], tags, 0, config);
+      // philia as a SPOUSE trait
+      const philia = spouseReactionPhiliaDelta([trait], tags);
+      expect(composure < 0).toBe(conflicted);
+      expect(philia < 0).toBe(conflicted);
+      expect(composure > 0).toBe(embraced);
+      expect(philia > 0).toBe(embraced);
+    }
   });
 });
 

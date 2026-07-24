@@ -17,7 +17,7 @@ import {
 import { applyChoiceEffects, findChoice, listEvents } from "../services/eventEngine.js";
 import { requireAuth } from "../services/auth.js";
 import { ensureCharacterRow, getActivePlayer, getActiveWorld, type CharacterRow } from "../services/character.js";
-import { familyEligibilityContext } from "../services/family.js";
+import { familyEligibilityContext, livingSpouseState } from "../services/family.js";
 import { getHeldTraits } from "../services/traits.js";
 import { applyComposureDelta, getComposureConfig, recoverComposure } from "../services/composure.js";
 import { ensureDailySet, findDailyCard, getDailySet, markCardResolved } from "../services/dailyDecisions.js";
@@ -54,20 +54,23 @@ function isWinterDay(now: Date, startedMs: number): boolean {
 // Net composure change for a choice = the trait/ideology-driven layer PLUS any
 // explicit change_composure effects. Combined so the preview equals what resolving
 // actually applies — never a hidden composure cost.
-function composurePreview(choice: EventChoice, traits: Trait[], config: ComposureConfig): { delta: number; reason: string } {
-  const tag = describeComposureDelta(traits, choice.tags ?? [], choiceIdeologyDelta(choice), config);
+function composurePreview(choice: EventChoice, traits: Trait[], config: ComposureConfig, spouseTraits: Trait[]): { delta: number; reason: string } {
+  // Her reaction to the choice's tags hits composure with attribution + spouseWeight
+  // (same as routines). Deliberately NO tag-derived philia here — family events move
+  // philia only through their explicit change_philia effects (the double-count guard).
+  const tag = describeComposureDelta(traits, choice.tags ?? [], choiceIdeologyDelta(choice), config, spouseTraits);
   const explicit = choiceComposureEffectDelta(choice);
   const delta = tag.delta + explicit;
   const reason = tag.delta !== 0 ? tag.reason : explicit !== 0 ? "the toll of the act itself" : tag.reason;
   return { delta, reason };
 }
 
-function withPreviews(event: EventDefinition, traits: Trait[]) {
+function withPreviews(event: EventDefinition, traits: Trait[], spouseTraits: Trait[]) {
   const config = getComposureConfig();
   return {
     ...event,
     choices: event.choices.map((choice: EventChoice) => {
-      const { delta, reason } = composurePreview(choice, traits, config);
+      const { delta, reason } = composurePreview(choice, traits, config, spouseTraits);
       return { ...choice, composureDelta: delta, composureReason: reason, costs: describeChoiceCosts(choice) };
     }),
   };
@@ -83,9 +86,11 @@ export async function eventRoutes(app: FastifyInstance) {
       return { error: acting.error };
     }
     const traits = await getHeldTraits(acting.row.id);
+    // Her reaction feeds the composure preview (0 reads if unmarried).
+    const spouseTraits = (await livingSpouseState(acting.row))?.personalityTraits ?? [];
     // Debug/future-use list: enrich so family events reflect real eligibility.
     const ctx = await contextFor(acting.row, traits.map((t) => t.id), new Date(), true);
-    return (await listEvents()).filter((event) => !isCalendarEvent(event) && isEventEligible(event, ctx)).map((event) => withPreviews(event, traits));
+    return (await listEvents()).filter((event) => !isCalendarEvent(event) && isEventEligible(event, ctx)).map((event) => withPreviews(event, traits, spouseTraits));
   });
 
   // The curated daily decision set: one card per arena (class/general/council/party),
@@ -99,6 +104,8 @@ export async function eventRoutes(app: FastifyInstance) {
     }
     const now = new Date();
     const traits = await getHeldTraits(acting.row.id);
+    // Her reaction feeds the composure preview (0 reads if unmarried).
+    const spouseTraits = (await livingSpouseState(acting.row, now))?.personalityTraits ?? [];
     // The family arena fires only on the winter day; enrich (spouse/children) only
     // then so non-winter draws pay zero extra queries.
     const winter = isWinterDay(now, acting.startedMs);
@@ -118,7 +125,7 @@ export async function eventRoutes(app: FastifyInstance) {
           resolved: card.resolved,
           resolvedChoiceId: card.resolvedChoiceId,
           resolvedResult: resolvedChoice?.resultText ?? null,
-          event: withPreviews(event, traits),
+          event: withPreviews(event, traits, spouseTraits),
         };
       })
       .filter((card): card is NonNullable<typeof card> => card !== null);
@@ -156,6 +163,10 @@ export async function eventRoutes(app: FastifyInstance) {
     }
     // Make sure today's set exists (so direct resolves are validated against it).
     const traits = await getHeldTraits(acting.row.id);
+    // Her reaction hits composure with attribution (0 reads if unmarried). NO
+    // tag-derived philia on this path — family events move philia only via their
+    // explicit change_philia effects (the double-count guard).
+    const spouseTraits = (await livingSpouseState(acting.row, now))?.personalityTraits ?? [];
     const winter = isWinterDay(now, acting.startedMs);
     const ctx = await contextFor(acting.row, traits.map((t) => t.id), now, winter);
     await ensureDailySet(acting.row.id, ctx, now, acting.startedMs);
@@ -172,7 +183,7 @@ export async function eventRoutes(app: FastifyInstance) {
     // Combined composure cost for THIS character (trait/ideology layer + explicit
     // change_composure effects), applied once so it matches the preview exactly.
     await recoverComposure(acting.row.id);
-    const { delta, reason } = composurePreview(found.choice, traits, getComposureConfig());
+    const { delta, reason } = composurePreview(found.choice, traits, getComposureConfig(), spouseTraits);
     const composure = await applyComposureDelta(acting.row.id, delta, reason);
 
     // Gameplay effects (atomic), then mark the card resolved.

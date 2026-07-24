@@ -2,11 +2,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, eq, sql } from "drizzle-orm";
-import { createDb, dailyRoutines, effectLog, partyFavor, playerCharacters } from "@massalia/db";
+import { createDb, dailyRoutines, effectLog, marriages, partyFavor, playerCharacters } from "@massalia/db";
 import {
   applyClassMods,
   applyStatGrowth,
   capStat,
+  clampPhilia,
   describeComposureDelta,
   isWithdrawn,
   ladderProgress,
@@ -15,6 +16,7 @@ import {
   parseRoutinesConfig,
   roundHalfUp,
   routinePoolFor,
+  spouseReactionPhiliaDelta,
   type ChoiceCost,
   type CharacterStats,
   type RoutineCard,
@@ -300,9 +302,14 @@ export async function resolveRoutine(row: CharacterRow, routineId: string, now: 
   // Combined composure delta (tag pipeline + explicit change_composure + classMods bonus).
   const traits = await getHeldTraits(row.id);
   // The apply path resolves the spouse itself (same helper the preview route uses,
-  // so the two never disagree about whether she is alive).
-  const spouseTraits = (await livingSpouseState(row, now))?.personalityTraits ?? [];
+  // so the two never disagree about whether she is alive). Her state is in hand for
+  // both composure attribution AND the daily philia coupling — no extra query.
+  const spouse = await livingSpouseState(row, now);
+  const spouseTraits = spouse?.personalityTraits ?? [];
   const tag = describeComposureDelta(traits, card.tags, 0, getComposureConfig(), spouseTraits);
+  // Her tag reactions to this card also nudge philia (±cap), reusing the SAME
+  // conflict/embrace matching composure scored above. Written in the tx below.
+  const philiaDelta = spouseReactionPhiliaDelta(spouseTraits, card.tags);
   const composureFromEffects = resolved.effects
     .filter((effect): effect is Extract<typeof effect, { type: "change_composure" }> => effect.type === "change_composure")
     .reduce((sum, effect) => sum + effect.amount, 0);
@@ -355,6 +362,16 @@ export async function resolveRoutine(row: CharacterRow, routineId: string, now: 
         appliedCosts.push({ label: `${signed(effect.amount)} ${party} favor`, tone: effect.amount >= 0 ? "positive" : "negative" });
       }
       // change_composure handled below as a single combined delta.
+    }
+    // Daily spouse-reaction philia coupling: a living spouse's net reaction to the
+    // card nudges the bond. Only when nonzero; unmarried/widowed writes nothing.
+    if (spouse && spouse.marriageId !== null && spouse.philia !== null && philiaDelta !== 0) {
+      await tx.update(marriages).set({ philia: clampPhilia(spouse.philia + philiaDelta) }).where(eq(marriages.id, spouse.marriageId));
+      await tx.insert(effectLog).values({
+        characterId: row.id,
+        kind: "change_philia",
+        detail: { amount: philiaDelta, source: "daily:spouse-reaction" },
+      });
     }
     await tx.insert(dailyRoutines).values({ characterId: row.id, utcDay, routineId: card.id });
   });

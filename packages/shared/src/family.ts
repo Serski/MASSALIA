@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { REAL_MS_PER_SEASON, SEASONS_PER_YEAR } from "./calendar.js";
+import { scoreTraitTags } from "./composure.js";
 import { manumissionConfigSchema } from "./manumission.js";
+import type { Trait } from "./traits.js";
 
 // One game year in real milliseconds (4 real days) — the same clock as character
 // and child age. Used as the default for the lazy spouse-age math.
@@ -253,6 +255,19 @@ export const PHILIA_MIN = 0;
 export const PHILIA_MAX = 100;
 export function clampPhilia(value: number): number {
   return Math.max(PHILIA_MIN, Math.min(PHILIA_MAX, value));
+}
+
+// The daily spouse-reaction philia delta: −1 per tag the spouse's traits oppose,
+// +1 per tag they embrace, summed and clamped to ±PHILIA_DAILY_CAP per apply.
+// Reuses scoreTraitTags — the SAME conflict/embrace matching composure scores
+// with — so the two consumers can never diverge on what counts as a conflict.
+export const PHILIA_DAILY_CAP = 2;
+export function spouseReactionPhiliaDelta(spouseTraits: Trait[], choiceTags: string[]): number {
+  let delta = 0;
+  for (const r of scoreTraitTags(spouseTraits, choiceTags)) {
+    delta += r.embraceTags.length - r.conflictTags.length;
+  }
+  return Math.max(-PHILIA_DAILY_CAP, Math.min(PHILIA_DAILY_CAP, delta));
 }
 
 export function isOfAge(age: number, cfg: FamilyConfig): boolean {
