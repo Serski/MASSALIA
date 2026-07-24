@@ -6,7 +6,7 @@ import { requireAuth } from "../services/auth.js";
 import { ensureCharacterRow, getActivePlayer, getActiveWorldId, type CharacterRow } from "../services/character.js";
 import { recoverComposure } from "../services/composure.js";
 import { getHeldTraits } from "../services/traits.js";
-import { livingSpousePersonalityTraits } from "../services/family.js";
+import { livingSpouseState } from "../services/family.js";
 import { ownedBuildingIds } from "../services/buildings.js";
 import { utcDayString } from "../services/dailyDecisions.js";
 import {
@@ -46,7 +46,7 @@ export async function routineRoutes(app: FastifyInstance) {
     const traits = await getHeldTraits(acting.row.id);
     // Resolve the living spouse ONCE for the whole preview (not per card) — same
     // helper the apply path uses, so preview and apply agree on her reaction.
-    const spouseTraits = await livingSpousePersonalityTraits(acting.row, now);
+    const spouseTraits = (await livingSpouseState(acting.row, now))?.personalityTraits ?? [];
     const owned = await ownedBuildingIds(acting.row.playerId);
     // Source pool: the abroad contract pool while sworn, else the home class pool.
     const pool = activePoolCards(acting.row);

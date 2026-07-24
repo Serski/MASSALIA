@@ -65,7 +65,7 @@ describe("festival events are calendar-triggered (excluded from the daily draw)"
 
   it("noClass excludes the listed classes from eligibility (olympiad bars hetaira/slave)", () => {
     const olympic = festivalEvents.find((e) => e.id === "olympic-nominate")!;
-    const ctx = (classId: string) => ({ classId, party: "none", isCouncilor: false, stats: { prestige: 0, devotion: 0, militia: 0, intelligence: 0 }, traitIds: [] });
+    const ctx = (classId: string) => ({ classId, party: "none", isCouncilor: false, stats: { prestige: 0, devotion: 0, militia: 0, intelligence: 0 }, traitIds: [], married: false, spouseTraitIds: [], livingChildren: [] });
     expect(isEventEligible(olympic, ctx("hetaira"))).toBe(false);
     expect(isEventEligible(olympic, ctx("slave"))).toBe(false);
     expect(isEventEligible(olympic, ctx("trader"))).toBe(true);

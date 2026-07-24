@@ -30,6 +30,14 @@ export type EventEffect =
   | { type: "olympic_nominate" }
   | { type: "olympic_compete"; mode: string };
 
+// Child age bands (years, inclusive): infant 0–4, child 5–9, youth 10–14.
+export type ChildAgeBand = "infant" | "child" | "youth";
+export const CHILD_AGE_BANDS: Record<ChildAgeBand, readonly [number, number]> = {
+  infant: [0, 4],
+  child: [5, 9],
+  youth: [10, 14],
+};
+
 // Event-level gating. An event is eligible only if every present condition passes.
 export interface EventRequirements {
   class?: string;
@@ -39,6 +47,13 @@ export interface EventRequirements {
   trait?: string;
   noTrait?: string;
   noClass?: string[]; // excluded classes (e.g. festivals barred to hetaira/slave)
+  // Family arena gating (any of these routes the event to the "family" arena).
+  married?: boolean; // requires a LIVING spouse
+  spouseTrait?: string; // matches EITHER the spouse's personality OR mechanical trait id
+  hasChildren?: boolean; // requires ≥1 living child
+  childAgeBand?: ChildAgeBand; // some living child falls in this band
+  childSex?: "male" | "female"; // narrows childAgeBand (or, alone, any living child of this sex)
+  household?: boolean; // hetaira household events (classId === "hetaira")
 }
 
 export interface EventChoice {
@@ -105,6 +120,12 @@ const requiresSchema = z
     trait: z.string().optional(),
     noTrait: z.string().optional(),
     noClass: z.array(z.string()).optional(),
+    married: z.boolean().optional(),
+    spouseTrait: z.string().optional(),
+    hasChildren: z.boolean().optional(),
+    childAgeBand: z.enum(["infant", "child", "youth"]).optional(),
+    childSex: z.enum(["male", "female"]).optional(),
+    household: z.boolean().optional(),
   })
   .strict();
 
@@ -145,6 +166,11 @@ export type EligibilityContext = {
   isCouncilor: boolean;
   stats: CharacterStats;
   traitIds: string[];
+  // Family arena inputs. Resolved from a LIVING spouse / living children (never
+  // raw spouseCandidateId); default to unmarried/childless when not enriched.
+  married: boolean;
+  spouseTraitIds: string[]; // personality + mechanical ids of the living spouse; [] when unmarried
+  livingChildren: { sex: "male" | "female"; ageYears: number }[];
 };
 
 // Calendar/festival events fire from the festival system, never the daily draw.
@@ -166,26 +192,70 @@ export function isEventEligible(event: EventDefinition, ctx: EligibilityContext)
       if (ctx.stats[stat as keyof CharacterStats] < (amount as number)) return false;
     }
   }
+  // --- Family gating -------------------------------------------------------
+  if (req.married !== undefined && ctx.married !== req.married) return false;
+  // spouseTrait matches EITHER the spouse's personality or mechanical id (its
+  // presence implies a living spouse — spouseTraitIds is [] when unmarried).
+  if (req.spouseTrait && !ctx.spouseTraitIds.includes(req.spouseTrait)) return false;
+  if (req.hasChildren !== undefined && ctx.livingChildren.length > 0 !== req.hasChildren) return false;
+  if (req.childAgeBand) {
+    const [lo, hi] = CHILD_AGE_BANDS[req.childAgeBand];
+    const match = ctx.livingChildren.some(
+      (child) => child.ageYears >= lo && child.ageYears <= hi && (!req.childSex || child.sex === req.childSex),
+    );
+    if (!match) return false;
+  } else if (req.childSex) {
+    // childSex without a band: any living child of that sex.
+    if (!ctx.livingChildren.some((child) => child.sex === req.childSex)) return false;
+  }
+  if (req.household === true && ctx.classId !== "hetaira") return false;
   return true;
 }
 
 // Which daily "arena" an event belongs to, inferred from its gating.
-export type EventArena = "class" | "council" | "party" | "general";
+export type EventArena = "class" | "council" | "party" | "general" | "family";
+
+// Any family requirement routes the event to the "family" arena — checked BEFORE
+// class/office/party, so a hetaira household event ({class:"hetaira", household})
+// lands in "family", not "class".
+function hasFamilyRequirement(req: EventRequirements): boolean {
+  return (
+    req.married !== undefined ||
+    req.spouseTrait !== undefined ||
+    req.hasChildren !== undefined ||
+    req.childAgeBand !== undefined ||
+    req.childSex !== undefined ||
+    req.household !== undefined
+  );
+}
 
 export function eventArena(event: EventDefinition): EventArena {
   const req = event.requires;
+  if (req && hasFamilyRequirement(req)) return "family";
   if (req?.class) return "class";
   if (req?.office === "councilor") return "council";
   if (req?.party) return "party";
   return "general";
 }
 
+// Whether the character qualifies for the family arena at all: a living spouse,
+// ≥1 living child, or the hetaira class (her household).
+export function qualifiesForFamilyArena(ctx: { classId: string; married: boolean; livingChildren: unknown[] }): boolean {
+  return ctx.married || ctx.livingChildren.length > 0 || ctx.classId === "hetaira";
+}
+
 // The arenas a character draws a daily card from: class + general always,
-// council if a councilor, party if aligned.
-export function dailyArenasFor(ctx: { isCouncilor: boolean; party: string }): EventArena[] {
+// council if a councilor, party if aligned. The family arena is included ONLY on
+// the winter day (once per game year by construction — 1 winter per 4-day year)
+// and only when the character qualifies.
+export function dailyArenasFor(
+  ctx: { isCouncilor: boolean; party: string; classId: string; married: boolean; livingChildren: unknown[] },
+  isWinter: boolean,
+): EventArena[] {
   const arenas: EventArena[] = ["class", "general"];
   if (ctx.isCouncilor) arenas.push("council");
   if (ctx.party && ctx.party !== "none") arenas.push("party");
+  if (isWinter && qualifiesForFamilyArena(ctx)) arenas.push("family");
   return arenas;
 }
 

@@ -28,22 +28,26 @@ suite("livingSpousePersonalityTraits (integration)", () => {
   let worldId: string;
   const now = new Date();
 
-  async function createCharacter(name: string) {
+  async function createCharacter(name: string, classId = "landowner") {
     const { users, players, playerCharacters } = m.dbPkg;
     const user = (await db.insert(users).values({ email: `${name}-${Math.random().toString(36).slice(2)}@test`, passwordHash: "x" }).returning())[0]!;
     const player = (await db.insert(players).values({ worldId, userId: user.id, name, color: "#123456" }).returning())[0]!;
     return (
-      await db.insert(playerCharacters).values({ playerId: player.id, worldId, houseSlug: "test-house", classId: "landowner", startAge: 30, deathAge: 90 }).returning()
+      await db.insert(playerCharacters).values({ playerId: player.id, worldId, houseSlug: "test-house", classId, startAge: 30, deathAge: 90 }).returning()
     )[0]!;
   }
 
-  // Marry a character to a generated wife with the given personality + death age.
-  async function marryTo(charId: string, opts: { personalityTraitId: string | null; spouseDeathAge: number | null; candidateAge?: number }) {
+  // Marry a character to a generated wife with the given personality + mechanical
+  // trait + death age.
+  async function marryTo(
+    charId: string,
+    opts: { personalityTraitId: string | null; traitId?: string | null; spouseDeathAge: number | null; candidateAge?: number },
+  ) {
     const { familyCandidates, marriages, playerCharacters } = m.dbPkg;
     const cand = (
       await db.insert(familyCandidates).values({
         worldId, forCharacterId: charId, purpose: "marriage", name: "Wife", sex: "female",
-        houseSlug: "test-house", age: opts.candidateAge ?? 30, personalityTraitId: opts.personalityTraitId,
+        houseSlug: "test-house", age: opts.candidateAge ?? 30, personalityTraitId: opts.personalityTraitId, traitId: opts.traitId ?? null,
       }).returning()
     )[0]!;
     await db.insert(marriages).values({ characterId: charId, candidateId: cand.id, spouseDeathAge: opts.spouseDeathAge });
@@ -78,34 +82,63 @@ suite("livingSpousePersonalityTraits (integration)", () => {
   it("unmarried -> [] (and takes the no-DB-read gate)", async () => {
     const c = await createCharacter("Single");
     expect(c.spouseCandidateId).toBeNull();
-    const traits = await m.family.livingSpousePersonalityTraits(c, now);
-    expect(traits).toEqual([]);
+    expect(await m.family.livingSpouseState(c, now)).toBeNull();
   });
 
-  it("married to a living wife with a personality -> [that trait]", async () => {
+  it("married to a living wife -> full state (personality traits, philia, ids)", async () => {
     const c = await createCharacter("Wedded");
-    await marryTo(c.id, { personalityTraitId: "brave", spouseDeathAge: 70, candidateAge: 30 });
+    await marryTo(c.id, { personalityTraitId: "brave", traitId: "fertile", spouseDeathAge: 70, candidateAge: 30 });
     const fresh = (await db.select().from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.id, c.id)).limit(1))[0]!;
-    const traits = await m.family.livingSpousePersonalityTraits(fresh, now);
-    expect(traits.map((t) => t.id)).toEqual(["brave"]);
+    const state = await m.family.livingSpouseState(fresh, now);
+    expect(state).not.toBeNull();
+    expect(state!.personalityTraits.map((t) => t.id)).toEqual(["brave"]);
+    expect(state!.spouseTraitId).toBe("fertile"); // mechanical
+    expect(state!.spouseTraitIds.sort()).toEqual(["brave", "fertile"]); // personality + mechanical
+    expect(state!.philia).toBe(50); // the default from Phase 1
+    expect(state!.marriageId).not.toBeNull();
   });
 
-  it("widowed (wife past her spouseDeathAge, not yet swept) -> []", async () => {
+  it("widowed (wife past her spouseDeathAge, not yet swept) -> null", async () => {
     const c = await createCharacter("Widower");
     // candidateAge 65 >= spouseDeathAge 60 -> isSpouseDeceased true, even though
     // spouseCandidateId is still set (the lazy sweep hasn't run).
     await marryTo(c.id, { personalityTraitId: "brave", spouseDeathAge: 60, candidateAge: 65 });
     const fresh = (await db.select().from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.id, c.id)).limit(1))[0]!;
     expect(fresh.spouseCandidateId).not.toBeNull(); // still married on paper
-    const traits = await m.family.livingSpousePersonalityTraits(fresh, now);
-    expect(traits).toEqual([]);
+    expect(await m.family.livingSpouseState(fresh, now)).toBeNull();
   });
 
-  it("married to a wife with NULL personality (legacy) -> []", async () => {
+  it("married to a wife with NULL personality (legacy) -> living state, empty personality", async () => {
     const c = await createCharacter("LegacyWife");
     await marryTo(c.id, { personalityTraitId: null, spouseDeathAge: 70, candidateAge: 30 });
     const fresh = (await db.select().from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.id, c.id)).limit(1))[0]!;
-    const traits = await m.family.livingSpousePersonalityTraits(fresh, now);
-    expect(traits).toEqual([]);
+    const state = await m.family.livingSpouseState(fresh, now);
+    expect(state).not.toBeNull(); // still married
+    expect(state!.personalityTraits).toEqual([]);
+    expect(state!.spouseTraitIds).toEqual([]);
+  });
+
+  it("familyEligibilityContext: married reads spouse ids; children age via childAge; slave short-circuits", async () => {
+    const { children, playerCharacters } = m.dbPkg;
+    const c = await createCharacter("Householder");
+    await marryTo(c.id, { personalityTraitId: "brave", traitId: "fertile", spouseDeathAge: 70, candidateAge: 30 });
+    // Two children: an infant and a youth. bornAt now → age 0; bornAt 12 game-years
+    // ago → age 12 (childAge = floor((now-bornAt)/realMsPerGameYear)).
+    const realMsPerGameYear = m.age.getAgeConfig().realMsPerGameYear;
+    await db.insert(children).values({ parentCharacterId: c.id, worldId, name: "Baby", sex: "female", bornAt: now });
+    await db.insert(children).values({ parentCharacterId: c.id, worldId, name: "Teen", sex: "male", bornAt: new Date(now.getTime() - 12 * realMsPerGameYear) });
+    const fresh = (await db.select().from(playerCharacters).where(eq(playerCharacters.id, c.id)).limit(1))[0]!;
+
+    const fam = await m.family.familyEligibilityContext(fresh, now);
+    expect(fam.married).toBe(true);
+    expect(fam.spouseTraitIds.sort()).toEqual(["brave", "fertile"]);
+    expect(fam.livingChildren.map((k) => `${k.sex}:${k.ageYears}`).sort()).toEqual(["female:0", "male:12"]);
+
+    // A slave (family locked) short-circuits with no spouse/children read.
+    const slave = await createCharacter("Enslaved", "slave");
+    await db.insert(children).values({ parentCharacterId: slave.id, worldId, name: "X", sex: "male", bornAt: now });
+    const slaveFresh = (await db.select().from(playerCharacters).where(eq(playerCharacters.id, slave.id)).limit(1))[0]!;
+    const slaveFam = await m.family.familyEligibilityContext(slaveFresh, now);
+    expect(slaveFam).toEqual({ married: false, spouseTraitIds: [], livingChildren: [] });
   });
 });

@@ -23,7 +23,7 @@ import {
 } from "@massalia/shared";
 import { applyComposureDelta, getComposureConfig, recoverComposure } from "./composure.js";
 import { getAgeConfig } from "./age.js";
-import { livingSpousePersonalityTraits } from "./family.js";
+import { livingSpouseState } from "./family.js";
 import { addTrait, getHeldTraits, removeTrait, TraitRuleError } from "./traits.js";
 import { utcDayString } from "./dailyDecisions.js";
 import { eligibleForCampaign, grantCampaignFavor } from "./elections.js";
@@ -301,7 +301,7 @@ export async function resolveRoutine(row: CharacterRow, routineId: string, now: 
   const traits = await getHeldTraits(row.id);
   // The apply path resolves the spouse itself (same helper the preview route uses,
   // so the two never disagree about whether she is alive).
-  const spouseTraits = await livingSpousePersonalityTraits(row, now);
+  const spouseTraits = (await livingSpouseState(row, now))?.personalityTraits ?? [];
   const tag = describeComposureDelta(traits, card.tags, 0, getComposureConfig(), spouseTraits);
   const composureFromEffects = resolved.effects
     .filter((effect): effect is Extract<typeof effect, { type: "change_composure" }> => effect.type === "change_composure")

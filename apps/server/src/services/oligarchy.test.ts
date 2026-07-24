@@ -130,8 +130,9 @@ suite("the Oligarchy Chamber (integration)", () => {
     const row = await freshRow(buyer.id);
     const cards = await m.daily.ensureDailySet(
       row.id,
-      { classId: row.classId, party: row.party, isCouncilor: row.isCouncilor, stats: { prestige: 0, devotion: 0, militia: 0, intelligence: 0 }, traitIds: [] },
+      { classId: row.classId, party: row.party, isCouncilor: row.isCouncilor, stats: { prestige: 0, devotion: 0, militia: 0, intelligence: 0 }, traitIds: [], married: false, spouseTraitIds: [], livingChildren: [] },
       now,
+      startedAt.getTime(),
     );
     const council = cards.find((card) => card.arena === "council");
     expect(council).toBeDefined();

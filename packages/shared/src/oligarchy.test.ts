@@ -147,6 +147,9 @@ describe("a fresh seat-holder draws the council (cou-*) events", () => {
     isCouncilor: true,
     stats: { prestige: 0, devotion: 0, militia: 0, intelligence: 0 },
     traitIds: [],
+    married: false,
+    spouseTraitIds: [],
+    livingChildren: [],
   };
 
   it("the council pack is gated on the councilor office (the is_councilor flag)", () => {
@@ -161,8 +164,8 @@ describe("a fresh seat-holder draws the council (cou-*) events", () => {
   });
 
   it("buying a seat adds the council arena to the daily set", () => {
-    expect(dailyArenasFor({ isCouncilor: false, party: "none" })).not.toContain("council");
-    expect(dailyArenasFor({ isCouncilor: true, party: "none" })).toContain("council");
+    expect(dailyArenasFor({ ...councilor, isCouncilor: false }, false)).not.toContain("council");
+    expect(dailyArenasFor(councilor, false)).toContain("council");
     const drawn = drawEvent(councilEvents.filter((event) => isEventEligible(event, councilor)), [], () => 0.5);
     expect(drawn?.id.startsWith("cou-")).toBe(true);
   });

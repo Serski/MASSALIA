@@ -33,6 +33,14 @@ export async function getActiveWorldId(): Promise<string | null> {
   return rows[0]?.id ?? null;
 }
 
+// The active world's id + start instant (ms). The start instant feeds gameDate()
+// for season derivation (e.g. the family arena's winter check).
+export async function getActiveWorld(): Promise<{ id: string; startedMs: number } | null> {
+  const rows = await db.select({ id: worlds.id, startedAt: worlds.startedAt }).from(worlds).where(eq(worlds.status, "active")).limit(1);
+  const world = rows[0];
+  return world ? { id: world.id, startedMs: world.startedAt.getTime() } : null;
+}
+
 export async function getActivePlayer(userId: string, worldId: string): Promise<PlayerRow | null> {
   const rows = await db
     .select()

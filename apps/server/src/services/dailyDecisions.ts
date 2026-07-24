@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { createDb, dailyDecisions } from "@massalia/db";
-import { dailyArenasFor, drawEvent, eventArena, isCalendarEvent, isEventEligible, type EligibilityContext } from "@massalia/shared";
+import { dailyArenasFor, drawEvent, eventArena, gameDate, isCalendarEvent, isEventEligible, type EligibilityContext } from "@massalia/shared";
 import { listEvents, recentEventIds, recordDraw } from "./eventEngine.js";
 
 const db = createDb();
@@ -21,7 +21,7 @@ export async function getDailySet(characterId: string, now: Date): Promise<Daily
 
 // Return today's curated set, generating it on first access: one weighted card
 // per arena the character qualifies for, excluding recently-seen events.
-export async function ensureDailySet(characterId: string, ctx: EligibilityContext, now: Date): Promise<DailyCardRow[]> {
+export async function ensureDailySet(characterId: string, ctx: EligibilityContext, now: Date, startedMs: number): Promise<DailyCardRow[]> {
   const existing = await getDailySet(characterId, now);
   if (existing.length > 0) return existing;
 
@@ -30,7 +30,10 @@ export async function ensureDailySet(characterId: string, ctx: EligibilityContex
   const eligible = (await listEvents()).filter((event) => !isCalendarEvent(event) && isEventEligible(event, ctx));
   const recent = await recentEventIds(characterId, 5);
 
-  for (const arena of dailyArenasFor(ctx)) {
+  // The family arena is included only on the winter day — its once-per-game-year
+  // cadence by construction (1 winter per 4 real-day year).
+  const isWinter = gameDate(now.getTime(), startedMs).seasonOfYear === 0;
+  for (const arena of dailyArenasFor(ctx, isWinter)) {
     const pool = eligible.filter((event) => eventArena(event) === arena);
     const drawn = drawEvent(pool, recent);
     if (!drawn) continue;

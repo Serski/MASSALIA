@@ -29,7 +29,15 @@ const ctx: EligibilityContext = {
   isCouncilor: false,
   stats: { prestige: 5, devotion: 2, militia: 0, intelligence: 8 },
   traitIds: ["shrewd"],
+  married: false,
+  spouseTraitIds: [],
+  livingChildren: [],
 };
+
+// A convenience for family-eligibility tests: the base ctx with overrides applied.
+function famCtx(over: Partial<EligibilityContext>): EligibilityContext {
+  return { ...ctx, ...over };
+}
 
 describe("parseEventFile — array vs single", () => {
   it("loads a single event object", () => {
@@ -66,6 +74,15 @@ describe("parseEventFile — array vs single", () => {
       }),
     );
     expect(out[0]!.choices[0]!.effects).toHaveLength(5);
+  });
+  it("accepts family requires fields under the strict schema", () => {
+    const out = parseEventFile(
+      event({ id: "e", requires: { married: true, spouseTrait: "brave", hasChildren: true, childAgeBand: "youth", childSex: "female", household: true } }),
+    );
+    expect(out[0]!.requires?.childAgeBand).toBe("youth");
+  });
+  it("still rejects an unknown requires key (strict)", () => {
+    expect(() => parseEventFile(event({ id: "e", requires: { bogus: true } as never }))).toThrow();
   });
 });
 
@@ -135,16 +152,50 @@ describe("eventArena / dailyArenasFor", () => {
     // a general event with only a stat gate is still general
     expect(eventArena(event({ id: "m", requires: { minStat: { militia: 3 } } }))).toBe("general");
   });
-  it("baseline player draws class + general", () => {
-    expect(dailyArenasFor({ isCouncilor: false, party: "none" })).toEqual(["class", "general"]);
+
+  it("any family field routes to the family arena", () => {
+    expect(eventArena(event({ id: "a", requires: { married: true } }))).toBe("family");
+    expect(eventArena(event({ id: "b", requires: { spouseTrait: "brave" } }))).toBe("family");
+    expect(eventArena(event({ id: "c", requires: { hasChildren: true } }))).toBe("family");
+    expect(eventArena(event({ id: "d", requires: { childAgeBand: "infant" } }))).toBe("family");
+    expect(eventArena(event({ id: "e", requires: { childSex: "male" } }))).toBe("family");
+    expect(eventArena(event({ id: "f", requires: { household: true } }))).toBe("family");
   });
-  it("oligarch in a party draws all four", () => {
-    expect(dailyArenasFor({ isCouncilor: true, party: "dynatoi" })).toEqual(["class", "general", "council", "party"]);
+
+  it("family precedence: family beats class on {class, household}", () => {
+    // The hetaira household event carries class:"hetaira" AND household:true —
+    // family must win over the class check.
+    expect(eventArena(event({ id: "h", requires: { class: "hetaira", household: true } }))).toBe("family");
+  });
+
+  it("baseline player draws class + general (non-winter)", () => {
+    expect(dailyArenasFor(famCtx({ party: "none" }), false)).toEqual(["class", "general"]);
+  });
+  it("oligarch in a party draws all four (non-winter)", () => {
+    expect(dailyArenasFor(famCtx({ isCouncilor: true, party: "dynatoi" }), false)).toEqual(["class", "general", "council", "party"]);
+  });
+
+  describe("family arena: winter × qualifying", () => {
+    it("winter + married adds the family arena", () => {
+      expect(dailyArenasFor(famCtx({ married: true }), true)).toContain("family");
+    });
+    it("winter + a living child adds the family arena", () => {
+      expect(dailyArenasFor(famCtx({ livingChildren: [{ sex: "male", ageYears: 3 }] }), true)).toContain("family");
+    });
+    it("winter + hetaira adds the family arena", () => {
+      expect(dailyArenasFor(famCtx({ classId: "hetaira" }), true)).toContain("family");
+    });
+    it("winter but NOT qualifying (unmarried, childless, non-hetaira) → no family arena", () => {
+      expect(dailyArenasFor(famCtx({ married: false, livingChildren: [], classId: "trader" }), true)).not.toContain("family");
+    });
+    it("qualifying but NOT winter → no family arena", () => {
+      expect(dailyArenasFor(famCtx({ married: true }), false)).not.toContain("family");
+    });
   });
 
   // The daily decision set IS the action budget: card count per day = arena count.
-  describe("daily card count by archetype", () => {
-    const cardCount = (ctx: { isCouncilor: boolean; party: string }) => dailyArenasFor(ctx).length;
+  describe("daily card count by archetype (non-winter)", () => {
+    const cardCount = (over: Partial<EligibilityContext>) => dailyArenasFor(famCtx(over), false).length;
 
     it("a commoner (no office, unaligned) gets 2 cards", () => {
       expect(cardCount({ isCouncilor: false, party: "none" })).toBe(2);
@@ -158,6 +209,64 @@ describe("eventArena / dailyArenasFor", () => {
     it("a partied councilor gets 4 cards", () => {
       expect(cardCount({ isCouncilor: true, party: "dynatoi" })).toBe(4);
     });
+  });
+});
+
+describe("isEventEligible — family gating", () => {
+  it("married requires a living spouse", () => {
+    expect(isEventEligible(event({ id: "e", requires: { married: true } }), famCtx({ married: true }))).toBe(true);
+    expect(isEventEligible(event({ id: "e", requires: { married: true } }), famCtx({ married: false }))).toBe(false);
+  });
+  it("spouseTrait matches personality OR mechanical id", () => {
+    const e = event({ id: "e", requires: { spouseTrait: "brave" } });
+    expect(isEventEligible(e, famCtx({ married: true, spouseTraitIds: ["brave"] }))).toBe(true);
+    expect(isEventEligible(e, famCtx({ married: true, spouseTraitIds: ["frail"] }))).toBe(false);
+    // no spouse -> spouseTraitIds is [] -> fails
+    expect(isEventEligible(e, famCtx({ married: false, spouseTraitIds: [] }))).toBe(false);
+  });
+  it("hasChildren requires ≥1 living child", () => {
+    expect(isEventEligible(event({ id: "e", requires: { hasChildren: true } }), famCtx({ livingChildren: [{ sex: "female", ageYears: 2 }] }))).toBe(true);
+    expect(isEventEligible(event({ id: "e", requires: { hasChildren: true } }), famCtx({ livingChildren: [] }))).toBe(false);
+  });
+  it("household requires the hetaira class", () => {
+    expect(isEventEligible(event({ id: "e", requires: { household: true } }), famCtx({ classId: "hetaira" }))).toBe(true);
+    expect(isEventEligible(event({ id: "e", requires: { household: true } }), famCtx({ classId: "trader" }))).toBe(false);
+  });
+
+  describe("childAgeBand boundaries (infant 0–4, child 5–9, youth 10–14)", () => {
+    const kids = (ageYears: number, sex: "male" | "female" = "male") => famCtx({ livingChildren: [{ sex, ageYears }] });
+    const band = (b: "infant" | "child" | "youth") => event({ id: "e", requires: { childAgeBand: b } });
+
+    it("infant includes 4, excludes 5", () => {
+      expect(isEventEligible(band("infant"), kids(4))).toBe(true);
+      expect(isEventEligible(band("infant"), kids(5))).toBe(false);
+    });
+    it("child includes 5 and 9, excludes 10", () => {
+      expect(isEventEligible(band("child"), kids(5))).toBe(true);
+      expect(isEventEligible(band("child"), kids(9))).toBe(true);
+      expect(isEventEligible(band("child"), kids(10))).toBe(false);
+    });
+    it("youth includes 10 and 14, excludes 15", () => {
+      expect(isEventEligible(band("youth"), kids(10))).toBe(true);
+      expect(isEventEligible(band("youth"), kids(14))).toBe(true);
+      expect(isEventEligible(band("youth"), kids(15))).toBe(false);
+    });
+    it("childSex narrows the band match", () => {
+      const e = event({ id: "e", requires: { childAgeBand: "child", childSex: "female" } });
+      expect(isEventEligible(e, kids(6, "female"))).toBe(true);
+      expect(isEventEligible(e, kids(6, "male"))).toBe(false);
+    });
+    it("matches when ANY child fits (multiple children)", () => {
+      const c = famCtx({ livingChildren: [{ sex: "male", ageYears: 1 }, { sex: "female", ageYears: 12 }] });
+      expect(isEventEligible(event({ id: "e", requires: { childAgeBand: "youth", childSex: "female" } }), c)).toBe(true);
+      expect(isEventEligible(event({ id: "e", requires: { childAgeBand: "youth", childSex: "male" } }), c)).toBe(false);
+    });
+  });
+
+  it("family + non-family requirements combine (all must pass)", () => {
+    const e = event({ id: "e", requires: { class: "hetaira", household: true } });
+    expect(isEventEligible(e, famCtx({ classId: "hetaira" }))).toBe(true);
+    expect(isEventEligible(e, famCtx({ classId: "trader" }))).toBe(false); // household fails
   });
 });
 

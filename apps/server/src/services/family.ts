@@ -68,17 +68,35 @@ export function getFamilyConfig(): FamilyConfig {
 // reuses the shared spouseCurrentAge / isSpouseDeceased math — never re-derived —
 // so a wife dead of old age but not yet swept still counts as gone. Only her
 // opposes/embraces tags feed composure; statMod is never read.
-export async function livingSpousePersonalityTraits(
+// The state of a character's LIVING spouse, or null when unmarried / widowed (a
+// wife past her spouseDeathAge but not yet swept counts as gone). Gated on
+// spouseCandidateId FIRST so unmarried characters incur zero DB reads; otherwise
+// exactly ONE joined query (candidate + her active marriage). Surfaces everything
+// a caller might need from that single query: her composure-ready personality
+// traits, her mechanical trait id, the combined id set for event eligibility, and
+// the marriage row id + philia. statMod is never read.
+export type LivingSpouse = {
+  marriageId: string | null;
+  philia: number | null;
+  personalityTraits: Trait[]; // 0 or 1 resolved trait (for composure)
+  spouseTraitId: string | null; // mechanical trait id
+  spouseTraitIds: string[]; // personality + mechanical ids (for event eligibility)
+};
+
+export async function livingSpouseState(
   character: Pick<CharacterRow, "id" | "spouseCandidateId">,
   now: Date = new Date(),
-): Promise<Trait[]> {
-  if (!character.spouseCandidateId) return []; // unmarried — no DB read
+): Promise<LivingSpouse | null> {
+  if (!character.spouseCandidateId) return null; // unmarried — no DB read
   const rows = await db
     .select({
       personalityTraitId: familyCandidates.personalityTraitId,
+      traitId: familyCandidates.traitId,
       age: familyCandidates.age,
       createdAt: familyCandidates.createdAt,
       spouseDeathAge: marriages.spouseDeathAge,
+      marriageId: marriages.id,
+      philia: marriages.philia,
     })
     .from(familyCandidates)
     .leftJoin(
@@ -88,13 +106,51 @@ export async function livingSpousePersonalityTraits(
     .where(eq(familyCandidates.id, character.spouseCandidateId))
     .limit(1);
   const row = rows[0];
-  if (!row || !row.personalityTraitId) return []; // gone, or no personality
+  if (!row) return null; // candidate row gone
   if (row.spouseDeathAge !== null) {
     const wifeAge = spouseCurrentAge(row.age, row.createdAt.getTime(), now.getTime(), getAgeConfig().realMsPerGameYear);
-    if (isSpouseDeceased(wifeAge, row.spouseDeathAge)) return []; // widowed, not yet swept
+    if (isSpouseDeceased(wifeAge, row.spouseDeathAge)) return null; // widowed, not yet swept
   }
-  const def = getTraitDef(row.personalityTraitId);
-  return def ? [def] : [];
+  const def = row.personalityTraitId ? getTraitDef(row.personalityTraitId) : undefined;
+  const spouseTraitIds = [row.personalityTraitId, row.traitId].filter((id): id is string => id !== null);
+  return {
+    marriageId: row.marriageId,
+    philia: row.philia,
+    personalityTraits: def ? [def] : [],
+    spouseTraitId: row.traitId ?? null,
+    spouseTraitIds,
+  };
+}
+
+// Family-arena eligibility inputs for the daily draw, resolved lazily. Callers
+// MUST gate on the winter day before invoking (non-winter draws never need this).
+// Slaves (family locked) short-circuit with zero queries — they can never
+// qualify. Otherwise: the living spouse via livingSpouseState (0 reads if
+// unmarried) plus ONE query for living children.
+export type FamilyEligibility = {
+  married: boolean;
+  spouseTraitIds: string[];
+  livingChildren: { sex: "male" | "female"; ageYears: number }[];
+};
+
+export async function familyEligibilityContext(
+  character: Pick<CharacterRow, "id" | "spouseCandidateId" | "classId">,
+  now: Date = new Date(),
+): Promise<FamilyEligibility> {
+  if (isFamilyLocked(character.classId, getFamilyConfig())) {
+    return { married: false, spouseTraitIds: [], livingChildren: [] }; // slave — no reads
+  }
+  const spouse = await livingSpouseState(character, now);
+  const childRows = await db
+    .select({ sex: children.sex, bornAt: children.bornAt })
+    .from(children)
+    .where(eq(children.parentCharacterId, character.id));
+  const realMsPerGameYear = getAgeConfig().realMsPerGameYear;
+  const livingChildren = childRows.map((child) => ({
+    sex: child.sex as "male" | "female",
+    ageYears: childAge(child.bornAt.getTime(), now.getTime(), realMsPerGameYear),
+  }));
+  return { married: spouse !== null, spouseTraitIds: spouse?.spouseTraitIds ?? [], livingChildren };
 }
 
 type CharacterRow = typeof playerCharacters.$inferSelect;
