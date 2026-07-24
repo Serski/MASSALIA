@@ -289,6 +289,10 @@ export const marriages = pgTable("marriages", {
   // The wife's rolled lifespan (uniform in spouse.deathAge); the marriage ends
   // with 'spouse_died' once her lazily-aged current age reaches it.
   spouseDeathAge: integer("spouse_death_age"),
+  // Philia: the 0–100 bond with the spouse (default 50). Moved by family-event
+  // change_philia effects + a daily spouse-reaction coupling; gates fertility and
+  // exposes band modifiers at its extremes. Nothing consumes it yet.
+  philia: integer("philia").notNull().default(50),
 });
 
 // Children of a played character. Age derives lazily from born_at (1 game year /
