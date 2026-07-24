@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   applyStatGrowth,
@@ -83,6 +86,28 @@ describe("parseEventFile — array vs single", () => {
   });
   it("still rejects an unknown requires key (strict)", () => {
     expect(() => parseEventFile(event({ id: "e", requires: { bogus: true } as never }))).toThrow();
+  });
+  it("accepts change_philia effects", () => {
+    const out = parseEventFile(
+      event({ id: "e", choices: [{ id: "c", label: "c", resultText: "r", effects: [{ type: "change_philia", amount: 5 }] }] }),
+    );
+    expect(out[0]!.choices[0]!.effects[0]).toEqual({ type: "change_philia", amount: 5 });
+  });
+  it("still rejects an unknown effect type (discriminated union stays strict)", () => {
+    expect(() =>
+      parseEventFile(event({ id: "e", choices: [{ id: "c", label: "c", resultText: "r", effects: [{ type: "change_nonsense", amount: 1 } as never] }] })),
+    ).toThrow();
+  });
+});
+
+describe("family content pool (content/events/events-family.json)", () => {
+  it("loads and all 32 events survive strict validation", () => {
+    const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+    const raw = JSON.parse(readFileSync(resolve(root, "content/events/events-family.json"), "utf8"));
+    const events = parseEventFile(raw);
+    expect(events).toHaveLength(32);
+    // Every family event routes to the family arena (their requires are all family fields).
+    for (const e of events) expect(eventArena(e)).toBe("family");
   });
 });
 

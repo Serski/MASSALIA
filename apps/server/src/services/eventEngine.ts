@@ -8,6 +8,7 @@ import {
   applyStatGrowth,
   capStat,
   clampIdeology,
+  clampPhilia,
   opinionBand,
   parseCitiesContent,
   parseEventFile,
@@ -15,8 +16,9 @@ import {
   type EventChoice,
   type EventDefinition,
 } from "@massalia/shared";
-import { createDb, effectLog, eventHistory, factionRelations, leagueCities, partyFavor, playerCharacters, worlds } from "@massalia/db";
+import { createDb, effectLog, eventHistory, factionRelations, leagueCities, marriages, partyFavor, playerCharacters, worlds } from "@massalia/db";
 import { broadcastState, resolveOwnerToken, setProvinceOwner } from "./worldState.js";
+import { livingSpouseState } from "./family.js";
 import { applyChangeTrait, TraitRuleError } from "./traits.js";
 import { onIdeologyChanged } from "./politics.js";
 import { getAgeConfig } from "./age.js";
@@ -134,6 +136,21 @@ export async function applyChoiceEffects(actingCharacterId: string, eventId: str
           const next = Math.max(0, rows[0].drachmae + effect.amount);
           await tx.update(playerCharacters).set({ drachmae: next }).where(eq(playerCharacters.id, actingCharacterId));
           await tx.insert(effectLog).values({ characterId: actingCharacterId, kind: "change_drachmae", detail: { amount: effect.amount, value: next } });
+          break;
+        }
+        case "change_philia": {
+          // Family arena only. Resolve the LIVING spouse (unmarried/widowed → silent
+          // no-op: child events fire for widowers and their philia effects vanish).
+          const charRows = await tx
+            .select({ spouseCandidateId: playerCharacters.spouseCandidateId })
+            .from(playerCharacters)
+            .where(eq(playerCharacters.id, actingCharacterId))
+            .limit(1);
+          const spouse = await livingSpouseState({ id: actingCharacterId, spouseCandidateId: charRows[0]?.spouseCandidateId ?? null });
+          if (!spouse || spouse.marriageId === null || spouse.philia === null) break;
+          const next = clampPhilia(spouse.philia + effect.amount);
+          await tx.update(marriages).set({ philia: next }).where(eq(marriages.id, spouse.marriageId));
+          await tx.insert(effectLog).values({ characterId: actingCharacterId, kind: "change_philia", detail: { amount: effect.amount, source: eventId } });
           break;
         }
         case "change_party_favor": {

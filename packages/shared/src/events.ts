@@ -22,6 +22,9 @@ export type EventEffect =
   | { type: "change_stat"; stat: keyof CharacterStats; amount: number }
   | { type: "change_composure"; amount: number }
   | { type: "change_drachmae"; amount: number }
+  // Family arena: move philia (the spouse bond) by amount. A no-op with no living
+  // spouse (unmarried/widowed) — see the executor.
+  | { type: "change_philia"; amount: number }
   | { type: "change_party_favor"; party: "palaioi" | "dynatoi"; amount: number }
   | { type: "spawn_army"; ownerPlayerId: string; provinceId: string; units: Record<string, number> }
   // Festivals (Prompt 7): record a choregos donation to a festival instance.
@@ -104,6 +107,7 @@ const effectSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("change_stat"), stat: statName, amount: z.number() }),
   z.object({ type: z.literal("change_composure"), amount: z.number() }),
   z.object({ type: z.literal("change_drachmae"), amount: z.number() }),
+  z.object({ type: z.literal("change_philia"), amount: z.number() }),
   z.object({ type: z.literal("change_party_favor"), party: z.enum(["palaioi", "dynatoi"]), amount: z.number() }),
   z.object({ type: z.literal("spawn_army"), ownerPlayerId: z.string(), provinceId: z.string(), units: z.record(z.string(), z.number()) }),
   z.object({ type: z.literal("register_choregos"), festivalId: z.string(), amount: z.number() }),

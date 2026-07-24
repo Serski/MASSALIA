@@ -1,0 +1,1770 @@
+[
+  {
+    "id": "fam-symposium-hostess",
+    "weight": 8,
+    "requires": {
+      "married": true
+    },
+    "scene": "Your wife has spent three days planning a symposium in your andron. The guest couches are short one place, and two men of standing both expect it.",
+    "choices": [
+      {
+        "id": "host",
+        "label": "Let her seat whom she favors",
+        "tags": [
+          "symposium",
+          "feast"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -20
+          },
+          {
+            "type": "change_philia",
+            "amount": 5
+          }
+        ],
+        "resultText": "The wine flows, the slighted man sulks, and your house is talked of for a season."
+      },
+      {
+        "id": "cancel",
+        "label": "Cancel it — the expense is absurd",
+        "tags": [
+          "abstain",
+          "refuse_aid"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_composure",
+            "amount": -4
+          },
+          {
+            "type": "change_philia",
+            "amount": -6
+          }
+        ],
+        "resultText": "The couches stay stacked. The house is quiet in the wrong way."
+      }
+    ]
+  },
+  {
+    "id": "fam-word-from-the-well",
+    "weight": 8,
+    "requires": {
+      "married": true
+    },
+    "scene": "Your wife returns from the fountain house with the women's talk: a rival family is quietly selling land before some trouble only they can see.",
+    "choices": [
+      {
+        "id": "act",
+        "label": "Move on the rumor before the men hear it",
+        "tags": [
+          "scheme",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 25
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_philia",
+            "amount": 4
+          }
+        ],
+        "resultText": "By the time the agora knows, you have already taken your position."
+      },
+      {
+        "id": "dismiss",
+        "label": "Dismiss it as washing-day gossip",
+        "tags": [
+          "idle"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": 2
+          },
+          {
+            "type": "change_philia",
+            "amount": -4
+          }
+        ],
+        "resultText": "Perhaps nothing. Though she was right about the grain factor last year."
+      }
+    ]
+  },
+  {
+    "id": "fam-quarrel-absence",
+    "weight": 8,
+    "requires": {
+      "married": true
+    },
+    "scene": "You have taken your evening meal away from the house nine nights running. Tonight your wife sets one place at the table, her own, and waits.",
+    "choices": [
+      {
+        "id": "stay",
+        "label": "Stay home. The city can wait a night",
+        "tags": [
+          "wait",
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": 6
+          },
+          {
+            "type": "change_philia",
+            "amount": 7
+          }
+        ],
+        "resultText": "Lamplight, barley bread, and talk of nothing important. You had forgotten the taste of both."
+      },
+      {
+        "id": "go",
+        "label": "Go out anyway — obligations are obligations",
+        "tags": [
+          "claim_office",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -6
+          },
+          {
+            "type": "change_philia",
+            "amount": -7
+          }
+        ],
+        "resultText": "The men at the harbor greet you warmly. The house is dark when you return."
+      }
+    ]
+  },
+  {
+    "id": "fam-her-kin-visit",
+    "weight": 8,
+    "requires": {
+      "married": true
+    },
+    "scene": "Your wife's brothers arrive unannounced with a cart, three amphorae of their inland wine, and opinions about how you keep your accounts.",
+    "choices": [
+      {
+        "id": "feast",
+        "label": "Feast them properly",
+        "tags": [
+          "feast",
+          "gift",
+          "wine"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_philia",
+            "amount": 5
+          }
+        ],
+        "resultText": "Loud, long, and expensive. But her family now calls yours an open house."
+      },
+      {
+        "id": "cold",
+        "label": "Give them bread, salt, and an early bedtime",
+        "tags": [
+          "abstain",
+          "refuse_aid"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -2
+          },
+          {
+            "type": "change_composure",
+            "amount": -4
+          },
+          {
+            "type": "change_philia",
+            "amount": -6
+          }
+        ],
+        "resultText": "They leave at dawn, polite as ice. The cart seems heavier going."
+      }
+    ]
+  },
+  {
+    "id": "fam-shrine-journey",
+    "weight": 8,
+    "requires": {
+      "married": true
+    },
+    "scene": "Your wife asks to travel to the spring shrine of Artemis beyond the walls — a day's walk each way, and the roads have been uneasy since the last raids.",
+    "choices": [
+      {
+        "id": "escort",
+        "label": "Walk with her yourself",
+        "tags": [
+          "pilgrimage",
+          "offering"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 4
+          },
+          {
+            "type": "change_philia",
+            "amount": 6
+          }
+        ],
+        "resultText": "Cold water, old stones, and the two of you on the road home at dusk."
+      },
+      {
+        "id": "refuse",
+        "label": "Forbid the journey until the roads settle",
+        "tags": [
+          "back_down",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": -4
+          },
+          {
+            "type": "change_philia",
+            "amount": -5
+          }
+        ],
+        "resultText": "She obeys. The votive she had woven hangs by the door, waiting."
+      }
+    ]
+  },
+  {
+    "id": "fam-loom-commission",
+    "weight": 8,
+    "requires": {
+      "married": true
+    },
+    "scene": "The wife of a magistrate has seen your wife's weaving and offers good silver for a commissioned piece — through you, of course, as is proper.",
+    "choices": [
+      {
+        "id": "accept",
+        "label": "Accept on her behalf",
+        "tags": [
+          "labor",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 20
+          },
+          {
+            "type": "change_philia",
+            "amount": 4
+          }
+        ],
+        "resultText": "The loom sings for a month. The silver is real, and so is her quiet pride."
+      },
+      {
+        "id": "decline",
+        "label": "Decline — your house does not take wages",
+        "tags": [
+          "boast",
+          "refuse_aid"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          },
+          {
+            "type": "change_philia",
+            "amount": -3
+          }
+        ],
+        "resultText": "Honor is kept. The finished cloth stays folded in a chest, unsold and unseen."
+      }
+    ]
+  },
+  {
+    "id": "fam-old-suitor",
+    "weight": 6,
+    "requires": {
+      "married": true
+    },
+    "scene": "At a festival crowd's edge, a man of her father's choosing — the one she did not marry — greets your wife with elaborate courtesy and you with none.",
+    "choices": [
+      {
+        "id": "civil",
+        "label": "Return courtesy for courtesy",
+        "tags": [
+          "wait",
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 2
+          },
+          {
+            "type": "change_philia",
+            "amount": 4
+          }
+        ],
+        "resultText": "Nothing happens, which is exactly the victory. She takes your arm on the walk home."
+      },
+      {
+        "id": "confront",
+        "label": "Answer the slight in front of the crowd",
+        "tags": [
+          "rash_act",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          },
+          {
+            "type": "change_philia",
+            "amount": -3
+          }
+        ],
+        "resultText": "He backs down. The crowd enjoys it more than she does."
+      }
+    ]
+  },
+  {
+    "id": "fam-household-accounts",
+    "weight": 8,
+    "requires": {
+      "married": true
+    },
+    "scene": "Going over the household tablets, your wife shows you a steady leak: the steward has been rounding every purchase in his own favor for a year.",
+    "choices": [
+      {
+        "id": "expose",
+        "label": "Confront the steward before the household",
+        "tags": [
+          "expose_secret",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_philia",
+            "amount": 3
+          }
+        ],
+        "resultText": "He repays what he can and serves more carefully. The household takes note of who caught him."
+      },
+      {
+        "id": "quiet",
+        "label": "Say nothing, but let her manage the purse now",
+        "tags": [
+          "scheme",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 8
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          },
+          {
+            "type": "change_philia",
+            "amount": 5
+          }
+        ],
+        "resultText": "The leak stops without a scene. The steward never learns why the keys changed hands."
+      }
+    ]
+  },
+  {
+    "id": "fam-winter-stores",
+    "weight": 8,
+    "requires": {
+      "married": true
+    },
+    "scene": "First frost. Your wife has counted the storage jars twice and wants to buy grain now, while a neighbor swears prices will fall after the next fleet.",
+    "choices": [
+      {
+        "id": "buy",
+        "label": "Buy now, as she asks",
+        "tags": [
+          "wait",
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -18
+          },
+          {
+            "type": "change_composure",
+            "amount": 4
+          },
+          {
+            "type": "change_philia",
+            "amount": 5
+          }
+        ],
+        "resultText": "The jars are full before the first storm closes the harbor. She does not say she told you so. Aloud."
+      },
+      {
+        "id": "gamble",
+        "label": "Wait for the fleet and the cheaper price",
+        "tags": [
+          "profit",
+          "rash_act"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 12
+          },
+          {
+            "type": "change_composure",
+            "amount": -4
+          },
+          {
+            "type": "change_philia",
+            "amount": -5
+          }
+        ],
+        "resultText": "The fleet comes in and prices drop. This time."
+      }
+    ]
+  },
+  {
+    "id": "fam-anniversary-cup",
+    "weight": 6,
+    "requires": {
+      "married": true
+    },
+    "scene": "It is the day she first poured you the cup, as Gyptis poured for Protis. Your wife has set out the same vessel, and the wine is already mixed.",
+    "choices": [
+      {
+        "id": "drink",
+        "label": "Drink, and give the evening to her",
+        "tags": [
+          "wine",
+          "feast"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": 6
+          },
+          {
+            "type": "change_philia",
+            "amount": 8
+          }
+        ],
+        "resultText": "One cup, then another. The city and its offices do not exist tonight."
+      },
+      {
+        "id": "toast",
+        "label": "One ceremonial sip, then back to work",
+        "tags": [
+          "abstain",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          },
+          {
+            "type": "change_philia",
+            "amount": -8
+          }
+        ],
+        "resultText": "The tablets get finished. The cup is washed and put away without comment."
+      }
+    ]
+  },
+  {
+    "id": "fam-pious-wife-omen",
+    "weight": 10,
+    "requires": {
+      "married": true,
+      "spouseTrait": "pious"
+    },
+    "scene": "Your wife woke before dawn from a dream of birds circling the roof, and will not rest until a proper offering is made at the temple of Artemis.",
+    "choices": [
+      {
+        "id": "offer",
+        "label": "Fund the offering and go with her",
+        "tags": [
+          "offering",
+          "pilgrimage"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -15
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_philia",
+            "amount": 7
+          }
+        ],
+        "resultText": "The priestess accepts the gift. Your wife sleeps soundly; oddly, so do you."
+      },
+      {
+        "id": "scoff",
+        "label": "Tell her dreams are dreams",
+        "tags": [
+          "impiety",
+          "debate"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_philia",
+            "amount": -8
+          }
+        ],
+        "resultText": "You win the argument at breakfast and lose every silence after it."
+      }
+    ]
+  },
+  {
+    "id": "fam-hedonist-wife-feast",
+    "weight": 10,
+    "requires": {
+      "married": true,
+      "spouseTrait": "hedonist"
+    },
+    "scene": "You return to find your courtyard hung with lamps, a flute-girl hired, and your wife declaring that tonight, for no reason at all, the house celebrates.",
+    "choices": [
+      {
+        "id": "join",
+        "label": "Surrender to the evening",
+        "tags": [
+          "feast",
+          "wine",
+          "symposium"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -25
+          },
+          {
+            "type": "change_composure",
+            "amount": 6
+          },
+          {
+            "type": "change_philia",
+            "amount": 7
+          }
+        ],
+        "resultText": "You remember perhaps half of it, all of it good."
+      },
+      {
+        "id": "rein",
+        "label": "Send the flute-girl home and count the cost",
+        "tags": [
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_philia",
+            "amount": -7
+          }
+        ],
+        "resultText": "The lamps come down. She pays the flute-girl anyway, from her own bracelet."
+      }
+    ]
+  },
+  {
+    "id": "fam-cunning-wife-whisper",
+    "weight": 10,
+    "requires": {
+      "married": true,
+      "spouseTrait": "cunning"
+    },
+    "scene": "Over the evening meal your wife mentions, lightly, that a certain councilor's wife owes her a favor — and that favors, like figs, spoil if left too long.",
+    "choices": [
+      {
+        "id": "use",
+        "label": "Let her call it in on your behalf",
+        "tags": [
+          "scheme",
+          "deception"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_party_favor",
+            "party": "dynatoi",
+            "amount": 2
+          },
+          {
+            "type": "change_philia",
+            "amount": 6
+          }
+        ],
+        "resultText": "Doors open that you never knocked on. You do not ask how."
+      },
+      {
+        "id": "refuse",
+        "label": "Your house does not trade in whispers",
+        "tags": [
+          "public_oath",
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -4
+          },
+          {
+            "type": "change_philia",
+            "amount": -4
+          }
+        ],
+        "resultText": "She smiles, agrees completely, and keeps the favor for another day."
+      }
+    ]
+  },
+  {
+    "id": "fam-ambitious-wife-office",
+    "weight": 10,
+    "requires": {
+      "married": true,
+      "spouseTrait": "ambitious"
+    },
+    "scene": "Your wife has drawn up, in her own hand, a list of the men you would need beside you to stand for office — and the weaknesses of every one of them.",
+    "choices": [
+      {
+        "id": "pursue",
+        "label": "Study the list together into the night",
+        "tags": [
+          "claim_office",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -4
+          },
+          {
+            "type": "change_philia",
+            "amount": 7
+          }
+        ],
+        "resultText": "By lamplight the two of you look less like a household and more like a faction."
+      },
+      {
+        "id": "burn",
+        "label": "Burn it — such lists get houses ruined",
+        "tags": [
+          "back_down",
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_philia",
+            "amount": -6
+          }
+        ],
+        "resultText": "The tablet goes soft in the brazier. Her ambition does not."
+      }
+    ]
+  },
+  {
+    "id": "fam-hotblooded-wife-market",
+    "weight": 10,
+    "requires": {
+      "married": true,
+      "spouseTrait": "hotblooded"
+    },
+    "scene": "A fishmonger in the agora called your wife a name. She threw the fish back at him, accurately, and now both households are demanding apologies.",
+    "choices": [
+      {
+        "id": "back-her",
+        "label": "Stand with her — he spoke first",
+        "tags": [
+          "duel",
+          "rash_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          },
+          {
+            "type": "change_philia",
+            "amount": 8
+          }
+        ],
+        "resultText": "The agora takes her side, mostly. The fishmonger finds customers elsewhere."
+      },
+      {
+        "id": "smooth",
+        "label": "Pay for the fish and smooth it over",
+        "tags": [
+          "mercy",
+          "gift"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_philia",
+            "amount": -4
+          }
+        ],
+        "resultText": "Silver soothes what pride inflamed. She eats her dinner in magnificent silence."
+      }
+    ]
+  },
+  {
+    "id": "fam-frail-wife-fever",
+    "weight": 10,
+    "requires": {
+      "married": true,
+      "spouseTrait": "frail"
+    },
+    "scene": "The autumn fever that passes through the lower city has reached your house. Your wife waves it off between coughs, but the physician's face says otherwise.",
+    "choices": [
+      {
+        "id": "physician",
+        "label": "Pay for the Asclepiad and the good herbs",
+        "tags": [
+          "gift",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -25
+          },
+          {
+            "type": "change_composure",
+            "amount": 4
+          },
+          {
+            "type": "change_philia",
+            "amount": 7
+          }
+        ],
+        "resultText": "A week of broth, bitter draughts, and sitting by the bed. The cough loosens its grip."
+      },
+      {
+        "id": "temple",
+        "label": "Carry an offering to Panacea instead",
+        "tags": [
+          "offering",
+          "pilgrimage"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -8
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_philia",
+            "amount": 4
+          }
+        ],
+        "resultText": "The fever breaks on the fourth day. The priests are not surprised. You were."
+      }
+    ]
+  },
+  {
+    "id": "fam-frail-wife-hard-winter",
+    "weight": 8,
+    "requires": {
+      "married": true,
+      "spouseTrait": "frail"
+    },
+    "scene": "The north wind has settled in her chest again. She insists on managing the household from her bed, tablets propped against her knees.",
+    "choices": [
+      {
+        "id": "rest",
+        "label": "Take the tablets away and order her to rest",
+        "tags": [
+          "mercy",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": 4
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -6
+          },
+          {
+            "type": "change_philia",
+            "amount": 4
+          }
+        ],
+        "resultText": "The household runs worse without her and she knows it, which pleases her enormously."
+      },
+      {
+        "id": "allow",
+        "label": "Let her work — stillness would grieve her more",
+        "tags": [
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          },
+          {
+            "type": "change_philia",
+            "amount": 5
+          }
+        ],
+        "resultText": "The accounts balance to the obol. Her cough keeps its own ledger."
+      }
+    ]
+  },
+  {
+    "id": "fam-dowried-wife-collectors",
+    "weight": 10,
+    "requires": {
+      "married": true,
+      "spouseTrait": "dowried"
+    },
+    "scene": "Her father's steward arrives with a polished smile: the family that gave sixty drachmae of dowry now asks your voice for their cousin's harbor concession.",
+    "choices": [
+      {
+        "id": "oblige",
+        "label": "Lend your voice — the dowry was real enough",
+        "tags": [
+          "patronage",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          },
+          {
+            "type": "change_philia",
+            "amount": 5
+          }
+        ],
+        "resultText": "The concession passes. Somewhere a ledger records that your voice can be purchased in advance."
+      },
+      {
+        "id": "refuse",
+        "label": "A dowry is a gift, not a mortgage",
+        "tags": [
+          "public_oath",
+          "refuse_aid"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_philia",
+            "amount": -6
+          }
+        ],
+        "resultText": "The steward's smile does not move. Her family's next letter is shorter."
+      }
+    ]
+  },
+  {
+    "id": "fam-infant-naming-omen",
+    "weight": 8,
+    "requires": {
+      "hasChildren": true,
+      "childAgeBand": "infant"
+    },
+    "scene": "On the seventh day rites for your youngest, a sea-eagle crosses the courtyard sunwise. The gathered kin look to you: such a bird means something, or nothing.",
+    "choices": [
+      {
+        "id": "embrace",
+        "label": "Declare it a blessing from Artemis",
+        "tags": [
+          "offering",
+          "festival"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_philia",
+            "amount": 3
+          }
+        ],
+        "resultText": "The kin drink to the eagle-marked child. The story will outlive everyone present."
+      },
+      {
+        "id": "shrug",
+        "label": "A bird is a bird; pour the wine",
+        "tags": [
+          "impiety",
+          "feast"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "The rites conclude without prophecy. The child sleeps through all of it."
+      }
+    ]
+  },
+  {
+    "id": "fam-infant-sleepless",
+    "weight": 8,
+    "requires": {
+      "hasChildren": true,
+      "childAgeBand": "infant"
+    },
+    "scene": "The youngest has howled through three nights running. The nurse is spent, the household walks like shades, and tomorrow you are expected in the city.",
+    "choices": [
+      {
+        "id": "walk",
+        "label": "Take the night watch yourself",
+        "tags": [
+          "labor",
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": 4
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          },
+          {
+            "type": "change_philia",
+            "amount": 5
+          }
+        ],
+        "resultText": "Dawn finds you hollow-eyed on the portico, the child asleep on your shoulder. You yawn through the morning's business."
+      },
+      {
+        "id": "nurse",
+        "label": "Hire a second nurse and guard your sleep",
+        "tags": [
+          "gift",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -12
+          },
+          {
+            "type": "change_philia",
+            "amount": -2
+          }
+        ],
+        "resultText": "Coin buys quiet. The city gets you sharp, the child gets a stranger's arms."
+      }
+    ]
+  },
+  {
+    "id": "fam-boy-palaestra-beating",
+    "weight": 8,
+    "requires": {
+      "hasChildren": true,
+      "childAgeBand": "child",
+      "childSex": "male"
+    },
+    "scene": "Your son comes home from the palaestra with a split lip and a torn chiton. The other boy was bigger, older, and — by every account — started it.",
+    "choices": [
+      {
+        "id": "teach",
+        "label": "Teach him to guard his chin yourself",
+        "tags": [
+          "duel",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          },
+          {
+            "type": "change_philia",
+            "amount": 2
+          }
+        ],
+        "resultText": "An hour a day in the courtyard. The next split lip belongs to someone else."
+      },
+      {
+        "id": "fathers",
+        "label": "Take it up with the other boy's father",
+        "tags": [
+          "debate",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          },
+          {
+            "type": "change_philia",
+            "amount": 3
+          }
+        ],
+        "resultText": "The fathers settle it over wine. The boys settle it behind the wrestling shed anyway."
+      }
+    ]
+  },
+  {
+    "id": "fam-girl-loom-song",
+    "weight": 8,
+    "requires": {
+      "hasChildren": true,
+      "childAgeBand": "child",
+      "childSex": "female"
+    },
+    "scene": "Your daughter has learned the weaving songs from the household women — and improved them, with verses about the neighbors that are unfortunately accurate.",
+    "choices": [
+      {
+        "id": "laugh",
+        "label": "Ask her to perform the whole cycle at dinner",
+        "tags": [
+          "feast",
+          "symposium"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": 5
+          },
+          {
+            "type": "change_philia",
+            "amount": 4
+          }
+        ],
+        "resultText": "The household weeps with laughter. You forbid the verse about the magistrate. She writes two more."
+      },
+      {
+        "id": "hush",
+        "label": "Silence the verses before they escape the house",
+        "tags": [
+          "abstain",
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          },
+          {
+            "type": "change_philia",
+            "amount": -3
+          }
+        ],
+        "resultText": "The songs stop at the door. Within the walls, the women hum them still."
+      }
+    ]
+  },
+  {
+    "id": "fam-child-fever-night",
+    "weight": 6,
+    "requires": {
+      "hasChildren": true,
+      "childAgeBand": "child"
+    },
+    "scene": "A child of yours burns with fever through the night. The physician can come at dawn for coin, or there is the old Gaulish woman by the gate whom the servants trust.",
+    "choices": [
+      {
+        "id": "physician",
+        "label": "Send for the physician, whatever the hour costs",
+        "tags": [
+          "gift"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -20
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          },
+          {
+            "type": "change_philia",
+            "amount": 4
+          }
+        ],
+        "resultText": "Greek medicine, Greek fees. By midday the fever loosens."
+      },
+      {
+        "id": "wise-woman",
+        "label": "Bring the Gaulish healer tonight",
+        "tags": [
+          "reformist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          },
+          {
+            "type": "change_ideology",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          },
+          {
+            "type": "change_philia",
+            "amount": 4
+          }
+        ],
+        "resultText": "Willow bark, wet cloths, and low singing in a tongue you half know. The child sleeps by moonset."
+      }
+    ]
+  },
+  {
+    "id": "fam-youth-boy-harbor",
+    "weight": 8,
+    "requires": {
+      "hasChildren": true,
+      "childAgeBand": "youth",
+      "childSex": "male"
+    },
+    "scene": "Your son has been slipping down to the Lacydon to haul lines for a Massaliote captain. He comes home rope-burned, sunburnt, and happier than his lessons have ever made him.",
+    "choices": [
+      {
+        "id": "allow",
+        "label": "Let the sea have its season with him",
+        "tags": [
+          "labor",
+          "hunt"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": 4
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          },
+          {
+            "type": "change_philia",
+            "amount": 3
+          }
+        ],
+        "resultText": "He brings home his first wage, all of it, and puts it in your hand like a trophy."
+      },
+      {
+        "id": "forbid",
+        "label": "Forbid it — his letters come first",
+        "tags": [
+          "study",
+          "discipline"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -4
+          },
+          {
+            "type": "change_philia",
+            "amount": -2
+          }
+        ],
+        "resultText": "He obeys, mostly. The tutor reports progress. The harbor reports him twice more."
+      }
+    ]
+  },
+  {
+    "id": "fam-youth-girl-suitors",
+    "weight": 8,
+    "requires": {
+      "hasChildren": true,
+      "childAgeBand": "youth",
+      "childSex": "female"
+    },
+    "scene": "Two families have sent gifts that are not quite betrothal gifts for your daughter — one old Massaliote blood, one new money with three ships. She has opinions.",
+    "choices": [
+      {
+        "id": "listen",
+        "label": "Hear her opinion before you answer either",
+        "tags": [
+          "debate",
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": 4
+          },
+          {
+            "type": "change_philia",
+            "amount": 5
+          }
+        ],
+        "resultText": "She argues her case like a logographer. You concede nothing and remember everything."
+      },
+      {
+        "id": "protocol",
+        "label": "Return both gifts — she is not yet spoken for",
+        "tags": [
+          "wait",
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_philia",
+            "amount": 2
+          }
+        ],
+        "resultText": "Both houses read the refusal correctly: the price has gone up."
+      }
+    ]
+  },
+  {
+    "id": "fam-youth-argument-gods",
+    "weight": 6,
+    "requires": {
+      "hasChildren": true,
+      "childAgeBand": "youth"
+    },
+    "scene": "At dinner your almost-grown child repeats something a philosopher said in the agora: that the gods, if they exist, do not concern themselves with Massalia's harvests.",
+    "choices": [
+      {
+        "id": "debate",
+        "label": "Take up the argument seriously",
+        "tags": [
+          "debate",
+          "study"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 2
+          },
+          {
+            "type": "change_philia",
+            "amount": 2
+          }
+        ],
+        "resultText": "Three hours later neither of you has won, and neither of you wants to stop."
+      },
+      {
+        "id": "rebuke",
+        "label": "End such talk at your table",
+        "tags": [
+          "traditionalist_act",
+          "skip_rite"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          },
+          {
+            "type": "change_philia",
+            "amount": -3
+          }
+        ],
+        "resultText": "Silence at the table. The philosopher, you hear, has a growing audience of the young."
+      }
+    ]
+  },
+  {
+    "id": "het-protege-training",
+    "weight": 8,
+    "requires": {
+      "class": "hetaira",
+      "household": true
+    },
+    "scene": "The youngest woman of your house cannot yet tell a senator's silence from a sailor's. Her beauty opens doors; her tongue closes them.",
+    "choices": [
+      {
+        "id": "school",
+        "label": "School her yourself, evening by evening",
+        "tags": [
+          "study",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "Poetry, politics, and when to say nothing. She learns the last one slowest, as you did."
+      },
+      {
+        "id": "lesson",
+        "label": "Let one bad evening teach what you cannot",
+        "tags": [
+          "wait",
+          "cruelty"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "The evening goes badly, as arranged. She comes home quiet and asks for the lessons herself."
+      }
+    ]
+  },
+  {
+    "id": "het-poaching-rival",
+    "weight": 8,
+    "requires": {
+      "class": "hetaira",
+      "household": true
+    },
+    "scene": "A rival house has offered your most accomplished woman her own rooms, her own clients, and freedom from your ledger. She tells you herself, which counts for something.",
+    "choices": [
+      {
+        "id": "match",
+        "label": "Match the offer — she has earned it",
+        "tags": [
+          "gift",
+          "patronage"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -25
+          },
+          {
+            "type": "change_composure",
+            "amount": 4
+          }
+        ],
+        "resultText": "She stays, on new terms. The house is poorer in silver and richer in loyalty."
+      },
+      {
+        "id": "release",
+        "label": "Open the door yourself and wish her well",
+        "tags": [
+          "mercy",
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          }
+        ],
+        "resultText": "She leaves owing you nothing and remembering everything. In this trade, that is an investment."
+      }
+    ]
+  },
+  {
+    "id": "het-girl-at-the-door",
+    "weight": 8,
+    "requires": {
+      "class": "hetaira",
+      "household": true
+    },
+    "scene": "A girl of perhaps sixteen waits at your door since dawn — a debtor's daughter, quick-eyed, hungry, asking to join your house before her father's creditors decide her future for her.",
+    "choices": [
+      {
+        "id": "take-in",
+        "label": "Take her in and buy out the debt",
+        "tags": [
+          "mercy",
+          "gift"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -20
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "The creditors are paid, the girl is fed, and the house gains a pair of eyes that miss nothing."
+      },
+      {
+        "id": "turn-away",
+        "label": "The house is full; send her to the temple",
+        "tags": [
+          "refuse_aid",
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": -4
+          }
+        ],
+        "resultText": "Artemis's women take her in. She does not look back at your door, which somehow stings."
+      }
+    ]
+  },
+  {
+    "id": "het-secret-overheard",
+    "weight": 8,
+    "requires": {
+      "class": "hetaira",
+      "household": true
+    },
+    "scene": "One of your women repeats what a magistrate murmured over his fourth cup: a harbor contract will be awarded before it is announced. Such knowledge is coin — and kindling.",
+    "choices": [
+      {
+        "id": "use",
+        "label": "Spend the knowledge quietly",
+        "tags": [
+          "scheme",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 30
+          },
+          {
+            "type": "change_composure",
+            "amount": -4
+          }
+        ],
+        "resultText": "Silver arrives by three unconnected hands. The magistrate drinks elsewhere now, which is a kind of receipt."
+      },
+      {
+        "id": "bury",
+        "label": "Bury it — the house sells company, not clients",
+        "tags": [
+          "public_oath",
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "Nothing happens, and word of nothing happening travels. Men speak more freely on your couches than anywhere in Massalia."
+      }
+    ]
+  },
+  {
+    "id": "het-successor-question",
+    "weight": 8,
+    "requires": {
+      "class": "hetaira",
+      "household": true
+    },
+    "scene": "Grey shows at your temple in the bronze mirror. The women of the house have begun, delicately, to wonder aloud which of them you are shaping to inherit it.",
+    "choices": [
+      {
+        "id": "name",
+        "label": "Begin grooming your chosen one openly",
+        "tags": [
+          "claim_office",
+          "study"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "You start teaching the ledger, the names, the debts owed and owing. The others watch, and sharpen."
+      },
+      {
+        "id": "silence",
+        "label": "Let them wonder — rivals work harder",
+        "tags": [
+          "scheme",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "The house has never run better, nor watched itself more closely."
+      }
+    ]
+  },
+  {
+    "id": "het-old-patron-dying",
+    "weight": 6,
+    "requires": {
+      "class": "hetaira",
+      "household": true
+    },
+    "scene": "The first patron your house ever had is dying in his garden across the city. His sons guard the door against scandal, but the old man has asked for you by name.",
+    "choices": [
+      {
+        "id": "go",
+        "label": "Go to him, past the sons if you must",
+        "tags": [
+          "mercy",
+          "rash_act"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": 5
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "You sit with him an hour and talk of years the sons never knew. The city whispers; you find you do not care."
+      },
+      {
+        "id": "send",
+        "label": "Send wine and a letter in your finest hand",
+        "tags": [
+          "gift",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -4
+          }
+        ],
+        "resultText": "The letter is read to him twice, they say. Propriety is kept. Something else is not."
+      }
+    ]
+  }
+]

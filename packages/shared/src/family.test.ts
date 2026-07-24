@@ -6,6 +6,7 @@ import {
   adoptionWomenOnly,
   assertPersonalityPoolResolves,
   canMarry,
+  clampPhilia,
   childAge,
   childRoll,
   defaultChildName,
@@ -424,6 +425,20 @@ describe("wife personality config", () => {
     // The mechanical axis (traitPool) stays separate — no id appears in both.
     const mechanical = new Set(cfg.candidates.traitPool);
     expect(cfg.candidates.personalityPool.some((id) => mechanical.has(id))).toBe(false);
+  });
+});
+
+describe("clampPhilia — 0..100 spouse bond", () => {
+  it("clamps at the low end (2 + (-5) -> 0)", () => {
+    expect(clampPhilia(2 + -5)).toBe(0);
+  });
+  it("clamps at the high end (98 + 5 -> 100)", () => {
+    expect(clampPhilia(98 + 5)).toBe(100);
+  });
+  it("passes values through within range", () => {
+    expect(clampPhilia(50)).toBe(50);
+    expect(clampPhilia(0)).toBe(0);
+    expect(clampPhilia(100)).toBe(100);
   });
 });
 

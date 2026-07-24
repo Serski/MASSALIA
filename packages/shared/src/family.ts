@@ -248,6 +248,13 @@ export function childAge(bornAtMs: number, nowMs: number, realMsPerGameYear: num
   return Math.max(0, Math.floor((nowMs - bornAtMs) / realMsPerGameYear));
 }
 
+// Philia: the 0–100 spouse bond. Moved by family-event change_philia effects.
+export const PHILIA_MIN = 0;
+export const PHILIA_MAX = 100;
+export function clampPhilia(value: number): number {
+  return Math.max(PHILIA_MIN, Math.min(PHILIA_MAX, value));
+}
+
 export function isOfAge(age: number, cfg: FamilyConfig): boolean {
   return age >= cfg.comingOfAge;
 }
