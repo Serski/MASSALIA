@@ -18,7 +18,12 @@ export type ChronicleType =
   | "birth"
   | "megas_choregos"
   | "festival_participation"
-  | "olympic_selection";
+  | "olympic_selection"
+  // Pack C: a marriage that ended in tragedy, one type per archetype, dated at
+  // endedAt. Each renders a single flat line in the web register.
+  | "tragedy_phaedra"
+  | "tragedy_clytemnestra"
+  | "tragedy_medea";
 
 export type ChronicleEntry = {
   // Sort key, from gameDate(timestamp, startedMs).seasonIndex.
@@ -101,6 +106,9 @@ const TYPE_ORDER: Record<ChronicleType, number> = {
   festival_participation: 3,
   olympic_selection: 4,
   divorce: 5,
+  tragedy_phaedra: 6,
+  tragedy_clytemnestra: 7,
+  tragedy_medea: 8,
 };
 
 // generation = 1 + (boundaries that occurred at or before the event). An event at
@@ -143,6 +151,11 @@ export function buildChronicle(input: ChronicleInput): ChronicleEntry[] {
     staged.push(stage(m.id, m.marriedAt, "marriage", { spouseName: m.spouseName }, input));
     if (m.endReason === "divorced" && m.endedAt != null) {
       staged.push(stage(`${m.id}:divorce`, m.endedAt, "divorce", { spouseName: m.spouseName }, input));
+    } else if (
+      m.endedAt != null &&
+      (m.endReason === "tragedy_phaedra" || m.endReason === "tragedy_clytemnestra" || m.endReason === "tragedy_medea")
+    ) {
+      staged.push(stage(`${m.id}:${m.endReason}`, m.endedAt, m.endReason, { spouseName: m.spouseName }, input));
     }
   }
   for (const b of input.births) {

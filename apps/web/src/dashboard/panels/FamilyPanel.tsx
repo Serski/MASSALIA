@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, contentUrl, type ChronicleEntry, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type DivorceNotice } from "../../api.js";
+import { api, ApiError, contentUrl, type ChronicleEntry, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type DivorceNotice, type TragedyNotice } from "../../api.js";
 import { assetPath, type House } from "../../data/league.js";
 import { DashboardCard, type FourStats, PanelBanner, type PanelProps, PersonFace, PersonRow, festivalName, titleCase } from "../shared.js";
 
@@ -212,6 +212,48 @@ function DiscoveredCard() {
   );
 }
 
+// The tragedy aftermath, one card per archetype (one season). A Clytemnestra
+// SUCCESS never reaches here — the heir has no such notice; the Chronicle carries it.
+function TragedyCard({ notice }: { notice: TragedyNotice }) {
+  const name = notice.formerWifeName ?? "Your wife";
+  const wed = `${notice.yearsMarried} year${notice.yearsMarried === 1 ? "" : "s"}`;
+  if (notice.archetype === "medea") {
+    return (
+      <DashboardCard className="birth-card mourning-card">
+        <div className="event-body">
+          <span className="dashboard-label event-kicker">The house is emptied</span>
+          <h3>{name} has killed your children, and herself.</h3>
+          <p className="composure-note neg">
+            Your wife of {wed} took the children into death with her, then followed. There is no one left.
+          </p>
+        </div>
+      </DashboardCard>
+    );
+  }
+  if (notice.archetype === "clytemnestra") {
+    return (
+      <DashboardCard className="birth-card mourning-card">
+        <div className="event-body">
+          <span className="dashboard-label event-kicker">Blood in the house</span>
+          <h3>{name} tried to kill you.</h3>
+          <p className="composure-note neg">
+            She came for you in the night and failed; taken in the act, she took her own life. The city speaks of little else.
+          </p>
+        </div>
+      </DashboardCard>
+    );
+  }
+  return (
+    <DashboardCard className="birth-card mourning-card">
+      <div className="event-body">
+        <span className="dashboard-label event-kicker">The marriage is ended</span>
+        <h3>{name} is dead by her own hand.</h3>
+        <p className="composure-note neg">Your wife of {wed} is gone. She left no word, and the house is very quiet.</p>
+      </div>
+    </DashboardCard>
+  );
+}
+
 export default function FamilyPanel({ onRefresh }: PanelProps) {
   // Two tabs: the household management view (default) and the dated house
   // chronicle (the existing TimelinePanel, mounted as-is).
@@ -392,6 +434,8 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
 
           {state.divorceNotice ? <DivorceAftermathCard notice={state.divorceNotice} /> : null}
 
+          {state.tragedyNotice ? <TragedyCard notice={state.tragedyNotice} /> : null}
+
           {state.fellNotice && state.spouse ? <FellCard wifeName={state.spouse.name} /> : null}
 
           {state.discoveredNotice ? <DiscoveredCard /> : null}
@@ -418,6 +462,18 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
                   <p className="composure-note muted"><em>A certain officer has been introduced to the household.</em></p>
                 ) : state.spouse.loverState === "fallen" ? (
                   <p className="composure-note muted"><em>She has a lover.</em></p>
+                ) : null}
+
+                {/* Persistent, band-derived warning at philia <= 10 (estranged) — no
+                    window, no dismissal. It reads as one warning with the red bond bar. */}
+                {state.spouse.philiaBand === "estranged" ? (
+                  <div className="estranged-banner" role="alert">
+                    <span className="censure-ic" aria-hidden="true">⚠️</span>
+                    <div>
+                      <strong>She has grown cold</strong>
+                      <p>The household feels her withdrawal. Left to fester, an estranged wife becomes a danger to the house — mend the bond while you still can.</p>
+                    </div>
+                  </div>
                 ) : null}
 
                 <div className="spouse-actions">
@@ -564,6 +620,11 @@ const chronicleRenderers: Record<ChronicleEntry["type"], (payload: Record<string
       : `Took part in the ${festivalName(String(p.festivalId))}.`,
   olympic_selection: (p) =>
     p.sent ? `Chosen to compete at Olympia (${p.yearBC} BC).` : `Stood for selection to Olympia.`,
+  tragedy_phaedra: (p) => `${p.spouseName} took her own life.`,
+  // One endReason covers both the survived attempt and the fatal one, so this line
+  // asserts neither outcome — only the attempt, which is true in every case.
+  tragedy_clytemnestra: (p) => `${p.spouseName} made an attempt on his life.`,
+  tragedy_medea: (p) => `${p.spouseName} killed their children and herself.`,
 };
 
 function renderChronicleEntry(entry: ChronicleEntry): string {

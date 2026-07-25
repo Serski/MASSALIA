@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { and, eq, isNull, sql } from "drizzle-orm";
+import { REAL_MS_PER_SEASON } from "@massalia/shared";
 
 // ---------------------------------------------------------------------------
 // livingSpousePersonalityTraits integration tests — run against a REAL Postgres,
@@ -741,6 +742,70 @@ suite("livingSpousePersonalityTraits (integration)", () => {
       await db.update(pcs()).set({ status: "deceased", lastChildRollAt: new Date(now.getTime() - 3 * y()) }).where(eq(pcs().id, s.id));
       expect(await m.dbPkg.rollChildrenDue(s.id, args(() => 0))).toEqual([]);
       expect((await logsOfKind(s.id, "tragedy")).length).toBe(0); // the guard exits before any roll
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Pack C phase 3: the derived tragedy notices (familyState), the estranged
+  // banner's gating data (spouse.philiaBand), and the slot-keyed chronicle
+  // lineage (a murdered predecessor's entry is visible to the heir).
+  // -------------------------------------------------------------------------
+  describe("tragedy notices, banner data, chronicle lineage (pack C phase 3)", () => {
+    const pcs = () => m.dbPkg.playerCharacters;
+    const fresh = async (id: string) => (await db.select().from(pcs()).where(eq(pcs().id, id)).limit(1))[0]!;
+    async function marryAt(name: string, philia: number, personality: string | null = null) {
+      const c = await createCharacter(name);
+      await marryTo(c.id, { personalityTraitId: personality, spouseDeathAge: 999, candidateAge: 40, philia });
+      return c.id;
+    }
+    // End the character's marriage in a tragedy (the phase-2 wife-death shape).
+    async function endInTragedy(charId: string, endReason: string, endedAt: Date) {
+      const mid = (await db.select({ id: m.dbPkg.marriages.id }).from(m.dbPkg.marriages).where(eq(m.dbPkg.marriages.characterId, charId)).limit(1))[0]!.id;
+      await db.update(m.dbPkg.marriages).set({ endedAt, endReason }).where(eq(m.dbPkg.marriages.id, mid));
+      await db.update(pcs()).set({ spouseCandidateId: null }).where(eq(pcs().id, charId));
+      return mid;
+    }
+
+    for (const arche of ["phaedra", "clytemnestra", "medea"]) {
+      it(`notice: ${arche} surfaces within the season window`, async () => {
+        const id = await marryAt(`Notice_${arche}`, 5);
+        await endInTragedy(id, `tragedy_${arche}`, now);
+        const state = await m.family.familyState(await fresh(id), now);
+        expect(state.tragedyNotice).toMatchObject({ archetype: arche });
+      });
+    }
+
+    it("notice: absent once the season has passed", async () => {
+      const id = await marryAt("NoticeGone", 5);
+      await endInTragedy(id, "tragedy_phaedra", new Date(now.getTime() - 2 * REAL_MS_PER_SEASON));
+      const state = await m.family.familyState(await fresh(id), now);
+      expect(state.tragedyNotice).toBeNull();
+    });
+
+    it("banner data: estranged + active marriage → spouse.philiaBand 'estranged'", async () => {
+      const id = await marryAt("BannerEstranged", 5);
+      const state = await m.family.familyState(await fresh(id), now);
+      expect(state.spouse?.philiaBand).toBe("estranged");
+    });
+
+    it("banner data: a dutiful marriage → not estranged (no banner)", async () => {
+      const id = await marryAt("BannerDutiful", 50);
+      const state = await m.family.familyState(await fresh(id), now);
+      expect(state.spouse?.philiaBand).toBe("dutiful");
+    });
+
+    it("banner data: an ended marriage → no spouse (no banner)", async () => {
+      const id = await marryAt("BannerEnded", 5);
+      await endInTragedy(id, "tragedy_phaedra", now);
+      const state = await m.family.familyState(await fresh(id), now);
+      expect(state.spouse).toBeNull();
+    });
+
+    it("chronicle lineage: a tragedy_clytemnestra marriage surfaces in the slot's chronicle (visible to the heir)", async () => {
+      const id = await marryAt("Murdered", 5, "ruthless");
+      await endInTragedy(id, "tragedy_clytemnestra", now);
+      const entries = await m.dbPkg.gatherChronicleForCharacter(id);
+      expect(entries.some((e) => e.type === "tragedy_clytemnestra")).toBe(true);
     });
   });
 });

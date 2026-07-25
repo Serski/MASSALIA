@@ -195,7 +195,10 @@ export type ChronicleType =
   | "birth"
   | "megas_choregos"
   | "festival_participation"
-  | "olympic_selection";
+  | "olympic_selection"
+  | "tragedy_phaedra"
+  | "tragedy_clytemnestra"
+  | "tragedy_medea";
 
 export type ChronicleEntry = {
   seasonIndex: number;
@@ -830,6 +833,15 @@ export type DivorceNotice = {
   yearsMarried: number;
 };
 
+// A tragedy-aftermath notice (one season). `archetype` is 'phaedra' |
+// 'clytemnestra' (the survived attempt) | 'medea' — the web picks the copy. A
+// Clytemnestra success never surfaces here (the marriage is the dead predecessor's).
+export type TragedyNotice = {
+  archetype: string;
+  formerWifeName: string | null;
+  yearsMarried: number;
+};
+
 export type FamilyState = {
   sex: string;
   classId: string;
@@ -841,6 +853,8 @@ export type FamilyState = {
   spouseDeath: SpouseDeathNotice | null;
   // Lover-plot + divorce notices, derived server-side for one season each.
   divorceNotice: DivorceNotice | null;
+  // A tragedy aftermath (Phaedra / Clytemnestra-failure / Medea), one season.
+  tragedyNotice: TragedyNotice | null;
   fellNotice: boolean;
   discoveredNotice: boolean;
   candidates: { marriage: MarriageCandidate[]; adoption: FamilyCandidate[] };

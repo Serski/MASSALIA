@@ -3210,6 +3210,35 @@
 .dashboard-shell .philia-bar span { display: block; height: 100%; background: #b06a72; }
 .dashboard-shell .philia-bar.estranged span { background: var(--dash-bad); }
 
+/* The estranged warning banner (pack C): the censure-banner form in the spouse
+   card, toned to --dash-bad so it and the red philia bar read as one warning.
+   Persistent + band-derived — it precedes the danger zone (philia <= 10). */
+.dashboard-shell .estranged-banner{
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 10px 0 4px;
+  padding: 12px 14px;
+  background: rgba(187, 106, 82, 0.12);
+  border: 1px solid rgba(187, 106, 82, 0.5);
+  border-left-width: 3px;
+  border-radius: 10px;
+}
+.dashboard-shell .estranged-banner strong{
+  display: block;
+  color: #d49a86;
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.dashboard-shell .estranged-banner p{
+  margin-top: 3px;
+  color: var(--dash-stone);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 /* The married-spouse action row: a wrapping flex row of padding-sized buttons on
    desktop; a two-step confirm (event-choice-stack) takes its own full-width row. */
 .dashboard-shell .spouse-actions { display: flex; flex-wrap: wrap; gap: 7px; }

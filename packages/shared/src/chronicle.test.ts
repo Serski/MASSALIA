@@ -237,3 +237,48 @@ describe("buildChronicle — divorce (pack B)", () => {
     expect(buildChronicle(input).filter((e) => e.type === "divorce")).toHaveLength(0);
   });
 });
+
+describe("buildChronicle — tragedies (pack C)", () => {
+  const base = { startedMs: 0, successionBoundariesMs: [] as number[], births: [], choregos: [], festivals: [], olympics: [] };
+
+  it("stages each tragedy_* end as its own type, dated at endedAt, after the marriage", () => {
+    const input: ChronicleInput = {
+      ...base,
+      marriages: [
+        { id: "m1", marriedAt: 5 * S, spouseName: "Phaidra", endedAt: 10 * S, endReason: "tragedy_phaedra" },
+        { id: "m2", marriedAt: 20 * S, spouseName: "Klytaimnestra", endedAt: 25 * S, endReason: "tragedy_clytemnestra" },
+        { id: "m3", marriedAt: 30 * S, spouseName: "Medeia", endedAt: 35 * S, endReason: "tragedy_medea" },
+      ],
+    };
+    const entries = buildChronicle(input);
+    const t = (type: string) => entries.find((e) => e.type === type)!;
+    expect(t("tragedy_phaedra").seasonIndex).toBe(10); // dated at endedAt, not marriedAt
+    expect(t("tragedy_phaedra").payload).toEqual({ spouseName: "Phaidra" });
+    expect(t("tragedy_clytemnestra").seasonIndex).toBe(25);
+    expect(t("tragedy_medea").seasonIndex).toBe(35);
+    expect(entries.filter((e) => e.type === "marriage")).toHaveLength(3); // each marriage still shown
+    // A same-season marriage vs its end orders marriage-first (TYPE_ORDER).
+    const same = buildChronicle({ ...base, marriages: [{ id: "m1", marriedAt: 8 * S, spouseName: "P", endedAt: 8 * S, endReason: "tragedy_phaedra" }] });
+    expect(same.map((e) => e.type)).toEqual(["marriage", "tragedy_phaedra"]);
+  });
+
+  it("a non-tragedy end (spouse_died) stages no tragedy entry", () => {
+    const input: ChronicleInput = { ...base, marriages: [{ id: "m1", marriedAt: 5 * S, spouseName: "X", endedAt: 12 * S, endReason: "spouse_died" }] };
+    expect(buildChronicle(input).filter((e) => e.type.startsWith("tragedy_"))).toHaveLength(0);
+  });
+
+  it("lineage: a predecessor's tragedy_clytemnestra entry keeps generation 1 across a later handoff (the heir still sees it)", () => {
+    // Founder murdered at season 10; handoff at season 20; the heir weds at 25.
+    const input: ChronicleInput = {
+      ...base,
+      successionBoundariesMs: [20 * S],
+      marriages: [
+        { id: "m1", marriedAt: 5 * S, spouseName: "Klytaimnestra", endedAt: 10 * S, endReason: "tragedy_clytemnestra" },
+        { id: "m2", marriedAt: 25 * S, spouseName: "Alkestis" }, // the heir's marriage
+      ],
+    };
+    const entries = buildChronicle(input);
+    expect(entries.find((e) => e.type === "tragedy_clytemnestra")!.generation).toBe(1); // the murdered founder's generation
+    expect(entries.find((e) => e.type === "marriage" && e.payload.spouseName === "Alkestis")!.generation).toBe(2);
+  });
+});

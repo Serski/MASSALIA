@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import {
   checkSpouseDeath,
   children,
@@ -409,6 +409,27 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
     }
   }
 
+  // A tragedy notice: a marriage that ended in tragedy within the last season,
+  // windowed on endedAt like the others. One object carries the archetype; the web
+  // picks the copy. A Clytemnestra SUCCESS produces no notice here — that marriage
+  // belongs to the dead predecessor's characterId, so this heir-keyed read never
+  // surfaces it; the Chronicle carries the murder instead.
+  let tragedyNotice = null;
+  if (!locked) {
+    const ended = await db
+      .select()
+      .from(marriages)
+      .where(and(eq(marriages.characterId, character.id), inArray(marriages.endReason, ["tragedy_phaedra", "tragedy_clytemnestra", "tragedy_medea"])))
+      .orderBy(desc(marriages.endedAt))
+      .limit(1);
+    const row = ended[0];
+    if (row && row.endedAt && now.getTime() - row.endedAt.getTime() < REAL_MS_PER_SEASON) {
+      const wife = await db.select({ name: familyCandidates.name }).from(familyCandidates).where(eq(familyCandidates.id, row.candidateId)).limit(1);
+      const yearsMarried = Math.max(0, Math.floor((row.endedAt.getTime() - row.marriedAt.getTime()) / getAgeConfig().realMsPerGameYear));
+      tragedyNotice = { archetype: row.endReason!.replace("tragedy_", ""), formerWifeName: wife[0]?.name ?? null, yearsMarried };
+    }
+  }
+
   // Lover-plot notices on the CURRENT marriage: she has fallen / the city knows,
   // each windowed on its timestamp like the other one-shot notices. Derivation
   // only — the cards render in a later phase.
@@ -436,6 +457,7 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
     spouse,
     spouseDeath,
     divorceNotice,
+    tragedyNotice,
     fellNotice,
     discoveredNotice,
     candidates: { marriage: marriageOffers, adoption: adoptionOffers },
