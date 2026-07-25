@@ -170,21 +170,17 @@ function gameYearMs(cfg: FamilyConfig): number {
   return getAgeConfig().realMsPerGameYear * cfg.candidates.drawCadenceGameYears;
 }
 
-// Lazy-on-read safety net: if the character has no unconsumed offers, draw one
-// and schedule the yearly BullMQ refresh. (The worker keeps it fresh thereafter.)
+// Lazy-on-read safety net: draw any purpose the character currently lacks
+// unconsumed offers for, then schedule the yearly BullMQ refresh. Per-purpose
+// (onlyMissing) so consuming marriage offers never disturbs standing adoption
+// offers, and vice versa — and a legacy character with only one purpose's rows
+// self-heals the missing one on the next read. The worker keeps them fresh after.
 export async function ensureFreshDraw(character: CharacterRow, now: Date = new Date()): Promise<void> {
   const cfg = getFamilyConfig();
   if (isFamilyLocked(character.classId, cfg)) return;
 
-  const existing = await db
-    .select({ id: familyCandidates.id })
-    .from(familyCandidates)
-    .where(and(eq(familyCandidates.forCharacterId, character.id), isNull(familyCandidates.consumedAt)))
-    .limit(1);
-  if (existing.length > 0) return;
-
-  await drawFamilyCandidates(character.id, { familyCfg: cfg, ageCfg: getAgeConfig(), now });
-  await enqueueFamilyDraw(character.id, gameYearMs(cfg));
+  const drawn = await drawFamilyCandidates(character.id, { familyCfg: cfg, ageCfg: getAgeConfig(), now, onlyMissing: true });
+  if (drawn.length > 0) await enqueueFamilyDraw(character.id, gameYearMs(cfg));
 }
 
 const HOUSE_NAMES_CACHE = new Map<string, string>();

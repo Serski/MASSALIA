@@ -28,16 +28,20 @@ const db = createDb();
 
 export type FamilyCandidateRow = typeof familyCandidates.$inferSelect;
 
-type DrawArgs = { familyCfg: FamilyConfig; ageCfg: AgeConfig; now?: Date };
+// `onlyMissing` draws only the purposes the character currently lacks unconsumed
+// offers for (the lazy-on-read gate — per purpose, so consuming one purpose never
+// disturbs the other). `purposes` restricts which purposes are considered at all
+// (the adoption belt draws just "adoption"). Defaults: draw + REPLACE every purpose.
+type DrawArgs = { familyCfg: FamilyConfig; ageCfg: AgeConfig; now?: Date; onlyMissing?: boolean; purposes?: ("marriage" | "adoption")[] };
 
 // Draw a fresh per-player candidate set. Used by BOTH the BullMQ worker
 // (scheduled yearly) and the server (lazy-on-read), like resolveCensureIfExpired.
 // New draws REPLACE the character's unconsumed candidates of that purpose so the
 // offer stays fresh; consumed (chosen) rows are left for history.
 //
-// Prompt A surfaces marriage candidates for unmarried citizens, and women-only
-// adoption candidates for the hetaira (her only family path). Citizen adoption +
-// children/heirs arrive with the succession pack.
+// Marriage candidates for unmarried citizens; adoption candidates for EVERY
+// family-unlocked class (an heir by adoption when the blood line fails — the
+// succession pack). Only the hetaira's adoption pool is women-only.
 export async function drawFamilyCandidates(characterId: string, args: DrawArgs): Promise<FamilyCandidateRow[]> {
   const { familyCfg, ageCfg } = args;
   const charRows = await db.select().from(playerCharacters).where(eq(playerCharacters.id, characterId)).limit(1);
@@ -62,12 +66,21 @@ export async function drawFamilyCandidates(characterId: string, args: DrawArgs):
   if (canMarry(character.classId, familyCfg) && !character.spouseCandidateId) {
     purposes.push({ purpose: "marriage", count: familyCfg.candidates.perDraw, womenOnly: false });
   }
-  if (character.classId === "hetaira") {
-    purposes.push({ purpose: "adoption", count: familyCfg.adoption.perDraw, womenOnly: adoptionWomenOnly(character.classId, familyCfg) });
-  }
+  // Adoption is offered to every family-unlocked class (slave already returned above).
+  purposes.push({ purpose: "adoption", count: familyCfg.adoption.perDraw, womenOnly: adoptionWomenOnly(character.classId, familyCfg) });
 
   const inserted: FamilyCandidateRow[] = [];
   for (const { purpose, count, womenOnly } of purposes) {
+    if (args.purposes && !args.purposes.includes(purpose)) continue; // targeted draw (e.g. the adoption belt)
+    if (args.onlyMissing) {
+      // Per-purpose gate: leave standing unconsumed offers of this purpose untouched.
+      const present = await db
+        .select({ id: familyCandidates.id })
+        .from(familyCandidates)
+        .where(and(eq(familyCandidates.forCharacterId, characterId), eq(familyCandidates.purpose, purpose), isNull(familyCandidates.consumedAt)))
+        .limit(1);
+      if (present.length > 0) continue;
+    }
     const drafts = generateCandidates(Math.random, purpose, count, familyCfg, houseRows, womenOnly);
     // Replace this purpose's unconsumed offers with the fresh draw.
     await db

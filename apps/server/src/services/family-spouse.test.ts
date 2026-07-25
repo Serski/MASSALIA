@@ -967,4 +967,73 @@ suite("livingSpousePersonalityTraits (integration)", () => {
       expect(await m.family.scandalHeadline(now)).toBeNull(); // older than a day
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Phase 2: adoption candidates for all family-unlocked houses (ruling A) — the
+  // draw extension, per-purpose redraw independence, and the forced-adoption belt.
+  // -------------------------------------------------------------------------
+  describe("adoption candidates for all houses (phase 2)", () => {
+    const pcs = () => m.dbPkg.playerCharacters;
+    const fc = () => m.dbPkg.familyCandidates;
+    const freshChar = async (id: string) => (await db.select().from(pcs()).where(eq(pcs().id, id)).limit(1))[0]!;
+    const drawArgs = () => ({ familyCfg: m.family.getFamilyConfig(), ageCfg: m.age.getAgeConfig(), now });
+    const perDraw = () => m.family.getFamilyConfig().adoption.perDraw;
+    const marriagePerDraw = () => m.family.getFamilyConfig().candidates.perDraw;
+    const unconsumed = async (id: string, purpose: "marriage" | "adoption") =>
+      await db.select().from(fc()).where(and(eq(fc().forCharacterId, id), eq(fc().purpose, purpose), isNull(fc().consumedAt)));
+    const consumeAll = (id: string, purpose: "marriage" | "adoption") =>
+      db.update(fc()).set({ consumedAt: now }).where(and(eq(fc().forCharacterId, id), eq(fc().purpose, purpose), isNull(fc().consumedAt)));
+
+    it("every family-unlocked class draws adoption candidates; the hetaira's are women-only; the slave draws none", async () => {
+      const land = await createCharacter("AdoptLandowner", "landowner");
+      await m.dbPkg.drawFamilyCandidates(land.id, drawArgs());
+      expect((await unconsumed(land.id, "adoption")).length).toBe(perDraw());
+
+      const het = await createCharacter("AdoptHetaira", "hetaira");
+      await m.dbPkg.drawFamilyCandidates(het.id, drawArgs());
+      const hetCands = await unconsumed(het.id, "adoption");
+      expect(hetCands.length).toBe(perDraw());
+      expect(hetCands.every((c) => c.sex === "female")).toBe(true); // adoptionWomenOnly(hetaira) === true
+
+      const slave = await createCharacter("AdoptSlave", "slave");
+      await m.dbPkg.drawFamilyCandidates(slave.id, drawArgs());
+      expect((await unconsumed(slave.id, "adoption")).length).toBe(0); // fully locked, no draws of any purpose
+    });
+
+    it("per-purpose redraw independence: consuming one purpose never redraws the other", async () => {
+      const c = await createCharacter("PerPurpose", "landowner"); // unmarried citizen → draws BOTH purposes
+      await m.dbPkg.drawFamilyCandidates(c.id, drawArgs());
+      const adoptBefore = (await unconsumed(c.id, "adoption")).map((x) => x.id).sort();
+      expect(adoptBefore.length).toBe(perDraw());
+      expect((await unconsumed(c.id, "marriage")).length).toBe(marriagePerDraw());
+
+      // Consume all marriage offers → onlyMissing refills marriage, leaves adoption alone.
+      await consumeAll(c.id, "marriage");
+      await m.dbPkg.drawFamilyCandidates(c.id, { ...drawArgs(), onlyMissing: true });
+      expect((await unconsumed(c.id, "marriage")).length).toBe(marriagePerDraw()); // refilled
+      expect((await unconsumed(c.id, "adoption")).map((x) => x.id).sort()).toEqual(adoptBefore); // NOT redrawn
+
+      // Inverse: consume adoption → marriage offers stay put.
+      const marriageIds = (await unconsumed(c.id, "marriage")).map((x) => x.id).sort();
+      await consumeAll(c.id, "adoption");
+      await m.dbPkg.drawFamilyCandidates(c.id, { ...drawArgs(), onlyMissing: true });
+      expect((await unconsumed(c.id, "adoption")).length).toBe(perDraw()); // refilled
+      expect((await unconsumed(c.id, "marriage")).map((x) => x.id).sort()).toEqual(marriageIds); // NOT redrawn
+    });
+
+    it("the forced-adoption belt: a legacy character with zero rows gets a fresh draw; a second read reuses it (no double-draw)", async () => {
+      const c = await createCharacter("LegacyDead", "landowner");
+      await db.delete(fc()).where(eq(fc().forCharacterId, c.id)); // legacy shape: no candidates at all
+      await db.update(pcs()).set({ status: "deceased" }).where(eq(pcs().id, c.id)); // childless → forced_adoption
+
+      const info1 = await m.succession.successionInfo(await freshChar(c.id), now);
+      expect(info1?.plan.kind).toBe("forced_adoption");
+      expect(info1?.candidates.length).toBe(perDraw()); // the belt drew them
+      expect((await unconsumed(c.id, "marriage")).length).toBe(0); // belt drew ONLY the adoption purpose
+
+      const ids1 = info1!.candidates.map((x) => x.id).sort();
+      const info2 = await m.succession.successionInfo(await freshChar(c.id), now);
+      expect(info2?.candidates.map((x) => x.id).sort()).toEqual(ids1); // exactly those rows — no double-draw
+    });
+  });
 });

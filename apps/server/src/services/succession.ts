@@ -1,5 +1,5 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { children, createDb, dynasties, familyCandidates, playerCharacters, players, successions } from "@massalia/db";
+import { children, createDb, drawFamilyCandidates, dynasties, familyCandidates, playerCharacters, players, successions } from "@massalia/db";
 import {
   capStat,
   childAge,
@@ -205,9 +205,14 @@ export async function successionInfo(row: CharacterRow, now: Date = new Date()) 
   const age = currentAge(row.startAge, row.createdAt.getTime(), now.getTime(), ageCfg);
   const ladder = await topLadderTrait(row.id);
 
-  // For the forced-adoption path, surface the 3 candidate choices.
+  // For the forced-adoption path, surface the candidate choices.
   let candidates: { id: string; name: string; sex: string; age: number; houseSlug: string }[] = [];
   if (plan.kind === "forced_adoption") {
+    // Belt for legacy characters created before adoption candidates were drawn in
+    // life: never present an empty forced-adoption screen. Draws the adoption purpose
+    // only, only if missing (onlyMissing) — a character who already has candidates
+    // keeps exactly those, so this cannot double-draw.
+    await drawFamilyCandidates(row.id, { familyCfg: cfg, ageCfg, now, onlyMissing: true, purposes: ["adoption"] });
     candidates = (await db
       .select()
       .from(familyCandidates)
