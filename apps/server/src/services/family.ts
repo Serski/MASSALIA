@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import {
+  characterTraits,
   checkSpouseDeath,
   children,
   createDb,
@@ -13,6 +14,7 @@ import {
   marriages,
   partyFavor,
   playerCharacters,
+  players,
   rollChildrenDue,
   worlds,
 } from "@massalia/db";
@@ -41,7 +43,7 @@ import {
   type Trait,
 } from "@massalia/shared";
 import { getAgeConfig, portraitUrl } from "./age.js";
-import { getAllTraitDefs, getTraitDef } from "./traits.js";
+import { addTrait, getAllTraitDefs, getHeldTraits, getTraitDef } from "./traits.js";
 import { applyComposureDelta } from "./composure.js";
 import { broadcastState } from "./worldState.js";
 import { onIdeologyChanged } from "./politics.js";
@@ -347,12 +349,14 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
       // server-side so the client never re-derives calendar math. Every active
       // marriage has a row via the schema default; null philia only if none.
       const marriageRows = await db
-        .select({ philia: marriages.philia, lastGiftYear: marriages.lastGiftYear, lastSymposiumYear: marriages.lastSymposiumYear, loverState: marriages.loverState })
+        .select({ philia: marriages.philia, lastGiftYear: marriages.lastGiftYear, lastSymposiumYear: marriages.lastSymposiumYear, loverState: marriages.loverState, marriedAt: marriages.marriedAt })
         .from(marriages)
         .where(and(eq(marriages.characterId, character.id), eq(marriages.candidateId, character.spouseCandidateId), isNull(marriages.endedAt)))
         .limit(1);
       const marriageRow = marriageRows[0];
       const philia = marriageRow?.philia ?? null;
+      // Divorce availability from the SAME cooldown helper the guard enforces.
+      const cooldown = marriageRow ? divorceCooldown(marriageRow.marriedAt, now) : { available: false, reason: null };
       const year = gameDate(now.getTime(), await worldStartedMs(character.worldId)).yearInGame;
       spouse = {
         ...candidateView(rows[0], cfg, await houseName(rows[0].houseSlug)),
@@ -368,6 +372,8 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
         giftDiminished: marriageRow?.lastGiftYear === year,
         symposiumAvailable: marriageRow?.lastSymposiumYear !== year,
         loverState: marriageRow?.loverState ?? "none",
+        divorceAvailable: cooldown.available,
+        divorceBlockedReason: cooldown.reason,
       };
     }
   }
@@ -657,7 +663,16 @@ const DIVORCE_FULL = { prestige: -12, devotion: -10, composure: -50, favor: 30, 
 const DIVORCE_FALLEN = { prestige: -3, devotion: -2, composure: -12, favor: 8, dowry: 0 };
 
 export type DivorcePenalties = { prestige: number; devotion: number; composure: number; partyFavor: number; drachmae: number };
-export type DivorceResult = { ok: true; tier: "full" | "fallen"; penalties: DivorcePenalties } | { ok: false; code: number; error: string };
+export type DivorceResult = { ok: true; tier: "full" | "fallen"; penalties: DivorcePenalties; branded: boolean } | { ok: false; code: number; error: string };
+
+// A voluntary divorce is gated until the marriage is a full game year old. Both
+// divorce() and the spouse-card view resolve availability through this one helper,
+// so the guard and the button can never disagree on the boundary instant.
+const DIVORCE_COOLDOWN_REASON = "The city expects a marriage be given at least a year.";
+function divorceCooldown(marriedAt: Date, now: Date): { available: boolean; reason: string | null } {
+  const oldEnough = now.getTime() - marriedAt.getTime() >= getAgeConfig().realMsPerGameYear;
+  return { available: oldEnough, reason: oldEnough ? null : DIVORCE_COOLDOWN_REASON };
+}
 
 // End the marriage on the player's initiative. Mirrors checkSpouseDeath (endedAt/
 // endReason + spouseCandidateId null) and the marriage-penalty pattern. Prospects
@@ -668,8 +683,14 @@ export async function divorce(character: CharacterRow, now: Date = new Date()): 
   if (!spouse || spouse.marriageId === null) return { ok: false, code: 409, error: "You have no wife to divorce." };
   const marriageId = spouse.marriageId;
 
-  const mRows = await db.select({ loverState: marriages.loverState }).from(marriages).where(eq(marriages.id, marriageId)).limit(1);
-  const fallen = (mRows[0]?.loverState ?? "none") === "fallen";
+  const mRows = await db.select({ loverState: marriages.loverState, marriedAt: marriages.marriedAt }).from(marriages).where(eq(marriages.id, marriageId)).limit(1);
+  const marriageRow = mRows[0];
+  // Cooldown: a marriage must be at least a game year old before it may be dissolved
+  // voluntarily. Tragedy + spouse death end marriages regardless — they don't route here.
+  if (marriageRow && !divorceCooldown(marriageRow.marriedAt, now).available) {
+    return { ok: false, code: 409, error: DIVORCE_COOLDOWN_REASON };
+  }
+  const fallen = (marriageRow?.loverState ?? "none") === "fallen";
   const tier = fallen ? DIVORCE_FALLEN : DIVORCE_FULL;
   const returnsDowry = tier.dowry > 0 && spouse.spouseTraitId === "dowried";
   const favorParty = character.party === "palaioi" || character.party === "dynatoi" ? character.party : null;
@@ -718,6 +739,24 @@ export async function divorce(character: CharacterRow, now: Date = new Date()): 
     }
   });
 
+  // The brand: has this life reached two voluntary divorces? Bound the count on
+  // marriedAt >= createdAt — slot ids are reused across generations and becomeHeir
+  // resets createdAt, so a naive characterId count would inherit a predecessor's
+  // divorces (a future reader: the naive count would LOOK correct — this bound is why).
+  // The trait's -2 prestige is live-computed (effectiveStats), so granting it IS the
+  // penalty; no stat-row write here. Log once on the actual grant, not every divorce.
+  const divorced = await db
+    .select({ id: marriages.id })
+    .from(marriages)
+    .where(and(eq(marriages.characterId, character.id), eq(marriages.endReason, "divorced"), gte(marriages.marriedAt, character.createdAt)));
+  const held = await getHeldTraits(character.id);
+  let branded = held.some((t) => t.id === "notorious-divorcer");
+  if (!branded && divorced.length >= 2) {
+    await addTrait(character.id, "notorious-divorcer").catch(() => {}); // reputation: no cap/opposite; ignore the rare rule error
+    await db.insert(effectLog).values({ characterId: character.id, kind: "reputation", detail: { traitId: "notorious-divorcer", source: "divorce" } });
+    branded = true;
+  }
+
   // Composure via the break-aware service (clamps at 0, may trigger a break).
   await applyComposureDelta(character.id, tier.composure, "divorce", now);
   await broadcastState();
@@ -726,7 +765,25 @@ export async function divorce(character: CharacterRow, now: Date = new Date()): 
     ok: true,
     tier: fallen ? "fallen" : "full",
     penalties: { prestige: prestigeApplied, devotion: devotionApplied, composure: tier.composure, partyFavor: favorApplied, drachmae: drachmaeApplied },
+    branded,
   };
+}
+
+// City-wide scandal headline: the most recent Notorious Divorcer branding, shown
+// for one real day (mirrors the Olympiad champion window). Any client sees it on
+// its own me/state read; the Court render is a later phase. Null when stale/absent.
+export async function scandalHeadline(now: Date = new Date()): Promise<{ name: string } | null> {
+  const branded = await db
+    .select({ name: players.name, gainedAt: characterTraits.gainedAt })
+    .from(characterTraits)
+    .innerJoin(playerCharacters, eq(playerCharacters.id, characterTraits.characterId))
+    .innerJoin(players, eq(players.id, playerCharacters.playerId))
+    .where(eq(characterTraits.traitId, "notorious-divorcer"))
+    .orderBy(desc(characterTraits.gainedAt))
+    .limit(1);
+  const row = branded[0];
+  if (row && now.getTime() - row.gainedAt.getTime() < REAL_MS_PER_SEASON) return { name: row.name };
+  return null;
 }
 
 // --- Lover plot (pack B) ----------------------------------------------------

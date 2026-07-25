@@ -948,5 +948,14 @@
     "category": "reputation",
     "description": "Carries the marks of a foreign campaign.",
     "statMod": {}
+  },
+  {
+    "id": "notorious-divorcer",
+    "name": "Notorious Divorcer",
+    "category": "reputation",
+    "description": "Twice he has sent a wife back through her father's door.",
+    "statMod": {
+      "prestige": -2
+    }
   }
 ]

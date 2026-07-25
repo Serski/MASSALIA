@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { REAL_MS_PER_SEASON } from "@massalia/shared";
+import { REAL_MS_PER_SEASON, effectiveStats } from "@massalia/shared";
 
 // ---------------------------------------------------------------------------
 // livingSpousePersonalityTraits integration tests — run against a REAL Postgres,
@@ -281,6 +281,8 @@ suite("livingSpousePersonalityTraits (integration)", () => {
       }).where(eq(m.dbPkg.playerCharacters.id, c.id));
       await marryTo(c.id, { personalityTraitId: null, traitId: opts.dowried ? "dowried" : null, spouseDeathAge: 70, candidateAge: 30 });
       const mr = await marriageRow(c.id);
+      // Age the marriage past the one-game-year voluntary-divorce cooldown (pack: divorce limits).
+      await db.update(m.dbPkg.marriages).set({ marriedAt: new Date(now.getTime() - 2 * m.age.getAgeConfig().realMsPerGameYear) }).where(eq(m.dbPkg.marriages.id, mr.id));
       if (opts.loverState) await db.update(m.dbPkg.marriages).set({ loverState: opts.loverState }).where(eq(m.dbPkg.marriages.id, mr.id));
       return c.id;
     }
@@ -453,6 +455,8 @@ suite("livingSpousePersonalityTraits (integration)", () => {
 
     it("plot state is fresh on remarriage after a fallen divorce", async () => {
       const id = await setupPlot("Rebound", { loverState: "fallen", candidateAge: 30 });
+      // Age the marriage past the divorce cooldown before dissolving it voluntarily.
+      await db.update(m.dbPkg.marriages).set({ marriedAt: new Date(now.getTime() - 2 * m.age.getAgeConfig().realMsPerGameYear) }).where(and(eq(m.dbPkg.marriages.characterId, id), sql`ended_at IS NULL`));
       await m.family.divorce(await fresh(id), now);
       await m.dbPkg.drawFamilyCandidates(id, { familyCfg: m.family.getFamilyConfig(), ageCfg: m.age.getAgeConfig(), now });
       const cand = (await db.select().from(m.dbPkg.familyCandidates).where(and(eq(m.dbPkg.familyCandidates.forCharacterId, id), eq(m.dbPkg.familyCandidates.purpose, "marriage"), sql`consumed_at IS NULL`)).limit(1))[0]!;
@@ -806,6 +810,141 @@ suite("livingSpousePersonalityTraits (integration)", () => {
       await endInTragedy(id, "tragedy_clytemnestra", now);
       const entries = await m.dbPkg.gatherChronicleForCharacter(id);
       expect(entries.some((e) => e.type === "tragedy_clytemnestra")).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Divorce limits + scandal: the one-game-year cooldown, the Notorious Divorcer
+  // brand (per-life count bounded on marriedAt >= createdAt), and the city-wide
+  // scandal headline. Voluntary action only — spouse death is unaffected.
+  // -------------------------------------------------------------------------
+  describe("divorce cooldown, notorious divorcer, and the scandal", () => {
+    const gy = () => m.age.getAgeConfig().realMsPerGameYear;
+    const pcs = () => m.dbPkg.playerCharacters;
+    const freshChar = async (id: string) => (await db.select().from(pcs()).where(eq(pcs().id, id)).limit(1))[0]!;
+    // Back-date the active (un-ended) marriage's marriedAt to age it on demand.
+    const setActiveMarriedAt = (charId: string, at: Date) =>
+      db.update(m.dbPkg.marriages).set({ marriedAt: at }).where(and(eq(m.dbPkg.marriages.characterId, charId), isNull(m.dbPkg.marriages.endedAt)));
+    const setCreatedAt = (charId: string, at: Date) => db.update(pcs()).set({ createdAt: at }).where(eq(pcs().id, charId));
+    const holdsBrand = async (charId: string) =>
+      (await db.select().from(m.dbPkg.characterTraits).where(and(eq(m.dbPkg.characterTraits.characterId, charId), eq(m.dbPkg.characterTraits.traitId, "notorious-divorcer")))).length > 0;
+    const repLogs = async (charId: string) =>
+      await db.select().from(m.dbPkg.effectLog).where(and(eq(m.dbPkg.effectLog.characterId, charId), eq(m.dbPkg.effectLog.kind, "reputation")));
+
+    it("cooldown: divorce inside the first game year → 409, nothing written", async () => {
+      const c = await createCharacter("TooSoon");
+      await marryTo(c.id, { personalityTraitId: null, spouseDeathAge: 999, candidateAge: 30 });
+      await db.update(pcs()).set({ prestige: 50 }).where(eq(pcs().id, c.id));
+      await setActiveMarriedAt(c.id, new Date(now.getTime() - gy() / 2)); // half a game year old
+      const res = await m.family.divorce(await freshChar(c.id), now);
+      expect(res).toMatchObject({ ok: false, code: 409 });
+      const marr = (await db.select().from(m.dbPkg.marriages).where(eq(m.dbPkg.marriages.characterId, c.id)).limit(1))[0]!;
+      expect(marr.endedAt).toBeNull(); // untouched
+      const f = await freshChar(c.id);
+      expect(f.spouseCandidateId).not.toBeNull();
+      expect(f.prestige).toBe(50); // no penalty applied
+    });
+
+    it("cooldown: a marriage at least a game year old divorces cleanly", async () => {
+      const c = await createCharacter("OldEnough");
+      await setCreatedAt(c.id, new Date(now.getTime() - 5 * gy()));
+      await marryTo(c.id, { personalityTraitId: null, spouseDeathAge: 999, candidateAge: 30 });
+      await setActiveMarriedAt(c.id, new Date(now.getTime() - 2 * gy())); // two game years
+      const res = await m.family.divorce(await freshChar(c.id), now);
+      expect(res).toMatchObject({ ok: true, branded: false });
+    });
+
+    it("the brand: no trait on the first divorce, granted on the second, idempotent on the third", async () => {
+      const c = await createCharacter("Serial");
+      await setCreatedAt(c.id, new Date(now.getTime() - 5 * gy())); // this life began 5 game years ago
+      const divorceOnce = async () => {
+        await marryTo(c.id, { personalityTraitId: null, spouseDeathAge: 999, candidateAge: 30 });
+        await setActiveMarriedAt(c.id, new Date(now.getTime() - 2 * gy())); // 2 yrs old, after createdAt
+        return m.family.divorce(await freshChar(c.id), now);
+      };
+      const r1 = await divorceOnce();
+      expect(r1).toMatchObject({ ok: true, branded: false });
+      expect(await holdsBrand(c.id)).toBe(false);
+
+      const r2 = await divorceOnce();
+      expect(r2).toMatchObject({ ok: true, branded: true });
+      expect(await holdsBrand(c.id)).toBe(true);
+      expect((await repLogs(c.id)).length).toBe(1);
+      // The -2 prestige is live-computed from the held trait, never written to base.
+      // Isolate the brand's contribution (the character may also hold other statMod
+      // traits, e.g. a composure-break recluse) by comparing effective with vs. without it.
+      const row = await freshChar(c.id);
+      const base = { prestige: row.prestige, devotion: row.devotion, militia: row.militia, intelligence: row.intelligence };
+      const held = await m.traits.getHeldTraits(c.id);
+      const withoutBrand = held.filter((t) => t.id !== "notorious-divorcer");
+      expect(effectiveStats(base, held).prestige).toBe(effectiveStats(base, withoutBrand).prestige - 2);
+
+      const r3 = await divorceOnce();
+      expect(r3).toMatchObject({ ok: true, branded: true }); // still holds it
+      expect((await repLogs(c.id)).length).toBe(1); // no duplicate audit row
+      expect((await db.select().from(m.dbPkg.characterTraits).where(and(eq(m.dbPkg.characterTraits.characterId, c.id), eq(m.dbPkg.characterTraits.traitId, "notorious-divorcer")))).length).toBe(1);
+    });
+
+    it("R1 bound: a predecessor-life divorce (marriedAt < createdAt) does not count", async () => {
+      const c = await createCharacter("Heir");
+      // Seed a predecessor-life divorce via a normal marriage, then end it and push
+      // its marriedAt before this life's createdAt.
+      await marryTo(c.id, { personalityTraitId: null, spouseDeathAge: 999, candidateAge: 30 });
+      const predMid = (await db.select({ id: m.dbPkg.marriages.id }).from(m.dbPkg.marriages).where(eq(m.dbPkg.marriages.characterId, c.id)).limit(1))[0]!.id;
+      await db.update(m.dbPkg.marriages).set({ marriedAt: new Date(now.getTime() - 5 * gy()), endedAt: new Date(now.getTime() - 4 * gy()), endReason: "divorced" }).where(eq(m.dbPkg.marriages.id, predMid));
+      await db.update(pcs()).set({ spouseCandidateId: null }).where(eq(pcs().id, c.id));
+      await setCreatedAt(c.id, new Date(now.getTime() - 3 * gy())); // this life begins AFTER the predecessor's marriage
+      // One current-life divorce.
+      await marryTo(c.id, { personalityTraitId: null, spouseDeathAge: 999, candidateAge: 30 });
+      await setActiveMarriedAt(c.id, new Date(now.getTime() - 2 * gy())); // after createdAt, ≥ 1 yr
+      const res = await m.family.divorce(await freshChar(c.id), now);
+      expect(res).toMatchObject({ ok: true, branded: false }); // count is 1 (predecessor excluded)
+      expect(await holdsBrand(c.id)).toBe(false);
+    });
+
+    it("SpouseView: divorceAvailable tracks the cooldown and agrees with the guard at the boundary", async () => {
+      const c = await createCharacter("ViewCheck");
+      await setCreatedAt(c.id, new Date(now.getTime() - 5 * gy()));
+      await marryTo(c.id, { personalityTraitId: null, spouseDeathAge: 999, candidateAge: 30 });
+
+      await setActiveMarriedAt(c.id, new Date(now.getTime() - gy() / 2)); // inside the year
+      const inside = await m.family.familyState(await freshChar(c.id), now);
+      expect(inside.spouse?.divorceAvailable).toBe(false);
+      expect(inside.spouse?.divorceBlockedReason).toMatch(/at least a year/);
+
+      await setActiveMarriedAt(c.id, new Date(now.getTime() - 2 * gy())); // well past
+      const after = await m.family.familyState(await freshChar(c.id), now);
+      expect(after.spouse?.divorceAvailable).toBe(true);
+      expect(after.spouse?.divorceBlockedReason).toBeNull();
+
+      // Boundary: exactly one game year old → view says available AND the guard lets it through.
+      await setActiveMarriedAt(c.id, new Date(now.getTime() - gy()));
+      const boundary = await m.family.familyState(await freshChar(c.id), now);
+      expect(boundary.spouse?.divorceAvailable).toBe(true);
+      expect((await m.family.divorce(await freshChar(c.id), now)).ok).toBe(true);
+    });
+
+    it("spouse death ends a young marriage regardless of the divorce cooldown", async () => {
+      const c = await createCharacter("Widowed");
+      await marryTo(c.id, { personalityTraitId: null, spouseDeathAge: 60, candidateAge: 65 }); // wife already past her death age
+      await setActiveMarriedAt(c.id, now); // married this instant — age 0
+      await m.family.advanceSpouseDeath(c.id, now);
+      const marr = (await db.select().from(m.dbPkg.marriages).where(eq(m.dbPkg.marriages.characterId, c.id)).limit(1))[0]!;
+      expect(marr.endReason).toBe("spouse_died"); // ended despite the young marriage
+      expect((await freshChar(c.id)).spouseCandidateId).toBeNull();
+    });
+
+    it("scandal headline: a fresh grant surfaces city-wide; stale or absent → null", async () => {
+      await db.delete(m.dbPkg.characterTraits).where(eq(m.dbPkg.characterTraits.traitId, "notorious-divorcer")); // clean slate for the city-wide query
+      expect(await m.family.scandalHeadline(now)).toBeNull(); // absent
+
+      const c = await createCharacter("Scandalous");
+      await db.insert(m.dbPkg.characterTraits).values({ characterId: c.id, traitId: "notorious-divorcer", gainedAt: now });
+      expect(await m.family.scandalHeadline(now)).toEqual({ name: "Scandalous" }); // fresh
+
+      await db.update(m.dbPkg.characterTraits).set({ gainedAt: new Date(now.getTime() - 2 * REAL_MS_PER_SEASON) })
+        .where(and(eq(m.dbPkg.characterTraits.characterId, c.id), eq(m.dbPkg.characterTraits.traitId, "notorious-divorcer")));
+      expect(await m.family.scandalHeadline(now)).toBeNull(); // older than a day
     });
   });
 });

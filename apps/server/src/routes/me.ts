@@ -10,6 +10,7 @@ import { decayCharacter, getAgeConfig, portraitUrl } from "../services/age.js";
 import { enforceDeathAndHandoff, regentBadge, successionInfo } from "../services/succession.js";
 import { closeDueFestivals, fireFestivalsForCharacter, liveFestivalForCharacter } from "../services/festival.js";
 import { olympiadStatus, syncOlympiadForCharacter } from "../services/olympiad.js";
+import { scandalHeadline } from "../services/family.js";
 import { manumissionStatus } from "../services/manumission.js";
 import { syncAgenda } from "../services/agenda.js";
 import { syncElections } from "../services/elections.js";
@@ -95,6 +96,10 @@ export async function meRoutes(app: FastifyInstance) {
     // then surface the cycle status (phase, badges, live event, city-wide victor).
     await syncOlympiadForCharacter(character);
     const olympiad = await olympiadStatus(character);
+
+    // Scandal headline: the most recent Notorious Divorcer branding, shown city-wide
+    // for one real day (mirrors the Olympiad champion window). Null when stale/absent.
+    const scandal = await scandalHeadline();
 
     // Elections (Politics Prompt 2): open due declarations, advance phases, and
     // reconcile office vacancies (death cascade + defection forfeit) on the same
@@ -192,6 +197,9 @@ export async function meRoutes(app: FastifyInstance) {
       // The Olympiad cycle status (Prompt 8): phase, your candidacy/vote/delegate
       // badges, the live Olympic event, and the city-wide victor — or null.
       olympiad,
+      // City-wide scandal headline: a fresh Notorious Divorcer branding (one real
+      // day), sibling to the champion — or null. Rendered in the Court (Phase 3).
+      scandal,
       // Manumission: { eligible } when a slave holds the freedman trait — the
       // signal for the client's "Claim Your Freedom" panel.
       manumission,

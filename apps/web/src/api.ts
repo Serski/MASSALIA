@@ -164,6 +164,8 @@ export type PlayerState = {
   festival: FestivalLive | null;
   // The Olympiad cycle status (phase, badges, live event, city-wide victor), or null.
   olympiad: OlympiadStatus | null;
+  // City-wide scandal headline: a fresh Notorious Divorcer branding, or null.
+  scandal: { name: string } | null;
   // Manumission: { eligible } when a slave holds the freedman trait, else flag false.
   manumission: { eligible: boolean } | null;
   resources: {
@@ -319,7 +321,7 @@ export const api = {
   marry: (candidateId: string) => apiFetch<MarryResult>("/api/family/marry", { method: "POST", body: { candidateId } }),
   giveGift: () => apiFetch<{ ok: true; philia: number; delta: number; diminished: boolean }>("/api/family/gift", { method: "POST" }),
   holdSymposium: () => apiFetch<{ ok: true; philia: number; delta: number; prestige: number }>("/api/family/symposium", { method: "POST" }),
-  divorce: () => apiFetch<{ ok: true; tier: "full" | "fallen"; penalties: { prestige: number; devotion: number; composure: number; partyFavor: number; drachmae: number } }>("/api/family/divorce", { method: "POST" }),
+  divorce: () => apiFetch<{ ok: true; tier: "full" | "fallen"; penalties: { prestige: number; devotion: number; composure: number; partyFavor: number; drachmae: number }; branded: boolean }>("/api/family/divorce", { method: "POST" }),
   startLoverPlot: () => apiFetch<{ ok: true; loverState: string }>("/api/family/lover", { method: "POST" }),
   nameChild: (childId: string, name: string) =>
     apiFetch<{ ok: boolean; name: string }>(`/api/family/children/${childId}/name`, { method: "POST", body: { name } }),
@@ -819,6 +821,10 @@ export type SpouseView = FamilyCandidate & {
   giftDiminished: boolean;
   symposiumAvailable: boolean;
   loverState: string; // 'none' | 'active' | 'fallen'
+  // Voluntary divorce is gated until the marriage is a game year old; the reason
+  // string is null when available (server is the single source of truth).
+  divorceAvailable: boolean;
+  divorceBlockedReason: string | null;
 };
 
 // A spouse-death-of-old-age notice (surfaces for one season, then auto-clears).
