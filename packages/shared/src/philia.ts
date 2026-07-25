@@ -23,8 +23,9 @@ export function philiaBand(p: number): PhiliaBand {
 export type PhiliaModifiers = { assassinationDefenseMod: number; composureRecoveryBonus: number };
 
 // Band modifiers. Only the two extreme bands carry a modifier today.
-// NOTE: assassinationDefenseMod has NO consumer — it is a defined input reserved
-// for the future D4 intrigue system (exported + tested here, wired nowhere).
+// NOTE: assassinationDefenseMod's first consumer is clytemnestraSuccessChance in
+// tragedy.ts (pack C) — the estranged band's -5 becomes +5 to a murderous wife's
+// success. composureRecoveryBonus feeds the devoted-band composure recovery.
 export function philiaModifiers(p: number): PhiliaModifiers {
   switch (philiaBand(p)) {
     case "estranged":

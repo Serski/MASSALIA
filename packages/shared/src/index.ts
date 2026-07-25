@@ -9,6 +9,7 @@ export * from "./routines.js";
 export * from "./age.js";
 export * from "./family.js";
 export * from "./philia.js";
+export * from "./tragedy.js";
 export * from "./lover.js";
 export * from "./manumission.js";
 export * from "./festival.js";

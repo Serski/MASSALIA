@@ -597,4 +597,150 @@ suite("livingSpousePersonalityTraits (integration)", () => {
       expect(living.length).toBe(max);
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Pack C phase 2: the tragedy roll and its three resolutions, fired through
+  // rollChildrenDue with an injected tragedyRng. The wife-death shape, child
+  // death (Medea), the merc-style player-death flip (Clytemnestra success), and
+  // the clamped composure / floored prestige penalties all live in packages/db.
+  // -------------------------------------------------------------------------
+  describe("the tragedies (pack C phase 2)", () => {
+    const y = () => m.age.getAgeConfig().realMsPerGameYear;
+    const seqRng = (vals: number[]) => { let i = 0; return () => vals[i++ % vals.length]!; };
+    const pcs = () => m.dbPkg.playerCharacters;
+    const fresh = async (id: string) => (await db.select().from(pcs()).where(eq(pcs().id, id)).limit(1))[0]!;
+    const marr = async (mid: string) => (await db.select().from(m.dbPkg.marriages).where(eq(m.dbPkg.marriages.id, mid)).limit(1))[0]!;
+    const childRows = async (id: string) => await db.select().from(m.dbPkg.children).where(eq(m.dbPkg.children.parentCharacterId, id));
+    const logsOfKind = async (id: string, kind: string) =>
+      await db.select().from(m.dbPkg.effectLog).where(and(eq(m.dbPkg.effectLog.characterId, id), eq(m.dbPkg.effectLog.kind, kind)));
+    const args = (tragedyRng?: () => number, rng?: () => number, familyCfg?: ReturnType<typeof m.family.getFamilyConfig>) =>
+      ({ familyCfg: familyCfg ?? m.family.getFamilyConfig(), ageCfg: m.age.getAgeConfig(), now, rng, tragedyRng });
+
+    // A married character parked at an estranged philia, anchor one year back so the
+    // loop takes exactly one roll (unless yearsBack overrides it).
+    async function setup(
+      name: string,
+      opts: {
+        personalityId?: string | null; philia?: number; militia?: number; composure?: number; prestige?: number;
+        loverState?: string; loverStartedAt?: boolean; children?: number; candidateAge?: number; yearsBack?: number;
+      },
+    ) {
+      const c = await createCharacter(name);
+      const patch: Record<string, unknown> = {};
+      if (opts.militia !== undefined) patch.militia = opts.militia;
+      if (opts.composure !== undefined) patch.composure = opts.composure;
+      if (opts.prestige !== undefined) patch.prestige = opts.prestige;
+      if (Object.keys(patch).length) await db.update(pcs()).set(patch).where(eq(pcs().id, c.id));
+      await marryTo(c.id, { personalityTraitId: opts.personalityId ?? null, spouseDeathAge: 999, candidateAge: opts.candidateAge ?? 40, philia: opts.philia ?? 5 });
+      const mid = (await db.select({ id: m.dbPkg.marriages.id }).from(m.dbPkg.marriages).where(eq(m.dbPkg.marriages.characterId, c.id)).limit(1))[0]!.id;
+      const mPatch: Record<string, unknown> = {};
+      if (opts.loverState) mPatch.loverState = opts.loverState;
+      if (opts.loverStartedAt) mPatch.loverStartedAt = now;
+      if (Object.keys(mPatch).length) await db.update(m.dbPkg.marriages).set(mPatch).where(eq(m.dbPkg.marriages.id, mid));
+      for (let i = 0; i < (opts.children ?? 0); i++) {
+        await db.insert(m.dbPkg.children).values({ parentCharacterId: c.id, worldId, name: `C${i}`, sex: "male", bornAt: new Date(now.getTime() - 5 * y()) });
+      }
+      await db.update(pcs()).set({ lastChildRollAt: new Date(now.getTime() - (opts.yearsBack ?? 1) * y()) }).where(eq(pcs().id, c.id));
+      return { id: c.id, marriageId: mid };
+    }
+
+    it("no tragedy roll above the threshold (philia 6, rng rigged to fire)", async () => {
+      const s = await setup("AbovePhilia", { personalityId: "ruthless", philia: 6 });
+      expect(await m.dbPkg.rollChildrenDue(s.id, args(() => 0))).toEqual([]);
+      expect((await logsOfKind(s.id, "tragedy")).length).toBe(0);
+      expect((await marr(s.marriageId)).endedAt).toBeNull();
+      expect((await fresh(s.id)).status).toBe("alive");
+    });
+
+    it("Phaedra: fires at philia 5 → she alone dies; composure −40, prestige −2, widowed; prospects redraw", async () => {
+      const s = await setup("PhaedraHouse", { personalityId: "pious", philia: 5, composure: 70, prestige: 50 });
+      expect(await m.dbPkg.rollChildrenDue(s.id, args(() => 0))).toEqual([]);
+      const mrow = await marr(s.marriageId);
+      expect(mrow.endReason).toBe("tragedy_phaedra");
+      expect(mrow.endedAt).not.toBeNull();
+      const f = await fresh(s.id);
+      expect(f.status).toBe("alive");
+      expect(f.spouseCandidateId).toBeNull(); // widower shape
+      expect(f.composure).toBe(30); // 70 − 40
+      expect(f.prestige).toBe(48); // 50 − 2
+      expect((await logsOfKind(s.id, "tragedy"))[0]!.detail).toMatchObject({ archetype: "phaedra" });
+      // Widowed → the yearly draw re-opens marriage prospects.
+      await m.dbPkg.drawFamilyCandidates(s.id, { familyCfg: m.family.getFamilyConfig(), ageCfg: m.age.getAgeConfig(), now });
+      const cands = await db.select().from(m.dbPkg.familyCandidates)
+        .where(and(eq(m.dbPkg.familyCandidates.forCharacterId, s.id), eq(m.dbPkg.familyCandidates.purpose, "marriage")));
+      expect(cands.length).toBeGreaterThan(0);
+    });
+
+    it("Clytemnestra failure: rigged to miss → she suicides; player alive, composure −30, prestige −2", async () => {
+      // ruthless + no plot + no children → clytemnestra (fails Medea's gate).
+      const s = await setup("ClytMiss", { personalityId: "ruthless", philia: 5, militia: 0, composure: 70, prestige: 50 });
+      // [trigger 0.0 fires, success 0.99 ≥ 0.30 → miss]
+      expect(await m.dbPkg.rollChildrenDue(s.id, args(seqRng([0.0, 0.99])))).toEqual([]);
+      expect((await marr(s.marriageId)).endReason).toBe("tragedy_clytemnestra");
+      const f = await fresh(s.id);
+      expect(f.status).toBe("alive");
+      expect(f.spouseCandidateId).toBeNull();
+      expect(f.composure).toBe(40); // 70 − 30
+      expect(f.prestige).toBe(48); // 50 − 2
+    });
+
+    it("Clytemnestra success: rigged to land → player deceased, no penalty, succession reachable, no child that year", async () => {
+      const cfg = m.family.getFamilyConfig();
+      // Force a birth if the loop were to continue past the tragedy (fertile wife + chance ≥ 1).
+      const forced = { ...cfg, children: { ...cfg.children, yearlyChildChance: 1, thirdPlusChildChance: 1, birthDeathRisk: 0 } };
+      const s = await setup("ClytKill", { personalityId: "ruthless", philia: 5, militia: 0, composure: 70, prestige: 50, candidateAge: 30 });
+      // [trigger 0.0 fires, success 0.0 < 0.30 → lands]
+      expect(await m.dbPkg.rollChildrenDue(s.id, args(seqRng([0.0, 0.0]), undefined, forced))).toEqual([]);
+      expect((await childRows(s.id)).length).toBe(0); // aborted before any child insert
+      expect((await marr(s.marriageId)).endReason).toBe("tragedy_clytemnestra");
+      const f = await fresh(s.id);
+      expect(f.status).toBe("deceased");
+      expect(f.composure).toBe(70); // untouched — the dead take no penalty
+      expect(f.prestige).toBe(50);
+      // The status-keyed succession flow picks it up unmodified: childless → forced_adoption.
+      const info = await m.succession.successionInfo(f, now);
+      expect(info?.plan.kind).toBe("forced_adoption");
+    });
+
+    it("Medea: ruthless + plot + living children → children die, composure −70, prestige −5; heirless → forced_adoption", async () => {
+      const s = await setup("MedeaHouse", { personalityId: "ruthless", philia: 5, composure: 90, prestige: 50, loverStartedAt: true, children: 2 });
+      expect(await m.dbPkg.rollChildrenDue(s.id, args(() => 0))).toEqual([]);
+      const kids = await childRows(s.id);
+      expect(kids.length).toBe(2);
+      expect(kids.every((k) => k.diedAt !== null)).toBe(true); // every living child taken
+      expect((await marr(s.marriageId)).endReason).toBe("tragedy_medea");
+      const f = await fresh(s.id);
+      expect(f.status).toBe("alive"); // Medea kills the children, not the player
+      expect(f.composure).toBe(20); // 90 − 70
+      expect(f.prestige).toBe(45); // 50 − 5
+      // Later the childless player dies of old age → no blood heir, no regency.
+      await db.update(pcs()).set({ status: "deceased" }).where(eq(pcs().id, s.id));
+      const info = await m.succession.successionInfo(await fresh(s.id), now);
+      expect(info?.plan.kind).toBe("forced_adoption");
+    });
+
+    it("the tragedy aborts before the lover rolls (both rigged to fire → only the tragedy lands)", async () => {
+      const s = await setup("AbortLover", { personalityId: "pious", philia: 5, loverState: "active", loverStartedAt: true });
+      // tragedyRng=0 fires the tragedy; loverRng=0 WOULD fire fall + discovery if reached.
+      expect(await m.dbPkg.rollChildrenDue(s.id, args(() => 0, () => 0))).toEqual([]);
+      const mrow = await marr(s.marriageId);
+      expect(mrow.endReason).toBe("tragedy_phaedra");
+      expect(mrow.loverFellAt).toBeNull(); // the fall roll never ran
+      expect(mrow.loverDiscoveredAt).toBeNull(); // nor discovery
+      expect((await logsOfKind(s.id, "lover_plot")).length).toBe(0);
+    });
+
+    it("catch-up: a tragedy in year 1 of a 3-year catch-up ends the loop (one tragedy, not three)", async () => {
+      const s = await setup("CatchUp", { personalityId: "pious", philia: 5, yearsBack: 3 });
+      expect(await m.dbPkg.rollChildrenDue(s.id, args(() => 0))).toEqual([]);
+      expect((await logsOfKind(s.id, "tragedy")).length).toBe(1); // years 2–3 never processed
+    });
+
+    it("status guard: a deceased player with a live spouse link rolls nothing (loop exits at the top)", async () => {
+      const s = await setup("DeadAlready", { personalityId: "ruthless", philia: 5 });
+      await db.update(pcs()).set({ status: "deceased", lastChildRollAt: new Date(now.getTime() - 3 * y()) }).where(eq(pcs().id, s.id));
+      expect(await m.dbPkg.rollChildrenDue(s.id, args(() => 0))).toEqual([]);
+      expect((await logsOfKind(s.id, "tragedy")).length).toBe(0); // the guard exits before any roll
+    });
+  });
 });

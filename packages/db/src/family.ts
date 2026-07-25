@@ -14,11 +14,15 @@ import {
   LOVER_DISCOVERY_PRESTIGE,
   loverFallChance,
   spouseCurrentAge,
+  clytemnestraSuccessChance,
+  tragedyArchetype,
+  TRAGEDY_PHILIA_THRESHOLD,
+  TRAGEDY_YEARLY_CHANCE,
   type AgeConfig,
   type FamilyConfig,
 } from "@massalia/shared";
 import { createDb } from "./client.js";
-import { children, effectLog, familyCandidates, houses, marriages, playerCharacters } from "./schema.js";
+import { children, composureLog, effectLog, familyCandidates, houses, marriages, playerCharacters } from "./schema.js";
 
 const db = createDb();
 
@@ -108,14 +112,16 @@ export type ChildBirth = { child: ChildRow; motherDied: boolean; lateWifeName: s
 // child survives — the widower may remarry from future draws.
 export async function rollChildrenDue(
   characterId: string,
-  // `rng` drives the lover fall/discovery rolls only (default Math.random); the
+  // `rng` drives the lover fall/discovery rolls only (default Math.random);
+  // `tragedyRng` drives the tragedy trigger + Clytemnestra success rolls; the
   // child roll keeps its own Math.random.
-  args: { familyCfg: FamilyConfig; ageCfg: AgeConfig; now?: Date; rng?: () => number },
+  args: { familyCfg: FamilyConfig; ageCfg: AgeConfig; now?: Date; rng?: () => number; tragedyRng?: () => number },
 ): Promise<ChildBirth[]> {
   const { familyCfg, ageCfg } = args;
   const now = args.now ?? new Date();
   const gameYearMs = ageCfg.realMsPerGameYear;
   const loverRng = args.rng ?? Math.random;
+  const tragedyRng = args.tragedyRng ?? Math.random;
 
   const load = async () => (await db.select().from(playerCharacters).where(eq(playerCharacters.id, characterId)).limit(1))[0];
   let character = await load();
@@ -135,7 +141,9 @@ export async function rollChildrenDue(
   const births: ChildBirth[] = [];
   for (let i = 0; i < rolls; i++) {
     character = await load();
-    if (!character || !character.spouseCandidateId) break; // widowed -> no more rolls until remarriage
+    // Widowed OR dead (a Clytemnestra success in an earlier catch-up year) -> stop:
+    // no more rolls until a living character remarries.
+    if (!character || character.status !== "alive" || !character.spouseCandidateId) break;
     // "That year's" roll timestamp — anchors the lover fell/discovered notices.
     const yearTimestamp = new Date(anchorStart.getTime() + (i + 1) * gameYearMs);
 
@@ -144,9 +152,9 @@ export async function rollChildrenDue(
     const spouseTrait = candidateTrait(familyCfg, spouse?.traitId ?? null);
 
     // The active marriage — philia + lover-plot state. Read ABOVE the fertility
-    // gate so the lover rolls fire every year regardless of the fertility window.
+    // gate so the lover/tragedy rolls fire every year regardless of the fertility window.
     const marriageRows = await db
-      .select({ id: marriages.id, philia: marriages.philia, loverState: marriages.loverState, loverDiscoveredAt: marriages.loverDiscoveredAt })
+      .select({ id: marriages.id, philia: marriages.philia, loverState: marriages.loverState, loverDiscoveredAt: marriages.loverDiscoveredAt, loverStartedAt: marriages.loverStartedAt })
       .from(marriages)
       .where(and(eq(marriages.characterId, characterId), eq(marriages.candidateId, character.spouseCandidateId), isNull(marriages.endedAt)))
       .limit(1);
@@ -154,6 +162,74 @@ export async function rollChildrenDue(
     const philia = marriage?.philia ?? 50;
     let loverState = marriage?.loverState ?? "none";
     let loverDiscovered = marriage?.loverDiscoveredAt != null;
+
+    // --- Tragedy roll (ABOVE the lover rolls: the terminal act outranks the plot) ---
+    // An estranged marriage (philia <= threshold) risks, each year, a fatal act by
+    // the wife, resolved by her personality. On ANY tragedy we resolve and break: the
+    // marriage is over, so no lover roll, fertility gate, or child insert may run this
+    // iteration or after (R2 belt-one). All timestamps use `now` (execution time) so
+    // notice windows are correct even during multi-year catch-up.
+    if (marriage && philia <= TRAGEDY_PHILIA_THRESHOLD && tragedyRng() < TRAGEDY_YEARLY_CHANCE) {
+      const char = character; // narrow non-null for the closures below
+      const living = await db
+        .select({ id: children.id })
+        .from(children)
+        .where(and(eq(children.parentCharacterId, characterId), isNull(children.diedAt)));
+      const archetype = tragedyArchetype({
+        personalityId: spouse?.personalityTraitId ?? null,
+        loverPlotWasRun: marriage.loverStartedAt != null,
+        hasLivingChildren: living.length > 0,
+      });
+
+      // All three: the wife dies — end the marriage (the wife-death shape: ended_at +
+      // reason + cleared spouse link) and log the tragedy.
+      const endMarriage = async (endReason: string) => {
+        await db.update(marriages).set({ endedAt: now, endReason }).where(eq(marriages.id, marriage.id));
+        await db.update(playerCharacters).set({ spouseCandidateId: null }).where(eq(playerCharacters.id, characterId));
+        await db.insert(effectLog).values({ characterId, kind: "tragedy", detail: { archetype } });
+      };
+      // Composure penalty, clamped to the floor (the merc db idiom: never below 0).
+      const hitComposure = async (amount: number) => {
+        const drop = Math.min(char.composure, amount);
+        await db.update(playerCharacters).set({ composure: char.composure - drop }).where(eq(playerCharacters.id, characterId));
+        await db.insert(composureLog).values({ characterId, delta: -drop, reason: `tragedy:${archetype}` });
+      };
+      // Negative prestige, floored (the lover-discovery db idiom; applyStatGrowth
+      // passes penalties through unscaled, capStat applies the floor).
+      const hitPrestige = async (amount: number) => {
+        const applied = applyStatGrowth(amount, Number(char.growthMultiplier));
+        const next = capStat(char.prestige + applied, ageCfg);
+        await db.update(playerCharacters).set({ prestige: next }).where(eq(playerCharacters.id, characterId));
+        await db.insert(effectLog).values({ characterId, kind: "change_stat", detail: { stat: "prestige", requested: amount, applied, source: `tragedy:${archetype}` } });
+      };
+
+      if (archetype === "medea") {
+        // She takes the children with her: mark every living child dead. Phase 1's
+        // filters make the childless aftermath (forced_adoption/regency) correct.
+        await db.update(children).set({ diedAt: now }).where(and(eq(children.parentCharacterId, characterId), isNull(children.diedAt)));
+        await endMarriage("tragedy_medea");
+        await hitComposure(70);
+        await hitPrestige(-5);
+      } else if (archetype === "clytemnestra") {
+        const success = tragedyRng() < clytemnestraSuccessChance(char.militia);
+        await endMarriage("tragedy_clytemnestra");
+        if (success) {
+          // The player dies. The merc-style direct status flip; the status-keyed
+          // succession flow takes over unmodified. The dead take no composure/prestige.
+          await db.update(playerCharacters).set({ status: "deceased" }).where(eq(playerCharacters.id, characterId));
+        } else {
+          // Discovered, she takes her own life.
+          await hitComposure(30);
+          await hitPrestige(-2);
+        }
+      } else {
+        // Phaedra: she alone dies.
+        await endMarriage("tragedy_phaedra");
+        await hitComposure(40);
+        await hitPrestige(-2);
+      }
+      break; // terminal — no further catch-up years are processed
+    }
 
     // --- Lover plot yearly rolls (piggybacked on the child cadence) ---------
     if (loverState !== "none" && marriage) {

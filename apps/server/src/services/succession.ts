@@ -155,7 +155,7 @@ export async function enforceDeathAndHandoff(characterId: string, now: Date = ne
 
   // Regency auto-handoff: the ward reaches coming-of-age -> the child takes over.
   if (row.isRegent && row.regentForChildId) {
-    const wardRows = await db.select().from(children).where(eq(children.id, row.regentForChildId)).limit(1);
+    const wardRows = await db.select().from(children).where(and(eq(children.id, row.regentForChildId), isNull(children.diedAt))).limit(1);
     const ward = wardRows[0];
     if (ward && childAge(ward.bornAt.getTime(), now.getTime(), ageCfg.realMsPerGameYear) >= cfg.comingOfAge) {
       const stats = bloodStats(deadStats(row), cfg, cfg.succession.prestigeCarryover.regent);
@@ -342,7 +342,7 @@ export async function adopt(row: CharacterRow, candidateId: string, now: Date = 
 export async function regentBadge(row: CharacterRow, now: Date = new Date()) {
   if (!row.isRegent || !row.regentForChildId) return null;
   const cfg = getFamilyConfig();
-  const wardRows = await db.select().from(children).where(eq(children.id, row.regentForChildId)).limit(1);
+  const wardRows = await db.select().from(children).where(and(eq(children.id, row.regentForChildId), isNull(children.diedAt))).limit(1);
   const ward = wardRows[0];
   const wardAge = ward ? childAge(ward.bornAt.getTime(), now.getTime(), getAgeConfig().realMsPerGameYear) : 0;
   return {
