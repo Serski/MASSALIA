@@ -12,6 +12,7 @@ import {
   festivalChoregos,
   festivalDonations,
   festivalEvents,
+  houses,
   marriages,
   olympicCandidates,
   playerCharacters,
@@ -45,7 +46,7 @@ const NON_PARTICIPATION_CHOICES = ["attend", "expired"];
 export async function gatherChronicleForCharacter(characterId: string): Promise<ChronicleEntry[]> {
   const slot = (
     await db
-      .select({ id: playerCharacters.id, dynastyId: playerCharacters.dynastyId })
+      .select({ id: playerCharacters.id, dynastyId: playerCharacters.dynastyId, adoptedCandidateId: playerCharacters.adoptedCandidateId })
       .from(playerCharacters)
       .where(eq(playerCharacters.id, characterId))
       .limit(1)
@@ -71,6 +72,20 @@ export async function gatherChronicleForCharacter(characterId: string): Promise<
     .from(marriages)
     .innerJoin(familyCandidates, eq(familyCandidates.id, marriages.candidateId))
     .where(eq(marriages.characterId, slot.id));
+
+  // The current adopted heir (in-life rite), dated at the candidate's consumedAt.
+  // adoptedCandidateId holds only the standing heir (ruling B/C — no re-adoption).
+  let adoptions: ChronicleInput["adoptions"] = [];
+  if (slot.adoptedCandidateId) {
+    const adoptRows = await db
+      .select({ id: familyCandidates.id, heirName: familyCandidates.name, houseName: houses.name, consumedAt: familyCandidates.consumedAt })
+      .from(familyCandidates)
+      .innerJoin(houses, eq(houses.slug, familyCandidates.houseSlug))
+      .where(eq(familyCandidates.id, slot.adoptedCandidateId))
+      .limit(1);
+    const a = adoptRows[0];
+    if (a?.consumedAt) adoptions = [{ id: a.id, adoptedAt: a.consumedAt.getTime(), heirName: a.heirName, houseName: a.houseName }];
+  }
 
   // Births.
   const birthRows = await db
@@ -172,5 +187,6 @@ export async function gatherChronicleForCharacter(characterId: string): Promise<
     choregos: choregosRows.map((row) => ({ id: row.id, closedAt: row.closedAt.getTime(), festivalId: row.festivalId, gameYear: row.gameYear })),
     festivals,
     olympics,
+    adoptions,
   });
 }

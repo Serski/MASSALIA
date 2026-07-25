@@ -282,3 +282,18 @@ describe("buildChronicle — tragedies (pack C)", () => {
     expect(entries.find((e) => e.type === "marriage" && e.payload.spouseName === "Alkestis")!.generation).toBe(2);
   });
 });
+
+describe("buildChronicle — adoption (the rite)", () => {
+  const base = { startedMs: 0, successionBoundariesMs: [] as number[], marriages: [], births: [], choregos: [], festivals: [], olympics: [] };
+
+  it("stages an adoption entry dated at adoptedAt with heir + house payload", () => {
+    const entries = buildChronicle({ ...base, adoptions: [{ id: "ad1", adoptedAt: 10 * S, heirName: "Deon", houseName: "Xanthippos" }] });
+    const a = entries.find((e) => e.type === "adoption")!;
+    expect(a.seasonIndex).toBe(10); // dated at adoptedAt (the candidate's consumedAt)
+    expect(a.payload).toEqual({ heirName: "Deon", houseName: "Xanthippos" });
+  });
+
+  it("no adoptions → no adoption entry (and the omitted field is fine)", () => {
+    expect(buildChronicle(base).some((e) => e.type === "adoption")).toBe(false);
+  });
+});

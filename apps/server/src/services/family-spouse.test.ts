@@ -1036,4 +1036,154 @@ suite("livingSpousePersonalityTraits (integration)", () => {
       expect(info2?.candidates.map((x) => x.id).sort()).toEqual(ids1); // exactly those rows — no double-draw
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Phase 3: the adoption rite — the three guards, the outlook, showAdoption,
+  // pendingCount, the adoption notice, and the Chronicle entry.
+  // -------------------------------------------------------------------------
+  describe("the adoption rite (phase 3)", () => {
+    const y = () => m.age.getAgeConfig().realMsPerGameYear;
+    const pcs = () => m.dbPkg.playerCharacters;
+    const fc = () => m.dbPkg.familyCandidates;
+    const freshChar = async (id: string) => (await db.select().from(pcs()).where(eq(pcs().id, id)).limit(1))[0]!;
+    const drawAdoption = async (id: string) => {
+      await m.dbPkg.drawFamilyCandidates(id, { familyCfg: m.family.getFamilyConfig(), ageCfg: m.age.getAgeConfig(), now });
+      return (await db.select().from(fc()).where(and(eq(fc().forCharacterId, id), eq(fc().purpose, "adoption"), isNull(fc().consumedAt))))[0]!;
+    };
+    const insertSon = (id: string, name: string, agoYears: number) =>
+      db.insert(m.dbPkg.children).values({ parentCharacterId: id, worldId, name, sex: "male", bornAt: new Date(now.getTime() - agoYears * y()) });
+    // A childless citizen aged `age` (createdAt=now → age===startAge) with funds + a drawn ward.
+    async function setup(name: string, opts: { age?: number; drachmae?: number; classId?: string } = {}) {
+      const c = await createCharacter(name, opts.classId ?? "landowner");
+      await db.update(pcs()).set({ startAge: opts.age ?? 35, createdAt: now, drachmae: opts.drachmae ?? 100 }).where(eq(pcs().id, c.id));
+      const cand = await drawAdoption(c.id);
+      return { id: c.id, candId: cand.id, cand };
+    }
+
+    it("the rite: −40 dr atomic, adoptedCandidateId set, candidate consumed, both effectLogs", async () => {
+      const s = await setup("RiteHouse", { age: 35, drachmae: 100 });
+      const r = await m.succession.adopt(await freshChar(s.id), s.candId, now);
+      expect(r).toMatchObject({ ok: true, heirName: s.cand.name, endedRegency: false });
+      const f = await freshChar(s.id);
+      expect(f.drachmae).toBe(60); // 100 − 40
+      expect(f.adoptedCandidateId).toBe(s.candId);
+      expect((await db.select().from(fc()).where(eq(fc().id, s.candId)).limit(1))[0]!.consumedAt).not.toBeNull();
+      const logs = await db.select().from(m.dbPkg.effectLog).where(eq(m.dbPkg.effectLog.characterId, s.id));
+      expect(logs.some((l) => l.kind === "change_drachmae" && (l.detail as { source?: string }).source === "adoption")).toBe(true);
+      expect(logs.some((l) => l.kind === "adoption")).toBe(true);
+    });
+
+    it("guard 1 — re-adoption is blocked (409 'You have named an heir.'), nothing touched", async () => {
+      const s = await setup("Twice", { age: 35, drachmae: 100 });
+      await m.succession.adopt(await freshChar(s.id), s.candId, now);
+      const before = await freshChar(s.id);
+      const cand2 = await drawAdoption(s.id);
+      const r = await m.succession.adopt(await freshChar(s.id), cand2.id, now);
+      expect(r).toMatchObject({ ok: false, code: 409, error: "You have named an heir." });
+      const after = await freshChar(s.id);
+      expect(after.drachmae).toBe(before.drachmae); // untouched
+      expect(after.adoptedCandidateId).toBe(s.candId); // still the first heir
+      expect((await db.select().from(fc()).where(eq(fc().id, cand2.id)).limit(1))[0]!.consumedAt).toBeNull();
+    });
+
+    it("guard 2 — age gate: under 30 → 409 (class-correct copy); at 30 → proceeds", async () => {
+      const man = await setup("YoungMan", { age: 29, drachmae: 100 });
+      expect(await m.succession.adopt(await freshChar(man.id), man.candId, now)).toMatchObject({ ok: false, code: 409, error: "A man under thirty takes a wife, not an heir." });
+      const het = await setup("YoungHetaira", { age: 29, drachmae: 100, classId: "hetaira" });
+      expect(await m.succession.adopt(await freshChar(het.id), het.candId, now)).toMatchObject({ ok: false, code: 409, error: "A mistress under thirty builds her house before naming its heir." });
+      const thirty = await setup("ExactlyThirty", { age: 30, drachmae: 100 });
+      expect((await m.succession.adopt(await freshChar(thirty.id), thirty.candId, now)).ok).toBe(true);
+    });
+
+    it("guard 3 — insufficient funds → 409, nothing written", async () => {
+      const s = await setup("Broke", { age: 35, drachmae: 39 });
+      expect(await m.succession.adopt(await freshChar(s.id), s.candId, now)).toMatchObject({ ok: false, code: 409 });
+      const f = await freshChar(s.id);
+      expect(f.drachmae).toBe(39); // untouched
+      expect(f.adoptedCandidateId).toBeNull();
+      expect((await db.select().from(fc()).where(eq(fc().id, s.candId)).limit(1))[0]!.consumedAt).toBeNull();
+    });
+
+    it("the death-flow is not age-gated: an under-30 heirless death completes a forced adoption", async () => {
+      const s = await setup("YoungHeirlessDead", { age: 26, drachmae: 0 });
+      await db.delete(fc()).where(eq(fc().forCharacterId, s.id)); // legacy shape too
+      await db.update(pcs()).set({ status: "deceased" }).where(eq(pcs().id, s.id));
+      const info = await m.succession.successionInfo(await freshChar(s.id), now);
+      expect(info?.plan.kind).toBe("forced_adoption");
+      expect(info!.candidates.length).toBeGreaterThan(0); // belt drew them
+      const r = await m.succession.resolveSuccession(await freshChar(s.id), info!.candidates[0]!.id, now);
+      expect(r.ok).toBe(true); // completes despite age 26 + no funds — no gate, no cost
+    });
+
+    it("outlook matrix: blood son / minor son → regency / adopted / childless → forced_adoption", async () => {
+      const blood = await setup("BloodDad", { age: 40 });
+      await insertSon(blood.id, "Kleon", 16);
+      expect((await m.family.familyState(await freshChar(blood.id), now)).successionOutlook).toMatchObject({ kind: "blood", heirName: "Kleon" });
+
+      const reg = await setup("RegDad", { age: 40 });
+      await insertSon(reg.id, "Boy", 8);
+      expect((await m.family.familyState(await freshChar(reg.id), now)).successionOutlook).toMatchObject({ kind: "regency", heirName: "Boy" });
+
+      const adp = await setup("AdpDad", { age: 40, drachmae: 100 });
+      await m.succession.adopt(await freshChar(adp.id), adp.candId, now);
+      expect((await m.family.familyState(await freshChar(adp.id), now)).successionOutlook).toMatchObject({ kind: "adopted", heirName: adp.cand.name });
+
+      const none = await setup("NoneDad", { age: 40 });
+      expect((await m.family.familyState(await freshChar(none.id), now)).successionOutlook).toMatchObject({ kind: "forced_adoption", heirName: null });
+    });
+
+    it("showAdoption matrix: childless 35 → true; hasAdopted → false; under-30 → false; blood → false", async () => {
+      const show = await setup("ShowA", { age: 35, drachmae: 100 });
+      expect((await m.family.familyState(await freshChar(show.id), now)).showAdoption).toBe(true);
+      await m.succession.adopt(await freshChar(show.id), show.candId, now);
+      expect((await m.family.familyState(await freshChar(show.id), now)).showAdoption).toBe(false); // hasAdopted hides
+
+      const young = await setup("ShowYoung", { age: 29 });
+      expect((await m.family.familyState(await freshChar(young.id), now)).showAdoption).toBe(false); // under 30 hides
+
+      const blood = await setup("ShowBlood", { age: 40 });
+      await insertSon(blood.id, "Heir", 16);
+      expect((await m.family.familyState(await freshChar(blood.id), now)).showAdoption).toBe(false); // blood-secure hides
+    });
+
+    it("pendingCount: 2 unnamed newborns + 1 notice → 3; naming one → 2; windows expire → 0", async () => {
+      const c = await createCharacter("PendHouse", "landowner");
+      await db.update(pcs()).set({ startAge: 35, createdAt: now }).where(eq(pcs().id, c.id));
+      await db.insert(m.dbPkg.children).values({ parentCharacterId: c.id, worldId, name: "A", sex: "male", bornAt: now, named: false });
+      const childB = (await db.insert(m.dbPkg.children).values({ parentCharacterId: c.id, worldId, name: "B", sex: "female", bornAt: now, named: false }).returning())[0]!;
+      // One in-window notice: a divorce that just landed.
+      await marryTo(c.id, { personalityTraitId: null, spouseDeathAge: 999, candidateAge: 30 });
+      const mid = (await db.select({ id: m.dbPkg.marriages.id }).from(m.dbPkg.marriages).where(eq(m.dbPkg.marriages.characterId, c.id)).limit(1))[0]!.id;
+      await db.update(m.dbPkg.marriages).set({ endedAt: now, endReason: "divorced" }).where(eq(m.dbPkg.marriages.id, mid));
+      await db.update(pcs()).set({ spouseCandidateId: null }).where(eq(pcs().id, c.id));
+      expect((await m.family.familyState(await freshChar(c.id), now)).pendingCount).toBe(3);
+
+      await db.update(m.dbPkg.children).set({ named: true }).where(eq(m.dbPkg.children.id, childB.id));
+      expect((await m.family.familyState(await freshChar(c.id), now)).pendingCount).toBe(2);
+
+      // Expire everything: name the last child + age the divorce out of the window.
+      await db.update(m.dbPkg.children).set({ named: true }).where(and(eq(m.dbPkg.children.parentCharacterId, c.id)));
+      await db.update(m.dbPkg.marriages).set({ endedAt: new Date(now.getTime() - 2 * REAL_MS_PER_SEASON) }).where(eq(m.dbPkg.marriages.id, mid));
+      expect((await m.family.familyState(await freshChar(c.id), now)).pendingCount).toBe(0);
+    });
+
+    it("chronicle: an adopted heir yields an adoption entry (heir + house); absent without one", async () => {
+      const s = await setup("ChronHouse", { age: 40, drachmae: 100 });
+      expect((await m.dbPkg.gatherChronicleForCharacter(s.id)).some((e) => e.type === "adoption")).toBe(false);
+      await m.succession.adopt(await freshChar(s.id), s.candId, now);
+      const entry = (await m.dbPkg.gatherChronicleForCharacter(s.id)).find((e) => e.type === "adoption");
+      expect(entry).toBeTruthy();
+      expect(entry!.payload.heirName).toBe(s.cand.name);
+      expect(typeof entry!.payload.houseName).toBe("string"); // the ward's house, resolved from its slug
+      expect(entry!.payload.houseName).toBeTruthy();
+    });
+
+    it("adoption notice: present within the season after adopting, gone after", async () => {
+      const s = await setup("NoticeHouse", { age: 40, drachmae: 100 });
+      await m.succession.adopt(await freshChar(s.id), s.candId, now);
+      expect((await m.family.familyState(await freshChar(s.id), now)).adoptionNotice).toMatchObject({ name: s.cand.name });
+      const later = new Date(now.getTime() + 2 * REAL_MS_PER_SEASON);
+      expect((await m.family.familyState(await freshChar(s.id), later)).adoptionNotice).toBeNull();
+    });
+  });
 });

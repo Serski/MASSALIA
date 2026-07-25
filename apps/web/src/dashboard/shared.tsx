@@ -56,6 +56,8 @@ export type PlayerDashboardState = {
   olympiad: OlympiadStatus | null;
   // City-wide scandal headline: a fresh Notorious Divorcer branding, or null.
   scandal: { name: string } | null;
+  // The honest Family nav badge count (unnamed newborns + in-window family notices).
+  familyPending: number;
   // Manumission: { eligible } when a slave holds the freedman trait, else null.
   manumission: { eligible: boolean } | null;
 };
@@ -128,6 +130,7 @@ export function playerFromState(state: PlayerState): PlayerDashboardView {
     festival: state.festival ?? null,
     olympiad: state.olympiad ?? null,
     scandal: state.scandal ?? null,
+    familyPending: state.familyPending ?? 0,
     manumission: state.manumission ?? null,
     profession,
     house,

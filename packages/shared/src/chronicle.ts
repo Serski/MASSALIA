@@ -23,7 +23,10 @@ export type ChronicleType =
   // endedAt. Each renders a single flat line in the web register.
   | "tragedy_phaedra"
   | "tragedy_clytemnestra"
-  | "tragedy_medea";
+  | "tragedy_medea"
+  // Pack: the adoption rite — an in-life adopted heir, dated at the candidate's
+  // consumedAt. One flat line in the web register.
+  | "adoption";
 
 export type ChronicleEntry = {
   // Sort key, from gameDate(timestamp, startedMs).seasonIndex.
@@ -96,6 +99,17 @@ export type ChronicleInput = {
   choregos: ChronicleChoregosRow[];
   festivals: ChronicleFestivalRow[];
   olympics: ChronicleOlympicRow[];
+  // In-life adoptions (the current adopted heir, dated at consumedAt). At most one
+  // per slot today — adoptedCandidateId holds only the standing heir (ruling B/C).
+  // Optional: a new input the pre-existing chronicle fixtures need not supply.
+  adoptions?: ChronicleAdoptionRow[];
+};
+
+export type ChronicleAdoptionRow = {
+  id: string;
+  adoptedAt: number;
+  heirName: string;
+  houseName: string;
 };
 
 // Deterministic tiebreak when several events land in the same season.
@@ -109,6 +123,7 @@ const TYPE_ORDER: Record<ChronicleType, number> = {
   tragedy_phaedra: 6,
   tragedy_clytemnestra: 7,
   tragedy_medea: 8,
+  adoption: 9,
 };
 
 // generation = 1 + (boundaries that occurred at or before the event). An event at
@@ -179,6 +194,9 @@ export function buildChronicle(input: ChronicleInput): ChronicleEntry[] {
   for (const o of input.olympics) {
     const yearBC = gameDate(o.nominatedAt, input.startedMs).yearBC;
     staged.push(stage(o.id, o.nominatedAt, "olympic_selection", { gameYear: o.gameYear, yearBC, sent: o.sent }, input));
+  }
+  for (const a of input.adoptions ?? []) {
+    staged.push(stage(a.id, a.adoptedAt, "adoption", { heirName: a.heirName, houseName: a.houseName }, input));
   }
 
   staged.sort(

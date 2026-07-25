@@ -254,6 +254,34 @@ function TragedyCard({ notice }: { notice: TragedyNotice }) {
   );
 }
 
+// The adoption aftermath — brief, in the birth-card register (one season).
+function AdoptionCard({ notice }: { notice: { name: string; house: string } }) {
+  return (
+    <DashboardCard className="birth-card">
+      <div className="event-body">
+        <span className="dashboard-label event-kicker">An heir is named</span>
+        <h3>You have adopted {notice.name} of House {notice.house}.</h3>
+        <p className="composure-note">The rite is done; your house has an heir, and their blood becomes yours.</p>
+      </div>
+    </DashboardCard>
+  );
+}
+
+// The always-visible succession outlook line ("If you fell today, …").
+function outlookLine(outlook: { kind: string; heirName: string | null }): string {
+  const name = outlook.heirName ?? "your heir";
+  switch (outlook.kind) {
+    case "blood":
+      return `If you fell today, ${name} inherits.`;
+    case "adopted":
+      return `If you fell today, your adopted heir ${name} takes the house.`;
+    case "regency":
+      return `If you fell today, a regent would rule for ${name}.`;
+    default: // forced_adoption / fresh
+      return "If you fell today, your line has no heir — the house would pass by adoption.";
+  }
+}
+
 export default function FamilyPanel({ onRefresh }: PanelProps) {
   // Two tabs: the household management view (default) and the dated house
   // chronicle (the existing TimelinePanel, mounted as-is).
@@ -374,6 +402,23 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
     }
   };
 
+  const adopt = async (candidateId: string) => {
+    setBusy(true);
+    setNote("");
+    try {
+      const r = await api.adopt(candidateId);
+      setConfirmId(null);
+      setNote(`${r.heirName} is named your heir.`);
+      load();
+      onRefresh();
+    } catch (err) {
+      // 409s (already an heir / under 30 / can't afford) surface through the note line.
+      setNote(err instanceof ApiError ? err.message : "The rite could not be performed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <section className="dashboard-panel" aria-labelledby="family-title">
       <div className="dashboard-panel-heading">
@@ -439,6 +484,8 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
           {state.fellNotice && state.spouse ? <FellCard wifeName={state.spouse.name} /> : null}
 
           {state.discoveredNotice ? <DiscoveredCard /> : null}
+
+          {state.adoptionNotice ? <AdoptionCard notice={state.adoptionNotice} /> : null}
 
           {state.spouse ? (
             <>
@@ -535,6 +582,46 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
             </>
           ) : null}
 
+          {!state.locks.locked ? (
+            <>
+              <div className="panel-label">Succession</div>
+              <p className="composure-note muted">{outlookLine(state.successionOutlook)}</p>
+              {state.showAdoption ? (
+                state.candidates.adoption.length === 0 ? (
+                  <p className="dashboard-todo">No wards are on offer this season.</p>
+                ) : (
+                  state.candidates.adoption.map((candidate) => (
+                    <DashboardCard className="prospect-card" key={candidate.id}>
+                      <div className="event-body">
+                        <div className="prospect-head">
+                          <span className="person-face prospect-face">
+                            <PersonFace portrait={candidate.portrait} />
+                          </span>
+                          <span className="dashboard-label">{candidate.name} of House {candidate.houseName}</span>
+                        </div>
+                        <p>Age {candidate.age}</p>
+                        <TraitChips trait={candidate.trait} personality={candidate.personality} />
+                        <CandidateStatChips stats={candidate.stats} />
+                        {confirmId === candidate.id ? (
+                          <div className="event-choice-stack">
+                            <button className="event-choice-button" type="button" disabled={busy} onClick={() => adopt(candidate.id)}>
+                              <strong>Confirm — 40 dr, and the house takes their blood</strong>
+                            </button>
+                            <button className="dashboard-ghost-button" type="button" disabled={busy} onClick={() => setConfirmId(null)}>Cancel</button>
+                          </div>
+                        ) : (
+                          <button className="event-choice-button" type="button" disabled={busy} onClick={() => setConfirmId(candidate.id)}>
+                            <strong>Adopt {candidate.name}</strong>
+                          </button>
+                        )}
+                      </div>
+                    </DashboardCard>
+                  ))
+                )
+              ) : null}
+            </>
+          ) : null}
+
           {state.locks.marriage && !state.married ? (
             <>
               <div className="panel-label">Prospects</div>
@@ -575,26 +662,6 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
             </>
           ) : null}
 
-          {!state.locks.marriage && !state.locks.locked ? (
-            <>
-              <div className="panel-label">Adoption</div>
-              {state.candidates.adoption.length === 0 ? (
-                <p className="dashboard-todo">No wards are on offer this season.</p>
-              ) : (
-                state.candidates.adoption.map((candidate) => (
-                  <PersonRow
-                    key={candidate.id}
-                    name={`${candidate.name} of House ${candidate.houseName}`}
-                    role={`Age ${candidate.age}${candidate.trait ? ` · ${candidate.trait.name}` : ""}`}
-                    traits={candidate.trait ? [{ label: candidate.trait.name, tone: "good" }] : []}
-                    right={<CandidateStatChips stats={candidate.stats} />}
-                    portrait={candidate.portrait}
-                  />
-                ))
-              )}
-              <p className="dashboard-todo">Marriage is not your path; an heir comes by adoption — the rite arrives with the succession pack.</p>
-            </>
-          ) : null}
         </>
       )}
       {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
@@ -633,6 +700,7 @@ const chronicleRenderers: Record<ChronicleEntry["type"], (payload: Record<string
   // asserts neither outcome — only the attempt, which is true in every case.
   tragedy_clytemnestra: (p) => `${p.spouseName} made an attempt on his life.`,
   tragedy_medea: (p) => `${p.spouseName} killed their children and herself.`,
+  adoption: (p) => `Adopted ${p.heirName} of House ${p.houseName} as heir.`,
 };
 
 function renderChronicleEntry(entry: ChronicleEntry): string {

@@ -10,7 +10,7 @@ import { decayCharacter, getAgeConfig, portraitUrl } from "../services/age.js";
 import { enforceDeathAndHandoff, regentBadge, successionInfo } from "../services/succession.js";
 import { closeDueFestivals, fireFestivalsForCharacter, liveFestivalForCharacter } from "../services/festival.js";
 import { olympiadStatus, syncOlympiadForCharacter } from "../services/olympiad.js";
-import { scandalHeadline } from "../services/family.js";
+import { familyPendingCount, scandalHeadline } from "../services/family.js";
 import { manumissionStatus } from "../services/manumission.js";
 import { syncAgenda } from "../services/agenda.js";
 import { syncElections } from "../services/elections.js";
@@ -100,6 +100,9 @@ export async function meRoutes(app: FastifyInstance) {
     // Scandal headline: the most recent Notorious Divorcer branding, shown city-wide
     // for one real day (mirrors the Olympiad champion window). Null when stale/absent.
     const scandal = await scandalHeadline();
+    // Family nav badge: the honest count of pending family items (replaces the old
+    // placeholder ①). Lean count queries — never the full family payload.
+    const familyPending = await familyPendingCount(character);
 
     // Elections (Politics Prompt 2): open due declarations, advance phases, and
     // reconcile office vacancies (death cascade + defection forfeit) on the same
@@ -200,6 +203,8 @@ export async function meRoutes(app: FastifyInstance) {
       // City-wide scandal headline: a fresh Notorious Divorcer branding (one real
       // day), sibling to the champion — or null. Rendered in the Court (Phase 3).
       scandal,
+      // The Family nav badge count (unnamed newborns + in-window family notices).
+      familyPending,
       // Manumission: { eligible } when a slave holds the freedman trait — the
       // signal for the client's "Claim Your Freedom" panel.
       manumission,

@@ -166,6 +166,8 @@ export type PlayerState = {
   olympiad: OlympiadStatus | null;
   // City-wide scandal headline: a fresh Notorious Divorcer branding, or null.
   scandal: { name: string } | null;
+  // The honest Family nav badge count (unnamed newborns + in-window family notices).
+  familyPending: number;
   // Manumission: { eligible } when a slave holds the freedman trait, else flag false.
   manumission: { eligible: boolean } | null;
   resources: {
@@ -200,7 +202,8 @@ export type ChronicleType =
   | "olympic_selection"
   | "tragedy_phaedra"
   | "tragedy_clytemnestra"
-  | "tragedy_medea";
+  | "tragedy_medea"
+  | "adoption";
 
 export type ChronicleEntry = {
   seasonIndex: number;
@@ -863,6 +866,12 @@ export type FamilyState = {
   tragedyNotice: TragedyNotice | null;
   fellNotice: boolean;
   discoveredNotice: boolean;
+  // The succession outlook ("If you fell today, …"), the Adopt-button visibility,
+  // a one-season adoption notice, and the honest pending-item count for the badge.
+  successionOutlook: { kind: string; heirName: string | null };
+  showAdoption: boolean;
+  adoptionNotice: { name: string; house: string } | null;
+  pendingCount: number;
   candidates: { marriage: MarriageCandidate[]; adoption: FamilyCandidate[] };
   children: FamilyChild[];
   birthEvent: BirthEvent | null;

@@ -1,5 +1,5 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
-import { children, createDb, drawFamilyCandidates, dynasties, familyCandidates, playerCharacters, players, successions } from "@massalia/db";
+import { and, eq, gte, isNull, sql } from "drizzle-orm";
+import { children, createDb, drawFamilyCandidates, dynasties, effectLog, familyCandidates, playerCharacters, players, successions } from "@massalia/db";
 import {
   capStat,
   childAge,
@@ -16,7 +16,7 @@ import {
   type Sex,
 } from "@massalia/shared";
 import { getAgeConfig } from "./age.js";
-import { getFamilyConfig } from "./family.js";
+import { ADOPTION_MIN_AGE, getFamilyConfig } from "./family.js";
 import { getComposureConfig } from "./composure.js";
 import { getHeldTraits } from "./traits.js";
 import { releaseSeatOf } from "./oligarchy.js";
@@ -320,7 +320,13 @@ async function applyAdoptedHeir(row: CharacterRow, cand: CandidateRow, now: Date
 
 export type AdoptResult = { ok: false; code: number; error: string } | { ok: true; heirName: string; endedRegency: boolean };
 
+const ADOPTION_COST = 40;
+
 export async function adopt(row: CharacterRow, candidateId: string, now: Date = new Date()): Promise<AdoptResult> {
+  // Guard 1 — re-adoption block (ruling B): a named heir bars the rite. The UI also
+  // hides the button; this is the server belt. Returns before any read/write.
+  if (row.adoptedCandidateId !== null) return { ok: false, code: 409, error: "You have named an heir." };
+
   const candRows = await db
     .select()
     .from(familyCandidates)
@@ -330,15 +336,48 @@ export async function adopt(row: CharacterRow, candidateId: string, now: Date = 
   if (!cand || cand.purpose !== "adoption" || cand.consumedAt !== null) return { ok: false, code: 409, error: "That ward is no longer available." };
 
   // Adopt-to-exit: during a regency, adopting an adult ends the regency NOW — the
-  // adoptee becomes the played character; the minor ward stays as a future heir.
+  // adoptee becomes the played character; the minor ward stays as a future heir. This
+  // is a succession-completion (like the death-flow forced adoption), NOT the in-life
+  // rite, so it is exempt from the age gate + cost below (regents can be under 30).
   if (row.isRegent) {
     await applyAdoptedHeir(row, cand, now, "adopted");
     return { ok: true, heirName: cand.name, endedRegency: true };
   }
 
-  // Otherwise: designate an adopted heir for the succession ladder (path b).
-  await db.update(familyCandidates).set({ consumedAt: now }).where(eq(familyCandidates.id, cand.id));
-  await db.update(playerCharacters).set({ adoptedCandidateId: cand.id }).where(eq(playerCharacters.id, row.id));
+  // --- The in-life adoption rite: designate an heir for the succession ladder ---
+  // Guard 2 — age gate (reuse the shared age math, never re-derive). In-life only;
+  // the death-flow forced adoption (resolveSuccession) never passes through here.
+  const age = currentAge(row.startAge, row.createdAt.getTime(), now.getTime(), getAgeConfig());
+  if (age < ADOPTION_MIN_AGE) {
+    return {
+      ok: false,
+      code: 409,
+      error: row.classId === "hetaira"
+        ? "A mistress under thirty builds her house before naming its heir."
+        : "A man under thirty takes a wife, not an heir.",
+    };
+  }
+
+  // Guard 3 + the rite — 40 dr, two-layer atomic spend (gift/symposium precedent):
+  // a cheap pre-check, then a conditional decrement inside the tx that also writes
+  // adoptedCandidateId and consumes the candidate, with both effectLogs.
+  if (row.drachmae < ADOPTION_COST) return { ok: false, code: 409, error: `The rite costs ${ADOPTION_COST} drachmae — you cannot afford it.` };
+  try {
+    await db.transaction(async (tx) => {
+      const paid = await tx
+        .update(playerCharacters)
+        .set({ drachmae: sql`${playerCharacters.drachmae} - ${ADOPTION_COST}`, adoptedCandidateId: cand.id })
+        .where(and(eq(playerCharacters.id, row.id), gte(playerCharacters.drachmae, ADOPTION_COST)))
+        .returning({ drachmae: playerCharacters.drachmae });
+      if (!paid.length) throw new Error("cannot_afford");
+      await tx.update(familyCandidates).set({ consumedAt: now }).where(eq(familyCandidates.id, cand.id));
+      await tx.insert(effectLog).values({ characterId: row.id, kind: "change_drachmae", detail: { amount: -ADOPTION_COST, value: paid[0]!.drachmae, source: "adoption" } });
+      await tx.insert(effectLog).values({ characterId: row.id, kind: "adoption", detail: { candidateId: cand.id, name: cand.name, house: cand.houseSlug } });
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "cannot_afford") return { ok: false, code: 409, error: `The rite costs ${ADOPTION_COST} drachmae — you cannot afford it.` };
+    throw error;
+  }
   await broadcastState();
   return { ok: true, heirName: cand.name, endedRegency: false };
 }

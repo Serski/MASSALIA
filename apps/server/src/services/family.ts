@@ -27,6 +27,7 @@ import {
   childAge,
   clampIdeology,
   clampPhilia,
+  currentAge,
   gameDate,
   isFamilyLocked,
   isFertile,
@@ -39,7 +40,9 @@ import {
   REAL_MS_PER_SEASON,
   rollSpouseDeathAge,
   spouseCurrentAge,
+  successionPlan,
   type FamilyConfig,
+  type Sex,
   type Trait,
 } from "@massalia/shared";
 import { getAgeConfig, portraitUrl } from "./age.js";
@@ -50,6 +53,10 @@ import { onIdeologyChanged } from "./politics.js";
 import { enqueueChildRoll, enqueueFamilyDraw } from "./queue.js";
 
 const db = createDb();
+// The in-life adoption rite is age-gated at 30 (shared by familyState's outlook/
+// showAdoption and adopt()'s guard — one source of truth). The death-flow forced
+// adoption is never age-gated.
+export const ADOPTION_MIN_AGE = 30;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../../..");
 const configFile = path.join(repoRoot, "content/family/family-config.json");
@@ -451,6 +458,49 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
 
   const { children: childList, birthEvent } = locked ? { children: [], birthEvent: null } : await childrenSection(character, now);
 
+  // --- Succession outlook + the in-life adoption rite -------------------------
+  const hasAdopted = character.adoptedCandidateId !== null;
+  const age = currentAge(character.startAge, character.createdAt.getTime(), now.getTime(), getAgeConfig());
+  // The adopted (consumed) candidate — ONE query, reused for the outlook heir name
+  // and the windowed adoption notice. Absent when the character has not adopted.
+  const adoptedCand = hasAdopted
+    ? (await db
+        .select({ name: familyCandidates.name, houseSlug: familyCandidates.houseSlug, consumedAt: familyCandidates.consumedAt })
+        .from(familyCandidates)
+        .where(eq(familyCandidates.id, character.adoptedCandidateId!))
+        .limit(1))[0]
+    : undefined;
+
+  // Outlook via the shared plan from data already in hand (children ages+sex,
+  // hasAdopted, class) — the plan kind costs no query; only the adopted heir's name
+  // reuses the candidate read above.
+  const plan = successionPlan({ classId: character.classId }, childList.map((c) => ({ id: c.id, age: c.age, sex: c.sex as Sex, name: c.name })), hasAdopted, cfg);
+  const heirName =
+    plan.kind === "blood" ? (childList.find((c) => c.id === plan.heirChildId)?.name ?? null)
+    : plan.kind === "regency" ? (childList.find((c) => c.id === plan.regentForChildId)?.name ?? null)
+    : plan.kind === "adopted" ? (adoptedCand?.name ?? null)
+    : null;
+  const successionOutlook = { kind: plan.kind, heirName };
+
+  // The Adopt button shows when the line is not blood-secure (or the hetaira, whose
+  // only path is adoption), the character has not yet named an heir, and is >= 30.
+  const showAdoption = !locked && (plan.kind !== "blood" || character.classId === "hetaira") && !hasAdopted && age >= ADOPTION_MIN_AGE;
+
+  // Adoption notice: one season on the adopted candidate's consumedAt (the anchor).
+  let adoptionNotice: { name: string; house: string } | null = null;
+  if (adoptedCand?.consumedAt && now.getTime() - adoptedCand.consumedAt.getTime() < REAL_MS_PER_SEASON) {
+    adoptionNotice = { name: adoptedCand.name, house: await houseName(adoptedCand.houseSlug) };
+  }
+
+  // pendingCount (ruling D): every unnamed-in-window child counted individually +
+  // each in-window notice. A child past its naming season is auto-named, so any
+  // still-unnamed child is within its window. Reaches 0 when nothing pends.
+  const pendingCount =
+    childList.filter((c) => !c.named).length +
+    [spouseDeath, divorceNotice, tragedyNotice, adoptionNotice].filter(Boolean).length +
+    (fellNotice ? 1 : 0) +
+    (discoveredNotice ? 1 : 0);
+
   return {
     sex: character.sex,
     classId: character.classId,
@@ -463,10 +513,63 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
     tragedyNotice,
     fellNotice,
     discoveredNotice,
+    successionOutlook,
+    showAdoption,
+    adoptionNotice,
+    pendingCount,
     candidates: { marriage: marriageOffers, adoption: adoptionOffers },
     children: childList,
     birthEvent,
   };
+}
+
+// The nav-badge count for me/state — the SAME formula as familyState.pendingCount,
+// but as focused count/existence queries so me/state never pays for the full family
+// payload. Every unnamed newborn + each in-window notice (ended-marriage death/
+// divorce/tragedy, lover fell/discovered, adoption). The one-game-year marriage
+// cooldown makes two marriage-ends in a single one-season window impossible, so
+// counting ended-marriage rows matches familyState's per-notice tally.
+export async function familyPendingCount(character: CharacterRow, now: Date = new Date()): Promise<number> {
+  if (isFamilyLocked(character.classId, getFamilyConfig())) return 0;
+  const windowStart = new Date(now.getTime() - REAL_MS_PER_SEASON);
+  let count = 0;
+
+  // Unnamed newborns (a past-window child is auto-named, so any unnamed one is in window).
+  const unnamed = await db
+    .select({ id: children.id })
+    .from(children)
+    .where(and(eq(children.parentCharacterId, character.id), isNull(children.diedAt), eq(children.named, false)));
+  count += unnamed.length;
+
+  // Ended-marriage notices (spouse death / divorce / the three tragedies) in window.
+  const endedRecently = await db
+    .select({ id: marriages.id })
+    .from(marriages)
+    .where(and(
+      eq(marriages.characterId, character.id),
+      inArray(marriages.endReason, ["spouse_died", "divorced", "tragedy_phaedra", "tragedy_clytemnestra", "tragedy_medea"]),
+      gte(marriages.endedAt, windowStart),
+    ));
+  count += endedRecently.length;
+
+  // Lover fell / discovered on the active marriage, each windowed.
+  if (character.spouseCandidateId) {
+    const m = (await db
+      .select({ loverFellAt: marriages.loverFellAt, loverDiscoveredAt: marriages.loverDiscoveredAt })
+      .from(marriages)
+      .where(and(eq(marriages.characterId, character.id), eq(marriages.candidateId, character.spouseCandidateId), isNull(marriages.endedAt)))
+      .limit(1))[0];
+    if (m?.loverFellAt && m.loverFellAt.getTime() > windowStart.getTime()) count += 1;
+    if (m?.loverDiscoveredAt && m.loverDiscoveredAt.getTime() > windowStart.getTime()) count += 1;
+  }
+
+  // Adoption notice: the adopted candidate consumed within the window.
+  if (character.adoptedCandidateId) {
+    const c = (await db.select({ consumedAt: familyCandidates.consumedAt }).from(familyCandidates).where(eq(familyCandidates.id, character.adoptedCandidateId)).limit(1))[0];
+    if (c?.consumedAt && c.consumedAt.getTime() > windowStart.getTime()) count += 1;
+  }
+
+  return count;
 }
 
 export type MarryResult =

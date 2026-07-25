@@ -19,13 +19,11 @@ type DashboardNavItem = {
   badge?: number;
 };
 
-const placeholderFamilyEventCount = 1;
-
 const dashboardNav: DashboardNavItem[] = [
   { id: "court", label: "Court", icon: "court" },
   { id: "ledger", label: "Ledger", icon: "ledger" },
   { id: "market", label: "Market", icon: "market" },
-  { id: "family", label: "Family", icon: "family", badge: placeholderFamilyEventCount },
+  { id: "family", label: "Family", icon: "family" }, // badge is player.familyPending (dynamic)
   { id: "politics", label: "Politics", icon: "politics" },
   { id: "atlas", label: "Atlas", icon: "atlas" },
 ];
@@ -71,6 +69,7 @@ const placeholderPlayerState: PlayerDashboardState = {
   festival: null,
   olympiad: null,
   scandal: null,
+  familyPending: 0,
   manumission: null,
 };
 
@@ -255,7 +254,7 @@ export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () =
                 <SvgIcon icon={item.icon} />
                 {item.label}
                 {item.id === "court" && courtBadgeCount ? <strong className="nav-badge">{courtBadgeCount}</strong> : null}
-                {item.badge ? <strong className="nav-badge subtle">{item.badge}</strong> : null}
+                {item.id === "family" && player.familyPending ? <strong className="nav-badge subtle">{player.familyPending}</strong> : null}
               </button>
             ))}
           </nav>
@@ -307,7 +306,7 @@ export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () =
             <SvgIcon icon={item.icon} />
             <span>{item.label}</span>
             {item.id === "court" && courtBadgeCount ? <strong className="nav-badge">{courtBadgeCount}</strong> : null}
-            {item.badge ? <strong className="nav-badge subtle">{item.badge}</strong> : null}
+            {item.id === "family" && player.familyPending ? <strong className="nav-badge subtle">{player.familyPending}</strong> : null}
           </button>
         ))}
         <button
