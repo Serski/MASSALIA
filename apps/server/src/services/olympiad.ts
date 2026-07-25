@@ -23,6 +23,7 @@ import {
   OLYMPIAD_GAMES_FESTIVAL_ID,
   OLYMPIC_DELEGATE_TRAIT_ID,
   OLYMPIONIKES_TRAIT_ID,
+  REAL_MS_PER_SEASON,
   type CompeteMode,
   type EventDefinition,
 } from "@massalia/shared";
@@ -213,8 +214,10 @@ export async function olympiadStatus(character: CharacterRow) {
 
   // City-wide victor: the most recent olympionikes crowned at/after this cycle's
   // payoff (i.e. this Olympiad produced a champion). All clients see it via me/state.
+  // The headline shows for ONE real day after the crowning — the `completed` phase
+  // itself lasts days, so without this window it would linger for the whole phase.
   let champion: { name: string } | null = null;
-  if (cycle.phase === "completed" && cycle.payoffAt) {
+  if (cycle.phase === "completed" && cycle.payoffAt && Date.now() - cycle.payoffAt.getTime() < REAL_MS_PER_SEASON) {
     const crowned = await db
       .select({ name: players.name, gainedAt: characterTraits.gainedAt })
       .from(characterTraits)
