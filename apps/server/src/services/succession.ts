@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { children, createDb, dynasties, familyCandidates, playerCharacters, players, successions } from "@massalia/db";
 import {
   capStat,
@@ -47,7 +47,7 @@ function randomAdultAvatar(sex: Sex): string | null {
 
 async function childInfos(characterId: string, now: Date) {
   const gameYearMs = getAgeConfig().realMsPerGameYear;
-  const rows = await db.select().from(children).where(eq(children.parentCharacterId, characterId));
+  const rows = await db.select().from(children).where(and(eq(children.parentCharacterId, characterId), isNull(children.diedAt)));
   return rows.map((c) => ({ id: c.id, age: childAge(c.bornAt.getTime(), now.getTime(), gameYearMs), sex: c.sex as Sex, name: c.name }));
 }
 

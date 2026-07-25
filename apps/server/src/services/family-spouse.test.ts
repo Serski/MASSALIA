@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // livingSpousePersonalityTraits integration tests — run against a REAL Postgres,
@@ -20,7 +20,8 @@ async function loadModules() {
   const traits = await import("./traits.js");
   const family = await import("./family.js");
   const composure = await import("./composure.js");
-  return { dbPkg, age, traits, family, composure };
+  const succession = await import("./succession.js");
+  return { dbPkg, age, traits, family, composure, succession };
 }
 
 suite("livingSpousePersonalityTraits (integration)", () => {
@@ -483,6 +484,117 @@ suite("livingSpousePersonalityTraits (integration)", () => {
       }
       expect(bornNo).not.toBeNull();
       expect(bornNo!.child.rumor).toBe(false);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Pack C phase 1: the `children.diedAt` column + living-children filters.
+  // Nothing sets diedAt yet (no tragedy code), so these tests seed diedAt
+  // directly to prove every live-state read now ignores the dead — while the
+  // Chronicle (history) keeps them, tested in chronicle.test where births live.
+  // The succession assertions are the Medea shape, verified before Medea exists.
+  // -------------------------------------------------------------------------
+  describe("child mortality (pack C phase 1): living-children filters", () => {
+    const y = () => m.age.getAgeConfig().realMsPerGameYear;
+    const freshChar = async (id: string) =>
+      (await db.select().from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.id, id)).limit(1))[0]!;
+    const childRow = async (id: string) =>
+      (await db.select().from(m.dbPkg.children).where(eq(m.dbPkg.children.id, id)).limit(1))[0]!;
+    // Insert one child; `agoYears` back-dates bornAt, diedAt marks it dead.
+    async function insertChild(
+      parentId: string,
+      opts: { name: string; sex: "male" | "female"; agoYears?: number; dead?: boolean; named?: boolean },
+    ) {
+      const bornAt = new Date(now.getTime() - (opts.agoYears ?? 0) * y());
+      return (
+        await db.insert(m.dbPkg.children).values({
+          parentCharacterId: parentId, worldId, name: opts.name, sex: opts.sex, bornAt,
+          named: opts.named ?? false, diedAt: opts.dead ? now : null,
+        }).returning()
+      )[0]!;
+    }
+
+    it("familyEligibilityContext: dead children are excluded from livingChildren", async () => {
+      const c = await createCharacter("MortalParent");
+      await marryTo(c.id, { personalityTraitId: null, spouseDeathAge: 70, candidateAge: 30 });
+      await insertChild(c.id, { name: "Alive", sex: "female", agoYears: 0 });
+      await insertChild(c.id, { name: "Dead", sex: "male", agoYears: 10, dead: true });
+      const fam = await m.family.familyEligibilityContext(await freshChar(c.id), now);
+      expect(fam.livingChildren.map((k) => `${k.sex}:${k.ageYears}`)).toEqual(["female:0"]);
+    });
+
+    it("familyState children: dead child hidden AND its come-of-age/named writes never fire", async () => {
+      const c = await createCharacter("GriefHouse");
+      // A dead child that is BOTH of-age (age 30 ≥ 15 → would stamp comeOfAgeAt) and
+      // unnamed-past-its-season (would flip named) — proving the filtered read never
+      // reaches either lazy write.
+      const dead = await insertChild(c.id, { name: "Lost", sex: "male", agoYears: 30, dead: true, named: false });
+      await insertChild(c.id, { name: "Living", sex: "female", agoYears: 0 });
+      const state = await m.family.familyState(await freshChar(c.id), now);
+      expect(state.children.map((k: { name: string }) => k.name)).toEqual(["Living"]);
+      const deadRow = await childRow(dead.id);
+      expect(deadRow.comeOfAgeAt).toBeNull();
+      expect(deadRow.named).toBe(false);
+    });
+
+    it("nameChild: a dead child cannot be (re)named", async () => {
+      const c = await createCharacter("NamerHouse");
+      const dead = await insertChild(c.id, { name: "Ghost", sex: "male", agoYears: 0, dead: true, named: false });
+      const res = await m.family.nameChild(await freshChar(c.id), dead.id, "NewName", now);
+      expect(res.ok).toBe(false);
+      const row = await childRow(dead.id);
+      expect(row.name).toBe("Ghost");
+      expect(row.named).toBe(false);
+    });
+
+    it("successionInfo: dead children don't count — a lone living young child → regency on that ward", async () => {
+      const c = await createCharacter("DeceasedParent");
+      await insertChild(c.id, { name: "Heir", sex: "male", agoYears: 5 }); // living, under coming-of-age (15)
+      await insertChild(c.id, { name: "DeadKid", sex: "female", agoYears: 5, dead: true });
+      await db.update(m.dbPkg.playerCharacters).set({ status: "deceased" }).where(eq(m.dbPkg.playerCharacters.id, c.id));
+      const info = await m.succession.successionInfo(await freshChar(c.id), now);
+      expect(info?.plan.kind).toBe("regency");
+      expect(info?.heir?.name).toBe("Heir");
+    });
+
+    it("successionInfo (Medea shape): all children dead + no adopted heir → forced_adoption, not regency", async () => {
+      const c = await createCharacter("ChildlessByTragedy");
+      await insertChild(c.id, { name: "GoneA", sex: "male", agoYears: 5, dead: true });
+      await insertChild(c.id, { name: "GoneB", sex: "female", agoYears: 3, dead: true });
+      await db.update(m.dbPkg.playerCharacters).set({ status: "deceased" }).where(eq(m.dbPkg.playerCharacters.id, c.id));
+      const info = await m.succession.successionInfo(await freshChar(c.id), now);
+      expect(info?.plan.kind).toBe("forced_adoption");
+    });
+
+    it("rollChildrenDue: dead children don't count toward maxChildren (a dead child frees a slot)", async () => {
+      const cfg = m.family.getFamilyConfig();
+      const max = cfg.children.maxChildren;
+      // Force deterministic births: chance ≥ 1 (rng() is always < 1 → always born),
+      // and zero birth-death risk (the wife never dies mid-loop). The fertility
+      // window is untouched, so a 30-year-old wife stays fertile every roll.
+      const forced = { ...cfg, children: { ...cfg.children, yearlyChildChance: 1, thirdPlusChildChance: 1, birthDeathRisk: 0 } };
+      const rollArgs = { familyCfg: forced, ageCfg: m.age.getAgeConfig(), now };
+      const setAnchor = (id: string) =>
+        db.update(m.dbPkg.playerCharacters).set({ lastChildRollAt: new Date(now.getTime() - 3 * y()) }).where(eq(m.dbPkg.playerCharacters.id, id));
+
+      // (a) max LIVING children → the cap blocks every catch-up roll → 0 births.
+      const atCap = await createCharacter("AtCap");
+      await marryTo(atCap.id, { personalityTraitId: null, spouseDeathAge: 999, candidateAge: 30 });
+      for (let i = 0; i < max; i++) await insertChild(atCap.id, { name: `K${i}`, sex: "male", agoYears: 0 });
+      await setAnchor(atCap.id);
+      expect((await m.dbPkg.rollChildrenDue(atCap.id, rollArgs)).length).toBe(0);
+
+      // (b) max rows but ONE dead → living = max-1 < cap → exactly one birth refills
+      // the freed slot (and no more; the next roll is back at the cap).
+      const freed = await createCharacter("SlotFreed");
+      await marryTo(freed.id, { personalityTraitId: null, spouseDeathAge: 999, candidateAge: 30 });
+      for (let i = 0; i < max - 1; i++) await insertChild(freed.id, { name: `L${i}`, sex: "male", agoYears: 0 });
+      await insertChild(freed.id, { name: "DeadSlot", sex: "female", agoYears: 0, dead: true });
+      await setAnchor(freed.id);
+      expect((await m.dbPkg.rollChildrenDue(freed.id, rollArgs)).length).toBe(1);
+      const living = await db.select().from(m.dbPkg.children)
+        .where(and(eq(m.dbPkg.children.parentCharacterId, freed.id), isNull(m.dbPkg.children.diedAt)));
+      expect(living.length).toBe(max);
     });
   });
 });

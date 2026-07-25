@@ -183,7 +183,7 @@ export async function rollChildrenDue(
       if (!isFertile(wifeAge, familyCfg)) continue;
     }
 
-    const existing = await db.select({ id: children.id }).from(children).where(eq(children.parentCharacterId, characterId));
+    const existing = await db.select({ id: children.id }).from(children).where(and(eq(children.parentCharacterId, characterId), isNull(children.diedAt)));
     const outcome = childRoll(Math.random, { active: true }, existing.length, spouseTrait, familyCfg, philia, plotActive);
     if (!outcome.born) continue;
 

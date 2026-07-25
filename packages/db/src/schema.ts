@@ -319,6 +319,9 @@ export const children = pgTable("children", {
   bornAt: timestamp("born_at", { withTimezone: true }).notNull().defaultNow(),
   named: boolean("named").notNull().default(false),
   comeOfAgeAt: timestamp("came_of_age_at", { withTimezone: true }),
+  // Set when the child dies (pack C tragedies). Null = living. Every live-state
+  // read of children filters on `diedAt IS NULL`; history (Chronicle) does not.
+  diedAt: timestamp("died_at", { withTimezone: true }),
   heirCharacterId: uuid("heir_character_id"),
   // Rumor of another father — set when a child is born while the lover plot is
   // active (pack B). Stored only; nothing consumes it yet.

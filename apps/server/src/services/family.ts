@@ -151,7 +151,7 @@ export async function familyEligibilityContext(
   const childRows = await db
     .select({ sex: children.sex, bornAt: children.bornAt })
     .from(children)
-    .where(eq(children.parentCharacterId, character.id));
+    .where(and(eq(children.parentCharacterId, character.id), isNull(children.diedAt)));
   const realMsPerGameYear = getAgeConfig().realMsPerGameYear;
   const livingChildren = childRows.map((child) => ({
     sex: child.sex as "male" | "female",
@@ -249,7 +249,7 @@ function childPortrait(sex: string, age: number, cfg: FamilyConfig): string {
 async function childrenSection(character: CharacterRow, now: Date) {
   const cfg = getFamilyConfig();
   const gameYearMs = getAgeConfig().realMsPerGameYear;
-  const rows = await db.select().from(children).where(eq(children.parentCharacterId, character.id)).orderBy(desc(children.bornAt));
+  const rows = await db.select().from(children).where(and(eq(children.parentCharacterId, character.id), isNull(children.diedAt))).orderBy(desc(children.bornAt));
 
   const list = [];
   for (const child of rows) {
@@ -302,7 +302,7 @@ async function childrenSection(character: CharacterRow, now: Date) {
 // default if the name is blank; marks the child named either way.
 export async function nameChild(character: CharacterRow, childId: string, name: string, now: Date = new Date()): Promise<{ ok: boolean; name: string }> {
   const clean = name.trim().replace(/\s+/g, " ").slice(0, 64);
-  const rows = await db.select().from(children).where(and(eq(children.id, childId), eq(children.parentCharacterId, character.id))).limit(1);
+  const rows = await db.select().from(children).where(and(eq(children.id, childId), eq(children.parentCharacterId, character.id), isNull(children.diedAt))).limit(1);
   const child = rows[0];
   if (!child) return { ok: false, name: "" };
   const finalName = clean || child.name; // blank -> keep the generated default
