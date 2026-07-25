@@ -70,6 +70,7 @@ const placeholderPlayerState: PlayerDashboardState = {
   decaying: [],
   festival: null,
   olympiad: null,
+  scandal: null,
   manumission: null,
 };
 

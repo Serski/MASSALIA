@@ -503,7 +503,7 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
                     )
                   ) : null}
 
-                  {confirmId === "divorce" ? (
+                  {confirmId === "divorce" && state.spouse.divorceAvailable ? (
                     <div className="event-choice-stack">
                       <button className="event-choice-button" type="button" disabled={busy} onClick={divorce}>
                         <strong>{state.spouse.loverState === "fallen" ? "Confirm — none will blame you" : "Confirm — the city will not forgive it"}</strong>
@@ -511,7 +511,15 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
                       <button className="dashboard-ghost-button" type="button" disabled={busy} onClick={() => setConfirmId(null)}>Cancel</button>
                     </div>
                   ) : (
-                    <button className="dashboard-ghost-button" type="button" disabled={busy} onClick={() => setConfirmId("divorce")}>Divorce her</button>
+                    <button
+                      className="dashboard-ghost-button"
+                      type="button"
+                      disabled={busy || !state.spouse.divorceAvailable}
+                      title={state.spouse.divorceAvailable ? undefined : state.spouse.divorceBlockedReason ?? undefined}
+                      onClick={() => setConfirmId("divorce")}
+                    >
+                      Divorce her
+                    </button>
                   )}
                 </div>
               </DashboardCard>

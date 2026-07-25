@@ -54,6 +54,8 @@ export type PlayerDashboardState = {
   festival: FestivalLive | null;
   // The Olympiad cycle status (phase, badges, live event, victor), or null.
   olympiad: OlympiadStatus | null;
+  // City-wide scandal headline: a fresh Notorious Divorcer branding, or null.
+  scandal: { name: string } | null;
   // Manumission: { eligible } when a slave holds the freedman trait, else null.
   manumission: { eligible: boolean } | null;
 };
@@ -125,6 +127,7 @@ export function playerFromState(state: PlayerState): PlayerDashboardView {
     decaying: state.character.decaying ?? [],
     festival: state.festival ?? null,
     olympiad: state.olympiad ?? null,
+    scandal: state.scandal ?? null,
     manumission: state.manumission ?? null,
     profession,
     house,

@@ -3275,6 +3275,10 @@
 .dashboard-shell .olympic-kicker { color: #8fc0e6; letter-spacing: 0.02em; }
 .dashboard-shell .champion-card { border-color: rgba(216, 178, 90, 0.7); background: linear-gradient(180deg, rgba(66, 50, 18, 0.5), rgba(20, 14, 9, 0.6)); }
 .dashboard-shell .champion-card .olympic-kicker { color: #e7c66a; }
+/* The scandal headline: the olympic-card geometry in a shame tone from --dash-bad
+   (rgb 187,106,82), consistent with the estranged/warning family. */
+.dashboard-shell .scandal-card { border-color: rgba(187, 106, 82, 0.7); background: linear-gradient(180deg, rgba(60, 26, 18, 0.5), rgba(20, 12, 9, 0.6)); }
+.dashboard-shell .scandal-kicker { color: #d49a86; letter-spacing: 0.02em; }
 .dashboard-shell .olympic-victory { color: #e7c66a; font-weight: 600; }
 .dashboard-shell .ballot-chosen { border-color: rgba(158, 196, 135, 0.8); box-shadow: inset 0 0 0 1px rgba(158, 196, 135, 0.5); }
 .dashboard-shell .olympic-badge { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; font-size: 12.5px; border: 1px solid rgba(120, 170, 210, 0.45); background: rgba(28, 40, 56, 0.4); color: #bcd6ea; }

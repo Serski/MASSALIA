@@ -361,6 +361,20 @@ function OlympiadSection({ olympiad }: { olympiad: OlympiadStatus }) {
   );
 }
 
+// City-wide scandal headline: a fresh Notorious Divorcer branding, shown to every
+// player (the divorcer included) for one real day. The champion card's register in
+// a shame tone — the city does not whisper quietly.
+function ScandalHeadline({ scandal }: { scandal: { name: string } }) {
+  return (
+    <DashboardCard className="olympic-card scandal-card">
+      <div className="event-body">
+        <span className="dashboard-label scandal-kicker">🗣 The Agora</span>
+        <h3>The city whispers — {scandal.name} has sent a second wife home.</h3>
+      </div>
+    </DashboardCard>
+  );
+}
+
 // The stat bonus of a manumission class, rendered as chips.
 function bonusChips(bonus: ManumissionChoice["bonus"]) {
   const labels: [keyof ManumissionChoice["bonus"], string][] = [
@@ -479,6 +493,7 @@ export default function CourtPanel({ player, onRefresh }: PanelProps) {
         <div className="decision-column">
           {player.manumission?.eligible ? <FreedomPanel onRefresh={onRefresh} /> : null}
           {player.olympiad ? <OlympiadSection olympiad={player.olympiad} /> : null}
+          {player.scandal ? <ScandalHeadline scandal={player.scandal} /> : null}
           {olympicLive && !dismissed.has("olympic-live") ? <OlympicBanner key="olympic-live" live={olympicLive} onRefresh={onRefresh} onClose={() => close("olympic-live")} /> : null}
           {voting && !dismissed.has("olympic-ballot") ? <OlympicBallotPanel onRefresh={onRefresh} onClose={() => close("olympic-ballot")} /> : null}
           {festival && !dismissed.has("festival") ? <FestivalBanner key="festival" festival={festival} onRefresh={onRefresh} onClose={() => close("festival")} /> : null}
