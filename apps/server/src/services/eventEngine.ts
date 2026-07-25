@@ -6,6 +6,7 @@ import {
   applyCityStat,
   applyOpinion,
   applyStatGrowth,
+  assertUniqueEventIds,
   capStat,
   clampIdeology,
   clampPhilia,
@@ -66,7 +67,11 @@ export async function listEvents(): Promise<EventDefinition[]> {
       }
     }),
   );
-  return groups.flat();
+  const events = groups.flat();
+  // Event ids must be unique across ALL content files (draw/findChoice resolve by
+  // id alone) — fail loudly at load if two files collide.
+  assertUniqueEventIds(events);
+  return events;
 }
 
 export async function findChoice(eventId: string, choiceId: string): Promise<{ event: EventDefinition; choice: EventChoice }> {

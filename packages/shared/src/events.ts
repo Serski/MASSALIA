@@ -162,6 +162,16 @@ export function parseEventFile(data: unknown): EventDefinition[] {
   return arr.map((entry) => parseEventDefinition(entry));
 }
 
+// Fail loudly on a duplicate event id across the pooled content. Draw/findChoice
+// resolve an event by id alone, so a collision would silently shadow one event.
+export function assertUniqueEventIds(events: EventDefinition[]): void {
+  const seen = new Set<string>();
+  for (const event of events) {
+    if (seen.has(event.id)) throw new Error(`Duplicate event id across content files: ${event.id}`);
+    seen.add(event.id);
+  }
+}
+
 // --- Eligibility, draw, growth (pure) --------------------------------------
 
 export type EligibilityContext = {

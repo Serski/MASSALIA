@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   applyStatGrowth,
+  assertUniqueEventIds,
   choiceComposureEffectDelta,
   dailyArenasFor,
   describeChoiceCosts,
@@ -100,14 +101,32 @@ describe("parseEventFile — array vs single", () => {
   });
 });
 
-describe("family content pool (content/events/events-family.json)", () => {
-  it("loads and all 32 events survive strict validation", () => {
-    const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-    const raw = JSON.parse(readFileSync(resolve(root, "content/events/events-family.json"), "utf8"));
-    const events = parseEventFile(raw);
-    expect(events).toHaveLength(32);
+describe("family content pool (content/events)", () => {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+  const load = (name: string) => parseEventFile(JSON.parse(readFileSync(resolve(root, `content/events/${name}`), "utf8")));
+
+  it("wave 1 (32) and wave 2 (64) both load under strict validation, all family-arena", () => {
+    const w1 = load("events-family.json");
+    const w2 = load("events-family-2.json");
+    expect(w1).toHaveLength(32);
+    expect(w2).toHaveLength(64);
     // Every family event routes to the family arena (their requires are all family fields).
-    for (const e of events) expect(eventArena(e)).toBe("family");
+    for (const e of [...w1, ...w2]) expect(eventArena(e)).toBe("family");
+  });
+
+  it("the combined household pool is 96 events with unique ids", () => {
+    const combined = [...load("events-family.json"), ...load("events-family-2.json")];
+    expect(combined).toHaveLength(96);
+    expect(() => assertUniqueEventIds(combined)).not.toThrow();
+  });
+});
+
+describe("assertUniqueEventIds — duplicate-id guard", () => {
+  it("passes a unique set", () => {
+    expect(() => assertUniqueEventIds([event({ id: "a" }), event({ id: "b" })])).not.toThrow();
+  });
+  it("throws loudly on a doctored duplicate id (test-only fixture, never committed)", () => {
+    expect(() => assertUniqueEventIds([event({ id: "dup" }), event({ id: "other" }), event({ id: "dup" })])).toThrow(/Duplicate event id/);
   });
 });
 
@@ -292,6 +311,20 @@ describe("isEventEligible — family gating", () => {
     const e = event({ id: "e", requires: { class: "hetaira", household: true } });
     expect(isEventEligible(e, famCtx({ classId: "hetaira" }))).toBe(true);
     expect(isEventEligible(e, famCtx({ classId: "trader" }))).toBe(false); // household fails
+  });
+
+  // Wave-2 gating values that had no live event before — one per axis. spouseTraitIds
+  // carries BOTH the wife's personality and mechanical ids, so a single string match
+  // covers either axis (no code changed to add these values).
+  it("spouseTrait 'brave' (personality axis): eligible for a brave-wived character, else not", () => {
+    const e = event({ id: "e", requires: { spouseTrait: "brave" } });
+    expect(isEventEligible(e, famCtx({ married: true, spouseTraitIds: ["brave"] }))).toBe(true);
+    expect(isEventEligible(e, famCtx({ married: true, spouseTraitIds: ["pious"] }))).toBe(false);
+  });
+  it("spouseTrait 'learned' (mechanical axis): eligible only when the spouse carries it", () => {
+    const e = event({ id: "e", requires: { spouseTrait: "learned" } });
+    expect(isEventEligible(e, famCtx({ married: true, spouseTraitIds: ["learned"] }))).toBe(true);
+    expect(isEventEligible(e, famCtx({ married: true, spouseTraitIds: ["temperate"] }))).toBe(false);
   });
 });
 
