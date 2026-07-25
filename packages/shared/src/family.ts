@@ -327,16 +327,21 @@ export type SuccessionPlan = {
 // a regency for a minor child > a fresh start (slave) / forced adoption (citizens
 // & hetaira). Every branch yields a playable next character.
 export function successionPlan(character: { classId: string }, children: ChildInfo[], hasAdoptedHeir: boolean, cfg: FamilyConfig): SuccessionPlan {
-  const ofAge = children.filter((child) => child.age >= cfg.comingOfAge);
-  if (ofAge.length > 0) {
-    const eldest = ofAge.reduce((a, b) => (b.age > a.age ? b : a));
+  // Patrilineal: the blood ladder runs through SONS only. Daughters still come of
+  // age universally (that flip is elsewhere) but never inherit — an all-daughters
+  // house has no blood path and falls through to adoption/regency-of-a-son/forced.
+  const sons = children.filter((child) => child.sex === "male");
+  const ofAgeSons = sons.filter((child) => child.age >= cfg.comingOfAge);
+  if (ofAgeSons.length > 0) {
+    const eldest = ofAgeSons.reduce((a, b) => (b.age > a.age ? b : a));
     return { kind: "blood", heirChildId: eldest.id };
   }
   if (hasAdoptedHeir) return { kind: "adopted" };
-  if (children.length > 0) {
-    // All remaining children are minors — regent for the eldest (next of age).
-    const eldestMinor = children.reduce((a, b) => (b.age > a.age ? b : a));
-    return { kind: "regency", regentForChildId: eldestMinor.id };
+  if (sons.length > 0) {
+    // Only minor sons remain (any of-age son would have taken blood) — regent for
+    // the eldest, holding the seat until he comes of age.
+    const eldestMinorSon = sons.reduce((a, b) => (b.age > a.age ? b : a));
+    return { kind: "regency", regentForChildId: eldestMinorSon.id };
   }
   return character.classId === "slave" ? { kind: "fresh" } : { kind: "forced_adoption" };
 }

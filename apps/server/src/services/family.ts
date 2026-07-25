@@ -274,7 +274,8 @@ async function childrenSection(character: CharacterRow, now: Date) {
       portrait: childPortrait(child.sex, age, cfg),
       comingOfAge: cfg.comingOfAge,
       yearsToComingOfAge: Math.max(0, cfg.comingOfAge - age),
-      heirEligible: ofAge,
+      // Patrilineal: only of-age SONS are heir-eligible. Daughters still come of age.
+      heirEligible: ofAge && child.sex === "male",
       named: child.named,
     });
   }

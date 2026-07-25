@@ -604,6 +604,26 @@ suite("livingSpousePersonalityTraits (integration)", () => {
   });
 
   // -------------------------------------------------------------------------
+  // Patrilineal succession: heirEligible (via childrenSection/familyState) is
+  // sons-only. Daughters still come of age but are never heir-eligible.
+  // -------------------------------------------------------------------------
+  describe("patrilineal succession (heir eligibility)", () => {
+    const y = () => m.age.getAgeConfig().realMsPerGameYear;
+    const freshChar = async (id: string) => (await db.select().from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.id, id)).limit(1))[0]!;
+
+    it("an of-age daughter is NOT heir-eligible; an of-age son is", async () => {
+      const c = await createCharacter("PatriHouse");
+      // Both are of age (>= comingOfAge, 15).
+      await db.insert(m.dbPkg.children).values({ parentCharacterId: c.id, worldId, name: "Daughter", sex: "female", bornAt: new Date(now.getTime() - 20 * y()) });
+      await db.insert(m.dbPkg.children).values({ parentCharacterId: c.id, worldId, name: "Son", sex: "male", bornAt: new Date(now.getTime() - 16 * y()) });
+      const state = await m.family.familyState(await freshChar(c.id), now);
+      const byName = (name: string) => state.children.find((k: { name: string }) => k.name === name)!;
+      expect(byName("Daughter").heirEligible).toBe(false); // came of age, but never inherits
+      expect(byName("Son").heirEligible).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Pack C phase 2: the tragedy roll and its three resolutions, fired through
   // rollChildrenDue with an injected tragedyRng. The wife-death shape, child
   // death (Medea), the merc-style player-death flip (Clytemnestra success), and

@@ -216,14 +216,15 @@ export async function successionInfo(row: CharacterRow, now: Date = new Date()) 
       .map((c) => ({ id: c.id, name: c.name, sex: c.sex, age: c.age, houseSlug: c.houseSlug }));
   }
 
-  // Preview the named heir where one is determined.
+  // Preview the named heir where one is determined. Patrilineal: a blood heir and a
+  // regency ward are always sons (the plan filters to sons), so the relation is fixed.
   let heirPreview: { name: string; relation: string } | null = null;
   if (plan.kind === "blood") {
     const heir = kids.find((k) => k.id === plan.heirChildId);
-    if (heir) heirPreview = { name: heir.name, relation: heir.sex === "male" ? "your eldest son" : "your eldest daughter" };
+    if (heir) heirPreview = { name: heir.name, relation: "your eldest son" };
   } else if (plan.kind === "regency") {
     const ward = kids.find((k) => k.id === plan.regentForChildId);
-    if (ward) heirPreview = { name: ward.name, relation: `your young ${ward.sex === "male" ? "son" : "daughter"} — a regent will govern until ${ward.name} comes of age` };
+    if (ward) heirPreview = { name: ward.name, relation: `your young son — a regent will govern until ${ward.name} comes of age` };
   }
 
   return {

@@ -296,6 +296,28 @@ describe("successionPlan — the ladder", () => {
   });
 });
 
+describe("successionPlan — patrilineal (the blood ladder runs through sons)", () => {
+  const son = (id: string, age: number) => child(id, age); // child() defaults sex "male"
+  const daughter = (id: string, age: number): ChildInfo => ({ id, age, sex: "female", name: id });
+
+  it("all-daughters house (of-age) has no blood path -> forced_adoption", () => {
+    expect(successionPlan({ classId: "trader" }, [daughter("a", 20), daughter("b", 17)], false, cfg).kind).toBe("forced_adoption");
+  });
+  it("the eldest SON takes blood over an older of-age daughter", () => {
+    const plan = successionPlan({ classId: "trader" }, [daughter("d", 20), son("s", 16)], false, cfg);
+    expect(plan.kind).toBe("blood");
+    expect(plan.heirChildId).toBe("s"); // the son inherits though the daughter is older
+  });
+  it("all-daughter minors -> forced_adoption, never regency", () => {
+    expect(successionPlan({ classId: "trader" }, [daughter("a", 5), daughter("b", 9)], false, cfg).kind).toBe("forced_adoption");
+  });
+  it("a minor son beside an of-age daughter -> regency for the son", () => {
+    const plan = successionPlan({ classId: "trader" }, [daughter("d", 20), son("s", 9)], false, cfg);
+    expect(plan.kind).toBe("regency");
+    expect(plan.regentForChildId).toBe("s");
+  });
+});
+
 describe("inheritance — carryover, always-inherited, bloodline nudge", () => {
   const dead = { prestige: 80, devotion: 40, militia: 60, intelligence: 30 };
 
