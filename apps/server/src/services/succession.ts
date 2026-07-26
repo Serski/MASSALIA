@@ -1,6 +1,7 @@
 import { and, eq, gte, isNull, sql } from "drizzle-orm";
 import { children, createDb, drawFamilyCandidates, dynasties, effectLog, familyCandidates, playerCharacters, players, successions } from "@massalia/db";
 import {
+  adoptionWomenOnly,
   capStat,
   childAge,
   currentAge,
@@ -334,6 +335,14 @@ export async function adopt(row: CharacterRow, candidateId: string, now: Date = 
     .limit(1);
   const cand = candRows[0];
   if (!cand || cand.purpose !== "adoption" || cand.consumedAt !== null) return { ok: false, code: 409, error: "That ward is no longer available." };
+
+  // Patrilineal: the adoptee's sex must match the class rule — a citizen takes a son,
+  // the hetaira a daughter. Rejects a stale wrong-sex row instantly (before either the
+  // regent adopt-to-exit or the in-life rite), closing the pre-fix hole.
+  const wantSon = !adoptionWomenOnly(row.classId, getFamilyConfig());
+  if (wantSon ? cand.sex !== "male" : cand.sex !== "female") {
+    return { ok: false, code: 409, error: wantSon ? "The house takes a son." : "The house takes a daughter." };
+  }
 
   // Adopt-to-exit: during a regency, adopting an adult ends the regency NOW — the
   // adoptee becomes the played character; the minor ward stays as a future heir. This

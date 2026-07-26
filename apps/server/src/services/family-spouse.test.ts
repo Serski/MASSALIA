@@ -1186,4 +1186,73 @@ suite("livingSpousePersonalityTraits (integration)", () => {
       expect((await m.family.familyState(await freshChar(s.id), later)).adoptionNotice).toBeNull();
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Male adoption for citizen houses: the generator draws men for citizens
+  // (women for the hetaira), the view filter hides stale wrong-sex rows, and
+  // adopt() guards the class rule. Death-flow inherits male-only via the generator.
+  // -------------------------------------------------------------------------
+  describe("citizen adoption draws men (patrilineal)", () => {
+    const pcs = () => m.dbPkg.playerCharacters;
+    const fc = () => m.dbPkg.familyCandidates;
+    const freshChar = async (id: string) => (await db.select().from(pcs()).where(eq(pcs().id, id)).limit(1))[0]!;
+    const drawArgs = () => ({ familyCfg: m.family.getFamilyConfig(), ageCfg: m.age.getAgeConfig(), now });
+    const adoptionCands = async (id: string) => await db.select().from(fc()).where(and(eq(fc().forCharacterId, id), eq(fc().purpose, "adoption"), isNull(fc().consumedAt)));
+    const poolOf = (avatarId: string | null) => m.age.getAgeConfig().avatars.find((a) => a.id === avatarId)?.pool;
+    const seedFemaleWard = (id: string) =>
+      db.insert(fc()).values({ worldId, forCharacterId: id, purpose: "adoption", name: "StaleWard", sex: "female", houseSlug: "test-house", age: 30 }).returning();
+
+    it("a citizen's adoption draw is all male; the hetaira's stays all female", async () => {
+      const cit = await createCharacter("CitAdopt", "landowner");
+      await m.dbPkg.drawFamilyCandidates(cit.id, drawArgs());
+      const cc = await adoptionCands(cit.id);
+      expect(cc.length).toBeGreaterThan(0);
+      expect(cc.every((c) => c.sex === "male")).toBe(true);
+
+      const het = await createCharacter("HetAdopt", "hetaira");
+      await m.dbPkg.drawFamilyCandidates(het.id, drawArgs());
+      const hc = await adoptionCands(het.id);
+      expect(hc.length).toBeGreaterThan(0);
+      expect(hc.every((c) => c.sex === "female")).toBe(true);
+    });
+
+    it("male adoption candidates carry a player-pool portrait, never a wife-pool one", async () => {
+      const cit = await createCharacter("PortraitCit", "landowner");
+      await m.dbPkg.drawFamilyCandidates(cit.id, drawArgs());
+      for (const c of await adoptionCands(cit.id)) {
+        if (c.avatarId) expect(poolOf(c.avatarId)).not.toBe("wife"); // male → player pool
+      }
+    });
+
+    it("adopt() rejects a stale wrong-sex ward (class copy), accepts the right-sex one", async () => {
+      const cit = await createCharacter("GuardCit", "landowner");
+      await db.update(pcs()).set({ startAge: 40, createdAt: now, drachmae: 100 }).where(eq(pcs().id, cit.id));
+      const female = (await seedFemaleWard(cit.id))[0]!;
+      expect(await m.succession.adopt(await freshChar(cit.id), female.id, now)).toMatchObject({ ok: false, code: 409, error: "The house takes a son." });
+      // The yearly replace retires the stale row and draws men; a son is accepted.
+      await m.dbPkg.drawFamilyCandidates(cit.id, drawArgs());
+      const son = (await adoptionCands(cit.id)).find((c) => c.sex === "male")!;
+      expect((await m.succession.adopt(await freshChar(cit.id), son.id, now)).ok).toBe(true);
+    });
+
+    it("view filter: a seeded stale female is hidden from a citizen's familyState offers", async () => {
+      const cit = await createCharacter("ViewCit", "landowner");
+      await db.update(pcs()).set({ startAge: 40, createdAt: now }).where(eq(pcs().id, cit.id));
+      await m.dbPkg.drawFamilyCandidates(cit.id, drawArgs()); // 3 men
+      await seedFemaleWard(cit.id); // a stale woman alongside them
+      const offers = (await m.family.familyState(await freshChar(cit.id), now)).candidates.adoption;
+      expect(offers.length).toBe(3); // only the men
+      expect(offers.every((c: { sex: string }) => c.sex === "male")).toBe(true);
+      expect(offers.some((c: { name: string }) => c.name === "StaleWard")).toBe(false);
+    });
+
+    it("the death-flow forced-adoption list is male-only (a fresh belt draw)", async () => {
+      const cit = await createCharacter("DeathCit", "landowner");
+      await db.update(pcs()).set({ status: "deceased" }).where(eq(pcs().id, cit.id)); // childless → forced_adoption
+      const info = await m.succession.successionInfo(await freshChar(cit.id), now);
+      expect(info?.plan.kind).toBe("forced_adoption");
+      expect(info!.candidates.length).toBeGreaterThan(0);
+      expect(info!.candidates.every((c) => c.sex === "male")).toBe(true); // belt drew men via the generator
+    });
+  });
 });

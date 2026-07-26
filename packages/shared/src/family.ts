@@ -182,8 +182,9 @@ export function generateCandidates(
   const drafts: CandidateDraft[] = [];
 
   for (let i = 0; i < count; i++) {
-    // Marriage is always a wife; adoption is either sex unless women-only.
-    const sex: Sex = purpose === "marriage" || womenOnly ? "female" : rng() < 0.5 ? "female" : "male";
+    // Marriage is always a wife. Adoption: female for the women-only (hetaira) rule,
+    // else male — succession is patrilineal, so a citizen's adopted heir is a son.
+    const sex: Sex = purpose === "marriage" || womenOnly ? "female" : "male";
     const name = pick(rng, sex === "female" ? GREEK_FEMALE_NAMES : GREEK_MALE_NAMES);
     const house = pick(rng, houses);
     const traitId = rng() < cfg.candidates.traitChance ? pick(rng, cfg.candidates.traitPool) : null;

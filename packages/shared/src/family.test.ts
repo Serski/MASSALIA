@@ -73,15 +73,14 @@ describe("generateCandidates", () => {
     }
   });
 
-  it("adoption candidates use the adopted age range and may be either sex", () => {
+  it("adoption candidates use the adopted age range and are all male (patrilineal, non-women-only)", () => {
     const cands = generateCandidates(Math.random, "adoption", 200, cfg, HOUSES);
     const [lo, hi] = cfg.succession.adoptedStartAgeRange;
     for (const c of cands) {
       expect(c.age).toBeGreaterThanOrEqual(lo);
       expect(c.age).toBeLessThanOrEqual(hi);
     }
-    expect(cands.some((c) => c.sex === "male")).toBe(true);
-    expect(cands.some((c) => c.sex === "female")).toBe(true);
+    expect(cands.every((c) => c.sex === "male")).toBe(true); // a citizen's adopted heir is a son
   });
 
   it("women-only forces every adoption candidate female (the hetaira rule)", () => {

@@ -19,6 +19,7 @@ import {
   worlds,
 } from "@massalia/db";
 import {
+  adoptionWomenOnly,
   applyStatGrowth,
   assertPersonalityPoolResolves,
   canMarry,
@@ -338,8 +339,12 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
     const penalty = marriagePenalty(character.ideology, cand.ideology, cfg);
     marriageOffers.push({ ...view, penalty, party: character.party });
   }
+  // Patrilineal: a citizen's adopted heir is a son, the hetaira's a daughter. Filter
+  // wrong-sex offers so stale rows (drawn before the generator went male) never render
+  // — no migration needed; the yearly replace draw retires them.
+  const adoptionSex = adoptionWomenOnly(character.classId, cfg) ? "female" : "male";
   const adoptionOffers = [];
-  for (const cand of offers.filter((o) => o.purpose === "adoption")) {
+  for (const cand of offers.filter((o) => o.purpose === "adoption" && o.sex === adoptionSex)) {
     adoptionOffers.push(candidateView(cand, cfg, await houseName(cand.houseSlug)));
   }
 
