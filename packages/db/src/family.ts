@@ -52,12 +52,13 @@ export async function drawFamilyCandidates(characterId: string, args: DrawArgs):
   const houseRows = await db.select({ slug: houses.slug, ideology: houses.startIdeology }).from(houses);
   // Pool avatars by draw pool, not sex — wives and hetairai are both female, so a
   // marriage candidate (always female) must draw only from the "wife" pool, never a
-  // hetaira player-face. Male picks use the "player" pool. Fall back to "player" if
-  // the wanted pool is empty (keeps working before a pool's art lands).
-  const avatarsByPool = { player: [] as string[], wife: [] as string[], hetaira: [] as string[] };
+  // hetaira player-face. Male candidates are grown adults, so they draw the "adoption"
+  // pool (the male faces). Fall back to "player" if the wanted pool is empty (keeps
+  // working before a pool's art lands).
+  const avatarsByPool = { player: [] as string[], adoption: [] as string[], wife: [] as string[], hetaira: [] as string[] };
   for (const a of ageCfg.avatars) (avatarsByPool[a.pool] ?? avatarsByPool.player).push(a.id);
   const pickAvatarFor = (sex: "male" | "female") => {
-    const wanted = sex === "female" ? avatarsByPool.wife : avatarsByPool.player;
+    const wanted = sex === "female" ? avatarsByPool.wife : avatarsByPool.adoption;
     const pool = wanted.length ? wanted : avatarsByPool.player;
     return pool.length ? pool[Math.floor(Math.random() * pool.length)]! : null;
   };

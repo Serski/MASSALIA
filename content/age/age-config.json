@@ -28,7 +28,8 @@
         "young": "avatars/avatar-20-1-young.webp",
         "prime": "avatars/avatar-20-1-prime.webp",
         "old": "avatars/avatar-20-1-old.webp"
-      }
+      },
+      "pool": "adoption"
     },
     {
       "id": "avatar-20-2",
@@ -38,7 +39,8 @@
         "young": "avatars/avatar-20-2-young.webp",
         "prime": "avatars/avatar-20-2-prime.webp",
         "old": "avatars/avatar-20-2-old.webp"
-      }
+      },
+      "pool": "adoption"
     },
     {
       "id": "avatar-20-3",
@@ -48,7 +50,8 @@
         "young": "avatars/avatar-20-3-young.webp",
         "prime": "avatars/avatar-20-3-prime.webp",
         "old": "avatars/avatar-20-3-old.webp"
-      }
+      },
+      "pool": "adoption"
     },
     {
       "id": "avatar-20-4",
@@ -58,7 +61,8 @@
         "young": "avatars/avatar-20-4-young.webp",
         "prime": "avatars/avatar-20-4-prime.webp",
         "old": "avatars/avatar-20-4-old.webp"
-      }
+      },
+      "pool": "adoption"
     },
     {
       "id": "avatar-20-5",
@@ -68,7 +72,8 @@
         "young": "avatars/avatar-20-5-young.webp",
         "prime": "avatars/avatar-20-5-prime.webp",
         "old": "avatars/avatar-20-5-old.webp"
-      }
+      },
+      "pool": "adoption"
     },
     {
       "id": "avatar-30-1",
@@ -78,7 +83,8 @@
         "young": "avatars/avatar-30-1-young.webp",
         "prime": "avatars/avatar-30-1-prime.webp",
         "old": "avatars/avatar-30-1-old.webp"
-      }
+      },
+      "pool": "adoption"
     },
     {
       "id": "avatar-30-2",
@@ -88,7 +94,8 @@
         "young": "avatars/avatar-30-2-young.webp",
         "prime": "avatars/avatar-30-2-prime.webp",
         "old": "avatars/avatar-30-2-old.webp"
-      }
+      },
+      "pool": "adoption"
     },
     {
       "id": "avatar-30-3",
@@ -98,7 +105,8 @@
         "young": "avatars/avatar-30-3-young.webp",
         "prime": "avatars/avatar-30-3-prime.webp",
         "old": "avatars/avatar-30-3-old.webp"
-      }
+      },
+      "pool": "adoption"
     },
     {
       "id": "avatar-30-4",
@@ -108,7 +116,8 @@
         "young": "avatars/avatar-30-4-young.webp",
         "prime": "avatars/avatar-30-4-prime.webp",
         "old": "avatars/avatar-30-4-old.webp"
-      }
+      },
+      "pool": "adoption"
     },
     {
       "id": "avatar-30-5",
@@ -118,7 +127,8 @@
         "young": "avatars/avatar-30-5-young.webp",
         "prime": "avatars/avatar-30-5-prime.webp",
         "old": "avatars/avatar-30-5-old.webp"
-      }
+      },
+      "pool": "adoption"
     },
     {
       "id": "avatar-20-6",
@@ -128,7 +138,8 @@
         "young": "avatars/avatar-20-6-young.webp",
         "prime": "avatars/avatar-20-6-prime.webp",
         "old": "avatars/avatar-20-6-old.webp"
-      }
+      },
+      "pool": "adoption"
     },
     {
       "id": "avatar-20-7",
@@ -138,7 +149,8 @@
         "young": "avatars/avatar-20-7-young.webp",
         "prime": "avatars/avatar-20-7-prime.webp",
         "old": "avatars/avatar-20-7-old.webp"
-      }
+      },
+      "pool": "adoption"
     },
     {
       "id": "avatar-20-8",
@@ -148,7 +160,8 @@
         "young": "avatars/avatar-20-8-young.webp",
         "prime": "avatars/avatar-20-8-prime.webp",
         "old": "avatars/avatar-20-8-old.webp"
-      }
+      },
+      "pool": "adoption"
     },
     {
       "id": "avatar-30-6",
@@ -158,7 +171,8 @@
         "young": "avatars/avatar-30-6-young.webp",
         "prime": "avatars/avatar-30-6-prime.webp",
         "old": "avatars/avatar-30-6-old.webp"
-      }
+      },
+      "pool": "adoption"
     },
     {
       "id": "avatar-30-7",
@@ -168,7 +182,8 @@
         "young": "avatars/avatar-30-7-young.webp",
         "prime": "avatars/avatar-30-7-prime.webp",
         "old": "avatars/avatar-30-7-old.webp"
-      }
+      },
+      "pool": "adoption"
     },
     {
       "id": "wife-01",

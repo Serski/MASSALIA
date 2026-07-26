@@ -39,10 +39,12 @@ export const ageConfigSchema = z
         // with a "male" default so the pre-existing male entries (no field) validate.
         sex: z.enum(["male", "female"]).default("male"),
         // Which draw pool this face belongs to — sex alone is no longer specific
-        // enough (wives and hetairai are both female). player = male signup faces,
-        // wife = spouse portraits, hetaira = female player faces. Defaults to
-        // "player" so the pre-existing male entries (no field) stay signup faces.
-        pool: z.enum(["player", "wife", "hetaira"]).default("player"),
+        // enough (wives and hetairai are both female). player = male signup faces
+        // (reserved for class creation art, currently none), adoption = generated
+        // adult men (candidates, heirs, regents), wife = spouse portraits, hetaira
+        // = female player faces. Defaults to "player" so a future pool-less class
+        // face validates and lands in the signup pool with no schema change.
+        pool: z.enum(["player", "adoption", "wife", "hetaira"]).default("player"),
         startAge: z.number(),
         label: z.string(),
         portraits: z.record(z.string(), z.string()),
@@ -143,6 +145,21 @@ export function startAgeForAvatar(avatarId: string, cfg: AgeConfig): number | nu
 
 export function startBonusForAge(age: number, cfg: AgeConfig): StatMap {
   return cfg.ageOptions.find((option) => option.age === age)?.startBonus ?? {};
+}
+
+// Signup face options for a class at a start-age tier. A hetaira draws her own
+// female pool; every other class draws the male "player" pool (reserved for
+// per-class creation art). The male faces now live in the "adoption" pool, so
+// the player pool is empty until that art lands.
+export function creationFacesForAge(cfg: AgeConfig, age: number, classSlug: string): AgeAvatar[] {
+  const facePool = classSlug === "hetaira" ? "hetaira" : "player";
+  const primary = cfg.avatars.filter((avatar) => avatar.startAge === age && (avatar.pool ?? "player") === facePool);
+  if (primary.length > 0 || facePool !== "player") return primary;
+  // TEMP fallback until class creation art lands — remove with it: the player pool
+  // is empty (its male faces became adoption faces), so borrow the adoption pool to
+  // keep signup from rendering empty. When pool-less class art arrives, `primary` is
+  // non-empty and this line never runs.
+  return cfg.avatars.filter((avatar) => avatar.startAge === age && avatar.pool === "adoption");
 }
 
 // Roll a death age uniformly in [min, max] (inclusive). rng injectable for tests.

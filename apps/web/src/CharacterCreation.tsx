@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { creationFacesForAge } from "@massalia/shared";
 import { api, apiErrorMessage, contentUrl, type AgeConfig } from "./api.js";
 import { assetPath, nobleHouses, professions, type Alignment, type House, type Profession } from "./data/league.js";
 import "./characterCreation.css";
@@ -342,11 +343,11 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
 
   // The faces for the chosen age, scoped to the class's face pool: hetaira draw
   // from the female hetaira pool, every other class from the male player pool.
-  // Wife portraits (pool "wife") are never a signup face.
+  // Wife portraits (pool "wife") are never a signup face. The player pool is empty
+  // today, so creationFacesForAge falls back to the adoption pool (TEMP — see it).
   const avatarsForAge = useMemo(() => {
     if (!ageConfig || selectedAge === null) return [];
-    const facePool = selectedClass?.slug === "hetaira" ? "hetaira" : "player";
-    return ageConfig.avatars.filter((avatar) => avatar.startAge === selectedAge && (avatar.pool ?? "player") === facePool);
+    return creationFacesForAge(ageConfig, selectedAge, selectedClass?.slug ?? "");
   }, [ageConfig, selectedAge, selectedClass]);
   const selectedAvatar = useMemo(() => avatarsForAge.find((avatar) => avatar.id === selectedFace), [avatarsForAge, selectedFace]);
 
