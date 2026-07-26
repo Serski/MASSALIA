@@ -123,9 +123,9 @@ describe("avatar -> startAge + start bonus", () => {
     expect(startBonusForAge(30, cfg)).toEqual({ prestige: 3, intelligence: 2 });
     expect(startAgeForAvatar("nope", cfg)).toBeNull();
   });
-  it("splits into player (10), wife (34), and hetaira (10) pools", () => {
-    expect(cfg.avatars.filter((a) => a.pool === "player" && a.startAge === 20)).toHaveLength(5);
-    expect(cfg.avatars.filter((a) => a.pool === "player" && a.startAge === 30)).toHaveLength(5);
+  it("splits into player (15), wife (34), and hetaira (10) pools", () => {
+    expect(cfg.avatars.filter((a) => a.pool === "player" && a.startAge === 20)).toHaveLength(8);
+    expect(cfg.avatars.filter((a) => a.pool === "player" && a.startAge === 30)).toHaveLength(7);
     expect(cfg.avatars.filter((a) => a.pool === "wife")).toHaveLength(34);
     expect(cfg.avatars.filter((a) => a.pool === "hetaira")).toHaveLength(10);
     // Every wife/hetaira face is female; every player face is male.
@@ -135,9 +135,9 @@ describe("avatar -> startAge + start bonus", () => {
   it("signup face filter (startAge + class pool) scopes faces to the right pool", () => {
     // Mirrors CharacterCreation.tsx avatarsForAge — the class's pool picks the faces.
     const forPool = (pool: string, age: number) => cfg.avatars.filter((a) => a.startAge === age && (a.pool ?? "player") === pool);
-    // A male class @20 -> the 5 male player faces, no wives, no hetairai.
+    // A male class @20 -> the 8 male player faces, no wives, no hetairai.
     const playerFaces = forPool("player", 20);
-    expect(playerFaces).toHaveLength(5);
+    expect(playerFaces).toHaveLength(8);
     expect(playerFaces.some((a) => a.id.startsWith("wife-") || a.id.startsWith("hetaira-"))).toBe(false);
     // Hetaira class @20 -> exactly the 5 hetaira-20-* faces.
     const hetairaFaces = forPool("hetaira", 20);
@@ -153,9 +153,9 @@ describe("stageFor / portraitFor", () => {
     expect(stageFor(50, cfg)).toBe("old");
   });
   it("returns the stage portrait path for the avatar", () => {
-    expect(portraitFor("avatar-20-1", 20, cfg)).toBe("avatars/avatar-20-1-young.png");
-    expect(portraitFor("avatar-20-1", 35, cfg)).toBe("avatars/avatar-20-1-prime.png");
-    expect(portraitFor("avatar-20-1", 60, cfg)).toBe("avatars/avatar-20-1-old.png");
+    expect(portraitFor("avatar-20-1", 20, cfg)).toBe("avatars/avatar-20-1-young.webp");
+    expect(portraitFor("avatar-20-1", 35, cfg)).toBe("avatars/avatar-20-1-prime.webp");
+    expect(portraitFor("avatar-20-1", 60, cfg)).toBe("avatars/avatar-20-1-old.webp");
     expect(portraitFor("missing", 30, cfg)).toBeNull();
     // A wife ages through the same stage machinery to her real .webp art.
     expect(portraitFor("wife-01", 20, cfg)).toBe("avatars/wife-01-young.webp");
@@ -195,11 +195,11 @@ describe("death age + isDeceased (helper only)", () => {
 });
 
 describe("config sanity", () => {
-  it("config loaded, 54 avatars (10 player + 34 wife + 10 hetaira)", () => {
-    expect(cfg.avatars).toHaveLength(54);
-    // Portrait slots: player 10×3 + wife 34×3 + hetaira-20 5×3 + hetaira-30 5×2 = 157.
+  it("config loaded, 59 avatars (15 player + 34 wife + 10 hetaira)", () => {
+    expect(cfg.avatars).toHaveLength(59);
+    // Portrait slots: player 15×3 + wife 34×3 + hetaira-20 5×3 + hetaira-30 5×2 = 172.
     const refs = cfg.avatars.flatMap((a) => Object.values(a.portraits));
-    expect(refs).toHaveLength(157);
+    expect(refs).toHaveLength(172);
     expect(avatarById("avatar-30-1", cfg)?.startAge).toBe(30);
     expect(avatarById("wife-01", cfg)?.pool).toBe("wife");
     expect(avatarById("avatar-20-1", cfg)?.pool).toBe("player");

@@ -25,9 +25,9 @@
       "startAge": 20,
       "label": "Young (20)",
       "portraits": {
-        "young": "avatars/avatar-20-1-young.png",
-        "prime": "avatars/avatar-20-1-prime.png",
-        "old": "avatars/avatar-20-1-old.png"
+        "young": "avatars/avatar-20-1-young.webp",
+        "prime": "avatars/avatar-20-1-prime.webp",
+        "old": "avatars/avatar-20-1-old.webp"
       }
     },
     {
@@ -35,9 +35,9 @@
       "startAge": 20,
       "label": "Young (20)",
       "portraits": {
-        "young": "avatars/avatar-20-2-young.png",
-        "prime": "avatars/avatar-20-2-prime.png",
-        "old": "avatars/avatar-20-2-old.png"
+        "young": "avatars/avatar-20-2-young.webp",
+        "prime": "avatars/avatar-20-2-prime.webp",
+        "old": "avatars/avatar-20-2-old.webp"
       }
     },
     {
@@ -45,9 +45,9 @@
       "startAge": 20,
       "label": "Young (20)",
       "portraits": {
-        "young": "avatars/avatar-20-3-young.png",
-        "prime": "avatars/avatar-20-3-prime.png",
-        "old": "avatars/avatar-20-3-old.png"
+        "young": "avatars/avatar-20-3-young.webp",
+        "prime": "avatars/avatar-20-3-prime.webp",
+        "old": "avatars/avatar-20-3-old.webp"
       }
     },
     {
@@ -55,9 +55,9 @@
       "startAge": 20,
       "label": "Young (20)",
       "portraits": {
-        "young": "avatars/avatar-20-4-young.png",
-        "prime": "avatars/avatar-20-4-prime.png",
-        "old": "avatars/avatar-20-4-old.png"
+        "young": "avatars/avatar-20-4-young.webp",
+        "prime": "avatars/avatar-20-4-prime.webp",
+        "old": "avatars/avatar-20-4-old.webp"
       }
     },
     {
@@ -65,9 +65,9 @@
       "startAge": 20,
       "label": "Young (20)",
       "portraits": {
-        "young": "avatars/avatar-20-5-young.png",
-        "prime": "avatars/avatar-20-5-prime.png",
-        "old": "avatars/avatar-20-5-old.png"
+        "young": "avatars/avatar-20-5-young.webp",
+        "prime": "avatars/avatar-20-5-prime.webp",
+        "old": "avatars/avatar-20-5-old.webp"
       }
     },
     {
@@ -75,9 +75,9 @@
       "startAge": 30,
       "label": "Established (30)",
       "portraits": {
-        "young": "avatars/avatar-30-1-young.png",
-        "prime": "avatars/avatar-30-1-prime.png",
-        "old": "avatars/avatar-30-1-old.png"
+        "young": "avatars/avatar-30-1-young.webp",
+        "prime": "avatars/avatar-30-1-prime.webp",
+        "old": "avatars/avatar-30-1-old.webp"
       }
     },
     {
@@ -85,9 +85,9 @@
       "startAge": 30,
       "label": "Established (30)",
       "portraits": {
-        "young": "avatars/avatar-30-2-young.png",
-        "prime": "avatars/avatar-30-2-prime.png",
-        "old": "avatars/avatar-30-2-old.png"
+        "young": "avatars/avatar-30-2-young.webp",
+        "prime": "avatars/avatar-30-2-prime.webp",
+        "old": "avatars/avatar-30-2-old.webp"
       }
     },
     {
@@ -95,9 +95,9 @@
       "startAge": 30,
       "label": "Established (30)",
       "portraits": {
-        "young": "avatars/avatar-30-3-young.png",
-        "prime": "avatars/avatar-30-3-prime.png",
-        "old": "avatars/avatar-30-3-old.png"
+        "young": "avatars/avatar-30-3-young.webp",
+        "prime": "avatars/avatar-30-3-prime.webp",
+        "old": "avatars/avatar-30-3-old.webp"
       }
     },
     {
@@ -105,9 +105,9 @@
       "startAge": 30,
       "label": "Established (30)",
       "portraits": {
-        "young": "avatars/avatar-30-4-young.png",
-        "prime": "avatars/avatar-30-4-prime.png",
-        "old": "avatars/avatar-30-4-old.png"
+        "young": "avatars/avatar-30-4-young.webp",
+        "prime": "avatars/avatar-30-4-prime.webp",
+        "old": "avatars/avatar-30-4-old.webp"
       }
     },
     {
@@ -115,9 +115,59 @@
       "startAge": 30,
       "label": "Established (30)",
       "portraits": {
-        "young": "avatars/avatar-30-5-young.png",
-        "prime": "avatars/avatar-30-5-prime.png",
-        "old": "avatars/avatar-30-5-old.png"
+        "young": "avatars/avatar-30-5-young.webp",
+        "prime": "avatars/avatar-30-5-prime.webp",
+        "old": "avatars/avatar-30-5-old.webp"
+      }
+    },
+    {
+      "id": "avatar-20-6",
+      "startAge": 20,
+      "label": "Young (20)",
+      "portraits": {
+        "young": "avatars/avatar-20-6-young.webp",
+        "prime": "avatars/avatar-20-6-prime.webp",
+        "old": "avatars/avatar-20-6-old.webp"
+      }
+    },
+    {
+      "id": "avatar-20-7",
+      "startAge": 20,
+      "label": "Young (20)",
+      "portraits": {
+        "young": "avatars/avatar-20-7-young.webp",
+        "prime": "avatars/avatar-20-7-prime.webp",
+        "old": "avatars/avatar-20-7-old.webp"
+      }
+    },
+    {
+      "id": "avatar-20-8",
+      "startAge": 20,
+      "label": "Young (20)",
+      "portraits": {
+        "young": "avatars/avatar-20-8-young.webp",
+        "prime": "avatars/avatar-20-8-prime.webp",
+        "old": "avatars/avatar-20-8-old.webp"
+      }
+    },
+    {
+      "id": "avatar-30-6",
+      "startAge": 30,
+      "label": "Established (30)",
+      "portraits": {
+        "young": "avatars/avatar-30-6-young.webp",
+        "prime": "avatars/avatar-30-6-prime.webp",
+        "old": "avatars/avatar-30-6-old.webp"
+      }
+    },
+    {
+      "id": "avatar-30-7",
+      "startAge": 30,
+      "label": "Established (30)",
+      "portraits": {
+        "young": "avatars/avatar-30-7-young.webp",
+        "prime": "avatars/avatar-30-7-prime.webp",
+        "old": "avatars/avatar-30-7-old.webp"
       }
     },
     {
