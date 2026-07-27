@@ -2818,6 +2818,16 @@
   border-radius: 20px;
 }
 
+/* Family list cards (children, prospects, wards) sit 2–3 across on wide viewports
+   instead of stretching full width. Single column below the 980px breakpoint. The
+   spouse/heir cards, notices, outlook line and labels stay full-width (they are not
+   wrapped in this grid). */
+.dashboard-shell .family-card-grid{
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 16px;
+}
+
 .dashboard-shell .person-role{
   margin: 2px 0 5px;
   color: var(--dash-stone);
@@ -3265,6 +3275,8 @@
 @media (max-width: 980px) {
   .dashboard-shell .spouse-actions > .event-choice-button,
   .dashboard-shell .spouse-actions > .dashboard-ghost-button { flex-basis: 100%; width: 100%; }
+  /* Family card grids collapse to a single column at the panel's breakpoint. */
+  .dashboard-shell .family-card-grid { grid-template-columns: 1fr; }
 }
 
 /* Family pack, Prompt C: succession screen, regent badge, dynasty header. */

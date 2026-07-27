@@ -268,9 +268,9 @@ function AdoptionCard({ notice }: { notice: { name: string; house: string } }) {
 }
 
 // The designated-heir card: the exact candidate-card presentation he was adopted
-// from (portrait, name/house, at-adoption age, trait/personality chips, stat chips),
-// with the Adopt button replaced by a standing ADOPTED HEIR label. No actions yet —
-// the preference toggle joins it in Phase 2.
+// from (portrait, name/house, at-adoption age, trait/personality chips, stat chips).
+// The designation is an inline tag beside his name — the "· your wife" convention —
+// not a full-width bar. No actions here; the preference toggle sits below in Phase 2.
 function HeirCard({ heir }: { heir: FamilyCandidate }) {
   return (
     <DashboardCard className="prospect-card">
@@ -279,12 +279,11 @@ function HeirCard({ heir }: { heir: FamilyCandidate }) {
           <span className="person-face prospect-face">
             <PersonFace portrait={heir.portrait} />
           </span>
-          <span className="dashboard-label">{heir.name} of House {heir.houseName}</span>
+          <span className="dashboard-label">{heir.name} of House {heir.houseName}<span className="person-suffix"> · adopted heir</span></span>
         </div>
         <p>Age {heir.age} at adoption</p>
         <TraitChips trait={heir.trait} personality={heir.personality} />
         <CandidateStatChips stats={heir.stats} />
-        <span className="heir-tag">ADOPTED HEIR</span>
       </div>
     </DashboardCard>
   );
@@ -649,9 +648,11 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
           {state.children.length > 0 ? (
             <>
               <div className="panel-label">Children · {state.children.length}</div>
-              {state.children.map((child) => (
-                <ChildCard key={child.id} child={child} />
-              ))}
+              <div className="family-card-grid">
+                {state.children.map((child) => (
+                  <ChildCard key={child.id} child={child} />
+                ))}
+              </div>
             </>
           ) : null}
 
@@ -670,7 +671,8 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
                 state.candidates.adoption.length === 0 ? (
                   <p className="dashboard-todo">No wards are on offer this season.</p>
                 ) : (
-                  state.candidates.adoption.map((candidate) => (
+                  <div className="family-card-grid">
+                  {state.candidates.adoption.map((candidate) => (
                     <DashboardCard className="prospect-card" key={candidate.id}>
                       <div className="event-body">
                         <div className="prospect-head">
@@ -696,7 +698,8 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
                         )}
                       </div>
                     </DashboardCard>
-                  ))
+                  ))}
+                  </div>
                 )
               ) : null}
             </>
@@ -708,7 +711,8 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
               {state.candidates.marriage.length === 0 ? (
                 <p className="dashboard-todo">No matches are on offer this season.</p>
               ) : (
-                state.candidates.marriage.map((candidate) => {
+                <div className="family-card-grid">
+                {state.candidates.marriage.map((candidate) => {
                   const penalty = penaltyText(candidate);
                   return (
                     <DashboardCard className="prospect-card" key={candidate.id}>
@@ -737,7 +741,8 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
                       </div>
                     </DashboardCard>
                   );
-                })
+                })}
+                </div>
               )}
             </>
           ) : null}
