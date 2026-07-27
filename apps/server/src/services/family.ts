@@ -474,9 +474,23 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
     : undefined;
 
   // The designated-heir card: the SAME presentation as the candidate card he was
-  // adopted from — portrait, "<Name> of House <X>", his stored (at-adoption) age,
-  // stat chips, and any trait/personality chip he carried. Null until adoption.
-  const adoptedHeir = adoptedCand ? candidateView(adoptedCand, cfg, await houseName(adoptedCand.houseSlug)) : null;
+  // adopted from — portrait, "<Name> of House <X>", stat chips, and any trait chip.
+  // Unlike a pending candidate he AGES: his current age is his stored age plus the
+  // game-years since the rite (the consumedAt anchor), via the shared lazy-age math
+  // spouseCurrentAge uses — not re-derived. The portrait re-resolves at that age so
+  // he moves young→prime→old over the decades instead of freezing at adoption. Null
+  // until adoption.
+  let adoptedHeir = null;
+  if (adoptedCand) {
+    const heirAge = adoptedCand.consumedAt
+      ? spouseCurrentAge(adoptedCand.age, adoptedCand.consumedAt.getTime(), now.getTime(), getAgeConfig().realMsPerGameYear)
+      : adoptedCand.age;
+    adoptedHeir = {
+      ...candidateView(adoptedCand, cfg, await houseName(adoptedCand.houseSlug)),
+      age: heirAge,
+      portrait: portraitUrl(portraitFor(adoptedCand.avatarId ?? "", heirAge, getAgeConfig())),
+    };
+  }
 
   // Outlook via the shared plan from data already in hand (children ages+sex,
   // hasAdopted, class) — the plan kind costs no query; only the adopted heir's name

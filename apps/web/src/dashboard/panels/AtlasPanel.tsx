@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { api, ApiError, type StandingsResponse, type StandingsBoard, type StandingRow, type CityView, type CityGroup, type FactionView, type FactionGroup, type FactionCharacterView, type FactionRefView } from "../../api.js";
 import { MapCanvas } from "../../map/MapCanvas.js";
-import { AssetIcon, DashboardCard, HouseCrest, titleCase } from "../shared.js";
+import { AssetIcon, DashboardCard, HouseCrest, StatPips, titleCase } from "../shared.js";
 import { BottomSheet } from "../sheets.js";
 
 // Standings board → stat icon. "wealth" has no icon asset (a coin glyph stands in).
@@ -395,24 +395,6 @@ function PanelSectionLabel({ children }: { children: ReactNode }) {
   );
 }
 
-// Stat icon files for the leadership pills (mirrors STAT_ICON without widening its
-// StandingsBoard key type — these four are the only stats a CharacterBlock shows).
-const STAT_PIP_ICON: Record<"prestige" | "devotion" | "militia" | "intelligence", string> = {
-  prestige: "PRESTIGE.webp", devotion: "DEVOTION.webp", militia: "Militia.webp", intelligence: "Intrigue.webp",
-};
-
-// One leadership stat: icon + value, icon-only with the name in title/alt for a11y.
-function StatPip({ stat, value }: { stat: "prestige" | "devotion" | "militia" | "intelligence"; value: number }) {
-  const label = stat.charAt(0).toUpperCase() + stat.slice(1);
-  const icon = STAT_PIP_ICON[stat];
-  return (
-    <span title={label} style={{ display: "inline-flex", gap: 5, alignItems: "center", padding: "2px 8px", borderRadius: 6, background: "var(--dash-panel-soft)", fontSize: "0.78em" }}>
-      {icon ? <AssetIcon file={icon} alt={label} className="asset-icon stat-pip-icon" /> : <span style={{ color: "var(--dash-stone-dim)" }}>{label}</span>}
-      <span style={{ color: "var(--dash-parchment)", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{value}</span>
-    </span>
-  );
-}
-
 // A ruler / heir / war-chief: framed portrait + name + role-relative descriptor +
 // live age + 4 stats. The portrait file is <factionId>_<roleKey>.webp under
 // assets/portraits/diplomacy; AssetIcon hides gracefully when one is missing
@@ -447,12 +429,7 @@ function CharacterBlock({
             {role} · age {char.age}
           </span>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
-          <StatPip stat="prestige" value={char.prestige} />
-          <StatPip stat="devotion" value={char.devotion} />
-          <StatPip stat="militia" value={char.militia} />
-          <StatPip stat="intelligence" value={char.intelligence} />
-        </div>
+        <StatPips stats={char} />
       </div>
     </div>
   );

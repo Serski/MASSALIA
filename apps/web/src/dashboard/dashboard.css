@@ -2828,6 +2828,15 @@
   gap: 16px;
 }
 
+/* Your household: the spouse and adopted-heir cards sit side by side on wide
+   viewports; a lone card (spouse or heir alone) spans full width via auto-fit.
+   Single column below the 980px breakpoint. */
+.dashboard-shell .household-row{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(560px, 1fr));
+  gap: 16px;
+}
+
 .dashboard-shell .person-role{
   margin: 2px 0 5px;
   color: var(--dash-stone);
@@ -3277,6 +3286,7 @@
   .dashboard-shell .spouse-actions > .dashboard-ghost-button { flex-basis: 100%; width: 100%; }
   /* Family card grids collapse to a single column at the panel's breakpoint. */
   .dashboard-shell .family-card-grid { grid-template-columns: 1fr; }
+  .dashboard-shell .household-row { grid-template-columns: 1fr; }
 }
 
 /* Family pack, Prompt C: succession screen, regent badge, dynasty header. */

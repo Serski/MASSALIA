@@ -1154,6 +1154,34 @@ suite("livingSpousePersonalityTraits (integration)", () => {
       expect(heir!.portrait === null || typeof heir!.portrait === "string").toBe(true);
     });
 
+    it("the heir ages: derived age = stored + game-years since the rite, portrait stage flips at a boundary", async () => {
+      const s = await setup("AgingHeir", { age: 40, drachmae: 100 });
+      // Pin the ward to a known avatar and an age one year below the young→prime edge.
+      await db.update(fc()).set({ age: 29, avatarId: "avatar-20-1" }).where(eq(fc().id, s.candId));
+      await m.succession.adopt(await freshChar(s.id), s.candId, now);
+
+      // At the rite (consumedAt = now): stored age 29, young-stage portrait.
+      const atRite = (await m.family.familyState(await freshChar(s.id), now)).adoptedHeir!;
+      expect(atRite.age).toBe(29);
+      expect(atRite.portrait).toContain("avatar-20-1-young");
+
+      // One game year on: age 30, and the portrait has advanced to the prime stage.
+      const yearLater = new Date(now.getTime() + y());
+      const later = (await m.family.familyState(await freshChar(s.id), yearLater)).adoptedHeir!;
+      expect(later.age).toBe(30);
+      expect(later.portrait).toContain("avatar-20-1-prime");
+    });
+
+    it("an UNadopted adoption candidate keeps its stored age + stored-age portrait (no consumedAt anchor)", async () => {
+      const s = await setup("StoredCand", { age: 40, drachmae: 100 });
+      await db.update(fc()).set({ age: 29, avatarId: "avatar-20-1" }).where(eq(fc().id, s.candId));
+      // Read a game year later WITHOUT adopting — the offer must not age.
+      const st = await m.family.familyState(await freshChar(s.id), new Date(now.getTime() + y()));
+      const offer = st.candidates.adoption.find((c) => c.id === s.candId)!;
+      expect(offer.age).toBe(29); // stored age, unchanged
+      expect(offer.portrait).toContain("avatar-20-1-young"); // stored-age stage
+    });
+
     it("showAdoption matrix: childless 35 → true; hasAdopted → false; under-30 → false; blood → false", async () => {
       const show = await setup("ShowA", { age: 35, drachmae: 100 });
       expect((await m.family.familyState(await freshChar(show.id), now)).showAdoption).toBe(true);

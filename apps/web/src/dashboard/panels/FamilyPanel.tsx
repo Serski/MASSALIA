@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, contentUrl, type ChronicleEntry, type FamilyState, type FamilyCandidate, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type DivorceNotice, type TragedyNotice } from "../../api.js";
 import { assetPath, type House } from "../../data/league.js";
-import { DashboardCard, type FourStats, PanelBanner, type PanelProps, PersonFace, PersonRow, festivalName, titleCase } from "../shared.js";
+import { DashboardCard, type FourStats, PanelBanner, type PanelProps, PersonFace, PersonRow, StatPips, festivalName, titleCase } from "../shared.js";
 
 function ordinalGeneration(n: number): string {
   const v = n % 100;
@@ -16,21 +16,10 @@ const SUCCESSION_KIND_LABEL: Record<string, string> = {
   fresh: "fresh start",
 };
 
-const FAMILY_STAT_DEFS: { key: keyof FourStats; abbr: string }[] = [
-  { key: "prestige", abbr: "PRE" },
-  { key: "devotion", abbr: "DEV" },
-  { key: "militia", abbr: "MIL" },
-  { key: "intelligence", abbr: "INT" },
-];
-
+// The heir + adoption-candidate stat row, restyled to the Atlas ruler icon pips so
+// they read consistently with the foreign NPCs. Shared StatPips is the source.
 function CandidateStatChips({ stats }: { stats: FourStats }) {
-  return (
-    <span className="choice-costs">
-      {FAMILY_STAT_DEFS.map((s) => (
-        <span key={s.key} className="cost-chip cost-neutral">{s.abbr} {stats[s.key]}</span>
-      ))}
-    </span>
-  );
+  return <StatPips stats={stats} />;
 }
 
 // The philia bond bar (family pack), reusing the child growth-bar treatment — a
@@ -267,10 +256,10 @@ function AdoptionCard({ notice }: { notice: { name: string; house: string } }) {
   );
 }
 
-// The designated-heir card: the exact candidate-card presentation he was adopted
-// from (portrait, name/house, at-adoption age, trait/personality chips, stat chips).
-// The designation is an inline tag beside his name — the "· your wife" convention —
-// not a full-width bar. No actions here; the preference toggle sits below in Phase 2.
+// The designated-heir card: the candidate-card presentation (portrait, name/house,
+// live current age, trait/personality chips, icon stat pips). He ages like everyone
+// else — the server derives his age + portrait stage from consumedAt. The designation
+// is an inline "· adopted heir" tag beside his name — the "· your wife" convention.
 function HeirCard({ heir }: { heir: FamilyCandidate }) {
   return (
     <DashboardCard className="prospect-card">
@@ -281,7 +270,7 @@ function HeirCard({ heir }: { heir: FamilyCandidate }) {
           </span>
           <span className="dashboard-label">{heir.name} of House {heir.houseName}<span className="person-suffix"> · adopted heir</span></span>
         </div>
-        <p>Age {heir.age} at adoption</p>
+        <p>Age {heir.age}</p>
         <TraitChips trait={heir.trait} personality={heir.personality} />
         <CandidateStatChips stats={heir.stats} />
       </div>
@@ -559,9 +548,11 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
 
           {state.heirChoiceNotice ? <HeirChoiceCard notice={state.heirChoiceNotice} busy={busy} onChoose={setPreference} /> : null}
 
-          {state.spouse ? (
+          {state.spouse || state.adoptedHeir ? (
             <>
-              <div className="panel-label">Your spouse</div>
+              <div className="panel-label">Your household</div>
+              <div className="household-row">
+              {state.spouse ? (
               <DashboardCard className="spouse-card">
                 <PersonRow
                   name={`${state.spouse.name} of House ${state.spouse.houseName}`}
@@ -642,6 +633,9 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
                   )}
                 </div>
               </DashboardCard>
+              ) : null}
+              {state.adoptedHeir ? <HeirCard heir={state.adoptedHeir} /> : null}
+              </div>
             </>
           ) : null}
 
@@ -659,14 +653,13 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
           {!state.locks.locked ? (
             <>
               <div className="panel-label">Succession</div>
-              {state.adoptedHeir ? <HeirCard heir={state.adoptedHeir} /> : null}
+              <p className="composure-note muted">{outlookLine(state.successionOutlook)}</p>
               {state.adoptedHeir && state.children.some((c) => c.heirEligible) ? (
                 <div className="heir-preference-toggle">
                   <span className="dashboard-label">Who carries the house?</span>
                   <HeirPreferenceChoices preference={state.heirPreference} busy={busy} onChoose={setPreference} />
                 </div>
               ) : null}
-              <p className="composure-note muted">{outlookLine(state.successionOutlook)}</p>
               {state.showAdoption ? (
                 state.candidates.adoption.length === 0 ? (
                   <p className="dashboard-todo">No wards are on offer this season.</p>

@@ -533,6 +533,36 @@ export function AssetIcon({
   return <img src={assetIconUrl(file)} alt={alt} className={className} loading="lazy" onError={() => setOk(false)} />;
 }
 
+// The four leadership stats → their icon files (shared by the Atlas ruler pills and
+// the Family panel's heir / adoption-candidate cards, so both read identically).
+const STAT_PIP_ICON: Record<keyof FourStats, string> = {
+  prestige: "PRESTIGE.webp", devotion: "DEVOTION.webp", militia: "Militia.webp", intelligence: "Intrigue.webp",
+};
+
+// One leadership stat: icon + value, icon-only with the name in title/alt for a11y.
+export function StatPip({ stat, value }: { stat: keyof FourStats; value: number }) {
+  const label = stat.charAt(0).toUpperCase() + stat.slice(1);
+  const icon = STAT_PIP_ICON[stat];
+  return (
+    <span title={label} style={{ display: "inline-flex", gap: 5, alignItems: "center", padding: "2px 8px", borderRadius: 6, background: "var(--dash-panel-soft)", fontSize: "0.78em" }}>
+      {icon ? <AssetIcon file={icon} alt={label} className="asset-icon stat-pip-icon" /> : <span style={{ color: "var(--dash-stone-dim)" }}>{label}</span>}
+      <span style={{ color: "var(--dash-parchment)", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{value}</span>
+    </span>
+  );
+}
+
+// The four leadership stats as a wrapping row of icon pips (Atlas ruler grammar).
+export function StatPips({ stats }: { stats: FourStats }) {
+  return (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
+      <StatPip stat="prestige" value={stats.prestige} />
+      <StatPip stat="devotion" value={stats.devotion} />
+      <StatPip stat="militia" value={stats.militia} />
+      <StatPip stat="intelligence" value={stats.intelligence} />
+    </div>
+  );
+}
+
 // House display-name (lowercased) → crest file. Two files differ from the slug
 // spelling (Mitliades / Xanthipos); a house without a crest falls back to nothing.
 export const HOUSE_CREST: Record<string, string> = {
