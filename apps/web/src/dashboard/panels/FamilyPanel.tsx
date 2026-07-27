@@ -291,18 +291,51 @@ function HeirCard({ heir }: { heir: FamilyCandidate }) {
 }
 
 // The always-visible succession outlook line ("If you fell today, …").
-function outlookLine(outlook: { kind: string; heirName: string | null }): string {
+function outlookLine(outlook: { kind: string; heirName: string | null; passedOverSon: string | null }): string {
   const name = outlook.heirName ?? "your heir";
   switch (outlook.kind) {
     case "blood":
       return `If you fell today, ${name} inherits.`;
     case "adopted":
-      return `If you fell today, your adopted heir ${name} takes the house.`;
+      // When an of-age son is passed over (preference "adopted"), name him.
+      return outlook.passedOverSon
+        ? `If you fell today, your adopted heir ${name} takes the house — over your son ${outlook.passedOverSon}.`
+        : `If you fell today, your adopted heir ${name} takes the house.`;
     case "regency":
       return `If you fell today, a regent would rule for ${name}.`;
     default: // forced_adoption / fresh
       return "If you fell today, your line has no heir — the house would pass by adoption.";
   }
+}
+
+// The two-choice heir preference control (blood vs adopted), reused by both the
+// come-of-age prompt and the Succession toggle. The active choice carries the
+// panel's selected state so an answered prompt reads as answered.
+function HeirPreferenceChoices({ preference, busy, onChoose }: { preference: string; busy: boolean; onChoose: (p: "blood" | "adopted") => void }) {
+  return (
+    <div className="event-choice-stack heir-preference-choices">
+      <button type="button" className={`event-choice-button${preference === "blood" ? " selected" : ""}`} aria-pressed={preference === "blood"} disabled={busy} onClick={() => onChoose("blood")}>
+        <strong>Prefer your blood</strong>
+      </button>
+      <button type="button" className={`event-choice-button${preference === "adopted" ? " selected" : ""}`} aria-pressed={preference === "adopted"} disabled={busy} onClick={() => onChoose("adopted")}>
+        <strong>Prefer the adopted heir</strong>
+      </button>
+    </div>
+  );
+}
+
+// The come-of-age prompt: a son first reaches manhood while an adopted heir stands.
+// Its two inline choices post the preference; the card marks the active one.
+function HeirChoiceCard({ notice, busy, onChoose }: { notice: { son: string; heir: string; preference: string }; busy: boolean; onChoose: (p: "blood" | "adopted") => void }) {
+  return (
+    <DashboardCard className="birth-card">
+      <div className="event-body">
+        <span className="dashboard-label event-kicker">A son comes of age</span>
+        <h3>{notice.son} stands a man — yet {notice.heir} was named your heir. Who carries the house?</h3>
+        <HeirPreferenceChoices preference={notice.preference} busy={busy} onChoose={onChoose} />
+      </div>
+    </DashboardCard>
+  );
 }
 
 export default function FamilyPanel({ onRefresh }: PanelProps) {
@@ -442,6 +475,21 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
     }
   };
 
+  const setPreference = async (preference: "blood" | "adopted") => {
+    setBusy(true);
+    setNote("");
+    try {
+      await api.setHeirPreference(preference);
+      setNote(preference === "adopted" ? "Your adopted heir will carry the house." : "Your blood will carry the house.");
+      load();
+      onRefresh();
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "The choice could not be recorded.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <section className="dashboard-panel" aria-labelledby="family-title">
       <div className="dashboard-panel-heading">
@@ -509,6 +557,8 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
           {state.discoveredNotice ? <DiscoveredCard /> : null}
 
           {state.adoptionNotice ? <AdoptionCard notice={state.adoptionNotice} /> : null}
+
+          {state.heirChoiceNotice ? <HeirChoiceCard notice={state.heirChoiceNotice} busy={busy} onChoose={setPreference} /> : null}
 
           {state.spouse ? (
             <>
@@ -609,6 +659,12 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
             <>
               <div className="panel-label">Succession</div>
               {state.adoptedHeir ? <HeirCard heir={state.adoptedHeir} /> : null}
+              {state.adoptedHeir && state.children.some((c) => c.heirEligible) ? (
+                <div className="heir-preference-toggle">
+                  <span className="dashboard-label">Who carries the house?</span>
+                  <HeirPreferenceChoices preference={state.heirPreference} busy={busy} onChoose={setPreference} />
+                </div>
+              ) : null}
               <p className="composure-note muted">{outlookLine(state.successionOutlook)}</p>
               {state.showAdoption ? (
                 state.candidates.adoption.length === 0 ? (

@@ -1117,6 +1117,21 @@
   border-color: rgba(210, 165, 92, 0.56);
 }
 
+/* Heir preference: the active choice carries the same gold selected state as the
+   party card, so an answered come-of-age prompt reads as answered. */
+.dashboard-shell .event-choice-button.selected {
+  color: #f4e6c8;
+  background: rgba(181, 138, 69, 0.14);
+  border-color: rgba(210, 165, 92, 0.6);
+}
+
+.dashboard-shell .heir-preference-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
 .dashboard-shell .unaligned-note,
 .dashboard-shell .party-motto{
   color: rgba(210, 165, 92, 0.8) !important;

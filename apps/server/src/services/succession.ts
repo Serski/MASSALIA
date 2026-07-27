@@ -201,7 +201,7 @@ export async function successionInfo(row: CharacterRow, now: Date = new Date()) 
   const cfg = getFamilyConfig();
   const ageCfg = getAgeConfig();
   const kids = await childInfos(row.id, now);
-  const plan = successionPlan({ classId: row.classId }, kids, await hasAdopted(row), cfg);
+  const plan = successionPlan({ classId: row.classId, heirPreference: row.heirPreference as "blood" | "adopted" }, kids, await hasAdopted(row), cfg);
 
   const epitaphName = await playerName(row.playerId);
   const age = currentAge(row.startAge, row.createdAt.getTime(), now.getTime(), ageCfg);
@@ -250,7 +250,7 @@ export async function resolveSuccession(row: CharacterRow, candidateId: string |
   if (row.status !== "deceased") return { ok: false, code: 409, error: "No succession is pending." };
   const cfg = getFamilyConfig();
   const kids = await childInfos(row.id, now);
-  const plan = successionPlan({ classId: row.classId }, kids, await hasAdopted(row), cfg);
+  const plan = successionPlan({ classId: row.classId, heirPreference: row.heirPreference as "blood" | "adopted" }, kids, await hasAdopted(row), cfg);
   const dead = deadStats(row);
 
   if (plan.kind === "blood") {
@@ -390,6 +390,22 @@ export async function adopt(row: CharacterRow, candidateId: string, now: Date = 
   }
   await broadcastState();
   return { ok: true, heirName: cand.name, endedRegency: false };
+}
+
+export type HeirPreferenceResult = { ok: false; code: number; error: string } | { ok: true; preference: "blood" | "adopted" };
+
+// Set the standing heir preference. successionPlan consults it only when BOTH an
+// of-age son and an adopted heir exist (otherwise inert), so this single-column
+// write is all the come-of-age prompt's inline choices and the Succession toggle
+// need — no bespoke succession logic. Idempotent: re-pressing the active choice
+// rewrites the same value.
+export async function setHeirPreference(row: CharacterRow, preference: string): Promise<HeirPreferenceResult> {
+  if (preference !== "blood" && preference !== "adopted") {
+    return { ok: false, code: 400, error: "Preference must be 'blood' or 'adopted'." };
+  }
+  await db.update(playerCharacters).set({ heirPreference: preference }).where(eq(playerCharacters.id, row.id));
+  await broadcastState();
+  return { ok: true, preference };
 }
 
 // HUD regent badge: ward + countdown to coming-of-age + the barred offices the

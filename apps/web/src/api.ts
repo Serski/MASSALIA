@@ -332,6 +332,8 @@ export const api = {
     apiFetch<{ ok: true; heirName: string; kind: string }>("/api/family/succeed", { method: "POST", body: { candidateId } }),
   adopt: (candidateId: string) =>
     apiFetch<{ ok: true; heirName: string; endedRegency: boolean }>("/api/family/adopt", { method: "POST", body: { candidateId } }),
+  setHeirPreference: (preference: "blood" | "adopted") =>
+    apiFetch<{ ok: true; preference: string }>("/api/family/heir-preference", { method: "POST", body: { preference } }),
   resolveFestival: (festivalId: string, choiceId: string) =>
     apiFetch<EventResolution>("/api/festivals/resolve", { method: "POST", body: { festivalId, choiceId } }),
   // The Olympiad (Prompt 8): the voting ballot, casting a vote, resolving the
@@ -868,10 +870,18 @@ export type FamilyState = {
   discoveredNotice: boolean;
   // The succession outlook ("If you fell today, …"), the Adopt-button visibility,
   // a one-season adoption notice, and the honest pending-item count for the badge.
-  successionOutlook: { kind: string; heirName: string | null };
+  // The succession outlook. passedOverSon names the eldest of-age son the adopted
+  // heir is preferred over ("…over your son <Son>"), non-null only for that case.
+  successionOutlook: { kind: string; heirName: string | null; passedOverSon: string | null };
   // The designated heir after in-life adoption: the full candidate card he was
   // adopted from (portrait, stats, trait), his age frozen at adoption. Null until adopted.
   adoptedHeir: FamilyCandidate | null;
+  // The standing heir preference ('blood' | 'adopted'); marks the active choice on
+  // the prompt and the toggle. Consulted only when both an of-age son and heir exist.
+  heirPreference: string;
+  // The come-of-age prompt: a son first reaches manhood while an adopted heir stands.
+  // Derived for one season; its inline choices post the preference. Null otherwise.
+  heirChoiceNotice: { son: string; heir: string; preference: string } | null;
   showAdoption: boolean;
   adoptionNotice: { name: string; house: string } | null;
   pendingCount: number;

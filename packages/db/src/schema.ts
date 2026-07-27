@@ -172,6 +172,9 @@ export const playerCharacters = pgTable("player_characters", {
   isRegent: boolean("is_regent").notNull().default(false),
   regentForChildId: uuid("regent_for_child_id"),
   adoptedCandidateId: uuid("adopted_candidate_id"),
+  // Heir preference: consulted only when BOTH an of-age son and an adopted heir
+  // exist; 'blood' (default) keeps the current son-wins behavior for every row.
+  heirPreference: text("heir_preference").notNull().default("blood"),
   // Hidden XP toward the four upbringing-trait ladders (fed by daily routines).
   rhetoricXp: integer("rhetoric_xp").notNull().default(0),
   philosophiaXp: integer("philosophia_xp").notNull().default(0),

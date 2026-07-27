@@ -1207,6 +1207,86 @@ suite("livingSpousePersonalityTraits (integration)", () => {
       const later = new Date(now.getTime() + 2 * REAL_MS_PER_SEASON);
       expect((await m.family.familyState(await freshChar(s.id), later)).adoptionNotice).toBeNull();
     });
+
+    // ---- Heir preference (Phase 2) ----------------------------------------
+    // A helper: an adopted citizen with one of-age son, ready for the choice.
+    const adoptedWithSon = async (name: string, sonName: string, sonAge = 16) => {
+      const s = await setup(name, { age: 40, drachmae: 100 });
+      await m.succession.adopt(await freshChar(s.id), s.candId, now);
+      await insertSon(s.id, sonName, sonAge);
+      return s;
+    };
+
+    it("the endpoint service validates the two values and writes the column", async () => {
+      const s = await setup("PrefWrite", { age: 40, drachmae: 100 });
+      expect(await m.succession.setHeirPreference(await freshChar(s.id), "bogus")).toMatchObject({ ok: false, code: 400 });
+      expect((await freshChar(s.id)).heirPreference).toBe("blood"); // untouched by the invalid attempt
+      expect(await m.succession.setHeirPreference(await freshChar(s.id), "adopted")).toMatchObject({ ok: true, preference: "adopted" });
+      expect((await freshChar(s.id)).heirPreference).toBe("adopted");
+      // Idempotent re-press + flip back.
+      expect(await m.succession.setHeirPreference(await freshChar(s.id), "adopted")).toMatchObject({ ok: true });
+      await m.succession.setHeirPreference(await freshChar(s.id), "blood");
+      expect((await freshChar(s.id)).heirPreference).toBe("blood");
+    });
+
+    it("come-of-age notice: fires on the first son's transition, not for a later son", async () => {
+      const s = await adoptedWithSon("FirstTransition", "Sostratos", 16);
+      // First read stamps Sostratos' come-of-age at `now` → the prompt fires.
+      const first = await m.family.familyState(await freshChar(s.id), now);
+      expect(first.heirChoiceNotice).toMatchObject({ son: "Sostratos", heir: s.cand.name, preference: "blood" });
+
+      // A season later, a SECOND son comes of age — the earliest come-of-age (Sostratos')
+      // is now out of window, so the prompt does not re-open.
+      const later = new Date(now.getTime() + REAL_MS_PER_SEASON + y());
+      await insertSon(s.id, "Younger", 16);
+      const second = await m.family.familyState(await freshChar(s.id), later);
+      expect(second.heirChoiceNotice).toBeNull();
+    });
+
+    it("both badge counters include the prompt for its season (the twin too)", async () => {
+      const s = await setup("BadgeHouse", { age: 40, drachmae: 100 });
+      await m.succession.adopt(await freshChar(s.id), s.candId, now);
+      const beforeSon = await m.family.familyPendingCount(await freshChar(s.id), now); // adoption notice only
+      await insertSon(s.id, "Sostratos", 16);
+      const st = await m.family.familyState(await freshChar(s.id), now); // stamps come-of-age
+      expect(st.heirChoiceNotice).not.toBeNull();
+      // familyState's own tally counts it (adoption notice + the prompt, nothing else).
+      expect(st.pendingCount).toBe(beforeSon + 1);
+      // The focused twin counts it too — recon flagged this so it wouldn't be missed.
+      const afterSon = await m.family.familyPendingCount(await freshChar(s.id), now);
+      expect(afterSon).toBe(beforeSon + 1);
+    });
+
+    it("outlook clause appears with preference 'adopted' + of-age son, and disappears when flipped back", async () => {
+      const s = await adoptedWithSon("OutlookHouse", "Sostratos", 16);
+      // Default 'blood': the son inherits, no passed-over clause.
+      const blood = await m.family.familyState(await freshChar(s.id), now);
+      expect(blood.successionOutlook).toMatchObject({ kind: "blood", heirName: "Sostratos", passedOverSon: null });
+
+      await m.succession.setHeirPreference(await freshChar(s.id), "adopted");
+      const adopted = await m.family.familyState(await freshChar(s.id), now);
+      expect(adopted.successionOutlook).toMatchObject({ kind: "adopted", heirName: s.cand.name, passedOverSon: "Sostratos" });
+
+      await m.succession.setHeirPreference(await freshChar(s.id), "blood");
+      expect((await m.family.familyState(await freshChar(s.id), now)).successionOutlook).toMatchObject({ kind: "blood", passedOverSon: null });
+    });
+
+    it("death flow honors the preference: 'adopted' seats the heir over the son; 'blood' seats the son", async () => {
+      // Preference 'adopted' → resolveSuccession seats the adopted heir despite an of-age son.
+      const a = await adoptedWithSon("DeadAdopted", "Sostratos", 16);
+      await m.succession.setHeirPreference(await freshChar(a.id), "adopted");
+      await db.update(pcs()).set({ status: "deceased" }).where(eq(pcs().id, a.id));
+      expect((await m.succession.successionInfo(await freshChar(a.id), now))?.plan.kind).toBe("adopted");
+      const ra = await m.succession.resolveSuccession(await freshChar(a.id), undefined, now);
+      expect(ra).toMatchObject({ ok: true, kind: "adopted", heirName: a.cand.name });
+
+      // A twin left at 'blood' → the son seats.
+      const b = await adoptedWithSon("DeadBlood", "Kleon", 16);
+      await db.update(pcs()).set({ status: "deceased" }).where(eq(pcs().id, b.id));
+      expect((await m.succession.successionInfo(await freshChar(b.id), now))?.plan.kind).toBe("blood");
+      const rb = await m.succession.resolveSuccession(await freshChar(b.id), undefined, now);
+      expect(rb).toMatchObject({ ok: true, kind: "blood", heirName: "Kleon" });
+    });
   });
 
   // -------------------------------------------------------------------------

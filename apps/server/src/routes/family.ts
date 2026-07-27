@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../services/auth.js";
 import { ensureCharacterRow, findCharacterRow, getActivePlayer, getActiveWorldId, type CharacterRow } from "../services/character.js";
 import { advanceChildren, advanceSpouseDeath, divorce, ensureFreshDraw, familyState, giveGift, holdSymposium, marry, nameChild, startLoverPlot } from "../services/family.js";
-import { adopt, dynastyInfo, regentBadge, resolveSuccession, successionInfo } from "../services/succession.js";
+import { adopt, dynastyInfo, regentBadge, resolveSuccession, setHeirPreference, successionInfo } from "../services/succession.js";
 
 async function actingRow(userId: string): Promise<{ row: CharacterRow } | { error: string; code: number }> {
   const worldId = await getActiveWorldId();
@@ -66,6 +66,24 @@ export async function familyRoutes(app: FastifyInstance) {
       return { error: "A candidateId is required." };
     }
     const result = await adopt(acting.row, candidateId, new Date());
+    if (!result.ok) {
+      reply.code(result.code);
+      return { error: result.error };
+    }
+    return result;
+  });
+
+  // Set the heir preference (blood vs adopted) — the come-of-age prompt's inline
+  // choices and the Succession toggle both post here. Thin single-column write.
+  app.post("/heir-preference", async (request, reply) => {
+    const user = await requireAuth(request);
+    const acting = await actingRow(user.id);
+    if ("error" in acting) {
+      reply.code(acting.code);
+      return { error: acting.error };
+    }
+    const preference = (request.body as { preference?: string } | undefined)?.preference ?? "";
+    const result = await setHeirPreference(acting.row, preference);
     if (!result.ok) {
       reply.code(result.code);
       return { error: result.error };

@@ -353,6 +353,32 @@ describe("successionPlan — patrilineal (the blood ladder runs through sons)", 
   });
 });
 
+describe("successionPlan — heir preference (only when both an of-age son AND an adopted heir exist)", () => {
+  const son = (id: string, age: number) => child(id, age);
+  it("default (no preference field) → the of-age son inherits by blood, as before", () => {
+    const plan = successionPlan({ classId: "trader" }, [son("s", 16)], true, cfg);
+    expect(plan).toMatchObject({ kind: "blood", heirChildId: "s" });
+  });
+  it("explicit 'blood' → the son inherits", () => {
+    const plan = successionPlan({ classId: "trader", heirPreference: "blood" }, [son("s", 16)], true, cfg);
+    expect(plan).toMatchObject({ kind: "blood", heirChildId: "s" });
+  });
+  it("'adopted' with both paths → the adopted heir wins over the of-age son", () => {
+    expect(successionPlan({ classId: "trader", heirPreference: "adopted" }, [son("s", 16)], true, cfg).kind).toBe("adopted");
+  });
+  it("'adopted' but NO of-age son → still the son's regency/adoption path decides, not the preference branch", () => {
+    // A minor son + adopted heir: the of-age-sons block never runs, so the adopted
+    // heir is chosen by the existing rule (kind 'adopted') regardless of preference…
+    expect(successionPlan({ classId: "trader", heirPreference: "adopted" }, [son("s", 9)], true, cfg).kind).toBe("adopted");
+    // …and 'blood' preference cannot conjure a son who isn't of age.
+    expect(successionPlan({ classId: "trader", heirPreference: "blood" }, [son("s", 9)], true, cfg).kind).toBe("adopted");
+  });
+  it("'adopted' preference with NO adopted heir → the son inherits regardless (preference inert)", () => {
+    const plan = successionPlan({ classId: "trader", heirPreference: "adopted" }, [son("s", 16)], false, cfg);
+    expect(plan).toMatchObject({ kind: "blood", heirChildId: "s" });
+  });
+});
+
 describe("inheritance — carryover, always-inherited, bloodline nudge", () => {
   const dead = { prestige: 80, devotion: 40, militia: 60, intelligence: 30 };
 

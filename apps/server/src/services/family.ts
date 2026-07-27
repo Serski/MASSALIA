@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import {
   characterTraits,
   checkSpouseDeath,
@@ -481,13 +481,21 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
   // Outlook via the shared plan from data already in hand (children ages+sex,
   // hasAdopted, class) — the plan kind costs no query; only the adopted heir's name
   // reuses the candidate read above.
-  const plan = successionPlan({ classId: character.classId }, childList.map((c) => ({ id: c.id, age: c.age, sex: c.sex as Sex, name: c.name })), hasAdopted, cfg);
+  const plan = successionPlan({ classId: character.classId, heirPreference: character.heirPreference as "blood" | "adopted" }, childList.map((c) => ({ id: c.id, age: c.age, sex: c.sex as Sex, name: c.name })), hasAdopted, cfg);
   const heirName =
     plan.kind === "blood" ? (childList.find((c) => c.id === plan.heirChildId)?.name ?? null)
     : plan.kind === "regency" ? (childList.find((c) => c.id === plan.regentForChildId)?.name ?? null)
     : plan.kind === "adopted" ? (adoptedCand?.name ?? null)
     : null;
-  const successionOutlook = { kind: plan.kind, heirName };
+  // When the adopted heir wins over a living of-age son (preference "adopted"), name
+  // the passed-over son so the outlook can say "…over your son <Son>". The eldest
+  // of-age son is the one who would otherwise have inherited by blood.
+  const ofAgeSons = childList.filter((c) => c.heirEligible);
+  const passedOverSon =
+    plan.kind === "adopted" && ofAgeSons.length > 0
+      ? ofAgeSons.reduce((a, b) => (b.age > a.age ? b : a)).name
+      : null;
+  const successionOutlook = { kind: plan.kind, heirName, passedOverSon };
 
   // The Adopt button shows when the line is not blood-secure (or the hetaira, whose
   // only path is adoption), the character has not yet named an heir, and is >= 30.
@@ -499,12 +507,30 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
     adoptionNotice = { name: adoptedCand.name, house: await houseName(adoptedCand.houseSlug) };
   }
 
+  // Heir-preference prompt (derived, one season): a character with an adopted heir
+  // whose FIRST son has just come of age faces a choice. Windowed on the EARLIEST
+  // of-age son's comeOfAgeAt — fixed once stamped, so a later son coming of age never
+  // re-opens it (the standing preference already answers him). `preference` lets the
+  // card mark the active choice so an answered prompt reads as answered, not dead.
+  let heirChoiceNotice: { son: string; heir: string; preference: string } | null = null;
+  if (hasAdopted && adoptedHeir) {
+    const firstSon = (await db
+      .select({ name: children.name, comeOfAgeAt: children.comeOfAgeAt })
+      .from(children)
+      .where(and(eq(children.parentCharacterId, character.id), isNull(children.diedAt), eq(children.sex, "male"), isNotNull(children.comeOfAgeAt)))
+      .orderBy(asc(children.comeOfAgeAt))
+      .limit(1))[0];
+    if (firstSon?.comeOfAgeAt && now.getTime() - firstSon.comeOfAgeAt.getTime() < REAL_MS_PER_SEASON) {
+      heirChoiceNotice = { son: firstSon.name, heir: adoptedHeir.name, preference: character.heirPreference };
+    }
+  }
+
   // pendingCount (ruling D): every unnamed-in-window child counted individually +
   // each in-window notice. A child past its naming season is auto-named, so any
   // still-unnamed child is within its window. Reaches 0 when nothing pends.
   const pendingCount =
     childList.filter((c) => !c.named).length +
-    [spouseDeath, divorceNotice, tragedyNotice, adoptionNotice].filter(Boolean).length +
+    [spouseDeath, divorceNotice, tragedyNotice, adoptionNotice, heirChoiceNotice].filter(Boolean).length +
     (fellNotice ? 1 : 0) +
     (discoveredNotice ? 1 : 0);
 
@@ -522,6 +548,8 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
     discoveredNotice,
     successionOutlook,
     adoptedHeir,
+    heirPreference: character.heirPreference,
+    heirChoiceNotice,
     showAdoption,
     adoptionNotice,
     pendingCount,
@@ -575,6 +603,16 @@ export async function familyPendingCount(character: CharacterRow, now: Date = ne
   if (character.adoptedCandidateId) {
     const c = (await db.select({ consumedAt: familyCandidates.consumedAt }).from(familyCandidates).where(eq(familyCandidates.id, character.adoptedCandidateId)).limit(1))[0];
     if (c?.consumedAt && c.consumedAt.getTime() > windowStart.getTime()) count += 1;
+
+    // Heir-preference prompt: an adopted heir AND the earliest of-age son's coming-of-age
+    // within the window (the same derivation familyState uses — one prompt, first son only).
+    const firstSon = (await db
+      .select({ comeOfAgeAt: children.comeOfAgeAt })
+      .from(children)
+      .where(and(eq(children.parentCharacterId, character.id), isNull(children.diedAt), eq(children.sex, "male"), isNotNull(children.comeOfAgeAt)))
+      .orderBy(asc(children.comeOfAgeAt))
+      .limit(1))[0];
+    if (firstSon?.comeOfAgeAt && firstSon.comeOfAgeAt.getTime() > windowStart.getTime()) count += 1;
   }
 
   return count;

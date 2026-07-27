@@ -335,13 +335,24 @@ export type SuccessionPlan = {
 // The succession ladder, in order: an of-age child (blood) > an adopted heir >
 // a regency for a minor child > a fresh start (slave) / forced adoption (citizens
 // & hetaira). Every branch yields a playable next character.
-export function successionPlan(character: { classId: string }, children: ChildInfo[], hasAdoptedHeir: boolean, cfg: FamilyConfig): SuccessionPlan {
+export function successionPlan(
+  character: { classId: string; heirPreference?: "blood" | "adopted" },
+  children: ChildInfo[],
+  hasAdoptedHeir: boolean,
+  cfg: FamilyConfig,
+): SuccessionPlan {
   // Patrilineal: the blood ladder runs through SONS only. Daughters still come of
   // age universally (that flip is elsewhere) but never inherit — an all-daughters
   // house has no blood path and falls through to adoption/regency-of-a-son/forced.
   const sons = children.filter((child) => child.sex === "male");
   const ofAgeSons = sons.filter((child) => child.age >= cfg.comingOfAge);
   if (ofAgeSons.length > 0) {
+    // Both an of-age son AND an adopted heir exist → the standing preference decides.
+    // Default 'blood' preserves the son-wins behavior; only an explicit 'adopted'
+    // hands the house to the ward. Everywhere else this branch is inert.
+    if (hasAdoptedHeir && (character.heirPreference ?? "blood") === "adopted") {
+      return { kind: "adopted" };
+    }
     const eldest = ofAgeSons.reduce((a, b) => (b.age > a.age ? b : a));
     return { kind: "blood", heirChildId: eldest.id };
   }
