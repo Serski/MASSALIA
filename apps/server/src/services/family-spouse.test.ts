@@ -1132,6 +1132,28 @@ suite("livingSpousePersonalityTraits (integration)", () => {
       expect((await m.family.familyState(await freshChar(none.id), now)).successionOutlook).toMatchObject({ kind: "forced_adoption", heirName: null });
     });
 
+    it("adoptedHeir card: null before adoption; the full candidate block (stats + trait + personality) after", async () => {
+      const s = await setup("HeirCardDad", { age: 40, drachmae: 100 });
+      // Before the rite: no designated heir on the family read.
+      expect((await m.family.familyState(await freshChar(s.id), now)).adoptedHeir).toBeNull();
+      // Give the ward a visible trait chip so the card's trait field is exercised.
+      await db.update(fc()).set({ traitId: "frail" }).where(eq(fc().id, s.candId));
+      await m.succession.adopt(await freshChar(s.id), s.candId, now);
+      const heir = (await m.family.familyState(await freshChar(s.id), now)).adoptedHeir;
+      expect(heir).not.toBeNull();
+      // The SAME presentation as his candidate card — id, name, stored (at-adoption)
+      // age, and the four stat chips — reused verbatim via candidateView.
+      expect(heir).toMatchObject({
+        id: s.candId,
+        name: s.cand.name,
+        age: s.cand.age,
+        stats: { prestige: s.cand.prestige, devotion: s.cand.devotion, militia: s.cand.militia, intelligence: s.cand.intelligence },
+      });
+      expect(heir!.trait).toMatchObject({ id: "frail" }); // the carried trait chip (FRAIL)
+      expect("personality" in heir!).toBe(true); // personality field present (null for adoption wards)
+      expect(heir!.portrait === null || typeof heir!.portrait === "string").toBe(true);
+    });
+
     it("showAdoption matrix: childless 35 → true; hasAdopted → false; under-30 → false; blood → false", async () => {
       const show = await setup("ShowA", { age: 35, drachmae: 100 });
       expect((await m.family.familyState(await freshChar(show.id), now)).showAdoption).toBe(true);

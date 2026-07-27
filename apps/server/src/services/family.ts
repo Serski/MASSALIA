@@ -466,15 +466,17 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
   // --- Succession outlook + the in-life adoption rite -------------------------
   const hasAdopted = character.adoptedCandidateId !== null;
   const age = currentAge(character.startAge, character.createdAt.getTime(), now.getTime(), getAgeConfig());
-  // The adopted (consumed) candidate — ONE query, reused for the outlook heir name
-  // and the windowed adoption notice. Absent when the character has not adopted.
+  // The adopted (consumed) candidate — ONE query (full row), reused for the outlook
+  // heir name, the windowed adoption notice, AND the designated-heir card. Absent
+  // when the character has not adopted.
   const adoptedCand = hasAdopted
-    ? (await db
-        .select({ name: familyCandidates.name, houseSlug: familyCandidates.houseSlug, consumedAt: familyCandidates.consumedAt })
-        .from(familyCandidates)
-        .where(eq(familyCandidates.id, character.adoptedCandidateId!))
-        .limit(1))[0]
+    ? (await db.select().from(familyCandidates).where(eq(familyCandidates.id, character.adoptedCandidateId!)).limit(1))[0]
     : undefined;
+
+  // The designated-heir card: the SAME presentation as the candidate card he was
+  // adopted from — portrait, "<Name> of House <X>", his stored (at-adoption) age,
+  // stat chips, and any trait/personality chip he carried. Null until adoption.
+  const adoptedHeir = adoptedCand ? candidateView(adoptedCand, cfg, await houseName(adoptedCand.houseSlug)) : null;
 
   // Outlook via the shared plan from data already in hand (children ages+sex,
   // hasAdopted, class) — the plan kind costs no query; only the adopted heir's name
@@ -519,6 +521,7 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
     fellNotice,
     discoveredNotice,
     successionOutlook,
+    adoptedHeir,
     showAdoption,
     adoptionNotice,
     pendingCount,

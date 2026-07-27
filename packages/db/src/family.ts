@@ -273,13 +273,15 @@ export async function rollChildrenDue(
       if (!isFertile(wifeAge, familyCfg)) continue;
     }
 
-    const existing = await db.select({ id: children.id }).from(children).where(and(eq(children.parentCharacterId, characterId), isNull(children.diedAt)));
+    const existing = await db.select({ id: children.id, name: children.name }).from(children).where(and(eq(children.parentCharacterId, characterId), isNull(children.diedAt)));
     const outcome = childRoll(Math.random, { active: true }, existing.length, spouseTrait, familyCfg, philia, plotActive);
     if (!outcome.born) continue;
 
+    // Sibling name dedup: avoid the living children's names (dead ones aren't in the
+    // `diedAt`-filtered set, so their names may recur — deliberate Greek reuse).
     const inserted = (await db
       .insert(children)
-      .values({ parentCharacterId: characterId, worldId: character.worldId, name: defaultChildName(outcome.sex), sex: outcome.sex, bornAt: now, named: false, rumor: plotActive })
+      .values({ parentCharacterId: characterId, worldId: character.worldId, name: defaultChildName(outcome.sex, Math.random, existing.map((c) => c.name)), sex: outcome.sex, bornAt: now, named: false, rumor: plotActive })
       .returning())[0]!;
 
     let lateWifeName: string | null = null;

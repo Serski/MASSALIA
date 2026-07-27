@@ -301,9 +301,17 @@ export function rollSpouseDeathAge(cfg: FamilyConfig, rng: () => number = Math.r
   return randInt(rng, min, max);
 }
 
-// A default Greek name for a newborn (sticks if the player never renames).
-export function defaultChildName(sex: Sex, rng: () => number = Math.random): string {
-  return pick(rng, sex === "female" ? GREEK_FEMALE_NAMES : GREEK_MALE_NAMES);
+// A default Greek name for a newborn (sticks if the player never renames). Any
+// name in `exclude` (the living siblings' names) is avoided so a house has no two
+// living children of the same name; dead/departed names are not passed in, so
+// Greek name reuse across generations stays deliberate. Exhaustion — every pool
+// name already borne by a living child — falls back to the full pool: a duplicate
+// beats failing the birth.
+export function defaultChildName(sex: Sex, rng: () => number = Math.random, exclude: Iterable<string> = []): string {
+  const pool = sex === "female" ? GREEK_FEMALE_NAMES : GREEK_MALE_NAMES;
+  const taken = new Set(exclude);
+  const available = pool.filter((name) => !taken.has(name));
+  return pick(rng, available.length > 0 ? available : pool);
 }
 
 // Just the trait fields the child roll needs (a spouse's candidate trait).

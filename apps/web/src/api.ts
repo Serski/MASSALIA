@@ -869,6 +869,9 @@ export type FamilyState = {
   // The succession outlook ("If you fell today, …"), the Adopt-button visibility,
   // a one-season adoption notice, and the honest pending-item count for the badge.
   successionOutlook: { kind: string; heirName: string | null };
+  // The designated heir after in-life adoption: the full candidate card he was
+  // adopted from (portrait, stats, trait), his age frozen at adoption. Null until adopted.
+  adoptedHeir: FamilyCandidate | null;
   showAdoption: boolean;
   adoptionNotice: { name: string; house: string } | null;
   pendingCount: number;

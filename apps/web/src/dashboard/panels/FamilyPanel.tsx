@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, contentUrl, type ChronicleEntry, type FamilyState, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type DivorceNotice, type TragedyNotice } from "../../api.js";
+import { api, ApiError, contentUrl, type ChronicleEntry, type FamilyState, type FamilyCandidate, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type DivorceNotice, type TragedyNotice } from "../../api.js";
 import { assetPath, type House } from "../../data/league.js";
 import { DashboardCard, type FourStats, PanelBanner, type PanelProps, PersonFace, PersonRow, festivalName, titleCase } from "../shared.js";
 
@@ -262,6 +262,29 @@ function AdoptionCard({ notice }: { notice: { name: string; house: string } }) {
         <span className="dashboard-label event-kicker">An heir is named</span>
         <h3>You have adopted {notice.name} of House {notice.house}.</h3>
         <p className="composure-note">The rite is done; your house has an heir, and their blood becomes yours.</p>
+      </div>
+    </DashboardCard>
+  );
+}
+
+// The designated-heir card: the exact candidate-card presentation he was adopted
+// from (portrait, name/house, at-adoption age, trait/personality chips, stat chips),
+// with the Adopt button replaced by a standing ADOPTED HEIR label. No actions yet —
+// the preference toggle joins it in Phase 2.
+function HeirCard({ heir }: { heir: FamilyCandidate }) {
+  return (
+    <DashboardCard className="prospect-card">
+      <div className="event-body">
+        <div className="prospect-head">
+          <span className="person-face prospect-face">
+            <PersonFace portrait={heir.portrait} />
+          </span>
+          <span className="dashboard-label">{heir.name} of House {heir.houseName}</span>
+        </div>
+        <p>Age {heir.age} at adoption</p>
+        <TraitChips trait={heir.trait} personality={heir.personality} />
+        <CandidateStatChips stats={heir.stats} />
+        <span className="heir-tag">ADOPTED HEIR</span>
       </div>
     </DashboardCard>
   );
@@ -585,6 +608,7 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
           {!state.locks.locked ? (
             <>
               <div className="panel-label">Succession</div>
+              {state.adoptedHeir ? <HeirCard heir={state.adoptedHeir} /> : null}
               <p className="composure-note muted">{outlookLine(state.successionOutlook)}</p>
               {state.showAdoption ? (
                 state.candidates.adoption.length === 0 ? (

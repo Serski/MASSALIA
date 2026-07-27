@@ -262,9 +262,45 @@ describe("childRoll", () => {
 });
 
 describe("defaultChildName", () => {
+  // The pools aren't exported; recover them by sampling every rng slot.
+  const collectPool = (sex: "male" | "female"): string[] => {
+    const names = new Set<string>();
+    for (let i = 0; i < 400; i++) names.add(defaultChildName(sex, () => i / 400));
+    return [...names];
+  };
+
   it("returns a Greek name for the child's sex", () => {
     expect(typeof defaultChildName("male", () => 0)).toBe("string");
     expect(defaultChildName("female", () => 0).length).toBeGreaterThan(0);
+  });
+
+  it("excludes the living siblings' names — a house has no two living children alike", () => {
+    const pool = collectPool("male");
+    expect(pool.length).toBeGreaterThan(1);
+    // Exclude every name but one → every draw, at any rng, yields the sole survivor.
+    const survivor = pool[pool.length - 1]!;
+    const exclude = pool.filter((n) => n !== survivor);
+    for (let i = 0; i < 50; i++) {
+      expect(defaultChildName("male", () => i / 50, exclude)).toBe(survivor);
+    }
+  });
+
+  it("allows a name not in the exclusion set (dead siblings aren't passed in → reuse is free)", () => {
+    const pool = collectPool("female");
+    const target = pool[0]!;
+    // Exclude everything EXCEPT the target (as if the target were a dead sibling's
+    // name, never added to the living-only exclusion set): the draw can return it.
+    const exclude = pool.filter((n) => n !== target);
+    const drawn = new Set<string>();
+    for (let i = 0; i < 50; i++) drawn.add(defaultChildName("female", () => i / 50, exclude));
+    expect(drawn.has(target)).toBe(true);
+  });
+
+  it("exhaustion (every name taken by a living child) falls back to a duplicate, never throws", () => {
+    const pool = collectPool("male");
+    expect(() => defaultChildName("male", () => 0, pool)).not.toThrow();
+    const name = defaultChildName("male", () => 0, pool);
+    expect(pool).toContain(name); // a real name, just a (permitted) duplicate
   });
 });
 
