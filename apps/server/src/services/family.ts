@@ -58,6 +58,10 @@ const db = createDb();
 // showAdoption and adopt()'s guard — one source of truth). The death-flow forced
 // adoption is never age-gated.
 export const ADOPTION_MIN_AGE = 30;
+// The adoption notice confirms a rite the player just performed while online, so it
+// lives a short 2-minute window rather than the standard one-real-day season window
+// the other (offline-firing) notices use.
+const ADOPTION_NOTICE_MS = 2 * 60 * 1000;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../../..");
 const configFile = path.join(repoRoot, "content/family/family-config.json");
@@ -515,9 +519,10 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
   // only path is adoption), the character has not yet named an heir, and is >= 30.
   const showAdoption = !locked && (plan.kind !== "blood" || character.classId === "hetaira") && !hasAdopted && age >= ADOPTION_MIN_AGE;
 
-  // Adoption notice: one season on the adopted candidate's consumedAt (the anchor).
+  // Adoption notice: a short 2-minute window on the adopted candidate's consumedAt —
+  // a confirmation of an online action, not an offline-firing event.
   let adoptionNotice: { name: string; house: string } | null = null;
-  if (adoptedCand?.consumedAt && now.getTime() - adoptedCand.consumedAt.getTime() < REAL_MS_PER_SEASON) {
+  if (adoptedCand?.consumedAt && now.getTime() - adoptedCand.consumedAt.getTime() < ADOPTION_NOTICE_MS) {
     adoptionNotice = { name: adoptedCand.name, house: await houseName(adoptedCand.houseSlug) };
   }
 
@@ -613,10 +618,11 @@ export async function familyPendingCount(character: CharacterRow, now: Date = ne
     if (m?.loverDiscoveredAt && m.loverDiscoveredAt.getTime() > windowStart.getTime()) count += 1;
   }
 
-  // Adoption notice: the adopted candidate consumed within the window.
+  // Adoption notice: the adopted candidate consumed within the short 2-minute window
+  // (matches familyState's adoptionNotice — NOT the season windowStart used above).
   if (character.adoptedCandidateId) {
     const c = (await db.select({ consumedAt: familyCandidates.consumedAt }).from(familyCandidates).where(eq(familyCandidates.id, character.adoptedCandidateId)).limit(1))[0];
-    if (c?.consumedAt && c.consumedAt.getTime() > windowStart.getTime()) count += 1;
+    if (c?.consumedAt && c.consumedAt.getTime() > now.getTime() - ADOPTION_NOTICE_MS) count += 1;
 
     // Heir-preference prompt: an adopted heir AND the earliest of-age son's coming-of-age
     // within the window (the same derivation familyState uses — one prompt, first son only).

@@ -256,24 +256,23 @@ function AdoptionCard({ notice }: { notice: { name: string; house: string } }) {
   );
 }
 
-// The designated-heir card: the candidate-card presentation (portrait, name/house,
-// live current age, trait/personality chips, icon stat pips). He ages like everyone
-// else — the server derives his age + portrait stage from consumedAt. The designation
-// is an inline "· adopted heir" tag beside his name — the "· your wife" convention.
+// The designated-heir card. Its header uses the SAME PersonRow treatment as the
+// spouse card beside it (bordered box, portrait, name typography, "· adopted heir"
+// suffix per the "· your wife" convention, and an "Age <derived> · <House>" meta
+// line in her style). He ages like everyone else — the server derives his age +
+// portrait stage from consumedAt. Below the header: the trait chips and icon stat pips.
 function HeirCard({ heir }: { heir: FamilyCandidate }) {
   return (
     <DashboardCard className="prospect-card">
-      <div className="event-body">
-        <div className="prospect-head">
-          <span className="person-face prospect-face">
-            <PersonFace portrait={heir.portrait} />
-          </span>
-          <span className="dashboard-label">{heir.name} of House {heir.houseName}<span className="person-suffix"> · adopted heir</span></span>
-        </div>
-        <p>Age {heir.age}</p>
-        <TraitChips trait={heir.trait} personality={heir.personality} />
-        <CandidateStatChips stats={heir.stats} />
-      </div>
+      <PersonRow
+        name={`${heir.name} of House ${heir.houseName}`}
+        nameSuffix={<span className="person-suffix"> · adopted heir</span>}
+        role={`Age ${heir.age} · ${heir.houseName}`}
+        traits={[]}
+        portrait={heir.portrait}
+      />
+      <TraitChips trait={heir.trait} personality={heir.personality} />
+      <CandidateStatChips stats={heir.stats} />
     </DashboardCard>
   );
 }

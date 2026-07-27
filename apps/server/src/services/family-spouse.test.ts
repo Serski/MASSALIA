@@ -1236,6 +1236,39 @@ suite("livingSpousePersonalityTraits (integration)", () => {
       expect((await m.family.familyState(await freshChar(s.id), later)).adoptionNotice).toBeNull();
     });
 
+    it("adoption notice lives a 2-minute window: present at +1min, gone at +3min — both badges follow", async () => {
+      const s = await setup("ShortNotice", { age: 40, drachmae: 100 });
+      await m.succession.adopt(await freshChar(s.id), s.candId, now);
+
+      // +1 minute: still present, and both badge counters count it.
+      const t1 = new Date(now.getTime() + 60 * 1000);
+      const at1 = await m.family.familyState(await freshChar(s.id), t1);
+      expect(at1.adoptionNotice).toMatchObject({ name: s.cand.name });
+      expect(at1.pendingCount).toBe(1);
+      expect(await m.family.familyPendingCount(await freshChar(s.id), t1)).toBe(1);
+
+      // +3 minutes: gone, and both badge counters exclude it.
+      const t3 = new Date(now.getTime() + 3 * 60 * 1000);
+      const at3 = await m.family.familyState(await freshChar(s.id), t3);
+      expect(at3.adoptionNotice).toBeNull();
+      expect(at3.pendingCount).toBe(0);
+      expect(await m.family.familyPendingCount(await freshChar(s.id), t3)).toBe(0);
+    });
+
+    it("only the adoption notice shortened: a season-windowed notice (birth) still lives at +3min", async () => {
+      const s = await setup("SeasonKept", { age: 40, drachmae: 100 });
+      await m.succession.adopt(await freshChar(s.id), s.candId, now);
+      // A birth notice landing at the same instant keeps the full one-day season window.
+      await db.insert(m.dbPkg.children).values({ parentCharacterId: s.id, worldId, name: "Newborn", sex: "male", bornAt: now, named: false });
+
+      const t3 = new Date(now.getTime() + 3 * 60 * 1000);
+      const st = await m.family.familyState(await freshChar(s.id), t3);
+      expect(st.adoptionNotice).toBeNull();               // 2-minute window: expired
+      expect(st.birthEvent).toMatchObject({ childName: "Newborn" }); // season window: still here
+      expect(st.pendingCount).toBe(1);                    // only the child, adoption excluded
+      expect(await m.family.familyPendingCount(await freshChar(s.id), t3)).toBe(1);
+    });
+
     // ---- Heir preference (Phase 2) ----------------------------------------
     // A helper: an adopted citizen with one of-age son, ready for the choice.
     const adoptedWithSon = async (name: string, sonName: string, sonAge = 16) => {
