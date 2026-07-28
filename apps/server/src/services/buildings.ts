@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, eq } from "drizzle-orm";
-import { createDb, playerBuildings, playerCharacters, playerPops, resources, worldTreasury, worlds } from "@massalia/db";
+import { createDb, effectLog, playerBuildings, playerCharacters, playerPops, resources, worldTreasury, worlds } from "@massalia/db";
 import {
   buildingCost,
   buildingBuildDays,
@@ -1033,7 +1033,7 @@ export async function hirePops(ctx: ActingContext, popType: string, count: numbe
 
 export type DismissResult =
   | { ok: false; code: number; error: string }
-  | { ok: true; popType: string; dismissed: number; owned: number };
+  | { ok: true; popType: string; dismissed: number; owned: number; refund: number };
 
 export async function dismissPops(ctx: ActingContext, popType: string, count: number, now: Date): Promise<DismissResult> {
   if (!Number.isInteger(count) || count <= 0) return { ok: false, code: 400, error: "Dismiss a whole, positive number of people." };
@@ -1052,9 +1052,20 @@ export async function dismissPops(ctx: ActingContext, popType: string, count: nu
     // the pop count drops, so income genuinely earned while staffed banks now instead
     // of being retroactively voided. Every marker resets to now.
     const settled = await settleAll(tx, ctx, now);
-    const owned = have - count; // floored at 0 by the reject above; no refund
+    const owned = have - count; // floored at 0 by the reject above
     await tx.update(playerPops).set({ count: owned }).where(eq(playerPops.id, existing[0]!.id));
-    return { composureDays: settled.composureDays, result: { ok: true as const, popType, dismissed: count, owned } };
+
+    // Sell-back: property resold refunds sellBack × count (slave only). Credited AFTER
+    // the settle (so it reads the settled wallet), same tx, logged like other wallet
+    // changes. Free classes have sellBack 0 → no refund, no log.
+    const refund = (popsC.pops[popType as PopType]!.sellBack ?? 0) * count;
+    if (refund > 0) {
+      const charRow = (await tx.select({ id: playerCharacters.id, drachmae: playerCharacters.drachmae }).from(playerCharacters).where(eq(playerCharacters.playerId, ctx.playerId)).limit(1))[0]!;
+      const nextWallet = charRow.drachmae + refund;
+      await tx.update(playerCharacters).set({ drachmae: nextWallet }).where(eq(playerCharacters.id, charRow.id));
+      await tx.insert(effectLog).values({ characterId: charRow.id, kind: "change_drachmae", detail: { amount: refund, value: nextWallet, source: "pop_sale" } });
+    }
+    return { composureDays: settled.composureDays, result: { ok: true as const, popType, dismissed: count, owned, refund } };
   });
   // Apply banked shrine composure after the tx, break-aware — exactly as collect does.
   if (outcome.composureDays > 0) await applyComposureDelta(await characterIdFor(ctx.playerId), outcome.composureDays, "building:shrine", now);
@@ -1067,14 +1078,14 @@ export async function dismissPops(ctx: ActingContext, popType: string, count: nu
 
 export type PeopleView = {
   foodGood: string;
-  pops: { type: string; label: string; dismissLabel: string; hireCost: number; upkeepPerDay: number; foodPerDay: number; civic: boolean }[];
+  pops: { type: string; label: string; dismissLabel: string; hireCost: number; sellBack: number; upkeepPerDay: number; foodPerDay: number; civic: boolean }[];
 };
 
 export function listPops(): PeopleView {
   const p = getPopsContent();
   return {
     foodGood: p.foodGood,
-    pops: Object.entries(p.pops).map(([type, d]) => ({ type, label: d.label, dismissLabel: d.dismissLabel, hireCost: d.hireCost, upkeepPerDay: d.upkeepPerDay, foodPerDay: d.foodPerDay, civic: d.civic })),
+    pops: Object.entries(p.pops).map(([type, d]) => ({ type, label: d.label, dismissLabel: d.dismissLabel, hireCost: d.hireCost, sellBack: d.sellBack, upkeepPerDay: d.upkeepPerDay, foodPerDay: d.foodPerDay, civic: d.civic })),
   };
 }
 

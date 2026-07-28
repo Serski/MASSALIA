@@ -428,6 +428,7 @@ export function HouseholdRow({
 }) {
   const [qty, setQty] = useState(1);
   const n = Math.min(qty, count);
+  const refund = pop.sellBack * n; // sell-back credit (slave only); 0 for the free classes
   return (
     <DetailRow
       icon={<PopGlyph type={pop.type} />}
@@ -437,7 +438,7 @@ export function HouseholdRow({
         <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <QtyStepper value={qty} setValue={setQty} min={1} max={count} />
           <button type="button" className="panel-btn ghost" disabled={busy || count <= 0} onClick={() => onDismiss(n)}>
-            {pop.dismissLabel} {n}
+            {pop.dismissLabel} {n}{refund > 0 ? ` · +${refund}dr` : ""}
           </button>
         </span>
       }

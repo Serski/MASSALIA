@@ -4,25 +4,26 @@
     "slave": {
       "label": "Slave",
       "dismissLabel": "Free / Sell",
-      "hireCost": 49,
-      "upkeepPerDay": 1,
+      "hireCost": 30,
+      "sellBack": 25,
+      "upkeepPerDay": 0,
       "foodPerDay": 1,
       "civic": false
     },
     "freeman": {
       "label": "Freeman",
       "dismissLabel": "Dismiss",
-      "hireCost": 28,
+      "hireCost": 20,
       "upkeepPerDay": 2,
-      "foodPerDay": 1,
+      "foodPerDay": 0,
       "civic": true
     },
     "citizen": {
       "label": "Citizen",
       "dismissLabel": "Release",
-      "hireCost": 84,
+      "hireCost": 50,
       "upkeepPerDay": 3,
-      "foodPerDay": 1,
+      "foodPerDay": 0,
       "civic": true
     }
   }

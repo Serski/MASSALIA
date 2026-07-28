@@ -20,7 +20,8 @@ const T0 = Date.UTC(2000, 0, 1); // world start = opening Winter
 async function loadModules() {
   const dbPkg = await import("@massalia/db");
   const buildings = await import("./buildings.js");
-  return { dbPkg, buildings };
+  const character = await import("./character.js");
+  return { dbPkg, buildings, character };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -118,10 +119,10 @@ suite("Ledger / building engine (integration)", () => {
 
     const collected = await m.buildings.collect(c, collectAt);
     expect(collected.banked.grain).toBeCloseTo(6, 1); // production (banked before food is drawn)
-    // Phase 2: the estate's 2 slaves now cost wages and eat. Food is drawn from the
-    // freshly-banked grain first, so stock left = produced − food drawn; the wallet =
-    // income (6) − staff wages (drawn food was free, no NPC buy needed).
-    expect(collected.staffUpkeep).toBeGreaterThan(0);
+    // The estate's 2 slaves have no wage but still eat. Food is drawn from the freshly
+    // banked grain first, so stock left = produced − food drawn; the wallet takes no
+    // staff-wage debit (slave wage 0) and no food-buy (drawn was free).
+    expect(collected.staffUpkeep).toBe(0);
     expect(collected.foodDrawn).toBeGreaterThan(0);
     expect(await goodBalance("grain")).toBeCloseTo(6 - collected.foodDrawn, 1);
     expect(await wallet()).toBe(collected.collected - collected.staffUpkeep - collected.foodCost);
@@ -231,10 +232,10 @@ suite("Ledger / building engine (integration)", () => {
     // Offering income banks into the integer wallet (income 7.2/day, T1 upkeep 0).
     expect(collected.collected).toBeGreaterThanOrEqual(5);
     expect(collected.collected).toBeLessThanOrEqual(8);
-    // Phase 2: the sanctuary's citizen costs wages and eats. The priest grows no
-    // grain, so the day's food is AUTO-BOUGHT from the NPC and the wallet debited.
+    // The sanctuary's citizen costs wages (3/day) but no longer eats — the free classes
+    // draw no food, so nothing is bought and only wages debit the wallet.
     expect(collected.staffUpkeep).toBeGreaterThan(0);
-    expect(collected.foodBought).toBeGreaterThan(0); // no wheat stock → bought
+    expect(collected.foodBought).toBe(0); // citizen eats nothing now
     expect(await wallet()).toBe(collected.collected - collected.staffUpkeep - collected.foodCost);
     // Herbal banks into resources (food draws grain, not herbal, so it's untouched).
     expect(collected.banked.herbal).toBeCloseTo(4, 0);
@@ -379,7 +380,7 @@ suite("Ledger / building engine (integration)", () => {
   // --- Phase 2: staffing as the counterweight ------------------------------
 
   it("(a) the rebalanced slipway (1 freeman) covers its own keep on cash income alone — staff + food < income", async () => {
-    // Phase 4 balance fix: the slipway now needs 1 freeman (2 dr/day wages + 1 food/day),
+    // Phase 4 balance fix: the slipway now needs 1 freeman (2 dr/day wages, no food),
     // so its 8.4 dr/day cash income covers its keep — naval-supplies are a bonus on top,
     // matching every other class (was a 2-freeman cash deficit before).
     playerId = await freshPlayer(100, "shipbuilder");
@@ -411,27 +412,28 @@ suite("Ledger / building engine (integration)", () => {
     const collected = await m.buildings.collect(c, new Date(T0 + 27 * DAY)); // long window
     expect(collected.idled).toContain("estate"); // under-staffed → idled
     expect(collected.income).toBe(0); // no income
-    expect(collected.staffUpkeep).toBeGreaterThan(0); // the 1 owned slave is still fed + paid, building idle or not
+    expect(collected.staffUpkeep).toBe(0); // slave has no wage
+    expect(collected.foodCost).toBeGreaterThan(0); // but the 1 owned slave still eats — food auto-bought
     expect(collected.upkeep).toBeGreaterThan(0); // building upkeep still accrues
-    expect(collected.owed).toBeGreaterThan(0); // empty purse can't cover wages + upkeep → forgiven shortfall
+    expect(collected.owed).toBeGreaterThan(0); // empty purse can't cover food + upkeep → forgiven shortfall
     expect(await wallet()).toBe(0); // never negative
   });
 
   it("(b) food draws from wheat stock first, then auto-buys the shortfall from the NPC (wallet debited)", async () => {
-    // A priest grows no grain. Seed exactly 1 wheat; over a 2-day window the sanctuary's
-    // citizen needs 2 food → 1 drawn from stock, 1 auto-bought at the wheat ceiling.
-    playerId = await freshPlayer(100, "priest");
-    const c = await ctx();
-    await m.buildings.build("priest", c, "sanctuary", new Date(T0));
+    // Only slaves eat now. Own 1 slave (createdAt T0 so the clock runs), grow no grain,
+    // seed exactly 1 wheat; over a 2-day window the slave needs 2 food → 1 drawn, 1 bought.
+    playerId = await freshPlayer(100, "landowner", {});
+    await db.insert(m.dbPkg.playerPops).values({ worldId, ownerPlayerId: playerId, popType: "slave", count: 1, createdAt: new Date(T0) });
     await db.insert(m.dbPkg.resources).values({ scope: "player", scopeId: playerId, type: "grain", amount: "1", ratePerSecond: "0", lastUpdatedAt: new Date(T0) });
+    const c = await ctx();
     const before = await wallet();
 
-    const collected = await m.buildings.collect(c, new Date(T0 + 3 * DAY)); // sanctuary active T0+1 → 2 whole days
+    const collected = await m.buildings.collect(c, new Date(T0 + 2 * DAY)); // 2 whole days → 2 food needed
     expect(collected.foodDrawn).toBe(1); // the seeded wheat, drawn first
     expect(collected.foodBought).toBe(1); // the remaining day bought from the NPC
     expect(collected.foodCost).toBeGreaterThan(0); // wallet paid for it
     expect(await goodBalance("grain")).toBe(0); // the 1 wheat was consumed
-    // Wallet = income − staff wages − bought-food cost (income covers it here).
+    // Wallet = (no income) − (slave wage 0) − bought-food cost.
     expect(await wallet()).toBe(before + collected.collected - collected.staffUpkeep - collected.foodCost);
   });
 
@@ -456,36 +458,37 @@ suite("Ledger / building engine (integration)", () => {
     expect(estate.income).toBe(0);
     expect(estate.upkeepPerDay).toBe(1); // T2 building upkeep — still owed
 
-    // Collecting confirms it: no goods, no income — yet the owned slave's wages AND the
-    // flat building upkeep are both charged (wages are owned-based, not staffing-based).
+    // Collecting confirms it: no goods, no income — yet the owned slave still EATS (its
+    // wage is 0) and the flat building upkeep is charged (both owned-based, not staffing-based).
     const collected = await m.buildings.collect(c, new Date(T0 + 10 * DAY));
     expect(Object.keys(collected.banked)).toHaveLength(0); // produced nothing
     expect(collected.income).toBe(0);
-    expect(collected.staffUpkeep).toBeGreaterThan(0); // the owned slave is still paid even though the estate idles
+    expect(collected.staffUpkeep).toBe(0); // slave has no wage
+    expect(collected.foodCost).toBeGreaterThan(0); // the owned slave still eats even though the estate idles
     expect(collected.upkeep).toBeGreaterThan(0); // building upkeep still owed
     expect(collected.idled).toContain("estate");
   });
 
-  it("(d) wages + food are charged on ALL owned pops, not just the staffing requirement", async () => {
-    // Own 5 slaves but build an estate that only requires 2. Hiring is the commitment:
-    // every owned slave draws wages + food, working a building or not. So the bill is
-    // 5 slaves' worth (25 dr over 5 days), NOT the 2 the estate staffs (which would be 10).
+  it("(d) food is charged on ALL owned pops, not just the staffing requirement", async () => {
+    // Own 5 slaves but build an estate that only requires 2. Owning is the commitment:
+    // every owned slave eats, working a building or not (slaves have no wage). So the food
+    // bill is 5 slaves' worth (25 units over 5 days), NOT the 2 the estate staffs (10).
     playerId = await freshPlayer(500, "landowner", { slave: 5 });
     const c = await ctx();
     await m.buildings.build("landowner", c, "estate", new Date(T0)); // T1 active T0+1, staffs 2
 
     const collected = await m.buildings.collect(c, new Date(T0 + 6 * DAY)); // 5 whole staffed days
     expect(collected.idled).toEqual([]); // 5 owned ≥ 2 required → fully staffed, not idled
-    expect(collected.staffUpkeep).toBe(25); // 5 owned × 1 dr/day × 5 days (required-only would be 10)
-    expect(collected.foodDrawn + collected.foodBought).toBe(25); // all 5 are fed each day
-    expect(collected.owed).toBe(0); // the estate's income + grain cover the bill
+    expect(collected.staffUpkeep).toBe(0); // slaves have no wage
+    expect(collected.foodDrawn + collected.foodBought).toBe(25); // all 5 are fed each day (5 × 1 × 5)
+    expect(collected.owed).toBe(0); // the estate's grain covers the food bill
   });
 
-  it("(e) owning pops with NO staffed building still runs the wages + food clock from when they were hired", async () => {
-    // The edge case: hire pops, build nothing. Wages + food are charged anyway — hiring
-    // means paying and feeding them, idle or not. With no building completion to anchor
-    // the first settle, it falls back to the pops' createdAt (set to T0 so the simulated
-    // clock applies).
+  it("(e) owning pops with NO staffed building still runs the food clock from when they were hired", async () => {
+    // The edge case: hire pops, build nothing. Food is charged anyway — owning slaves
+    // means feeding them, idle or not (they draw no wage). With no building completion to
+    // anchor the first settle, it falls back to the pops' createdAt (set to T0 so the
+    // simulated clock applies).
     playerId = await freshPlayer(500, "landowner", {}); // empty purse-staffing: no pops, no building
     await db.insert(m.dbPkg.playerPops).values({ worldId, ownerPlayerId: playerId, popType: "slave", count: 3, createdAt: new Date(T0) });
     const c = await ctx();
@@ -496,10 +499,10 @@ suite("Ledger / building engine (integration)", () => {
     const collected = await m.buildings.collect(c, new Date(T0 + 5 * DAY));
     expect(collected.income).toBe(0); // earns nothing
     expect(collected.collected).toBe(0); // no income, no building upkeep
-    expect(collected.staffUpkeep).toBe(15); // 3 slaves × 1 dr/day × 5 days, anchored at hire time (T0)
-    expect(collected.foodBought).toBe(15); // grows no grain → all 15 food auto-bought
+    expect(collected.staffUpkeep).toBe(0); // slaves have no wage
+    expect(collected.foodBought).toBe(15); // grows no grain → all 15 food auto-bought (3 × 1 × 5)
     expect(collected.foodCost).toBeGreaterThan(0); // wallet paid for the food
-    expect(collected.owed).toBe(0); // 500 dr covers wages + food
+    expect(collected.owed).toBe(0); // 500 dr covers the food
     expect(await wallet()).toBe(500 - collected.staffUpkeep - collected.foodCost); // debited, never negative
   });
 
@@ -551,6 +554,53 @@ suite("Ledger / building engine (integration)", () => {
     // pending income, banked by the checkpoint BEFORE the affordability check, can cover it.
     await setWallet(cost - 1);
     expect((await m.buildings.hirePops(c, "freeman", 1, new Date(T0 + 9 * DAY))).ok).toBe(true);
+  });
+
+  // --- Pop pricing: slave sell-back + starting package ----------------------
+
+  it("(sell-back) dismissing a slave refunds sellBack × N with a pop_sale log; freemen refund nothing", async () => {
+    playerId = await freshPlayer(200, "landowner", { slave: 3, freeman: 1 }); // pops' createdAt = real now → the T0 settle is a no-op
+    const c = await ctx();
+    const back = m.buildings.getPopsContent().pops.slave!.sellBack; // 25
+    const charId = (await db.select({ id: m.dbPkg.playerCharacters.id }).from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.playerId, playerId)).limit(1))[0]!.id;
+    const saleLogs = async () =>
+      (await db.select().from(m.dbPkg.effectLog).where(and(eq(m.dbPkg.effectLog.characterId, charId), eq(m.dbPkg.effectLog.kind, "change_drachmae"))))
+        .filter((l) => (l.detail as { source?: string }).source === "pop_sale");
+
+    // Slave resells: refund 25 × 2 = 50, banked to the wallet with a pop_sale log.
+    const wPre = await wallet();
+    const dis = await m.buildings.dismissPops(c, "slave", 2, new Date(T0 + DAY));
+    expect(dis).toMatchObject({ ok: true, dismissed: 2, owned: 1, refund: back * 2 });
+    expect(await wallet()).toBe(wPre + back * 2);
+    const logs = await saleLogs();
+    expect(logs).toHaveLength(1);
+    expect((logs[0]!.detail as { amount?: number }).amount).toBe(back * 2);
+
+    // Freeman is released, not sold: refund 0, wallet unchanged, no new pop_sale log.
+    const wMid = await wallet();
+    const disF = await m.buildings.dismissPops(c, "freeman", 1, new Date(T0 + DAY));
+    expect(disF).toMatchObject({ ok: true, refund: 0 });
+    expect(await wallet()).toBe(wMid);
+    expect(await saleLogs()).toHaveLength(1); // still just the slave sale
+  });
+
+  it("(pkg) the free-class starting package grants 10 wheat + 1 slave; a slave-class character gets nothing", async () => {
+    const bare = async () => {
+      const u = (await db.insert(m.dbPkg.users).values({ email: `pkg-${Math.random().toString(36).slice(2)}@t`, passwordHash: "x" }).returning())[0]!;
+      return (await db.insert(m.dbPkg.players).values({ worldId, userId: u.id, name: "P", color: "#123456", houseSlug: "test-house" }).returning())[0]!.id;
+    };
+    const grainOf = async (pid: string) => Number((await db.select().from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scopeId, pid), eq(m.dbPkg.resources.type, "grain"))).limit(1))[0]?.amount ?? 0);
+    const slaveOf = async (pid: string) => (await db.select().from(m.dbPkg.playerPops).where(and(eq(m.dbPkg.playerPops.ownerPlayerId, pid), eq(m.dbPkg.playerPops.popType, "slave"))).limit(1))[0]?.count ?? 0;
+
+    const free = await bare();
+    await m.character.grantStartingPackage(db, free, worldId, "trader");
+    expect(await grainOf(free)).toBe(10);
+    expect(await slaveOf(free)).toBe(1);
+
+    const enslaved = await bare();
+    await m.character.grantStartingPackage(db, enslaved, worldId, "slave");
+    expect(await grainOf(enslaved)).toBe(0); // bare enslaved start — no package
+    expect(await slaveOf(enslaved)).toBe(0);
   });
 
   // --- Upgrade-in-progress earns the PRIOR tier (Option A) -------------------
@@ -723,7 +773,7 @@ suite("Ledger / building engine (integration)", () => {
   });
 
   it("(P3d) hire debits hireCost × N and increments the pop count; rejected when the wallet is short", async () => {
-    // slave hireCost is 49 (content). Hire 2 → 98 dr, +2 slaves.
+    // slave hireCost is 30 (content). Hire 2 → 60 dr, +2 slaves.
     playerId = await freshPlayer(100, "landowner", {}); // start with no slaves
     const c = await ctx();
     expect(await popBalance("slave")).toBe(0);
@@ -731,50 +781,52 @@ suite("Ledger / building engine (integration)", () => {
     const hired = await m.buildings.hirePops(c, "slave", 2, new Date(T0));
     expect(hired.ok).toBe(true);
     if (hired.ok) {
-      expect(hired.unitCost).toBe(49); // from pops.json
-      expect(hired.total).toBe(98);
+      expect(hired.unitCost).toBe(30); // from pops.json
+      expect(hired.total).toBe(60);
       expect(hired.owned).toBe(2);
     }
-    expect(await wallet()).toBe(2); // 100 − 98
+    expect(await wallet()).toBe(40); // 100 − 60
     expect(await popBalance("slave")).toBe(2);
 
-    // Hiring again increments the existing row (not a duplicate); rejected when short.
-    const broke = await m.buildings.hirePops(c, "slave", 1, new Date(T0)); // needs 49, have 2
+    // Hiring 2 more increments the existing row (not a duplicate); rejected when short.
+    const broke = await m.buildings.hirePops(c, "slave", 2, new Date(T0)); // needs 60, have 40
     expect(broke.ok).toBe(false);
     if (!broke.ok) expect(broke.code).toBe(402);
-    expect(await wallet()).toBe(2); // unchanged
+    expect(await wallet()).toBe(40); // unchanged
     expect(await popBalance("slave")).toBe(2); // unchanged
 
     const rows = await db.select().from(m.dbPkg.playerPops).where(and(eq(m.dbPkg.playerPops.ownerPlayerId, playerId), eq(m.dbPkg.playerPops.popType, "slave")));
     expect(rows).toHaveLength(1); // single row, count incremented in place
   });
 
-  it("(P3e) dismiss decrements the owned count (no refund) and the upkeep drops on the NEXT settle", async () => {
-    // Own 3 slaves but build an estate that staffs 2. The first collect charges all 3
-    // (owned-based wages). Dismiss 2 — no refund, the wallet is untouched by the act —
-    // and the next collect charges only the 1 that remains.
+  it("(P3e) dismiss decrements the owned count, refunds the sell-back, and the food bill drops on the NEXT settle", async () => {
+    // Own 3 slaves and an estate that staffs 2. The first collect feeds all 3 (owned-based
+    // food; slaves draw no wage). Dismiss 2 — 25 sell-back each refunds — and the next
+    // collect feeds only the 1 that remains.
     playerId = await freshPlayer(500, "landowner", { slave: 3 });
     const c = await ctx();
     await m.buildings.build("landowner", c, "estate", new Date(T0)); // T1 active T0+1, staffs 2
 
     const first = await m.buildings.collect(c, new Date(T0 + 6 * DAY)); // 5 whole days × 3 slaves
-    expect(first.staffUpkeep).toBe(15); // 3 owned × 1 dr/day × 5 days
+    expect(first.staffUpkeep).toBe(0); // slaves have no wage
+    expect(first.foodDrawn + first.foodBought).toBe(15); // 3 owned × 1 food × 5 days
 
-    // Dismiss 2 slaves: count floors toward 0, no drachmae refunded.
+    // Dismiss 2 slaves: count → 1, and the sell-back refunds 25 × 2 = 50 to the wallet.
     const walletBefore = await wallet();
     const res = await m.buildings.dismissPops(c, "slave", 2, new Date(T0 + 6 * DAY));
     expect(res.ok).toBe(true);
     if (res.ok) {
       expect(res.dismissed).toBe(2);
       expect(res.owned).toBe(1); // 3 − 2
+      expect(res.refund).toBe(50); // 25 × 2
     }
     expect(await popBalance("slave")).toBe(1); // decremented in place
-    expect(await wallet()).toBe(walletBefore); // NO refund — dismissing is a sunk cost
+    expect(await wallet()).toBe(walletBefore + 50); // +50 sell-back credited
 
-    // Next settle charges only the 1 remaining slave (upkeep dropped from 15 → 5).
+    // Next settle feeds only the 1 remaining slave (food dropped from 15 → 5).
     const second = await m.buildings.collect(c, new Date(T0 + 11 * DAY)); // another 5 whole days
-    expect(second.staffUpkeep).toBe(5); // 1 owned × 1 dr/day × 5 days
-    expect(second.staffUpkeep).toBeLessThan(first.staffUpkeep);
+    expect(second.foodDrawn + second.foodBought).toBe(5); // 1 owned × 1 food × 5 days
+    expect(second.foodDrawn + second.foodBought).toBeLessThan(first.foodDrawn + first.foodBought);
   });
 
   it("(P3f) dismissing MORE than you own is rejected — nothing mutated", async () => {
@@ -825,9 +877,9 @@ suite("Ledger / building engine (integration)", () => {
     expect(view.foodGood).toBe("grain");
     expect(view.pops.map((p) => p.type).sort()).toEqual(["citizen", "freeman", "slave"]);
     const slave = view.pops.find((p) => p.type === "slave")!;
-    expect(slave).toMatchObject({ label: "Slave", dismissLabel: "Free / Sell", hireCost: 49, upkeepPerDay: 1, foodPerDay: 1, civic: false });
+    expect(slave).toMatchObject({ label: "Slave", dismissLabel: "Free / Sell", hireCost: 30, sellBack: 25, upkeepPerDay: 0, foodPerDay: 1, civic: false });
     const citizen = view.pops.find((p) => p.type === "citizen")!;
-    expect(citizen).toMatchObject({ label: "Citizen", dismissLabel: "Release", hireCost: 84, upkeepPerDay: 3, foodPerDay: 1, civic: true });
+    expect(citizen).toMatchObject({ label: "Citizen", dismissLabel: "Release", hireCost: 50, sellBack: 0, upkeepPerDay: 3, foodPerDay: 0, civic: true });
   });
 
   it("(P4-C0) every craft recipe is cheaper to make than to buy: craftRawCost < the good's vendor sell", () => {

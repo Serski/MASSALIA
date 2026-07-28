@@ -1063,7 +1063,7 @@ export type BuildingsMine = {
 
 export type PeopleView = {
   foodGood: string;
-  pops: { type: PopType; label: string; dismissLabel: string; hireCost: number; upkeepPerDay: number; foodPerDay: number; civic: boolean }[];
+  pops: { type: PopType; label: string; dismissLabel: string; hireCost: number; sellBack: number; upkeepPerDay: number; foodPerDay: number; civic: boolean }[];
 };
 
 export type HireResult = { ok: true; popType: string; hired: number; unitCost: number; total: number; wallet: number; owned: number };

@@ -10,7 +10,7 @@ describe("startingCharacter", () => {
     expect(c.prestige).toBe(0);
     expect(c.militia).toBe(0);
     expect(c.intelligence).toBe(0);
-    expect(c.drachmae).toBe(100);
+    expect(c.drachmae).toBe(150); // free classes start with 150 (+ a 10-wheat/1-slave package at creation)
     expect(c.growthMultiplier).toBe(1.0);
     expect(c.composure).toBe(70);
     expect(c.party).toBe("none");
@@ -26,7 +26,7 @@ describe("startingCharacter", () => {
     expect(c.devotion).toBe(0);
   });
 
-  it("gives the slave reduced drachmae and a hidden growth multiplier", () => {
+  it("gives the slave reduced drachmae and a hidden growth multiplier (the bare enslaved start — no 150, no package)", () => {
     const c = startingCharacter("xanthippos", "slave");
     expect(c.drachmae).toBe(10);
     expect(c.growthMultiplier).toBe(1.5);

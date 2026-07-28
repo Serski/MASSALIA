@@ -48,14 +48,17 @@ export const HOUSE_START: Record<string, { ideology: number; bonus: StatBonus }>
 };
 
 // Class starting data. Slave begins poorer but with a hidden growth multiplier.
+// The seven free classes start with 150 drachmae (+ a starting package of 10 wheat
+// and 1 slave, granted at creation). Slave keeps its enslaved-start special case:
+// 10 drachmae, no package — a slave begins with nothing.
 export const CLASS_START: Record<ClassId, { bonus: StatBonus; drachmae: number; growthMultiplier: number }> = {
-  landowner: { bonus: { prestige: 2 }, drachmae: 100, growthMultiplier: 1.0 },
-  trader: { bonus: { intelligence: 2 }, drachmae: 100, growthMultiplier: 1.0 },
-  philosopher: { bonus: { intelligence: 3 }, drachmae: 100, growthMultiplier: 1.0 },
-  hetaira: { bonus: { prestige: 2, intelligence: 1 }, drachmae: 100, growthMultiplier: 1.0 },
-  hoplite: { bonus: { militia: 3 }, drachmae: 100, growthMultiplier: 1.0 },
-  shipbuilder: { bonus: { intelligence: 2, militia: 1 }, drachmae: 100, growthMultiplier: 1.0 },
-  priest: { bonus: { devotion: 3 }, drachmae: 100, growthMultiplier: 1.0 },
+  landowner: { bonus: { prestige: 2 }, drachmae: 150, growthMultiplier: 1.0 },
+  trader: { bonus: { intelligence: 2 }, drachmae: 150, growthMultiplier: 1.0 },
+  philosopher: { bonus: { intelligence: 3 }, drachmae: 150, growthMultiplier: 1.0 },
+  hetaira: { bonus: { prestige: 2, intelligence: 1 }, drachmae: 150, growthMultiplier: 1.0 },
+  hoplite: { bonus: { militia: 3 }, drachmae: 150, growthMultiplier: 1.0 },
+  shipbuilder: { bonus: { intelligence: 2, militia: 1 }, drachmae: 150, growthMultiplier: 1.0 },
+  priest: { bonus: { devotion: 3 }, drachmae: 150, growthMultiplier: 1.0 },
   slave: { bonus: {}, drachmae: 10, growthMultiplier: 1.5 },
 };
 

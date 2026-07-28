@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { createDb, dynasties, players, playerCharacters, worlds } from "@massalia/db";
+import { createDb, dynasties, players, playerCharacters, playerPops, resources, worlds } from "@massalia/db";
 import {
   capStat,
   CLASS_START,
@@ -24,9 +24,21 @@ import { getComposureConfig } from "./composure.js";
 import { getAgeConfig, portraitUrl } from "./age.js";
 
 const db = createDb();
+type DbTx = Parameters<Parameters<ReturnType<typeof createDb>["transaction"]>[0]>[0];
+type Exec = DbTx | typeof db;
 
 export type CharacterRow = typeof playerCharacters.$inferSelect;
 export type PlayerRow = typeof players.$inferSelect;
+
+// The free classes' starting package, granted in the creation transaction: 10 wheat
+// (grain) + 1 slave. The 150 starting drachmae lives on the character row (CLASS_START).
+// A slave-class character gets nothing — the enslaved start is deliberately bare (a
+// slave owning a slave from day one would be strange), so the grant is class-scoped.
+export async function grantStartingPackage(exec: Exec, playerId: string, worldId: string, classId: ClassId, now: Date = new Date()): Promise<void> {
+  if (classId === "slave") return;
+  await exec.insert(resources).values({ scope: "player", scopeId: playerId, type: "grain", amount: "10", ratePerSecond: "0", lastUpdatedAt: now });
+  await exec.insert(playerPops).values({ worldId, ownerPlayerId: playerId, popType: "slave", count: 1 });
+}
 
 export async function getActiveWorldId(): Promise<string | null> {
   const rows = await db.select({ id: worlds.id }).from(worlds).where(eq(worlds.status, "active")).limit(1);

@@ -82,7 +82,7 @@ export type CraftRecipe = { building: string; tier: number; recipe: Record<strin
 // People market — pops you hire to staff buildings. Each carries a one-time hire
 // cost, a daily drachmae upkeep (the minus), and a daily food draw (foodGood).
 export type PopType = "slave" | "freeman" | "citizen";
-export type PopDef = { label: string; dismissLabel: string; hireCost: number; upkeepPerDay: number; foodPerDay: number; civic: boolean };
+export type PopDef = { label: string; dismissLabel: string; hireCost: number; sellBack: number; upkeepPerDay: number; foodPerDay: number; civic: boolean };
 export type PopsContent = { foodGood: string; pops: Record<PopType, PopDef> };
 
 export type ClassBuildingTier = { tier: number; name: string; rank?: string };
@@ -406,6 +406,9 @@ const popDefSchema = z
     label: z.string(),
     dismissLabel: z.string(), // per-type flavour for the disband action (Free / Sell · Dismiss · Release)
     hireCost: z.number().int().nonnegative(),
+    // Dismiss refund per unit — property resold (slave 25); 0 (default) for the free
+    // classes, who are released, not sold.
+    sellBack: z.number().int().nonnegative().default(0),
     upkeepPerDay: z.number().nonnegative(),
     foodPerDay: z.number().nonnegative(),
     civic: z.boolean(),

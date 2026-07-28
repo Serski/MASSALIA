@@ -71,6 +71,7 @@ function PeopleMarketRow({
 }) {
   const [qty, setQty] = useState(1);
   const dismissN = Math.min(qty, owned); // never dismiss more than owned
+  const refund = pop.sellBack * dismissN; // sell-back credit (slave only); 0 for the free classes
   return (
     <PanelRow
       icon={<PopGlyph type={pop.type} />}
@@ -79,9 +80,9 @@ function PeopleMarketRow({
       action={
         <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <QtyStepper value={qty} setValue={setQty} min={1} />
-          {/* Dismiss has NO refund — it only stops the upkeep + food. */}
+          {/* Refund shown only when the pop resells (slave); the free classes are released. */}
           <button type="button" className="panel-btn ghost" disabled={busy || owned <= 0} onClick={() => onDismiss(dismissN)}>
-            {pop.dismissLabel} {dismissN}
+            {pop.dismissLabel} {dismissN}{refund > 0 ? ` · +${refund}dr` : ""}
           </button>
           <button type="button" className="panel-btn" disabled={busy} onClick={() => onHire(qty)}>
             Hire {qty} · {pop.hireCost * qty}dr

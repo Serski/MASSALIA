@@ -12,7 +12,7 @@ import {
 } from "@massalia/db";
 import { avatarById, type ClassId } from "@massalia/shared";
 import { requireAuth } from "../services/auth.js";
-import { createCharacterRow } from "../services/character.js";
+import { createCharacterRow, grantStartingPackage } from "../services/character.js";
 import { getAgeConfig } from "../services/age.js";
 
 const db = createDb();
@@ -159,6 +159,9 @@ export async function characterRoutes(app: FastifyInstance) {
           lastUpdatedAt: new Date(),
         })),
       );
+
+      // Starting package (free classes only): 10 wheat + 1 slave.
+      await grantStartingPackage(tx, player.id, world.id, profession.slug as ClassId);
 
       return { player, character };
     });

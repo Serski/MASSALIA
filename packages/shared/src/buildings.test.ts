@@ -309,22 +309,27 @@ describe("Economy v2.1 — materials, staffing, craft & pops", () => {
     expect(content.craft!.galley!.tier).toBe(4);
   });
 
-  it("pops: hire cost is the -30% set, all pops draw food, only freeman/citizen are civic", () => {
-    expect(pops.pops.slave.hireCost).toBe(49);
-    expect(pops.pops.freeman.hireCost).toBe(28);
-    expect(pops.pops.citizen.hireCost).toBe(84);
-    expect([pops.pops.slave, pops.pops.freeman, pops.pops.citizen].every((p) => p.foodPerDay === 1)).toBe(true);
+  it("pops: hire costs 30/20/50; only the slave eats + resells (25) with no wage; only freeman/citizen are civic", () => {
+    expect(pops.pops.slave.hireCost).toBe(30);
+    expect(pops.pops.freeman.hireCost).toBe(20);
+    expect(pops.pops.citizen.hireCost).toBe(50);
+    // Only the slave draws food and has no wage; the free classes wage (2/3) but don't eat.
+    expect([pops.pops.slave.foodPerDay, pops.pops.freeman.foodPerDay, pops.pops.citizen.foodPerDay]).toEqual([1, 0, 0]);
+    expect([pops.pops.slave.upkeepPerDay, pops.pops.freeman.upkeepPerDay, pops.pops.citizen.upkeepPerDay]).toEqual([0, 2, 3]);
+    // Sell-back: the slave is resold (25); the free classes are released, not sold.
+    expect(pops.pops.slave.sellBack).toBe(25);
+    expect([pops.pops.freeman.sellBack, pops.pops.citizen.sellBack]).toEqual([0, 0]);
     expect(pops.pops.slave.civic).toBe(false);
     expect(pops.foodGood).toBe("grain"); // wheat (display label)
   });
 
-  it("staff daily cost scales with tier (the rising payroll that bites T4 ROI)", () => {
+  it("staff daily cost scales with tier (slaves are wage-free, so the rising FOOD bill bites T4 ROI)", () => {
     const estate = content.classBuildings.landowner!; // 2 slaves T1
     const t1 = staffDailyCost(estate.staffing, 1, pops);
     const t4 = staffDailyCost(estate.staffing, 4, pops);
-    expect(t1.upkeep).toBe(2); // 2 slaves × 1
-    expect(t1.food).toBe(2);
-    expect(t4.upkeep).toBe(4); // 4 slaves × 1 at T4
-    expect(t4.upkeep).toBeGreaterThan(t1.upkeep);
+    expect(t1.upkeep).toBe(0); // slaves draw no wage
+    expect(t1.food).toBe(2); // 2 slaves × 1 food
+    expect(t4.food).toBe(4); // 4 slaves × 1 food at T4
+    expect(t4.food).toBeGreaterThan(t1.food);
   });
 });
