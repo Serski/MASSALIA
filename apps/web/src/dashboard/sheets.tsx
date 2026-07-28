@@ -84,11 +84,6 @@ export const placeholderItems = [
   { id: "letter-credit", icon: "📜", name: "Letter of Credit", origin: "Redeem at any Agora for 100 dr.", action: "Redeem" },
 ];
 
-// TODO: placeholder units until the units system exists.
-export const placeholderUnits = [
-  { id: "caravan", icon: "🛡️", name: "Caravan Guards × 2", line: "Protect your trade routes · upkeep −1g/day each", tag: "hired", dim: false },
-  { id: "militia", icon: "⚔️", name: "Militia × 0", line: "Trained and led by Military Leaders", tag: "—", dim: true },
-];
 
 // TODO: placeholder achievements until the achievement system exists.
 export const earnedAchievements = [
@@ -495,14 +490,6 @@ export function InventoryUnits({
           {note ? <p className="sheet-todo">{note}</p> : null}
         </>
       ) : null}
-      <SheetLabel>Your units</SheetLabel>
-      {placeholderUnits.map((unit) => (
-        <DetailRow key={unit.id} icon={unit.icon} name={unit.name} sub={unit.line} tag={unit.tag} dim={unit.dim} />
-      ))}
-      <div className="slot-empty">
-        Hire guards for protection — or befriend a Dekarchos. Armies are a Military Leader&apos;s trade.
-      </div>
-      <p className="sheet-todo">TODO: guards &amp; armies are placeholder rows until the units system exists.</p>
     </div>
   );
 }

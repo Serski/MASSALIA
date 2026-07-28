@@ -4,43 +4,6 @@ import { assetPath } from "../../data/league.js";
 import { GOOD_ICON, PanelBanner, type PanelProps, PanelRow, PopGlyph, QtyStepper } from "../shared.js";
 import { SheetTabs } from "../sheets.js";
 
-// TODO: market listings are placeholder until the market service exists.
-type MarketCat = "res" | "item" | "people" | "special";
-const placeholderListings: {
-  id: string;
-  cat: MarketCat;
-  icon: string;
-  name: string;
-  price: string;
-  seller: string;
-  sellerIsGame: boolean;
-  action: string;
-}[] = [
-  { id: "tin", cat: "res", icon: "🪨", name: "Tin × 40", price: "11 g ea", seller: "Nikandros", sellerIsGame: false, action: "Buy" },
-  { id: "wine", cat: "res", icon: "🍷", name: "Wine × 20", price: "15 g ea", seller: "the Agora", sellerIsGame: true, action: "Buy" },
-  { id: "wheat", cat: "res", icon: "🌾", name: "Wheat × 100", price: "9 g ea", seller: "Philippa", sellerIsGame: false, action: "Buy" },
-  { id: "letter", cat: "item", icon: "📜", name: "Letter of Credit", price: "95 g", seller: "Dorieus", sellerIsGame: false, action: "Buy" },
-  { id: "amphora", cat: "item", icon: "🏺", name: "Bronze Amphora set", price: "60 g", seller: "the Agora", sellerIsGame: true, action: "Buy" },
-  { id: "guard", cat: "people", icon: "🛡️", name: "Caravan Guard · contract", price: "40 g", seller: "the Agora", sellerIsGame: true, action: "Hire" },
-  { id: "tutor", cat: "people", icon: "📖", name: "Tutor · for your children", price: "120 g", seller: "the Agora", sellerIsGame: true, action: "Hire" },
-  { id: "expedition", cat: "special", icon: "⛵", name: "Expedition share · a long voyage", price: "500 g", seller: "the Agora", sellerIsGame: true, action: "Buy" },
-  { id: "ring", cat: "special", icon: "💍", name: "Lion-seal ring · unique", price: "800 g", seller: "Kallias", sellerIsGame: false, action: "Buy" },
-];
-
-// TODO: buy orders are placeholder until the market service exists.
-const placeholderBuyOrders: { id: string; icon: string; title: string; sub: string; mine: boolean }[] = [
-  { id: "tin", icon: "🪨", title: "Seeking 60 Tin · 10g ea", sub: "Posted by you · partial · 22 filled", mine: true },
-  { id: "wheat", icon: "🌾", title: "Seeking 30 Wheat · 8g ea", sub: "Posted by Dorieus", mine: false },
-];
-
-const marketFilters: { id: "all" | MarketCat; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "res", label: "Resources" },
-  { id: "item", label: "Items" },
-  { id: "people", label: "People" },
-  { id: "special", label: "Special" },
-];
-
 // Display-only grouping for the agora. The goods LIST is derived from the vendor
 // data (so future goods appear automatically); only the bucket is a hint. The nine
 // raw materials are a stable content concept; the naval line is derived from the
