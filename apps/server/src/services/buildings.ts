@@ -603,6 +603,25 @@ async function settleShrine(exec: Exec, ctx: ActingContext, rows: BuildingRow[],
   return perDay * days;
 }
 
+// The complete "settle everything up to now" sequence the collect path runs, in one
+// place: goods + income (staffed only) + building upkeep + staff wages/food + shrine
+// composure, driven by ONE idled set resolved from CURRENT pop ownership. Reused by
+// collect AND by the staffing mutations (hire/dismiss), which run it BEFORE changing
+// pop counts so history banks at the staffing that actually prevailed and every
+// marker resets to `now`. Composure is returned (never applied here) — the caller
+// applies it AFTER the transaction, break-aware, exactly as collect does.
+type FullSettle = { rows: BuildingRow[]; idled: Set<string>; banked: Record<string, number>; wallet: WalletSettle; staff: StaffSettle; composureDays: number };
+
+async function settleAll(exec: Exec, ctx: ActingContext, now: Date): Promise<FullSettle> {
+  const rows = await flipActivations(exec, await ownedRows(exec, ctx.playerId), now);
+  const idled = await staffingFor(exec, ctx, rows, now);
+  const banked = await settleGoods(exec, ctx, rows, now, idled);
+  const wallet = await settleWallet(exec, ctx, rows, now, idled);
+  const staff = await settleStaffing(exec, ctx, rows, now); // owned-pop wages + food; after income is banked
+  const composureDays = await settleShrine(exec, ctx, rows, idled, now);
+  return { rows, idled, banked, wallet, staff, composureDays };
+}
+
 // --- Catalog (GET /api/buildings) -------------------------------------------
 
 export type CatalogTier = {
@@ -966,17 +985,23 @@ export type HireResult =
   | { ok: false; code: number; error: string }
   | { ok: true; popType: string; hired: number; unitCost: number; total: number; wallet: number; owned: number };
 
-export async function hirePops(ctx: ActingContext, popType: string, count: number, _now: Date): Promise<HireResult> {
+export async function hirePops(ctx: ActingContext, popType: string, count: number, now: Date): Promise<HireResult> {
   if (!Number.isInteger(count) || count <= 0) return { ok: false, code: 400, error: "Hire a whole, positive number of people." };
   const popsC = getPopsContent();
   const def = popsC.pops[popType as PopType];
   if (!def) return { ok: false, code: 404, error: "The agora hires no such people." };
   const total = def.hireCost * count;
 
-  return db.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx) => {
+    // Checkpoint: settle history up to now at the CURRENT (pre-hire) staffing before
+    // the pop count grows, so the unstaffed window never back-pays at the staffed
+    // rate. Every marker resets to now; the future accrues at the new staffing.
+    const settled = await settleAll(tx, ctx, now);
+    // Affordability is checked against the SETTLED wallet — income just banked, wages
+    // /upkeep just debited — an honest post-settle balance (may help or hurt the hire).
     const charRows = await tx.select({ drachmae: playerCharacters.drachmae }).from(playerCharacters).where(eq(playerCharacters.playerId, ctx.playerId)).limit(1);
     const wallet = charRows[0]?.drachmae ?? 0;
-    if (wallet < total) return { ok: false as const, code: 402, error: `Hiring ${count} ${popType} costs ${total} drachmae — you have ${wallet}.` };
+    if (wallet < total) return { composureDays: settled.composureDays, result: { ok: false as const, code: 402, error: `Hiring ${count} ${popType} costs ${total} drachmae — you have ${wallet}.` } };
     await tx.update(playerCharacters).set({ drachmae: wallet - total }).where(eq(playerCharacters.playerId, ctx.playerId));
     const existing = await tx
       .select()
@@ -991,8 +1016,11 @@ export async function hirePops(ctx: ActingContext, popType: string, count: numbe
       owned = count;
       await tx.insert(playerPops).values({ worldId: ctx.worldId, ownerPlayerId: ctx.playerId, popType, count });
     }
-    return { ok: true as const, popType, hired: count, unitCost: def.hireCost, total, wallet: wallet - total, owned };
+    return { composureDays: settled.composureDays, result: { ok: true as const, popType, hired: count, unitCost: def.hireCost, total, wallet: wallet - total, owned } };
   });
+  // Apply banked shrine composure after the tx, break-aware — exactly as collect does.
+  if (outcome.composureDays > 0) await applyComposureDelta(await characterIdFor(ctx.playerId), outcome.composureDays, "building:shrine", now);
+  return outcome.result;
 }
 
 // --- Dismiss / disband (POST /api/buildings/dismiss) -------------------------
@@ -1007,23 +1035,30 @@ export type DismissResult =
   | { ok: false; code: number; error: string }
   | { ok: true; popType: string; dismissed: number; owned: number };
 
-export async function dismissPops(ctx: ActingContext, popType: string, count: number, _now: Date): Promise<DismissResult> {
+export async function dismissPops(ctx: ActingContext, popType: string, count: number, now: Date): Promise<DismissResult> {
   if (!Number.isInteger(count) || count <= 0) return { ok: false, code: 400, error: "Dismiss a whole, positive number of people." };
   const popsC = getPopsContent();
   if (!popsC.pops[popType as PopType]) return { ok: false, code: 404, error: "You keep no such people." };
 
-  return db.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx) => {
     const existing = await tx
       .select()
       .from(playerPops)
       .where(and(eq(playerPops.worldId, ctx.worldId), eq(playerPops.ownerPlayerId, ctx.playerId), eq(playerPops.popType, popType)))
       .limit(1);
     const have = existing[0]?.count ?? 0;
-    if (have < count) return { ok: false as const, code: 409, error: `You own ${have} ${popType} — you cannot dismiss ${count}.` };
+    if (have < count) return { composureDays: 0, result: { ok: false as const, code: 409, error: `You own ${have} ${popType} — you cannot dismiss ${count}.` } };
+    // Checkpoint: settle history up to now at the CURRENT (pre-dismiss) staffing before
+    // the pop count drops, so income genuinely earned while staffed banks now instead
+    // of being retroactively voided. Every marker resets to now.
+    const settled = await settleAll(tx, ctx, now);
     const owned = have - count; // floored at 0 by the reject above; no refund
     await tx.update(playerPops).set({ count: owned }).where(eq(playerPops.id, existing[0]!.id));
-    return { ok: true as const, popType, dismissed: count, owned };
+    return { composureDays: settled.composureDays, result: { ok: true as const, popType, dismissed: count, owned } };
   });
+  // Apply banked shrine composure after the tx, break-aware — exactly as collect does.
+  if (outcome.composureDays > 0) await applyComposureDelta(await characterIdFor(ctx.playerId), outcome.composureDays, "building:shrine", now);
+  return outcome.result;
 }
 
 // --- People market (GET /api/buildings/people) -------------------------------
@@ -1103,17 +1138,10 @@ export type CollectResult = {
 
 export async function collect(ctx: ActingContext, now: Date): Promise<CollectResult> {
   const result = await db.transaction(async (tx) => {
-    const rows = await flipActivations(tx, await ownedRows(tx, ctx.playerId), now);
-    // Resolve the shared-pool staffing ONCE, then drive every settle from it:
-    // goods + income come only from staffed buildings; building upkeep from all.
-    const idled = await staffingFor(tx, ctx, rows, now);
-    const banked = await settleGoods(tx, ctx, rows, now, idled);
-    const wallet = await settleWallet(tx, ctx, rows, now, idled);
-    const staff = await settleStaffing(tx, ctx, rows, now); // owned-pop wages + food; after income is banked
-    const composureDays = await settleShrine(tx, ctx, rows, idled, now);
+    const s = await settleAll(tx, ctx, now);
     // Report idled buildings by their content id (not the row uuid) for consumers.
-    const idledBuildings = rows.filter((r) => idled.has(r.id)).map((r) => r.buildingId);
-    return { banked, wallet, staff, composureDays, idled: idledBuildings };
+    const idledBuildings = s.rows.filter((r) => s.idled.has(r.id)).map((r) => r.buildingId);
+    return { banked: s.banked, wallet: s.wallet, staff: s.staff, composureDays: s.composureDays, idled: idledBuildings };
   });
   // Composure goes through the break-aware service (clamps to the cap), after tx.
   let composure = 0;

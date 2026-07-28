@@ -76,6 +76,11 @@ suite("Ledger / building engine (integration)", () => {
     const rows = await db.select().from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scope, "player"), eq(m.dbPkg.resources.scopeId, playerId), eq(m.dbPkg.resources.type, type))).limit(1);
     return Number(rows[0]?.amount ?? 0);
   }
+  // The wallet-income accrual marker's timestamp (null until a settle creates it).
+  async function incomeMarker(): Promise<number | null> {
+    const rows = await db.select().from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scope, "player"), eq(m.dbPkg.resources.scopeId, playerId), eq(m.dbPkg.resources.type, "building_income"))).limit(1);
+    return rows[0]?.lastUpdatedAt.getTime() ?? null;
+  }
 
   beforeAll(async () => {
     m = await loadModules();
@@ -496,6 +501,56 @@ suite("Ledger / building engine (integration)", () => {
     expect(collected.foodCost).toBeGreaterThan(0); // wallet paid for the food
     expect(collected.owed).toBe(0); // 500 dr covers wages + food
     expect(await wallet()).toBe(500 - collected.staffUpkeep - collected.foodCost); // debited, never negative
+  });
+
+  // --- Checkpoint-on-staffing-change: hire/dismiss settle before mutating ----
+  // The emporion (trader) is income-only at T1 (9.6 dr/day, no goods), so collect.income
+  // isolates the accrual cleanly. Grain is seeded so the freeman's food is DRAWN (free),
+  // keeping the net-wallet assertions free of food-buy noise.
+
+  it("(cp-hire) hiring staff does NOT back-pay income for the unstaffed window; the income marker resets to now", async () => {
+    playerId = await freshPlayer(2000, "trader", { freeman: 1 }); // build needs the staff it requires
+    const c = await ctx();
+    await m.buildings.build("trader", c, "emporion", new Date(T0)); // active T0+1, staffed by 1 freeman
+    // Lose the freeman OUTSIDE the settle path (freed/dead — the pool-drop of test (c)),
+    // so [T0+1, T0+9] runs UNSTAFFED with no checkpoint to bank against.
+    await db.update(m.dbPkg.playerPops).set({ count: 0 }).where(and(eq(m.dbPkg.playerPops.ownerPlayerId, playerId), eq(m.dbPkg.playerPops.popType, "freeman")));
+    const hireAt = new Date(T0 + 9 * DAY);
+    expect((await m.buildings.hirePops(c, "freeman", 1, hireAt)).ok).toBe(true);
+    // The hire settled the unstaffed window (to 0) and reset the marker to now.
+    expect(await incomeMarker()).toBe(hireAt.getTime());
+    // Collecting at the SAME instant proves the unstaffed window was NOT back-paid.
+    expect((await m.buildings.collect(c, hireAt)).income).toBe(0);
+    // A further STAFFED window now accrues normally.
+    expect((await m.buildings.collect(c, new Date(T0 + 13 * DAY))).income).toBeGreaterThan(0);
+  });
+
+  it("(cp-dismiss) dismissing below staffing BANKS the earned window's income; the post-dismiss window earns nothing", async () => {
+    playerId = await freshPlayer(2000, "trader", { freeman: 1 }, { timber: 500, stone: 500, iron: 500, grain: 2000 }); // staffed
+    const c = await ctx();
+    await m.buildings.build("trader", c, "emporion", new Date(T0)); // active T0+1, staffed by 1 freeman
+    const dismissAt = new Date(T0 + 9 * DAY);
+    // [T0+1, T0+9] staffed → income is pending.
+    expect((await m.buildings.mine("trader", c, dismissAt)).pendingIncomeTotal).toBeGreaterThan(0);
+    const wPre = await wallet();
+    expect((await m.buildings.dismissPops(c, "freeman", 1, dismissAt)).ok).toBe(true); // → understaffed
+    // The staffed window's income was BANKED at dismissal (wallet rose), not voided.
+    expect(await wallet()).toBeGreaterThan(wPre);
+    expect(await incomeMarker()).toBe(dismissAt.getTime()); // marker reset to now
+    expect((await m.buildings.mine("trader", c, dismissAt)).pendingIncomeTotal).toBe(0); // nothing left pending
+    // The post-dismiss (understaffed) window earns nothing.
+    expect((await m.buildings.collect(c, new Date(T0 + 13 * DAY))).income).toBe(0);
+  });
+
+  it("(cp-afford) a hire unaffordable against the RAW wallet succeeds once the settle-first checkpoint banks income", async () => {
+    playerId = await freshPlayer(2000, "trader", { freeman: 1 }, { timber: 500, stone: 500, iron: 500, grain: 2000 }); // staffed, accruing
+    const c = await ctx();
+    await m.buildings.build("trader", c, "emporion", new Date(T0));
+    const cost = m.buildings.getPopsContent().pops.freeman!.hireCost;
+    // Drain the wallet to one drachma short of the hire cost. Only the staffed window's
+    // pending income, banked by the checkpoint BEFORE the affordability check, can cover it.
+    await setWallet(cost - 1);
+    expect((await m.buildings.hirePops(c, "freeman", 1, new Date(T0 + 9 * DAY))).ok).toBe(true);
   });
 
   // --- Upgrade-in-progress earns the PRIOR tier (Option A) -------------------
