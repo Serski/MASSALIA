@@ -92,19 +92,65 @@ function PeopleMarketRow({
   );
 }
 
+// One goods-market row with a quantity stepper: buy N (wallet-bounded — the server
+// 4xx surfaces to the note line, like hire) or sell N (clamped to held stock, like
+// dismiss). The row title shows current holdings when the player owns any.
+function GoodsMarketRow({
+  price,
+  held,
+  busy,
+  label,
+  icon,
+  onBuy,
+  onSell,
+}: {
+  price: VendorPrice;
+  held: number;
+  busy: boolean;
+  label: string;
+  icon: string;
+  onBuy: (n: number) => void;
+  onSell: (n: number) => void;
+}) {
+  const [qty, setQty] = useState(1);
+  const sellN = Math.min(qty, held); // never sell more than held
+  return (
+    <PanelRow
+      icon={icon}
+      title={held > 0 ? `${label} · you hold ${held}` : label}
+      sub={`buy ${price.buy}dr · sell ${price.sell}dr`}
+      action={
+        <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <QtyStepper value={qty} setValue={setQty} min={1} />
+          <button type="button" className="panel-btn ghost" disabled={busy || held <= 0} onClick={() => onSell(sellN)}>
+            Sell {sellN} · {price.sell * sellN}dr
+          </button>
+          <button type="button" className="panel-btn" disabled={busy} onClick={() => onBuy(qty)}>
+            Buy {qty} · {price.buy * qty}dr
+          </button>
+        </span>
+      }
+    />
+  );
+}
+
 export default function MarketPanel({ onRefresh }: PanelProps) {
   const [catalog, setCatalog] = useState<BuildingsCatalog | null>(null);
   const [mine, setMine] = useState<BuildingsMine | null>(null);
   const [people, setPeople] = useState<PeopleView | null>(null);
+  // Current goods stock (type -> amount), the same balances the Inventory drawer
+  // reads — used to show holdings in the row title and clamp the Sell stepper.
+  const [balances, setBalances] = useState<Record<string, number>>({});
   const [tab, setTab] = useState<"goods" | "people">("goods");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const [c, m, p] = await Promise.all([api.buildingsCatalog(), api.buildingsMine(), api.people()]);
+    const [c, m, p, s] = await Promise.all([api.buildingsCatalog(), api.buildingsMine(), api.people(), api.state()]);
     setCatalog(c);
     setMine(m);
     setPeople(p);
+    setBalances(s.resources.balances);
   }, []);
   useEffect(() => {
     let cancelled = false;
@@ -177,17 +223,15 @@ export default function MarketPanel({ onRefresh }: PanelProps) {
               <div className="panel-label">{group}</div>
               <div className="panel-grid2">
                 {list.map((price) => (
-                  <PanelRow
+                  <GoodsMarketRow
                     key={price.good}
+                    price={price}
+                    held={balances[price.good] ?? 0}
+                    busy={busy}
+                    label={label(price.good)}
                     icon={GOOD_ICON[price.good] ?? "📦"}
-                    title={label(price.good)}
-                    sub={`buy ${price.buy}dr · sell ${price.sell}dr`}
-                    action={
-                      <span style={{ display: "flex", gap: 6 }}>
-                        <button type="button" className="panel-btn ghost" disabled={busy} onClick={() => act(() => api.vendorTrade("buy", price.good, 1))}>Buy 1</button>
-                        <button type="button" className="panel-btn" disabled={busy} onClick={() => act(() => api.vendorTrade("sell", price.good, 1))}>Sell 1</button>
-                      </span>
-                    }
+                    onBuy={(n) => act(() => api.vendorTrade("buy", price.good, n))}
+                    onSell={(n) => act(() => api.vendorTrade("sell", price.good, n))}
                   />
                 ))}
               </div>
