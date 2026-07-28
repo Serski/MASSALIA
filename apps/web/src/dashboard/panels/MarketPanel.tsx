@@ -74,7 +74,7 @@ function PeopleMarketRow({
   return (
     <PanelRow
       icon={<PopGlyph type={pop.type} />}
-      title={`${pop.label} · you own ${owned}`}
+      title={`${pop.label} · own ${owned}`}
       sub={`hire ${pop.hireCost}dr · upkeep ${pop.upkeepPerDay}dr/day · eats ${pop.foodPerDay} ${foodLabel}/day`}
       action={
         <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -113,16 +113,19 @@ function GoodsMarketRow({
   onSell: (n: number) => void;
 }) {
   const [qty, setQty] = useState(1);
-  const sellN = Math.min(qty, held); // never sell more than held
+  // Balances are fractional floats from the lazy accrual; the player sees whole
+  // numbers only (matching the server's floor(balance) in its over-sell guard).
+  const owned = Math.floor(held);
+  const sellN = Math.min(qty, owned); // never sell more than the floored holding
   return (
     <PanelRow
       icon={icon}
-      title={held > 0 ? `${label} · you hold ${held}` : label}
+      title={owned > 0 ? `${label} · own ${owned}` : label}
       sub={`buy ${price.buy}dr · sell ${price.sell}dr`}
       action={
         <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <QtyStepper value={qty} setValue={setQty} min={1} />
-          <button type="button" className="panel-btn ghost" disabled={busy || held <= 0} onClick={() => onSell(sellN)}>
+          <button type="button" className="panel-btn ghost" disabled={busy || owned <= 0} onClick={() => onSell(sellN)}>
             Sell {sellN} · {price.sell * sellN}dr
           </button>
           <button type="button" className="panel-btn" disabled={busy} onClick={() => onBuy(qty)}>

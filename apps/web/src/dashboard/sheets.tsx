@@ -344,8 +344,10 @@ export function InventoryResources({ player, goodLabels }: { player: PlayerDashb
   // "What I have": EVERY good the player holds (non-zero), minus non-goods
   // (markers/stats). Post-v2.1 the class good is just a good — it shows here like the
   // rest. Derived via a deny-list, so future goods appear automatically.
+  // Floor for display (balances are fractional floats from the lazy accrual). A
+  // sub-1 balance floors to 0 and is hidden like an absent good — no "0" rows.
   const heldGoods = Object.entries(player.balances)
-    .filter(([type, amount]) => amount > 0 && !NON_GOODS.has(type))
+    .filter(([type, amount]) => Math.floor(amount) >= 1 && !NON_GOODS.has(type))
     .sort((a, b) => label(a[0]).localeCompare(label(b[0])));
   return (
     <div role="tabpanel">
@@ -377,7 +379,7 @@ export function InventoryResources({ player, goodLabels }: { player: PlayerDashb
             key={type}
             icon={goodIcon(type)}
             name={label(type)}
-            amount={amount.toLocaleString()}
+            amount={Math.floor(amount).toLocaleString()}
             rate="—"
             rateTone="zero"
           />
