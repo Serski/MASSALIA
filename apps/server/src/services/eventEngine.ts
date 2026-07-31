@@ -43,14 +43,14 @@ const factionsFile = path.join(repoRoot, "content/diplomacy/factions.json");
 // Memoized; an unknown id is absent here and the effect skips it (no throw).
 let cityDefaults: Map<string, { population: number; tax: number; stability: number; fortifications: number; garrison: number }> | null = null;
 let factionDefaults: Map<string, { opinion: number; atWar: boolean; allied: boolean; vassal: boolean }> | null = null;
-async function getCityDefaults() {
+export async function getCityDefaults() {
   if (!cityDefaults) {
     const content = parseCitiesContent(JSON.parse(await fs.readFile(citiesFile, "utf8")));
     cityDefaults = new Map(content.cities.map((c) => [c.id, c.start]));
   }
   return cityDefaults;
 }
-async function getFactionDefaults() {
+export async function getFactionDefaults() {
   if (!factionDefaults) {
     const content = parseFactionsContent(JSON.parse(await fs.readFile(factionsFile, "utf8")));
     factionDefaults = new Map(content.factions.map((f) => [f.id, f.start]));
