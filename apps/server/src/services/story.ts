@@ -20,7 +20,7 @@ const db = createDb();
 
 // Domain error signalled to routes, mirroring TraitRuleError's shape (reason +
 // derived statusCode). The next pack's route maps these to 4xx/5xx.
-export type StoryRuleReason = "unknown_story" | "not_started" | "unknown_choice" | "invariant";
+export type StoryRuleReason = "unknown_story" | "not_started" | "unknown_choice" | "not_eligible" | "invariant";
 export class StoryRuleError extends Error {
   reason: StoryRuleReason;
   statusCode: number;
@@ -28,7 +28,13 @@ export class StoryRuleError extends Error {
     super(message);
     this.reason = reason;
     this.statusCode =
-      reason === "unknown_story" || reason === "not_started" ? 404 : reason === "unknown_choice" ? 400 : 500;
+      reason === "unknown_story" || reason === "not_started"
+        ? 404
+        : reason === "unknown_choice"
+          ? 400
+          : reason === "not_eligible"
+            ? 403
+            : 500;
   }
 }
 
@@ -108,6 +114,18 @@ export async function getOrStartStory(characterId: string, storyId: string) {
   const row = await readRow(characterId, storyId);
   if (!row) throw new StoryRuleError("invariant", `story_progress vanished for ${storyId}`);
   return projectState(storyId, tree, row);
+}
+
+// Gated start (Pack 2 Phase B): "you cannot start what was never offered."
+// Idempotent — an existing run (active OR completed) is returned as-is via
+// getOrStartStory, never reset and never an error. A fresh start is allowed only
+// when availableStories currently lists the story as "offered" for this character.
+export async function startStory(characterId: string, storyId: string, registry: Record<string, StoryTrigger> = STORY_TRIGGERS) {
+  const existing = await readRow(characterId, storyId);
+  if (existing) return getOrStartStory(characterId, storyId); // resume / completed projection
+  const offered = (await availableStories(characterId, registry)).some((s) => s.storyId === storyId && s.status === "offered");
+  if (!offered) throw new StoryRuleError("not_eligible", `Story not offered: ${storyId}`);
+  return getOrStartStory(characterId, storyId);
 }
 
 // Read-only projection. No row → not_started (call getOrStartStory first).

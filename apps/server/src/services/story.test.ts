@@ -367,4 +367,58 @@ suite("story play service (integration)", () => {
     await closeInstance("fest-test", 5);
     expect(await m.story.availableStories(c.id, REG)).toEqual([{ storyId: "test-story", status: "offered" }]);
   });
+
+  // --- startStory (gated start) ---------------------------------------------
+
+  it("18. eligible character starts: a row is created at tree.start", async () => {
+    const c = await createCharacter("Eligible2");
+    await attend(c.id, "fest-test", 1);
+    await closeInstance("fest-test", 1);
+    const state = await m.story.startStory(c.id, "test-story", REG);
+    expect(state.status).toBe("active");
+    expect(state.node.id).toBe("S1");
+    expect(await progressCount(c.id, "test-story")).toBe(1);
+  });
+
+  it("19. ineligible character (no attendance) throws not_eligible and writes nothing", async () => {
+    const c = await createCharacter("Ineligible");
+    let caught: unknown;
+    try {
+      await m.story.startStory(c.id, "test-story", REG);
+    } catch (e) {
+      caught = e;
+    }
+    expect((caught as { reason?: string }).reason).toBe("not_eligible");
+    expect((caught as { statusCode?: number }).statusCode).toBe(403);
+    expect(await progressCount(c.id, "test-story")).toBe(0); // nothing written
+  });
+
+  it("20. active row resumes via startStory (same row, same node)", async () => {
+    const c = await createCharacter("Resumer");
+    await attend(c.id, "fest-test", 1);
+    await closeInstance("fest-test", 1);
+    const first = await m.story.startStory(c.id, "test-story", REG);
+    await m.story.advanceStory(c.id, "test-story", "c1"); // move to S2
+    const again = await m.story.startStory(c.id, "test-story", REG); // resume, not restart
+    expect(again.status).toBe("active");
+    expect(again.node.id).toBe("S2");
+    expect(first.node.id).toBe("S1");
+    expect(await progressCount(c.id, "test-story")).toBe(1); // no duplicate
+  });
+
+  it("21. completed row returns the completed projection via startStory (no error, no grant)", async () => {
+    const c = await createCharacter("Completer");
+    await attend(c.id, "fest-test", 1);
+    await closeInstance("fest-test", 1);
+    await m.story.startStory(c.id, "test-story", REG);
+    await m.story.advanceStory(c.id, "test-story", "c1");
+    await m.story.advanceStory(c.id, "test-story", "finish"); // completes at TEND
+
+    const before = { drachmae: (await charRow(c.id)).drachmae, traits: await traitCount(c.id), effectLog: await effectLogCount(c.id) };
+    const state = await m.story.startStory(c.id, "test-story", REG); // no error, no re-grant
+    expect(state.status).toBe("completed");
+    expect(state.node.id).toBe("TEND");
+    const after = { drachmae: (await charRow(c.id)).drachmae, traits: await traitCount(c.id), effectLog: await effectLogCount(c.id) };
+    expect(after).toEqual(before);
+  });
 });

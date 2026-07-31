@@ -9,6 +9,7 @@ import { recoverComposure } from "../services/composure.js";
 import { decayCharacter, getAgeConfig, portraitUrl } from "../services/age.js";
 import { enforceDeathAndHandoff, regentBadge, successionInfo } from "../services/succession.js";
 import { closeDueFestivals, fireFestivalsForCharacter, liveFestivalForCharacter } from "../services/festival.js";
+import { availableStories } from "../services/story.js";
 import { olympiadStatus, syncOlympiadForCharacter } from "../services/olympiad.js";
 import { familyPendingCount, scandalHeadline } from "../services/family.js";
 import { manumissionStatus } from "../services/manumission.js";
@@ -91,6 +92,9 @@ export async function meRoutes(app: FastifyInstance) {
     await closeDueFestivals();
     await fireFestivalsForCharacter(character);
     const festival = await liveFestivalForCharacter(character);
+    // Festival-gated story offers — computed AFTER the lazy festival lifecycle above,
+    // so an instance closed by this very read is immediately eligible.
+    const stories = await availableStories(character.id);
 
     // Olympiad (Prompt 8): advance any due cycle + deliver the nominate card lazily,
     // then surface the cycle status (phase, badges, live event, city-wide victor).
@@ -197,6 +201,8 @@ export async function meRoutes(app: FastifyInstance) {
       succession,
       // The festival live for the player this season (a free civic event), or null.
       festival,
+      // Festival-gated story offers/resumes for this character.
+      stories,
       // The Olympiad cycle status (Prompt 8): phase, your candidacy/vote/delegate
       // badges, the live Olympic event, and the city-wide victor — or null.
       olympiad,
