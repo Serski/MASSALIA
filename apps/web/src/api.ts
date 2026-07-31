@@ -201,7 +201,14 @@ export type StoryNodeBody = { eyebrow?: string; paragraphs: string[] };
 export type StoryNodeView = { id: string; type: "scene" | "terminal"; body: StoryNodeBody; image?: string };
 export type StoryChoiceView = { id: string; text: string };
 export type StoryStateView = { storyId: string; status: string; node: StoryNodeView; choices?: StoryChoiceView[] };
-export type StoryAdvanceView = { resultText: string | null; completed: boolean; node: StoryNodeView & { choices?: StoryChoiceView[] } };
+// Post-grant summary of what an advance just applied (mirrors the server shape). It
+// appears ONLY on advance responses — never on node/state projections.
+export type StoryReward =
+  | { kind: "stat"; stat: string; amount: number }
+  | { kind: "drachmae"; amount: number }
+  | { kind: "trait"; traitId: string; name: string }
+  | { kind: "composure"; amount: number };
+export type StoryAdvanceView = { resultText: string | null; completed: boolean; node: StoryNodeView & { choices?: StoryChoiceView[] }; rewardsGranted: StoryReward[] };
 
 // The Player Chronicle (Timeline): a dated, generation-tagged life-event, with a
 // structured payload the client renders into prose (see renderChronicleEntry).

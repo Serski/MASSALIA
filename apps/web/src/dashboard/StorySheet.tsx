@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, contentUrl, type StoryAdvanceView, type StoryChoiceView, type StoryNodeView, type StoryStateView } from "../api.js";
+import { api, ApiError, contentUrl, type StoryAdvanceView, type StoryChoiceView, type StoryNodeView, type StoryReward, type StoryStateView } from "../api.js";
 import { BottomSheet } from "./sheets.js";
 import { DashboardCard, PanelBanner } from "./shared.js";
 
@@ -15,6 +15,34 @@ const fromState = (s: StoryStateView): View => ({ node: s.node, choices: s.choic
 const fromAdvance = (a: StoryAdvanceView): View => ({ node: a.node, choices: a.node.choices ?? [] });
 const isTerminal = (v: View) => v.node.type === "terminal";
 
+// Post-grant reward strip — quiet inline chips reusing the daily cards' cost-chip
+// classes (no new CSS). Renders nothing when empty.
+const signed = (n: number) => (n >= 0 ? `+${n}` : `${n}`); // negatives keep their minus
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+function rewardLabel(r: StoryReward): string {
+  switch (r.kind) {
+    case "stat":
+      return `${signed(r.amount)} ${cap(r.stat)}`;
+    case "drachmae":
+      return `${signed(r.amount)} Drachmae`;
+    case "composure":
+      return `${signed(r.amount)} Composure`;
+    case "trait":
+      return `Gained trait: ${r.name}`;
+  }
+}
+const rewardTone = (r: StoryReward): string => (r.kind !== "trait" && r.amount < 0 ? "cost-negative" : "cost-positive");
+function RewardStrip({ rewards }: { rewards: StoryReward[] }) {
+  if (rewards.length === 0) return null;
+  return (
+    <div className="choice-costs" role="status" aria-label="Rewards">
+      {rewards.map((r, i) => (
+        <span key={i} className={`cost-chip ${rewardTone(r)}`}>{rewardLabel(r)}</span>
+      ))}
+    </div>
+  );
+}
+
 export default function StorySheet({
   storyId,
   open,
@@ -29,6 +57,7 @@ export default function StorySheet({
   const [view, setView] = useState<View | null>(null);
   const [interstitial, setInterstitial] = useState<string | null>(null); // resultText awaiting Continue
   const [pending, setPending] = useState<View | null>(null); // node to show after the interstitial
+  const [rewards, setRewards] = useState<StoryReward[]>([]); // strip for the CURRENT moment (interstitial / terminal)
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -46,6 +75,7 @@ export default function StorySheet({
     setView(null);
     setInterstitial(null);
     setPending(null);
+    setRewards([]);
     setBusy(false);
     setError("");
     api
@@ -73,8 +103,12 @@ export default function StorySheet({
       if (adv.resultText) {
         setInterstitial(adv.resultText); // show the blurb; the node waits behind Continue
         setPending(next);
+        setRewards(adv.rewardsGranted); // strip rides the interstitial
       } else {
         setView(next);
+        // No interstitial: show the strip only when landing on a terminal (the tale's end);
+        // a mid-story scene renders no strip (the moment already passed).
+        setRewards(isTerminal(next) ? adv.rewardsGranted : []);
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "That choice could not be made.");
@@ -87,6 +121,7 @@ export default function StorySheet({
     if (pending) setView(pending);
     setInterstitial(null);
     setPending(null);
+    setRewards([]); // the strip describes the moment, not the run — next node renders without it
   };
 
   return (
@@ -111,6 +146,7 @@ export default function StorySheet({
             // Interstitial blurb (styled like the daily cards' .event-outcome).
             <div className="event-outcome" role="status">
               <p>{interstitial}</p>
+              <RewardStrip rewards={rewards} />
               <div className="event-choice-stack">
                 <button className="event-choice-button" type="button" onClick={continueFromInterstitial}>
                   <strong>Continue</strong>
@@ -125,11 +161,14 @@ export default function StorySheet({
                 <p key={i}>{paragraph}</p>
               ))}
               {isTerminal(view) ? (
-                <div className="event-choice-stack">
-                  <button className="event-choice-button" type="button" onClick={handleClose}>
-                    <strong>The tale is ended</strong>
-                  </button>
-                </div>
+                <>
+                  <RewardStrip rewards={rewards} />
+                  <div className="event-choice-stack">
+                    <button className="event-choice-button" type="button" onClick={handleClose}>
+                      <strong>The tale is ended</strong>
+                    </button>
+                  </div>
+                </>
               ) : (
                 <div className="event-choice-stack">
                   {view.choices.map((choice) => (
