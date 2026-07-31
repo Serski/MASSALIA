@@ -885,6 +885,35 @@
     }
   },
   {
+    "id": "artemis-hound",
+    "name": "Hound of Artemis",
+    "category": "reputation",
+    "description": "Hunted the truth for the goddess and let the city see it done. The temple remembers; so does Massalia.",
+    "statMod": {
+      "prestige": 2,
+      "devotion": 1
+    }
+  },
+  {
+    "id": "temple-confidant",
+    "name": "Temple Confidant",
+    "category": "reputation",
+    "description": "Trusted with what the goddess's house keeps quiet. Doors open softly for those who know how to keep them shut.",
+    "statMod": {
+      "devotion": 2,
+      "intelligence": 1
+    }
+  },
+  {
+    "id": "keeper-of-secrets",
+    "name": "Keeper of Secrets",
+    "category": "reputation",
+    "description": "Knows what a buried truth is worth — and what silence sells for in Massalia.",
+    "statMod": {
+      "intelligence": 2
+    }
+  },
+  {
     "id": "olympic-delegate",
     "name": "Olympic Delegate",
     "category": "reputation",
