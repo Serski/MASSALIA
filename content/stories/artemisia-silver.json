@@ -1,0 +1,397 @@
+{
+  "id": "artemisia-silver",
+  "version": 1,
+  "tree": {
+    "title": "The Silver of Artemis",
+    "start": "P1",
+    "nodes": [
+      {
+        "type": "scene",
+        "id": "P1",
+        "body": {
+          "eyebrow": "The whisper after the festival",
+          "paragraphs": [
+            "The Great Artemisia has ended. Garlands hang browning on the temple gates, and the whole of Massalia moves slowly this morning, pleasantly wounded by three days of song, smoke, and wine poured out for the goddess. You are tending to your own affairs when a temple girl — one of the Melissai, the attendants of Artemis — appears at your side as if she'd stepped out of the wall.",
+            "\"The High Priestess asks for you. Quietly. Come by the grove path, not the great stair.\" She is gone before you can shape a question."
+          ]
+        },
+        "choices": [
+          {
+            "id": "go-at-once",
+            "text": "Go at once, by the grove path.",
+            "result": "The grove path smells of pine resin and cold ash from the festival fires. Cicadas start and stop as you pass. A side door opens before you knock.",
+            "next": "P2"
+          },
+          {
+            "id": "unhurried",
+            "text": "Finish your morning's affairs first — let no one see you hurry.",
+            "result": "You arrive at the temple unremarkable among the morning's petitioners, just another soul come to give thanks. No one looks at you twice. That, you suspect, was the point.",
+            "next": "P2"
+          },
+          {
+            "id": "ask-why",
+            "text": "Send word back asking why you, before you come.",
+            "result": "The reply comes within the hour, a single wax tablet in a careful hand: \"Because the goddess saw you at her festival, and I need eyes that owe nothing to anyone in this. Come.\" You go.",
+            "next": "P2"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "P2",
+        "body": {
+          "eyebrow": "The empty thesauros",
+          "paragraphs": [
+            "Aristonike, High Priestess of Artemis, receives you beneath the sacred effigies — a tall woman with a voice built for silence rather than volume. She leads you behind the altar to the thesauros, the treasury chamber cut into living rock.",
+            "\"On the festival's last night, the offerings were counted, sealed, and the door barred. This morning the seal was whole, the bar in place — and a third of the silver gone. Four people know. You are the fourth. Before the city learns the goddess was robbed under her own roof, I will know by whose hand.\"",
+            "She steps aside. The chamber is yours. Where do you begin?"
+          ]
+        },
+        "choices": [
+          {
+            "id": "seal-lock",
+            "text": "Examine the seal and the lock.",
+            "result": "The wax seal is whole — and doubled. Beneath the crisp impression lies the ghost of an earlier pressing. The lock is unscratched, freshly oiled, turned by its proper key. No thief broke in here. Someone walked in.",
+            "next": "P3"
+          },
+          {
+            "id": "night-guard",
+            "text": "Question the night guard.",
+            "result": "The guard swears the watch roster was changed on the last night — \"by the priestess's own written order\" — an order he cannot now produce. Aristonike's face goes very still. She gave no such order.",
+            "next": "P3"
+          },
+          {
+            "id": "ledgers",
+            "text": "Study the offering ledgers.",
+            "result": "The count-page is wrong in a way only patience reveals: scraped clean and rewritten in a careful, practiced hand, the ink days too young for the date it carries. Whoever took the silver took the numbers first.",
+            "next": "P3"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "P3",
+        "body": {
+          "eyebrow": "The priestess's question",
+          "paragraphs": [
+            "Aristonike listens to what you've found without blinking. \"Then it is worse than theft,\" she says at last. \"It is someone the goddess feeds.\"",
+            "She studies you the way a hunter studies the ground. \"Past this point, it stops being simple. Whoever did this eats at the temple's table, or paid someone who does. If you go on, you go into the temple's own shadow — and into mine with it. So I ask you plainly: will you hunt this for Artemis?\""
+          ]
+        },
+        "choices": [
+          {
+            "id": "hunt",
+            "text": "\"I'll hunt it.\"",
+            "result": "She nods once, as if she'd known before asking. \"Then the Lady of the Hunt walks with you. Walk carefully anyway.\"",
+            "next": "P4"
+          },
+          {
+            "id": "hunt-for-fee",
+            "text": "\"I'll hunt it — and the temple will remember what it owes me.\"",
+            "result": "Something flickers across her face — not offense; something closer to respect. \"The temple pays its debts. Find my silver.\"",
+            "next": "P4"
+          },
+          {
+            "id": "walk-away",
+            "text": "\"Find another hound. Some doors are better left shut.\"",
+            "next": "EXIT1"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "P4",
+        "body": {
+          "eyebrow": "Three threads",
+          "paragraphs": [
+            "Between the counting and the dawn, only a handful of people could have reached that chamber. Aristonike names them for you, her voice flat as a ledger line.",
+            "Philemon, the young neokoros who carries keys during festivals — and dice debts the rest of the year. Simos the chandler, whose carts of lamp oil, wax, and garlands rolled in and out of the precinct for days. And Thratta, the slave who scrubs the treasury chamber and holds its cleaning key.",
+            "\"The steward Neokles counted and sealed the silver himself and reported the loss at first light,\" she adds. \"Twenty years he has kept our accounts. Begin where you will.\""
+          ]
+        },
+        "choices": [
+          {
+            "id": "philemon",
+            "text": "The neokoros, Philemon.",
+            "result": "You find him gray-faced and shaking — but not for the reason you hoped. He spent the whole of the last night at the Anchor, dicing badly before a dozen witnesses until dawn. As you turn to leave he babbles one strange thing: last spring, when a debt turned ugly, \"someone at the temple\" quietly made it vanish. He never learned who.",
+            "next": "P5"
+          },
+          {
+            "id": "simos",
+            "text": "Simos the chandler.",
+            "result": "His carts and tallies come up clean, and he's sour about being asked. But sourness loosens tongues: after lamps-out on the final night he saw a man by the grove wall wearing no festival wreath — when every soul in Massalia wore one — a man smelling of pitch, watching the temple \"like a buyer at a horse fair.\"",
+            "next": "P5"
+          },
+          {
+            "id": "thratta",
+            "text": "Thratta, the slave.",
+            "result": "She keeps her eyes on the floor and her cleaning key hangs untouched on its nail, dusty at the hook. It takes patience before she whispers it: before dawn she saw the steward Neokles at the brazier, burning papers. \"And stewards do not burn paper. They hoard it.\" Then, begging: forget she spoke. When silver goes missing, \"they will count it out of my skin.\"",
+            "next": "P5"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "P5",
+        "body": {
+          "eyebrow": "Questions in the agora",
+          "paragraphs": [
+            "A day of quiet walking closes the other threads: the boy's tavern alibi holds to the last throw of the dice; the chandler's carts are clean; the slave's fear is the truest thing you've touched yet. What lingers is stranger than any suspect — money that once moved quietly through the temple, a wreathless man who smelled of pitch, and paper burned before dawn.",
+            "The city itself may know more. Massalia gossips like a well — everything dropped in comes back up eventually. Where do you go to listen?"
+          ]
+        },
+        "choices": [
+          {
+            "id": "taverns",
+            "text": "The taverns along the harbor road.",
+            "result": "The Anchor's keeper remembers him — pitch-smell, no wreath, a purse fat as a festival ham. He asked mild little questions between rounds he bought for strangers: when are temple offerings counted, who keeps which key, who walks the night watch. He tipped like a man spending someone else's silver.",
+            "next": "P6",
+            "rewards": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }]
+          },
+          {
+            "id": "moneylender",
+            "text": "Bion the moneylender.",
+            "result": "Bion trades in debts and silence, and will sell you a little of both. Years ago, a temple man borrowed heavily from him to pay a physician — and repaid every last obol out of his own purse. \"A settled debt is worth nothing,\" Bion shrugs. \"A settled debt with a temple name on it — that, a stranger paid dearly for this spring. Why buy a dead debt? For the name on it.\" The name itself, he will not sell. Not yet.",
+            "next": "P6",
+            "rewards": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }]
+          },
+          {
+            "id": "docks",
+            "text": "The docks.",
+            "result": "A Tyrrhenian coaster has ridden at anchor for two days, hold empty, crew paid to sit and wait — for \"one passenger and a small heavy chest,\" a deckhand tells you. Asked what the passenger looks like, the man wrinkles his nose. Smells of pitch, apparently.",
+            "next": "P6",
+            "rewards": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "P6",
+        "body": {
+          "eyebrow": "The stranger's purse",
+          "paragraphs": [
+            "He finds you first.",
+            "Between two warehouses in the failing light, the smell of pitch and foreign harbors arrives a half-breath before the man himself. No wreath. No name. He holds out a purse, and lets you feel the wordless weight of it in the air between you.",
+            "\"You've been asking clever questions. Here is a dull answer. The temple lost nothing it will miss, and you have affairs of your own to tend. Take it, and forget the groves.\"",
+            "Somewhere behind you, water slaps against the stones."
+          ]
+        },
+        "choices": [
+          {
+            "id": "take-purse",
+            "text": "Take the purse.",
+            "next": "EXIT2"
+          },
+          {
+            "id": "refuse",
+            "text": "Refuse. \"Keep it. I like the groves.\"",
+            "result": "He weighs you the way Bion weighs coin, then pockets the purse. \"A pity. Hunt quickly, then — the moon won't wait.\" He is gone between two breaths, and leaves you with the certainty that a clock you cannot see is running.",
+            "next": "P7"
+          },
+          {
+            "id": "tell-priestess",
+            "text": "Refuse — and carry the whole encounter straight to Aristonike.",
+            "result": "Her fury is the cold kind. \"So there is a buyer.\" She counts on her fingers, quietly: a forged roster order, burnt papers, and now a man paying you to stop. \"Bring me proof by tomorrow's dark — before we learn what the moon is for.\"",
+            "next": "P7",
+            "rewards": [{ "type": "change_stat", "stat": "devotion", "amount": 1 }]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "P7",
+        "body": {
+          "eyebrow": "Closing the net",
+          "paragraphs": [
+            "One name now sits at the center of every thread — never accused, always adjacent. Neokles. Steward of Artemis, twenty years of unblemished accounts. The man who counted the silver, sealed the door, and reported the loss. A quiet old debt paid to a physician. Papers burned before dawn. A receipt with a temple name on it, bought this spring by a man with no name at all.",
+            "Suspicion is not proof, and you have perhaps a day to turn one into the other."
+          ]
+        },
+        "choices": [
+          {
+            "id": "brazier-ashes",
+            "text": "Sift the brazier ashes — Thratta shows you where.",
+            "result": "Among the cold coals: a curl of papyrus, half-eaten by flame, the hand careful and foreign. \"…the Artemisia count, whole, at the old grove shrine when the moon stands full — or the receipt goes to the Ephors, and your name with it.\" No signature. The moon stands full tomorrow night.",
+            "next": "P8"
+          },
+          {
+            "id": "roster-order",
+            "text": "Ask Aristonike to examine the guard's written roster order.",
+            "result": "She summons the guard and holds the order to the lamp. Her own seal — pressed twice, faintly doubled, the same ghost-impression as the treasury door. Only one man keeps a duplicate of the temple's seal-stamp for documents: her steward. Her voice could frost the lamp glass: \"Bring him to me with proof in hand. Not before.\"",
+            "next": "P8"
+          },
+          {
+            "id": "shadow-neokles",
+            "text": "Shadow Neokles through his day.",
+            "result": "He is a man being eaten from the inside. He prays at odd altars, touches no food, twice walks toward the grove path and twice turns back. At dusk, drawing water, he slides a wrapped bundle the size of a strongbox beneath the well-stone. He is not spending the silver. He is waiting to hand it over.",
+            "next": "P8"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "P8",
+        "body": {
+          "eyebrow": "The grove at night",
+          "paragraphs": [
+            "Full moon over the sacred groves. The effigies of Artemis stand silvered among the pines, and the cicadas have gone respectfully quiet. You know the place now — the old shrine, half-swallowed by trees — and you know the hour. Somewhere off the point, a Tyrrhenian coaster rides at anchor, waiting for one passenger and a small heavy chest.",
+            "Tonight, Neokles will come to give the goddess's silver away. How do you take this?"
+          ]
+        },
+        "choices": [
+          {
+            "id": "mark-buyer",
+            "text": "Let the handoff begin — mark the buyer's man, then break it.",
+            "result": "The pitch-smelling stranger steps into the moonlight to receive the chest, and for one clean moment you see a signet on his hand — a device you don't know, and will not forget. Then your interruption shatters the clearing; he melts into the pines toward the sea, empty-handed, and Neokles drops to his knees in the needles. The silver stays. So does the memory of that ring.",
+            "next": "P9",
+            "rewards": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }]
+          },
+          {
+            "id": "take-neokles",
+            "text": "Take Neokles before the stranger ever shows.",
+            "result": "You step from the trees while the bundle is still in his arms. He does not run. He almost sags — the relief of a man finally caught. The stranger, watching from somewhere in the dark, never appears at all; by morning the coaster has sailed. Clean and silent — and the buyer's man goes unseen.",
+            "next": "P9",
+            "rewards": [{ "type": "change_composure", "amount": 2 }]
+          },
+          {
+            "id": "swap-chest",
+            "text": "Swap the chest — stones for silver — and watch what comes.",
+            "result": "You spend the afternoon on the substitution and the night in the pines, watching. The stranger hefts the chest, pauses — a man who knows the true weight of silver — and smiles once into the darkness, more or less exactly where you are hiding, before walking away with the stones. A cold compliment. The silver is safe; the buyer is warned; Neokles is left kneeling by the shrine.",
+            "next": "P9",
+            "rewards": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "P9",
+        "body": {
+          "eyebrow": "Confession in the lamplight",
+          "paragraphs": [
+            "In a storeroom smelling of lamp oil and old wool, Neokles empties like a cracked jar.",
+            "Years ago his wife lay dying, and a physician's fees ran past anything a steward earns. He borrowed from Bion — and repaid every obol from his own pay. He never touched the temple's silver. Not then. But receipts outlive debts. This spring, a stranger bought his — and named the price of its silence: the whole Artemisia count. Refuse, and the receipt with its temple name would go before the Ephors, and the goddess's house would be shamed in a summer when the city already argues about everything.",
+            "So he pressed a false seal, forged a roster order, scraped a ledger page — and told himself Artemis would rather lose silver than honor. He never meant for Thratta to be suspected. That is the one sentence he cannot finish."
+          ]
+        },
+        "choices": [
+          {
+            "id": "mercy",
+            "text": "Mercy. \"Artemis hunts what runs. You stopped running.\"",
+            "result": "He weeps like a man twenty years overdue for it, and gives everything into your hands — the duplicate seal-stamp, the forged order, the hour, the place, the wording of the letter. All of it.",
+            "next": "P10",
+            "rewards": [{ "type": "change_stat", "stat": "devotion", "amount": 1 }]
+          },
+          {
+            "id": "cold",
+            "text": "Cold. Make him tell it twice, in order, every detail.",
+            "result": "Names, hours, hiding places, the letter word for word — by the time the lamp gutters you hold a confession that would stand before any court in Massalia, and a man scraped hollow by the telling of it.",
+            "next": "P10",
+            "rewards": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }]
+          },
+          {
+            "id": "silence",
+            "text": "Silence. Let the lamp burn down and the man talk.",
+            "result": "Silence pulls more from a guilty man than any question. Near dawn he offers up the one thing he had held back: the stranger once let slip that his master \"would pay again — for other temples, other summers.\"",
+            "next": "P10",
+            "rewards": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "P10",
+        "body": {
+          "eyebrow": "The weight of silver",
+          "paragraphs": [
+            "Dawn is close. The goddess's silver is secured; a broken steward sits in your keeping, along with a half-burned letter, a doubled seal, and the whole shape of what was done beneath Artemis's roof. Aristonike waits at the temple. The Ephors will wake with the city. And somewhere out on the grey water, a man with a signet ring sails to tell his master that it all went wrong.",
+            "What happens next happens because of you."
+          ]
+        },
+        "choices": [
+          {
+            "id": "ephors",
+            "text": "To the Ephors — let Massalia see justice done in daylight.",
+            "next": "E1"
+          },
+          {
+            "id": "priestess",
+            "text": "To Aristonike alone — the goddess's house settles its own.",
+            "next": "E2"
+          },
+          {
+            "id": "your-price",
+            "text": "Name your own price for silence — some truths are worth more buried.",
+            "next": "E3"
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "id": "EXIT1",
+        "body": {
+          "eyebrow": "Some doors, left shut",
+          "paragraphs": [
+            "She does not argue. She presses a small blessing-token into your palm and turns back to her goddess. Weeks later you hear the temple \"recovered a miscount,\" and nothing more. You never learn what door you left shut."
+          ]
+        },
+        "rewards": [{ "type": "change_drachmae", "amount": 10 }]
+      },
+      {
+        "type": "terminal",
+        "id": "EXIT2",
+        "body": {
+          "eyebrow": "The stranger's purse",
+          "paragraphs": [
+            "The silver is real, and it spends like any other. In time the temple announces a miscount; a slave is quietly sold away south; the matter closes like water over a dropped stone. Only on certain mornings, when the wind comes off the harbor, does the smell of pitch find you — and with it the thought that somewhere, a man knows exactly what your silence costs."
+          ]
+        },
+        "rewards": [{ "type": "change_drachmae", "amount": 100 }]
+      },
+      {
+        "type": "terminal",
+        "id": "E1",
+        "body": {
+          "eyebrow": "Daylight justice",
+          "paragraphs": [
+            "You bring silver, seal-stamp, and steward before the Ephors as the city wakes, and by noon there is no one in Massalia who has not heard. The trial is short and loud. The temple is shamed for a season and cleansed for a generation; Neokles goes to whatever the Ephors decide, who are neither cruel nor kind. Thratta is cleared before the whole assembly, her name spoken aloud and spoken clean — which is worth more than silver to a slave.",
+            "Aristonike thanks you with a face like carved olive-wood: grateful for the truth, grieving the manner of it. And whoever bought that receipt now knows their scheme was dragged into daylight — they will be more careful next time. So must you."
+          ]
+        },
+        "rewards": [
+          { "type": "change_trait", "traitId": "artemis-hound", "operation": "add" },
+          { "type": "change_drachmae", "amount": 20 }
+        ]
+      },
+      {
+        "type": "terminal",
+        "id": "E2",
+        "body": {
+          "eyebrow": "The quiet settling",
+          "paragraphs": [
+            "The silver returns to the thesauros before the sun clears the hills, and the city never learns it left. There is no trial. Neokles departs \"for reasons of health\" to sweep a small inland shrine until his back gives out — punishment and mercy folded into one. Thratta is moved to honored work among the Melissai, her name never once spoken in the same breath as the word thief.",
+            "\"The city will never know what you did,\" Aristonike says at the temple door. \"I will never forget it.\" The discreet gratitude of the goddess's house is a quiet coin — and it never stops spending. And the buyer, out there behind his nameless man, learns nothing at all. Which is its own kind of victory."
+          ]
+        },
+        "rewards": [
+          { "type": "change_trait", "traitId": "temple-confidant", "operation": "add" },
+          { "type": "change_drachmae", "amount": 50 }
+        ]
+      },
+      {
+        "type": "terminal",
+        "id": "E3",
+        "body": {
+          "eyebrow": "The buried truth",
+          "paragraphs": [
+            "A price is named — yours. Neokles pays it without haggling; ruined men make honest customers. The temple announces a miscount, the steward quietly bleeds his own means for years to square the count, and the truth goes into the ground with your silver on top of it. You make one condition beyond the money: the slave is never blamed. Even buried truths deserve one clean corner.",
+            "The duplicate seal-stamp stays in your keeping. Insurance. On certain mornings the wind carries pitch off the harbor, and you find you've learned something worth more than the purse itself — the exact market rate of your silence."
+          ]
+        },
+        "rewards": [
+          { "type": "change_trait", "traitId": "keeper-of-secrets", "operation": "add" },
+          { "type": "change_drachmae", "amount": 120 }
+        ]
+      }
+    ]
+  }
+}

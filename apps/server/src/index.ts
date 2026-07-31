@@ -39,6 +39,7 @@ import { loadAgeConfig } from "./services/age.js";
 import { loadFamilyConfig } from "./services/family.js";
 import { loadCalendarConfig, getCalendarConfig } from "./services/festival.js";
 import { loadPoliticsConfig } from "./services/oligarchy.js";
+import { loadStories } from "./services/story.js";
 import { electionConfig } from "@massalia/shared";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -81,6 +82,8 @@ await loadContractsContent();
 electionConfig(getCalendarConfig());
 // Atlas Phase 2a: validate the cities + factions content at boot.
 await loadLeagueContent();
+// Story engine (Pack 3): validate every authored story graph + upsert into `stories`.
+await loadStories();
 
 app.get("/health", async () => ({ ok: true }));
 await app.register(authRoutes, { prefix: "/auth" });

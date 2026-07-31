@@ -1,6 +1,9 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { and, eq, exists } from "drizzle-orm";
 import { createDb, festivalChoregos, festivalEvents, stories, storyProgress } from "@massalia/db";
-import { parseStoryTree, type EventEffect, type NodeBody, type StoryNode, type StoryTree } from "@massalia/shared";
+import { parseStoryTree, validateStoryGraph, type EventEffect, type NodeBody, type StoryNode, type StoryTree } from "@massalia/shared";
 import { applyEffectsInTx, getCityDefaults, getFactionDefaults } from "./eventEngine.js";
 import { applyChangeTrait, TraitRuleError } from "./traits.js";
 import { applyComposureDelta } from "./composure.js";
@@ -17,6 +20,9 @@ import { broadcastState } from "./worldState.js";
 // ---------------------------------------------------------------------------
 
 const db = createDb();
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const storiesDir = path.resolve(__dirname, "../../../..", "content/stories");
 
 // Domain error signalled to routes, mirroring TraitRuleError's shape (reason +
 // derived statusCode). The next pack's route maps these to 4xx/5xx.
@@ -46,6 +52,39 @@ export type StoryTrigger = { kind: "festival"; festivalId: string };
 export const STORY_TRIGGERS: Record<string, StoryTrigger> = {
   "artemisia-silver": { kind: "festival", festivalId: "fest-artemisia" },
 };
+
+// Boot-time content load: validate + upsert every authored story. A directory read
+// so the next story is a file-drop. Each file is a `{ id, version, tree }` wrapper —
+// id/version by hand, `tree` via parseStoryTree — then validateStoryGraph, failing
+// LOUD with the filename + every problem (mirrors listEvents' per-file throw). The
+// upsert is idempotent: every boot re-asserts the deployed content, which is how a
+// content edit ships (edit file → deploy → boot upsert).
+export async function loadStories(): Promise<void> {
+  const files = (await fs.readdir(storiesDir)).filter((file) => file.endsWith(".json"));
+  for (const file of files) {
+    const raw = await fs.readFile(path.join(storiesDir, file), "utf8");
+    let id: string;
+    let version: number;
+    let tree: StoryTree;
+    try {
+      const parsed = JSON.parse(raw) as { id?: unknown; version?: unknown; tree?: unknown };
+      if (typeof parsed.id !== "string") throw new Error("missing string `id`");
+      if (typeof parsed.version !== "number") throw new Error("missing numeric `version`");
+      id = parsed.id;
+      version = parsed.version;
+      tree = parseStoryTree(parsed.tree);
+    } catch (error) {
+      throw new Error(`Invalid story content in ${file}: ${(error as Error).message}`);
+    }
+    const problems = validateStoryGraph(tree);
+    if (problems.length > 0) throw new Error(`Invalid story graph in ${file}: ${problems.join("; ")}`);
+    const treeJson = tree as unknown as Record<string, unknown>;
+    await db
+      .insert(stories)
+      .values({ id, version, tree: treeJson })
+      .onConflictDoUpdate({ target: stories.id, set: { tree: treeJson, version } });
+  }
+}
 
 // World-scoped effect types (the pre-tx dance mirrors applyChoiceEffects: load the
 // content defaults only when a reward actually targets a city/faction).
