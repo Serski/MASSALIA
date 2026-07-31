@@ -96,7 +96,7 @@ const statName = z.enum(["prestige", "devotion", "militia", "intelligence"]);
 // World-scoped city stats an event may move (fortifications excluded — Archon-only).
 const cityStatName = z.enum(["population", "tax", "stability", "garrison"]);
 
-const effectSchema = z.discriminatedUnion("type", [
+export const effectSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("gain_resource"), scope: z.enum(["player", "province"]), id: z.string(), resource: z.string(), amount: z.number() }),
   z.object({ type: z.literal("set_province_owner"), provinceId: z.string(), ownerPlayerId: z.string() }),
   z.object({ type: z.literal("change_city_stat"), cityId: z.string(), stat: cityStatName, amount: z.number() }),
