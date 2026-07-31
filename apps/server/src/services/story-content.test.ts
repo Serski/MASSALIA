@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -53,6 +53,23 @@ describe("Artemisia story content integrity (pure)", () => {
       expect(rewards.filter((e) => e.type === "change_drachmae").length).toBe(1);
     }
   });
+
+  it("5. every image path in every story tree resolves to a real file (path-typo tripwire)", () => {
+    const storiesDir = resolve(root, "content/stories");
+    const files = readdirSync(storiesDir).filter((f) => f.endsWith(".json"));
+    let checked = 0;
+    for (const file of files) {
+      const tree = parseStoryTree((JSON.parse(readFileSync(resolve(storiesDir, file), "utf8")) as { tree: unknown }).tree);
+      for (const node of tree.nodes) {
+        if (!node.image) continue;
+        // node.image is a "/content/…" URL path; the static route maps /content → <root>/content.
+        const physical = resolve(root, node.image.replace(/^\//, ""));
+        expect(existsSync(physical), `${file}: image "${node.image}" missing at ${physical}`).toBe(true);
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(0); // the Artemisia P1/P6/P8 images must actually be present to check
+  });
 });
 
 const dbUrl = process.env.DATABASE_URL ?? "";
@@ -84,7 +101,7 @@ suite("loadStories seed (integration)", () => {
 
     const rows = await db.select().from(m.dbPkg.stories).where(eq(m.dbPkg.stories.id, "artemisia-silver"));
     expect(rows.length).toBe(1);
-    expect(rows[0]!.version).toBe(1);
+    expect(rows[0]!.version).toBe(readStory().version); // read the expected version from the file's own wrapper
     const tree = rows[0]!.tree as { start: string; nodes: unknown[] };
     expect(tree.start).toBe("P1"); // spot-check start
     expect(tree.nodes.length).toBe(15); // spot-check node count

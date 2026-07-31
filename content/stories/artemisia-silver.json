@@ -1,6 +1,6 @@
 {
   "id": "artemisia-silver",
-  "version": 1,
+  "version": 2,
   "tree": {
     "title": "The Silver of Artemis",
     "start": "P1",
@@ -8,6 +8,7 @@
       {
         "type": "scene",
         "id": "P1",
+        "image": "/content/stories/story-artemisia-p1-temple.webp",
         "body": {
           "eyebrow": "The whisper after the festival",
           "paragraphs": [
@@ -167,6 +168,7 @@
       {
         "type": "scene",
         "id": "P6",
+        "image": "/content/stories/story-artemisia-p6-harbor.webp",
         "body": {
           "eyebrow": "The stranger's purse",
           "paragraphs": [
@@ -231,6 +233,7 @@
       {
         "type": "scene",
         "id": "P8",
+        "image": "/content/stories/story-artemisia-p8-grove.webp",
         "body": {
           "eyebrow": "The grove at night",
           "paragraphs": [
