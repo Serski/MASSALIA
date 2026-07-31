@@ -74,6 +74,17 @@ const BAD_TRAIT_STORY = {
   ],
 };
 
+// A reward-free path: a scene whose only choice grants nothing → a terminal that
+// grants nothing. Exercises the empty rewardsGranted summary.
+const PLAIN_STORY = {
+  title: "Nothing Gained",
+  start: "N1",
+  nodes: [
+    { type: "scene", id: "N1", body: { paragraphs: ["A quiet errand."] }, choices: [{ id: "step", text: "Move on", next: "NEND" }] },
+    { type: "terminal", id: "NEND", body: { paragraphs: ["It comes to nothing."] }, rewards: [] },
+  ],
+};
+
 suite("story play service (integration)", () => {
   let m: Mods;
   let db: ReturnType<Mods["dbPkg"]["createDb"]>;
@@ -147,6 +158,7 @@ suite("story play service (integration)", () => {
     worldId = world.id;
     await db.insert(m.dbPkg.stories).values({ id: "test-story", tree: m.shared.parseStoryTree(STORY) as unknown as Record<string, unknown> });
     await db.insert(m.dbPkg.stories).values({ id: "bad-trait-story", tree: m.shared.parseStoryTree(BAD_TRAIT_STORY) as unknown as Record<string, unknown> });
+    await db.insert(m.dbPkg.stories).values({ id: "plain-story", tree: m.shared.parseStoryTree(PLAIN_STORY) as unknown as Record<string, unknown> });
   });
 
   it("1. start + resume: creates exactly one active row at S1; re-calling resumes it", async () => {
@@ -222,6 +234,7 @@ suite("story play service (integration)", () => {
 
     const res = await m.story.advanceStory(c.id, "test-story", "finish"); // valid-looking choiceId
     expect(res.completed).toBe(true);
+    expect(res.rewardsGranted).toEqual([]); // completed-replay no-op summarizes nothing
 
     const a = await charRow(c.id);
     const after = {
@@ -420,5 +433,56 @@ suite("story play service (integration)", () => {
     expect(state.node.id).toBe("TEND");
     const after = { drachmae: (await charRow(c.id)).drachmae, traits: await traitCount(c.id), effectLog: await effectLogCount(c.id) };
     expect(after).toEqual(before);
+  });
+
+  // --- rewardsGranted (post-grant reward summary) ---------------------------
+
+  it("22. terminal advance summarizes choice-layer then terminal-layer rewards, in order, nominal", async () => {
+    const c = await createCharacter("Rewarded");
+    await m.story.getOrStartStory(c.id, "test-story");
+    await m.story.advanceStory(c.id, "test-story", "c1"); // → S2 (pass-through)
+    const res = await m.story.advanceStory(c.id, "test-story", "finish"); // → TEND (terminal)
+    expect(res.completed).toBe(true);
+    expect(res.rewardsGranted).toEqual([
+      { kind: "stat", stat: "devotion", amount: 1 }, // choice layer
+      { kind: "drachmae", amount: 50 }, // terminal layer, nominal
+      { kind: "trait", traitId: "brave", name: "Brave" }, // resolved display name
+      { kind: "composure", amount: -5 }, // negative preserved
+    ]);
+  });
+
+  it("23. pass-through advance summarizes exactly its choice-layer rewards", async () => {
+    const c = await createCharacter("PassThrough");
+    await m.story.getOrStartStory(c.id, "test-story");
+    const res = await m.story.advanceStory(c.id, "test-story", "c1"); // → S2, choice reward only
+    expect(res.completed).toBe(false);
+    expect(res.rewardsGranted).toEqual([{ kind: "stat", stat: "intelligence", amount: 1 }]);
+  });
+
+  it("24. a reward-free path summarizes []", async () => {
+    const c = await createCharacter("Empty");
+    await m.story.getOrStartStory(c.id, "plain-story");
+    const res = await m.story.advanceStory(c.id, "plain-story", "step"); // choice + terminal both reward-free
+    expect(res.completed).toBe(true);
+    expect(res.rewardsGranted).toEqual([]);
+  });
+
+  it("25. unknown-trait terminal: drachmae summarized, trait entry omitted (the swallow)", async () => {
+    const c = await createCharacter("Swallow2");
+    await m.story.getOrStartStory(c.id, "bad-trait-story");
+    const res = await m.story.advanceStory(c.id, "bad-trait-story", "go"); // BEND: +25 drachmae + unknown trait
+    expect(res.completed).toBe(true);
+    expect(res.rewardsGranted).toEqual([{ kind: "drachmae", amount: 25 }]);
+    expect(res.rewardsGranted.some((r) => r.kind === "trait")).toBe(false);
+  });
+
+  it("26. spoiler discipline: state projection and advance node carry no `rewards` key", async () => {
+    const c = await createCharacter("NoSpoiler");
+    await m.story.getOrStartStory(c.id, "test-story");
+    const state = await m.story.getStoryState(c.id, "test-story");
+    expect(JSON.stringify(state)).not.toMatch(/"rewards"/); // state projection never leaks rewards
+    const res = await m.story.advanceStory(c.id, "test-story", "c1");
+    expect(JSON.stringify(res.node)).not.toMatch(/"rewards"/); // the node-now-current never leaks rewards
+    expect("rewardsGranted" in res).toBe(true); // but the post-grant summary IS present on advance
   });
 });

@@ -5,7 +5,7 @@ import { and, eq, exists } from "drizzle-orm";
 import { createDb, festivalChoregos, festivalEvents, stories, storyProgress } from "@massalia/db";
 import { parseStoryTree, validateStoryGraph, type EventEffect, type NodeBody, type StoryNode, type StoryTree } from "@massalia/shared";
 import { applyEffectsInTx, getCityDefaults, getFactionDefaults } from "./eventEngine.js";
-import { applyChangeTrait, TraitRuleError } from "./traits.js";
+import { applyChangeTrait, getTraitDef, TraitRuleError } from "./traits.js";
 import { applyComposureDelta } from "./composure.js";
 import { onIdeologyChanged } from "./politics.js";
 import { broadcastState } from "./worldState.js";
@@ -175,6 +175,45 @@ export async function getStoryState(characterId: string, storyId: string) {
   return projectState(storyId, tree, row);
 }
 
+// A post-grant summary of what an advance just applied — NEVER a pre-choice preview
+// (the spoiler discipline: state/node projections still carry no rewards).
+export type StoryReward =
+  | { kind: "stat"; stat: string; amount: number }
+  | { kind: "drachmae"; amount: number }
+  | { kind: "trait"; traitId: string; name: string }
+  | { kind: "composure"; amount: number };
+
+// Summarize the effects THIS advance actually applied (choice layer then, if a
+// terminal was reached, terminal layer — the order `applied` was built in).
+// Amounts are NOMINAL (as authored in the tree): change_stat's real applied value
+// after the growth multiplier + age cap may differ; it is not recomputed for display.
+// Effect types outside the four below are still applied — just not summarized.
+function summarizeRewards(applied: EventEffect[]): StoryReward[] {
+  const out: StoryReward[] = [];
+  for (const e of applied) {
+    switch (e.type) {
+      case "change_stat":
+        out.push({ kind: "stat", stat: e.stat, amount: e.amount });
+        break;
+      case "change_drachmae":
+        out.push({ kind: "drachmae", amount: e.amount });
+        break;
+      case "change_composure":
+        out.push({ kind: "composure", amount: e.amount });
+        break;
+      case "change_trait": {
+        if (e.operation !== "add") break; // only a grant is a reward
+        const def = getTraitDef(e.traitId);
+        if (def) out.push({ kind: "trait", traitId: e.traitId, name: def.name }); // omit unknown ids (the swallow path)
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  return out;
+}
+
 // Advance the run by resolving choiceId on the current scene, applying rewards, and
 // (if the next node is a terminal) flipping to completed — all in one transaction.
 export async function advanceStory(characterId: string, storyId: string, choiceId: string) {
@@ -275,7 +314,9 @@ export async function advanceStory(characterId: string, storyId: string, choiceI
   if (ideologyTouched) await onIdeologyChanged(characterId);
   await broadcastState();
 
-  return result!;
+  // Post-grant summary only — describes effects THIS advance applied (empty for the
+  // completed-replay no-op, since `applied` stays empty). Never a pre-choice preview.
+  return { ...result!, rewardsGranted: summarizeRewards(applied) };
 }
 
 // All stories joined against this character's progress, dropping completed runs.
