@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice } from "../../api.js";
 import { assetPath, type House } from "../../data/league.js";
 import { DashboardCard, ListRow, PanelBanner, type PanelProps, placeholderDigest, timeUntil, titleCase } from "../shared.js";
 import { CardClose, FestivalBanner, OlympicBanner } from "../banners.js";
+
+// Lazy so the story UI (and its chunk) cost nothing until a card is opened.
+const StorySheet = lazy(() => import("../StorySheet.js"));
 
 const ARENA_LABELS: Record<string, string> = {
   class: "Your Calling",
@@ -457,6 +460,9 @@ export default function CourtPanel({ player, onRefresh }: PanelProps) {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [festivalSticky, setFestivalSticky] = useState<FestivalLive | null>(null);
   const [olympicLiveSticky, setOlympicLiveSticky] = useState<NonNullable<OlympiadStatus["liveEvent"]> | null>(null);
+  // Which story's sheet is open, if any. Local to CourtPanel by design — never lifted
+  // into Dashboard. null = closed; opening lazy-loads StorySheet's chunk.
+  const [openStoryId, setOpenStoryId] = useState<string | null>(null);
   const lastDayKey = useRef(dayKey);
 
   useEffect(() => {
@@ -497,6 +503,26 @@ export default function CourtPanel({ player, onRefresh }: PanelProps) {
           {olympicLive && !dismissed.has("olympic-live") ? <OlympicBanner key="olympic-live" live={olympicLive} onRefresh={onRefresh} onClose={() => close("olympic-live")} /> : null}
           {voting && !dismissed.has("olympic-ballot") ? <OlympicBallotPanel onRefresh={onRefresh} onClose={() => close("olympic-ballot")} /> : null}
           {festival && !dismissed.has("festival") ? <FestivalBanner key="festival" festival={festival} onRefresh={onRefresh} onClose={() => close("festival")} /> : null}
+          {/* Festival-gated story offers. No client dismiss: a card lives while the
+              server offers it and vanishes by being played. Empty array → nothing. */}
+          {player.stories.map((story) => (
+            <DashboardCard className="event-card" key={story.storyId}>
+              <div className="event-body">
+                <span className="dashboard-label event-kicker">A matter requires you</span>
+                <h3>{story.status === "active" ? "Your tale continues." : "An untold matter awaits."}</h3>
+                <div className="event-choice-stack">
+                  <button className="event-choice-button" type="button" onClick={() => setOpenStoryId(story.storyId)}>
+                    <strong>{story.status === "active" ? "Continue" : "Begin"}</strong>
+                  </button>
+                </div>
+              </div>
+            </DashboardCard>
+          ))}
+          {openStoryId ? (
+            <Suspense fallback={null}>
+              <StorySheet storyId={openStoryId} open onClose={() => setOpenStoryId(null)} onRefresh={onRefresh} />
+            </Suspense>
+          ) : null}
           <div className="panel-subhead decision-subhead">
             <span className="dashboard-label">Decisions awaiting you</span>
           </div>

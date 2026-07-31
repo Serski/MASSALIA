@@ -67,6 +67,7 @@ const placeholderPlayerState: PlayerDashboardState = {
   deceased: false,
   decaying: [],
   festival: null,
+  stories: [],
   olympiad: null,
   scandal: null,
   familyPending: 0,

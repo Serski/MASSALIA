@@ -52,6 +52,8 @@ export type PlayerDashboardState = {
   decaying: string[];
   // The festival live this season (a free civic event), or null.
   festival: FestivalLive | null;
+  // Festival-gated story offers/resumes for this character (Pack 2).
+  stories: PlayerState["stories"];
   // The Olympiad cycle status (phase, badges, live event, victor), or null.
   olympiad: OlympiadStatus | null;
   // City-wide scandal headline: a fresh Notorious Divorcer branding, or null.
@@ -128,6 +130,7 @@ export function playerFromState(state: PlayerState): PlayerDashboardView {
     deceased: state.character.deceased,
     decaying: state.character.decaying ?? [],
     festival: state.festival ?? null,
+    stories: state.stories ?? [],
     olympiad: state.olympiad ?? null,
     scandal: state.scandal ?? null,
     familyPending: state.familyPending ?? 0,

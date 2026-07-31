@@ -162,6 +162,8 @@ export type PlayerState = {
   succession: SuccessionState | null;
   // The festival live for the player this season (a free civic event), or null.
   festival: FestivalLive | null;
+  // Festival-gated story offers/resumes for this character (Pack 2).
+  stories: Array<{ storyId: string; status: "offered" | "active" }>;
   // The Olympiad cycle status (phase, badges, live event, city-wide victor), or null.
   olympiad: OlympiadStatus | null;
   // City-wide scandal headline: a fresh Notorious Divorcer branding, or null.
@@ -190,6 +192,16 @@ export type PlayerState = {
     intelligence: number;
   };
 };
+
+// Story engine projections (Pack 2) — mirror the server's shapes exactly; no
+// `next`/`rewards`/unchosen `result` are ever sent. NOTE the asymmetry the server
+// produces: start/state expose `choices` as a SIBLING of `node`; advance carries
+// `choices` INSIDE the node-now-current.
+export type StoryNodeBody = { eyebrow?: string; paragraphs: string[] };
+export type StoryNodeView = { id: string; type: "scene" | "terminal"; body: StoryNodeBody; image?: string };
+export type StoryChoiceView = { id: string; text: string };
+export type StoryStateView = { storyId: string; status: string; node: StoryNodeView; choices?: StoryChoiceView[] };
+export type StoryAdvanceView = { resultText: string | null; completed: boolean; node: StoryNodeView & { choices?: StoryChoiceView[] } };
 
 // The Player Chronicle (Timeline): a dated, generation-tagged life-event, with a
 // structured payload the client renders into prose (see renderChronicleEntry).
@@ -315,6 +327,11 @@ export const api = {
   dailyEvents: () => apiFetch<DailySet>("/api/events/daily"),
   resolveEvent: (eventId: string, choiceId: string) =>
     apiFetch<EventResolution>(`/api/events/${eventId}/choices/${choiceId}`, { method: "POST" }),
+  // Story engine (Pack 2). start = fresh start OR mid-story resume (idempotent).
+  storyStart: (storyId: string) => apiFetch<StoryStateView>(`/api/stories/${storyId}/start`, { method: "POST" }),
+  storyAdvance: (storyId: string, choiceId: string) =>
+    apiFetch<StoryAdvanceView>(`/api/stories/${storyId}/choices/${choiceId}`, { method: "POST" }),
+  storyState: (storyId: string) => apiFetch<StoryStateView>(`/api/stories/${storyId}`),
   routines: () => apiFetch<RoutineSet>("/api/routines"),
   resolveRoutine: (routineId: string) =>
     apiFetch<RoutineResult>("/api/routines/resolve", { method: "POST", body: { routineId } }),
