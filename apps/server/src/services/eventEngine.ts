@@ -16,6 +16,7 @@ import {
   parseFactionsContent,
   type EventChoice,
   type EventDefinition,
+  type EventEffect,
 } from "@massalia/shared";
 import { createDb, effectLog, eventHistory, factionRelations, leagueCities, marriages, partyFavor, playerCharacters, worlds } from "@massalia/db";
 import { broadcastState, resolveOwnerToken, setProvinceOwner } from "./worldState.js";
@@ -25,6 +26,10 @@ import { onIdeologyChanged } from "./politics.js";
 import { getAgeConfig } from "./age.js";
 
 const db = createDb();
+
+// The drizzle transaction handle as passed to db.transaction's callback, so the
+// extracted effect loop can run inside a caller-owned transaction.
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../../..");
@@ -83,32 +88,36 @@ export async function findChoice(eventId: string, choiceId: string): Promise<{ e
   return { event, choice };
 }
 
-// Apply a choice's effects for the acting character. Direct row effects + the
-// effect log + event_history are committed in one transaction; the rule-enforcing
-// trait service and the break-aware composure service run alongside. The ideology
-// drift/censure hook and the SSE broadcast fire after the work is done.
-// NOTE: composure (the trait/ideology layer + explicit change_composure effects) is
-// applied by the events route as a single combined delta, so it is intentionally NOT
-// handled here — that keeps the up-front preview equal to what resolving applies.
-export async function applyChoiceEffects(actingCharacterId: string, eventId: string, choice: EventChoice) {
+// The in-transaction effect loop, extracted so a caller (e.g. the future story
+// service) can apply an EventEffect[] atomically inside ITS OWN transaction. Kept
+// out of the helper on purpose (they stay in applyChoiceEffects): the event_history
+// insert, the post-tx change_trait application, and broadcastState(). change_composure,
+// change_trait, and spawn_army remain no-ops here, exactly as before the extraction.
+// `eventId` is free-form provenance only (nothing validates it against loaded content);
+// callers may pass synthetic ids like `story:{storyId}:{choiceId}`.
+export async function applyEffectsInTx(
+  tx: Tx,
+  args: {
+    characterId: string;
+    eventId: string;
+    effects: EventEffect[];
+    cityDef: Awaited<ReturnType<typeof getCityDefaults>> | null;
+    factionDef: Awaited<ReturnType<typeof getFactionDefaults>> | null;
+  },
+): Promise<{ ideologyTouched: boolean }> {
+  const { characterId: actingCharacterId, eventId, effects, cityDef, factionDef } = args;
   let ideologyTouched = false;
-  const traitEffects = choice.effects.filter((e) => e.type === "change_trait");
-
-  // World-scoped effects (Atlas Phase 2b-ii) are explicitly-targeted; resolve their
-  // content defaults outside the tx (file IO) only when this choice actually uses one.
-  const hasWorldEffect = choice.effects.some(
+  // The caller keeps its own copy of this (pre-tx, to gate the content-default load);
+  // recomputed here from the same predicate so the worldId resolution stays verbatim.
+  const hasWorldEffect = effects.some(
     (e) => e.type === "change_city_stat" || e.type === "change_faction_stance" || e.type === "set_faction_vassal",
   );
-  const cityDef = hasWorldEffect ? await getCityDefaults() : null;
-  const factionDef = hasWorldEffect ? await getFactionDefaults() : null;
-
-  await db.transaction(async (tx) => {
-    // The world a world-scoped effect targets is the active world (NOT read from the
-    // acting player — keeps these effects reusable by a future player-less trigger).
-    const worldId = hasWorldEffect
-      ? (await tx.select({ id: worlds.id }).from(worlds).where(eq(worlds.status, "active")).limit(1))[0]?.id ?? null
-      : null;
-    for (const effect of choice.effects) {
+  // The world a world-scoped effect targets is the active world (NOT read from the
+  // acting player — keeps these effects reusable by a future player-less trigger).
+  const worldId = hasWorldEffect
+    ? (await tx.select({ id: worlds.id }).from(worlds).where(eq(worlds.status, "active")).limit(1))[0]?.id ?? null
+    : null;
+    for (const effect of effects) {
       switch (effect.type) {
         case "change_stat": {
           const rows = await tx
@@ -267,6 +276,31 @@ export async function applyChoiceEffects(actingCharacterId: string, eventId: str
           break;
       }
     }
+  return { ideologyTouched };
+}
+
+// Apply a choice's effects for the acting character. Direct row effects + the
+// effect log + event_history are committed in one transaction; the rule-enforcing
+// trait service and the break-aware composure service run alongside. The ideology
+// drift/censure hook and the SSE broadcast fire after the work is done.
+// NOTE: composure (the trait/ideology layer + explicit change_composure effects) is
+// applied by the events route as a single combined delta, so it is intentionally NOT
+// handled here — that keeps the up-front preview equal to what resolving applies.
+export async function applyChoiceEffects(actingCharacterId: string, eventId: string, choice: EventChoice) {
+  const traitEffects = choice.effects.filter((e) => e.type === "change_trait");
+
+  // World-scoped effects (Atlas Phase 2b-ii) are explicitly-targeted; resolve their
+  // content defaults outside the tx (file IO) only when this choice actually uses one.
+  const hasWorldEffect = choice.effects.some(
+    (e) => e.type === "change_city_stat" || e.type === "change_faction_stance" || e.type === "set_faction_vassal",
+  );
+  const cityDef = hasWorldEffect ? await getCityDefaults() : null;
+  const factionDef = hasWorldEffect ? await getFactionDefaults() : null;
+
+  let ideologyTouched = false;
+  await db.transaction(async (tx) => {
+    const result = await applyEffectsInTx(tx, { characterId: actingCharacterId, eventId, effects: choice.effects, cityDef, factionDef });
+    ideologyTouched = result.ideologyTouched;
     // Record the resolution in history (also recorded at draw time).
     await tx.insert(eventHistory).values({ characterId: actingCharacterId, eventId });
   });
