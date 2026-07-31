@@ -1,5 +1,5 @@
-import { and, eq } from "drizzle-orm";
-import { createDb, stories, storyProgress } from "@massalia/db";
+import { and, eq, exists } from "drizzle-orm";
+import { createDb, festivalChoregos, festivalEvents, stories, storyProgress } from "@massalia/db";
 import { parseStoryTree, type EventEffect, type NodeBody, type StoryNode, type StoryTree } from "@massalia/shared";
 import { applyEffectsInTx, getCityDefaults, getFactionDefaults } from "./eventEngine.js";
 import { applyChangeTrait, TraitRuleError } from "./traits.js";
@@ -31,6 +31,15 @@ export class StoryRuleError extends Error {
       reason === "unknown_story" || reason === "not_started" ? 404 : reason === "unknown_choice" ? 400 : 500;
   }
 }
+
+// What makes a story eligible to be offered. Only "festival" exists today: the
+// story is offered once the named festival's instance has closed for a character
+// who attended it. A `trigger` column on `stories` is the eventual home if a
+// second kind ever appears — a registry is deliberate for now (do not add a column).
+export type StoryTrigger = { kind: "festival"; festivalId: string };
+export const STORY_TRIGGERS: Record<string, StoryTrigger> = {
+  "artemisia-silver": { kind: "festival", festivalId: "fest-artemisia" },
+};
 
 // World-scoped effect types (the pre-tx dance mirrors applyChoiceEffects: load the
 // content defaults only when a reward actually targets a city/faction).
@@ -226,6 +235,67 @@ export async function listPlayableStories(characterId: string): Promise<{ storyI
     const status = statusById.get(s.id);
     if (status === "completed") continue;
     out.push({ storyId: s.id, status: status === "active" ? "active" : "unstarted" });
+  }
+  return out;
+}
+
+// The lazy, read-side eligibility check (Pack 2 Phase A). For each registered
+// festival-triggered story: an in-flight run resumes as "active"; a completed run
+// is omitted; otherwise it is "offered" iff the story is seeded AND the character
+// attended a now-closed instance of the trigger festival (any game year — the
+// offer persists until played). Attendance counts however the festival_events row
+// resolved, incl. the offline auto-resolve to "attend" (closeInstance writes the
+// festival_choregos guard row unconditionally, even winnerless).
+//
+// Per registered story: one progress lookup (unique index on character_id,
+// story_id), and — only when there is no progress row — one guard query that is a
+// single row from `stories` (PK) with an EXISTS over the festival_events ⋈
+// festival_choregos join (both sides index-covered). No scans.
+export async function availableStories(
+  characterId: string,
+  registry: Record<string, StoryTrigger> = STORY_TRIGGERS,
+): Promise<Array<{ storyId: string; status: "offered" | "active" }>> {
+  const out: Array<{ storyId: string; status: "offered" | "active" }> = [];
+  for (const [storyId, trigger] of Object.entries(registry)) {
+    if (trigger.kind !== "festival") continue;
+
+    // In-flight / finished short-circuits the offer check.
+    const prog = (
+      await db
+        .select({ status: storyProgress.status })
+        .from(storyProgress)
+        .where(and(eq(storyProgress.characterId, characterId), eq(storyProgress.storyId, storyId)))
+        .limit(1)
+    )[0];
+    if (prog) {
+      if (prog.status === "active") out.push({ storyId, status: "active" });
+      continue; // "completed" (or any non-active) → omit
+    }
+
+    // No progress row: seeded story AND an attended, closed instance → offered.
+    const seededAndAttended = await db
+      .select({ id: stories.id })
+      .from(stories)
+      .where(
+        and(
+          eq(stories.id, storyId),
+          exists(
+            db
+              .select({ id: festivalEvents.id })
+              .from(festivalEvents)
+              .innerJoin(
+                festivalChoregos,
+                and(
+                  eq(festivalChoregos.festivalId, festivalEvents.festivalId),
+                  eq(festivalChoregos.gameYear, festivalEvents.gameYear),
+                ),
+              )
+              .where(and(eq(festivalEvents.characterId, characterId), eq(festivalEvents.festivalId, trigger.festivalId))),
+          ),
+        ),
+      )
+      .limit(1);
+    if (seededAndAttended.length > 0) out.push({ storyId, status: "offered" });
   }
   return out;
 }

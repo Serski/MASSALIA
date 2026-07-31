@@ -106,6 +106,25 @@ suite("story play service (integration)", () => {
   const eventHistoryCount = async (id: string) =>
     (await db.select({ id: m.dbPkg.eventHistory.id }).from(m.dbPkg.eventHistory).where(eq(m.dbPkg.eventHistory.characterId, id))).length;
 
+  // --- availableStories fixtures (festival eligibility) ---------------------
+  // Registry keyed to the already-seeded "test-story"; a second variant points at
+  // an UNSEEDED id so the "no stories row" case has a trigger with no content.
+  const REG = { "test-story": { kind: "festival" as const, festivalId: "fest-test" } };
+  const REG_UNSEEDED = { "no-such-story": { kind: "festival" as const, festivalId: "fest-test" } };
+
+  const attend = async (charId: string, festivalId: string, gameYear: number, opts: { resolved?: boolean; resolvedChoiceId?: string } = {}) =>
+    db.insert(m.dbPkg.festivalEvents).values({
+      characterId: charId,
+      festivalId,
+      eventId: festivalId,
+      gameYear,
+      resolved: opts.resolved ?? false,
+      resolvedChoiceId: opts.resolvedChoiceId ?? null,
+    });
+  // The once-per-instance close guard (winner may be null — a winnerless close).
+  const closeInstance = async (festivalId: string, gameYear: number, winner: string | null = null) =>
+    db.insert(m.dbPkg.festivalChoregos).values({ festivalId, gameYear, winnerCharacterId: winner });
+
   const expectedStat = (base: number, amount: number, growthMultiplier: string) =>
     m.shared.capStat(base + m.shared.applyStatGrowth(amount, Number(growthMultiplier)), m.age.getAgeConfig());
 
@@ -120,6 +139,7 @@ suite("story play service (integration)", () => {
   beforeEach(async () => {
     await db.execute(sql`
       TRUNCATE TABLE event_history, effect_log, composure_log, character_traits, story_progress, stories,
+        festival_choregos, festival_events,
         player_characters, dynasties, players, sessions, users, worlds CASCADE
     `);
     await db.insert(m.dbPkg.houses).values({ slug: "test-house", name: "Test House", initial: "T", alignment: "c", stance: "s", motto: "m", patron: "p", crest: "c" }).onConflictDoNothing();
@@ -290,5 +310,61 @@ suite("story play service (integration)", () => {
       caught = e;
     }
     expect((caught as { reason?: string }).reason).toBe("not_started");
+  });
+
+  // --- availableStories (festival-gated eligibility) ------------------------
+
+  it("10. attended + instance closed + seeded + no progress → offered", async () => {
+    const c = await createCharacter("Eligible");
+    await attend(c.id, "fest-test", 1);
+    await closeInstance("fest-test", 1);
+    expect(await m.story.availableStories(c.id, REG)).toEqual([{ storyId: "test-story", status: "offered" }]);
+  });
+
+  it("11. newcomer (no festival_events row) → [], even with the instance closed and story seeded", async () => {
+    const c = await createCharacter("Newcomer");
+    await closeInstance("fest-test", 1); // instance closed globally, but this char never attended
+    expect(await m.story.availableStories(c.id, REG)).toEqual([]);
+  });
+
+  it("12. attended but instance still open (no festival_choregos) → []", async () => {
+    const c = await createCharacter("Waiting");
+    await attend(c.id, "fest-test", 1); // no close row
+    expect(await m.story.availableStories(c.id, REG)).toEqual([]);
+  });
+
+  it("13. auto-resolved attendance (resolved 'attend') still qualifies", async () => {
+    const c = await createCharacter("Offline");
+    await attend(c.id, "fest-test", 1, { resolved: true, resolvedChoiceId: "attend" });
+    await closeInstance("fest-test", 1, null); // winnerless close
+    expect(await m.story.availableStories(c.id, REG)).toEqual([{ storyId: "test-story", status: "offered" }]);
+  });
+
+  it("14. active progress row → active (short-circuits, needs no festival rows)", async () => {
+    const c = await createCharacter("InFlight");
+    await m.story.getOrStartStory(c.id, "test-story"); // active progress, no attendance
+    expect(await m.story.availableStories(c.id, REG)).toEqual([{ storyId: "test-story", status: "active" }]);
+  });
+
+  it("15. completed progress row → [] (omitted even when otherwise eligible)", async () => {
+    const c = await createCharacter("Done");
+    await attend(c.id, "fest-test", 1);
+    await closeInstance("fest-test", 1);
+    await db.insert(m.dbPkg.storyProgress).values({ characterId: c.id, storyId: "test-story", status: "completed", currentNode: "TEND", completedAt: now });
+    expect(await m.story.availableStories(c.id, REG)).toEqual([]);
+  });
+
+  it("16. trigger satisfied but no stories row → [] (the pre-seed prod situation)", async () => {
+    const c = await createCharacter("PreSeed");
+    await attend(c.id, "fest-test", 1);
+    await closeInstance("fest-test", 1);
+    expect(await m.story.availableStories(c.id, REG_UNSEEDED)).toEqual([]);
+  });
+
+  it("17. prior-year attendance still qualifies (offer persists across years)", async () => {
+    const c = await createCharacter("Veteran");
+    await attend(c.id, "fest-test", 5); // a past game year; the check has no current-year filter
+    await closeInstance("fest-test", 5);
+    expect(await m.story.availableStories(c.id, REG)).toEqual([{ storyId: "test-story", status: "offered" }]);
   });
 });
