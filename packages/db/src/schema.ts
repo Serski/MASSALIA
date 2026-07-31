@@ -892,3 +892,36 @@ export const mapTowns = pgTable("map_towns", {
   pxX: numeric("px_x").notNull(),
   pxY: numeric("px_y").notNull(),
 });
+
+// --- Story engine (authored branching stories) ------------------------------
+// Created by the hand-written SQL migration 0040. Like the other recent tables,
+// these defs describe the LIVE tables for typed access; the SQL migration is the
+// source of truth. The status CHECK lives in the migration (repo convention for
+// status enums — see chamber_votes/elections — is inline SQL CHECK, no drizzle
+// check() in schema.ts).
+
+// Authored branching stories (interactive narrative events). `tree` holds the
+// node/choice graph; its shape is validated in @massalia/shared (later phase),
+// so it is typed loosely here on purpose.
+export const stories = pgTable("stories", {
+  id: text("id").primaryKey(), // slug, e.g. "artemisia-silver" — no seed data in this phase
+  version: integer("version").notNull().default(1),
+  tree: jsonb("tree").$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// One row per (character, story). The UNIQUE index is the once-ever guard;
+// status flips to 'completed' atomically with terminal rewards (later phase).
+// Note: playerCharacters.id is the reused dynasty slot, so progress survives
+// succession by design — the heir does not replay a finished story.
+export const storyProgress = pgTable("story_progress", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  characterId: uuid("character_id").references(() => playerCharacters.id).notNull(),
+  storyId: text("story_id").references(() => stories.id).notNull(),
+  status: text("status").notNull().default("active"),
+  currentNode: text("current_node").notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => ({
+  oneRunPerCharacter: uniqueIndex("story_progress_character_story_idx").on(table.characterId, table.storyId),
+}));
