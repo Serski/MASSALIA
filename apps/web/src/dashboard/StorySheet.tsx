@@ -45,11 +45,13 @@ function RewardStrip({ rewards }: { rewards: StoryReward[] }) {
 
 export default function StorySheet({
   storyId,
+  title,
   open,
   onClose,
   onRefresh,
 }: {
   storyId: string;
+  title: string;
   open: boolean;
   onClose: () => void;
   onRefresh: () => void;
@@ -125,7 +127,8 @@ export default function StorySheet({
   };
 
   return (
-    <BottomSheet open={open} onClose={handleClose} labelledBy="story-sheet-title" title="A matter requires you">
+    <BottomSheet open={open} onClose={handleClose} labelledBy="story-sheet-title" title={title || "A matter requires you"}>
+      <div className="story-sheet">
       <DashboardCard className="event-card">
         <div className="event-body">
           {!view ? (
@@ -189,6 +192,7 @@ export default function StorySheet({
           )}
         </div>
       </DashboardCard>
+      </div>
     </BottomSheet>
   );
 }

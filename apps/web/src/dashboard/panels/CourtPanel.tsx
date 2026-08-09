@@ -509,7 +509,7 @@ export default function CourtPanel({ player, onRefresh }: PanelProps) {
             <DashboardCard className="event-card" key={story.storyId}>
               <div className="event-body">
                 <span className="dashboard-label event-kicker">A matter requires you</span>
-                <h3>{story.status === "active" ? "Your tale continues." : "An untold matter awaits."}</h3>
+                <h3>{story.title || (story.status === "active" ? "Your tale continues." : "An untold matter awaits.")}</h3>
                 <div className="event-choice-stack">
                   <button className="event-choice-button" type="button" onClick={() => setOpenStoryId(story.storyId)}>
                     <strong>{story.status === "active" ? "Continue" : "Begin"}</strong>
@@ -520,7 +520,13 @@ export default function CourtPanel({ player, onRefresh }: PanelProps) {
           ))}
           {openStoryId ? (
             <Suspense fallback={null}>
-              <StorySheet storyId={openStoryId} open onClose={() => setOpenStoryId(null)} onRefresh={onRefresh} />
+              <StorySheet
+                storyId={openStoryId}
+                title={player.stories.find((s) => s.storyId === openStoryId)?.title ?? ""}
+                open
+                onClose={() => setOpenStoryId(null)}
+                onRefresh={onRefresh}
+              />
             </Suspense>
           ) : null}
           <div className="panel-subhead decision-subhead">

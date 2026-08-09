@@ -3514,3 +3514,41 @@
    over the existing drop shadow (kept through hover so it never flickers). */
 .dashboard-shell .dashboard-card{ box-shadow: 0 18px 48px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05); }
 .dashboard-shell .dashboard-card:hover{ box-shadow: 0 22px 58px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.07); }
+
+/* Story sheet — desktop reading layout (Prompt 14). Mobile base is the shared card
+   styles, byte-for-byte unchanged; EVERY rule below sits inside the min-width query.
+   The dashboard's own breakpoints are desktop-first max-width (560/620/720/760/980/
+   1180); this is the lone min-width block because the requirement is "add desktop on
+   top of an untouched mobile base". Scoped to .story-sheet so no other sheet changes.
+   680px column centered in the wide sheet; the mobile column-hug + the >980px
+   .event-card 2-col grid (which trapped the body at 38%) are overridden to one column. */
+@media (min-width: 768px) {
+  .dashboard-shell .story-sheet {
+    max-width: 680px;
+    margin: 0 auto;
+  }
+  .dashboard-shell .story-sheet .event-card {
+    display: block; /* drop the 2-col grid so the body uses the full column */
+  }
+  .dashboard-shell .story-sheet .event-body {
+    padding: 24px 28px;
+    gap: 12px;
+  }
+  .dashboard-shell .story-sheet .panel-banner {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 2 / 1; /* the scene art is authored 2:1 (1134x567) */
+    margin-bottom: 20px;
+  }
+  .dashboard-shell .story-sheet .event-body p {
+    font-size: 1.05rem;
+    line-height: 1.7;
+  }
+  .dashboard-shell .story-sheet .event-kicker {
+    font-size: 0.85rem;
+  }
+  .dashboard-shell .story-sheet .event-choice-button,
+  .dashboard-shell .story-sheet .choice-costs {
+    width: 100%;
+  }
+}

@@ -163,7 +163,7 @@ export type PlayerState = {
   // The festival live for the player this season (a free civic event), or null.
   festival: FestivalLive | null;
   // Festival-gated story offers/resumes for this character (Pack 2).
-  stories: Array<{ storyId: string; status: "offered" | "active" }>;
+  stories: Array<{ storyId: string; status: "offered" | "active"; title: string }>;
   // The Olympiad cycle status (phase, badges, live event, city-wide victor), or null.
   olympiad: OlympiadStatus | null;
   // City-wide scandal headline: a fresh Notorious Divorcer branding, or null.
