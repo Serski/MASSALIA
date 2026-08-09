@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { and, eq, exists } from "drizzle-orm";
+import { and, eq, exists, sql } from "drizzle-orm";
 import { createDb, festivalChoregos, festivalEvents, stories, storyProgress } from "@massalia/db";
 import { parseStoryTree, validateStoryGraph, type EventEffect, type NodeBody, type StoryNode, type StoryTree } from "@massalia/shared";
 import { applyEffectsInTx, getCityDefaults, getFactionDefaults } from "./eventEngine.js";
@@ -352,8 +352,12 @@ export async function listPlayableStories(characterId: string): Promise<{ storyI
 export async function availableStories(
   characterId: string,
   registry: Record<string, StoryTrigger> = STORY_TRIGGERS,
-): Promise<Array<{ storyId: string; status: "offered" | "active" }>> {
-  const out: Array<{ storyId: string; status: "offered" | "active" }> = [];
+): Promise<Array<{ storyId: string; status: "offered" | "active"; title: string }>> {
+  const out: Array<{ storyId: string; status: "offered" | "active"; title: string }> = [];
+  // The story's display title, extracted from the jsonb tree. Never break the payload
+  // over a display string: a null/empty extraction falls back to the storyId.
+  const titleExpr = sql<string | null>`${stories.tree}->>'title'`;
+  const titleOr = (raw: string | null | undefined, storyId: string) => (raw && raw.length > 0 ? raw : storyId);
   for (const [storyId, trigger] of Object.entries(registry)) {
     if (trigger.kind !== "festival") continue;
 
@@ -366,13 +370,18 @@ export async function availableStories(
         .limit(1)
     )[0];
     if (prog) {
-      if (prog.status === "active") out.push({ storyId, status: "active" });
+      if (prog.status === "active") {
+        // One PK read on `stories` for the title (the offer query is skipped here).
+        const titleRows = await db.select({ title: titleExpr }).from(stories).where(eq(stories.id, storyId)).limit(1);
+        out.push({ storyId, status: "active", title: titleOr(titleRows[0]?.title, storyId) });
+      }
       continue; // "completed" (or any non-active) → omit
     }
 
     // No progress row: seeded story AND an attended, closed instance → offered.
+    // The guard query also pulls the title (same single, index-friendly query).
     const seededAndAttended = await db
-      .select({ id: stories.id })
+      .select({ id: stories.id, title: titleExpr })
       .from(stories)
       .where(
         and(
@@ -393,7 +402,7 @@ export async function availableStories(
         ),
       )
       .limit(1);
-    if (seededAndAttended.length > 0) out.push({ storyId, status: "offered" });
+    if (seededAndAttended.length > 0) out.push({ storyId, status: "offered", title: titleOr(seededAndAttended[0]!.title, storyId) });
   }
   return out;
 }

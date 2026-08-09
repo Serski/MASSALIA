@@ -331,7 +331,7 @@ suite("story play service (integration)", () => {
     const c = await createCharacter("Eligible");
     await attend(c.id, "fest-test", 1);
     await closeInstance("fest-test", 1);
-    expect(await m.story.availableStories(c.id, REG)).toEqual([{ storyId: "test-story", status: "offered" }]);
+    expect(await m.story.availableStories(c.id, REG)).toEqual([{ storyId: "test-story", status: "offered", title: "The Assay" }]);
   });
 
   it("11. newcomer (no festival_events row) → [], even with the instance closed and story seeded", async () => {
@@ -350,13 +350,13 @@ suite("story play service (integration)", () => {
     const c = await createCharacter("Offline");
     await attend(c.id, "fest-test", 1, { resolved: true, resolvedChoiceId: "attend" });
     await closeInstance("fest-test", 1, null); // winnerless close
-    expect(await m.story.availableStories(c.id, REG)).toEqual([{ storyId: "test-story", status: "offered" }]);
+    expect(await m.story.availableStories(c.id, REG)).toEqual([{ storyId: "test-story", status: "offered", title: "The Assay" }]);
   });
 
   it("14. active progress row → active (short-circuits, needs no festival rows)", async () => {
     const c = await createCharacter("InFlight");
     await m.story.getOrStartStory(c.id, "test-story"); // active progress, no attendance
-    expect(await m.story.availableStories(c.id, REG)).toEqual([{ storyId: "test-story", status: "active" }]);
+    expect(await m.story.availableStories(c.id, REG)).toEqual([{ storyId: "test-story", status: "active", title: "The Assay" }]);
   });
 
   it("15. completed progress row → [] (omitted even when otherwise eligible)", async () => {
@@ -378,7 +378,7 @@ suite("story play service (integration)", () => {
     const c = await createCharacter("Veteran");
     await attend(c.id, "fest-test", 5); // a past game year; the check has no current-year filter
     await closeInstance("fest-test", 5);
-    expect(await m.story.availableStories(c.id, REG)).toEqual([{ storyId: "test-story", status: "offered" }]);
+    expect(await m.story.availableStories(c.id, REG)).toEqual([{ storyId: "test-story", status: "offered", title: "The Assay" }]);
   });
 
   // --- startStory (gated start) ---------------------------------------------
