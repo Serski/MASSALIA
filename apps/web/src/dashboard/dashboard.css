@@ -3510,3 +3510,185 @@
     width: 100%;
   }
 }
+
+/* First-run welcome overlay + the character-sheet portrait pulse (onboarding). */
+.dashboard-shell .welcome-overlay{
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(4vh, env(safe-area-inset-top)) 12px max(9vh, env(safe-area-inset-bottom));
+  background: rgba(8, 6, 5, 0.78);
+  backdrop-filter: blur(4px);
+}
+
+.dashboard-shell .welcome-card{
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(640px, 96%);
+  max-height: 92vh;
+  max-height: 92dvh;
+  background: linear-gradient(180deg, #221a14, #15100c);
+  border: 1px solid var(--dash-gold);
+  border-radius: 18px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7);
+  animation: sheetUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.dashboard-shell .welcome-body{
+  padding: 26px 28px 24px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.dashboard-shell .welcome-title{
+  margin: 0;
+  color: var(--dash-parchment);
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.dashboard-shell .welcome-framing{
+  margin: 10px 0 20px;
+  color: var(--dash-stone);
+  font-size: 14px;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.dashboard-shell .welcome-tabs{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dashboard-shell .welcome-tab{
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.dashboard-shell .welcome-tab-ic{
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-top: 1px;
+  color: var(--dash-gold);
+}
+
+.dashboard-shell .welcome-tab-ic svg{
+  width: 20px;
+  height: 20px;
+}
+
+.dashboard-shell .welcome-tab-body{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dashboard-shell .welcome-tab-body strong{
+  color: var(--dash-gold-bright);
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+
+.dashboard-shell .welcome-tab-body span{
+  color: var(--dash-stone);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.dashboard-shell .welcome-section{
+  margin: 22px 0 12px;
+  color: var(--dash-gold);
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.dashboard-shell .welcome-traits{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dashboard-shell .welcome-trait{
+  margin: 0;
+  color: var(--dash-stone);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.dashboard-shell .welcome-trait strong{
+  color: var(--dash-parchment);
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 0.03em;
+}
+
+.dashboard-shell .welcome-tip{
+  margin: 20px 0 0;
+  color: var(--dash-gold-bright);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.dashboard-shell .welcome-closer{
+  margin: 10px 0 0;
+  color: var(--dash-stone-dim);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.dashboard-shell .welcome-enter{
+  margin-top: 22px;
+  align-self: stretch;
+  padding: 13px 20px;
+  color: #15100c;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, var(--gold-bright), var(--bronze));
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.dashboard-shell .welcome-enter:hover{
+  filter: brightness(1.06);
+}
+
+/* Portrait pulse: a soft gold ring drawing the eye to the character sheet. */
+.dashboard-shell .avatar-btn.onboarding-pulse{
+  animation: onboardingPulse 1.8s ease-out infinite;
+}
+
+@keyframes onboardingPulse{
+  0% { box-shadow: 0 0 0 0 rgba(181, 138, 69, 0.55); }
+  70% { box-shadow: 0 0 0 10px rgba(181, 138, 69, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(181, 138, 69, 0); }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .dashboard-shell .welcome-card{
+    animation: none;
+  }
+  .dashboard-shell .avatar-btn.onboarding-pulse{
+    animation: none;
+    box-shadow: 0 0 0 3px rgba(181, 138, 69, 0.5);
+  }
+}

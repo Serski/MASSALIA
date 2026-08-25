@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ComponentType, type LazyExoticComponent, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type LazyExoticComponent, type ReactNode } from "react";
 import { api, ApiError, type PlayerState } from "../api.js";
 import { assetPath, nobleHouses, professions, type House } from "../data/league.js";
 import { DashboardCard, type DashboardSection, type IconName, MoreIcon, type PanelProps, type PlayerDashboardState, type PlayerDashboardView, SvgIcon, playerFromState } from "./shared.js";
@@ -11,6 +11,9 @@ const MarketPanel = lazy(() => import("./panels/MarketPanel.js"));
 const FamilyPanel = lazy(() => import("./panels/FamilyPanel.js"));
 const PoliticsPanel = lazy(() => import("./panels/PoliticsPanel.js"));
 const AtlasPanel = lazy(() => import("./panels/AtlasPanel.js"));
+// First-run welcome overlay: lazy so it never weighs on the main bundle (Suspense
+// fallback null — it must never block the dashboard from rendering).
+const WelcomeOverlay = lazy(() => import("./WelcomeOverlay.js"));
 
 type DashboardNavItem = {
   id: DashboardSection;
@@ -72,6 +75,10 @@ const placeholderPlayerState: PlayerDashboardState = {
   scandal: null,
   familyPending: 0,
   manumission: null,
+  // The placeholder is "already onboarded" so neither the overlay nor the pulse
+  // flashes before real /me/state loads and reports the true flags.
+  introSeen: true,
+  sheetSeen: true,
 };
 
 function getPlaceholderPlayer(): PlayerDashboardView {
@@ -115,6 +122,25 @@ export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () =
   const [courtRemaining, setCourtRemaining] = useState(0);
   const [loadError, setLoadError] = useState("");
   const player = useMemo(() => playerState ? playerFromState(playerState) : getPlaceholderPlayer(), [playerState]);
+  // Onboarding: the welcome overlay (intro) and the portrait pulse (sheet). Each is
+  // acked at most once, optimistically hidden regardless of the network result — a
+  // failed ack simply re-shows on the next load, never nags in-session.
+  const [introDismissed, setIntroDismissed] = useState(false);
+  const [sheetAcked, setSheetAcked] = useState(false);
+  const introAckRef = useRef(false);
+  const sheetAckRef = useRef(false);
+  const dismissIntro = useCallback(() => {
+    if (introAckRef.current) return;
+    introAckRef.current = true;
+    setIntroDismissed(true);
+    api.onboardingSeen("intro").catch(() => {});
+  }, []);
+  const ackSheet = useCallback(() => {
+    if (sheetAckRef.current) return;
+    sheetAckRef.current = true;
+    setSheetAcked(true);
+    api.onboardingSeen("sheet").catch(() => {});
+  }, []);
   const closeSheet = useCallback(() => setActiveSheet(null), []);
   const handleLogout = useCallback(async () => {
     try {
@@ -225,9 +251,13 @@ export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () =
             {PLACEHOLDER_NEW_ITEM_COUNT > 0 ? <span className="vital-badge">{PLACEHOLDER_NEW_ITEM_COUNT}</span> : null}
           </button>
           <button
-            className="avatar-btn"
+            className={!player.sheetSeen && !sheetAcked ? "avatar-btn onboarding-pulse" : "avatar-btn"}
             type="button"
-            onClick={() => setActiveSheet("character")}
+            onClick={() => {
+              setActiveSheet("character");
+              // Opening the sheet acks the pulse (once) and clears it optimistically.
+              if (!player.sheetSeen) ackSheet();
+            }}
             title="Open your character"
           >
             <span className="avatar-av" aria-hidden="true"><AvatarImage player={player} /></span>
@@ -329,6 +359,12 @@ export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () =
 
       <InventorySheet open={activeSheet === "inventory"} onClose={closeSheet} player={player} initialTab={inventoryTab} />
       <CharacterSheet open={activeSheet === "character"} onClose={closeSheet} player={player} onLogout={handleLogout} onAccountDeleted={onRequireLogin} />
+
+      {player.introSeen === false && !introDismissed ? (
+        <Suspense fallback={null}>
+          <WelcomeOverlay onDismiss={dismissIntro} />
+        </Suspense>
+      ) : null}
     </main>
   );
 }

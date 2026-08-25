@@ -172,6 +172,10 @@ export type PlayerState = {
   familyPending: number;
   // Manumission: { eligible } when a slave holds the freedman trait, else flag false.
   manumission: { eligible: boolean } | null;
+  // Onboarding first-seen flags: the welcome intro overlay and the character-sheet
+  // portrait pulse show while their flag is false (derived from the players row).
+  introSeen: boolean;
+  sheetSeen: boolean;
   resources: {
     drachmae: number;
     prestige: number;
@@ -334,6 +338,10 @@ export const api = {
   chronicle: () => apiFetch<{ entries: ChronicleEntry[] }>("/me/chronicle"),
   setNewsletter: (optIn: boolean) =>
     apiFetch<{ ok: true; newsletterOptIn: boolean }>("/me/newsletter", { method: "POST", body: { optIn } }),
+  // Mark an onboarding step as seen (first-seen is immutable server-side; repeat
+  // calls are no-op acks). Fire-and-optimistic: callers hide the UI regardless.
+  onboardingSeen: (step: "intro" | "sheet") =>
+    apiFetch<{ ok: true }>("/me/onboarding", { method: "POST", body: { step } }),
   joinParty: (party: "dynatoi" | "palaioi") =>
     apiFetch<{ party: string }>("/api/party/join", { method: "POST", body: { party } }),
   leaveParty: () => apiFetch<{ party: string }>("/api/party/leave", { method: "POST" }),

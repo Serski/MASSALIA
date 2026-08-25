@@ -62,6 +62,10 @@ export type PlayerDashboardState = {
   familyPending: number;
   // Manumission: { eligible } when a slave holds the freedman trait, else null.
   manumission: { eligible: boolean } | null;
+  // Onboarding first-seen flags: the welcome overlay shows while introSeen is false;
+  // the portrait pulse shows while sheetSeen is false.
+  introSeen: boolean;
+  sheetSeen: boolean;
 };
 
 export type PlayerDashboardView = PlayerDashboardState & {
@@ -122,6 +126,8 @@ export function playerFromState(state: PlayerState): PlayerDashboardView {
     scandal: state.scandal ?? null,
     familyPending: state.familyPending ?? 0,
     manumission: state.manumission ?? null,
+    introSeen: state.introSeen ?? true,
+    sheetSeen: state.sheetSeen ?? true,
     profession,
     house,
   };
