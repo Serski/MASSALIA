@@ -179,13 +179,8 @@ export async function familyEligibilityContext(
 type CharacterRow = typeof playerCharacters.$inferSelect;
 type CandidateRow = typeof familyCandidates.$inferSelect;
 
-// One game year = the age clock's realMsPerGameYear (4 real days).
-function gameYearMs(cfg: FamilyConfig): number {
-  return getAgeConfig().realMsPerGameYear * cfg.candidates.drawCadenceGameYears;
-}
-
 // Lazy-on-read safety net: draw any purpose the character currently lacks
-// unconsumed offers for, then schedule the yearly BullMQ refresh. Per-purpose
+// unconsumed offers for, then schedule the seasonal BullMQ refresh. Per-purpose
 // (onlyMissing) so consuming marriage offers never disturbs standing adoption
 // offers, and vice versa — and a legacy character with only one purpose's rows
 // self-heals the missing one on the next read. The worker keeps them fresh after.
@@ -194,7 +189,8 @@ export async function ensureFreshDraw(character: CharacterRow, now: Date = new D
   if (isFamilyLocked(character.classId, cfg)) return;
 
   const drawn = await drawFamilyCandidates(character.id, { familyCfg: cfg, ageCfg: getAgeConfig(), now, onlyMissing: true });
-  if (drawn.length > 0) await enqueueFamilyDraw(character.id, gameYearMs(cfg));
+  // A fresh draw of brides arrives each season (1 season = 1 real day) if none please the player.
+  if (drawn.length > 0) await enqueueFamilyDraw(character.id, REAL_MS_PER_SEASON);
 }
 
 const HOUSE_NAMES_CACHE = new Map<string, string>();

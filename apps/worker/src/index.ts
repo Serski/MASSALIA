@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Queue, Worker, type Job } from "bullmq";
-import { completionDelayMs, parseAgeConfig, parseAgendaFile, parseCalendarConfig, parseContractsContent, parseFamilyConfig, parsePoliticsConfig, parseTraitsFile, type AgeConfig, type AgendaScope, type CalendarConfig, type ContractsContent, type FamilyConfig, type PoliticsConfig, type Trait } from "@massalia/shared";
+import { completionDelayMs, parseAgeConfig, parseAgendaFile, parseCalendarConfig, parseContractsContent, parseFamilyConfig, parsePoliticsConfig, parseTraitsFile, REAL_MS_PER_SEASON, type AgeConfig, type AgendaScope, type CalendarConfig, type ContractsContent, type FamilyConfig, type PoliticsConfig, type Trait } from "@massalia/shared";
 import { accrueLeagueCities, accrueTreasuries, advanceAgendaCycles, advanceElections, advanceOlympiads, closeDueChamberVotes, closeDueFestivals, deliverOlympicNominationToAll, drawFamilyCandidates, ensurePartyLeaders, fireFestivalsForAll, openAgendaCycleIfDue, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, sweepMercenaryContracts, sweepSpouseDeaths, type AgendaPools, type MercContractCfgMap } from "@massalia/db";
 
 const redisUrl = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
@@ -240,11 +240,11 @@ const processJob = async (job: Job) => {
       const { familyCfg: fc, ageCfg: ac } = await configs();
       const drawn = await drawFamilyCandidates(characterId, { familyCfg: fc, ageCfg: ac });
       console.log(`Drew ${drawn.length} family candidates for ${characterId}`);
-      // Re-schedule next game year (1 game year = 4 real days).
+      // Re-schedule next season (1 season = 1 real day) so brides refresh each season.
       await scheduledResolutionQueue.add(
         "family-candidate-draw",
         { characterId },
-        { delay: ac.realMsPerGameYear * fc.candidates.drawCadenceGameYears, removeOnComplete: true, removeOnFail: 100, jobId: `family-draw:${characterId}` },
+        { delay: REAL_MS_PER_SEASON, removeOnComplete: true, removeOnFail: 100, jobId: `family-draw:${characterId}` },
       );
       return;
     }
