@@ -406,6 +406,7 @@ function DetailBody({ entry }: { entry: DetailEntry }) {
             <h2>Objective</h2>
             <p>{entry.objective}</p>
             <p><strong>Starting condition:</strong> {entry.income}</p>
+            <p><strong>Starting funds:</strong> No coin, land, or House at start.</p>
             <p>{entry.note}</p>
             <p>{entry.narrativePath.todo}</p>
           </article>
@@ -430,7 +431,7 @@ function DetailBody({ entry }: { entry: DetailEntry }) {
           <h2>Objective</h2>
           <p>{entry.objective}</p>
           <p><strong>Starting income:</strong> {entry.income}</p>
-          <p><strong>Cost to start:</strong> 100 dr.</p>
+          <p><strong>Starting funds:</strong> 150 dr.</p>
           <p>{entry.note}</p>
         </article>
         <article className="detail-panel">
