@@ -98,20 +98,20 @@ suite("Ledger / building engine (integration)", () => {
     playerId = await freshPlayer();
   });
 
-  it("day-1 path: 100dr → build Estate T1 (50) → wallet 50 → constructs in 1 day → first collect yields grain", async () => {
+  it("day-1 path: 100dr → build Estate T1 (50) → wallet 50 → constructs in 1 hour → first collect yields grain", async () => {
     const c = await ctx();
     const built = await m.buildings.build("landowner", c, "estate", new Date(T0));
     expect(built.ok).toBe(true);
     if (built.ok) expect(built.cost).toBe(50);
     expect(await wallet()).toBe(50);
 
-    // Still constructing before completesAt.
-    const midBuild = await m.buildings.mine("landowner", c, new Date(T0 + DAY / 2));
+    // Still constructing before completesAt (tier 1 now completes in 1 hour = DAY/24).
+    const midBuild = await m.buildings.mine("landowner", c, new Date(T0 + DAY / 48));
     expect(midBuild.buildings[0]!.status).toBe("constructing");
 
-    // OFFLINE: jump two days forward with no intervening tick. Lazy activation
-    // flips it active and ~one day of grain has accrued (guarded → full output).
-    const collectAt = new Date(T0 + 2 * DAY);
+    // OFFLINE: jump to one day after the 1-hour build completes, no intervening tick.
+    // Lazy activation flips it active and ~one day of grain has accrued (guarded → full output).
+    const collectAt = new Date(T0 + DAY + DAY / 24);
     const view = await m.buildings.mine("landowner", c, collectAt);
     expect(view.buildings[0]!.status).toBe("active");
     expect(view.pendingGoods.grain).toBeGreaterThan(5.5);
@@ -221,8 +221,8 @@ suite("Ledger / building engine (integration)", () => {
     if (built.ok) expect(built.cost).toBe(50);
     expect(await wallet()).toBe(50);
 
-    // OFFLINE jump: constructs in 1 day, then ~1 day active (guarded → full output).
-    const collectAt = new Date(T0 + 2 * DAY);
+    // OFFLINE jump: constructs in 1 hour, then ~1 day active (guarded → full output).
+    const collectAt = new Date(T0 + DAY + DAY / 24);
     const view = await m.buildings.mine("priest", c, collectAt);
     expect(view.buildings[0]!.status).toBe("active");
     expect(view.pendingGoods.herbal).toBeGreaterThan(3.5);
@@ -322,7 +322,8 @@ suite("Ledger / building engine (integration)", () => {
     expect(built.ok).toBe(true);
     expect(await wallet()).toBe(50);
 
-    const collectAt = new Date(T0 + 2 * DAY);
+    // Tier 1 completes in 1 hour; collect one day into the active window (guarded full output).
+    const collectAt = new Date(T0 + DAY + DAY / 24);
     const view = await m.buildings.mine("shipbuilder", c, collectAt);
     expect(view.buildings[0]!.status).toBe("active");
     expect(view.pendingGoods["naval-supplies"]).toBeGreaterThan(0.8); // ~1/day, guarded full output
@@ -659,8 +660,8 @@ suite("Ledger / building engine (integration)", () => {
   it("(U3) a fresh tier-1 build still earns 0 while constructing (no prior tier)", async () => {
     playerId = await freshPlayer(5000, "trader");
     const c = await ctx();
-    await m.buildings.build("trader", c, "emporion", new Date(T0)); // T1, completes T0+1
-    const at = new Date(T0 + DAY / 2); // before completion
+    await m.buildings.build("trader", c, "emporion", new Date(T0)); // T1, completes T0 + 1 hour
+    const at = new Date(T0 + DAY / 48); // before completion (< 1 hour)
     const view = await m.buildings.mine("trader", c, at);
     const emp = view.buildings.find((b) => b.id === "emporion")!;
     expect(emp.status).toBe("constructing");

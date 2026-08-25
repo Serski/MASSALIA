@@ -8,7 +8,7 @@ import type { CharacterStats } from "./character.js";
 // Every number flows from ONE curve (constants below), never hand-typed rows:
 //   cost(t)      = COST_TABLE[t-1]                          → 50 / 125 / 300 / 750
 //   yield(base,t)= base × YIELD_GROWTH^(t-1)
-//   buildDays(t) = BUILD_DAYS[t-1]                          → 1 / 2 / 4 / 7
+//   buildDays(t) = BUILD_DAYS[t-1]                          → 1/24 / 2 / 4 / 7
 //   upkeep(t)    = UPKEEP[t-1]                              → 0 / 1 / 3 / 6  (dr/day)
 //
 // Accrual is closed-form (rate × elapsed × seasonal), computed lazily on read —
@@ -21,8 +21,10 @@ import type { CharacterStats } from "./character.js";
 
 export const COST_TABLE = [50, 125, 300, 750] as const;
 export const YIELD_GROWTH = 1.8;
-// Real days (= in-game seasons) to build each tier; index 0 is tier 1.
-export const BUILD_DAYS = [1, 2, 4, 7] as const;
+// Real days (= in-game seasons) to build each tier; index 0 is tier 1. Tier 1 is a
+// single hour (1/24 day) so a fresh class building comes online almost at once;
+// higher tiers keep their multi-day cadence. completesAt math is ms-based (buildMs).
+export const BUILD_DAYS = [1 / 24, 2, 4, 7] as const;
 // Flat upkeep in drachmae/day per tier; gentle (a tax, not a treadmill).
 export const UPKEEP = [0, 1, 3, 6] as const;
 export const MAX_TIER = 4;
@@ -43,7 +45,8 @@ export function buildingYield(base: number, tier: number): number {
 }
 
 export function buildingBuildDays(tier: number): number {
-  // ≥1 season floor; clamp out-of-range tiers to the last defined entry.
+  // Tier 1 is sub-day (1/24); higher tiers are whole days. Clamp out-of-range tiers
+  // to the last defined entry.
   return BUILD_DAYS[Math.min(BUILD_DAYS.length, Math.max(1, tier)) - 1] ?? BUILD_DAYS[BUILD_DAYS.length - 1]!;
 }
 

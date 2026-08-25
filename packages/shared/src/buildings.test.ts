@@ -45,8 +45,8 @@ describe("the building curve (one curve, not hand rows)", () => {
     expect([1, 2, 3, 4].map(buildingCost)).toEqual([50, 125, 300, 750]);
   });
 
-  it("buildDays(t) = [1, 2, 4, 7] real days (≥1 season floor)", () => {
-    expect([1, 2, 3, 4].map(buildingBuildDays)).toEqual([1, 2, 4, 7]);
+  it("buildDays(t) = [1/24, 2, 4, 7] (tier 1 is one hour, higher tiers whole days)", () => {
+    expect([1, 2, 3, 4].map(buildingBuildDays)).toEqual([1 / 24, 2, 4, 7]);
   });
 
   it("upkeep(t) is gentle and scales with tier → 0 / 1 / 3 / 6", () => {
@@ -120,7 +120,7 @@ describe("BALANCE GUARDRAIL — the day-1 landowner path", () => {
   // Day-1 landowner: build Estate T1 (cost 50) → constructs in 1 day.
   it("Estate T1 costs 50dr (the day-1 entry)", () => {
     expect(buildingCost(1)).toBe(50);
-    expect(buildingBuildDays(1)).toBe(1);
+    expect(buildingBuildDays(1)).toBe(1 / 24);
   });
 
   it("the first collect within a day yields grain, and vendor chicken is affordable by day 2", () => {
