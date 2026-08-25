@@ -3331,6 +3331,8 @@
   flex: none;
 }
 .dashboard-shell .stat-pip-icon{ width: 15px; height: 15px; vertical-align: middle; }
+/* Profile stat cell: the leadership icon sits above the value (cell is centered). */
+.dashboard-shell .cs-stat-icon{ display: block; width: 22px; height: 22px; margin: 0 auto 4px; }
 /* Mobile: hide the diplomacy pip meter (redundant with the stance pill) so the
    row fits and the name column can truncate instead of overflowing. */
 @media (max-width: 620px){

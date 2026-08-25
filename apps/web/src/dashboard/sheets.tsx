@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, type CharacterSheet as CharacterSheetData, type BuildingsCatalog, type BuildingsMine, type OwnedBuilding, type PeopleView } from "../api.js";
 import { type House } from "../data/league.js";
-import { type FourStats, POP_ICON, type PlayerDashboardView, PopGlyph, QtyStepper, buildCountdown, formatPerDay, formatRate, ideologyReadout, idleReason } from "./shared.js";
+import { AssetIcon, type FourStats, POP_ICON, type PlayerDashboardView, PopGlyph, QtyStepper, STAT_PIP_ICON, buildCountdown, formatPerDay, formatRate, ideologyReadout, idleReason } from "./shared.js";
 
 // Everyone starts at Tier 1; real tier tracking lands with profession progression.
 export const BASE_TIER_LABEL = "Tier 1";
@@ -762,6 +762,7 @@ export function CharacterTab({ player, sheet }: { player: PlayerDashboardView; s
               className={`cs-stat${stat.key === primary ? " primary" : ""}${isDeclining ? " declining" : ""}`}
               title={isDeclining ? "Age is taking its toll on this stat." : delta ? `base ${base[stat.key]} · ${delta > 0 ? "+" : ""}${delta} from traits` : undefined}
             >
+              <AssetIcon file={STAT_PIP_ICON[stat.key]} alt="" className="asset-icon cs-stat-icon" />
               <div className="cs-stat-v">
                 {value}<span className="cs-stat-cap">/100</span>
                 {delta ? <span className="cs-stat-delta">{delta > 0 ? `+${delta}` : delta}</span> : null}

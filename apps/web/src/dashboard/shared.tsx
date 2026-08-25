@@ -538,7 +538,7 @@ export function AssetIcon({
 
 // The four leadership stats → their icon files (shared by the Atlas ruler pills and
 // the Family panel's heir / adoption-candidate cards, so both read identically).
-const STAT_PIP_ICON: Record<keyof FourStats, string> = {
+export const STAT_PIP_ICON: Record<keyof FourStats, string> = {
   prestige: "PRESTIGE.webp", devotion: "DEVOTION.webp", militia: "Militia.webp", intelligence: "Intrigue.webp",
 };
 
