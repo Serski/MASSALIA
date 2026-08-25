@@ -80,6 +80,10 @@ export const players = pgTable("players", {
   partyCooldownUntil: timestamp("party_cooldown_until", { withTimezone: true }),
   origin: text("origin").notNull().default("Massalia"),
   isActive: boolean("is_active").notNull().default(true),
+  // Onboarding first-seen timestamps (immutable once set): the welcome intro overlay
+  // and the character-sheet portrait pulse. NULL = not yet dismissed.
+  introSeenAt: timestamp("intro_seen_at", { withTimezone: true }),
+  sheetSeenAt: timestamp("sheet_seen_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   oneActivePlayerPerWorld: uniqueIndex("players_one_active_user_world_idx").on(table.worldId, table.userId),

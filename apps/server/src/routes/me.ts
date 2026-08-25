@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { createDb, gatherChronicleForCharacter, houses, players, professions, resources, users, worlds } from "@massalia/db";
 import { currentAge, decayBandFor, formatGameDate, gameDate, isDeceased, isWithdrawn, lifeStage, portraitFor } from "@massalia/shared";
 import { requireAuth } from "../services/auth.js";
@@ -214,6 +214,10 @@ export async function meRoutes(app: FastifyInstance) {
       // Manumission: { eligible } when a slave holds the freedman trait — the
       // signal for the client's "Claim Your Freedom" panel.
       manumission,
+      // Onboarding first-seen flags (derived from the players row timestamps): the
+      // welcome intro overlay and the character-sheet portrait pulse show while false.
+      introSeen: state.player.introSeenAt !== null,
+      sheetSeen: state.player.sheetSeenAt !== null,
       resources: {
         // Drachmae is the canonical currency.
         drachmae: character.drachmae,
@@ -277,5 +281,39 @@ export async function meRoutes(app: FastifyInstance) {
     const optIn = (request.body as { optIn?: boolean } | undefined)?.optIn === true;
     await db.update(users).set({ newsletterOptIn: optIn }).where(eq(users.id, user.id));
     return { ok: true, newsletterOptIn: optIn };
+  });
+
+  // Mark an onboarding step as seen. First-seen is immutable: the column is stamped
+  // with now() only while it is still NULL, so repeat calls are no-op acks.
+  app.post("/onboarding", async (request, reply) => {
+    const user = await requireAuth(request);
+    const step = (request.body as { step?: string } | undefined)?.step;
+    if (step !== "intro" && step !== "sheet") {
+      reply.code(400);
+      return { error: "Unknown onboarding step." };
+    }
+
+    const worldRows = await db.select({ id: worlds.id }).from(worlds).where(eq(worlds.status, "active")).limit(1);
+    const world = worldRows[0];
+    if (!world) {
+      reply.code(503);
+      return { error: "No active world exists." };
+    }
+
+    const playerRows = await db
+      .select({ id: players.id })
+      .from(players)
+      .where(and(eq(players.userId, user.id), eq(players.worldId, world.id), eq(players.isActive, true)))
+      .limit(1);
+    const player = playerRows[0];
+    if (!player) {
+      reply.code(404);
+      return { error: "No active character found." };
+    }
+
+    const column = step === "intro" ? players.introSeenAt : players.sheetSeenAt;
+    const patch = step === "intro" ? { introSeenAt: sql`now()` } : { sheetSeenAt: sql`now()` };
+    await db.update(players).set(patch).where(and(eq(players.id, player.id), isNull(column)));
+    return { ok: true };
   });
 }
