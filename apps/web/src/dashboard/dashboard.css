@@ -76,7 +76,6 @@
 .dashboard-shell .avatar-btn,
 .dashboard-shell .dashboard-nav button,
 .dashboard-shell .dashboard-mobile-tabs button,
-.dashboard-shell .discord-link,
 .dashboard-shell .dashboard-label,
 .dashboard-shell .dashboard-primary-button,
 .dashboard-shell .dashboard-ghost-button,
@@ -417,27 +416,6 @@
   border: 1px solid rgba(125, 135, 148, 0.58);
 }
 
-.dashboard-shell .dashboard-sidebar-bottom{
-  display: grid;
-  gap: 10px;
-}
-
-.dashboard-shell .discord-link{
-  display: inline-flex;
-  min-height: 38px;
-  align-items: center;
-  justify-content: center;
-  color: #f1ddb1;
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  text-decoration: none;
-  text-transform: uppercase;
-  background: rgba(181, 138, 69, 0.06);
-  border: 1px solid rgba(181, 138, 69, 0.3);
-  border-radius: 5px;
-}
-
 .dashboard-shell .dashboard-content{
   min-width: 0;
   padding: clamp(18px, 2.5vw, 30px);
@@ -603,8 +581,7 @@
 .dashboard-shell .market-row strong,
 .dashboard-shell .person-card h3,
 .dashboard-shell .party-card strong,
-.dashboard-shell .market-stat-row strong,
-.dashboard-shell .house-standing-card > strong{
+.dashboard-shell .market-stat-row strong{
   margin: 0;
   color: #f1ddb1;
   font-family: var(--font-display);
@@ -1137,21 +1114,6 @@
   color: rgba(210, 165, 92, 0.8) !important;
 }
 
-.dashboard-shell .house-meter{
-  height: 8px;
-  overflow: hidden;
-  background: rgba(12, 8, 7, 0.7);
-  border: 1px solid rgba(181, 138, 69, 0.24);
-  border-radius: 999px;
-}
-
-.dashboard-shell .house-meter span{
-  display: block;
-  height: 100%;
-  background: linear-gradient(90deg, var(--dash-bronze), var(--dash-gold-bright));
-  border-radius: inherit;
-}
-
 .dashboard-shell .dashboard-map-card{
   min-height: min(66vh, 620px);
   padding: 0;
@@ -1180,8 +1142,7 @@
 .dashboard-shell .mobile-more-sheet button:focus-visible,
 .dashboard-shell .dashboard-primary-button:focus-visible,
 .dashboard-shell .dashboard-ghost-button:focus-visible,
-.dashboard-shell .event-choice-button:focus-visible,
-.dashboard-shell .discord-link:focus-visible{
+.dashboard-shell .event-choice-button:focus-visible{
   outline: 2px solid rgba(241, 211, 132, 0.82);
   outline-offset: 3px;
 }
@@ -1323,8 +1284,7 @@
   }
 
   .dashboard-shell .section-eyebrow::after,
-  .dashboard-shell .decision-subhead .dashboard-label::after,
-  .dashboard-shell .digest-card h2::after{
+  .dashboard-shell .decision-subhead .dashboard-label::after{
     flex: 1;
     height: 1px;
     content: "";
@@ -1367,11 +1327,6 @@
     display: contents;
   }
 
-  .dashboard-shell .digest-card{
-    order: 1;
-    margin-bottom: 8px;
-  }
-
   .dashboard-shell .decision-column{
     order: 2;
     gap: 8px;
@@ -1379,70 +1334,6 @@
 
   .dashboard-shell .offices-card{
     order: 3;
-  }
-
-  .dashboard-shell .digest-card h2{
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    margin: 0 0 2px;
-    color: var(--dash-gold);
-    font-size: 10px;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-  }
-
-  .dashboard-shell .digest-card .dashboard-list{
-    gap: 0;
-  }
-
-  .dashboard-shell .digest-card .dashboard-list-row{
-    position: relative;
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
-    padding: 7px 0;
-    background: transparent;
-    border: 0;
-    border-bottom: 1px dashed rgba(181, 138, 69, 0.14);
-    border-radius: 0;
-  }
-
-  .dashboard-shell .digest-card .dashboard-list-row:last-child{
-    border-bottom: 0;
-  }
-
-  .dashboard-shell .digest-card .dashboard-list-row::before{
-    display: grid;
-    width: 22px;
-    height: 22px;
-    flex: 0 0 auto;
-    place-items: center;
-    color: var(--dash-gold-bright);
-    font-family: var(--font-display);
-    font-size: 11px;
-    content: "I";
-    background: rgba(181, 138, 69, 0.12);
-    border-radius: 6px;
-  }
-
-  .dashboard-shell .digest-card .dashboard-list-row:nth-child(2)::before{
-    content: "H";
-  }
-
-  .dashboard-shell .digest-card .dashboard-list-row:nth-child(3)::before{
-    content: "S";
-  }
-
-  .dashboard-shell .digest-card .dashboard-list-row strong{
-    font-family: var(--font-body);
-    font-size: 12.5px;
-    font-weight: 500;
-  }
-
-  .dashboard-shell .digest-card .dashboard-list-row p{
-    font-size: 12.5px;
-    color: var(--dash-stone);
   }
 
   .dashboard-shell .decision-subhead{
@@ -1704,8 +1595,7 @@
     backdrop-filter: blur(10px);
   }
 
-  .dashboard-shell .mobile-more-sheet button,
-  .dashboard-shell .mobile-more-sheet .discord-link{
+  .dashboard-shell .mobile-more-sheet button{
     position: relative;
     display: flex;
     gap: 10px;

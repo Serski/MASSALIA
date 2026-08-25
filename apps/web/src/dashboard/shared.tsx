@@ -69,22 +69,9 @@ export type PlayerDashboardView = PlayerDashboardState & {
   house: House;
 };
 
-export type DigestItem = {
-  id: string;
-  title: string;
-  text: string;
-};
-
 // Props shared by every panel. `onRefresh` re-pulls /me/state after a real
 // mutation (e.g. joining/leaving a party).
 export type PanelProps = { player: PlayerDashboardView; onRefresh: () => void };
-
-// TODO: Replace with real away-summary records.
-export const placeholderDigest: DigestItem[] = [
-  { id: "trade", title: "Harbor trade", text: "Two wine offers expired while you were away." },
-  { id: "house", title: "House Leonidas", text: "Your House gained standing among conservative citizens." },
-  { id: "season", title: "Season clock", text: "Season I advanced by one day. The assembly meets soon." },
-];
 
 export function normalizeParty(party: string): PlayerDashboardState["party"] {
   if (party.toLowerCase() === "palaioi") return "Palaioi";

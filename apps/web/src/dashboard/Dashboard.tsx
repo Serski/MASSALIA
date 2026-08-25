@@ -259,18 +259,6 @@ export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () =
               </button>
             ))}
           </nav>
-          <div className="dashboard-sidebar-bottom">
-            <a className="discord-link" href="#discord">Discord</a>
-            <DashboardCard className="house-standing-card">
-              <span className="dashboard-label">Your House</span>
-              <strong>{player.house.name}</strong>
-              <p>{player.house.stance}</p>
-              <div className="house-meter" aria-label="House standing placeholder">
-                <span style={{ width: "62%" }} />
-              </div>
-              <p className="dashboard-todo">TODO: House standing score awaits backend state.</p>
-            </DashboardCard>
-          </div>
         </aside>
 
         <section className="dashboard-content" aria-live="polite">
@@ -338,7 +326,6 @@ export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () =
                 {item.badge ? <strong className="nav-badge subtle">{item.badge}</strong> : null}
               </button>
             ))}
-            <a className="discord-link" href="#discord" onClick={() => setIsMoreOpen(false)}>Discord</a>
           </div>
         </div>
       ) : null}

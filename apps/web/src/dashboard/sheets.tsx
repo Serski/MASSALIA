@@ -892,10 +892,6 @@ export function SettingsTab({ player, onLogout }: { player: PlayerDashboardView;
         <span className="set-l">Password</span>
         <button className="set-act" type="button" onClick={stub("changing your password")}>Change password</button>
       </div>
-      <div className="settings-row">
-        <span className="set-l">Discord</span>
-        <button className="set-act" type="button" onClick={stub("Discord linking")}>Link account</button>
-      </div>
 
       <SheetLabel>Preferences</SheetLabel>
       <div className="settings-row">
@@ -911,10 +907,6 @@ export function SettingsTab({ player, onLogout }: { player: PlayerDashboardView;
         >
           <span className="toggle-knob" aria-hidden="true" />
         </button>
-      </div>
-      <div className="settings-row">
-        <span className="set-l">Event notifications via Discord</span>
-        <span className="set-v">requires linked account</span>
       </div>
 
       {note ? <p className="sheet-todo" role="status">{note}</p> : null}

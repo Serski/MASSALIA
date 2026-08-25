@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice } from "../../api.js";
 import { assetPath, type House } from "../../data/league.js";
-import { DashboardCard, ListRow, PanelBanner, type PanelProps, placeholderDigest, timeUntil, titleCase } from "../shared.js";
+import { DashboardCard, PanelBanner, type PanelProps, timeUntil, titleCase } from "../shared.js";
 import { CardClose, FestivalBanner, OlympicBanner } from "../banners.js";
 
 // Lazy so the story UI (and its chunk) cost nothing until a card is opened.
@@ -211,7 +211,7 @@ function RoutinesCard({ onRefresh }: PanelProps) {
     </div>
   ) : null;
 
-  // order:3 keeps this after the digest on the mobile court-grid reflow.
+  // order:3 keeps this after the decision column on the mobile court-grid reflow.
   return (
     <DashboardCard className="actions-card" style={{ order: 3 }}>
       <h2>Your Day</h2>
@@ -535,20 +535,7 @@ export default function CourtPanel({ player, onRefresh }: PanelProps) {
           <CourtDecisions player={player} onRefresh={onRefresh} />
         </div>
         <aside className="court-rail" aria-label="Court summary">
-          <DashboardCard className="digest-card">
-            <h2>While you were away</h2>
-            <div className="dashboard-list compact">
-              {placeholderDigest.map((item) => (
-                <ListRow key={item.id}>
-                  <strong>{item.title}</strong>
-                  <p>{item.text}</p>
-                </ListRow>
-              ))}
-            </div>
-            <p className="dashboard-todo">TODO: digest is placeholder data until the away-summary service exists.</p>
-          </DashboardCard>
-          {/* Daily Routines: the proactive half of the daily loop. order:3 lives
-              inside RoutinesCard so it stays after the digest on the mobile reflow. */}
+          {/* Daily Routines: the proactive half of the daily loop. */}
           <RoutinesCard player={player} onRefresh={onRefresh} />
         </aside>
       </div>
