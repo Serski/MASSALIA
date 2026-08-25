@@ -15,12 +15,23 @@ function marketGroup(good: string, craft: Record<string, unknown>): "Naval & shi
   return "Goods";
 }
 
+// While a trade is in flight EVERY action button is disabled; this only picks the
+// LOOK. The pressed button reads busy; a non-pressed, non-statically-disabled
+// sibling reads waiting; a statically-disabled button (e.g. Sell with nothing
+// owned) keeps the plain dim disabled look (no extra class).
+function btnClass(base: string, myKey: string, busy: boolean, busyKey: string | null, staticDisabled = false): string {
+  if (busyKey === myKey) return `${base} is-busy`;
+  if (busy && !staticDisabled) return `${base} is-waiting`;
+  return base;
+}
+
 // One People-market row with a quantity stepper: hire N (wallet-bounded) or
 // dismiss/disband N (clamped to owned — the endpoint also rejects over-dismiss).
 function PeopleMarketRow({
   pop,
   owned,
   busy,
+  busyKey,
   foodLabel,
   onHire,
   onDismiss,
@@ -28,6 +39,7 @@ function PeopleMarketRow({
   pop: PeopleView["pops"][number];
   owned: number;
   busy: boolean;
+  busyKey: string | null;
   foodLabel: string;
   onHire: (n: number) => void;
   onDismiss: (n: number) => void;
@@ -44,10 +56,10 @@ function PeopleMarketRow({
         <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <QtyStepper value={qty} setValue={setQty} min={1} />
           {/* Refund shown only when the pop resells (slave); the free classes are released. */}
-          <button type="button" className="panel-btn ghost" disabled={busy || owned <= 0} onClick={() => onDismiss(dismissN)}>
+          <button type="button" className={btnClass("panel-btn ghost", `dismiss:${pop.type}`, busy, busyKey, owned <= 0)} disabled={busy || owned <= 0} onClick={() => onDismiss(dismissN)}>
             {pop.dismissLabel} {dismissN}{refund > 0 ? ` · +${refund}dr` : ""}
           </button>
-          <button type="button" className="panel-btn" disabled={busy} onClick={() => onHire(qty)}>
+          <button type="button" className={btnClass("panel-btn", `hire:${pop.type}`, busy, busyKey)} disabled={busy} onClick={() => onHire(qty)}>
             Hire {qty} · {pop.hireCost * qty}dr
           </button>
         </span>
@@ -63,6 +75,7 @@ function GoodsMarketRow({
   price,
   held,
   busy,
+  busyKey,
   label,
   icon,
   onBuy,
@@ -71,6 +84,7 @@ function GoodsMarketRow({
   price: VendorPrice;
   held: number;
   busy: boolean;
+  busyKey: string | null;
   label: string;
   icon: string;
   onBuy: (n: number) => void;
@@ -89,10 +103,10 @@ function GoodsMarketRow({
       action={
         <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <QtyStepper value={qty} setValue={setQty} min={1} />
-          <button type="button" className="panel-btn ghost" disabled={busy || owned <= 0} onClick={() => onSell(sellN)}>
+          <button type="button" className={btnClass("panel-btn ghost", `sell:${price.good}`, busy, busyKey, owned <= 0)} disabled={busy || owned <= 0} onClick={() => onSell(sellN)}>
             Sell {sellN} · {price.sell * sellN}dr
           </button>
-          <button type="button" className="panel-btn" disabled={busy} onClick={() => onBuy(qty)}>
+          <button type="button" className={btnClass("panel-btn", `buy:${price.good}`, busy, busyKey)} disabled={busy} onClick={() => onBuy(qty)}>
             Buy {qty} · {price.buy * qty}dr
           </button>
         </span>
@@ -111,6 +125,9 @@ export default function MarketPanel({ onRefresh }: PanelProps) {
   const [tab, setTab] = useState<"goods" | "people">("goods");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  // The key of the action currently in flight (e.g. "buy:iron"), so only the
+  // pressed button reads as busy while its siblings read as merely waiting.
+  const [busyKey, setBusyKey] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [c, m, p, s] = await Promise.all([api.buildingsCatalog(), api.buildingsMine(), api.people(), api.state()]);
@@ -127,8 +144,9 @@ export default function MarketPanel({ onRefresh }: PanelProps) {
     };
   }, [load]);
 
-  const act = async (fn: () => Promise<unknown>, ok?: string) => {
+  const act = async (key: string, fn: () => Promise<unknown>, ok?: string) => {
     setBusy(true);
+    setBusyKey(key);
     setNote("");
     try {
       await fn();
@@ -139,6 +157,7 @@ export default function MarketPanel({ onRefresh }: PanelProps) {
       setNote(err instanceof ApiError ? err.message : "That could not be done.");
     } finally {
       setBusy(false);
+      setBusyKey(null);
     }
   };
 
@@ -195,10 +214,11 @@ export default function MarketPanel({ onRefresh }: PanelProps) {
                     price={price}
                     held={balances[price.good] ?? 0}
                     busy={busy}
+                    busyKey={busyKey}
                     label={label(price.good)}
                     icon={GOOD_ICON[price.good] ?? "📦"}
-                    onBuy={(n) => act(() => api.vendorTrade("buy", price.good, n))}
-                    onSell={(n) => act(() => api.vendorTrade("sell", price.good, n))}
+                    onBuy={(n) => act(`buy:${price.good}`, () => api.vendorTrade("buy", price.good, n))}
+                    onSell={(n) => act(`sell:${price.good}`, () => api.vendorTrade("sell", price.good, n))}
                   />
                 ))}
               </div>
@@ -214,9 +234,10 @@ export default function MarketPanel({ onRefresh }: PanelProps) {
                 pop={pop}
                 owned={mine.pops[pop.type] ?? 0}
                 busy={busy}
+                busyKey={busyKey}
                 foodLabel={label(people.foodGood)}
-                onHire={(n) => act(() => api.hirePeople(pop.type, n), `Hired ${n} ${pop.label}.`)}
-                onDismiss={(n) => act(() => api.dismissPeople(pop.type, n), `${pop.dismissLabel} — ${n} ${pop.label} let go.`)}
+                onHire={(n) => act(`hire:${pop.type}`, () => api.hirePeople(pop.type, n), `Hired ${n} ${pop.label}.`)}
+                onDismiss={(n) => act(`dismiss:${pop.type}`, () => api.dismissPeople(pop.type, n), `${pop.dismissLabel} — ${n} ${pop.label} let go.`)}
               />
             ))}
           </div>

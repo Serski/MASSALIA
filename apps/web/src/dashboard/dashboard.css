@@ -3374,6 +3374,42 @@
   background: rgba(181, 138, 69, 0.08);
 }
 
+/* Market in-flight visuals scoped to the pressed button (Phase 5). Every action
+   button is still :disabled while a trade runs, but instead of the flat grey
+   .panel-btn:disabled look, a WAITING sibling keeps its solid variant look (just
+   dimmed) and the BUSY pressed button reads as pressed. These out-specify
+   .panel-btn:disabled (two extra classes) and never touch it. */
+.dashboard-shell .panel-btn.is-waiting:disabled{
+  color: #1a1208;
+  background: linear-gradient(135deg, var(--dash-gold-bright), var(--dash-bronze));
+  border: none;
+  opacity: 0.75;
+  cursor: default;
+}
+.dashboard-shell .panel-btn.ghost.is-waiting:disabled{
+  color: var(--dash-stone);
+  background: none;
+  border: 1px solid var(--dash-line);
+  opacity: 0.75;
+  cursor: default;
+}
+.dashboard-shell .panel-btn.is-busy:disabled{
+  color: #1a1208;
+  background: linear-gradient(135deg, var(--dash-gold-bright), var(--dash-bronze));
+  border: none;
+  transform: translateY(1px);
+  filter: brightness(0.9);
+  cursor: default;
+}
+.dashboard-shell .panel-btn.ghost.is-busy:disabled{
+  color: var(--dash-stone);
+  background: none;
+  border: 1px solid var(--dash-line);
+  transform: translateY(1px);
+  filter: brightness(0.9);
+  cursor: default;
+}
+
 /* A touch more carved depth: a 1px parchment top-highlight on cards, layered
    over the existing drop shadow (kept through hover so it never flickers). */
 .dashboard-shell .dashboard-card{ box-shadow: 0 18px 48px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05); }
