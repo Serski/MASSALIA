@@ -328,7 +328,7 @@ export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () =
       ) : null}
 
       <InventorySheet open={activeSheet === "inventory"} onClose={closeSheet} player={player} initialTab={inventoryTab} />
-      <CharacterSheet open={activeSheet === "character"} onClose={closeSheet} player={player} onLogout={handleLogout} />
+      <CharacterSheet open={activeSheet === "character"} onClose={closeSheet} player={player} onLogout={handleLogout} onAccountDeleted={onRequireLogin} />
     </main>
   );
 }

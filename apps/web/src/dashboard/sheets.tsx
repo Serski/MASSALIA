@@ -856,10 +856,44 @@ export function AchievementsTab() {
   );
 }
 
-export function SettingsTab({ player, onLogout }: { player: PlayerDashboardView; onLogout: () => void }) {
+export function SettingsTab({
+  player,
+  onLogout,
+  onAccountDeleted,
+}: {
+  player: PlayerDashboardView;
+  onLogout: () => void;
+  onAccountDeleted: () => void;
+}) {
   const [newsletter, setNewsletter] = useState(player.newsletterOptIn);
   const [savingNewsletter, setSavingNewsletter] = useState(false);
   const [note, setNote] = useState("");
+  // Delete-account (anonymize-and-detach): a password-gated, irreversible action,
+  // so it stays behind an inline confirm rather than a one-click danger button.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const cancelDelete = () => {
+    setConfirmingDelete(false);
+    setDeletePassword("");
+    setDeleteError(null);
+  };
+
+  const submitDelete = async () => {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.deleteAccount(deletePassword);
+      // Token is already cleared inside api.deleteAccount; route back to login the
+      // same way logout does. Component unmounts, so no need to reset local state.
+      onAccountDeleted();
+    } catch (err) {
+      setDeleteError(err instanceof ApiError ? err.message : "Could not delete your account. Try again.");
+      setDeleting(false);
+    }
+  };
 
   const toggleNewsletter = async () => {
     const next = !newsletter;
@@ -916,6 +950,42 @@ export function SettingsTab({ player, onLogout }: { player: PlayerDashboardView;
         <span className="set-l">Signed in as {player.name}</span>
         <button className="set-act danger" type="button" onClick={onLogout}>Log out</button>
       </div>
+
+      {confirmingDelete ? (
+        <div className="set-danger">
+          <p className="sheet-gate">
+            This permanently scrubs your account and signs you out — immediately and for good. Your house
+            and its history stay in the world. Enter your password to confirm.
+          </p>
+          <input
+            className="set-input"
+            type="password"
+            autoComplete="current-password"
+            placeholder="Password"
+            aria-label="Confirm your password to delete your account"
+            value={deletePassword}
+            disabled={deleting}
+            onChange={(event) => setDeletePassword(event.target.value)}
+          />
+          {deleteError ? <p className="sheet-gate" role="alert">{deleteError}</p> : null}
+          <div className="set-danger-actions">
+            <button className="set-act" type="button" disabled={deleting} onClick={cancelDelete}>Cancel</button>
+            <button
+              className="set-act danger"
+              type="button"
+              disabled={deleting || !deletePassword}
+              onClick={submitDelete}
+            >
+              {deleting ? "Deleting…" : "Confirm deletion"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="settings-row">
+          <span className="set-l">Delete account</span>
+          <button className="set-act danger" type="button" onClick={() => setConfirmingDelete(true)}>Delete account</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -927,11 +997,13 @@ export function CharacterSheet({
   onClose,
   player,
   onLogout,
+  onAccountDeleted,
 }: {
   open: boolean;
   onClose: () => void;
   player: PlayerDashboardView;
   onLogout: () => void;
+  onAccountDeleted: () => void;
 }) {
   const [tab, setTab] = useState<CharacterSheetTab>("character");
   const [sheet, setSheet] = useState<CharacterSheetData | null>(null);
@@ -993,7 +1065,7 @@ export function CharacterSheet({
       />
       {tab === "character" ? <CharacterTab player={player} sheet={sheet} /> : null}
       {tab === "achievements" ? <AchievementsTab /> : null}
-      {tab === "settings" ? <SettingsTab player={player} onLogout={onLogout} /> : null}
+      {tab === "settings" ? <SettingsTab player={player} onLogout={onLogout} onAccountDeleted={onAccountDeleted} /> : null}
     </BottomSheet>
   );
 }

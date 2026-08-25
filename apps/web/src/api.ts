@@ -319,6 +319,14 @@ export const api = {
       setStoredToken(null);
     }
   },
+  // Anonymize-and-detach: clear the local bearer token only AFTER the request
+  // succeeds. On failure (wrong password, rate-limit, network) the server keeps the
+  // session, so the client must too — the inline retry in Settings depends on it.
+  deleteAccount: async (password: string) => {
+    const result = await apiFetch<{ ok: true }>("/auth/delete-account", { method: "POST", body: { password } });
+    setStoredToken(null);
+    return result;
+  },
   me: () => apiFetch<AuthResponse>("/auth/me"),
   createCharacter: (payload: CreationRequest) => apiFetch("/characters", { method: "POST", body: payload }),
   state: () => apiFetch<PlayerState>("/me/state"),

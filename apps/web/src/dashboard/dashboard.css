@@ -2234,6 +2234,34 @@
   border-color: rgba(187, 106, 82, 0.5);
 }
 
+/* Delete-account inline confirm: warning + password field + Cancel/Confirm. */
+.dashboard-shell .set-danger{
+  padding: 10px 4px;
+  border-bottom: 1px dashed rgba(181, 138, 69, 0.14);
+}
+
+.dashboard-shell .set-input{
+  width: 100%;
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(12, 8, 7, 0.5);
+  border: 1px solid rgba(181, 138, 69, 0.3);
+  color: inherit;
+  font-size: 12.5px;
+}
+
+.dashboard-shell .set-input:focus-visible{
+  outline: 2px solid rgba(241, 211, 132, 0.82);
+  outline-offset: 2px;
+}
+
+.dashboard-shell .set-danger-actions{
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .dashboard-shell .toggle{
   position: relative;
   width: 36px;
