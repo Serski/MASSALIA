@@ -820,6 +820,9 @@ export type MarriageCandidate = FamilyCandidate & {
   // Cross-house penalty preview: how marrying shifts the player + costs party favor.
   penalty: { ideologyShift: number; partyFavorLoss: number };
   party: string;
+  // The exact retinue she brings on marriage (servants + household goods), derived
+  // from her id — shown here is exactly what the marriage grants.
+  package: { slaves: number; wool: number; oliveoil: number };
 };
 
 export type FamilyChild = {

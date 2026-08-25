@@ -3080,6 +3080,7 @@
 }
 .dashboard-shell .composure-withdrawn{ color: #d49a86; font-weight: 600; }
 
+.dashboard-shell .prospect-retinue{ margin-top: 4px; font-size: 11.5px; color: var(--dash-stone-dim); }
 .dashboard-shell .composure-note{ margin-top: 6px; font-size: 11.5px; font-style: italic; }
 .dashboard-shell .composure-note.neg{ color: #d49a86; }
 .dashboard-shell .composure-note.pos{ color: #9ec487; }

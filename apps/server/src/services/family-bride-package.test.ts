@@ -133,4 +133,26 @@ suite("the bride's package (integration)", () => {
     expect(await goodAmount(playerId, "wool")).toBe(woolAfterMarriage);
     expect(await goodAmount(playerId, "oliveoil")).toBe(oilAfterMarriage);
   });
+
+  it("familyState shows the exact package that marriage then grants (shown == granted)", async () => {
+    const { charId, playerId } = await createCharacter("Betrothed");
+    const candidateId = await candidateFor(charId);
+
+    // What the selection card reports for this candidate.
+    const state = await m.family.familyState(await fresh(charId), now);
+    const offer = state.candidates.marriage.find((cand) => cand.id === candidateId)!;
+    expect(offer.package).toBeDefined();
+
+    const beforeSlaves = await slaveCount(playerId);
+    const beforeWool = await goodAmount(playerId, "wool");
+    const beforeOil = await goodAmount(playerId, "oliveoil");
+
+    const result = await m.family.marry(await fresh(charId), candidateId, now);
+    expect(result.ok).toBe(true);
+
+    // The pop/inventory delta equals EXACTLY what was shown at selection.
+    expect((await slaveCount(playerId)) - beforeSlaves).toBe(offer.package.slaves);
+    expect((await goodAmount(playerId, "wool")) - beforeWool).toBe(offer.package.wool);
+    expect((await goodAmount(playerId, "oliveoil")) - beforeOil).toBe(offer.package.oliveoil);
+  });
 });

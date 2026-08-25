@@ -22,6 +22,7 @@ import {
   adoptionWomenOnly,
   applyStatGrowth,
   assertPersonalityPoolResolves,
+  bridePackageForCandidate,
   canMarry,
   candidateTrait,
   capStat,
@@ -39,7 +40,6 @@ import {
   philiaBand,
   portraitFor,
   REAL_MS_PER_SEASON,
-  rollBridePackage,
   rollSpouseDeathAge,
   spouseCurrentAge,
   successionPlan,
@@ -343,7 +343,8 @@ export async function familyState(character: CharacterRow, now: Date = new Date(
   for (const cand of offers.filter((o) => o.purpose === "marriage")) {
     const view = candidateView(cand, cfg, await houseName(cand.houseSlug));
     const penalty = marriagePenalty(character.ideology, cand.ideology, cfg);
-    marriageOffers.push({ ...view, penalty, party: character.party });
+    // The exact package she brings, derived from her id — shown here == granted on marry.
+    marriageOffers.push({ ...view, package: bridePackageForCandidate(cand.id), penalty, party: character.party });
   }
   // Patrilineal: a citizen's adopted heir is a son, the hetaira's a daughter. Filter
   // wrong-sex offers so stale rows (drawn before the generator went male) never render
@@ -675,9 +676,10 @@ export async function marry(character: CharacterRow, candidateId: string, now: D
   const applyFavorLoss = penalty.partyFavorLoss > 0 && favorParty !== null;
 
   // The bride's package (additive beside the dowry): servants + household goods she
-  // brings. Rolled now; granted atomically in the marriage tx through the same
+  // brings. Derived deterministically from her id — the same value familyState shows
+  // at selection — and granted atomically in the marriage tx through the same
   // checkpoint-aware helpers the vendor/hire flows use (never raw resource writes).
-  const bridePackage = rollBridePackage();
+  const bridePackage = bridePackageForCandidate(candidateId);
   const ctx = await buildingContext(character.playerId, character.worldId);
   if (!ctx) return { ok: false, code: 503, error: "No active world." };
 

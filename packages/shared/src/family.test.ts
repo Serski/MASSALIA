@@ -19,6 +19,7 @@ import {
   isOfAge,
   isSpouseDeceased,
   marriagePenalty,
+  bridePackageForCandidate,
   parseFamilyConfig,
   rollBridePackage,
   rollSpouseDeathAge,
@@ -552,6 +553,35 @@ describe("rollBridePackage", () => {
       expect(pkg.oliveoil).toBeGreaterThanOrEqual(6);
       expect(pkg.oliveoil).toBeLessThanOrEqual(8);
     }
+  });
+});
+
+describe("bridePackageForCandidate (deterministic per candidate id)", () => {
+  it("is stable: the same id always yields the same package", () => {
+    const id = "b1c0ffee-0000-4000-8000-000000000001";
+    expect(bridePackageForCandidate(id)).toEqual(bridePackageForCandidate(id));
+  });
+
+  it("always lands within the ruled ranges", () => {
+    for (let i = 0; i < 200; i++) {
+      const pkg = bridePackageForCandidate(`cand-${i}-${i * 7 + 3}`);
+      expect(pkg.slaves).toBeGreaterThanOrEqual(2);
+      expect(pkg.slaves).toBeLessThanOrEqual(3);
+      expect(pkg.wool).toBeGreaterThanOrEqual(8);
+      expect(pkg.wool).toBeLessThanOrEqual(10);
+      expect(pkg.oliveoil).toBeGreaterThanOrEqual(6);
+      expect(pkg.oliveoil).toBeLessThanOrEqual(8);
+    }
+  });
+
+  it("distinct ids do not all collapse to one package", () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 40; i++) {
+      const pkg = bridePackageForCandidate(`distinct-${i}`);
+      seen.add(`${pkg.slaves}-${pkg.wool}-${pkg.oliveoil}`);
+    }
+    // The space is 2×3×3 = 18 combinations; 40 distinct ids must surface several.
+    expect(seen.size).toBeGreaterThan(1);
   });
 });
 

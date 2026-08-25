@@ -716,6 +716,7 @@ export default function FamilyPanel({ onRefresh }: PanelProps) {
                           <span className="dashboard-label">{candidate.name} of House {candidate.houseName}</span>
                         </div>
                         <p>Age {candidate.age}{candidate.dowry > 0 ? ` · dowry ${candidate.dowry}g` : ""}</p>
+                        <p className="prospect-retinue">Retinue: {candidate.package.slaves} servants · {candidate.package.wool} wool · {candidate.package.oliveoil} olive oil</p>
                         <TraitChips trait={candidate.trait} personality={candidate.personality} />
                         {penalty ? <p className="composure-note neg">{penalty}</p> : <p className="composure-note pos">No ideological cost — a comfortable match.</p>}
                         {confirmId === candidate.id ? (
