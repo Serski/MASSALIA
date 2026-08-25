@@ -78,13 +78,6 @@ export function primaryStatFor(slug: string): keyof FourStats {
   return primaryStatByProfession[slug] ?? "prestige";
 }
 
-// TODO: placeholder items until the items system exists.
-export const placeholderItems = [
-  { id: "tin-shipment", icon: "📦", name: "Recovered Tin Shipment", origin: 'Event reward · "The Missing Shipment" · sell or hold', action: "Sell" },
-  { id: "letter-credit", icon: "📜", name: "Letter of Credit", origin: "Redeem at any Agora for 100 dr.", action: "Redeem" },
-];
-
-
 // TODO: placeholder achievements until the achievement system exists.
 export const earnedAchievements = [
   { id: "first-coin", icon: "🪙", name: "First Coin", detail: "Earn your first drachmae from your trade.", when: "Season I · Day 1" },
@@ -358,7 +351,6 @@ export function InventoryResources({ player, goodLabels }: { player: PlayerDashb
           </div>
         </div>
       </div>
-      <p className="sheet-todo">TODO: warehouse capacity is a placeholder until storage limits exist.</p>
 
       <SheetLabel>Coin</SheetLabel>
       {/* No per-day rate pill: accrual is lazy/closed-form (no tick), and the real
@@ -380,29 +372,6 @@ export function InventoryResources({ player, goodLabels }: { player: PlayerDashb
           />
         ))
       )}
-    </div>
-  );
-}
-
-export function InventoryItems() {
-  return (
-    <div role="tabpanel">
-      <SheetLabel>Items · {placeholderItems.length}</SheetLabel>
-      {placeholderItems.map((item) => (
-        <DetailRow
-          key={item.id}
-          icon={item.icon}
-          name={item.name}
-          sub={item.origin}
-          action={
-            <button className="sheet-btn" type="button" disabled title="TODO: items system not wired yet">
-              {item.action}
-            </button>
-          }
-        />
-      ))}
-      <div className="slot-empty">Items come from events, trade, and rewards — they are kept here.</div>
-      <p className="sheet-todo">TODO: items are placeholder rows until the items system exists.</p>
     </div>
   );
 }
@@ -641,7 +610,7 @@ export function InventoryEconomy({ data, goodLabels }: { data: { mine: Buildings
   );
 }
 
-export type InventoryTab = "resources" | "economy" | "items" | "units";
+export type InventoryTab = "resources" | "economy" | "units";
 
 export function InventorySheet({
   open,
@@ -704,13 +673,11 @@ export function InventorySheet({
         tabs={[
           { id: "resources", label: "Resources" },
           { id: "economy", label: "Economy" },
-          { id: "items", label: "Items", badge: placeholderItems.length },
           { id: "units", label: "Units" },
         ]}
       />
       {tab === "resources" ? <InventoryResources player={player} goodLabels={goodLabels} /> : null}
       {tab === "economy" ? <InventoryEconomy data={data} goodLabels={goodLabels} /> : null}
-      {tab === "items" ? <InventoryItems /> : null}
       {tab === "units" ? <InventoryUnits household={household} goodLabels={goodLabels} onChanged={reload} /> : null}
     </BottomSheet>
   );
