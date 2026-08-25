@@ -98,12 +98,12 @@ suite("Ledger / building engine (integration)", () => {
     playerId = await freshPlayer();
   });
 
-  it("day-1 path: 100dr → build Estate T1 (100) → wallet 0 → constructs in 1 day → first collect yields grain", async () => {
+  it("day-1 path: 100dr → build Estate T1 (50) → wallet 50 → constructs in 1 day → first collect yields grain", async () => {
     const c = await ctx();
     const built = await m.buildings.build("landowner", c, "estate", new Date(T0));
     expect(built.ok).toBe(true);
-    if (built.ok) expect(built.cost).toBe(100);
-    expect(await wallet()).toBe(0);
+    if (built.ok) expect(built.cost).toBe(50);
+    expect(await wallet()).toBe(50);
 
     // Still constructing before completesAt.
     const midBuild = await m.buildings.mine("landowner", c, new Date(T0 + DAY / 2));
@@ -125,7 +125,7 @@ suite("Ledger / building engine (integration)", () => {
     expect(collected.staffUpkeep).toBe(0);
     expect(collected.foodDrawn).toBeGreaterThan(0);
     expect(await goodBalance("grain")).toBeCloseTo(6 - collected.foodDrawn, 1);
-    expect(await wallet()).toBe(collected.collected - collected.staffUpkeep - collected.foodCost);
+    expect(await wallet()).toBe(50 + collected.collected - collected.staffUpkeep - collected.foodCost);
   });
 
   it("vendor band trades are atomic (sell grain for floor, buy chicken at ceiling)", async () => {
@@ -163,7 +163,7 @@ suite("Ledger / building engine (integration)", () => {
     const up = await m.buildings.upgrade(c, "estate", t1);
     expect(up.ok).toBe(true);
     if (up.ok) expect(up.tier).toBe(2);
-    expect(await wallet()).toBe(50); // 300 − 250
+    expect(await wallet()).toBe(175); // 300 − 125
 
     // First collect creates the wallet marker. Drain the purse, then collect after a
     // long window. Under economy v2.1 the landowner's T2 income (10.8 dr/day) far
@@ -218,8 +218,8 @@ suite("Ledger / building engine (integration)", () => {
 
     const built = await m.buildings.build("priest", c, "sanctuary", new Date(T0));
     expect(built.ok).toBe(true);
-    if (built.ok) expect(built.cost).toBe(100);
-    expect(await wallet()).toBe(0);
+    if (built.ok) expect(built.cost).toBe(50);
+    expect(await wallet()).toBe(50);
 
     // OFFLINE jump: constructs in 1 day, then ~1 day active (guarded → full output).
     const collectAt = new Date(T0 + 2 * DAY);
@@ -236,7 +236,7 @@ suite("Ledger / building engine (integration)", () => {
     // draw no food, so nothing is bought and only wages debit the wallet.
     expect(collected.staffUpkeep).toBeGreaterThan(0);
     expect(collected.foodBought).toBe(0); // citizen eats nothing now
-    expect(await wallet()).toBe(collected.collected - collected.staffUpkeep - collected.foodCost);
+    expect(await wallet()).toBe(50 + collected.collected - collected.staffUpkeep - collected.foodCost);
     // Herbal banks into resources (food draws grain, not herbal, so it's untouched).
     expect(collected.banked.herbal).toBeCloseTo(4, 0);
     expect(await goodBalance("herbal")).toBeCloseTo(4, 0);
@@ -250,7 +250,7 @@ suite("Ledger / building engine (integration)", () => {
     const up = await m.buildings.upgrade(c, "sanctuary", new Date(T0 + 5 * DAY));
     expect(up.ok).toBe(true);
     if (up.ok) expect(up.tier).toBe(2);
-    expect(await wallet()).toBe(50); // 300 − 250
+    expect(await wallet()).toBe(175); // 300 − 125
   });
 
   it("the class gate is generic: a non-priest cannot build the Sanctuary, and a priest cannot build the Estate", async () => {
@@ -285,8 +285,8 @@ suite("Ledger / building engine (integration)", () => {
 
       const built = await m.buildings.build(classId, c, buildingId, new Date(T0));
       expect(built.ok).toBe(true);
-      if (built.ok) expect(built.cost).toBe(100);
-      expect(await wallet()).toBe(0);
+      if (built.ok) expect(built.cost).toBe(50);
+      expect(await wallet()).toBe(50);
 
       // ~1 day active → income accrues to the wallet (no goods at T1 for these lines).
       const collectAt = new Date(T0 + 2 * DAY);
@@ -300,7 +300,7 @@ suite("Ledger / building engine (integration)", () => {
       // Phase 2: staff wages + auto-bought food (these lines grow no grain) net out
       // of the wallet alongside the income.
       expect(collected.staffUpkeep).toBeGreaterThan(0);
-      expect(await wallet()).toBe(collected.collected - collected.staffUpkeep - collected.foodCost);
+      expect(await wallet()).toBe(50 + collected.collected - collected.staffUpkeep - collected.foodCost);
       expect(collected.banked).toEqual({}); // nothing into resources
 
       // Upgrade to tier 2 works on the curve; the section slot stays the labelled stub.
@@ -320,7 +320,7 @@ suite("Ledger / building engine (integration)", () => {
 
     const built = await m.buildings.build("shipbuilder", c, "slipway", new Date(T0));
     expect(built.ok).toBe(true);
-    expect(await wallet()).toBe(0);
+    expect(await wallet()).toBe(50);
 
     const collectAt = new Date(T0 + 2 * DAY);
     const view = await m.buildings.mine("shipbuilder", c, collectAt);
@@ -386,7 +386,7 @@ suite("Ledger / building engine (integration)", () => {
     playerId = await freshPlayer(100, "shipbuilder");
     const c = await ctx();
     await m.buildings.build("shipbuilder", c, "slipway", new Date(T0));
-    expect(await wallet()).toBe(0);
+    expect(await wallet()).toBe(50);
 
     const collected = await m.buildings.collect(c, new Date(T0 + 12 * DAY));
     expect(collected.staffUpkeep).toBeGreaterThan(0); // crew wages still charged
@@ -687,13 +687,13 @@ suite("Ledger / building engine (integration)", () => {
   it("(P3a) build is rejected — and nothing mutated — when drachmae, materials, OR pops are short", async () => {
     const noBuilding = async () => (await db.select().from(m.dbPkg.playerBuildings).where(eq(m.dbPkg.playerBuildings.ownerPlayerId, playerId))).length === 0;
 
-    // (i) Insufficient drachmae: estate T1 costs 100; give 50. Materials + slaves are present.
-    playerId = await freshPlayer(50, "landowner");
+    // (i) Insufficient drachmae: estate T1 costs 50; give 25. Materials + slaves are present.
+    playerId = await freshPlayer(25, "landowner");
     let c = await ctx();
     const poorWallet = await m.buildings.build("landowner", c, "estate", new Date(T0));
     expect(poorWallet.ok).toBe(false);
     if (!poorWallet.ok) expect(poorWallet.code).toBe(402);
-    expect(await wallet()).toBe(50); // not debited
+    expect(await wallet()).toBe(25); // not debited
     expect(await goodBalance("timber")).toBe(500); // materials untouched
     expect(await noBuilding()).toBe(true); // no row created (rolled back)
 
@@ -725,10 +725,10 @@ suite("Ledger / building engine (integration)", () => {
     const built = await m.buildings.build("landowner", c, "estate", new Date(T0));
     expect(built.ok).toBe(true);
     if (built.ok) {
-      expect(built.cost).toBe(100);
+      expect(built.cost).toBe(50);
       expect(built.materials).toEqual({ timber: 8, stone: 6 }); // T1 material bill (content-driven)
     }
-    expect(await wallet()).toBe(0); // 100 − 100
+    expect(await wallet()).toBe(50); // 100 − 50
     expect(await goodBalance("timber")).toBe(492); // 500 − 8
     expect(await goodBalance("stone")).toBe(494); // 500 − 6
     expect(await popBalance("slave")).toBe(slavesBefore); // pops are a prerequisite, NOT consumed
@@ -751,10 +751,10 @@ suite("Ledger / building engine (integration)", () => {
     expect(up.ok).toBe(true);
     if (up.ok) {
       expect(up.tier).toBe(2);
-      expect(up.cost).toBe(250); // buildingCost(2)
+      expect(up.cost).toBe(125); // buildingCost(2)
       expect(up.materials).toEqual({ timber: 14, stone: 11 }); // 8×1.8=14.4→14, 6×1.8=10.8→11
     }
-    expect(await wallet()).toBe(walletAfterBuild - 250);
+    expect(await wallet()).toBe(walletAfterBuild - 125);
     expect(await goodBalance("timber")).toBe(timberAfterBuild - 14);
     expect(await goodBalance("stone")).toBe(stoneAfterBuild - 11);
 

@@ -39,10 +39,10 @@ const vendor = content.vendor;
 const seasonal = content.seasonal;
 
 describe("the building curve (one curve, not hand rows)", () => {
-  it("cost(t) = round(100 × 2.5^(t-1)) → 100 / 250 / 625 / 1563", () => {
-    // The formula is the source of truth (constants, not hand rows); 625/1563
-    // are its exact values (the design note's 600/1500 were a rough annotation).
-    expect([1, 2, 3, 4].map(buildingCost)).toEqual([100, 250, 625, 1563]);
+  it("cost(t) = COST_TABLE[t-1] → 50 / 125 / 300 / 750", () => {
+    // A flat table is the source of truth (constants, not hand rows); the class
+    // tiers were halved from the old 100/250/625/1563 curve.
+    expect([1, 2, 3, 4].map(buildingCost)).toEqual([50, 125, 300, 750]);
   });
 
   it("buildDays(t) = [1, 2, 4, 7] real days (≥1 season floor)", () => {
@@ -117,9 +117,9 @@ describe("the new-player guard (winter joiners aren't punished)", () => {
 });
 
 describe("BALANCE GUARDRAIL — the day-1 landowner path", () => {
-  // 100dr start → build Estate T1 (cost 100) → wallet 0 → constructs in 1 day.
-  it("Estate T1 costs exactly the starting purse", () => {
-    expect(buildingCost(1)).toBe(100);
+  // Day-1 landowner: build Estate T1 (cost 50) → constructs in 1 day.
+  it("Estate T1 costs 50dr (the day-1 entry)", () => {
+    expect(buildingCost(1)).toBe(50);
     expect(buildingBuildDays(1)).toBe(1);
   });
 
@@ -154,19 +154,23 @@ describe("BALANCE GUARDRAIL — class ROI beats commons for the owner", () => {
     }
   });
 
-  it("commons sit at ~55–60% of the class line (band 40–70%; never beating it)", () => {
+  it("commons sit at ~28% of the class line by vendor-floor value (band 20–35%)", () => {
+    // Ruling (class costs halved to 50/125/300/750): the class line is decisively
+    // the priority investment; commons are goods access and a secondary sink. Their
+    // strategic value (bulls/horses/etc. in bulk) is NOT captured by this floor-value
+    // ratio, so a low number here is by design — not commons being weak.
     for (const common of commons) {
       const ratio = commonBuildingRoi(common, vendor) / classT1;
-      expect(ratio).toBeGreaterThanOrEqual(0.4);
-      expect(ratio).toBeLessThan(0.7);
+      expect(ratio).toBeGreaterThanOrEqual(0.2);
+      expect(ratio).toBeLessThanOrEqual(0.35);
     }
   });
 
-  it("the full T1→T4 grind costs ~2450dr (a multi-week, late-game push)", () => {
-    // The curve sums to 2538 — the ≈2450 design target, late-game by intent.
+  it("the full T1→T4 grind costs 1225dr (a multi-week, late-game push)", () => {
+    // The halved table sums to 1225 (50 + 125 + 300 + 750), late-game by intent.
     const total = [1, 2, 3, 4].reduce((sum, t) => sum + buildingCost(t), 0);
-    expect(total).toBe(2538);
-    expect(total).toBeGreaterThan(2400);
+    expect(total).toBe(1225);
+    expect(total).toBeGreaterThan(1000);
   });
 });
 
@@ -221,8 +225,8 @@ describe("the four remaining class lines (content-only, same generic frame)", ()
     for (const line of [trader, philosopher, hetaira, shipbuilder]) {
       expect(line.tiers.map((t) => t.tier)).toEqual([1, 2, 3, 4]);
       expect(line.tiers.every((t) => t.rank?.startsWith("@"))).toBe(true);
-      // Tier-1 cost is the universal 100dr entry; nothing hand-rolled.
-      expect(buildingCost(1)).toBe(100);
+      // Tier-1 cost is the universal 50dr entry; nothing hand-rolled.
+      expect(buildingCost(1)).toBe(50);
     }
   });
 
