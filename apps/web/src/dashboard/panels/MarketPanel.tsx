@@ -56,7 +56,7 @@ function PeopleMarketRow({
         <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <QtyStepper value={qty} setValue={setQty} min={1} />
           {/* Refund shown only when the pop resells (slave); the free classes are released. */}
-          <button type="button" className={btnClass("panel-btn ghost", `dismiss:${pop.type}`, busy, busyKey, owned <= 0)} disabled={busy || owned <= 0} onClick={() => onDismiss(dismissN)}>
+          <button type="button" className={btnClass("panel-btn silver", `dismiss:${pop.type}`, busy, busyKey, owned <= 0)} disabled={busy || owned <= 0} onClick={() => onDismiss(dismissN)}>
             {pop.dismissLabel} {dismissN}{refund > 0 ? ` · +${refund}dr` : ""}
           </button>
           <button type="button" className={btnClass("panel-btn", `hire:${pop.type}`, busy, busyKey)} disabled={busy} onClick={() => onHire(qty)}>
