@@ -3,7 +3,7 @@
   "pops": {
     "slave": {
       "label": "Slave",
-      "dismissLabel": "Free / Sell",
+      "dismissLabel": "Sell",
       "hireCost": 30,
       "sellBack": 25,
       "upkeepPerDay": 0,

@@ -877,7 +877,7 @@ suite("Ledger / building engine (integration)", () => {
     expect(view.foodGood).toBe("grain");
     expect(view.pops.map((p) => p.type).sort()).toEqual(["citizen", "freeman", "slave"]);
     const slave = view.pops.find((p) => p.type === "slave")!;
-    expect(slave).toMatchObject({ label: "Slave", dismissLabel: "Free / Sell", hireCost: 30, sellBack: 25, upkeepPerDay: 0, foodPerDay: 1, civic: false });
+    expect(slave).toMatchObject({ label: "Slave", dismissLabel: "Sell", hireCost: 30, sellBack: 25, upkeepPerDay: 0, foodPerDay: 1, civic: false });
     const citizen = view.pops.find((p) => p.type === "citizen")!;
     expect(citizen).toMatchObject({ label: "Citizen", dismissLabel: "Release", hireCost: 50, sellBack: 0, upkeepPerDay: 3, foodPerDay: 0, civic: true });
   });
