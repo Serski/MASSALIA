@@ -357,16 +357,8 @@ function AuthRoutePage({ mode }: { mode: AuthMode }) {
   );
 }
 
-function DetailPage({ entry, onStart, onOpenAuth }: { entry: DetailEntry; onStart: () => void; onOpenAuth: (mode: AuthMode) => void }) {
+function DetailPage({ entry, onOpenAuth }: { entry: DetailEntry; onOpenAuth: (mode: AuthMode) => void }) {
   const emblem = "image" in entry ? entry.image : undefined;
-  const ctaText =
-    entry.kind === "house"
-      ? `Pledge to ${entry.name}`
-      : entry.kind === "party"
-        ? `Join the ${entry.name}`
-        : entry.kind === "profession"
-          ? "Choose this path"
-          : "Begin here";
 
   return (
     <main className="landing-shell detail-shell">
@@ -399,8 +391,6 @@ function DetailPage({ entry, onStart, onOpenAuth }: { entry: DetailEntry; onStar
           </div>
         </div>
         <DetailBody entry={entry} />
-        {/* TODO: If entry is via Discord, change this CTA to "Join the Discord" / "Enter the League" and point it to the invite link. */}
-        <button className="primary-cta" type="button" onClick={onStart}>{ctaText}</button>
       </section>
       <LandingFooter />
     </main>
@@ -576,7 +566,7 @@ export function App() {
   if (detailEntry) {
     return (
       <>
-        <DetailPage entry={detailEntry} onStart={startGame} onOpenAuth={openAuth} />
+        <DetailPage entry={detailEntry} onOpenAuth={openAuth} />
         {authModalMode ? <AuthModal mode={authModalMode} onModeChange={setAuthModalMode} onClose={closeAuth} /> : null}
       </>
     );
