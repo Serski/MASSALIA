@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, type BuildingsCatalog, type BuildingsMine, type CatalogEntry, type OwnedBuilding, type ClassSection, type VendorPrice, type ServiceView, type MercBoard, type RiskOutcome } from "../../api.js";
+import { api, ApiError, type BuildingsCatalog, type BuildingsMine, type CatalogEntry, type OwnedBuilding, type ClassSection, type ServiceView, type MercBoard, type RiskOutcome } from "../../api.js";
 import { assetPath } from "../../data/league.js";
 import { AssetIcon, BuildingGlyph, GOOD_ICON, PanelBanner, type PanelProps, PanelRow, buildCountdown, buildingArtFile, formatPerDay, idleReason, popName } from "../shared.js";
 
@@ -452,37 +452,6 @@ function ServiceSection({ label, onRefresh }: { label: string; onRefresh: () => 
   );
 }
 
-function VendorDrawer({ catalog, onTrade, busy }: { catalog: BuildingsCatalog; onTrade: (action: "buy" | "sell", type: string, qty: number) => void; busy: boolean }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="ledger-vendor">
-      <button type="button" className="panel-btn" onClick={() => setOpen((v) => !v)}>
-        {open ? "Close the agora" : "Visit the agora vendor"}
-      </button>
-      {open ? (
-        <div className="panel-grid2" style={{ marginTop: 10 }}>
-          {catalog.vendor.map((price: VendorPrice) => (
-            <div key={price.good} className="panel-row">
-              <div className="pr-l">
-                <span className="pr-ic" aria-hidden="true">{GOOD_ICON[price.good] ?? "📦"}</span>
-                <div>
-                  <div className="pr-t">{price.good[0]!.toUpperCase() + price.good.slice(1)}</div>
-                  <div className="pr-s">buy {price.buy}dr · sell {price.sell}dr</div>
-                </div>
-              </div>
-              <span style={{ display: "flex", gap: 6 }}>
-                <button type="button" className="panel-btn ghost" disabled={busy} onClick={() => onTrade("buy", price.good, 1)}>Buy 1</button>
-                <button type="button" className="panel-btn" disabled={busy} onClick={() => onTrade("sell", price.good, 1)}>Sell 1</button>
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : null}
-      <p className="pr-s" style={{ marginTop: 6 }}>The agora trades at a fixed band ({catalog.season}); the vendor sells dear and buys cheap, so the market can never deadlock.</p>
-    </div>
-  );
-}
-
 // The shipbuilder's craft bench (content.craft): each good shows its recipe + the
 // building-tier gate, with a Craft action. Gated/blocked when under-tier or short
 // on the recipe materials (the server is the source of truth — this mirrors it).
@@ -797,9 +766,6 @@ export default function LedgerPanel({ player, onRefresh }: PanelProps) {
       ) : (
         <ClassActionsList section={mine.classSection} />
       )}
-
-      <div className="panel-label">The Agora</div>
-      <VendorDrawer catalog={catalog} busy={busy} onTrade={(action, type, qty) => act(() => api.vendorTrade(action, type, qty))} />
 
       {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
     </section>

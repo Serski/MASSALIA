@@ -2350,9 +2350,6 @@
   border: 1px solid rgba(181, 138, 69, 0.32);
   background: rgba(40, 28, 16, 0.5);
 }
-.dashboard-shell .ledger-vendor{
-  margin-bottom: 8px;
-}
 .dashboard-shell .panel-banner{
   position: relative;
   display: flex;
