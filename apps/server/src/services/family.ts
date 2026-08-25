@@ -39,6 +39,7 @@ import {
   philiaBand,
   portraitFor,
   REAL_MS_PER_SEASON,
+  rollBridePackage,
   rollSpouseDeathAge,
   spouseCurrentAge,
   successionPlan,
@@ -47,6 +48,7 @@ import {
   type Trait,
 } from "@massalia/shared";
 import { getAgeConfig, portraitUrl } from "./age.js";
+import { buildingContext, creditGoods, grantPops } from "./buildings.js";
 import { addTrait, getAllTraitDefs, getHeldTraits, getTraitDef } from "./traits.js";
 import { applyComposureDelta } from "./composure.js";
 import { broadcastState } from "./worldState.js";
@@ -672,6 +674,13 @@ export async function marry(character: CharacterRow, candidateId: string, now: D
   const favorParty = character.party === "palaioi" || character.party === "dynatoi" ? character.party : null;
   const applyFavorLoss = penalty.partyFavorLoss > 0 && favorParty !== null;
 
+  // The bride's package (additive beside the dowry): servants + household goods she
+  // brings. Rolled now; granted atomically in the marriage tx through the same
+  // checkpoint-aware helpers the vendor/hire flows use (never raw resource writes).
+  const bridePackage = rollBridePackage();
+  const ctx = await buildingContext(character.playerId, character.worldId);
+  if (!ctx) return { ok: false, code: 503, error: "No active world." };
+
   await db.transaction(async (tx) => {
     // Roll the wife's lifespan now (uniform in spouse.deathAge); she ages toward it.
     await tx.insert(marriages).values({ characterId: character.id, candidateId, spouseDeathAge: rollSpouseDeathAge(cfg) });
@@ -683,6 +692,10 @@ export async function marry(character: CharacterRow, candidateId: string, now: D
       updates.drachmae = character.drachmae + dowry;
       await tx.insert(effectLog).values({ characterId: character.id, kind: "change_drachmae", detail: { amount: dowry, source: "marriage:dowry" } });
     }
+    // The bride's package: household goods through the checkpoint-aware credit path,
+    // servants through the hire pop-adjust — both free (no wallet, no hire cost).
+    await creditGoods(tx, ctx, { wool: bridePackage.wool, oliveoil: bridePackage.oliveoil }, now);
+    await grantPops(tx, ctx, "slave", bridePackage.slaves);
     if (penalty.ideologyShift !== 0) {
       updates.ideology = clampIdeology(character.ideology + penalty.ideologyShift);
       await tx.insert(effectLog).values({ characterId: character.id, kind: "change_ideology", detail: { amount: penalty.ideologyShift, value: updates.ideology, source: "marriage:cross_house" } });

@@ -20,6 +20,7 @@ import {
   isSpouseDeceased,
   marriagePenalty,
   parseFamilyConfig,
+  rollBridePackage,
   rollSpouseDeathAge,
   spouseCurrentAge,
   successionPlan,
@@ -532,6 +533,25 @@ describe("rollSpouseDeathAge", () => {
   it("covers both ends of the band (uniform, inclusive)", () => {
     expect(rollSpouseDeathAge(cfg, () => 0)).toBe(60); // min
     expect(rollSpouseDeathAge(cfg, () => 0.9999)).toBe(70); // max
+  });
+});
+
+describe("rollBridePackage", () => {
+  it("rolls uniform inclusive ranges (slaves 2-3, wool 8-10, oliveoil 6-8)", () => {
+    expect(rollBridePackage(() => 0)).toEqual({ slaves: 2, wool: 8, oliveoil: 6 }); // mins
+    expect(rollBridePackage(() => 0.9999)).toEqual({ slaves: 3, wool: 10, oliveoil: 8 }); // maxes
+  });
+
+  it("always lands within range", () => {
+    for (let i = 0; i < 500; i++) {
+      const pkg = rollBridePackage(Math.random);
+      expect(pkg.slaves).toBeGreaterThanOrEqual(2);
+      expect(pkg.slaves).toBeLessThanOrEqual(3);
+      expect(pkg.wool).toBeGreaterThanOrEqual(8);
+      expect(pkg.wool).toBeLessThanOrEqual(10);
+      expect(pkg.oliveoil).toBeGreaterThanOrEqual(6);
+      expect(pkg.oliveoil).toBeLessThanOrEqual(8);
+    }
   });
 });
 

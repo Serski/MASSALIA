@@ -1218,6 +1218,37 @@ export async function vendorTrade(ctx: ActingContext, action: VendorAction, type
   });
 }
 
+// --- Free grants (checkpoint-consistent; no wallet, no vendor price) ---------
+// Used by the bride's package (family marry): credit goods and add pops WITHOUT
+// charging drachmae. Goods take the same settle-then-add path vendorTrade uses —
+// pending accrual is banked first so the goods marker stays honest, then the grant
+// is added on top. Pops reuse the hire upsert. Both run inside the caller's tx.
+
+export async function creditGoods(tx: Exec, ctx: ActingContext, grants: Record<string, number>, now: Date): Promise<void> {
+  const entries = Object.entries(grants).filter(([, qty]) => qty > 0);
+  if (entries.length === 0) return;
+  const rows = await flipActivations(tx, await ownedRows(tx, ctx.playerId), now);
+  await settleGoods(tx, ctx, rows, now); // bank pending so the grant adds to fresh stock
+  for (const [type, qty] of entries) {
+    const goodRow = await getOrCreateResource(tx, ctx.playerId, type, now);
+    await tx.update(resources).set({ amount: String(Number(goodRow.amount) + qty) }).where(eq(resources.id, goodRow.id));
+  }
+}
+
+export async function grantPops(tx: Exec, ctx: ActingContext, popType: string, count: number): Promise<void> {
+  if (count <= 0) return;
+  const existing = await tx
+    .select()
+    .from(playerPops)
+    .where(and(eq(playerPops.worldId, ctx.worldId), eq(playerPops.ownerPlayerId, ctx.playerId), eq(playerPops.popType, popType)))
+    .limit(1);
+  if (existing[0]) {
+    await tx.update(playerPops).set({ count: existing[0].count + count }).where(eq(playerPops.id, existing[0].id));
+  } else {
+    await tx.insert(playerPops).values({ worldId: ctx.worldId, ownerPlayerId: ctx.playerId, popType, count });
+  }
+}
+
 // --- Routine consumption hook -----------------------------------------------
 // Resolve a routine card's `requires` block in one transaction: a `waivedBy`
 // building the player owns zeroes the cost; otherwise debit the good (banking

@@ -301,6 +301,17 @@ export function rollSpouseDeathAge(cfg: FamilyConfig, rng: () => number = Math.r
   return randInt(rng, min, max);
 }
 
+// The bride's package: servants and household goods she brings to the union, rolled
+// at marriage time with uniform inclusive ranges. Additive beside the dowry-drachmae
+// mechanic; granted on every marriage. rng injectable for tests.
+export function rollBridePackage(rng: () => number = Math.random): { slaves: number; wool: number; oliveoil: number } {
+  return {
+    slaves: randInt(rng, 2, 3),
+    wool: randInt(rng, 8, 10),
+    oliveoil: randInt(rng, 6, 8),
+  };
+}
+
 // A default Greek name for a newborn (sticks if the player never renames). Any
 // name in `exclude` (the living siblings' names) is avoided so a house has no two
 // living children of the same name; dead/departed names are not passed in, so
