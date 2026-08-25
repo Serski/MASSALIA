@@ -23,6 +23,16 @@ function staffReqLine(staffing: Record<string, number>): string {
     .join(" · ");
 }
 
+// Spell out a build duration for the ledger. Sub-day tiers (tier 1 now builds in an
+// hour) render as hours; whole-day tiers as days. Both pluralize.
+function formatBuildDuration(days: number): string {
+  if (days < 1) {
+    const hours = Math.round(days * 24);
+    return `${hours} hour${hours === 1 ? "" : "s"}`;
+  }
+  return `${days} day${days === 1 ? "" : "s"}`;
+}
+
 function ClassBuildingLadder({
   entry,
   owned,
@@ -110,7 +120,7 @@ function ClassBuildingLadder({
               <div className="tier-meta">
                 {state === "constructing"
                   ? `under construction · ${buildCountdown(owned?.completesAt ?? null)}`
-                  : `${t.cost}dr · ${t.buildDays}d${t.upkeep > 0 ? ` · upkeep ${t.upkeep}dr/day` : ""}`}
+                  : `Cost ${t.cost} dr · ${formatBuildDuration(t.buildDays)}${t.upkeep > 0 ? ` · upkeep ${t.upkeep}dr/day` : ""}`}
               </div>
               {(state === "current" || state === "built") && staffReqLine(t.staffing) ? (
                 <div className="tier-meta">Staff: {staffReqLine(t.staffing)}</div>
@@ -642,10 +652,10 @@ export default function LedgerPanel({ player, onRefresh }: PanelProps) {
   const buildableRow = (entry: CatalogEntry, disabled?: string) => {
     const t1 = entry.tiers[0]!;
     const sub = entry.composurePerDay
-      ? `+${entry.composurePerDay} composure/day (flat) · ${t1.cost}dr · ${t1.buildDays}d`
+      ? `+${entry.composurePerDay} composure/day (flat) · Cost ${t1.cost} dr · ${formatBuildDuration(t1.buildDays)}`
       : entry.storageBonus
-        ? `+${entry.storageBonus} storage · ${t1.cost}dr · ${t1.buildDays}d`
-        : `${yieldSummary(t1.yields, t1.income, catalog.goodLabels)} · ${t1.cost}dr · ${t1.buildDays}d`;
+        ? `+${entry.storageBonus} storage · Cost ${t1.cost} dr · ${formatBuildDuration(t1.buildDays)}`
+        : `${yieldSummary(t1.yields, t1.income, catalog.goodLabels)} · Cost ${t1.cost} dr · ${formatBuildDuration(t1.buildDays)}`;
     // FEATURE 3: what it takes to build — material bill + staffing requirement.
     const matBill = Object.entries(t1.materials).map(([g, q]) => `${q} ${label(g)}`).join(" · ");
     const staffBill = staffReqLine(t1.staffing as Record<string, number>);
