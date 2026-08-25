@@ -672,6 +672,9 @@ export default function PoliticsPanel({ player, onRefresh }: PanelProps) {
   const [note, setNote] = useState("");
   const censureSeconds = useCountdownSeconds(player.censured ? player.censureExpiresAt : null);
   const joined = player.party !== "Unaligned";
+  // The unfree hold no seat and no party — the assembly is locked until manumission.
+  // Keyed off live player state, so freedom releases it on the next refresh.
+  const locked = player.professionSlug === "slave";
 
   const join = async (slug: "dynatoi" | "palaioi") => {
     setNote("");
@@ -700,6 +703,13 @@ export default function PoliticsPanel({ player, onRefresh }: PanelProps) {
         <p>The Oligarchy Council rules the League — and two parties fight to steer it.</p>
       </div>
 
+      {locked ? (
+        <>
+          <div className="panel-label">Locked</div>
+          <p className="dashboard-todo" role="status">The unfree hold no voice in the assembly. Freedom will open this.</p>
+        </>
+      ) : (
+        <>
       <div className="cs-tabs" role="tablist">
         <button type="button" role="tab" aria-selected={tab === "council"} className={`cs-tab${tab === "council" ? " on" : ""}`} onClick={() => setTab("council")}>
           Oligarchy Council
@@ -810,6 +820,8 @@ export default function PoliticsPanel({ player, onRefresh }: PanelProps) {
           </p>
           {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
         </div>
+      )}
+        </>
       )}
     </section>
   );

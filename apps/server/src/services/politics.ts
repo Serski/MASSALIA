@@ -39,6 +39,9 @@ async function loadCharacter(characterId: string) {
 export async function joinParty(characterId: string, party: JoinableParty) {
   const character = await loadCharacter(characterId);
   if (!character) throw new PartyError(404, "No active character found.");
+  if (character.classId === "slave") {
+    throw new PartyError(403, "The unfree may not join a party.");
+  }
   if (await activeCensure(characterId)) {
     throw new PartyError(409, "You are under censure and cannot change party allegiance.");
   }
