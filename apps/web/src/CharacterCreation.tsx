@@ -531,10 +531,6 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
           {step === 4 ? (
             <form className="creation-account-form" id="creation-account-form" onSubmit={handleSubmit}>
               <p className="creation-note">Save your character.</p>
-              <button className="primary-cta" type="button" onClick={() => setMessage("TODO: Discord OAuth is not connected yet.")}>
-                Continue with Discord
-              </button>
-              <div className="auth-divider"><span>or</span></div>
               <label>
                 <span>Email</span>
                 <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required />
