@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import { createDb, sessions, users } from "@massalia/db";
 
 export const sessionCookieName = "massalia_session";
@@ -81,7 +81,7 @@ export async function getAuthUser(request: FastifyRequest): Promise<AuthUser | n
     })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
-    .where(and(eq(sessions.tokenHash, hashToken(token)), gt(sessions.expiresAt, new Date())))
+    .where(and(eq(sessions.tokenHash, hashToken(token)), gt(sessions.expiresAt, new Date()), isNull(users.deletedAt)))
     .limit(1);
 
   return rows[0] ?? null;

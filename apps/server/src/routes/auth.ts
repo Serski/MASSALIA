@@ -4,7 +4,8 @@ import rateLimit from "@fastify/rate-limit";
 import Redis from "ioredis";
 import { and, eq } from "drizzle-orm";
 import { createDb, players, users, worlds } from "@massalia/db";
-import { clearSession, createSession, getAuthUser } from "../services/auth.js";
+import { clearSession, createSession, getAuthUser, requireAuth } from "../services/auth.js";
+import { deleteAccount } from "../services/account.js";
 
 const db = createDb();
 
@@ -107,7 +108,8 @@ export async function authRoutes(app: FastifyInstance) {
     const { email, password } = assertAuthPayload(request.body as AuthPayload);
     const found = await db.select().from(users).where(eq(users.email, email)).limit(1);
     const user = found[0];
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    // A deleted account is refused before the bcrypt compare (its hash is a sentinel).
+    if (!user || user.deletedAt || !(await bcrypt.compare(password, user.passwordHash))) {
       reply.code(401);
       return { error: "Invalid email or password." };
     }
@@ -117,6 +119,25 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.post("/logout", async (request, reply) => {
+    await clearSession(request, reply);
+    return { ok: true };
+  });
+
+  // Account deletion (anonymize-and-detach): immediate, irreversible, no grace period.
+  // Re-authenticate with the password, then scrub PII + drop every session + detach
+  // players (see services/account.ts). The session row is deleted inside deleteAccount;
+  // clearSession only clears the cookie.
+  app.post("/delete-account", { config: { rateLimit: { max: 5, timeWindow: 60_000 } } }, async (request, reply) => {
+    const authed = await requireAuth(request);
+    const body = request.body as AuthPayload | undefined;
+    const password = typeof body?.password === "string" ? body.password : "";
+    const found = await db.select().from(users).where(eq(users.id, authed.id)).limit(1);
+    const user = found[0];
+    if (!user || user.deletedAt || !(await bcrypt.compare(password, user.passwordHash))) {
+      reply.code(401);
+      return { error: "Password is incorrect." };
+    }
+    await deleteAccount(user.id);
     await clearSession(request, reply);
     return { ok: true };
   });

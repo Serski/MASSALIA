@@ -16,6 +16,9 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   newsletterOptIn: boolean("newsletter_opt_in").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  // Account deletion (anonymize-and-detach): set at deletion time alongside the
+  // scrubbed email/passwordHash; NULL for every live account (login/auth gate on it).
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 
 export const sessions = pgTable("sessions", {
