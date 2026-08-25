@@ -417,6 +417,16 @@
   color: #f1ddb1;
 }
 
+.creation-saving-as {
+  color: rgba(236, 224, 204, 0.76);
+  font-family: var(--font-body);
+  font-size: 16px;
+}
+
+.creation-saving-as strong {
+  color: #f1ddb1;
+}
+
 .creation-footer,
 .creation-sheet-footer {
   display: flex;

@@ -328,6 +328,11 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
   const [sheet, setSheet] = useState<SheetState>(null);
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // A visitor who signed up on the landing page arrives here already authenticated
+  // (App routes character-less logins to /create). When so, the save step skips the
+  // credential fields and creates against the live session — never re-registers.
+  // null = no session (collect email + password and register on save).
+  const [authedEmail, setAuthedEmail] = useState<string | null>(null);
 
   const selectedClass = useMemo(() => professions.find((profession) => profession.slug === selectedClassSlug), [selectedClassSlug]);
   const selectedHouse = useMemo(() => nobleHouses.find((house) => house.slug === selectedHouseSlug), [selectedHouseSlug]);
@@ -336,6 +341,18 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
   useEffect(() => {
     let cancelled = false;
     api.ageConfig().then((cfg) => !cancelled && setAgeConfig(cfg)).catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Detect an existing session so the save step can skip the credential fields.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .me()
+      .then((result) => !cancelled && setAuthedEmail(result.user?.email ?? null))
+      .catch(() => !cancelled && setAuthedEmail(null));
     return () => {
       cancelled = true;
     };
@@ -359,10 +376,10 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
 
   function continueLabel() {
     if (step === 3) {
-      return "Continue → email";
+      return authedEmail ? "Continue →" : "Continue → email";
     }
     if (step === 4) {
-      return "Enter the agora →";
+      return "Save character";
     }
     return "Continue →";
   }
@@ -392,7 +409,12 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
     };
     setIsSubmitting(true);
     try {
-      await api.register(email, password, newsletter);
+      // Register only when there's no session yet, and mark ourselves authed on
+      // success — so a failed createCharacter retry never registers a second time.
+      if (!authedEmail) {
+        await api.register(email, password, newsletter);
+        setAuthedEmail(email);
+      }
       await api.createCharacter(payload);
       onComplete(payload);
     } catch (error) {
@@ -531,18 +553,24 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
           {step === 4 ? (
             <form className="creation-account-form" id="creation-account-form" onSubmit={handleSubmit}>
               <p className="creation-note">Save your character.</p>
-              <label>
-                <span>Email</span>
-                <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required />
-              </label>
-              <label>
-                <span>Password</span>
-                <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" minLength={8} required />
-              </label>
-              <label className="creation-consent">
-                <input type="checkbox" checked={newsletter} onChange={(event) => setNewsletter(event.target.checked)} />
-                <span>Send me season updates and League dispatches.</span>
-              </label>
+              {authedEmail ? (
+                <p className="creation-saving-as">Saving as <strong>{authedEmail}</strong>.</p>
+              ) : (
+                <>
+                  <label>
+                    <span>Email</span>
+                    <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required />
+                  </label>
+                  <label>
+                    <span>Password</span>
+                    <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" minLength={8} required />
+                  </label>
+                  <label className="creation-consent">
+                    <input type="checkbox" checked={newsletter} onChange={(event) => setNewsletter(event.target.checked)} />
+                    <span>Send me season updates and League dispatches.</span>
+                  </label>
+                </>
+              )}
               <label className="creation-consent">
                 <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} required />
                 <span>I accept the <a href="/terms">Terms &amp; Conditions</a> and <a href="/privacy">Privacy Policy</a>.</span>
