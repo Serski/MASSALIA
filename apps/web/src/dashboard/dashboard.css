@@ -3410,6 +3410,33 @@
   cursor: default;
 }
 
+/* Silver sell buttons (Phase 6): the gold gradient's construction in silver.
+   Hues provisional — Argiris judges live post-deploy. The is-waiting/is-busy
+   companions mirror the Phase-5 rules so the pressed-button scoping holds. */
+.dashboard-shell .panel-btn.silver{
+  color: #141920;
+  background: linear-gradient(135deg, #e8ebef, #a9b2bc);
+  border: none;
+}
+.dashboard-shell .panel-btn.silver:not(:disabled):hover{
+  filter: brightness(1.07);
+}
+.dashboard-shell .panel-btn.silver.is-waiting:disabled{
+  color: #141920;
+  background: linear-gradient(135deg, #e8ebef, #a9b2bc);
+  border: none;
+  opacity: 0.75;
+  cursor: default;
+}
+.dashboard-shell .panel-btn.silver.is-busy:disabled{
+  color: #141920;
+  background: linear-gradient(135deg, #e8ebef, #a9b2bc);
+  border: none;
+  transform: translateY(1px);
+  filter: brightness(0.9);
+  cursor: default;
+}
+
 /* A touch more carved depth: a 1px parchment top-highlight on cards, layered
    over the existing drop shadow (kept through hover so it never flickers). */
 .dashboard-shell .dashboard-card{ box-shadow: 0 18px 48px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05); }

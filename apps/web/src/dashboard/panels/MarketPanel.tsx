@@ -103,7 +103,7 @@ function GoodsMarketRow({
       action={
         <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <QtyStepper value={qty} setValue={setQty} min={1} />
-          <button type="button" className={btnClass("panel-btn ghost", `sell:${price.good}`, busy, busyKey, owned <= 0)} disabled={busy || owned <= 0} onClick={() => onSell(sellN)}>
+          <button type="button" className={btnClass("panel-btn silver", `sell:${price.good}`, busy, busyKey, owned <= 0)} disabled={busy || owned <= 0} onClick={() => onSell(sellN)}>
             Sell {sellN} · {price.sell * sellN}dr
           </button>
           <button type="button" className={btnClass("panel-btn", `buy:${price.good}`, busy, busyKey)} disabled={busy} onClick={() => onBuy(qty)}>
