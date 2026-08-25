@@ -224,9 +224,6 @@ export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () =
             {/* TODO: new-items badge placeholder until the items system exists. */}
             {PLACEHOLDER_NEW_ITEM_COUNT > 0 ? <span className="vital-badge">{PLACEHOLDER_NEW_ITEM_COUNT}</span> : null}
           </button>
-          <button className="topbar-logout" type="button" onClick={handleLogout}>
-            <span aria-hidden="true">⎋</span> Log out
-          </button>
           <button
             className="avatar-btn"
             type="button"

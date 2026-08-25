@@ -72,7 +72,6 @@
 
 .dashboard-shell .season-strip,
 .dashboard-shell .topbar-vital,
-.dashboard-shell .topbar-logout,
 .dashboard-shell .avatar-btn,
 .dashboard-shell .dashboard-nav button,
 .dashboard-shell .dashboard-mobile-tabs button,
@@ -228,27 +227,6 @@
   font-weight: 700;
   background: var(--dash-bad);
   border-radius: 10px;
-}
-
-.dashboard-shell .topbar-logout{
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  padding: 9px 14px;
-  color: var(--dash-stone-dim);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  background: none;
-  border: 1px solid var(--dash-line);
-  border-radius: 10px;
-  cursor: pointer;
-  transition: border-color 0.2s, color 0.2s;
-}
-
-.dashboard-shell .topbar-logout:hover{
-  color: #d49a86;
-  border-color: rgba(187, 106, 82, 0.6);
 }
 
 .dashboard-shell .avatar-btn{
@@ -2294,7 +2272,6 @@
 
 /* Focus visibility for sheet controls */
 .dashboard-shell .topbar-vital:focus-visible,
-.dashboard-shell .topbar-logout:focus-visible,
 .dashboard-shell .avatar-btn:focus-visible,
 .dashboard-shell .sheet-close:focus-visible,
 .dashboard-shell .cs-tab:focus-visible,
