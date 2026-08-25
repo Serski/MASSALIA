@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, type CharacterSheet as CharacterSheetData, type BuildingsCatalog, type BuildingsMine, type OwnedBuilding, type PeopleView } from "../api.js";
 import { type House } from "../data/league.js";
-import { type FourStats, POP_ICON, type PlayerDashboardView, PopGlyph, QtyStepper, buildCountdown, formatPerDay, ideologyReadout, idleReason } from "./shared.js";
+import { type FourStats, POP_ICON, type PlayerDashboardView, PopGlyph, QtyStepper, buildCountdown, formatPerDay, formatRate, ideologyReadout, idleReason } from "./shared.js";
 
 // Everyone starts at Tier 1; real tier tracking lands with profession progression.
 export const BASE_TIER_LABEL = "Tier 1";
@@ -613,7 +613,7 @@ export function InventoryEconomy({ data, goodLabels }: { data: { mine: Buildings
         <>
           <SheetLabel>Goods produced</SheetLabel>
           {goodsRows.map(([good, perDay]) => (
-            <ResRow key={`good-${good}`} icon={goodIcon(good)} name={label(good)} amount={`+${formatPerDay(perDay)}/day`} />
+            <ResRow key={`good-${good}`} icon={goodIcon(good)} name={label(good)} amount={`+${formatRate(perDay)}`} />
           ))}
         </>
       ) : null}

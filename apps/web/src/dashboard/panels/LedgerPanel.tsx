@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type BuildingsCatalog, type BuildingsMine, type CatalogEntry, type OwnedBuilding, type ClassSection, type ServiceView, type MercBoard, type RiskOutcome } from "../../api.js";
 import { assetPath } from "../../data/league.js";
-import { AssetIcon, BuildingGlyph, GOOD_ICON, PanelBanner, type PanelProps, PanelRow, buildCountdown, buildingArtFile, formatPerDay, idleReason, popName } from "../shared.js";
+import { AssetIcon, BuildingGlyph, GOOD_ICON, PanelBanner, type PanelProps, PanelRow, buildCountdown, buildingArtFile, formatPerDay, formatRate, idleReason, popName } from "../shared.js";
 
 // What a building provides per day: drachmae income first (income-only lines like
 // trader/philosopher/hetaira would otherwise read blank), then each good. Income
@@ -11,7 +11,7 @@ function yieldSummary(yields: { good: string; perDay: number }[], income = 0, go
   const name = (good: string) => goodLabels[good] ?? good.charAt(0).toUpperCase() + good.slice(1);
   const parts: string[] = [];
   if (income >= 1) parts.push(`${formatPerDay(income)} dr/day`);
-  for (const y of yields) parts.push(`${formatPerDay(y.perDay)} ${name(y.good)}/day`);
+  for (const y of yields) parts.push(formatRate(y.perDay, name(y.good)));
   return parts.join(" · ");
 }
 

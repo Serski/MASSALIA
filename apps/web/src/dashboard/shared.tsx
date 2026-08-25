@@ -461,6 +461,19 @@ export function formatPerDay(n: number): string {
   return n >= 1 ? String(Math.round(n)) : n.toFixed(1);
 }
 
+// A per-day rate as human phrasing. Sub-1 rates (server rates are seasonally scaled —
+// an authored 0.5 may arrive as 0.325 or 0.6) read as "1 <unit> / N days" once
+// N = round(1/perDay) is ≥ 2; otherwise the plain formatPerDay + "/day" composition.
+// (perDay > 0 guards the reciprocal against a 0-rate → Infinity.)
+export function formatRate(perDay: number, unit = ""): string {
+  const u = unit ? ` ${unit}` : "";
+  if (perDay > 0 && perDay < 1) {
+    const days = Math.round(1 / perDay);
+    if (days >= 2) return `1${u} / ${days} days`;
+  }
+  return `${formatPerDay(perDay)}${u}/day`;
+}
+
 export const GOOD_ICON: Record<string, string> = {
   grain: "🌾", oliveoil: "🫒", wine: "🍷", chicken: "🐔", timber: "🪵", bull: "🐂", horse: "🐎", herbal: "🌿",
 };
