@@ -5,11 +5,21 @@
       { "id": "buy", "label": "Buy ruined cargo for a pittance", "tags": ["profit"], "effects": [{ "type": "change_drachmae", "amount": 25 }, { "type": "change_stat", "stat": "prestige", "amount": -1 }], "resultText": "Salt-stained amphorae, bought cheap, sold quietly." }
     ] },
   { "id": "gen-plague-rumor", "weight": 6, "scene": "Word spreads of fever in the Ligurian quarter. Some say it came off a Punic ship.",
+    "requires": {
+      "noClass": [
+        "slave"
+      ]
+    },
     "choices": [
       { "id": "calm", "label": "Speak against the panic in the agora", "tags": ["judge_fairly"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_stat", "stat": "intelligence", "amount": 1 }], "resultText": "Your level words cool hot heads." },
       { "id": "blame", "label": "Blame the foreigners loudly", "tags": ["traditionalist_act"], "effects": [{ "type": "change_ideology", "amount": -3 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_composure", "amount": -5 }], "resultText": "The crowd roars approval. The quarter remembers." }
     ] },
   { "id": "gen-gaulish-caravan", "weight": 8, "scene": "A Gaulish caravan from the Rhone valley arrives with amber, hides, and a chieftain's son eager to see the famous polis.",
+    "requires": {
+      "noClass": [
+        "slave"
+      ]
+    },
     "choices": [
       { "id": "host", "label": "Host the chieftain's son", "tags": ["reformist_act", "feast"], "effects": [{ "type": "change_ideology", "amount": 3 }, { "type": "change_stat", "stat": "prestige", "amount": 1 }], "resultText": "He leaves with gifts and good stories about you." },
       { "id": "trade", "label": "Just trade and send them on", "tags": ["profit"], "effects": [{ "type": "change_drachmae", "amount": 15 }], "resultText": "Fair prices, no entanglements." }
@@ -25,11 +35,21 @@
       { "id": "protect", "label": "Protect only your own interests", "tags": ["refuse_aid"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": -1 }], "resultText": "Yours survived. Others noticed whose did not." }
     ] },
   { "id": "gen-punic-spy", "weight": 5, "scene": "A man with a Punic accent has been asking detailed questions about harbor depths and grain stores.",
+    "requires": {
+      "noClass": [
+        "slave"
+      ]
+    },
     "choices": [
       { "id": "report", "label": "Report him to the Ephors", "tags": ["expose_secret"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 1 }, { "type": "change_party_favor", "party": "palaioi", "amount": 2 }], "resultText": "He vanishes before the guards arrive, but your vigilance is noted." },
       { "id": "sell", "label": "Sell him harmless half-truths", "tags": ["deception", "profit"], "effects": [{ "type": "change_drachmae", "amount": 40 }, { "type": "change_trait", "traitId": "carthaginian-sympathizer", "operation": "add" }], "resultText": "Carthaginian silver spends like any other. If no one learns." }
     ] },
   { "id": "gen-ligurian-refugees", "weight": 6, "scene": "A raided Ligurian village sends families to Massalia's gates seeking shelter.",
+    "requires": {
+      "noClass": [
+        "slave"
+      ]
+    },
     "choices": [
       { "id": "shelter", "label": "Argue to admit them", "tags": ["reformist_act", "mercy"], "effects": [{ "type": "change_ideology", "amount": 4 }, { "type": "change_stat", "stat": "devotion", "amount": 1 }], "resultText": "They camp inside the wooden wall. Some citizens grumble." },
       { "id": "refuse", "label": "Argue the city is for citizens", "tags": ["traditionalist_act", "refuse_aid"], "effects": [{ "type": "change_ideology", "amount": -4 }, { "type": "change_party_favor", "party": "palaioi", "amount": 2 }], "resultText": "The gates stay watched. The old families nod." }
@@ -40,6 +60,11 @@
       { "id": "natural", "label": "Argue it is a natural wonder", "tags": ["debate", "impiety"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 2 }], "resultText": "Some call you wise. The priests call you something else." }
     ] },
   { "id": "gen-wine-shortage", "weight": 6, "scene": "A bad pressing in the chora means wine prices triple. Symposia are getting desperate.",
+    "requires": {
+      "noClass": [
+        "slave"
+      ]
+    },
     "choices": [
       { "id": "share", "label": "Open your stores to friends", "tags": ["gift", "symposium"], "effects": [{ "type": "change_stat", "stat": "prestige", "amount": 2 }, { "type": "change_drachmae", "amount": -15 }], "resultText": "Your name is toasted in every andron this month." },
       { "id": "sell-high", "label": "Sell at the new price", "tags": ["profit"], "effects": [{ "type": "change_drachmae", "amount": 35 }, { "type": "change_stat", "stat": "prestige", "amount": -1 }], "resultText": "Excellent margins. Cooler greetings." }
