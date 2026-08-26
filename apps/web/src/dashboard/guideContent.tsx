@@ -68,5 +68,37 @@ export const GUIDE_TIP = "First day: marry — put the dowry into your class bui
 export const GUIDE_CLOSER =
   "Your portrait in the top bar holds your stats, achievements, and settings — start there.";
 
-// Longer-form Guide sections. Empty in this phase; populated when the Guide sheet lands.
-export const GUIDE_SECTIONS: GuideSection[] = [];
+// The overlay's final line, pointing the player to the always-available Guide.
+export const GUIDE_REREAD = "Read this again anytime — Guide, in the sidebar.";
+
+// Longer-form Guide sections (Guide sheet only — not in the first-run overlay).
+export const GUIDE_SECTIONS: GuideSection[] = [
+  {
+    id: "calendar",
+    title: "The Calendar & Seasons",
+    paragraphs: [
+      "Each day is a season; four days make a year, and the round spans a generation and more. The seasons are not scenery: fields sleep in winter and wake in summer, and the vendor's prices breathe with them. You age on the same clock — Prime, Middle Age, Old, Venerable — and your stats wear down with the years. Prestige alone never fades. Each season brings its festivals; attend them.",
+    ],
+  },
+  {
+    id: "holdings",
+    title: "Your Holdings & Your People",
+    paragraphs: [
+      "Your class building is one structure raised through four tiers, upgraded in place: it keeps producing through every upgrade, and only a fresh first build earns nothing until it stands. The first tier rises within the hour; the rest take days. Beyond it lie the commons — farms, vines, timber, the warehouse, the shrine — open to any class. Buildings need hands: slaves are bought outright, eat from your stores, and can be sold back; freemen and citizens work for wages. Your holdings labor while you sleep — income accrues whether you watch or not.",
+    ],
+  },
+  {
+    id: "family",
+    title: "Family & the Line",
+    paragraphs: [
+      "Every bride arrives with her retinue; some bring dowries besides, and a new draw comes each season. Philia is her bond: a gift costs 25 drachmae and deepens it by 5 — but only once a year; repeat gifts barely move her. Symposia work too, and a devoted wife steadies your composure faster. Raise children and name your heir. The adoption rite opens at thirty — and should you die heirless, it is performed regardless: the line does not end. Your heir keeps the house, the holdings, the coin, the council seat, and a measure of your prestige; the rest he earns himself. Divorce is possible, and costs dearly.",
+    ],
+  },
+  {
+    id: "politics",
+    title: "The City's Politics",
+    paragraphs: [
+      "Two parties contest the city: the PALAIOI, keepers of the old ways, and the DYNATOI, men of the new. Join one and build favor. The Archons and Ephors are elected — declare, campaign, win the vote, take office; the Strategoi are appointed. The wealthy may buy a seat among the Three Hundred. But choose your ambition: a party's for-life leader may never stand for the city's offices — machine boss or magistrate, not both. The unfree have no voice until freedom.",
+    ],
+  },
+];

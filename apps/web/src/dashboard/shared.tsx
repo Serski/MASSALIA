@@ -5,7 +5,7 @@ import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 
 export type DashboardSection = "court" | "ledger" | "market" | "family" | "politics" | "atlas";
 
-export type IconName = "court" | "ledger" | "market" | "family" | "politics" | "atlas";
+export type IconName = "court" | "ledger" | "market" | "family" | "politics" | "atlas" | "guide";
 
 export type FourStats = {
   prestige: number;
@@ -183,6 +183,14 @@ export function iconPath(icon: IconName) {
           <path d="M4 12h16" />
           <path d="M12 4c2 2.2 3 4.8 3 8s-1 5.8-3 8" />
           <path d="M12 4c-2 2.2-3 4.8-3 8s1 5.8 3 8" />
+        </>
+      );
+    case "guide":
+      return (
+        <>
+          <path d="M12 6c-2-1.2-4.5-1.6-7-1v12c2.5-.6 5-.2 7 1" />
+          <path d="M12 6c2-1.2 4.5-1.6 7-1v12c-2.5-.6-5-.2-7 1" />
+          <path d="M12 6v12" />
         </>
       );
   }

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { SvgIcon } from "./shared.js";
-import { GUIDE_CLOSER, GUIDE_FRAMING, GUIDE_READING, GUIDE_READING_HEADER, GUIDE_TABS, GUIDE_TIP, GUIDE_TITLE } from "./guideContent.js";
+import { GUIDE_CLOSER, GUIDE_FRAMING, GUIDE_READING, GUIDE_READING_HEADER, GUIDE_REREAD, GUIDE_TABS, GUIDE_TIP, GUIDE_TITLE } from "./guideContent.js";
 
 // The first-run welcome overlay. Lazy-loaded (see Dashboard) so it never weighs on
 // the main bundle, and rendered only while the player's introSeen flag is false.
@@ -48,6 +48,7 @@ export default function WelcomeOverlay({ onDismiss }: { onDismiss: () => void })
 
           <p className="welcome-tip">{GUIDE_TIP}</p>
           <p className="welcome-closer">{GUIDE_CLOSER}</p>
+          <p className="welcome-reread">{GUIDE_REREAD}</p>
 
           <button className="welcome-enter" type="button" onClick={onDismiss}>
             Enter Massalia

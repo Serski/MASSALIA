@@ -3692,3 +3692,54 @@
     box-shadow: 0 0 0 3px rgba(181, 138, 69, 0.5);
   }
 }
+
+/* The overlay's closing "read this again" pointer to the Guide. */
+.dashboard-shell .welcome-reread{
+  margin: 10px 0 0;
+  color: var(--dash-gold);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Sidebar Guide link — a sheet trigger, visually secondary to the six panel tabs
+   (dimmer, separated by a rule; the sidebar's space-between drops it to the foot). */
+.dashboard-shell .sidebar-guide{
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  min-height: 36px;
+  padding: 10px 11px 0;
+  color: var(--dash-stone-dim);
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+  text-align: left;
+  text-transform: uppercase;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--dash-line);
+  cursor: pointer;
+  transition: color 160ms ease;
+}
+
+.dashboard-shell .sidebar-guide:hover{
+  color: var(--dash-gold-bright);
+}
+
+/* Guide sheet body copy (the sheet reuses .welcome-tabs / .welcome-traits for its
+   icon rows and character rows; these style its plain paragraphs). */
+.dashboard-shell .guide-p{
+  margin: 0 0 12px;
+  color: var(--dash-stone);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.dashboard-shell .guide-closer{
+  margin: 16px 0 4px;
+  color: var(--dash-stone-dim);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.5;
+}

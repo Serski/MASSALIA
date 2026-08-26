@@ -14,6 +14,8 @@ const AtlasPanel = lazy(() => import("./panels/AtlasPanel.js"));
 // First-run welcome overlay: lazy so it never weighs on the main bundle (Suspense
 // fallback null — it must never block the dashboard from rendering).
 const WelcomeOverlay = lazy(() => import("./WelcomeOverlay.js"));
+// The in-game Guide sheet: lazy, loaded only when the player opens it.
+const GuideSheet = lazy(() => import("./GuideSheet.js"));
 
 type DashboardNavItem = {
   id: DashboardSection;
@@ -114,7 +116,7 @@ const panelComponents: Record<DashboardSection, LazyExoticComponent<ComponentTyp
 export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () => void; onRequireLogin: () => void; onRequireCharacter: () => void }) {
   const [activeSection, setActiveSection] = useState<DashboardSection>("court");
   const [isMoreOpen, setIsMoreOpen] = useState(false);
-  const [activeSheet, setActiveSheet] = useState<"inventory" | "character" | null>(null);
+  const [activeSheet, setActiveSheet] = useState<"inventory" | "character" | "guide" | null>(null);
   // Which Inventory tab to open on: the drachmae pill opens Economy, the inventory
   // button opens Resources (default).
   const [inventoryTab, setInventoryTab] = useState<InventoryTab>("resources");
@@ -286,6 +288,10 @@ export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () =
               </button>
             ))}
           </nav>
+          <button className="sidebar-guide" type="button" onClick={() => setActiveSheet("guide")}>
+            <SvgIcon icon="guide" />
+            Guide
+          </button>
         </aside>
 
         <section className="dashboard-content" aria-live="polite">
@@ -353,12 +359,28 @@ export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () =
                 {item.badge ? <strong className="nav-badge subtle">{item.badge}</strong> : null}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveSheet("guide");
+                setIsMoreOpen(false);
+              }}
+            >
+              <SvgIcon icon="guide" />
+              <span>Guide</span>
+            </button>
           </div>
         </div>
       ) : null}
 
       <InventorySheet open={activeSheet === "inventory"} onClose={closeSheet} player={player} initialTab={inventoryTab} />
       <CharacterSheet open={activeSheet === "character"} onClose={closeSheet} player={player} onLogout={handleLogout} onAccountDeleted={onRequireLogin} />
+
+      {activeSheet === "guide" ? (
+        <Suspense fallback={null}>
+          <GuideSheet open onClose={closeSheet} />
+        </Suspense>
+      ) : null}
 
       {player.introSeen === false && !introDismissed ? (
         <Suspense fallback={null}>
