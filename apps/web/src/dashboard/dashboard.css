@@ -1301,6 +1301,9 @@
     display: flex;
     flex-direction: column;
     gap: 14px;
+    /* The base rule's align-items: start is for the desktop grid; as a flex column
+       the children must stretch so "Your Day" spans the width like the decisions. */
+    align-items: stretch;
   }
 
   .dashboard-shell .court-rail{
