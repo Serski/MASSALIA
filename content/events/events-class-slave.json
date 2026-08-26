@@ -41,7 +41,7 @@
     ] },
   { "id": "sla-manumission-hint", "weight": 4, "requires": { "class": "slave" }, "scene": "The master, in good humor after a profitable season, muses aloud about your price and the temple registry.",
     "choices": [
-      { "id": "press", "label": "Name your saved peculium then and there", "tags": ["claim_office", "rash_act"], "effects": [{ "type": "change_drachmae", "amount": -50 }, { "type": "change_trait", "traitId": "freedman", "operation": "add" }, { "type": "change_stat", "stat": "prestige", "amount": 2 }], "resultText": "Before Artemis and two witnesses, the registry takes your name. Free. The word tastes like sea air." },
+      { "id": "press", "label": "Name your saved peculium then and there", "tags": ["claim_office", "rash_act"], "effects": [{ "type": "change_stat", "stat": "intelligence", "amount": 1 }, { "type": "change_composure", "amount": 5 }], "resultText": "The master names a price and does not laugh when you say you will meet it. Fifty drachmae, and the registry will take your name — the saving is yours to do." },
       { "id": "patient", "label": "Smile, serve well, let the idea ripen", "tags": ["wait", "patient"], "effects": [{ "type": "change_drachmae", "amount": 10 }, { "type": "change_stat", "stat": "intelligence", "amount": 1 }], "resultText": "Push a master and he remembers owning you. Wait, and he remembers liking you. The jar grows." }
     ] },
   { "id": "sla-tutor-notice", "weight": 5, "requires": { "class": "slave" }, "scene": "The children's hired tutor notices you mouthing the lesson's Greek verses from the doorway.",
