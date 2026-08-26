@@ -18,13 +18,17 @@ export type RoutineEffect =
   | { type: "change_stat"; stat: keyof CharacterStats; amount: number }
   | { type: "change_composure"; amount: number }
   | { type: "change_drachmae"; amount: number }
-  | { type: "change_party_favor"; party: "palaioi" | "dynatoi"; amount: number };
+  | { type: "change_party_favor"; party: "palaioi" | "dynatoi"; amount: number }
+  // Grant/remove a trait — shaped identically to the event engine's change_trait so
+  // content authors use one vocabulary. Applied via the shared trait service.
+  | { type: "change_trait"; traitId: string; operation: "add" | "remove"; characterId?: string };
 
 const routineEffectSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("change_stat"), stat: statName, amount: z.number() }),
   z.object({ type: z.literal("change_composure"), amount: z.number() }),
   z.object({ type: z.literal("change_drachmae"), amount: z.number() }),
   z.object({ type: z.literal("change_party_favor"), party: z.enum(["palaioi", "dynatoi"]), amount: z.number() }),
+  z.object({ type: z.literal("change_trait"), traitId: z.string(), operation: z.enum(["add", "remove"]), characterId: z.string().optional() }),
 ]);
 
 // Per-class flavour: scale the card's own effect amounts / ladder XP, add a flat
@@ -157,7 +161,10 @@ export function applyClassMods(card: RoutineCard, classId: string, config: Routi
   const scaled: RoutineEffect[] =
     amountMult === 1
       ? card.effects.map((effect) => ({ ...effect }))
-      : card.effects.map((effect) => ({ ...effect, amount: roundHalfUp(effect.amount * amountMult) }));
+      : card.effects.map((effect) =>
+          // change_trait carries no amount to scale; pass it through untouched.
+          "amount" in effect ? { ...effect, amount: roundHalfUp(effect.amount * amountMult) } : { ...effect },
+        );
 
   const extra = (mod?.extra ?? []).map((effect) => ({ ...effect }));
   const ladderXp = roundHalfUp((card.ladderXp ?? 0) * xpMult);

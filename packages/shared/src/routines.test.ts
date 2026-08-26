@@ -103,8 +103,9 @@ describe("applyClassMods", () => {
     // hoplite gymnasium: +1 -> classMods 1.5 -> +2, then growthMultiplier applies.
     const scaled = applyClassMods(gymnasium, "hoplite", config).effects[0]!;
     expect(scaled).toEqual({ type: "change_stat", stat: "militia", amount: 2 });
-    expect(applyStatGrowth(scaled.amount, 1.0)).toBe(2); // neutral growth
-    expect(applyStatGrowth(scaled.amount, 1.5)).toBe(3); // round(2 * 1.5)
+    const amount = scaled.type === "change_stat" ? scaled.amount : NaN;
+    expect(applyStatGrowth(amount, 1.0)).toBe(2); // neutral growth
+    expect(applyStatGrowth(amount, 1.5)).toBe(3); // round(2 * 1.5)
   });
 
   it("rounds scaled amounts half up", () => {

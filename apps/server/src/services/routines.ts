@@ -20,13 +20,14 @@ import {
   type ChoiceCost,
   type CharacterStats,
   type RoutineCard,
+  type RoutineEffect,
   type RoutinesConfig,
   type Trait,
 } from "@massalia/shared";
 import { applyComposureDelta, getComposureConfig, recoverComposure } from "./composure.js";
 import { getAgeConfig } from "./age.js";
 import { livingSpouseState } from "./family.js";
-import { addTrait, getHeldTraits, removeTrait, TraitRuleError } from "./traits.js";
+import { addTrait, applyChangeTrait, getHeldTraits, removeTrait, TraitRuleError } from "./traits.js";
 import { utcDayString } from "./dailyDecisions.js";
 import { eligibleForCampaign, grantCampaignFavor } from "./elections.js";
 import { consumeRoutineRequirement } from "./buildings.js";
@@ -120,7 +121,7 @@ function signed(amount: number): string {
 }
 
 // Cost chips for a final (post-classMods, post-growth) effect list.
-function costChips(effects: { type: string; stat?: keyof CharacterStats; amount: number; party?: string }[]): ChoiceCost[] {
+function costChips(effects: RoutineEffect[]): ChoiceCost[] {
   const chips: ChoiceCost[] = [];
   for (const effect of effects) {
     if (effect.type === "change_stat" && effect.stat) {
@@ -375,6 +376,19 @@ export async function resolveRoutine(row: CharacterRow, routineId: string, now: 
     }
     await tx.insert(dailyRoutines).values({ characterId: row.id, utcDay, routineId: card.id });
   });
+
+  // change_trait effects run through the shared trait service AFTER the tx — the same
+  // path (and post-tx placement) the event engine and the ladder grant below use, since
+  // applyChangeTrait is not tx-bound. addTrait is idempotent, so a repeat pick no-ops.
+  for (const effect of penalizedEffects) {
+    if (effect.type !== "change_trait") continue;
+    try {
+      await applyChangeTrait(effect.characterId ?? row.id, effect.traitId, effect.operation);
+    } catch (error) {
+      if (!(error instanceof TraitRuleError)) throw error;
+      console.warn(`routine change_trait skipped (${error.reason}): ${error.message}`);
+    }
+  }
 
   // Composure via the break-aware service + audit log (same as event resolution).
   const composure = await applyComposureDelta(row.id, composureDelta, `routine:${card.id}`, now);
