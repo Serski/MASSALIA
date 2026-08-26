@@ -45,6 +45,17 @@ function campaignCard(): RoutineCard | null {
   return getRoutineCards().find((card) => card.pool === CAMPAIGN_POOL) ?? null;
 }
 
+// The buy-freedom card sits in the slave pool but must vanish once the slave is freed
+// — a freedman has no freedom left to buy. Inverse of the campaign off-pool conditional:
+// an in-pool card conditionally FILTERED OUT. (Non-slave classes never reach the slave
+// pool via routing, so no class check is needed here.)
+const BUY_FREEDOM_ID = "routine-buy-freedom";
+
+export function withoutClaimedFreedom(cards: RoutineCard[], heldTraitIds: string[]): RoutineCard[] {
+  if (!heldTraitIds.includes("freedman")) return cards;
+  return cards.filter((card) => card.id !== BUY_FREEDOM_ID);
+}
+
 // The campaign card a declared candidate may pick today (appended to their pool),
 // or null when they are not standing in an active election.
 export async function campaignCardFor(characterId: string): Promise<RoutineCard | null> {
@@ -243,10 +254,13 @@ export type RoutineResolution =
 // penalty on stat/drachmae/ladder XP (not composure).
 export async function resolveRoutine(row: CharacterRow, routineId: string, now: Date = new Date()): Promise<RoutineResolution> {
   const cfg = getRoutinesConfig();
+  // Held traits gate which pool cards are offered (the buy-freedom card drops once
+  // freed) AND feed the composure attribution below — read once, reused.
+  const held = await getHeldTraits(row.id);
   // Source pool: the abroad contract pool while sworn, else the home class pool
   // (Step 3). This also VALIDATES the pick belongs to the currently-active pool —
   // a home card can't be submitted while abroad and vice versa.
-  const pool = activePoolCards(row);
+  const pool = withoutClaimedFreedom(activePoolCards(row), held.map((trait) => trait.id));
   let card = pool.find((candidate) => candidate.id === routineId);
   // The campaign card is off-pool: allow it only for a declared candidate AT HOME.
   // Abroad characters are not candidates, so the two overrides never collide.
@@ -301,7 +315,7 @@ export async function resolveRoutine(row: CharacterRow, routineId: string, now: 
   const penalizedLadderXp = roundHalfUp(resolved.ladderXp * penalty);
 
   // Combined composure delta (tag pipeline + explicit change_composure + classMods bonus).
-  const traits = await getHeldTraits(row.id);
+  const traits = held; // held traits read once at the top; unchanged by the steps between.
   // The apply path resolves the spouse itself (same helper the preview route uses,
   // so the two never disagree about whether she is alive). Her state is in hand for
   // both composure attribution AND the daily philia coupling — no extra query.

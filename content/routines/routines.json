@@ -1485,5 +1485,29 @@
         "amount": 1
       }
     ]
+  },
+  {
+    "id": "routine-buy-freedom",
+    "pool": "slave",
+    "label": "Buy your freedom",
+    "scene": "Fifty drachmae of peculium, counted out before the temple registry. The price of a name that is your own.",
+    "tags": [
+      "labor"
+    ],
+    "effects": [
+      {
+        "type": "change_trait",
+        "traitId": "freedman",
+        "operation": "add"
+      },
+      {
+        "type": "change_stat",
+        "stat": "prestige",
+        "amount": 2
+      }
+    ],
+    "requires": {
+      "fee": 50
+    }
   }
 ]

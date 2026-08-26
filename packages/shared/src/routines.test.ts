@@ -183,11 +183,11 @@ describe("pool routing + content parsing", () => {
     const configJson = JSON.parse(readFileSync(resolve(root, "content/routines/routines-config.json"), "utf8"));
     const cards = parseRoutineFile(routinesJson);
     const cfg = parseRoutinesConfig(configJson);
-    // 19 home/off-pool cards + 50 mercenary abroad cards (Hoplite Step 3).
-    expect(cards).toHaveLength(69);
+    // 20 home/off-pool cards + 50 mercenary abroad cards (Hoplite Step 3).
+    expect(cards).toHaveLength(70);
     expect(routinesForClass(cards, "trader", cfg)).toHaveLength(11); // citizen pool
     expect(routinesForClass(cards, "hetaira", cfg)).toHaveLength(6);
-    expect(routinesForClass(cards, "slave", cfg)).toHaveLength(1);
+    expect(routinesForClass(cards, "slave", cfg)).toHaveLength(2);
     expect(cards.filter((c) => c.pool === "campaign")).toHaveLength(1);
     // The five abroad pools, 10 cards each, all ids unique.
     for (const pool of ["merc-trade-ship", "merc-gaul-caravan", "merc-syracuse", "merc-carthage", "merc-ptolemy"]) {

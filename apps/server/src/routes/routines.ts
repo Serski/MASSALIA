@@ -17,6 +17,7 @@ import {
   ladderStates,
   previewRoutine,
   resolveRoutine,
+  withoutClaimedFreedom,
 } from "../services/routines.js";
 
 const db = createDb();
@@ -49,7 +50,8 @@ export async function routineRoutes(app: FastifyInstance) {
     const spouseTraits = (await livingSpouseState(acting.row, now))?.personalityTraits ?? [];
     const owned = await ownedBuildingIds(acting.row.playerId);
     // Source pool: the abroad contract pool while sworn, else the home class pool.
-    const pool = activePoolCards(acting.row);
+    // The buy-freedom card drops once the slave is freed (held-traits gate).
+    const pool = withoutClaimedFreedom(activePoolCards(acting.row), traits.map((trait) => trait.id));
     // The campaign card is surfaced to declared candidates AT HOME only (an abroad
     // character is never a candidate, so the two off-pool overrides never collide).
     const campaign = acting.row.contractId ? null : await campaignCardFor(acting.row.id);
