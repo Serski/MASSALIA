@@ -305,8 +305,10 @@
   top: 76px;
   display: grid;
   height: calc(100vh - 76px);
-  align-content: space-between;
-  gap: 20px;
+  /* Rows pack at the top so the Guide link sits directly under the nav (Atlas),
+     not pushed to the sidebar's foot. */
+  align-content: start;
+  gap: 8px;
   padding: 18px 14px;
   background: rgba(14, 9, 7, 0.72);
   border-right: 1px solid rgba(181, 138, 69, 0.26);
