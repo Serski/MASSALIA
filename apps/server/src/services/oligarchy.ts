@@ -138,6 +138,9 @@ export interface ChamberSeatView {
   // party (independent-grey when party is 'none'); null for empty seats.
   party: SeatParty | null;
   holderName: string | null;
+  // The player character holding this seat (its public profile key) — null for
+  // NPC and empty seats. Lets the hemicycle open a held seat's public profile.
+  characterId: string | null;
 }
 
 export interface ChamberView {
@@ -192,17 +195,17 @@ export async function chamberView(row: CharacterRow): Promise<ChamberView> {
     if (seat.holderType === "npc") {
       const party = (seat.npcParty ?? "independent") as SeatParty;
       composition.npc[party]++;
-      return { seatIndex: seat.seatIndex, holderType: "npc", party, holderName: null };
+      return { seatIndex: seat.seatIndex, holderType: "npc", party, holderName: null, characterId: null };
     }
     if (seat.holderType === "player") {
       const party = playerSeatParty(seat.holderParty);
       composition.players[party]++;
       composition.playersTotal++;
       if (seat.characterId === row.id) yourSeat = seat.seatIndex;
-      return { seatIndex: seat.seatIndex, holderType: "player", party, holderName: seat.holderName };
+      return { seatIndex: seat.seatIndex, holderType: "player", party, holderName: seat.holderName, characterId: seat.characterId };
     }
     composition.empty++;
-    return { seatIndex: seat.seatIndex, holderType: "empty", party: null, holderName: null };
+    return { seatIndex: seat.seatIndex, holderType: "empty", party: null, holderName: null, characterId: null };
   });
 
   let reason: string | null = null;

@@ -206,6 +206,12 @@ export const playerCharacters = pgTable("player_characters", {
   // Hoplite Step 5: true if the character is, or ever was, a hoplite. Set at
   // creation-as-hoplite and PRESERVED through re-class — the veteran Strategos signal.
   wasHoplite: boolean("was_hoplite").notNull().default(false),
+  // Spymaster posture (Interaction Pipeline Prompt 4): 'guard' (flat defense on both
+  // hidden channels) | 'hunt' (flat bonus to own hostile attempts). Meaningful only
+  // while a spymaster is retained; persists across hire/dismiss and rides succession.
+  // The changed-at anchor gates the one-switch-per-season cooldown (NULL = never set).
+  spymasterPosture: text("spymaster_posture").notNull().default("guard"),
+  spymasterPostureChangedAt: timestamp("spymaster_posture_changed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   oneCharacterPerPlayerWorld: uniqueIndex("player_characters_player_world_idx").on(table.playerId, table.worldId),
@@ -931,4 +937,23 @@ export const storyProgress = pgTable("story_progress", {
   completedAt: timestamp("completed_at", { withTimezone: true }),
 }, (table) => ({
   oneRunPerCharacter: uniqueIndex("story_progress_character_story_idx").on(table.characterId, table.storyId),
+}));
+
+// --- Player→player interactions (Interaction Pipeline, Prompt 1) -------------
+// Created by the hand-written SQL migration 0043; this def mirrors the LIVE table
+// for typed access (the migration is the source of truth). The append-only ledger
+// every player-to-player action rides. No status column: Prompt 1 actions (give)
+// resolve instantly; contested resolution (poison, assassination) will store its
+// outcome inside `payload`.
+export const interactions = pgTable("interactions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  actorCharacterId: uuid("actor_character_id").references(() => playerCharacters.id).notNull(),
+  targetCharacterId: uuid("target_character_id").references(() => playerCharacters.id).notNull(),
+  type: text("type").notNull(),
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  byTarget: index("interactions_target_idx").on(table.targetCharacterId, table.createdAt),
+  byActor: index("interactions_actor_idx").on(table.actorCharacterId, table.createdAt),
 }));

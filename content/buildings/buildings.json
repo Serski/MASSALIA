@@ -419,6 +419,14 @@
     }
   ],
   "vendor": {
+    "poison": {
+      "sell": 120,
+      "buy": 40
+    },
+    "remedy": {
+      "sell": 40,
+      "buy": 15
+    },
     "chicken": {
       "sell": 3,
       "buy": 1
@@ -499,6 +507,8 @@
   "seasonal": {
     "newPlayerGuardDays": 3,
     "goodCategory": {
+      "poison": "yearround",
+      "remedy": "yearround",
       "grain": "agricultural",
       "oliveoil": "agricultural",
       "wine": "agricultural",
@@ -585,6 +595,8 @@
     "oliveoil": "Olive Oil",
     "naval-supplies": "Naval Supplies",
     "trade-ship": "Trade Ship",
-    "galley": "Galley"
+    "galley": "Galley",
+    "poison": "Poison",
+    "remedy": "Remedy"
   }
 }

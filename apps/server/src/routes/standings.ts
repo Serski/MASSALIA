@@ -17,6 +17,9 @@ export const STANDINGS_BOARDS: StandingsBoard[] = ["prestige", "wealth", "devoti
 // never copied into the response (rank position is all the client ever sees).
 export type StandingsInput = {
   playerId: string;
+  // The player's character (dynasty slot) id — the public-profile key. Null for a
+  // legacy player with no character row yet (they rank with zeroed stats).
+  characterId: string | null;
   name: string;
   house: string;
   classId: string;
@@ -31,6 +34,8 @@ export type StandingsInput = {
 export type StandingRow = {
   rank: number;
   playerId: string;
+  // The public-profile key — null for a legacy player with no character row.
+  characterId: string | null;
   name: string;
   house: string;
   classId: string;
@@ -58,6 +63,7 @@ export function rankStandings(roster: StandingsInput[], viewerPlayerId: string |
     boards[board] = sorted.map((p, index) => ({
       rank: index + 1,
       playerId: p.playerId,
+      characterId: p.characterId,
       name: p.name,
       house: p.house,
       classId: p.classId,
@@ -99,6 +105,7 @@ export async function standingsRoutes(app: FastifyInstance) {
         houseSlug: players.houseSlug,
         houseName: houses.name,
         createdAt: players.createdAt,
+        characterId: playerCharacters.id,
         classId: playerCharacters.classId,
         prestige: playerCharacters.prestige,
         drachmae: playerCharacters.drachmae,
@@ -113,6 +120,7 @@ export async function standingsRoutes(app: FastifyInstance) {
 
     const roster: StandingsInput[] = rows.map((r) => ({
       playerId: r.playerId,
+      characterId: r.characterId ?? null,
       name: r.name,
       house: r.houseName ?? r.houseSlug ?? "—",
       classId: r.classId ?? "",

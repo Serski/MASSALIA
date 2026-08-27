@@ -26,7 +26,20 @@ export type ChronicleType =
   | "tragedy_medea"
   // Pack: the adoption rite — an in-life adopted heir, dated at the candidate's
   // consumedAt. One flat line in the web register.
-  | "adoption";
+  | "adoption"
+  // Interaction Pipeline (Prompt 1): drachmae received from another player, dated
+  // at the gift instant. One flat line in the web register.
+  | "gift_received"
+  // Interaction Pipeline (Prompt 2): the poison channel. Hostile actions are
+  // anonymous — no actor name. Illness is recorded (a physician may yet cure it);
+  // a successful treatment is recorded too. Poison DEATH produces no chronicle line
+  // (the succession flow is the announcement), and failures leave no record at all.
+  | "poison_illness"
+  | "venom_purged"
+  // Interaction Pipeline (Prompt 3): a FAILED assassination attempt (target-visible,
+  // anonymous). A successful assassination produces no chronicle line — the
+  // succession flow is the announcement, same as a poison death.
+  | "assassination_survived";
 
 export type ChronicleEntry = {
   // Sort key, from gameDate(timestamp, startedMs).seasonIndex.
@@ -103,6 +116,12 @@ export type ChronicleInput = {
   // per slot today — adoptedCandidateId holds only the standing heir (ruling B/C).
   // Optional: a new input the pre-existing chronicle fixtures need not supply.
   adoptions?: ChronicleAdoptionRow[];
+  // Interaction Pipeline (Prompt 1): drachmae this dynasty RECEIVED from other
+  // players. Optional — pre-existing fixtures need not supply it.
+  gifts?: ChronicleGiftRow[];
+  // Interaction Pipeline (Prompt 2): poison illness onsets + cures for this
+  // character. Optional — pre-existing fixtures need not supply it.
+  afflictions?: ChronicleAfflictionRow[];
 };
 
 export type ChronicleAdoptionRow = {
@@ -110,6 +129,22 @@ export type ChronicleAdoptionRow = {
   adoptedAt: number;
   heirName: string;
   houseName: string;
+};
+
+export type ChronicleGiftRow = {
+  id: string;
+  sentAt: number;
+  actorName: string;
+  houseName: string;
+  amount: number;
+};
+
+// Poison-channel entries the character sees: an illness onset or a cure. Anonymous
+// (no actor) by design; `kind` selects the chronicle type. `at` is the event instant.
+export type ChronicleAfflictionRow = {
+  id: string;
+  at: number;
+  kind: "poison_illness" | "venom_purged" | "assassination_survived";
 };
 
 // Deterministic tiebreak when several events land in the same season.
@@ -124,6 +159,10 @@ const TYPE_ORDER: Record<ChronicleType, number> = {
   tragedy_clytemnestra: 7,
   tragedy_medea: 8,
   adoption: 9,
+  gift_received: 10,
+  poison_illness: 11,
+  venom_purged: 12,
+  assassination_survived: 13,
 };
 
 // generation = 1 + (boundaries that occurred at or before the event). An event at
@@ -197,6 +236,12 @@ export function buildChronicle(input: ChronicleInput): ChronicleEntry[] {
   }
   for (const a of input.adoptions ?? []) {
     staged.push(stage(a.id, a.adoptedAt, "adoption", { heirName: a.heirName, houseName: a.houseName }, input));
+  }
+  for (const g of input.gifts ?? []) {
+    staged.push(stage(g.id, g.sentAt, "gift_received", { actorName: g.actorName, houseName: g.houseName, amount: g.amount }, input));
+  }
+  for (const a of input.afflictions ?? []) {
+    staged.push(stage(a.id, a.at, a.kind, {}, input));
   }
 
   staged.sort(

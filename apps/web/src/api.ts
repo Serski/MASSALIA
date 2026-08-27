@@ -226,7 +226,11 @@ export type ChronicleType =
   | "tragedy_phaedra"
   | "tragedy_clytemnestra"
   | "tragedy_medea"
-  | "adoption";
+  | "adoption"
+  | "gift_received"
+  | "poison_illness"
+  | "venom_purged"
+  | "assassination_survived";
 
 export type ChronicleEntry = {
   seasonIndex: number;
@@ -410,6 +414,18 @@ export const api = {
     apiFetch<{ ok: true }>("/api/offices/appoint-strategos", { method: "POST", body: { candidateCharacterId } }),
   // Player Standings (Atlas Phase 1): five rank-only leaderboards for the world.
   standings: () => apiFetch<StandingsResponse>("/api/standings"),
+  // Player→player interactions (Interaction Pipeline, Prompt 1): the public
+  // profile behind a hemicycle seat / standings row, and the give-drachmae action.
+  publicProfile: (characterId: string) => apiFetch<PublicProfileView>(`/api/interactions/profile/${characterId}`),
+  giveDrachmae: (targetCharacterId: string, amount: number) =>
+    apiFetch<{ ok: true; amount: number; wallet: number }>("/api/interactions/give", { method: "POST", body: { targetCharacterId, amount } }),
+  poison: (targetCharacterId: string) =>
+    apiFetch<{ ok: true; outcome: PoisonOutcome }>("/api/interactions/poison", { method: "POST", body: { targetCharacterId } }),
+  assassinate: (targetCharacterId: string) =>
+    apiFetch<{ ok: true; outcome: AssassinateOutcome }>("/api/interactions/assassinate", { method: "POST", body: { targetCharacterId } }),
+  treat: () => apiFetch<{ ok: true }>("/api/interactions/treat", { method: "POST" }),
+  setSpymasterPosture: (posture: "guard" | "hunt") =>
+    apiFetch<{ ok: true; posture: string }>("/api/interactions/spymaster-posture", { method: "POST", body: { posture } }),
   // Atlas Phase 2a: the nine League colonies (with five stats each) and the
   // nineteen neighbouring factions (stance + vassal). Static seeded values.
   leagueCities: () => apiFetch<LeagueCitiesResponse>("/api/league/cities"),
@@ -568,6 +584,8 @@ export type StandingsBoard = "prestige" | "wealth" | "devotion" | "militia" | "i
 export type StandingRow = {
   rank: number;
   playerId: string;
+  // The public-profile key — null for a legacy player with no character row.
+  characterId: string | null;
   name: string;
   house: string;
   classId: string;
@@ -654,6 +672,9 @@ export type ChamberSeat = {
   // (independent-grey when party is 'none'); null for empty seats.
   party: SeatParty | null;
   holderName: string | null;
+  // The player character holding this seat (its public-profile key); null for NPC
+  // and empty seats. Lets the hemicycle open a held seat's public profile.
+  characterId: string | null;
 };
 
 export type ChamberView = {
@@ -668,6 +689,40 @@ export type ChamberView = {
   };
   you: { holdsSeat: boolean; seatIndex: number | null; canBuy: boolean; reason: string | null };
 };
+
+// --- Player→player interactions (Interaction Pipeline, Prompt 1) -------------
+
+// A public character profile — public facts only (no raw sheet; standings stay
+// rank-only by design, so prestige is the one stat shown as a public signal).
+export type PublicProfileView = {
+  characterId: string;
+  name: string;
+  houseSlug: string;
+  houseName: string;
+  classId: string;
+  party: string;
+  seatIndex: number | null;
+  prestige: number;
+  isAlive: boolean;
+  // Server-computed: this profile is the viewer's own character (hides interactions).
+  isSelf: boolean;
+  viewer: {
+    isOligarch: boolean;
+    canInteract: boolean;
+    // Present when the viewer may NOT interact (give); drives the disabled-button hint.
+    lockReason: string | null;
+    // The poison action (Prompt 2): whether it's available + the visible-but-locked hint.
+    canPoison: boolean;
+    poisonLockReason: string | null;
+    // The assassinate action (Prompt 3): whether it's available + the locked hint + cost.
+    canAssassinate: boolean;
+    assassinateLockReason: string | null;
+    assassinateCost: number;
+  };
+};
+
+export type PoisonOutcome = "ill" | "dead" | "failed";
+export type AssassinateOutcome = "dead" | "failed";
 
 // PUBLIC by design — the chamber's political ledger names every voter.
 export type ChamberPublicBallot = {
@@ -1026,7 +1081,7 @@ export type CatalogTier = {
   staffing: Partial<Record<PopType, number>>;
 };
 
-export type PopType = "slave" | "freeman" | "citizen";
+export type PopType = "slave" | "freeman" | "citizen" | "physician" | "bodyguard" | "spymaster";
 export type CraftRecipe = { building: string; tier: number; recipe: Record<string, number> };
 
 export type CatalogEntry = {
@@ -1104,9 +1159,14 @@ export type BuildingsMine = {
   pops: Record<string, number>;
 };
 
+// The retained spymaster's posture + remaining switch cooldown (Prompt 4). Additive
+// on the People payload — the toggle shows only when a spymaster is owned (mine.pops).
+export type SpymasterStatus = { posture: "guard" | "hunt"; cooldownRemainingMs: number };
+
 export type PeopleView = {
   foodGood: string;
   pops: { type: PopType; label: string; dismissLabel: string; hireCost: number; sellBack: number; upkeepPerDay: number; foodPerDay: number; civic: boolean }[];
+  spymaster: SpymasterStatus;
 };
 
 export type HireResult = { ok: true; popType: string; hired: number; unitCost: number; total: number; wallet: number; owned: number };

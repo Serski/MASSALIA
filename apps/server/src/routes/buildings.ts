@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { VendorAction } from "@massalia/shared";
 import { requireAuth } from "../services/auth.js";
 import { ensureCharacterRow, getActivePlayer, getActiveWorldId, type CharacterRow } from "../services/character.js";
+import { spymasterStatus } from "../services/interactions.js";
 import {
   build,
   buildingContext,
@@ -126,9 +127,16 @@ export async function buildingRoutes(app: FastifyInstance) {
   });
 
   // The People market: list the hireable pop types + their content numbers (read).
-  app.get("/people", async (request) => {
-    await requireAuth(request);
-    return listPops();
+  // Additive: the acting character's spymaster posture + cooldown, so the People
+  // surface can render the posture toggle without a second fetch (Prompt 4).
+  app.get("/people", async (request, reply) => {
+    const user = await requireAuth(request);
+    const a = await acting(user.id);
+    if ("error" in a) {
+      reply.code(a.code);
+      return { error: a.error };
+    }
+    return { ...listPops(), spymaster: spymasterStatus(a.row) };
   });
 
   // Craft a shop good from content.craft (Phase 4). Body: { good }.

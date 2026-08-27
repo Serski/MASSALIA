@@ -997,23 +997,27 @@ export async function hirePops(ctx: ActingContext, popType: string, count: numbe
     // the pop count grows, so the unstaffed window never back-pays at the staffed
     // rate. Every marker resets to now; the future accrues at the new staffing.
     const settled = await settleAll(tx, ctx, now);
+    const existing = await tx
+      .select()
+      .from(playerPops)
+      .where(and(eq(playerPops.worldId, ctx.worldId), eq(playerPops.ownerPlayerId, ctx.playerId), eq(playerPops.popType, popType)))
+      .limit(1);
+    const already = existing[0]?.count ?? 0;
+    const owned = already + count;
+    // Retention cap (physician: max 1). Only enforced for pop types that set `max`;
+    // capped BEFORE any wallet deduction so a blocked hire costs nothing.
+    if (def.max !== undefined && owned > def.max) {
+      return { composureDays: settled.composureDays, result: { ok: false as const, code: 409, error: `You already retain a ${def.label.toLowerCase()}.` } };
+    }
     // Affordability is checked against the SETTLED wallet — income just banked, wages
     // /upkeep just debited — an honest post-settle balance (may help or hurt the hire).
     const charRows = await tx.select({ drachmae: playerCharacters.drachmae }).from(playerCharacters).where(eq(playerCharacters.playerId, ctx.playerId)).limit(1);
     const wallet = charRows[0]?.drachmae ?? 0;
     if (wallet < total) return { composureDays: settled.composureDays, result: { ok: false as const, code: 402, error: `Hiring ${count} ${popType} costs ${total} drachmae — you have ${wallet}.` } };
     await tx.update(playerCharacters).set({ drachmae: wallet - total }).where(eq(playerCharacters.playerId, ctx.playerId));
-    const existing = await tx
-      .select()
-      .from(playerPops)
-      .where(and(eq(playerPops.worldId, ctx.worldId), eq(playerPops.ownerPlayerId, ctx.playerId), eq(playerPops.popType, popType)))
-      .limit(1);
-    let owned: number;
     if (existing[0]) {
-      owned = existing[0].count + count;
       await tx.update(playerPops).set({ count: owned }).where(eq(playerPops.id, existing[0].id));
     } else {
-      owned = count;
       await tx.insert(playerPops).values({ worldId: ctx.worldId, ownerPlayerId: ctx.playerId, popType, count });
     }
     return { composureDays: settled.composureDays, result: { ok: true as const, popType, hired: count, unitCost: def.hireCost, total, wallet: wallet - total, owned } };
@@ -1021,6 +1025,21 @@ export async function hirePops(ctx: ActingContext, popType: string, count: numbe
   // Apply banked shrine composure after the tx, break-aware — exactly as collect does.
   if (outcome.composureDays > 0) await applyComposureDelta(await characterIdFor(ctx.playerId), outcome.composureDays, "building:shrine", now);
   return outcome.result;
+}
+
+// A player's SETTLED pop count: checkpoints the economy first (the exact hire/dismiss
+// discipline — settleAll before reading player_pops), then reads the count. The
+// poison channel reads the target's physician count through this, never a raw
+// unsettled read. Shrine composure banked by the settle is applied after the tx,
+// break-aware, exactly as hire/collect do.
+export async function settledPopCount(ctx: ActingContext, popType: string, now: Date): Promise<number> {
+  const outcome = await db.transaction(async (tx) => {
+    const settled = await settleAll(tx, ctx, now);
+    const counts = await popCountsFor(tx, ctx.playerId);
+    return { composureDays: settled.composureDays, count: counts[popType] ?? 0 };
+  });
+  if (outcome.composureDays > 0) await applyComposureDelta(await characterIdFor(ctx.playerId), outcome.composureDays, "building:shrine", now);
+  return outcome.count;
 }
 
 // --- Dismiss / disband (POST /api/buildings/dismiss) -------------------------

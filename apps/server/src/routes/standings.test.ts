@@ -6,6 +6,7 @@ import { rankStandings, STANDINGS_BOARDS, type StandingsInput } from "./standing
 function player(over: Partial<StandingsInput> & { playerId: string }): StandingsInput {
   return {
     name: over.playerId,
+    characterId: null,
     house: "Xanthippos",
     classId: "trader",
     isUnfree: false,
@@ -83,6 +84,8 @@ describe("rankStandings", () => {
   it("never leaks a raw stat value into the response rows", () => {
     const roster = [player({ playerId: "a", metrics: { prestige: 42, wealth: 77, devotion: 13, militia: 8, intelligence: 5 } })];
     const row = rankStandings(roster, "a").boards.prestige[0]!;
-    expect(Object.keys(row).sort()).toEqual(["classId", "house", "isViewer", "name", "playerId", "rank"]);
+    // characterId is a public-profile key (not a stat), so it may appear; the guard
+    // is that no raw metric value (prestige/wealth/…) leaks into a row.
+    expect(Object.keys(row).sort()).toEqual(["characterId", "classId", "house", "isViewer", "name", "playerId", "rank"]);
   });
 });

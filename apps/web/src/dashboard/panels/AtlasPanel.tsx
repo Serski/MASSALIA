@@ -3,6 +3,7 @@ import { api, ApiError, type StandingsResponse, type StandingsBoard, type Standi
 import { MapCanvas } from "../../map/MapCanvas.js";
 import { AssetIcon, DashboardCard, HouseCrest, StatPips, titleCase } from "../shared.js";
 import { BottomSheet } from "../sheets.js";
+import { PublicProfile, type ProfileTarget } from "../PublicProfile.js";
 
 // Standings board → stat icon. "wealth" has no icon asset (a coin glyph stands in).
 const STAT_ICON: Partial<Record<StandingsBoard, string>> = {
@@ -69,9 +70,16 @@ const standingsPagerStyle: CSSProperties = {
   color: "var(--dash-stone)",
 };
 
-function StandingsRowItem({ row }: { row: StandingRow }) {
+function StandingsRowItem({ row, onOpen }: { row: StandingRow; onOpen: (row: StandingRow) => void }) {
+  // A row opens the citizen's public profile — only when the player has a character
+  // row (a legacy player with no sheet has no profile to open).
+  const clickable = row.characterId !== null;
   return (
-    <li className="atlas-row" style={row.isViewer ? standingsViewerRowStyle : standingsRowStyle}>
+    <li
+      className={`atlas-row${clickable ? " atlas-row-clickable" : ""}`}
+      style={row.isViewer ? standingsViewerRowStyle : standingsRowStyle}
+      onClick={clickable ? () => onOpen(row) : undefined}
+    >
       <span style={standingsRankStyle}>#{row.rank}</span>
       <span style={standingsNameStyle}>
         <HouseCrest house={row.house} />
@@ -91,6 +99,10 @@ function StandingsView() {
   const [error, setError] = useState("");
   const [board, setBoard] = useState<StandingsBoard>("prestige");
   const [page, setPage] = useState(0);
+  const [profileTarget, setProfileTarget] = useState<ProfileTarget | null>(null);
+  const openProfile = (row: StandingRow) => {
+    if (row.characterId) setProfileTarget({ characterId: row.characterId, isSelf: row.isViewer });
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -164,13 +176,13 @@ function StandingsView() {
         ) : (
           <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {pageRows.map((row) => (
-              <StandingsRowItem key={row.playerId} row={row} />
+              <StandingsRowItem key={row.playerId} row={row} onOpen={openProfile} />
             ))}
           </ol>
         )}
         {viewerRow && !viewerOnPage ? (
           <ol style={{ listStyle: "none", margin: "8px 0 0", padding: 0 }}>
-            <StandingsRowItem row={viewerRow} />
+            <StandingsRowItem row={viewerRow} onOpen={openProfile} />
           </ol>
         ) : null}
       </DashboardCard>
@@ -188,6 +200,7 @@ function StandingsView() {
           </button>
         </div>
       ) : null}
+      <PublicProfile target={profileTarget} onClose={() => setProfileTarget(null)} />
     </>
   );
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type BuildingsCatalog, type BuildingsMine, type VendorPrice, type PeopleView } from "../../api.js";
 import { assetPath } from "../../data/league.js";
-import { GOOD_ICON, PanelBanner, type PanelProps, PanelRow, PopGlyph, QtyStepper } from "../shared.js";
+import { formatDuration, GOOD_ICON, PanelBanner, type PanelProps, PanelRow, PopGlyph, QtyStepper } from "../shared.js";
 import { SheetTabs } from "../sheets.js";
 
 // Display-only grouping for the agora. The goods LIST is derived from the vendor
@@ -108,6 +108,52 @@ function GoodsMarketRow({
           </button>
           <button type="button" className={btnClass("panel-btn", `buy:${price.good}`, busy, busyKey)} disabled={busy} onClick={() => onBuy(qty)}>
             Buy {qty} · {price.buy * qty}dr
+          </button>
+        </span>
+      }
+    />
+  );
+}
+
+// The retained spymaster's posture indicator + toggle (Prompt 4). Only rendered when
+// a spymaster is owned. During the one-switch-per-season cooldown both buttons are
+// disabled and the remaining time is shown; the current posture's button is disabled
+// too (re-setting it would be a no-op). Failed switches surface the server string.
+function SpymasterPostureControl({
+  status,
+  busy,
+  busyKey,
+  onSwitch,
+}: {
+  status: PeopleView["spymaster"];
+  busy: boolean;
+  busyKey: string | null;
+  onSwitch: (posture: "guard" | "hunt") => void;
+}) {
+  const onCooldown = status.cooldownRemainingMs > 0;
+  const cooldownLabel = formatDuration(Math.ceil(status.cooldownRemainingMs / 1000));
+  return (
+    <PanelRow
+      icon={<PopGlyph type="spymaster" />}
+      title={`Spymaster posture · ${status.posture === "guard" ? "Guarding the house" : "Hunting for openings"}`}
+      sub={onCooldown ? `Your spymaster needs a season to redirect his web — ${cooldownLabel} left.` : "Guard both hidden channels, or hunt for openings in your own attempts (one switch per season)."}
+      action={
+        <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className={btnClass("panel-btn", "posture:guard", busy, busyKey, onCooldown || status.posture === "guard")}
+            disabled={busy || onCooldown || status.posture === "guard"}
+            onClick={() => onSwitch("guard")}
+          >
+            Guard the house
+          </button>
+          <button
+            type="button"
+            className={btnClass("panel-btn", "posture:hunt", busy, busyKey, onCooldown || status.posture === "hunt")}
+            disabled={busy || onCooldown || status.posture === "hunt"}
+            onClick={() => onSwitch("hunt")}
+          >
+            Hunt for openings
           </button>
         </span>
       }
@@ -241,6 +287,23 @@ export default function MarketPanel({ onRefresh }: PanelProps) {
               />
             ))}
           </div>
+          {(mine.pops.spymaster ?? 0) >= 1 ? (
+            <>
+              <div className="panel-label">Your spy network</div>
+              <SpymasterPostureControl
+                status={people.spymaster}
+                busy={busy}
+                busyKey={busyKey}
+                onSwitch={(posture) =>
+                  act(
+                    `posture:${posture}`,
+                    () => api.setSpymasterPosture(posture),
+                    posture === "guard" ? "Your spymaster turns to guarding the house." : "Your spymaster turns to hunting for openings.",
+                  )
+                }
+              />
+            </>
+          ) : null}
           <p className="dashboard-todo">“People” are contract hires — guards, tutors, hands for your trade. Never persons as property.</p>
         </>
       )}

@@ -779,6 +779,10 @@ const chronicleRenderers: Record<ChronicleEntry["type"], (payload: Record<string
   tragedy_clytemnestra: (p) => `${p.spouseName} made an attempt on his life.`,
   tragedy_medea: (p) => `${p.spouseName} killed their children and herself.`,
   adoption: (p) => `Adopted ${p.heirName} of House ${p.houseName} as heir.`,
+  gift_received: (p) => `${p.actorName} of House ${p.houseName} sent ${Number(p.amount).toLocaleString()} drachmae.`,
+  poison_illness: () => "You have fallen gravely ill — a physician may yet purge the venom.",
+  venom_purged: () => "The venom is purged; your strength returns.",
+  assassination_survived: () => "A blade meant for you was turned aside in the dark.",
 };
 
 function renderChronicleEntry(entry: ChronicleEntry): string {

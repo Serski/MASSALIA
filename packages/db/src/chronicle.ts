@@ -2,10 +2,12 @@ import { and, eq, inArray, notInArray } from "drizzle-orm";
 import {
   buildChronicle,
   OLYMPIAD_GAMES_FESTIVAL_ID,
+  type ChronicleAfflictionRow,
   type ChronicleEntry,
   type ChronicleInput,
 } from "@massalia/shared";
 import { createDb } from "./client.js";
+import { alias } from "drizzle-orm/pg-core";
 import {
   children,
   familyCandidates,
@@ -13,8 +15,10 @@ import {
   festivalDonations,
   festivalEvents,
   houses,
+  interactions,
   marriages,
   olympicCandidates,
+  players,
   playerCharacters,
   successions,
 } from "./schema.js";
@@ -179,6 +183,54 @@ export async function gatherChronicleForCharacter(characterId: string): Promise<
     }));
   }
 
+  // Interaction Pipeline (Prompt 1): drachmae this slot RECEIVED from other
+  // players. The actor's display name + house come from the players join (the
+  // same pattern chamberView uses: player_characters → players for the name).
+  const actorCharacters = alias(playerCharacters, "actor_characters");
+  const giftRows = await db
+    .select({
+      id: interactions.id,
+      createdAt: interactions.createdAt,
+      payload: interactions.payload,
+      actorName: players.name,
+      houseName: houses.name,
+    })
+    .from(interactions)
+    .innerJoin(actorCharacters, eq(actorCharacters.id, interactions.actorCharacterId))
+    .innerJoin(players, eq(players.id, actorCharacters.playerId))
+    .leftJoin(houses, eq(houses.slug, actorCharacters.houseSlug))
+    .where(and(eq(interactions.targetCharacterId, slot.id), eq(interactions.type, "give")));
+
+  const gifts = giftRows.map((row) => ({
+    id: row.id,
+    sentAt: row.createdAt.getTime(),
+    actorName: row.actorName,
+    houseName: row.houseName ?? "—",
+    amount: Number((row.payload as { amount?: unknown }).amount ?? 0),
+  }));
+
+  // Hostile-channel chronicle lines targeting this slot (Prompts 2 & 3). All
+  // anonymous — no actor surfaced. Poison illness onsets ('ill') + cures ('treat')
+  // + survived assassinations (assassinate 'failed'). Excluded by design: poison/
+  // assassination DEATH (succession is the announcement) and poison FAILURE (no
+  // target-visible record — only the actor learns a poison failed).
+  const afflictionRows = await db
+    .select({ id: interactions.id, createdAt: interactions.createdAt, type: interactions.type, payload: interactions.payload })
+    .from(interactions)
+    .where(and(eq(interactions.targetCharacterId, slot.id), inArray(interactions.type, ["poison", "treat", "assassinate"])));
+
+  const afflictions: ChronicleAfflictionRow[] = [];
+  for (const row of afflictionRows) {
+    const outcome = (row.payload as { outcome?: unknown }).outcome;
+    if (row.type === "treat") {
+      afflictions.push({ id: row.id, at: row.createdAt.getTime(), kind: "venom_purged" });
+    } else if (row.type === "poison" && outcome === "ill") {
+      afflictions.push({ id: row.id, at: row.createdAt.getTime(), kind: "poison_illness" });
+    } else if (row.type === "assassinate" && outcome === "failed") {
+      afflictions.push({ id: row.id, at: row.createdAt.getTime(), kind: "assassination_survived" });
+    }
+  }
+
   return buildChronicle({
     startedMs,
     successionBoundariesMs,
@@ -188,5 +240,7 @@ export async function gatherChronicleForCharacter(characterId: string): Promise<
     festivals,
     olympics,
     adoptions,
+    gifts,
+    afflictions,
   });
 }

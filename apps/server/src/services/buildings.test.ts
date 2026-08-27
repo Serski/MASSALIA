@@ -873,14 +873,19 @@ suite("Ledger / building engine (integration)", () => {
     expect(await goodBalance("naval-supplies")).toBe(2);
   });
 
-  it("(P4-B) the People market lists all three pop types with the content numbers", () => {
+  it("(P4-B) the People market lists all pop types with the content numbers", () => {
     const view = m.buildings.listPops();
     expect(view.foodGood).toBe("grain");
-    expect(view.pops.map((p) => p.type).sort()).toEqual(["citizen", "freeman", "slave"]);
+    // physician + bodyguard + spymaster joined with the poison/assassinate/spy channels.
+    expect(view.pops.map((p) => p.type).sort()).toEqual(["bodyguard", "citizen", "freeman", "physician", "slave", "spymaster"]);
     const slave = view.pops.find((p) => p.type === "slave")!;
     expect(slave).toMatchObject({ label: "Slave", dismissLabel: "Sell", hireCost: 30, sellBack: 25, upkeepPerDay: 0, foodPerDay: 1, civic: false });
     const citizen = view.pops.find((p) => p.type === "citizen")!;
     expect(citizen).toMatchObject({ label: "Citizen", dismissLabel: "Release", hireCost: 50, sellBack: 0, upkeepPerDay: 3, foodPerDay: 0, civic: true });
+    const physician = view.pops.find((p) => p.type === "physician")!;
+    expect(physician).toMatchObject({ label: "Physician", dismissLabel: "Dismiss", hireCost: 100, sellBack: 0, upkeepPerDay: 2, foodPerDay: 1, civic: false });
+    const bodyguard = view.pops.find((p) => p.type === "bodyguard")!;
+    expect(bodyguard).toMatchObject({ label: "Bodyguard", dismissLabel: "Dismiss", hireCost: 60, sellBack: 0, upkeepPerDay: 3, foodPerDay: 2, civic: false });
   });
 
   it("(P4-C0) every craft recipe is cheaper to make than to buy: craftRawCost < the good's vendor sell", () => {

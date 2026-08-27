@@ -523,7 +523,7 @@ export function idleReason(staffing: Record<string, number>, pops: Record<string
   return missing ? `needs ${missing} you don't own` : "your pops are staffing other buildings — hire more";
 }
 
-export const POP_ICON: Record<string, string> = { slave: "⛓️", freeman: "🧑", citizen: "🏛️" };
+export const POP_ICON: Record<string, string> = { slave: "⛓️", freeman: "🧑", citizen: "🏛️", physician: "⚕️", bodyguard: "🛡️", spymaster: "🕵️" };
 
 // --- Identity / stat icons (visual polish) ---------------------------------
 // Wire the on-disk image assets into their natural places. assetPath() does not

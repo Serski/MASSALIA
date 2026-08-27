@@ -2511,6 +2511,36 @@
   border: 1px solid var(--dash-line);
 }
 
+/* Destructive action (the poison attempt, confirm step): a muted crimson. */
+.dashboard-shell .panel-btn.danger{
+  color: #f4e2df;
+  background: linear-gradient(135deg, #9c3b34, #6f261f);
+}
+.dashboard-shell .panel-btn.danger:disabled{
+  color: var(--dash-stone-dim);
+  background: none;
+  border: 1px solid var(--dash-line);
+}
+
+/* The poison interaction row sits under Send drachmae — a hair of separation. */
+.dashboard-shell .profile-poison-row{ margin-top: 2px; }
+
+/* Affliction (poisoned) banner on the character sheet — the censure-banner form,
+   recoloured crimson, with its Seek-treatment action. */
+.dashboard-shell .affliction-banner{
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  margin: 8px 0;
+  border-radius: 8px;
+  background: rgba(120, 38, 31, 0.16);
+  border: 1px solid rgba(156, 59, 52, 0.5);
+}
+.dashboard-shell .affliction-banner .affliction-ic{ font-size: 18px; line-height: 1; }
+.dashboard-shell .affliction-banner strong{ color: #f0d7d2; font-family: var(--font-display); font-size: 11px; letter-spacing: 0.05em; }
+.dashboard-shell .affliction-banner p{ margin: 3px 0 8px; color: var(--dash-stone); font-size: 12px; }
+
 .dashboard-shell .panel-btn:disabled{
   color: var(--dash-stone-dim);
   background: none;
@@ -3241,6 +3271,8 @@
 .dashboard-shell .seat-dot.seat-held.seat-palaioi { fill: #e7c66a; }
 .dashboard-shell .seat-dot.seat-held.seat-dynatoi { fill: #7fc4e8; }
 .dashboard-shell .seat-dot.seat-held.seat-independent { fill: #b9b9c2; }
+/* Only player-held seats are interactive — they open the holder's public profile. */
+.dashboard-shell .seat-dot.seat-clickable { cursor: pointer; }
 .dashboard-shell .chamber-legend { display: flex; flex-direction: column; gap: 7px; font-size: 12.5px; color: var(--dash-stone); }
 .dashboard-shell .legend-row { display: flex; align-items: center; gap: 8px; }
 .dashboard-shell .legend-dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
@@ -3381,6 +3413,8 @@
   background: var(--dash-panel-soft);
   box-shadow: inset 0 0 0 1px rgba(181, 138, 69, 0.22);
 }
+/* A standings row with a character behind it opens that citizen's public profile. */
+.dashboard-shell .atlas-row-clickable{ cursor: pointer; }
 
 /* Tabs: align an in-tab icon to the label, a subtle hover lift, and a warm wash
    on the active tab (atop the existing gold underline). */

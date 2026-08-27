@@ -6,7 +6,10 @@ import type { CharacterStats } from "./character.js";
 // Content lives in content/traits/traits.json; the server validates it at boot.
 // ---------------------------------------------------------------------------
 
-export const TRAIT_CATEGORIES = ["personality", "upbringing", "class", "coping", "reputation"] as const;
+// "affliction" is the poison channel's category (Interaction Pipeline, Prompt 2):
+// a temporary, curable negative trait. It sits outside the personality cap and has
+// no opposite, so canAddTrait treats it as a plain additive stat trait.
+export const TRAIT_CATEGORIES = ["personality", "upbringing", "class", "coping", "reputation", "affliction"] as const;
 export type TraitCategory = (typeof TRAIT_CATEGORIES)[number];
 
 const statModSchema = z

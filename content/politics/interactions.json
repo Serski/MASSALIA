@@ -1,0 +1,14 @@
+{
+  "prestigeFloor": 10,
+  "actions": {
+    "give": { "hostile": false, "respectsPrestigeFloor": false, "minAmount": 1, "maxAmount": 10000 },
+    "poison": { "hostile": true, "respectsPrestigeFloor": true,
+      "baseChance": 0.5, "statScale": 40, "clampMin": 0.05, "clampMax": 0.95,
+      "physicianMod": 15, "illnessChance": 0.6 },
+    "assassinate": { "hostile": true, "respectsPrestigeFloor": true,
+      "costDrachmae": 200,
+      "baseChance": 0.45, "statScale": 40, "clampMin": 0.05, "clampMax": 0.95,
+      "bodyguardModMax": 24, "bodyguardDecay": 0.5 }
+  },
+  "spymaster": { "guardMod": 10, "huntMod": 10, "postureCooldownHours": 24 }
+}

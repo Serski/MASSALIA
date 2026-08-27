@@ -986,5 +986,16 @@
     "statMod": {
       "prestige": -2
     }
+  },
+  {
+    "id": "poisoned",
+    "name": "Poisoned",
+    "category": "affliction",
+    "description": "A slow venom works through the body.",
+    "statMod": {
+      "militia": -3,
+      "intelligence": -2,
+      "prestige": -1
+    }
   }
 ]

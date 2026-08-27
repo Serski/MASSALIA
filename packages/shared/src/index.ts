@@ -19,6 +19,7 @@ export * from "./olympiad.js";
 export * from "./traits.js";
 export * from "./politics.js";
 export * from "./oligarchy.js";
+export * from "./interactions.js";
 export * from "./elections.js";
 export * from "./agenda.js";
 export * from "./composure.js";

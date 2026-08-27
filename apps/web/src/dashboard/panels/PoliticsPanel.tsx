@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type AgendaScopeView } from "../../api.js";
 import { assetPath, type House } from "../../data/league.js";
 import { AssetIcon, DashboardCard, DigestList, PanelBanner, type PanelProps, PanelRow, PersonRow, formatDuration, ideologyReadout, titleCase, useCountdownSeconds } from "../shared.js";
+import { PublicProfile, type ProfileTarget } from "../PublicProfile.js";
 
 const partyNews = [
   { id: "champion", icon: "📣", text: <>A member seeks the party's backing for <b>Archon</b>.</> },
@@ -85,17 +86,22 @@ function hemicycleLayout(seats: ChamberSeat[]): SeatDot[] {
   return slots.map((seat, i) => ({ x: positions[i]!.x, y: positions[i]!.y, seat: seat! }));
 }
 
-function Hemicycle({ seats }: { seats: ChamberSeat[] }) {
+function Hemicycle({ seats, onSeatClick }: { seats: ChamberSeat[]; onSeatClick: (seat: ChamberSeat) => void }) {
   const dots = useMemo(() => hemicycleLayout(seats), [seats]);
   return (
     <svg className="hemicycle" viewBox="0 0 460 226" role="img" aria-label="The Oligarchy chamber — 300 seats">
-      {dots.map(({ x, y, seat }) => (
+      {dots.map(({ x, y, seat }) => {
+        // Only player-held seats are interactive — they open the holder's public
+        // profile. NPC and empty seats stay inert.
+        const held = seat.holderType === "player" && seat.characterId !== null;
+        return (
         <circle
           key={seat.seatIndex}
           cx={x}
           cy={y}
           r={seat.holderType === "player" ? 5.2 : 4.2}
-          className={`seat-dot seat-${seat.party ?? "empty"}${seat.holderType === "player" ? " seat-held" : ""}`}
+          className={`seat-dot seat-${seat.party ?? "empty"}${seat.holderType === "player" ? " seat-held" : ""}${held ? " seat-clickable" : ""}`}
+          onClick={held ? () => onSeatClick(seat) : undefined}
         >
           <title>
             {seat.holderType === "player"
@@ -105,7 +111,8 @@ function Hemicycle({ seats }: { seats: ChamberSeat[] }) {
                 : `Empty seat ${seat.seatIndex} — 300 dr.`}
           </title>
         </circle>
-      ))}
+        );
+      })}
     </svg>
   );
 }
@@ -130,6 +137,7 @@ function OligarchySection({ onRefresh }: PanelProps) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
+  const [profileTarget, setProfileTarget] = useState<ProfileTarget | null>(null);
 
   const load = useCallback(() => {
     api.oligarchyChamber().then(setChamber).catch((err) => setError(err instanceof ApiError ? err.message : "The chamber rolls could not be read."));
@@ -176,6 +184,13 @@ function OligarchySection({ onRefresh }: PanelProps) {
 
   const { composition, you } = chamber;
 
+  // A player-held seat opens the holder's public profile. Self-detection uses the
+  // viewer's own seat index (so their own profile hides the interaction row).
+  const openSeat = (seat: ChamberSeat) => {
+    if (!seat.characterId) return;
+    setProfileTarget({ characterId: seat.characterId, isSelf: you.holdsSeat && seat.seatIndex === you.seatIndex });
+  };
+
   return (
     <>
       <div className="panel-label panel-label-seal">
@@ -184,7 +199,7 @@ function OligarchySection({ onRefresh }: PanelProps) {
       </div>
       <DashboardCard className="chamber-card">
         <div className="chamber-grid">
-          <Hemicycle seats={chamber.seats} />
+          <Hemicycle seats={chamber.seats} onSeatClick={openSeat} />
           <div className="chamber-legend">
             <div className="legend-row"><span className="legend-dot seat-palaioi" /> Palaioi · {composition.npc.palaioi + composition.players.palaioi} ({composition.players.palaioi} citizens)</div>
             <div className="legend-row"><span className="legend-dot seat-dynatoi" /> Dynatoi · {composition.npc.dynatoi + composition.players.dynatoi} ({composition.players.dynatoi} citizens)</div>
@@ -267,6 +282,14 @@ function OligarchySection({ onRefresh }: PanelProps) {
         </DashboardCard>
       ) : null}
       {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
+      <PublicProfile
+        target={profileTarget}
+        onClose={() => setProfileTarget(null)}
+        onInteracted={() => {
+          load();
+          onRefresh();
+        }}
+      />
     </>
   );
 }

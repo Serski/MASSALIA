@@ -739,7 +739,43 @@ export function ComposureBar({ composure, withdrawn }: { composure: number; with
   );
 }
 
-export function CharacterTab({ player, sheet }: { player: PlayerDashboardView; sheet: CharacterSheetData | null }) {
+// The poisoned-affliction banner + Seek-treatment action, shown adjacent to the
+// character's traits when they hold the 'poisoned' trait. The treat gates (a
+// physician attends, a remedy is held) are enforced server-side; their exact
+// strings surface here on a failed attempt. Success reloads the sheet.
+function AfflictionBanner({ afflicted, onTreated }: { afflicted: boolean; onTreated?: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  if (!afflicted) return null;
+  const seekTreatment = async () => {
+    setBusy(true);
+    setNote("");
+    try {
+      await api.treat();
+      setNote("The venom is purged; your strength returns.");
+      onTreated?.();
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : "The treatment could not be given.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="affliction-banner" role="alert">
+      <span className="affliction-ic" aria-hidden="true">☠️</span>
+      <div>
+        <strong>Poisoned</strong>
+        <p>A slow venom works through the body. A physician and a remedy can purge it.</p>
+        <button type="button" className="panel-btn danger" disabled={busy} onClick={seekTreatment}>
+          Seek treatment
+        </button>
+        {note ? <p className="sheet-todo" role="status">{note}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+export function CharacterTab({ player, sheet, onTreated }: { player: PlayerDashboardView; sheet: CharacterSheetData | null; onTreated?: () => void }) {
   const primary = primaryStatFor(player.professionSlug);
   // Effective stats (base + trait mods) from the canonical sheet; base from the
   // sheet too, falling back to /me/state base while the sheet loads.
@@ -784,6 +820,8 @@ export function CharacterTab({ player, sheet }: { player: PlayerDashboardView; s
 
       <SheetLabel>Alignment</SheetLabel>
       <AlignmentBar ideology={player.ideology} />
+
+      <AfflictionBanner afflicted={sheet?.traits.some((t) => t.id === "poisoned") ?? false} onTreated={onTreated} />
 
       <SheetLabel>Traits · {sheet ? sheet.traits.length : "…"}</SheetLabel>
       {sheet ? <TraitRows traits={sheet.traits} /> : <div className="slot-empty">Loading traits…</div>}
@@ -977,7 +1015,16 @@ export function CharacterSheet({
   const [sheet, setSheet] = useState<CharacterSheetData | null>(null);
   const partyChip = player.party === "Unaligned" ? "Party — chosen in-game" : player.party;
 
-  // Pull the canonical sheet (traits + base/effective stats) each time it opens.
+  // Pull the canonical sheet (traits + base/effective stats). Reused on open and
+  // after a self-action (Seek treatment) so the trait list refreshes in place.
+  const reloadSheet = useCallback(() => {
+    return api
+      .character()
+      .then((result) => setSheet(result.character))
+      .catch(() => {
+        /* sheet stays as-is -> tab shows the loading/base state */
+      });
+  }, []);
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -1031,7 +1078,7 @@ export function CharacterSheet({
           { id: "settings", label: "Settings" },
         ]}
       />
-      {tab === "character" ? <CharacterTab player={player} sheet={sheet} /> : null}
+      {tab === "character" ? <CharacterTab player={player} sheet={sheet} onTreated={reloadSheet} /> : null}
       {tab === "achievements" ? <AchievementsTab /> : null}
       {tab === "settings" ? <SettingsTab player={player} onLogout={onLogout} onAccountDeleted={onAccountDeleted} /> : null}
     </BottomSheet>

@@ -84,8 +84,10 @@ export type CraftRecipe = { building: string; tier: number; recipe: Record<strin
 
 // People market — pops you hire to staff buildings. Each carries a one-time hire
 // cost, a daily drachmae upkeep (the minus), and a daily food draw (foodGood).
-export type PopType = "slave" | "freeman" | "citizen";
-export type PopDef = { label: string; dismissLabel: string; hireCost: number; sellBack: number; upkeepPerDay: number; foodPerDay: number; civic: boolean };
+export type PopType = "slave" | "freeman" | "citizen" | "physician" | "bodyguard" | "spymaster";
+// `max` caps how many of this pop type a player may retain (physician: 1). Absent
+// → unlimited (every existing pop type), so the hire path only enforces it when set.
+export type PopDef = { label: string; dismissLabel: string; hireCost: number; sellBack: number; upkeepPerDay: number; foodPerDay: number; civic: boolean; max?: number };
 export type PopsContent = { foodGood: string; pops: Record<PopType, PopDef> };
 
 export type ClassBuildingTier = { tier: number; name: string; rank?: string };
@@ -415,13 +417,15 @@ const popDefSchema = z
     upkeepPerDay: z.number().nonnegative(),
     foodPerDay: z.number().nonnegative(),
     civic: z.boolean(),
+    // Optional retention cap (physician: 1). Absent → unlimited (unchanged behavior).
+    max: z.number().int().positive().optional(),
   })
   .strict();
 
 export const popsContentSchema = z
   .object({
     foodGood: z.string(),
-    pops: z.object({ slave: popDefSchema, freeman: popDefSchema, citizen: popDefSchema }).strict(),
+    pops: z.object({ slave: popDefSchema, freeman: popDefSchema, citizen: popDefSchema, physician: popDefSchema, bodyguard: popDefSchema, spymaster: popDefSchema }).strict(),
   })
   .strict();
 

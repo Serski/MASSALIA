@@ -25,6 +25,35 @@
       "upkeepPerDay": 3,
       "foodPerDay": 0,
       "civic": true
+    },
+    "physician": {
+      "label": "Physician",
+      "dismissLabel": "Dismiss",
+      "hireCost": 100,
+      "sellBack": 0,
+      "upkeepPerDay": 2,
+      "foodPerDay": 1,
+      "civic": false,
+      "max": 1
+    },
+    "bodyguard": {
+      "label": "Bodyguard",
+      "dismissLabel": "Dismiss",
+      "hireCost": 60,
+      "sellBack": 0,
+      "upkeepPerDay": 3,
+      "foodPerDay": 2,
+      "civic": false
+    },
+    "spymaster": {
+      "label": "Spymaster",
+      "dismissLabel": "Dismiss",
+      "hireCost": 150,
+      "sellBack": 0,
+      "upkeepPerDay": 4,
+      "foodPerDay": 1,
+      "civic": false,
+      "max": 1
     }
   }
 }
