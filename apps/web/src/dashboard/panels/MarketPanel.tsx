@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { api, ApiError, type BuildingsCatalog, type BuildingsMine, type VendorPrice, type PeopleView } from "../../api.js";
 import { assetPath } from "../../data/league.js";
-import { formatDuration, GOOD_ICON, PanelBanner, type PanelProps, PanelRow, PopGlyph, QtyStepper } from "../shared.js";
+import { formatDuration, GoodGlyph, PanelBanner, type PanelProps, PanelRow, PopGlyph, QtyStepper } from "../shared.js";
 import { SheetTabs } from "../sheets.js";
 
 // Display-only grouping for the agora. The goods LIST is derived from the vendor
@@ -86,7 +86,7 @@ function GoodsMarketRow({
   busy: boolean;
   busyKey: string | null;
   label: string;
-  icon: string;
+  icon: ReactNode;
   onBuy: (n: number) => void;
   onSell: (n: number) => void;
 }) {
@@ -262,7 +262,7 @@ export default function MarketPanel({ onRefresh }: PanelProps) {
                     busy={busy}
                     busyKey={busyKey}
                     label={label(price.good)}
-                    icon={GOOD_ICON[price.good] ?? "📦"}
+                    icon={<GoodGlyph good={price.good} fallback="📦" />}
                     onBuy={(n) => act(`buy:${price.good}`, () => api.vendorTrade("buy", price.good, n))}
                     onSell={(n) => act(`sell:${price.good}`, () => api.vendorTrade("sell", price.good, n))}
                   />

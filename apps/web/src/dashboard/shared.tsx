@@ -611,6 +611,43 @@ export function PopGlyph({ type }: { type: string }) {
   return <AssetIcon file={file} alt="" className="asset-icon pop-glyph" fallback={emoji} />;
 }
 
+// Resource/good artwork, keyed by GOOD ID (not display name — grain's picture is
+// wheat, timber's is wood). 128x128 lossless WebP with alpha, same pattern as
+// POP_WEBP. Ship goods (galley/naval-supplies/trade-ship) have no artwork and fall
+// through to their emoji. EXACT on-disk filenames — do not rename (Linux is
+// case-sensitive; spaces are encoded by assetIconUrl).
+export const RESOURCE_WEBP: Record<string, string> = {
+  bull: "BULL.webp",
+  chicken: "CHICKEN.webp",
+  herbal: "HERBS.webp",
+  horse: "HORSE.webp",
+  iron: "IRON.webp",
+  lead: "LEAD.webp",
+  leather: "LEATHER.webp",
+  marble: "MARBLE.webp",
+  oliveoil: "OLIVE OIL.webp",
+  poison: "POISON.webp",
+  remedy: "REMEDY.webp",
+  salt: "SALT.webp",
+  stone: "STONE.webp",
+  tin: "TIN.webp",
+  grain: "WHEAT.webp",
+  wine: "WINE.webp",
+  timber: "WOOD.webp",
+  wool: "WOOL.webp",
+};
+
+// A good/resource glyph: the artwork when present, else the caller's emoji
+// fallback (the market, ledger and sheets each pass the emoji they showed before,
+// so a missing file degrades to exactly the old glyph). Rendered at the same 1em
+// box as the emoji it replaces so row layouts don't shift.
+export function GoodGlyph({ good, fallback = "📦" }: { good: string; fallback?: string }) {
+  const emoji = <span aria-hidden="true">{GOOD_ICON[good] ?? fallback}</span>;
+  const file = RESOURCE_WEBP[good];
+  if (!file) return emoji;
+  return <AssetIcon file={file} alt="" className="asset-icon good-glyph" fallback={emoji} />;
+}
+
 // Building art lives in assets/buildings/. Class buildings carry one image per
 // tier (<id>-<tier>.webp, e.g. estate-1.webp); commons have a single image
 // (<id>.webp, e.g. vineyard.webp). EXACT on-disk filenames — do not rename.

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type BuildingsCatalog, type BuildingsMine, type CatalogEntry, type OwnedBuilding, type ClassSection, type ServiceView, type MercBoard, type RiskOutcome } from "../../api.js";
 import { assetPath } from "../../data/league.js";
-import { AssetIcon, BuildingGlyph, GOOD_ICON, PanelBanner, type PanelProps, PanelRow, buildCountdown, buildingArtFile, formatPerDay, formatRate, idleReason, popName } from "../shared.js";
+import { AssetIcon, BuildingGlyph, GoodGlyph, PanelBanner, type PanelProps, PanelRow, buildCountdown, buildingArtFile, formatPerDay, formatRate, idleReason, popName } from "../shared.js";
 
 // What a building provides per day: drachmae income first (income-only lines like
 // trader/philosopher/hetaira would otherwise read blank), then each good. Income
@@ -496,7 +496,7 @@ function CraftPanel({
           return (
             <PanelRow
               key={good}
-              icon={GOOD_ICON[good] ?? "⛵"}
+              icon={<GoodGlyph good={good} fallback="⛵" />}
               title={label(good)}
               sub={
                 `${recipeStr} · needs ${buildingDisplay(catalog, recipe.building)} T${recipe.tier}` +

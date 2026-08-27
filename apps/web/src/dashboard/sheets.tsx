@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, type CharacterSheet as CharacterSheetData, type BuildingsCatalog, type BuildingsMine, type OwnedBuilding, type PeopleView } from "../api.js";
 import { type House } from "../data/league.js";
-import { AssetIcon, type FourStats, POP_ICON, type PlayerDashboardView, PopGlyph, QtyStepper, STAT_PIP_ICON, buildCountdown, formatPerDay, formatRate, ideologyReadout, idleReason } from "./shared.js";
+import { AssetIcon, type FourStats, GoodGlyph, POP_ICON, type PlayerDashboardView, PopGlyph, QtyStepper, STAT_PIP_ICON, buildCountdown, formatPerDay, formatRate, ideologyReadout, idleReason } from "./shared.js";
 
 // Everyone starts at Tier 1; real tier tracking lands with profession progression.
 export const BASE_TIER_LABEL = "Tier 1";
@@ -185,7 +185,7 @@ export function ResRow({
   rateTitle,
   dim = false,
 }: {
-  icon: string;
+  icon: ReactNode;
   name: string;
   sub?: string;
   amount: string;
@@ -196,7 +196,7 @@ export function ResRow({
 }) {
   return (
     <div className={`res-row${dim ? " dim" : ""}`}>
-      <span className="res-ic" aria-hidden="true">{icon}</span>
+      <span className="res-ic" aria-hidden="true">{icon}</span>{/* icon: emoji string or a glyph node */}
       <div className="res-n">
         {name}
         {sub ? <span className="res-sub"> · {sub}</span> : null}
@@ -364,7 +364,7 @@ export function InventoryResources({ player, goodLabels }: { player: PlayerDashb
         heldGoods.map(([type, amount]) => (
           <ResRow
             key={type}
-            icon={goodIcon(type)}
+            icon={<GoodGlyph good={type} fallback={goodIcon(type)} />}
             name={label(type)}
             amount={Math.floor(amount).toLocaleString()}
             rate="—"
@@ -582,7 +582,7 @@ export function InventoryEconomy({ data, goodLabels }: { data: { mine: Buildings
         <>
           <SheetLabel>Goods produced</SheetLabel>
           {goodsRows.map(([good, perDay]) => (
-            <ResRow key={`good-${good}`} icon={goodIcon(good)} name={label(good)} amount={`+${formatRate(perDay)}`} />
+            <ResRow key={`good-${good}`} icon={<GoodGlyph good={good} fallback={goodIcon(good)} />} name={label(good)} amount={`+${formatRate(perDay)}`} />
           ))}
         </>
       ) : null}

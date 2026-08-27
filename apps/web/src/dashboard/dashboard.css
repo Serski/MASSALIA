@@ -3388,6 +3388,10 @@
 }
 .dashboard-shell .party-icon{ width: 14px; height: 14px; margin-right: 2px; vertical-align: -2px; }
 .dashboard-shell .pop-glyph{ width: 22px; height: 22px; vertical-align: middle; }
+/* Resource/good artwork in a row's icon slot: sits inside the fixed .pr-ic (36px)
+   and .res-ic (27px) boxes, so the box governs row height and swapping the emoji
+   for the image never shifts layout. */
+.dashboard-shell .good-glyph{ width: 22px; height: 22px; object-fit: contain; vertical-align: middle; }
 /* Building emblem in a row's icon slot: fills the 36px .pr-ic box as a thumbnail. */
 .dashboard-shell .building-glyph{ width: 34px; height: 34px; border-radius: 7px; object-fit: cover; vertical-align: middle; }
 /* Class-building tier-ladder art: a framed thumbnail per tier step. */
