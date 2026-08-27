@@ -594,7 +594,14 @@ export const HOUSE_CREST: Record<string, string> = {
   philon: "Philon.png",
   leonidas: "Leonidas.png",
 };
-export const POP_WEBP: Record<string, string> = { citizen: "CITIZEN CLEAR.webp", freeman: "FREEMAN CLEAR.webp", slave: "SLAVE CLEAR.webp" };
+export const POP_WEBP: Record<string, string> = {
+  citizen: "CITIZEN CLEAR.webp",
+  freeman: "FREEMAN CLEAR.webp",
+  slave: "SLAVE CLEAR.webp",
+  physician: "PHYSICIAN CLEAR.webp",
+  bodyguard: "BODYGUARD CLEAR.webp",
+  spymaster: "SPYMASTER CLEAR.webp",
+};
 
 // A pop/people-unit glyph: the new emblem when present, else the emoji fallback.
 export function PopGlyph({ type }: { type: string }) {
