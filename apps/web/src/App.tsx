@@ -743,11 +743,10 @@ function LandingFooter() {
   return (
     <footer className="landing-footer">
       <div className="footer-brand">MASSALIA</div>
-      <nav aria-label="Legal">
-        <a href="#discord">Discord</a>
-        <a href="#lore">Lore</a>
-        <a href="#map">Map</a>
-        <a href="#support">Support</a>
+      <nav aria-label="Legal" className="footer-legal">
+        <a href="?page=terms">Terms of Service</a>
+        <a href="?page=privacy">Privacy Policy</a>
+        <a href="?page=rules">Game Rules</a>
       </nav>
       <small>© 320 BC – MMXXVI · THE LEAGUE OF MASSALIA</small>
     </footer>
@@ -772,10 +771,10 @@ export function App() {
   const [resetToken, setResetToken] = useState<string | null>(
     () => new URLSearchParams(window.location.search).get("reset"),
   );
-  // Static legal pages: `?page=privacy` / `?page=terms` (same query-param routing).
+  // Static legal pages: `?page=privacy` / `?page=terms` / `?page=rules` (same routing).
   const [legalPage, setLegalPage] = useState<LegalPageKind | null>(() => {
     const page = new URLSearchParams(window.location.search).get("page");
-    return page === "privacy" || page === "terms" ? page : null;
+    return page === "privacy" || page === "terms" || page === "rules" ? page : null;
   });
   // Email-verification link: `?verify=TOKEN` on any load.
   const [verifyToken, setVerifyToken] = useState<string | null>(

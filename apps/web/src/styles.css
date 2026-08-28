@@ -1923,6 +1923,15 @@ button.auth-forgot {
   margin: 0 0 16px;
 }
 
+.legal-article ol {
+  margin: 0 0 16px;
+  padding-left: 22px;
+}
+
+.legal-article li {
+  margin: 0 0 14px;
+}
+
 .legal-article strong {
   color: var(--gold, #b58a45);
 }

@@ -2,10 +2,11 @@ import { type ReactNode } from "react";
 import { assetPath } from "./data/league.js";
 
 // Static legal pages, rendered as standalone full-page views when the URL carries
-// `?page=privacy` or `?page=terms` (same query-param routing as `?reset=` /
-// `?verify=`). Reachable logged-out and logged-in. Copy is fixed and verbatim.
+// `?page=privacy`, `?page=terms`, or `?page=rules` (same query-param routing as
+// `?reset=` / `?verify=`). Reachable logged-out and logged-in. Copy is fixed and
+// verbatim.
 
-export type LegalPageKind = "privacy" | "terms";
+export type LegalPageKind = "privacy" | "terms" | "rules";
 
 const SUPPORT_EMAIL = "support@playmassalia.com";
 
@@ -20,7 +21,7 @@ function LegalFrame({
   children,
 }: {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   onBack: () => void;
   children: ReactNode;
 }) {
@@ -37,7 +38,7 @@ function LegalFrame({
       </header>
       <article className="legal-article">
         <h1>{title}</h1>
-        <p className="legal-updated">{subtitle}</p>
+        {subtitle ? <p className="legal-updated">{subtitle}</p> : null}
         {children}
       </article>
     </main>
@@ -125,6 +126,30 @@ export function TermsOfService({ onBack }: { onBack: () => void }) {
   );
 }
 
+export function GameRules({ onBack }: { onBack: () => void }) {
+  return (
+    <LegalFrame title="Game rules" onBack={onBack}>
+      <ol className="legal-rules">
+        <li>
+          <strong>One character per world.</strong>
+          {` Each player may own and play only one character per game world.`}
+        </li>
+        <li>
+          <strong>Play for your own benefit.</strong>
+          {` A character must always be played for its own benefit, or for the benefit of its House or party. Characters that exist to serve a character outside their own House or party may be permanently banned and deleted. Characters that knowingly profit from such feeder characters may be severely punished.`}
+        </li>
+        <li>
+          <strong>No voting multis.</strong>
+          {` Characters created to influence votes, elections, or chamber seats will be banned.`}
+        </li>
+      </ol>
+      <p>{`Breaking these rules can lead to warnings, loss of assets, or permanent deletion of the character, at the discretion of the game staff.`}</p>
+    </LegalFrame>
+  );
+}
+
 export function LegalPage({ page, onBack }: { page: LegalPageKind; onBack: () => void }) {
-  return page === "privacy" ? <PrivacyPolicy onBack={onBack} /> : <TermsOfService onBack={onBack} />;
+  if (page === "privacy") return <PrivacyPolicy onBack={onBack} />;
+  if (page === "rules") return <GameRules onBack={onBack} />;
+  return <TermsOfService onBack={onBack} />;
 }
