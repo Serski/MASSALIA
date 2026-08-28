@@ -29,7 +29,6 @@ export type Profession = {
   hardMode?: boolean;
   narrativePath?: {
     milestones: NarrativeMilestone[];
-    todo: string;
   };
 };
 
@@ -213,7 +212,6 @@ export const professions: Profession[] = [
         { milestone: "Manumitted", advance: "Secure freedom through the narrative arc and become a freedman." },
         { milestone: "Free Citizen", advance: "Choose any profession and begin a normal ladder from the bottom." },
       ],
-      todo: "TODO: Final milestone requirements and numeric thresholds are not designed yet.",
     },
   },
 ];

@@ -644,7 +644,6 @@ function DetailBody({ entry }: { entry: DetailEntry }) {
             <p><strong>Starting condition:</strong> {entry.income}</p>
             <p><strong>Starting funds:</strong> No coin, land, or House at start.</p>
             <p>{entry.note}</p>
-            <p>{entry.narrativePath.todo}</p>
           </article>
           <article className="detail-panel">
             <h2>Status path</h2>
