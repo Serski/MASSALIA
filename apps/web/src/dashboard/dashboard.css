@@ -3448,12 +3448,14 @@
   background: rgba(181, 138, 69, 0.08);
 }
 
-/* Market in-flight visual scoped to the pressed button (Phase 5). Every action
-   button is still :disabled while a trade runs: only the BUSY pressed button gets a
-   highlight (the is-busy rules below), and every WAITING sibling falls through to
-   the plain .panel-btn:disabled dim (stone-dim text, no background, thin border,
-   0.55 opacity) — no sibling highlight. The is-busy rules out-specify
-   .panel-btn:disabled (two extra classes) and never touch it. */
+/* Market in-flight visuals (Phase 5, final scheme). While a trade runs EVERY action
+   button is :disabled, but only the pressed one changes: the BUSY pressed button
+   shows the is-busy feedback (below); every WAITING sibling keeps its normal resting
+   look, frozen (the is-waiting rules restore each variant's base declarations plus
+   opacity:1, so nothing blinks); a statically-disabled button (e.g. Sell with 0
+   owned) never gets is-waiting and keeps the plain .panel-btn:disabled dim. The
+   is-busy rules (0,4,0 / 0,5,0) out-specify the is-waiting rules, which never share a
+   button with is-busy anyway (btnClass emits one class or the other). */
 .dashboard-shell .panel-btn.is-busy:disabled{
   color: #1a1208;
   background: linear-gradient(135deg, var(--dash-gold-bright), var(--dash-bronze));
@@ -3470,10 +3472,34 @@
   filter: brightness(0.9);
   cursor: default;
 }
+/* Waiting siblings: hold each variant's resting appearance exactly (base declarations
+   verbatim + opacity:1 + cursor:default) so the panel does not flicker during flight.
+   These out-specify .panel-btn:disabled and, for silver, .panel-btn.silver:disabled. */
+.dashboard-shell .panel-btn.is-waiting:disabled{
+  color: #1a1208;
+  background: linear-gradient(135deg, var(--dash-gold-bright), var(--dash-bronze));
+  border: none;
+  opacity: 1;
+  cursor: default;
+}
+.dashboard-shell .panel-btn.ghost.is-waiting:disabled{
+  color: var(--dash-stone);
+  background: none;
+  border: 1px solid var(--dash-line);
+  opacity: 1;
+  cursor: default;
+}
+.dashboard-shell .panel-btn.silver.is-waiting:disabled{
+  color: #141920;
+  background: linear-gradient(135deg, #e8ebef, #a9b2bc);
+  border: none;
+  opacity: 1;
+  cursor: default;
+}
 
 /* Silver sell buttons (Phase 6): the gold gradient's construction in silver.
-   Hues provisional — Argiris judges live post-deploy. Only the is-busy companion
-   remains, mirroring the Phase-5 rule so the pressed-button scoping holds. */
+   Hues provisional — Argiris judges live post-deploy. Its is-busy (pressed) and
+   is-waiting (frozen sibling) companions live with the Phase-5 in-flight rules above. */
 .dashboard-shell .panel-btn.silver{
   color: #141920;
   background: linear-gradient(135deg, #e8ebef, #a9b2bc);
@@ -3482,10 +3508,11 @@
 .dashboard-shell .panel-btn.silver:not(:disabled):hover{
   filter: brightness(1.07);
 }
-/* The silver base rule sits AFTER .panel-btn:disabled in source order, so a plain
-   disabled silver button would otherwise keep its gradient (equal specificity, later
-   wins). This restores the plain .panel-btn:disabled dim for waiting silver siblings;
-   the is-busy pressed button still wins with its extra class. */
+/* Statically-disabled silver (e.g. Sell with 0 owned): the silver base rule sits
+   AFTER .panel-btn:disabled in source order, so without this a disabled silver button
+   would keep its gradient (equal specificity, later wins). This restores the plain
+   dim. A WAITING silver sibling instead carries is-waiting and stays gradient (rule
+   above); the is-busy pressed button wins over both with its extra class. */
 .dashboard-shell .panel-btn.silver:disabled{
   color: var(--dash-stone-dim);
   background: none;
