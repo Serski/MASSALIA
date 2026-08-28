@@ -17,10 +17,15 @@ export function getCookieOptions() {
   const webOrigin = process.env.WEB_ORIGIN ?? "http://localhost:5173";
   const isSecureOrigin = webOrigin.startsWith("https://");
 
+  // First-party same-site setup: the web app (apex playmassalia.com) and the API
+  // (api.playmassalia.com subdomain) share a registrable domain, so the session
+  // cookie is same-site and `SameSite=Lax` is sufficient. This replaces the old
+  // cross-site (github.io ↔ railway.app) arrangement that required `SameSite=None`.
+  // `secure` stays derived from an https WEB_ORIGIN so local HTTP dev still works.
   return {
     httpOnly: true,
     path: "/",
-    sameSite: isSecureOrigin ? "none" as const : "lax" as const,
+    sameSite: "lax" as const,
     secure: isSecureOrigin,
     signed: true,
     maxAge: Math.floor(sessionTtlMs / 1000),
