@@ -1095,17 +1095,10 @@
 }
 
 .dashboard-shell .dashboard-map-card{
-  min-height: min(66vh, 620px);
+  /* The ProvinceMap stage is aspect-locked to the theatre, so it sets its own
+     height; no fixed min-height (which would leave dead space below the map). */
   padding: 0;
   overflow: hidden;
-}
-
-.dashboard-shell .dashboard-map-card .map-screen{
-  height: min(66vh, 620px);
-}
-
-.dashboard-shell .dashboard-map-card .map-host{
-  height: 100%;
 }
 
 .dashboard-shell .dashboard-mobile-tabs{

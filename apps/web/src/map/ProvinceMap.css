@@ -1,0 +1,143 @@
+/* Campaign-map camera: stage, controls, and fullscreen overlay. Unscoped (the
+   standalone /map route has no .dashboard-shell), prefixed .pmap-. */
+
+.pmap {
+  padding: 12px;
+  font-family: "Spectral", serif;
+  color: var(--dash-stone, #d7ccb7);
+}
+
+.pmap-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.pmap-header .pmap-legend {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.pmap-status {
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--dash-gold-bright, #d1ae63);
+}
+
+/* The stage is aspect-locked to the theatre viewBox so a fully zoomed-out camera
+   equals the theatre exactly, with no letterboxing at any zoom. */
+.pmap-stage {
+  position: relative;
+  width: 100%;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #749ab9;
+}
+
+.pmap-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  /* Panning the map never scrolls the page; pinching never zooms the browser. */
+  touch-action: none;
+  cursor: grab;
+  outline: none;
+}
+
+.pmap-svg:active {
+  cursor: grabbing;
+}
+
+.pmap-svg:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--dash-gold, #b58a45);
+}
+
+/* Camera controls, bottom-right of the stage. */
+.pmap-controls {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: grid;
+  gap: 6px;
+  justify-items: stretch;
+}
+
+.pmap-btn {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--dash-parchment, #ece0cc);
+  background: rgba(20, 13, 10, 0.82);
+  border: 1px solid rgba(181, 138, 69, 0.5);
+  border-radius: 8px;
+  cursor: pointer;
+  backdrop-filter: blur(3px);
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.pmap-btn:hover {
+  border-color: var(--dash-gold, #b58a45);
+  background: rgba(30, 20, 14, 0.9);
+}
+
+.pmap-btn:focus-visible {
+  outline: none;
+  border-color: var(--dash-gold-bright, #d1ae63);
+}
+
+/* Fullscreen overlay — the sheet/panel language, full-bleed. */
+.pmap-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  background: rgba(8, 6, 5, 0.92);
+  backdrop-filter: blur(6px);
+  animation: pmapFade 0.24s ease both;
+}
+
+@keyframes pmapFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.pmap-fullscreen .pmap-stage {
+  /* Grow to fill the overlay while keeping the theatre aspect, centered. */
+  flex: 1;
+  min-height: 0;
+  width: auto;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.pmap-close {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  z-index: 3;
+  padding: 6px 12px;
+  color: var(--dash-stone-dim, #9a8c72);
+  font-family: var(--font-display, "Cinzel", serif);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(20, 13, 10, 0.7);
+  border: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28));
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.pmap-close:hover {
+  color: var(--dash-parchment, #ece0cc);
+  border-color: var(--dash-gold, #b58a45);
+}
