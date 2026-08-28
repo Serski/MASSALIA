@@ -240,30 +240,38 @@ function RoutinesCard({ onRefresh }: PanelProps) {
         </div>
       ) : (
         <div className="event-choice-stack">
-          {set.cards.map((card) => (
-            <button
-              className="event-choice-button"
-              type="button"
-              key={card.id}
-              disabled={busy}
-              title={card.scene}
-              onClick={() => pick(card.id)}
-            >
-              <strong>{card.label}</strong>
-              {card.costs.length > 0 || card.composureDelta !== 0 ? (
-                <span className="choice-costs">
-                  {card.costs.map((cost, i) => (
-                    <span key={i} className={`cost-chip cost-${cost.tone}`}>{cost.label}</span>
-                  ))}
-                  {card.composureDelta !== 0 ? (
-                    <span className={`cost-chip ${card.composureDelta < 0 ? "cost-negative" : "cost-positive"}`} title={card.composureReason}>
-                      {card.composureDelta > 0 ? "+" : ""}{card.composureDelta} Composure
-                    </span>
-                  ) : null}
-                </span>
-              ) : null}
-            </button>
-          ))}
+          {set.cards.map((card) => {
+            // The drachmae fee the server charges (routine-buy-freedom's 50) was only
+            // in the hover scene — invisible on touch. Surface it as a visible cost
+            // chip, reusing the same requires.fee the resolve path consumes. Waived
+            // fees (building-covered) show nothing.
+            const fee = card.requires && !card.requires.waived ? card.requires.fee : undefined;
+            return (
+              <button
+                className="event-choice-button"
+                type="button"
+                key={card.id}
+                disabled={busy}
+                title={card.scene}
+                onClick={() => pick(card.id)}
+              >
+                <strong>{card.label}</strong>
+                {card.costs.length > 0 || card.composureDelta !== 0 || fee ? (
+                  <span className="choice-costs">
+                    {fee ? <span className="cost-chip cost-negative">−{fee} drachmae</span> : null}
+                    {card.costs.map((cost, i) => (
+                      <span key={i} className={`cost-chip cost-${cost.tone}`}>{cost.label}</span>
+                    ))}
+                    {card.composureDelta !== 0 ? (
+                      <span className={`cost-chip ${card.composureDelta < 0 ? "cost-negative" : "cost-positive"}`} title={card.composureReason}>
+                        {card.composureDelta > 0 ? "+" : ""}{card.composureDelta} Composure
+                      </span>
+                    ) : null}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
         </div>
       )}
       {ladderBars}
