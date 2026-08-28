@@ -62,6 +62,17 @@ export type House = {
   moment: string;
 };
 
+// The landing "View rank ladder" panels (apps/web/src/App.tsx) render this array
+// verbatim, so the numbers here MUST track the live game data. They are hand-synced
+// (not imported) from three sources — content JSON is loaded at runtime via fs and
+// this package compiles with rootDir "src", so a static cross-root JSON import would
+// break both the tsc and the server build. Re-sync when any of these change:
+//   • content/buildings/buildings.json  — the six class buildings' tier names, rank
+//     handles, base income (dr/day at tier 1) and goods yields.
+//   • content/military/ranks.json       — the hoplite's four army ranks (no buildings).
+//   • packages/shared/src/buildings.ts  — the curve: income/goods scale by
+//     YIELD_GROWTH (1.8) per tier; UPKEEP = [0,1,3,6] dr/day. Incomes are rounded to
+//     whole drachmae and goods via formatPerDay, matching the dashboard's display.
 export const professions: Profession[] = [
   {
     kind: "profession",
@@ -71,14 +82,14 @@ export const professions: Profession[] = [
     name: "Landowner",
     rank: "@Georgos",
     objective: "Turn fields and estates into the grain engine of your city.",
-    income: "2 Wheat/day",
+    income: "6 dr/day; 6 Wheat/day",
     tiers: [
-      { building: "Farm", rank: "@Ktematias", benefit: "4 Wheat/day" },
-      { building: "Large Farm", rank: "@Choriarches", benefit: "10 Wheat/day", upkeep: "-10 gold" },
-      { building: "Estate", rank: "@Protogeorgos", benefit: "15 Wheat/day" },
-      { building: "Large Estate", rank: "@Mega Georgos", benefit: "20 Wheat/day", upkeep: "-25 gold" },
+      { building: "Farmstead", rank: "@Georgos", benefit: "6 dr/day; 6 Wheat/day" },
+      { building: "Olive Groves", rank: "@Ktematias", benefit: "11 dr/day; 11 Wheat/day", upkeep: "1 dr/day" },
+      { building: "Great Estate", rank: "@Protogeorgos", benefit: "19 dr/day; 19 Wheat/day; 2 Olive Oil/day", upkeep: "3 dr/day" },
+      { building: "Chōra (Χώρα)", rank: "@Mega Georgos", benefit: "35 dr/day; 35 Wheat/day; 4 Olive Oil/day", upkeep: "6 dr/day" },
     ],
-    note: "All professions cost 100 gold to start. Wheat is roughly 10 gold/unit; Landowners can use the Forge.",
+    note: "Every free class starts with 150 dr. Wheat is roughly 3 dr/unit; Landowners can use the Forge.",
   },
   {
     kind: "profession",
@@ -86,16 +97,16 @@ export const professions: Profession[] = [
     initial: "T",
     image: "assets/TRADER copy.png",
     name: "Trader",
-    rank: "@Emporos",
+    rank: "@Kapelos",
     objective: "Move wine, rare resources, and influence across the Mediterranean routes.",
-    income: "2 Wine/day",
+    income: "10 dr/day",
     tiers: [
-      { building: "Trade Post", rank: "@Nautilos Emporos", benefit: "4 Wine/day" },
-      { building: "Large Trade Post", rank: "@Emporikos Presbeutes", benefit: "10 Wine/day", upkeep: "-10 gold" },
-      { building: "Trading Hub", rank: "@Emporos Archon", benefit: "15 Wine/day" },
-      { building: "Trade Port", rank: "@Emporos Mega", benefit: "20 Wine/day", upkeep: "-25 gold" },
+      { building: "Market Stall", rank: "@Kapelos", benefit: "10 dr/day" },
+      { building: "Counting House", rank: "@Emporos", benefit: "17 dr/day; 2 Wine/day", upkeep: "1 dr/day" },
+      { building: "Trade House", rank: "@Naukleros", benefit: "31 dr/day; 4 Wine/day", upkeep: "3 dr/day" },
+      { building: "Emporion of the West", rank: "@Megemporos", benefit: "56 dr/day; 6 Wine/day", upkeep: "6 dr/day" },
     ],
-    note: "All professions cost 100 gold to start. Wine is roughly 15 gold/unit; trade ports unlock rare resources.",
+    note: "Every free class starts with 150 dr. Wine is roughly 5 dr/unit; trade ports unlock rare resources.",
   },
   {
     kind: "profession",
@@ -105,14 +116,14 @@ export const professions: Profession[] = [
     name: "Priest",
     rank: "@Neokoros",
     objective: "Convert devotion, healing, and ritual authority into civic power.",
-    income: "2 Herbal/day +5 Devotion",
+    income: "7 dr/day; 4 Herbs/day",
     tiers: [
-      { building: "Shrine", rank: "@Mystes", benefit: "4 Herbal/day; +5 Devotion" },
-      { building: "Temple", rank: "@Hierophant", benefit: "10 Herbal/day; +10 Devotion" },
-      { building: "Sanctuary", rank: "@Archiereus", benefit: "15 Herbal/day; +15 Devotion" },
-      { building: "Grand Sanctuary", rank: "@Mega Archiereus", benefit: "20 Herbal/day; +20 Devotion" },
+      { building: "Roadside Shrine", rank: "@Neokoros", benefit: "7 dr/day; 4 Herbs/day" },
+      { building: "Temple Precinct", rank: "@Hiereus", benefit: "13 dr/day; 7 Herbs/day", upkeep: "1 dr/day" },
+      { building: "Sanctuary of Artemis", rank: "@Archiereus", benefit: "23 dr/day; 13 Herbs/day", upkeep: "3 dr/day" },
+      { building: "Oracle Seat", rank: "@Hierophantes", benefit: "42 dr/day; 23 Herbs/day", upkeep: "6 dr/day" },
     ],
-    note: "All professions cost 100 gold to start. Herbal is roughly 20 gold/unit; Priests train Healers. One Healer restores 10 troops.",
+    note: "Every free class starts with 150 dr. Herbs are roughly 5 dr/unit; Priests train Healers. One Healer restores 10 troops.",
   },
   {
     kind: "profession",
@@ -120,16 +131,16 @@ export const professions: Profession[] = [
     initial: "F",
     image: "assets/PHILOSOPHER copy.png",
     name: "Philosopher",
-    rank: "@Didaskalos",
+    rank: "@Sophistes",
     objective: "Build schools, prestige, and diplomatic leverage through learning.",
-    income: "10 gold/day +5 Prestige",
+    income: "11 dr/day",
     tiers: [
-      { building: "School", rank: "@Scholarch", benefit: "20 gold/day; +5 Prestige" },
-      { building: "Academy", rank: "@Philosophos", benefit: "30 gold/day; +10 Prestige" },
-      { building: "Lyceum", rank: "@Sophistes", benefit: "40 gold/day; +20 Prestige" },
-      { building: "Great Lyceum", rank: "@Megasophistes", benefit: "50 gold/day; +30 Prestige" },
+      { building: "Stoa Corner", rank: "@Sophistes", benefit: "11 dr/day" },
+      { building: "Private School", rank: "@Didaskalos", benefit: "19 dr/day", upkeep: "1 dr/day" },
+      { building: "Academy", rank: "@Scholarches", benefit: "35 dr/day", upkeep: "3 dr/day" },
+      { building: "The Lyceum", rank: "@Philosophos", benefit: "63 dr/day", upkeep: "6 dr/day" },
     ],
-    note: "All professions cost 100 gold to start. Philosophers craft prestige items through the Cloth Factory and gain +10% diplomatic missions.",
+    note: "Every free class starts with 150 dr. Philosophers craft prestige items through the Cloth Factory and gain +10% diplomatic missions.",
   },
   {
     kind: "profession",
@@ -139,14 +150,14 @@ export const professions: Profession[] = [
     name: "Shipbuilder",
     rank: "@Naupegos",
     objective: "Own the dockyards that decide who can trade, raid, and cross the sea.",
-    income: "10 gold/day",
+    income: "8 dr/day; 1 Naval Supplies/day",
     tiers: [
-      { building: "Shipyard", rank: "@Naukleros", benefit: "20 gold/day" },
-      { building: "Naval Dock", rank: "@Epimeletes", benefit: "30 gold/day" },
-      { building: "Shipwright Complex", rank: "@Ship Architekton", benefit: "40 gold/day" },
-      { building: "Grand Naval Facility", rank: "@Mega Naupegos", benefit: "50 gold/day" },
+      { building: "Boat Shed", rank: "@Naupegos", benefit: "8 dr/day; 1 Naval Supplies/day" },
+      { building: "Slipway", rank: "@Architekton", benefit: "15 dr/day; 2 Naval Supplies/day", upkeep: "1 dr/day" },
+      { building: "Small Shipyard", rank: "@Nauarchos", benefit: "27 dr/day; 3 Naval Supplies/day", upkeep: "3 dr/day" },
+      { building: "Great Shipyard", rank: "@Meganaupegos", benefit: "49 dr/day; 6 Naval Supplies/day", upkeep: "6 dr/day" },
     ],
-    note: "All professions cost 100 gold to start. Shipbuilders craft naval supplies, sailors, and ships, and research new ship types.",
+    note: "Every free class starts with 150 dr. Shipbuilders craft naval supplies, sailors, and ships, and research new ship types.",
   },
   {
     kind: "profession",
@@ -154,16 +165,16 @@ export const professions: Profession[] = [
     initial: "H",
     image: "assets/HETAIRA copy.png",
     name: "Hetaira",
-    rank: "@Hetaira",
+    rank: "@Auletris",
     objective: "Turn salons, gossip, and dangerous favors into quiet political force.",
-    income: "20 gold/day +5 Intelligence",
+    income: "11 dr/day",
     tiers: [
-      { building: "Salon", rank: "@Desmoteros", benefit: "30 gold/day; +10 Intelligence" },
-      { building: "Courtesan House", rank: "@Pallake", benefit: "40 gold/day; +15 Intelligence" },
-      { building: "Luxury Villa", rank: "@Hetairarches", benefit: "50 gold/day; +20 Intelligence; +5% intelligence" },
-      { building: "Grand Villa", rank: "@Megalhetaira", benefit: "60 gold/day; +25 Intelligence; +10% intelligence" },
+      { building: "Rented Rooms", rank: "@Auletris", benefit: "11 dr/day" },
+      { building: "The Salon", rank: "@Hetaira", benefit: "19 dr/day", upkeep: "1 dr/day" },
+      { building: "House of Muses", rank: "@Megale Hetaira", benefit: "35 dr/day", upkeep: "3 dr/day" },
+      { building: "The Symposion Court", rank: "@Despoina", benefit: "63 dr/day", upkeep: "6 dr/day" },
     ],
-    note: "All professions cost 100 gold to start. Hetairai craft poisons and gossip spreaders, train Healers, and use the Cloth Factory.",
+    note: "Every free class starts with 150 dr. Hetairai craft poisons and gossip spreaders, train Healers, and use the Cloth Factory.",
   },
   {
     kind: "profession",
@@ -171,16 +182,16 @@ export const professions: Profession[] = [
     initial: "M",
     image: "assets/HOPLITE copy.png",
     name: "Hoplite",
-    rank: "@Dekarchos",
+    rank: "@Stratiotes",
     objective: "Command citizen soldiers and grow from local captain to League warlord.",
-    income: "20 gold/day +5 Militia; leads 10 troops",
+    income: "8 dr/day",
     tiers: [
-      { building: "Enhanced Training", rank: "@Ekatontarchos", benefit: "30 gold/day; +10 Militia; leads 100 troops" },
-      { building: "Advanced Training Facility", rank: "@Lochagos", benefit: "40 gold/day; +15 Militia; leads 250 troops" },
-      { building: "Fortified Barracks", rank: "@Taxiarchos", benefit: "50 gold/day; +20 Militia; leads 750 troops" },
-      { building: "Citadel Command Center", rank: "@Xiliarchos", benefit: "60 gold/day; +25 Militia; leads 1000 troops" },
+      { building: "Recruit", rank: "@Stratiotes", benefit: "8 dr/day" },
+      { building: "Veteran", rank: "@Epilektos", benefit: "16 dr/day; +1 militia/day; needs 15 Militia, 10 Prestige" },
+      { building: "Lochagos", rank: "@Lochagos", benefit: "28 dr/day; +1 militia/day; needs 30 Militia, 25 Prestige" },
+      { building: "Archilochagos", rank: "@Archilochagos", benefit: "45 dr/day; +2 militia/day; needs 50 Militia, 45 Prestige" },
     ],
-    note: "All professions cost 100 gold to start. Military Leaders craft military traits with wine and papyrus and can use the Forge.",
+    note: "Every free class starts with 150 dr. Military Leaders craft military traits with wine and papyrus and can use the Forge.",
   },
   {
     kind: "profession",
@@ -190,7 +201,7 @@ export const professions: Profession[] = [
     name: "Slave",
     rank: "@Doulos",
     objective: "Hard mode. Begin at the very bottom of Massalian society with nothing to your name: no land, no coin, no House. Endure, scrape together a peculium, and earn your freedom through the story, then rise into any profession you choose.",
-    income: "0 gold/day · earn your freedom",
+    income: "0 dr/day · earn your freedom",
     tiers: [],
     note: "Solo hard-mode start. No other player commands this path; freedom is earned through narrative progression.",
     hardMode: true,
