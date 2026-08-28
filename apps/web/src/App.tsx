@@ -919,7 +919,6 @@ export function App() {
               <div><dt>Noble Houses</dt><dd>{landingStats.houses}</dd></div>
               <div><dt>{landingStats.seasonLabel}</dt><dd>{landingStats.seasonStatus}</dd></div>
             </dl>
-            <p className="todo-note">TODO: wire real live-player count, season length, and countdown when available.</p>
           </div>
           <div className="hero-art-focus" aria-hidden="true">
             <img className="hero-lion" src={assetPath("assets/MASSALIA LION.png")} alt="" />
