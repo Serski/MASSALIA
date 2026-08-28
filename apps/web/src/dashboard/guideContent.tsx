@@ -84,7 +84,7 @@ export const GUIDE_SECTIONS: GuideSection[] = [
     id: "holdings",
     title: "Your Holdings & Your People",
     paragraphs: [
-      "Your class building is one structure raised through four tiers, upgraded in place: it keeps producing through every upgrade, and only a fresh first build earns nothing until it stands. The first tier rises within the hour; the rest take days. Beyond it lie the commons — farms, vines, timber, the warehouse, the shrine — open to any class. Buildings need hands: slaves are bought outright, eat from your stores, and can be sold back; freemen and citizens work for wages. Your holdings labor while you sleep — income accrues whether you watch or not.",
+      "Your class building is one structure raised through four tiers, upgraded in place: it keeps producing through every upgrade, and only a fresh first build earns nothing until it stands. The first tier rises within the hour; the rest take days. Beyond it lie the commons — farms, vines, timber, the shrine — open to any class. Buildings need hands: slaves are bought outright, eat from your stores, and can be sold back; freemen and citizens work for wages. Your holdings labor while you sleep — income accrues whether you watch or not.",
     ],
   },
   {

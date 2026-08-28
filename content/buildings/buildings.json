@@ -381,6 +381,7 @@
     {
       "id": "harbor-warehouse",
       "name": "Harbor Warehouse",
+      "hidden": true,
       "icon": "⚓",
       "category": "yearround",
       "cost": 300,

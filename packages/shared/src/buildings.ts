@@ -117,6 +117,9 @@ export type CommonBuildingDef = {
   staffing?: Partial<Record<PopType, number>>;
   composurePerDay?: number; // flat, never scales (Household Shrine)
   storageBonus?: number; // capacity contribution (Harbor Warehouse); light enforcement
+  // When true the building is withheld from the buildable catalog and new builds
+  // are rejected server-side; owned instances keep resolving and working.
+  hidden?: boolean;
   blurb: string;
 };
 
@@ -175,6 +178,7 @@ const commonBuildingSchema = z
     staffing: staffingSchema.optional(),
     composurePerDay: z.number().optional(),
     storageBonus: z.number().optional(),
+    hidden: z.boolean().optional(),
     blurb: z.string(),
   })
   .strict();

@@ -645,6 +645,8 @@ export type CatalogEntry = {
   blurb?: string;
   storageBonus?: number;
   composurePerDay?: number;
+  // Withheld from the buildable list (owned instances still render). See build().
+  hidden?: boolean;
   tiers: CatalogTier[];
 };
 
@@ -698,6 +700,9 @@ export function catalog(classId: string, ctx: ActingContext, now: Date): Catalog
       tiers: catalogTiers(def, classDef.tiers),
     };
   }
+  // Hidden commons (hidden: true) carry the flag through so consumers withhold them
+  // from the buildable list; the entry stays present so an already-owned instance
+  // still resolves its name and renders. New builds are rejected in build().
   const commons: CatalogEntry[] = c.commonBuildings.map((b) => {
     const def = resolveDef(b.id)!;
     return {
@@ -709,6 +714,7 @@ export function catalog(classId: string, ctx: ActingContext, now: Date): Catalog
       blurb: b.blurb,
       storageBonus: b.storageBonus,
       composurePerDay: b.composurePerDay,
+      hidden: b.hidden,
       tiers: catalogTiers(def, [{ tier: 1, name: b.name }]),
     };
   });
@@ -936,6 +942,11 @@ export async function build(classId: string, ctx: ActingContext, buildingId: str
   if (!canBuild(classId)) return { ok: false, code: 403, error: "A slave owns no land — earn your freedom first." };
   const def = resolveDef(buildingId);
   if (!def) return { ok: false, code: 404, error: "No such building." };
+  // Hidden commons cannot be raised (owned instances stay functional; this only
+  // gates new builds).
+  if (getBuildingsContent().commonBuildings.find((b) => b.id === buildingId)?.hidden) {
+    return { ok: false, code: 409, error: "No such building." };
+  }
   // Class buildings may only be raised by their own class.
   if (def.isClass && classBuildingIdFor(classId) !== buildingId) {
     return { ok: false, code: 403, error: "That estate is not your class's to build." };

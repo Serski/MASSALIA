@@ -1107,6 +1107,8 @@ export type CatalogEntry = {
   blurb?: string;
   storageBonus?: number;
   composurePerDay?: number;
+  // Withheld from the buildable list; an already-owned instance still renders.
+  hidden?: boolean;
   tiers: CatalogTier[];
 };
 

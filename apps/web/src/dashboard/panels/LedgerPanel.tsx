@@ -767,6 +767,9 @@ export default function LedgerPanel({ player, onRefresh }: PanelProps) {
       <div className="panel-grid2">
         {catalog.commons.map((entry) => {
           const owned = ownedById.get(entry.id);
+          // Hidden commons (e.g. Harbor Warehouse, withheld for now) never offer a
+          // build row; an already-owned instance still renders normally.
+          if (!owned && entry.hidden) return null;
           return owned ? ownedRow(owned) : buildableRow(entry);
         })}
       </div>
