@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, type CharacterSheet as CharacterSheetData, type BuildingsCatalog, type BuildingsMine, type OwnedBuilding, type PeopleView } from "../api.js";
 import { type House } from "../data/league.js";
-import { AssetIcon, type FourStats, GoodGlyph, POP_ICON, type PlayerDashboardView, PopGlyph, QtyStepper, STAT_PIP_ICON, buildCountdown, formatPerDay, formatRate, ideologyReadout, idleReason } from "./shared.js";
+import { AssetIcon, type FourStats, GoodGlyph, type PlayerDashboardView, PopGlyph, QtyStepper, STAT_PIP_ICON, buildCountdown, formatPerDay, formatRate, ideologyReadout, idleReason } from "./shared.js";
 
 // Everyone starts at Tier 1; real tier tracking lands with profession progression.
 export const BASE_TIER_LABEL = "Tier 1";
@@ -590,12 +590,12 @@ export function InventoryEconomy({ data, goodLabels }: { data: { mine: Buildings
       <SheetLabel>Expenses</SheetLabel>
       {wages.length === 0 && foodUnits === 0 && upkeepTotal === 0 ? <p className="sheet-todo">No wages, food, or upkeep yet.</p> : null}
       {wages.map((w) => (
-        <ResRow key={`wage-${w.type}`} icon={POP_ICON[w.type] ?? "👤"} name={`${cap(w.type)} wages × ${w.count}`} amount={dr(-w.drCost)} />
+        <ResRow key={`wage-${w.type}`} icon={<PopGlyph type={w.type} />} name={`${cap(w.type)} wages × ${w.count}`} amount={dr(-w.drCost)} />
       ))}
       {foodUnits > 0 ? (
         <ResRow
-          icon="🌾"
-          name="Food"
+          icon={<GoodGlyph good={foodGood} fallback="🌾" />}
+          name={label(foodGood)}
           sub={`${formatPerDay(foodUnits)} ${label(foodGood)}/day${foodDrawn > 0 ? ` · ${formatPerDay(foodDrawn)} from your harvest` : ""}${foodBought > 0 ? ` · ${formatPerDay(foodBought)} bought` : ""}`}
           amount={foodCost > 0 ? dr(-foodCost) : "0 dr"}
         />
