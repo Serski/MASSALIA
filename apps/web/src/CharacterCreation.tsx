@@ -419,7 +419,7 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
       // Register only when there's no session yet, and mark ourselves authed on
       // success — so a failed createCharacter retry never registers a second time.
       if (!authedEmail) {
-        await api.register(email, password, newsletter);
+        await api.register(email, password, newsletter, consent);
         setAuthedEmail(email);
       }
       await api.createCharacter(payload);
@@ -580,7 +580,7 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
               )}
               <label className="creation-consent">
                 <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} required />
-                <span>I accept the <a href="/terms">Terms &amp; Conditions</a> and <a href="/privacy">Privacy Policy</a>.</span>
+                <span>I agree to the <a href="?page=terms" target="_blank" rel="noopener noreferrer">Terms of Service</a> and <a href="?page=privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a></span>
               </label>
               {message ? <p className="auth-message" role="status">{message}</p> : null}
             </form>

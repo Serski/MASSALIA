@@ -81,6 +81,18 @@ suite("account deletion (integration)", () => {
     )[0]!;
   }
 
+  // 0 — required consent gate at registration: no termsAccepted → 400, no user row.
+  it("POST /register without termsAccepted → 400 and creates no user", async () => {
+    const missing = await post("/auth/register", { email: "noconsent@t", password: "correct-horse" });
+    expect(missing.statusCode).toBe(400);
+    expect(missing.json().error).toBe("You must accept the Terms of Service and Privacy Policy to register.");
+
+    const explicitFalse = await post("/auth/register", { email: "noconsent@t", password: "correct-horse", termsAccepted: false });
+    expect(explicitFalse.statusCode).toBe(400);
+
+    expect(await userByEmail("noconsent@t")).toBeUndefined();
+  });
+
   // 1 — service level: tombstone + detach across worlds; sessions dropped.
   it("deleteAccount tombstones the user, drops every session, and detaches players in all worlds", async () => {
     const user = (await db.insert(m.dbPkg.users).values({ email: "svc@t", passwordHash: "realhash", newsletterOptIn: true }).returning())[0]!;
@@ -107,7 +119,7 @@ suite("account deletion (integration)", () => {
 
   // 2 — wrong password: 401, nothing mutated, session intact.
   it("POST /delete-account with the wrong password → 401, user row + sessions untouched", async () => {
-    const reg = await post("/auth/register", { email: "wrong@t", password: "correct-horse" });
+    const reg = await post("/auth/register", { email: "wrong@t", password: "correct-horse", termsAccepted: true });
     expect(reg.statusCode).toBe(200);
     const token = reg.json().token as string;
     const before = await userByEmail("wrong@t");
@@ -125,7 +137,7 @@ suite("account deletion (integration)", () => {
 
   // 3 — old bearer token is dead after deletion (requireAuth on an authed route).
   it("a bearer token is rejected (401) on an authed route after the account is deleted", async () => {
-    const reg = await post("/auth/register", { email: "stale@t", password: "correct-horse" });
+    const reg = await post("/auth/register", { email: "stale@t", password: "correct-horse", termsAccepted: true });
     const token = reg.json().token as string;
 
     const del = await post("/auth/delete-account", { password: "correct-horse" }, token);
@@ -139,7 +151,7 @@ suite("account deletion (integration)", () => {
 
   // 4 & 5 — login with the old credentials is refused; the email frees up for reuse.
   it("after deletion, login with the old email+password is refused and the email re-registers to a fresh id", async () => {
-    const reg = await post("/auth/register", { email: "reuse@t", password: "correct-horse" });
+    const reg = await post("/auth/register", { email: "reuse@t", password: "correct-horse", termsAccepted: true });
     const oldId = reg.json().user.id as string;
     const token = reg.json().token as string;
     expect((await post("/auth/delete-account", { password: "correct-horse" }, token)).statusCode).toBe(200);
@@ -150,7 +162,7 @@ suite("account deletion (integration)", () => {
     expect(login.json().error).toBe("Invalid email or password.");
 
     // 5: the freed email re-registers to a brand-new users id.
-    const again = await post("/auth/register", { email: "reuse@t", password: "brand-new-pass" });
+    const again = await post("/auth/register", { email: "reuse@t", password: "brand-new-pass", termsAccepted: true });
     expect(again.statusCode).toBe(200);
     expect(again.json().user.id).not.toBe(oldId);
   });

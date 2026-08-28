@@ -1802,6 +1802,86 @@ button.auth-forgot {
   color: var(--gold-bright, #d9b45f);
 }
 
+/* Small "Terms · Privacy" footer links on the auth screen. */
+.auth-legal-links {
+  z-index: 1;
+  margin: 14px 0 0;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: rgba(236, 224, 204, 0.5);
+  text-align: center;
+}
+
+.auth-legal-links a {
+  color: rgba(236, 224, 204, 0.72);
+  text-decoration: none;
+}
+
+.auth-legal-links a:hover {
+  color: var(--gold-bright, #d9b45f);
+}
+
+/* Static legal pages (Privacy Policy / Terms of Service). */
+.legal-shell {
+  min-height: 100vh;
+  padding: 0 20px 64px;
+}
+
+.legal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px 0;
+}
+
+.legal-back {
+  padding: 8px 16px;
+  color: var(--gold-bright, #d9b45f);
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 12px;
+  background: rgba(15, 10, 8, 0.5);
+  border: 1px solid rgba(181, 138, 69, 0.36);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.legal-article {
+  max-width: 760px;
+  margin: 0 auto;
+  color: rgba(236, 224, 204, 0.86);
+  font-size: 16px;
+  line-height: 1.62;
+}
+
+.legal-article h1 {
+  font-family: var(--font-display);
+  color: var(--gold-bright, #d9b45f);
+  margin: 8px 0 4px;
+}
+
+.legal-article .legal-updated {
+  margin: 0 0 24px;
+  color: rgba(236, 224, 204, 0.55);
+  font-size: 14px;
+}
+
+.legal-article p {
+  margin: 0 0 16px;
+}
+
+.legal-article strong {
+  color: var(--gold, #b58a45);
+}
+
+.legal-article a {
+  color: var(--gold-bright, #d9b45f);
+}
+
 @keyframes heroFade {
   from {
     opacity: 0;

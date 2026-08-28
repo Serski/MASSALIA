@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { ApiError, api, apiErrorMessage } from "./api.js";
+import { LegalPage, type LegalPageKind } from "./legal.js";
 import { CharacterCreation } from "./CharacterCreation.js";
 import { Dashboard } from "./dashboard/Dashboard.js";
 import { ProvinceMap } from "./map/ProvinceMap.js";
@@ -189,13 +190,13 @@ function AuthPanel({
     event.preventDefault();
     setMessage("");
     if (isSignup && !termsAccepted) {
-      setMessage("Accept the Terms & Conditions and Privacy Policy to join the League.");
+      setMessage("Accept the Terms of Service and Privacy Policy to join the League.");
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const result = isSignup ? await api.register(email, password, newsletter) : await api.login(email, password);
+      const result = isSignup ? await api.register(email, password, newsletter, termsAccepted) : await api.login(email, password);
       onClose?.();
       navigateTo(result.hasCharacter ? "/game" : "/create");
     } catch (error) {
@@ -372,7 +373,8 @@ function AuthPanel({
                     <label>
                       <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} required />
                       <span>
-                        I accept the <a href="/terms">Terms &amp; Conditions</a> and <a href="/privacy">Privacy Policy</a>.
+                        I agree to the <a href="?page=terms" target="_blank" rel="noopener noreferrer">Terms of Service</a> and{" "}
+                        <a href="?page=privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
                       </span>
                     </label>
                   </div>
@@ -399,6 +401,12 @@ function AuthPanel({
               </p>
             </>
           )}
+
+          <p className="auth-legal-links">
+            <a href="?page=terms" target="_blank" rel="noopener noreferrer">Terms</a>
+            {" · "}
+            <a href="?page=privacy" target="_blank" rel="noopener noreferrer">Privacy</a>
+          </p>
         </div>
       </div>
       <div className="auth-meander auth-meander-bottom" aria-hidden="true" />
@@ -707,6 +715,11 @@ export function App() {
   const [resetToken, setResetToken] = useState<string | null>(
     () => new URLSearchParams(window.location.search).get("reset"),
   );
+  // Static legal pages: `?page=privacy` / `?page=terms` (same query-param routing).
+  const [legalPage, setLegalPage] = useState<LegalPageKind | null>(() => {
+    const page = new URLSearchParams(window.location.search).get("page");
+    return page === "privacy" || page === "terms" ? page : null;
+  });
   const detailEntry = getDetailEntry(pathname);
   const authRouteMode: AuthMode | undefined = pathname === "/login" ? "login" : pathname === "/signup" ? "signup" : undefined;
   const palaioi = parties[0]!;
@@ -727,6 +740,18 @@ export function App() {
     window.history.replaceState({}, "", window.location.pathname);
     setResetToken(null);
   };
+
+  if (legalPage) {
+    return (
+      <LegalPage
+        page={legalPage}
+        onBack={() => {
+          window.history.replaceState({}, "", window.location.pathname);
+          setLegalPage(null);
+        }}
+      />
+    );
+  }
 
   if (resetToken) {
     return (

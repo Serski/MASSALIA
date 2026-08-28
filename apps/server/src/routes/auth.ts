@@ -40,6 +40,7 @@ type AuthPayload = {
   email?: string;
   password?: string;
   newsletterOptIn?: boolean;
+  termsAccepted?: boolean;
 };
 
 function normalizeEmail(email: string) {
@@ -103,6 +104,11 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.post("/register", { config: { rateLimit: { max: 8, timeWindow: 60_000 } } }, async (request, reply) => {
     const { email, password } = assertAuthPayload(request.body as AuthPayload);
+    // Required consent gate (no storage): registration is the point of agreement.
+    if ((request.body as AuthPayload).termsAccepted !== true) {
+      reply.code(400);
+      return { error: "You must accept the Terms of Service and Privacy Policy to register." };
+    }
     const newsletterOptIn = (request.body as AuthPayload).newsletterOptIn === true;
     const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
     if (existing[0]) {

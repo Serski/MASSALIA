@@ -80,7 +80,7 @@ suite("password reset (integration)", () => {
   const sessionCount = async (userId: string) =>
     (await db.select({ id: m.dbPkg.sessions.id }).from(m.dbPkg.sessions).where(eq(m.dbPkg.sessions.userId, userId))).length;
   const register = async (email: string, password: string) => {
-    const res = await post("/auth/register", { email, password });
+    const res = await post("/auth/register", { email, password, termsAccepted: true });
     expect(res.statusCode).toBe(200);
     return res.json() as { user: { id: string }; token: string };
   };

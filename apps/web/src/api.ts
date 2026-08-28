@@ -317,8 +317,8 @@ export function streamMap(handlers: { onState?: (state: MapState) => void; onCha
 }
 
 export const api = {
-  register: (email: string, password: string, newsletterOptIn = false) =>
-    authenticate("/auth/register", { email, password, newsletterOptIn }),
+  register: (email: string, password: string, newsletterOptIn = false, termsAccepted = false) =>
+    authenticate("/auth/register", { email, password, newsletterOptIn, termsAccepted }),
   login: (email: string, password: string) => authenticate("/auth/login", { email, password }),
   // Always resolves to the same generic message (enumeration-safe on the server).
   forgotPassword: (email: string) =>
