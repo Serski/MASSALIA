@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { api, ApiError, type StandingsResponse, type StandingsBoard, type StandingRow, type CityView, type CityGroup, type FactionView, type FactionGroup, type FactionCharacterView, type FactionRefView } from "../../api.js";
-import { MapCanvas } from "../../map/MapCanvas.js";
+import { ProvinceMap } from "../../map/ProvinceMap.js";
 import { AssetIcon, DashboardCard, HouseCrest, StatPips, titleCase } from "../shared.js";
 import { BottomSheet } from "../sheets.js";
 import { PublicProfile, type ProfileTarget } from "../PublicProfile.js";
@@ -619,7 +619,7 @@ export default function AtlasPanel() {
 
       {tab === "map" ? (
         <DashboardCard className="dashboard-map-card">
-          <MapCanvas />
+          <ProvinceMap />
         </DashboardCard>
       ) : tab === "standings" ? (
         <StandingsView />

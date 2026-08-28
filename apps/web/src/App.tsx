@@ -850,9 +850,9 @@ export function App() {
     return <Dashboard onExit={() => navigateTo("/")} onRequireLogin={() => navigateTo("/login")} onRequireCharacter={() => navigateTo("/create")} />;
   }
 
-  // Dev route for the province/map system — open /map to see the seeded 300 BC map
-  // with live conquest (requires a logged-in session, like the rest of the app).
-  if (pathname === "/map") {
+  // Standalone route for previewing the read-only campaign theatre. The same
+  // map is also mounted inside Dashboard → Atlas → Map.
+  if (pathname === "/map" || pathname === "/map/") {
     return <ProvinceMap />;
   }
 

@@ -17,6 +17,7 @@ let _db: Db | null = null;
 // The map is a single global season for now — a text scope key, decoupled from the
 // uuid worlds table (see migration 0034). A constant today, a parameter later.
 const MAP_WORLD_ID = "season-1";
+const MAP_MUTATIONS_ENABLED = process.env.MAP_MUTATIONS_ENABLED === "true";
 
 // Only these two changes are legal. 'occupy' = wartime control (controller only,
 // since_tick untouched); 'annex' = peace annexation (owner + controller, since_tick
@@ -105,6 +106,13 @@ export async function mapRoutes(app: FastifyInstance) {
   // Change one province's ownership. Body: { polityId, changeType: 'occupy' | 'annex' }.
   // Validation is a placeholder for the real war system, isolated in services/mapWar.ts.
   app.post("/state/:provinceId", async (request, reply) => {
+    // The theatre launches read-only. This explicit server-side gate prevents the
+    // unfinished war seam from becoming reachable merely because a client knows
+    // the route. Enabling it later still requires replacing mapWar's placeholders.
+    if (!MAP_MUTATIONS_ENABLED) {
+      reply.code(404);
+      return { error: "Map mutations are not available." };
+    }
     const { createDb } = await import("@massalia/db");
     const { requireAuth } = await import("../services/auth.js");
     const db = (_db ??= createDb());
