@@ -492,13 +492,14 @@ export const GOOD_ICON: Record<string, string> = {
   grain: "🌾", oliveoil: "🫒", wine: "🍷", chicken: "🐔", timber: "🪵", bull: "🐂", horse: "🐎", herbal: "🌿",
 };
 
-// The class building's FULL tier ladder (Your Trade). Generic over every building
-// class — it renders catalog.classBuilding.tiers, so the player sees the whole
-// progression (built ✓ → current → next [BUILD/UPGRADE] → future, greyed) with
-// each tier's provides (income + goods), cost, build time, and upkeep. The
-// build/upgrade action sits on the one buildable "next" tier; the rest are
-// informational. (Hoplite/slave have no class building, so this never renders for
-// them — their Your Trade falls through to the profession/stub path.)
+// The class building's tier ladder (Your Trade). Generic over every building
+// class — it renders catalog.classBuilding.tiers from the current tier up: the
+// current building (or tier 1 to build when unbuilt), the one buildable "next"
+// tier [BUILD/UPGRADE], then the remaining future tiers (greyed). Tiers already
+// completed are hidden, so at max tier only the current building shows. Each tier
+// lists its provides (income + goods), cost, build time, and upkeep. (Hoplite/slave
+// have no class building, so this never renders for them — their Your Trade falls
+// through to the profession/stub path.)
 // Capitalised pop-type name for the staffing line (pops aren't goods, so they have
 // no goodLabels entry — Slave / Freeman / Citizen).
 export function popName(type: string): string {

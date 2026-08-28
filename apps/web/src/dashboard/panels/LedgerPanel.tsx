@@ -63,7 +63,10 @@ function ClassBuildingLadder({
 
   return (
     <ol className="tier-ladder">
-      {entry.tiers.map((t) => {
+      {/* Focus the ladder on where the player is and where they can go: hide tiers
+          already completed (below the current one). Unbuilt (currentTier 0) still
+          shows the whole ladder; at max tier only the current building remains. */}
+      {entry.tiers.filter((t) => t.tier >= currentTier).map((t) => {
         const state =
           t.tier < currentTier
             ? "built"
