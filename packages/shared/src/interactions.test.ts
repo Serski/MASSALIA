@@ -168,6 +168,7 @@ describe("parseInteractionsConfig", () => {
   it("parses the shipped config with give + poison + assassinate + spymaster", () => {
     const parsed = parseInteractionsConfig({
       prestigeFloor: 10,
+      hostileCooldownHours: 48,
       actions: {
         give: { hostile: false, respectsPrestigeFloor: false, minAmount: 1, maxAmount: 10000 },
         poison: { hostile: true, respectsPrestigeFloor: true, baseChance: 0.5, statScale: 40, clampMin: 0.05, clampMax: 0.95, physicianMod: 15, illnessChance: 0.6 },
@@ -177,6 +178,7 @@ describe("parseInteractionsConfig", () => {
     });
     expect(parsed.actions.poison.illnessChance).toBe(0.6);
     expect(parsed.actions.assassinate.costDrachmae).toBe(200);
+    expect(parsed.hostileCooldownHours).toBe(48);
     expect(parsed.spymaster).toEqual({ guardMod: 10, huntMod: 10, postureCooldownHours: 24 });
     // deathChance is derived (1 − illnessChance), never stored.
     expect(parsed.actions.poison).not.toHaveProperty("deathChance");

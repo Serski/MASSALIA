@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { characterTraits, createDb, houses, interactions, players, playerCharacters, resources } from "@massalia/db";
 import { assassinateSuccessChance, currentAge, effectiveStats, parseInteractionsConfig, poisonSuccessChance, type CharacterStats, type InteractionsConfig } from "@massalia/shared";
 import type { CharacterRow } from "./character.js";
@@ -45,6 +45,21 @@ const TREAT_NO_REMEDY = "You hold no remedy.";
 const NO_STANDING = POISON_NO_STANDING;
 const bladeCostMessage = (cost: number) => `A blade costs ${cost} drachmae — you cannot afford it.`;
 
+// A compact remaining-time string for the cooldown copy ("1d 6h" / "6h").
+function formatCooldownRemaining(ms: number): string {
+  const hours = Math.ceil(ms / 3_600_000);
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24);
+    const rem = hours % 24;
+    return rem ? `${days}d ${rem}h` : `${days}d`;
+  }
+  return `${Math.max(1, hours)}h`;
+}
+// The lock a viewer sees / an attempt returns while a hostile move is still cooling
+// down against this target. NEW PLAYER-FACING COPY — flagged for review.
+const cooldownLockMessage = (remainingMs: number) =>
+  `Your hand is already turned against them — two seasons must pass before you strike again (${formatCooldownRemaining(remainingMs)} left).`;
+
 export interface PublicProfile {
   characterId: string;
   name: string;
@@ -84,7 +99,7 @@ export interface PublicProfile {
 
 // GET /api/interactions/profile/:characterId — the public character profile a
 // viewer opens from the hemicycle or standings. Public facts only (no raw sheet).
-export async function publicProfile(viewerRow: CharacterRow, characterId: string): Promise<PublicProfile | null> {
+export async function publicProfile(viewerRow: CharacterRow, characterId: string, now: Date = new Date()): Promise<PublicProfile | null> {
   const rows = await db
     .select({
       id: playerCharacters.id,
@@ -116,6 +131,11 @@ export async function publicProfile(viewerRow: CharacterRow, characterId: string
   else if (!isOligarch) lockReason = LOCK_NO_SEAT;
   const canInteract = isAlive && isOligarch && !isSelf;
 
+  // The shared hostile cooldown for this viewer→target pair (poison + assassinate).
+  // Both gates read it after standing, mirroring the attempt paths.
+  const cooldownMs = isSelf ? 0 : await hostileCooldownRemainingMs(viewerRow.id, target.id, now);
+  const onCooldown = cooldownMs > 0;
+
   // Poison gate (Prompt 2) — same order as poisonAttempt's gates, minus the roll.
   const { prestigeFloor } = getInteractionsConfig();
   const viewerPoison = isSelf ? 0 : await heldResourceAmount(viewerRow.playerId, "poison");
@@ -124,8 +144,9 @@ export async function publicProfile(viewerRow: CharacterRow, characterId: string
   else if (!isAlive) poisonLockReason = LOCK_DEAD;
   else if (!isOligarch) poisonLockReason = LOCK_NO_SEAT;
   else if (target.prestige < prestigeFloor) poisonLockReason = POISON_NO_STANDING;
+  else if (onCooldown) poisonLockReason = cooldownLockMessage(cooldownMs);
   else if (viewerPoison < 1) poisonLockReason = POISON_NO_POISON;
-  const canPoison = isAlive && isOligarch && !isSelf && target.prestige >= prestigeFloor && viewerPoison >= 1;
+  const canPoison = isAlive && isOligarch && !isSelf && target.prestige >= prestigeFloor && !onCooldown && viewerPoison >= 1;
 
   // Assassinate gate (Prompt 3) — same order as assassinateAttempt's gates, minus the roll.
   const assassinate = getInteractionsConfig().actions.assassinate;
@@ -135,8 +156,9 @@ export async function publicProfile(viewerRow: CharacterRow, characterId: string
   else if (!isAlive) assassinateLockReason = LOCK_DEAD;
   else if (!isOligarch) assassinateLockReason = LOCK_NO_SEAT;
   else if (target.prestige < prestigeFloor) assassinateLockReason = NO_STANDING;
+  else if (onCooldown) assassinateLockReason = cooldownLockMessage(cooldownMs);
   else if (!canAfford) assassinateLockReason = bladeCostMessage(assassinate.costDrachmae);
-  const canAssassinate = isAlive && isOligarch && !isSelf && target.prestige >= prestigeFloor && canAfford;
+  const canAssassinate = isAlive && isOligarch && !isSelf && target.prestige >= prestigeFloor && !onCooldown && canAfford;
 
   return {
     characterId: target.id,
@@ -163,6 +185,24 @@ async function heldResourceAmount(playerId: string, type: string): Promise<numbe
     .where(and(eq(resources.scope, "player"), eq(resources.scopeId, playerId), eq(resources.type, type)))
     .limit(1);
   return Math.floor(Number(rows[0]?.amount ?? 0));
+}
+
+// The remaining hostile cooldown (ms) for this attacker→target pair — 0 when clear.
+// One hostile attempt (poison OR assassinate, combined) per pair per
+// hostileCooldownHours, counted from the attempt regardless of outcome: every real
+// attempt writes a poison/assassinate ledger row (failures included), so the most
+// recent such row against this target starts the clock.
+async function hostileCooldownRemainingMs(actorId: string, targetId: string, now: Date): Promise<number> {
+  const windowMs = getInteractionsConfig().hostileCooldownHours * 3_600_000;
+  const rows = await db
+    .select({ createdAt: interactions.createdAt })
+    .from(interactions)
+    .where(and(eq(interactions.actorCharacterId, actorId), eq(interactions.targetCharacterId, targetId), inArray(interactions.type, ["poison", "assassinate"])))
+    .orderBy(desc(interactions.createdAt))
+    .limit(1);
+  const last = rows[0]?.createdAt;
+  if (!last) return 0;
+  return Math.max(0, windowMs - (now.getTime() - last.getTime()));
 }
 
 // --- Give drachmae (Interaction Pipeline, Prompt 1) --------------------------
@@ -334,6 +374,10 @@ export async function poisonAttempt(
   if (target.id === actorRow.id) return { ok: false, code: 409, error: "You cannot poison yourself." };
   if (target.status !== "alive") return { ok: false, code: 409, error: LOCK_DEAD };
   if (target.prestige < cfg.prestigeFloor) return { ok: false, code: 403, error: POISON_NO_STANDING };
+  // One hostile attempt per pair per window (poison + assassinate share it). Checked
+  // after standing and before any vial is spent — a refusal consumes nothing.
+  const poisonCooldownMs = await hostileCooldownRemainingMs(actorRow.id, target.id, now);
+  if (poisonCooldownMs > 0) return { ok: false, code: 429, error: cooldownLockMessage(poisonCooldownMs) };
   if ((await heldResourceAmount(actorRow.playerId, "poison")) < 1) return { ok: false, code: 409, error: POISON_NO_POISON };
 
   // Resolution — every read server-side; nothing about the defense is persisted. The
@@ -499,6 +543,10 @@ export async function assassinateAttempt(
   if (target.id === actorRow.id) return { ok: false, code: 409, error: "You cannot mark yourself." };
   if (target.status !== "alive") return { ok: false, code: 409, error: LOCK_DEAD };
   if (target.prestige < cfg.prestigeFloor) return { ok: false, code: 403, error: NO_STANDING };
+  // One hostile attempt per pair per window (poison + assassinate share it). Checked
+  // after standing and before the blade is paid — a refusal consumes nothing.
+  const bladeCooldownMs = await hostileCooldownRemainingMs(actorRow.id, target.id, now);
+  if (bladeCooldownMs > 0) return { ok: false, code: 429, error: cooldownLockMessage(bladeCooldownMs) };
   if (actorRow.drachmae < cost) return { ok: false, code: 409, error: bladeCostMessage(cost) };
 
   // Resolution — every read server-side. The bodyguard + spymaster counts are read

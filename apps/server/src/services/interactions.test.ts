@@ -416,7 +416,10 @@ suite("the Interaction Pipeline (integration)", () => {
     const target = await standingTarget("TwicePoisoned");
 
     expect(await m.interactions.poisonAttempt(actor, target.id, now, forceIll)).toMatchObject({ ok: true, outcome: "ill" });
-    expect(await m.interactions.poisonAttempt(actor, target.id, now, forceIll)).toMatchObject({ ok: true, outcome: "ill" });
+    // The two channels share a per-target cooldown now, so the SECOND illness poison
+    // must fall past the window (49h) to land — this test is about the trait/ledger,
+    // not the cooldown.
+    expect(await m.interactions.poisonAttempt(actor, target.id, new Date(now.getTime() + 49 * 3_600_000), forceIll)).toMatchObject({ ok: true, outcome: "ill" });
 
     // Exactly one trait row (ON CONFLICT DO NOTHING against the unique index)…
     const traitRows = await db.select().from(characterTraits).where(and(eq(characterTraits.characterId, target.id), eq(characterTraits.traitId, "poisoned")));
@@ -614,5 +617,77 @@ suite("the Interaction Pipeline (integration)", () => {
     const second = await m.buildings.hirePops(ctx, "spymaster", 1, now);
     expect(second).toMatchObject({ ok: false, code: 409, error: "You already retain a spymaster." });
     expect((await freshRow(spy.id)).drachmae).toBe(350); // only the first 150 charged
+  });
+
+  // --- Hostile attempt cooldown: one poison-OR-assassinate per pair per window ----
+  // The clock starts from any attempt (failures included, since they hit the ledger),
+  // and the two channels share it. Second attempts use `new Date()` (just after the
+  // first ledger write) for "inside window"; +49h for "after window".
+  const AFTER_WINDOW = () => new Date(Date.now() + 49 * 3_600_000);
+
+  it("(cooldown) a second poison inside the window is refused with the lock copy — no vial spent", async () => {
+    const actor = await oligarch("SerialP", 0);
+    await seedResource(actor.playerId, "poison", 2);
+    const target = await standingTarget("RepeatP");
+    expect(await m.interactions.poisonAttempt(actor, target.id, new Date(), forceFail)).toMatchObject({ ok: true, outcome: "failed" });
+    expect(await resourceAmount(actor.playerId, "poison")).toBe(1); // the first vial was spent
+    const second = await m.interactions.poisonAttempt(actor, target.id, new Date(), forceFail);
+    expect(second).toMatchObject({ ok: false, code: 429 });
+    expect(second.ok ? "" : second.error).toMatch(/two seasons/);
+    expect(await resourceAmount(actor.playerId, "poison")).toBe(1); // the refusal consumed nothing
+  });
+
+  it("(cooldown) a second assassination inside the window is refused — no drachmae spent", async () => {
+    const actor = await oligarch("SerialB", 500);
+    const target = await standingTarget("RepeatB");
+    expect(await m.interactions.assassinateAttempt(actor, target.id, new Date(), forceFail)).toMatchObject({ ok: true, outcome: "failed" });
+    expect((await freshRow(actor.id)).drachmae).toBe(300); // 500 − 200 blade
+    const second = await m.interactions.assassinateAttempt(actor, target.id, new Date(), forceFail);
+    expect(second).toMatchObject({ ok: false, code: 429 });
+    expect((await freshRow(actor.id)).drachmae).toBe(300); // the refusal charged nothing
+  });
+
+  it("(cooldown) the window is CROSS-channel: a failed poison blocks an assassination on the same target", async () => {
+    const actor = await oligarch("Mixer", 500);
+    await seedResource(actor.playerId, "poison", 1);
+    const target = await standingTarget("CrossMark");
+    expect(await m.interactions.poisonAttempt(actor, target.id, new Date(), forceFail)).toMatchObject({ ok: true, outcome: "failed" });
+    const blade = await m.interactions.assassinateAttempt(actor, target.id, new Date(), forceDead);
+    expect(blade).toMatchObject({ ok: false, code: 429 });
+    expect(blade.ok ? "" : blade.error).toMatch(/two seasons/);
+    expect((await freshRow(actor.id)).drachmae).toBe(500); // the blade was never paid
+    expect((await freshRow(target.id)).status).toBe("alive"); // and the target still lives
+  });
+
+  it("(cooldown) a DIFFERENT target is unaffected by a move against another", async () => {
+    const actor = await oligarch("Busy", 0);
+    await seedResource(actor.playerId, "poison", 2);
+    const a = await standingTarget("PairA");
+    const b = await standingTarget("PairB");
+    expect(await m.interactions.poisonAttempt(actor, a.id, new Date(), forceFail)).toMatchObject({ ok: true });
+    // b was never targeted → its own clock is clear.
+    expect(await m.interactions.poisonAttempt(actor, b.id, new Date(), forceFail)).toMatchObject({ ok: true, outcome: "failed" });
+  });
+
+  it("(cooldown) after the window the attempt proceeds again", async () => {
+    const actor = await oligarch("Patient", 0);
+    await seedResource(actor.playerId, "poison", 2);
+    const target = await standingTarget("Later");
+    expect(await m.interactions.poisonAttempt(actor, target.id, new Date(), forceFail)).toMatchObject({ ok: true });
+    // 49h later — past the 48h window → allowed, and the second vial is spent.
+    expect(await m.interactions.poisonAttempt(actor, target.id, AFTER_WINDOW(), forceFail)).toMatchObject({ ok: true, outcome: "failed" });
+    expect(await resourceAmount(actor.playerId, "poison")).toBe(0); // both vials spent
+  });
+
+  it("(cooldown) the profile lock reason names the cooldown inside the window on both channels", async () => {
+    const actor = await oligarch("Watcher", 500);
+    await seedResource(actor.playerId, "poison", 1);
+    const target = await standingTarget("Observed");
+    expect(await m.interactions.assassinateAttempt(actor, target.id, new Date(), forceFail)).toMatchObject({ ok: true, outcome: "failed" });
+    const profile = await m.interactions.publicProfile(await freshRow(actor.id), target.id, new Date());
+    expect(profile!.viewer.canPoison).toBe(false);
+    expect(profile!.viewer.canAssassinate).toBe(false);
+    expect(profile!.viewer.poisonLockReason).toMatch(/two seasons/);
+    expect(profile!.viewer.assassinateLockReason).toMatch(/two seasons/);
   });
 });

@@ -1,5 +1,6 @@
 {
   "prestigeFloor": 10,
+  "hostileCooldownHours": 48,
   "actions": {
     "give": { "hostile": false, "respectsPrestigeFloor": false, "minAmount": 1, "maxAmount": 10000 },
     "poison": { "hostile": true, "respectsPrestigeFloor": true,
