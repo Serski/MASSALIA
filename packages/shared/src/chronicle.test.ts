@@ -297,3 +297,50 @@ describe("buildChronicle — adoption (the rite)", () => {
     expect(buildChronicle(base).some((e) => e.type === "adoption")).toBe(false);
   });
 });
+
+describe("buildChronicle — deaths", () => {
+  // Boundaries are OFFSET from a season edge (the +100), matching production, where a
+  // succession instant is an arbitrary `now`, never season-aligned.
+  const B1 = 10 * S + 100;
+  const B2 = 20 * S + 100;
+
+  it("projects a death per handoff with age + cause; a null/legacy cause reads plain", () => {
+    const entries = buildChronicle({
+      startedMs: 0,
+      successionBoundariesMs: [B1, B2],
+      marriages: [],
+      births: [],
+      choregos: [],
+      festivals: [],
+      olympics: [],
+      deaths: [
+        { id: "legacy", at: B1, age: 72, cause: null }, // the one real production death
+        { id: "murder", at: B2, age: 55, cause: "assassinated" },
+      ],
+    });
+    const deaths = entries.filter((e) => e.type === "death");
+    expect(deaths.map((e) => e.payload.cause)).toEqual([null, "assassinated"]);
+    expect(deaths.map((e) => e.payload.age)).toEqual([72, 55]);
+    // The null-cause row is a plain death entry, not dropped.
+    expect(deaths[0]!.payload.cause).toBeNull();
+  });
+
+  it("tags a death with the generation it ends, not the incoming one", () => {
+    const entries = buildChronicle({
+      startedMs: 0,
+      successionBoundariesMs: [B1, B2],
+      marriages: [],
+      births: [],
+      choregos: [],
+      festivals: [],
+      olympics: [],
+      deaths: [
+        { id: "d1", at: B1, age: 60, cause: "poison" }, // ends gen 1
+        { id: "d2", at: B2, age: 44, cause: "mercenary" }, // ends gen 2
+      ],
+    });
+    const byCause = (c: string) => entries.find((e) => e.type === "death" && e.payload.cause === c)!;
+    expect(byCause("poison").generation).toBe(1);
+    expect(byCause("mercenary").generation).toBe(2);
+  });
+});

@@ -7,7 +7,19 @@ export function SuccessionScreen({ succession, onResolved }: { succession: Succe
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [picked, setPicked] = useState<string | null>(null);
-  const { epitaph, plan, heir, candidates } = succession;
+  const { epitaph, plan, heir, candidates, cause } = succession;
+
+  // Murder variant: an assassination or a poisoning reads plainly as murder, with the
+  // method named. Every other cause (natural, mercenary, legacy null) keeps the plain
+  // notice. NEW PLAYER-FACING COPY — flagged for review in the report.
+  const murdered = cause === "assassinated" || cause === "poison";
+  const name = `${epitaph.name}${epitaph.ladderTrait ? `, ${epitaph.ladderTrait}` : ""}`;
+  const title = murdered
+    ? `${name} was murdered in the ${epitaph.age}th year.`
+    : `${name}, dies in the ${epitaph.age}th year.`;
+  const epitaphLine = murdered
+    ? `${epitaph.lifeStage} · age ${epitaph.age}. ${cause === "poison" ? "Poison in the cup." : "A hidden blade found its mark."} The house must pass to another.`
+    : `${epitaph.lifeStage} · age ${epitaph.age}. The house must pass to another.`;
 
   const succeed = async (candidateId?: string) => {
     setBusy(true);
@@ -23,12 +35,10 @@ export function SuccessionScreen({ succession, onResolved }: { succession: Succe
 
   return (
     <main className="succession-shell">
-      <section className="succession-card">
-        <p className="section-eyebrow">Succession</p>
-        <h1 className="succession-title">
-          {epitaph.name}{epitaph.ladderTrait ? `, ${epitaph.ladderTrait}` : ""}, dies in the {epitaph.age}th year.
-        </h1>
-        <p className="succession-epitaph">{epitaph.lifeStage} · age {epitaph.age}. The house must pass to another.</p>
+      <section className={`succession-card${murdered ? " succession-murder" : ""}`}>
+        <p className="section-eyebrow">{murdered ? "Murder" : "Succession"}</p>
+        <h1 className="succession-title">{title}</h1>
+        <p className="succession-epitaph">{epitaphLine}</p>
 
         {plan.kind === "forced_adoption" ? (
           <>

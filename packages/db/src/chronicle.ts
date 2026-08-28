@@ -3,8 +3,10 @@ import {
   buildChronicle,
   OLYMPIAD_GAMES_FESTIVAL_ID,
   type ChronicleAfflictionRow,
+  type ChronicleDeathRow,
   type ChronicleEntry,
   type ChronicleInput,
+  type DeathCause,
 } from "@massalia/shared";
 import { createDb } from "./client.js";
 import { alias } from "drizzle-orm/pg-core";
@@ -60,15 +62,20 @@ export async function gatherChronicleForCharacter(characterId: string): Promise<
   const startedMs = await worldStartedMs();
   if (startedMs === null) return [];
 
-  // Succession instants for this dynasty mark the generation handoffs.
-  const successionBoundariesMs = slot.dynastyId
-    ? (
-        await db
-          .select({ occurredAt: successions.occurredAt })
-          .from(successions)
-          .where(eq(successions.dynastyId, slot.dynastyId))
-      ).map((row) => row.occurredAt.getTime())
+  // Succession rows for this dynasty: every occurredAt is a generation boundary, and
+  // each death handoff (blood/adopted/fresh — NOT a regent maturation) is also a
+  // death entry, carrying the age at death and the recorded cause.
+  const successionRows = slot.dynastyId
+    ? await db
+        .select({ id: successions.id, kind: successions.kind, fromAge: successions.fromAge, cause: successions.cause, occurredAt: successions.occurredAt })
+        .from(successions)
+        .where(eq(successions.dynastyId, slot.dynastyId))
     : [];
+  const successionBoundariesMs = successionRows.map((row) => row.occurredAt.getTime());
+  const DEATH_KINDS = new Set(["blood", "adopted", "fresh"]);
+  const deaths: ChronicleDeathRow[] = successionRows
+    .filter((row) => DEATH_KINDS.has(row.kind))
+    .map((row) => ({ id: row.id, at: row.occurredAt.getTime(), age: row.fromAge, cause: (row.cause as DeathCause | null) ?? null }));
 
   // Marriages (spouse display name via the consumed family candidate).
   const marriageRows = await db
@@ -242,5 +249,6 @@ export async function gatherChronicleForCharacter(characterId: string): Promise<
     adoptions,
     gifts,
     afflictions,
+    deaths,
   });
 }

@@ -783,6 +783,22 @@ const chronicleRenderers: Record<ChronicleEntry["type"], (payload: Record<string
   poison_illness: () => "You have fallen gravely ill — a physician may yet purge the venom.",
   venom_purged: () => "The venom is purged; your strength returns.",
   assassination_survived: () => "A blade meant for you was turned aside in the dark.",
+  // The end of a generation. A murder (assassinated/poison) says so plainly; a
+  // mercenary death names the field; a natural or unknown/legacy cause reads as a
+  // plain death. NEW PLAYER-FACING COPY — flagged for review in the report.
+  death: (p) => {
+    const at = typeof p.age === "number" ? ` at ${p.age}` : "";
+    switch (p.cause) {
+      case "assassinated":
+        return `Murdered${at}.`;
+      case "poison":
+        return `Poisoned${at}.`;
+      case "mercenary":
+        return `Fell on campaign${at}.`;
+      default:
+        return `Died${at}.`;
+    }
+  },
 };
 
 function renderChronicleEntry(entry: ChronicleEntry): string {

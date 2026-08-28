@@ -6,7 +6,7 @@ if (import.meta.env.PROD && !configuredApiUrl) {
 
 export const apiBaseUrl = (configuredApiUrl ?? (import.meta.env.DEV ? "http://localhost:3001" : "")).replace(/\/$/, "");
 
-import type { AgeConfig, CharacterSheet, GameDate } from "@massalia/shared";
+import type { AgeConfig, CharacterSheet, DeathCause, GameDate } from "@massalia/shared";
 
 export type { CharacterSheet } from "@massalia/shared";
 export type { AgeConfig } from "@massalia/shared";
@@ -231,7 +231,8 @@ export type ChronicleType =
   | "gift_received"
   | "poison_illness"
   | "venom_purged"
-  | "assassination_survived";
+  | "assassination_survived"
+  | "death";
 
 export type ChronicleEntry = {
   seasonIndex: number;
@@ -860,6 +861,9 @@ export type RegentBadge = {
 export type SuccessionState = {
   pending: true;
   epitaph: { name: string; age: number; lifeStage: string; ladderTrait: string | null };
+  // How they died; assassinated/poison drive the murder card variant. Null (legacy
+  // rows, natural, mercenary) keeps the plain card.
+  cause: DeathCause | null;
   plan: { kind: "blood" | "adopted" | "regency" | "fresh" | "forced_adoption" };
   heir: { name: string; relation: string } | null;
   candidates: { id: string; name: string; sex: string; age: number; houseSlug: string }[];

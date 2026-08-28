@@ -10,7 +10,16 @@
 // each entry's structured payload into prose. Prose is NEVER stored here.
 // ---------------------------------------------------------------------------
 
+import { z } from "zod";
 import { formatGameDate, gameDate } from "./calendar.js";
+
+// How a character died, recorded on the succession handoff (see successions.cause,
+// migration 0047). A NULL/unknown cause (legacy rows, regent maturation) reads as a
+// plain death everywhere. These are the only lethal paths that exist in the code:
+// old age (natural), the hidden blade (assassinated), the cup (poison), and a
+// mercenary contract gone wrong (mercenary).
+export const deathCauseSchema = z.enum(["natural", "assassinated", "poison", "mercenary"]);
+export type DeathCause = z.infer<typeof deathCauseSchema>;
 
 export type ChronicleType =
   | "marriage"
@@ -37,9 +46,13 @@ export type ChronicleType =
   | "poison_illness"
   | "venom_purged"
   // Interaction Pipeline (Prompt 3): a FAILED assassination attempt (target-visible,
-  // anonymous). A successful assassination produces no chronicle line — the
-  // succession flow is the announcement, same as a poison death.
-  | "assassination_survived";
+  // anonymous). A successful assassination has no survived-line — instead it lands as
+  // a "death" entry below (cause assassinated), the same as any other death.
+  | "assassination_survived"
+  // The end of a generation: this character died. One per death handoff (successions
+  // blood/adopted/fresh), dated at the succession instant, carrying the age at death
+  // and the cause (murder reads plainly; a null/natural cause reads as a plain death).
+  | "death";
 
 export type ChronicleEntry = {
   // Sort key, from gameDate(timestamp, startedMs).seasonIndex.
@@ -122,6 +135,9 @@ export type ChronicleInput = {
   // Interaction Pipeline (Prompt 2): poison illness onsets + cures for this
   // character. Optional — pre-existing fixtures need not supply it.
   afflictions?: ChronicleAfflictionRow[];
+  // One row per death handoff in the dynasty (successions blood/adopted/fresh).
+  // Optional — pre-existing fixtures need not supply it.
+  deaths?: ChronicleDeathRow[];
 };
 
 export type ChronicleAdoptionRow = {
@@ -147,6 +163,15 @@ export type ChronicleAfflictionRow = {
   kind: "poison_illness" | "venom_purged" | "assassination_survived";
 };
 
+// A death handoff for the dynasty: `at` is the succession instant, `age` the age at
+// death (null on legacy rows), `cause` how they died (null reads as a plain death).
+export type ChronicleDeathRow = {
+  id: string;
+  at: number;
+  age: number | null;
+  cause: DeathCause | null;
+};
+
 // Deterministic tiebreak when several events land in the same season.
 const TYPE_ORDER: Record<ChronicleType, number> = {
   marriage: 0,
@@ -163,6 +188,8 @@ const TYPE_ORDER: Record<ChronicleType, number> = {
   poison_illness: 11,
   venom_purged: 12,
   assassination_survived: 13,
+  // A death ends the generation, so it sorts last when several events share a season.
+  death: 14,
 };
 
 // generation = 1 + (boundaries that occurred at or before the event). An event at
@@ -242,6 +269,15 @@ export function buildChronicle(input: ChronicleInput): ChronicleEntry[] {
   }
   for (const a of input.afflictions ?? []) {
     staged.push(stage(a.id, a.at, a.kind, {}, input));
+  }
+  for (const d of input.deaths ?? []) {
+    // The succession instant is a generation boundary, so a death dated exactly on it
+    // would tag as the INCOMING generation. A death belongs to the generation it
+    // ends, so date it a hair earlier (in play occurredAt is never season-aligned, so
+    // the label is unchanged) to keep it under the dying generation's heading.
+    const at = Math.max(0, d.at - 1);
+    const yearBC = gameDate(at, input.startedMs).yearBC;
+    staged.push(stage(d.id, at, "death", { age: d.age, cause: d.cause ?? null, yearBC }, input));
   }
 
   staged.sort(

@@ -1,5 +1,5 @@
 import { and, eq, gte, isNull, sql } from "drizzle-orm";
-import { children, createDb, drawFamilyCandidates, dynasties, effectLog, familyCandidates, playerCharacters, players, successions } from "@massalia/db";
+import { children, createDb, drawFamilyCandidates, dynasties, effectLog, familyCandidates, interactions, playerCharacters, players, successions } from "@massalia/db";
 import {
   adoptionWomenOnly,
   capStat,
@@ -12,6 +12,7 @@ import {
   rollDeathAge,
   successionPlan,
   type CharacterStats,
+  type DeathCause,
   type FamilyConfig,
   type StatBlock,
   type Sex,
@@ -67,6 +68,30 @@ async function playerName(playerId: string): Promise<string> {
   return rows[0]?.name ?? "Your forebear";
 }
 
+// How this character died, read from the death context that survives to the card
+// and to heir resolution. There is no single "cause" column on the character; each
+// lethal path leaves its own mark, so we read exactly those:
+//   - a mercenary contract death stashed a note on pending_death_note (db/merc.ts);
+//   - a lethal poison / assassination wrote an interactions row (outcome 'dead')
+//     for THIS life (createdAt >= the life's createdAt — the slot is reused, so the
+//     lower bound scopes to the current life, not a forebear's killing);
+//   - otherwise old age took them (natural).
+// Returns null only for a non-death handoff (regent maturation), where the caller
+// passes recordKind 'regent_handoff' and skips the write.
+async function resolveDeathCause(slot: CharacterRow): Promise<DeathCause> {
+  if (slot.pendingDeathNote) return "mercenary";
+  const lethal = await db
+    .select({ type: interactions.type, payload: interactions.payload })
+    .from(interactions)
+    .where(and(eq(interactions.targetCharacterId, slot.id), gte(interactions.createdAt, slot.createdAt)));
+  for (const row of lethal) {
+    if ((row.payload as { outcome?: unknown }).outcome !== "dead") continue;
+    if (row.type === "assassinate") return "assassinated";
+    if (row.type === "poison") return "poison";
+  }
+  return "natural";
+}
+
 // Mutate the single slot (players row + player_characters row) into the heir. The
 // always-inherited set (house, holdings, drachmae, oligarch seat / is_councilor)
 // is simply NOT reset. Records a successions row + increments the dynasty
@@ -84,6 +109,12 @@ async function becomeHeir(
   if (recordKind && slot.dynastyId) {
     const fromName = await playerName(slot.playerId);
     const fromAge = currentAge(slot.startAge, slot.createdAt.getTime(), now.getTime(), ageCfg);
+    // A death handoff (blood/adopted/fresh) records how they died; a regent
+    // maturation is not a death, so it leaves cause null. A plain old-age death is
+    // stored as NULL too — null is the single "plain death" signal (same as a legacy
+    // pre-0047 row), so only the lethal causes carry a value.
+    const resolved = recordKind === "regent_handoff" ? "natural" : await resolveDeathCause(slot);
+    const cause = resolved === "natural" ? null : resolved;
     await db.update(dynasties).set({ generation: sql`${dynasties.generation} + 1` }).where(eq(dynasties.id, slot.dynastyId));
     await db.insert(successions).values({
       dynastyId: slot.dynastyId,
@@ -96,6 +127,7 @@ async function becomeHeir(
       // Hoplite Step 4: a glorious merc death stashed its chronicle line here; carry
       // it into the dynasty ledger. Null for old-age / other handoffs.
       note: slot.pendingDeathNote ?? null,
+      cause,
     });
   }
 
@@ -206,6 +238,11 @@ export async function successionInfo(row: CharacterRow, now: Date = new Date()) 
   const epitaphName = await playerName(row.playerId);
   const age = currentAge(row.startAge, row.createdAt.getTime(), now.getTime(), ageCfg);
   const ladder = await topLadderTrait(row.id);
+  // Read the cause now, from the same death context becomeHeir will record — so the
+  // murder card is right even when the victim was offline when the blade fell. A
+  // plain old-age death surfaces as null (the card only distinguishes murder).
+  const resolvedCause = await resolveDeathCause(row);
+  const cause = resolvedCause === "natural" ? null : resolvedCause;
 
   // For the forced-adoption path, surface the candidate choices.
   let candidates: { id: string; name: string; sex: string; age: number; houseSlug: string }[] = [];
@@ -237,6 +274,8 @@ export async function successionInfo(row: CharacterRow, now: Date = new Date()) 
   return {
     pending: true,
     epitaph: { name: epitaphName, age, lifeStage: lifeStage(age, ageCfg), ladderTrait: ladder },
+    // How they died — the card shows a distinct murder variant for assassinated/poison.
+    cause,
     plan: { kind: plan.kind },
     heir: heirPreview,
     candidates,

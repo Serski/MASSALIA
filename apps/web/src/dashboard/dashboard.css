@@ -3230,6 +3230,11 @@
 .succession-card { max-width: 540px; width: 100%; padding: 28px; border-radius: 14px; background: rgba(18, 13, 9, 0.92); border: 1px solid rgba(181, 138, 69, 0.3); box-shadow: 0 24px 60px rgba(0,0,0,0.5); display: grid; gap: 14px; }
 .succession-title { font-size: 24px; line-height: 1.25; color: var(--dash-gold, #d8b25a); }
 .succession-epitaph { opacity: 0.78; }
+/* Murder variant (assassination / poison): a crimson cast so a killing does not read
+   like a quiet passing. Reuses the affliction-banner crimson. */
+.succession-card.succession-murder { border-color: rgba(156, 59, 52, 0.6); box-shadow: 0 24px 60px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(120, 38, 31, 0.25); }
+.succession-card.succession-murder .section-eyebrow { color: #d49a86; }
+.succession-card.succession-murder .succession-title { color: #e7b6ac; }
 .succession-candidates { display: grid; gap: 8px; }
 .succession-candidate { display: grid; gap: 2px; text-align: left; padding: 12px 14px; border-radius: 8px; background: rgba(12, 8, 7, 0.5); border: 1px solid rgba(181, 138, 69, 0.28); color: inherit; cursor: pointer; }
 .succession-candidate.selected { border-color: var(--dash-gold, #d8b25a); background: rgba(181, 138, 69, 0.16); }

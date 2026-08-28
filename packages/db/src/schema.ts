@@ -154,6 +154,10 @@ export const successions = pgTable("successions", {
   // Free-text chronicle line for the handoff (Hoplite Step 4): a glorious merc
   // death records "<name> fell <setting>, season <n>"; other handoffs leave it null.
   note: text("note"),
+  // How the departing character died, for the death card + chronicle (migration
+  // 0047): 'natural' | 'assassinated' | 'poison' | 'mercenary' on a death handoff;
+  // NULL on a regent-maturation handoff and on legacy rows written before 0047.
+  cause: text("cause"),
   occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   dynastyIdx: index("successions_dynasty_idx").on(table.dynastyId),
