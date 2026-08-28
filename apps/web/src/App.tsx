@@ -675,13 +675,6 @@ export function App() {
           <p className="section-eyebrow">Atlas</p>
           <h2 id="atlas-title">Massalia and the Phocaean world</h2>
           <p>Massalia is the shared arena: a 300-seat oligarchy, the elected Archons and Ephors, and two rival parties — power worth fighting over politically, economically, and socially. Around her lie the Phocaean colonies and trading ports of the western sea.</p>
-          <div className="city-list" aria-label="Cities of the Phocaean world">
-            {leagueCities.map((city) => (
-              <DetailLink className="city-item" entry={city} key={city.name}>
-                <span>{city.capital ? "★ " : ""}{city.name}</span>
-              </DetailLink>
-            ))}
-          </div>
         </div>
         <div className="map-frame" role="img" aria-label="League of Massalia atlas map">
           <img src={assetPath("assets/MAP01.jpg")} alt="" />
