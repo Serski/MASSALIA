@@ -1,12 +1,17 @@
 import crypto from "node:crypto";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { and, eq, gt, isNull } from "drizzle-orm";
-import { createDb, sessions, users } from "@massalia/db";
+import { createDb, passwordResetTokens, sessions, users } from "@massalia/db";
 
 export const sessionCookieName = "massalia_session";
 
 const db = createDb();
 const sessionTtlMs = 30 * 24 * 60 * 60 * 1000;
+const passwordResetTtlMs = 60 * 60 * 1000;
+
+// Transaction handle type (drizzle's tx passed to db.transaction's callback), so
+// password-reset consumption can run inside the caller's transaction.
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export type AuthUser = {
   id: string;
@@ -38,6 +43,60 @@ function hashToken(token: string) {
 
 export function createSessionToken() {
   return crypto.randomBytes(32).toString("base64url");
+}
+
+// --- Password reset ---------------------------------------------------------
+// Same token discipline as sessions: a random token (reusing createSessionToken)
+// is returned to the caller (emailed as a link), but only its SHA-256 hash is
+// stored. 60-minute TTL, newest-only, single-use — see migration 0045.
+
+// Issue a reset token for a user. Newest-only: every prior unused token for this
+// user is marked used first, so only the freshest link works. Returns the RAW
+// token (the hash is what lands in the table).
+export async function createPasswordReset(userId: string): Promise<string> {
+  const token = createSessionToken();
+  const expiresAt = new Date(Date.now() + passwordResetTtlMs);
+  await db.transaction(async (tx) => {
+    await tx
+      .update(passwordResetTokens)
+      .set({ usedAt: new Date() })
+      .where(and(eq(passwordResetTokens.userId, userId), isNull(passwordResetTokens.usedAt)));
+    await tx.insert(passwordResetTokens).values({ userId, tokenHash: hashToken(token), expiresAt });
+  });
+  return token;
+}
+
+// Atomically consume a reset token WITHIN a caller-provided transaction, so the
+// consume and the password update commit (or roll back) together. The mark-used
+// UPDATE is guarded by `used_at IS NULL AND expires_at > now()` and RETURNs the
+// affected row: under concurrency the loser waits on the row lock, then matches
+// zero rows and gets null — the token can never be spent twice. NULL/expired/
+// already-used/deleted-user all yield null (no partial state, nothing revealed).
+export async function consumePasswordResetTx(tx: Tx, rawToken: string): Promise<AuthUser | null> {
+  const marked = await tx
+    .update(passwordResetTokens)
+    .set({ usedAt: new Date() })
+    .where(
+      and(
+        eq(passwordResetTokens.tokenHash, hashToken(rawToken)),
+        isNull(passwordResetTokens.usedAt),
+        gt(passwordResetTokens.expiresAt, new Date()),
+      ),
+    )
+    .returning({ userId: passwordResetTokens.userId });
+  if (marked.length !== 1) return null;
+
+  const rows = await tx
+    .select({ id: users.id, email: users.email })
+    .from(users)
+    .where(and(eq(users.id, marked[0]!.userId), isNull(users.deletedAt)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+// Standalone consume (own transaction) — for direct testing / non-reset callers.
+export async function consumePasswordReset(rawToken: string): Promise<AuthUser | null> {
+  return db.transaction((tx) => consumePasswordResetTx(tx, rawToken));
 }
 
 export async function createSession(reply: FastifyReply, userId: string) {

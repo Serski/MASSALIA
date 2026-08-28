@@ -320,6 +320,13 @@ export const api = {
   register: (email: string, password: string, newsletterOptIn = false) =>
     authenticate("/auth/register", { email, password, newsletterOptIn }),
   login: (email: string, password: string) => authenticate("/auth/login", { email, password }),
+  // Always resolves to the same generic message (enumeration-safe on the server).
+  forgotPassword: (email: string) =>
+    apiFetch<{ ok: true; message: string }>("/auth/forgot-password", { method: "POST", body: { email } }),
+  // Returns the login-shaped AuthResponse; authenticate() stores the new token so
+  // the caller can enter the app exactly as after a normal login.
+  resetPassword: (token: string, password: string) =>
+    authenticate("/auth/reset-password", { token, password }),
   logout: async () => {
     try {
       return await apiFetch<{ ok: true }>("/auth/logout", { method: "POST" });

@@ -3,8 +3,16 @@ import type { FastifyInstance } from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import Redis from "ioredis";
 import { and, eq } from "drizzle-orm";
-import { createDb, players, users, worlds } from "@massalia/db";
-import { clearSession, createSession, getAuthUser, requireAuth } from "../services/auth.js";
+import { createDb, players, sessions, users, worlds } from "@massalia/db";
+import {
+  clearSession,
+  consumePasswordResetTx,
+  createPasswordReset,
+  createSession,
+  getAuthUser,
+  requireAuth,
+} from "../services/auth.js";
+import { sendPasswordResetEmail } from "../services/email.js";
 import { deleteAccount } from "../services/account.js";
 
 const db = createDb();
@@ -38,19 +46,27 @@ function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
+function httpError(message: string, statusCode: number) {
+  const error = new Error(message);
+  (error as Error & { statusCode?: number }).statusCode = statusCode;
+  return error;
+}
+
+// The password rule enforced at register/login. Reset re-uses this exact check so
+// a reset can never set a password weaker than registration would accept.
+function assertPasswordStrength(password: string) {
+  if (password.length < 8) {
+    throw httpError("Password must be at least 8 characters.", 400);
+  }
+}
+
 function assertAuthPayload(payload: AuthPayload) {
   const email = typeof payload.email === "string" ? normalizeEmail(payload.email) : "";
   const password = typeof payload.password === "string" ? payload.password : "";
   if (!email.includes("@") || email.length > 254) {
-    const error = new Error("Enter a valid email address.");
-    (error as Error & { statusCode?: number }).statusCode = 400;
-    throw error;
+    throw httpError("Enter a valid email address.", 400);
   }
-  if (password.length < 8) {
-    const error = new Error("Password must be at least 8 characters.");
-    (error as Error & { statusCode?: number }).statusCode = 400;
-    throw error;
-  }
+  assertPasswordStrength(password);
   return { email, password };
 }
 
@@ -140,6 +156,65 @@ export async function authRoutes(app: FastifyInstance) {
     await deleteAccount(user.id);
     await clearSession(request, reply);
     return { ok: true };
+  });
+
+  // Request a reset link. Enumeration-safe: ALWAYS returns the same generic 200,
+  // whether the email is unknown, live, or a deleted tombstone. A token is created
+  // and an email attempted only for a live (non-deleted) account; nothing about the
+  // outcome (existence or delivery) is reflected in the response. Tight rate limit
+  // (3/hour/IP) to blunt reset spam.
+  app.post("/forgot-password", { config: { rateLimit: { max: 3, timeWindow: 3_600_000 } } }, async (request, reply) => {
+    const body = request.body as { email?: unknown } | undefined;
+    const email = typeof body?.email === "string" ? normalizeEmail(body.email) : "";
+    if (!email.includes("@") || email.length > 254) {
+      reply.code(400);
+      return { error: "Enter a valid email address." };
+    }
+
+    const found = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    const user = found[0];
+    if (user && !user.deletedAt) {
+      const token = await createPasswordReset(user.id);
+      // Reset link is a query param on root, NOT a path — GitHub Pages 404s SPA paths.
+      const base = (process.env.WEB_ORIGIN ?? "https://playmassalia.com").replace(/\/$/, "");
+      await sendPasswordResetEmail(email, `${base}/?reset=${token}`);
+    }
+
+    return { ok: true, message: "If that email is registered, a reset link is on its way." };
+  });
+
+  // Complete a reset. Password is validated (same rule as register) BEFORE the token
+  // is touched, so a rejected password leaves the token usable. On success, one
+  // transaction consumes the token (atomic single-use), rewrites the password hash,
+  // and drops every existing session; a fresh session is then issued and the
+  // login-shaped payload returned so the web client reuses its login-success path.
+  app.post("/reset-password", { config: { rateLimit: { max: 8, timeWindow: 60_000 } } }, async (request, reply) => {
+    const body = request.body as { token?: unknown; password?: unknown } | undefined;
+    const token = typeof body?.token === "string" ? body.token : "";
+    const password = typeof body?.password === "string" ? body.password : "";
+    try {
+      assertPasswordStrength(password);
+    } catch (error) {
+      reply.code(400);
+      return { error: (error as Error).message };
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const user = await db.transaction(async (tx) => {
+      const consumed = await consumePasswordResetTx(tx, token);
+      if (!consumed) return null;
+      await tx.update(users).set({ passwordHash }).where(eq(users.id, consumed.id));
+      await tx.delete(sessions).where(eq(sessions.userId, consumed.id));
+      return consumed;
+    });
+
+    if (!user) {
+      reply.code(400);
+      return { error: "This reset link is invalid or has expired. Request a new one." };
+    }
+
+    const sessionToken = await createSession(reply, user.id);
+    return { user: { id: user.id, email: user.email }, hasCharacter: await hasCharacter(user.id), token: sessionToken };
   });
 
   app.get("/me", async (request) => {

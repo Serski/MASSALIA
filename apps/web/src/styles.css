@@ -1778,6 +1778,30 @@ body {
   cursor: pointer;
 }
 
+/* Forgot-password link is a <button> (swaps to the reset-request sub-view), but
+   reads as the text link it replaced. */
+button.auth-forgot {
+  display: block;
+  margin: 12px auto 0;
+  padding: 0;
+  font-size: 12px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.auth-forgot-lead {
+  z-index: 1;
+  margin: 0 0 4px;
+  color: rgba(236, 224, 204, 0.72);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.auth-message-success {
+  color: var(--gold-bright, #d9b45f);
+}
+
 @keyframes heroFade {
   from {
     opacity: 0;

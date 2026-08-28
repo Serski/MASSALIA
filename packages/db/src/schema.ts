@@ -29,6 +29,24 @@ export const sessions = pgTable("sessions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Password reset tokens (see migration 0045). Mirrors the session-token discipline:
+// only the SHA-256 hash of the raw token is stored. 60-min TTL, newest-only,
+// single-use — enforced in services/auth.ts (createPasswordReset/consumePasswordReset).
+export const passwordResetTokens = pgTable(
+  "password_reset_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").references(() => users.id).notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index("password_reset_tokens_user_idx").on(table.userId, table.createdAt),
+  }),
+);
+
 export const houses = pgTable("houses", {
   slug: text("slug").primaryKey(),
   name: text("name").notNull(),

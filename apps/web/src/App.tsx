@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
-import { api, apiErrorMessage } from "./api.js";
+import { ApiError, api, apiErrorMessage } from "./api.js";
 import { CharacterCreation } from "./CharacterCreation.js";
 import { Dashboard } from "./dashboard/Dashboard.js";
 import { ProvinceMap } from "./map/ProvinceMap.js";
@@ -167,11 +167,22 @@ function AuthPanel({
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Forgot-password sub-view (login mode only): swaps the form for a one-field
+  // email prompt; forgotDone flips the message to the generic success line.
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotDone, setForgotDone] = useState(false);
   const isSignup = mode === "signup";
 
   useEffect(() => {
     const firstField = panelRef.current?.querySelector<HTMLInputElement>("input");
     firstField?.focus();
+  }, [mode, forgotOpen]);
+
+  // Leaving login mode (or switching modes) closes the forgot sub-view.
+  useEffect(() => {
+    setForgotOpen(false);
+    setForgotDone(false);
+    setMessage("");
   }, [mode]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -188,6 +199,23 @@ function AuthPanel({
       onClose?.();
       navigateTo(result.hasCharacter ? "/game" : "/create");
     } catch (error) {
+      setMessage(apiErrorMessage(error, "auth"));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleForgot(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage("");
+    setIsSubmitting(true);
+    try {
+      const result = await api.forgotPassword(email);
+      setForgotDone(true);
+      // Always the same generic line — the server never reveals whether the email exists.
+      setMessage(result.message);
+    } catch (error) {
+      setForgotDone(false);
       setMessage(apiErrorMessage(error, "auth"));
     } finally {
       setIsSubmitting(false);
@@ -262,76 +290,115 @@ function AuthPanel({
             {isSignup ? "Choose your calling. Pledge a House. Make your name." : "Massalia awaits your return."}
           </p>
 
-          <div className="auth-social-row" aria-label="Social sign in">
-            {["Discord", "Google", "Facebook"].map((provider) => (
-              <button key={provider} type="button" onClick={() => handleSocial(provider)}>
-                <span aria-hidden="true">{provider[0]}</span>
-                {provider}
+          {forgotOpen ? (
+            <form className="auth-form" onSubmit={handleForgot}>
+              <p className="auth-forgot-lead">Enter your email and we&apos;ll send a link to reset your password.</p>
+              <label>
+                <span>Email</span>
+                <input
+                  type="email"
+                  name="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  autoComplete="email"
+                  placeholder="Email address"
+                  required
+                />
+                <i aria-hidden="true">✉</i>
+              </label>
+
+              {message ? (
+                <p className={`auth-message${forgotDone ? " auth-message-success" : ""}`} role="status">{message}</p>
+              ) : null}
+
+              <button className="primary-cta auth-submit" type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Working..." : "Send reset link"}
               </button>
-            ))}
-          </div>
 
-          <div className="auth-divider"><span>or</span></div>
-
-          <form className="auth-form" onSubmit={handleSubmit}>
-            <label>
-              <span>Email</span>
-              <input
-                type="email"
-                name="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                autoComplete="email"
-                placeholder="Email address"
-                required
-              />
-              <i aria-hidden="true">✉</i>
-            </label>
-            <label>
-              <span>Password</span>
-              <input
-                type="password"
-                name="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoComplete={isSignup ? "new-password" : "current-password"}
-                placeholder="Password"
-                minLength={8}
-                required
-              />
-              <i aria-hidden="true">▣</i>
-            </label>
-
-            {isSignup ? (
-              <div className="auth-checks">
-                <label>
-                  <input type="checkbox" checked={newsletter} onChange={(event) => setNewsletter(event.target.checked)} />
-                  <span>Send me season updates and League dispatches.</span>
-                </label>
-                <label>
-                  <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} required />
-                  <span>
-                    I accept the <a href="/terms">Terms &amp; Conditions</a> and <a href="/privacy">Privacy Policy</a>.
-                  </span>
-                </label>
+              <p className="auth-switch">
+                <button type="button" onClick={() => { setForgotOpen(false); setForgotDone(false); setMessage(""); }}>
+                  ← Back to log in
+                </button>
+              </p>
+            </form>
+          ) : (
+            <>
+              <div className="auth-social-row" aria-label="Social sign in">
+                {["Discord", "Google", "Facebook"].map((provider) => (
+                  <button key={provider} type="button" onClick={() => handleSocial(provider)}>
+                    <span aria-hidden="true">{provider[0]}</span>
+                    {provider}
+                  </button>
+                ))}
               </div>
-            ) : null}
 
-            {message ? <p className="auth-message" role="status">{message}</p> : null}
+              <div className="auth-divider"><span>or</span></div>
 
-            <button className="primary-cta auth-submit" type="submit" disabled={isSubmitting || (isSignup && !termsAccepted)}>
-              {isSubmitting ? "Working..." : isSignup ? "Sign up & play free" : "Log in"}
-            </button>
-          </form>
+              <form className="auth-form" onSubmit={handleSubmit}>
+                <label>
+                  <span>Email</span>
+                  <input
+                    type="email"
+                    name="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    autoComplete="email"
+                    placeholder="Email address"
+                    required
+                  />
+                  <i aria-hidden="true">✉</i>
+                </label>
+                <label>
+                  <span>Password</span>
+                  <input
+                    type="password"
+                    name="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    autoComplete={isSignup ? "new-password" : "current-password"}
+                    placeholder="Password"
+                    minLength={8}
+                    required
+                  />
+                  <i aria-hidden="true">▣</i>
+                </label>
 
-          {!isSignup ? <a className="auth-forgot" href="/forgot-password">Forgot your password?</a> : null}
+                {isSignup ? (
+                  <div className="auth-checks">
+                    <label>
+                      <input type="checkbox" checked={newsletter} onChange={(event) => setNewsletter(event.target.checked)} />
+                      <span>Send me season updates and League dispatches.</span>
+                    </label>
+                    <label>
+                      <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} required />
+                      <span>
+                        I accept the <a href="/terms">Terms &amp; Conditions</a> and <a href="/privacy">Privacy Policy</a>.
+                      </span>
+                    </label>
+                  </div>
+                ) : null}
 
-          <p className="auth-switch">
-            {isSignup ? "Already a citizen?" : "New to the League?"}{" "}
-            <button type="button" onClick={() => onModeChange(isSignup ? "login" : "signup")}>
-              {isSignup ? "Enter the League" : "Found your legacy"} →
-            </button>
-          </p>
+                {message ? <p className="auth-message" role="status">{message}</p> : null}
+
+                <button className="primary-cta auth-submit" type="submit" disabled={isSubmitting || (isSignup && !termsAccepted)}>
+                  {isSubmitting ? "Working..." : isSignup ? "Sign up & play free" : "Log in"}
+                </button>
+              </form>
+
+              {!isSignup ? (
+                <button className="auth-forgot" type="button" onClick={() => { setForgotOpen(true); setForgotDone(false); setMessage(""); }}>
+                  Forgot your password?
+                </button>
+              ) : null}
+
+              <p className="auth-switch">
+                {isSignup ? "Already a citizen?" : "New to the League?"}{" "}
+                <button type="button" onClick={() => onModeChange(isSignup ? "login" : "signup")}>
+                  {isSignup ? "Enter the League" : "Found your legacy"} →
+                </button>
+              </p>
+            </>
+          )}
         </div>
       </div>
       <div className="auth-meander auth-meander-bottom" aria-hidden="true" />
@@ -353,6 +420,110 @@ function AuthRoutePage({ mode }: { mode: AuthMode }) {
   return (
     <main className="landing-shell auth-page-shell">
       <AuthPanel mode={mode} onModeChange={(nextMode) => navigateTo(`/${nextMode}`)} />
+    </main>
+  );
+}
+
+// Reached when the app loads with `?reset=TOKEN` (the emailed link). Sets a new
+// password (with a client-side confirm-match check mirroring the server's 8-char
+// rule), then enters the app via the standard login-success path. On a rejected
+// token it offers to request a fresh link.
+function ResetPasswordPage({
+  token,
+  onSuccess,
+  onRequestNew,
+}: {
+  token: string;
+  onSuccess: (result: { hasCharacter: boolean }) => void;
+  onRequestNew: () => void;
+}) {
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [linkDead, setLinkDead] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage("");
+    if (password.length < 8) {
+      setMessage("Password must be at least 8 characters.");
+      return;
+    }
+    if (password !== confirm) {
+      setMessage("Those passwords don't match.");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const result = await api.resetPassword(token, password);
+      onSuccess({ hasCharacter: result.hasCharacter });
+    } catch (error) {
+      // A 400 means the link is invalid/expired — offer a fresh request.
+      if (error instanceof ApiError && error.status === 400) {
+        setLinkDead(true);
+      }
+      setMessage(apiErrorMessage(error, "auth"));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <main className="landing-shell auth-page-shell">
+      <div className="auth-scroll-frame">
+        <div className="auth-card">
+          <div className="auth-card-inner">
+            <p className="auth-brandline">The League of Massalia</p>
+            <h1>Set a new password</h1>
+            {linkDead ? (
+              <>
+                <p className="auth-subtitle">{message}</p>
+                <button className="primary-cta auth-submit" type="button" onClick={onRequestNew}>
+                  Request a new link
+                </button>
+              </>
+            ) : (
+              <form className="auth-form" onSubmit={handleSubmit}>
+                <label>
+                  <span>New password</span>
+                  <input
+                    type="password"
+                    name="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    autoComplete="new-password"
+                    placeholder="New password"
+                    minLength={8}
+                    required
+                  />
+                  <i aria-hidden="true">▣</i>
+                </label>
+                <label>
+                  <span>Confirm password</span>
+                  <input
+                    type="password"
+                    name="confirm"
+                    value={confirm}
+                    onChange={(event) => setConfirm(event.target.value)}
+                    autoComplete="new-password"
+                    placeholder="Confirm password"
+                    minLength={8}
+                    required
+                  />
+                  <i aria-hidden="true">▣</i>
+                </label>
+
+                {message ? <p className="auth-message" role="status">{message}</p> : null}
+
+                <button className="primary-cta auth-submit" type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? "Working..." : "Set password & enter"}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      </div>
     </main>
   );
 }
@@ -531,6 +702,11 @@ function getDetailEntry(pathname: string): DetailEntry | undefined {
 export function App() {
   const [pathname, setPathname] = useState(window.location.pathname);
   const [authModalMode, setAuthModalMode] = useState<AuthMode | null>(null);
+  // Password-reset link: `?reset=TOKEN` on any load (delivered to root, since GitHub
+  // Pages 404s SPA paths). Present → the reset screen preempts normal routing.
+  const [resetToken, setResetToken] = useState<string | null>(
+    () => new URLSearchParams(window.location.search).get("reset"),
+  );
   const detailEntry = getDetailEntry(pathname);
   const authRouteMode: AuthMode | undefined = pathname === "/login" ? "login" : pathname === "/signup" ? "signup" : undefined;
   const palaioi = parties[0]!;
@@ -545,6 +721,28 @@ export function App() {
   const openAuth = (mode: AuthMode) => setAuthModalMode(mode);
   const closeAuth = () => setAuthModalMode(null);
   const startGame = () => navigateTo("/create");
+
+  // Strip `?reset=TOKEN` from the URL so a refresh/back doesn't re-open the flow.
+  const clearResetParam = () => {
+    window.history.replaceState({}, "", window.location.pathname);
+    setResetToken(null);
+  };
+
+  if (resetToken) {
+    return (
+      <ResetPasswordPage
+        token={resetToken}
+        onSuccess={(result) => {
+          clearResetParam();
+          navigateTo(result.hasCharacter ? "/game" : "/create");
+        }}
+        onRequestNew={() => {
+          clearResetParam();
+          navigateTo("/login");
+        }}
+      />
+    );
+  }
 
   if (pathname === "/game") {
     return <Dashboard onExit={() => navigateTo("/")} onRequireLogin={() => navigateTo("/login")} onRequireCharacter={() => navigateTo("/create")} />;
