@@ -2182,7 +2182,11 @@ button.auth-forgot {
   }
 
   .map-frame {
-    min-height: 280px;
+    /* Drop the min-height floor on phones: with aspect-ratio set, a floor taller than
+       the aspect height drives the WIDTH past 100% (min-height 280 × 1.583 ≈ 445px),
+       overflowing the viewport and cutting the map off. At 0 the frame sizes by its
+       full width and the aspect-ratio derives the height, so the whole map shows. */
+    min-height: 0;
   }
 
   .houses-section {
