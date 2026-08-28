@@ -16,9 +16,11 @@ function marketGroup(good: string, craft: Record<string, unknown>): "Naval & shi
 }
 
 // While a trade is in flight EVERY action button is disabled; this only picks the
-// LOOK. The pressed button reads busy; a non-pressed, non-statically-disabled
-// sibling reads waiting; a statically-disabled button (e.g. Sell with nothing
-// owned) keeps the plain dim disabled look (no extra class).
+// LOOK. The pressed button reads busy (is-busy highlight); every other button —
+// waiting siblings and statically-disabled ones (e.g. Sell with nothing owned)
+// alike — shows the plain dim disabled look. The is-waiting class is still emitted
+// for waiting siblings but now carries no styling (the CSS rule was removed), so it
+// is inert and they fall through to .panel-btn:disabled.
 function btnClass(base: string, myKey: string, busy: boolean, busyKey: string | null, staticDisabled = false): string {
   if (busyKey === myKey) return `${base} is-busy`;
   if (busy && !staticDisabled) return `${base} is-waiting`;
