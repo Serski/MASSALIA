@@ -337,6 +337,13 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
   const selectedClass = useMemo(() => professions.find((profession) => profession.slug === selectedClassSlug), [selectedClassSlug]);
   const selectedHouse = useMemo(() => nobleHouses.find((house) => house.slug === selectedHouseSlug), [selectedHouseSlug]);
 
+  // On every step change — forward or back — reset the window scroll to the top so
+  // each step opens at its first choice. Without this the House step (step 2) opens
+  // scrolled to wherever the class step left off, i.e. near the bottom on mobile.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 });
+  }, [step]);
+
   // Load the age config (avatars + age options) for the signup gallery.
   useEffect(() => {
     let cancelled = false;

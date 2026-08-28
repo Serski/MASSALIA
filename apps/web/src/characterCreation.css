@@ -615,6 +615,29 @@
   .creation-ghost-button {
     width: 100%;
   }
+
+  /* Mobile: pin the step footer (Continue / Save + Back) to the bottom of the
+     viewport so the primary button is reachable without scrolling to the end of a
+     long class or House list. Sticky reserves its own flow slot, so no card is left
+     hidden behind it; the grid padding below adds breathing room above the bar, and
+     env(safe-area-inset-bottom) keeps it clear of the iOS home indicator. The
+     negative side/bottom margins bleed the bar across the panel's own padding. */
+  .creation-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 6;
+    margin: 0 calc(-1 * clamp(22px, 3vw, 34px)) calc(-1 * clamp(22px, 3vw, 34px));
+    padding: 14px clamp(22px, 3vw, 34px) calc(14px + env(safe-area-inset-bottom, 0px));
+    background: rgba(20, 13, 10, 0.94);
+    border-top: 1px solid rgba(181, 138, 69, 0.32);
+    backdrop-filter: blur(8px);
+  }
+
+  .creation-class-grid,
+  .creation-house-grid,
+  .creation-face-grid {
+    padding-bottom: 10px;
+  }
 }
 
 /* Age pack: starting-age toggle (20 / 30) that swaps the avatar gallery. */
