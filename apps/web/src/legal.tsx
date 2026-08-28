@@ -53,12 +53,16 @@ export function PrivacyPolicy({ onBack }: { onBack: () => void }) {
         {` When you register: your email address, a securely hashed version of your password (we never store the password itself), and your newsletter preference. While you play: your game actions and progress (characters, holdings, messages to other players' characters, and similar), session tokens to keep you logged in, and your IP address, used transiently for rate limiting and abuse prevention.`}
       </p>
       <p>
+        <strong>Analytics.</strong>
+        {` We use Plausible Analytics, a privacy-focused, EU-hosted service, to measure aggregate site usage (pages visited, referral sources, country, device type). It uses no cookies and collects no personal identifiers.`}
+      </p>
+      <p>
         <strong>What we don't do.</strong>
-        {` We don't run ads. We don't use analytics trackers or advertising cookies. We don't sell or share your data with anyone for marketing. The only cookie we set is the session cookie that keeps you logged in.`}
+        {` We don't run ads. We don't use advertising cookies or invasive trackers. We don't sell or share your data with anyone for marketing. The only cookie we set is the session cookie that keeps you logged in.`}
       </p>
       <p>
         <strong>Where it lives.</strong>
-        {` Game data is hosted on Railway and the website is served via GitHub Pages; transactional email (such as password resets) is sent via Resend from EU infrastructure. These providers may process some data on servers outside the EU, including in the United States, under their own compliance frameworks.`}
+        {` Game data is hosted on Railway and the website is served via GitHub Pages; transactional email (such as password resets) is sent via Resend from EU infrastructure, and aggregate analytics are processed by Plausible on EU infrastructure. These providers may process some data on servers outside the EU, including in the United States, under their own compliance frameworks.`}
       </p>
       <p>
         <strong>How long we keep it.</strong>
