@@ -110,13 +110,13 @@ suite("the Oligarchy Chamber (integration)", () => {
     expect(count((s) => s.holderType === "empty")).toBe(190);
   });
 
-  it("buying a seat deducts 300, takes the lowest empty seat, flips is_councilor", async () => {
+  it("buying a seat deducts 200, takes the lowest empty seat, flips is_councilor", async () => {
     const buyer = await createCharacter("Eutychos", { drachmae: 500 });
     const result = await m.oligarchy.buySeat(buyer, now);
-    expect(result).toMatchObject({ ok: true, seatIndex: 110, price: 300 });
+    expect(result).toMatchObject({ ok: true, seatIndex: 110, price: 200 });
 
     const after = await freshRow(buyer.id);
-    expect(after.drachmae).toBe(200);
+    expect(after.drachmae).toBe(300);
     expect(after.isCouncilor).toBe(true);
 
     const seat = await m.oligarchy.seatOf(buyer.id);
@@ -143,7 +143,7 @@ suite("the Oligarchy Chamber (integration)", () => {
     const slave = await createCharacter("Doulos", { drachmae: 1000, classId: "slave" });
     expect(await m.oligarchy.buySeat(slave, now)).toMatchObject({ ok: false, code: 409 });
 
-    const poor = await createCharacter("Penes", { drachmae: 299 });
+    const poor = await createCharacter("Penes", { drachmae: 199 });
     expect(await m.oligarchy.buySeat(poor, now)).toMatchObject({ ok: false, code: 409 });
 
     const twice = await createCharacter("Dis", { drachmae: 1000 });

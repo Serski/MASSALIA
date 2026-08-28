@@ -24,7 +24,7 @@ export async function oligarchyRoutes(app: FastifyInstance) {
     return chamberView(acting.row);
   });
 
-  // Buy the lowest-index empty seat — 300 dr., dynastic, wakes the council events.
+  // Buy the lowest-index empty seat — 200 dr., dynastic, wakes the council events.
   app.post("/buy-seat", async (request, reply) => {
     const user = await requireAuth(request);
     const acting = await actingRow(user.id);

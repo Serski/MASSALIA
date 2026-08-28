@@ -28,7 +28,7 @@ const chamber: ChamberConfig = politics.chamber;
 describe("politics-config.json", () => {
   it("parses with the spec'd chamber tuning", () => {
     expect(chamber.capacity).toBe(300);
-    expect(chamber.seatPrice).toBe(300);
+    expect(chamber.seatPrice).toBe(200);
     expect(chamber.npcSeats).toEqual({ palaioi: 50, dynatoi: 50, independent: 10 });
     expect(chamber.npcSwingFraction).toBe(0.2);
     expect(chamber.favorPerSwingVote).toBe(5);

@@ -1,7 +1,7 @@
 {
   "chamber": {
     "capacity": 300,
-    "seatPrice": 300,
+    "seatPrice": 200,
     "npcSeats": {
       "palaioi": 50,
       "dynatoi": 50,
