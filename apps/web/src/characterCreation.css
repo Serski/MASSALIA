@@ -466,7 +466,12 @@
 
 .creation-sheet {
   display: grid;
-  max-height: min(82vh, 760px);
+  /* handle / body / footer — the middle row is the only one that flexes, so the
+     body (minmax(0,1fr)) is height-constrained and its overflow-y actually scrolls
+     while the footer keeps its own row instead of overlaying clipped content. */
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: min(88vh, 760px); /* fallback for browsers without svh */
+  height: min(88svh, 760px);
   overflow: hidden;
   color: #ece0cc;
   background:
@@ -504,6 +509,8 @@
   position: sticky;
   bottom: 0;
   padding: 16px clamp(20px, 4vw, 36px);
+  /* clear the iOS home indicator on notched phones */
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
   background: rgba(20, 13, 10, 0.94);
   border-top: 1px solid rgba(181, 138, 69, 0.22);
 }

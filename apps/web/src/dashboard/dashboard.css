@@ -1678,6 +1678,10 @@
 }
 
 .dashboard-shell .sheet-body{
+  /* flex:1 + min-height:0 lets the body fill the sheet and scroll: short content
+     leaves calm empty space, long content scrolls inside the height cap. */
+  flex: 1;
+  min-height: 0;
   padding: 14px 26px 22px;
   overflow-y: auto;
   scrollbar-width: thin;
@@ -2323,7 +2327,11 @@
   }
 
   .dashboard-shell .sheet{
-    max-height: 92dvh;
+    /* One consistent tall height for every dashboard sheet on phones, so short
+       content (e.g. Inventory Resources) opens as tall as the faction sheet with the
+       body scrolling inside. Desktop stays content-sized (base rule). */
+    height: 88vh; /* fallback for browsers without svh */
+    height: 88svh;
     border-bottom: none;
     border-radius: 18px 18px 0 0;
   }
