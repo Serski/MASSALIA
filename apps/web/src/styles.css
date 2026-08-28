@@ -1821,6 +1821,55 @@ button.auth-forgot {
   color: var(--gold-bright, #d9b45f);
 }
 
+/* Soft email-verification banner at the top of the dashboard content area. */
+.verify-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  color: rgba(236, 224, 204, 0.9);
+  font-size: 14px;
+  background: rgba(181, 138, 69, 0.14);
+  border: 1px solid rgba(181, 138, 69, 0.4);
+  border-radius: 6px;
+}
+
+.verify-banner-text {
+  flex: 1;
+}
+
+.verify-banner-resend {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  color: var(--gold-bright, #d9b45f);
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 12px;
+  background: rgba(15, 10, 8, 0.5);
+  border: 1px solid rgba(181, 138, 69, 0.5);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.verify-banner-resend:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.verify-banner-close {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  color: rgba(236, 224, 204, 0.7);
+  font-size: 18px;
+  line-height: 1;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
 /* Static legal pages (Privacy Policy / Terms of Service). */
 .legal-shell {
   min-height: 100vh;

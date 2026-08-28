@@ -1,13 +1,14 @@
 import crypto from "node:crypto";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { and, eq, gt, isNull } from "drizzle-orm";
-import { createDb, passwordResetTokens, sessions, users } from "@massalia/db";
+import { createDb, emailVerificationTokens, passwordResetTokens, sessions, users } from "@massalia/db";
 
 export const sessionCookieName = "massalia_session";
 
 const db = createDb();
 const sessionTtlMs = 30 * 24 * 60 * 60 * 1000;
 const passwordResetTtlMs = 60 * 60 * 1000;
+const emailVerificationTtlMs = 24 * 60 * 60 * 1000;
 
 // Transaction handle type (drizzle's tx passed to db.transaction's callback), so
 // password-reset consumption can run inside the caller's transaction.
@@ -97,6 +98,66 @@ export async function consumePasswordResetTx(tx: Tx, rawToken: string): Promise<
 // Standalone consume (own transaction) — for direct testing / non-reset callers.
 export async function consumePasswordReset(rawToken: string): Promise<AuthUser | null> {
   return db.transaction((tx) => consumePasswordResetTx(tx, rawToken));
+}
+
+// --- Email verification -----------------------------------------------------
+// Same token discipline as password resets, but a 24-hour TTL and a success side
+// effect of stamping users.email_verified_at. Verification is soft (non-blocking):
+// nothing gates on it beyond a nagging banner.
+
+// Issue a verification token for a user (newest-only). Returns the RAW token.
+export async function createEmailVerification(userId: string): Promise<string> {
+  const token = createSessionToken();
+  const expiresAt = new Date(Date.now() + emailVerificationTtlMs);
+  await db.transaction(async (tx) => {
+    await tx
+      .update(emailVerificationTokens)
+      .set({ usedAt: new Date() })
+      .where(and(eq(emailVerificationTokens.userId, userId), isNull(emailVerificationTokens.usedAt)));
+    await tx.insert(emailVerificationTokens).values({ userId, tokenHash: hashToken(token), expiresAt });
+  });
+  return token;
+}
+
+// Atomically consume a verification token and stamp email_verified_at, in one
+// transaction. Same single-use guard as password resets (used_at IS NULL AND
+// expires_at > now(), affected-row check). NULL/expired/used/deleted-user → null.
+export async function consumeEmailVerification(rawToken: string): Promise<AuthUser | null> {
+  return db.transaction(async (tx) => {
+    const marked = await tx
+      .update(emailVerificationTokens)
+      .set({ usedAt: new Date() })
+      .where(
+        and(
+          eq(emailVerificationTokens.tokenHash, hashToken(rawToken)),
+          isNull(emailVerificationTokens.usedAt),
+          gt(emailVerificationTokens.expiresAt, new Date()),
+        ),
+      )
+      .returning({ userId: emailVerificationTokens.userId });
+    if (marked.length !== 1) return null;
+
+    const rows = await tx
+      .select({ id: users.id, email: users.email })
+      .from(users)
+      .where(and(eq(users.id, marked[0]!.userId), isNull(users.deletedAt)))
+      .limit(1);
+    const user = rows[0];
+    if (!user) return null;
+
+    await tx.update(users).set({ emailVerifiedAt: new Date() }).where(eq(users.id, user.id));
+    return user;
+  });
+}
+
+// Read the verification flag for a user (for bootstrap payloads / resend guard).
+export async function isEmailVerified(userId: string): Promise<boolean> {
+  const rows = await db
+    .select({ emailVerifiedAt: users.emailVerifiedAt })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return Boolean(rows[0]?.emailVerifiedAt);
 }
 
 export async function createSession(reply: FastifyReply, userId: string) {

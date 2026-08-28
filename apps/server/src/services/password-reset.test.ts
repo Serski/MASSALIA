@@ -206,9 +206,9 @@ suite("password reset (integration)", () => {
       const res = await post("/auth/forgot-password", { email: "logme@t" });
       expect(res.statusCode).toBe(200);
       const logged = spy.mock.calls.map((c) => String(c[0]));
-      const line = logged.find((l) => l.includes("[email dev-mode]"));
+      // Register also emits a dev-mode verification log; match the reset line specifically.
+      const line = logged.find((l) => l.includes("[email dev-mode]") && l.includes("/?reset="));
       expect(line).toBeTruthy();
-      expect(line).toContain("/?reset=");
       expect(line).toContain("logme@t");
     } finally {
       spy.mockRestore();

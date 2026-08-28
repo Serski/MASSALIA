@@ -134,7 +134,7 @@ export async function meRoutes(app: FastifyInstance) {
     }
 
     const userRows = await db
-      .select({ newsletterOptIn: users.newsletterOptIn })
+      .select({ newsletterOptIn: users.newsletterOptIn, emailVerifiedAt: users.emailVerifiedAt })
       .from(users)
       .where(eq(users.id, user.id))
       .limit(1);
@@ -151,6 +151,7 @@ export async function meRoutes(app: FastifyInstance) {
       user: {
         ...user,
         newsletterOptIn: userRows[0]?.newsletterOptIn ?? false,
+        emailVerified: Boolean(userRows[0]?.emailVerifiedAt),
       },
       world: {
         id: world.id,

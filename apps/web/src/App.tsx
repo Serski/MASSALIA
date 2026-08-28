@@ -536,6 +536,63 @@ function ResetPasswordPage({
   );
 }
 
+// Reached when the app loads with `?verify=TOKEN` (the emailed verification link).
+// Calls verify-email once on mount, clears the param, and shows a brief result:
+// success enters the app (self-routing to the dashboard or login); failure shows
+// the error with a hint to log in and resend from the banner.
+function VerifyEmailPage({
+  token,
+  onDone,
+  onLogin,
+}: {
+  token: string;
+  onDone: () => void;
+  onLogin: () => void;
+}) {
+  const [status, setStatus] = useState<"pending" | "ok" | "error">("pending");
+  const [message, setMessage] = useState("Verifying your email…");
+  const ranRef = useRef(false);
+
+  useEffect(() => {
+    if (ranRef.current) return; // guard React 18 StrictMode double-invoke
+    ranRef.current = true;
+    // Strip `?verify=TOKEN` up front (the token is captured in App state) so a
+    // refresh can't re-run verification, whatever the outcome.
+    window.history.replaceState({}, "", window.location.pathname);
+    api.verifyEmail(token)
+      .then(() => {
+        setStatus("ok");
+        setMessage("Email verified.");
+      })
+      .catch((error) => {
+        setStatus("error");
+        setMessage(apiErrorMessage(error, "auth"));
+      });
+  }, [token]);
+
+  return (
+    <main className="landing-shell auth-page-shell">
+      <div className="auth-scroll-frame">
+        <div className="auth-card">
+          <div className="auth-card-inner">
+            <p className="auth-brandline">The League of Massalia</p>
+            <h1>Email verification</h1>
+            <p className={`auth-subtitle${status === "ok" ? " auth-message-success" : ""}`} role="status">{message}</p>
+            {status === "ok" ? (
+              <button className="primary-cta auth-submit" type="button" onClick={onDone}>Continue</button>
+            ) : status === "error" ? (
+              <>
+                <p className="auth-subtitle">Log in and resend a verification email from the banner.</p>
+                <button className="primary-cta auth-submit" type="button" onClick={onLogin}>Log in</button>
+              </>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
+
 function DetailPage({ entry, onOpenAuth }: { entry: DetailEntry; onOpenAuth: (mode: AuthMode) => void }) {
   const emblem = "image" in entry ? entry.image : undefined;
 
@@ -720,6 +777,10 @@ export function App() {
     const page = new URLSearchParams(window.location.search).get("page");
     return page === "privacy" || page === "terms" ? page : null;
   });
+  // Email-verification link: `?verify=TOKEN` on any load.
+  const [verifyToken, setVerifyToken] = useState<string | null>(
+    () => new URLSearchParams(window.location.search).get("verify"),
+  );
   const detailEntry = getDetailEntry(pathname);
   const authRouteMode: AuthMode | undefined = pathname === "/login" ? "login" : pathname === "/signup" ? "signup" : undefined;
   const palaioi = parties[0]!;
@@ -748,6 +809,24 @@ export function App() {
         onBack={() => {
           window.history.replaceState({}, "", window.location.pathname);
           setLegalPage(null);
+        }}
+      />
+    );
+  }
+
+  if (verifyToken) {
+    return (
+      <VerifyEmailPage
+        token={verifyToken}
+        onDone={() => {
+          window.history.replaceState({}, "", window.location.pathname);
+          setVerifyToken(null);
+          navigateTo("/game");
+        }}
+        onLogin={() => {
+          window.history.replaceState({}, "", window.location.pathname);
+          setVerifyToken(null);
+          navigateTo("/login");
         }}
       />
     );

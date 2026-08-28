@@ -104,6 +104,7 @@ export type AuthResponse = {
   user: { id: string; email: string } | null;
   hasCharacter: boolean;
   token?: string;
+  emailVerified?: boolean;
 };
 
 export type CreationRequest = {
@@ -114,7 +115,7 @@ export type CreationRequest = {
 };
 
 export type PlayerState = {
-  user: { id: string; email: string; newsletterOptIn: boolean };
+  user: { id: string; email: string; newsletterOptIn: boolean; emailVerified: boolean };
   world: {
     id: string;
     name: string;
@@ -327,6 +328,12 @@ export const api = {
   // the caller can enter the app exactly as after a normal login.
   resetPassword: (token: string, password: string) =>
     authenticate("/auth/reset-password", { token, password }),
+  // Soft email verification: verify from the emailed link (no auth needed), or
+  // ask for a fresh link while logged in.
+  verifyEmail: (token: string) =>
+    apiFetch<{ ok: true }>("/auth/verify-email", { method: "POST", body: { token } }),
+  resendVerification: () =>
+    apiFetch<{ ok: true; message: string }>("/auth/resend-verification", { method: "POST" }),
   logout: async () => {
     try {
       return await apiFetch<{ ok: true }>("/auth/logout", { method: "POST" });

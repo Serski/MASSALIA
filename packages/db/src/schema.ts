@@ -16,6 +16,9 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   newsletterOptIn: boolean("newsletter_opt_in").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  // Soft email verification (see migration 0046): timestamp when the address was
+  // verified (via a verify link or by using a password-reset link); NULL = unverified.
+  emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
   // Account deletion (anonymize-and-detach): set at deletion time alongside the
   // scrubbed email/passwordHash; NULL for every live account (login/auth gate on it).
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
@@ -44,6 +47,24 @@ export const passwordResetTokens = pgTable(
   },
   (table) => ({
     userIdx: index("password_reset_tokens_user_idx").on(table.userId, table.createdAt),
+  }),
+);
+
+// Email verification tokens (see migration 0046). Same discipline as
+// passwordResetTokens: only the SHA-256 hash of the raw token is stored. 24-hour
+// TTL, newest-only, single-use — enforced in services/auth.ts.
+export const emailVerificationTokens = pgTable(
+  "email_verification_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").references(() => users.id).notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index("email_verification_tokens_user_idx").on(table.userId, table.createdAt),
   }),
 );
 

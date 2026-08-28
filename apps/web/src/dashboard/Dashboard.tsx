@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type LazyExoticComponent, type ReactNode } from "react";
-import { api, ApiError, type PlayerState } from "../api.js";
+import { api, ApiError, apiErrorMessage, type PlayerState } from "../api.js";
 import { assetPath, nobleHouses, professions, type House } from "../data/league.js";
 import { DashboardCard, type DashboardSection, type IconName, MoreIcon, type PanelProps, type PlayerDashboardState, type PlayerDashboardView, SvgIcon, playerFromState } from "./shared.js";
 import { AvatarImage, CharacterSheet, InventorySheet, type InventoryTab } from "./sheets.js";
@@ -123,6 +123,22 @@ export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () =
   const [playerState, setPlayerState] = useState<PlayerState | null>(null);
   const [courtRemaining, setCourtRemaining] = useState(0);
   const [loadError, setLoadError] = useState("");
+  // Soft email-verification banner: shows while the account is unverified, is
+  // dismissible for the session only (reappears next load), and can resend the link.
+  const [verifyBannerDismissed, setVerifyBannerDismissed] = useState(false);
+  const [verifyResend, setVerifyResend] = useState<{ status: "idle" | "sending" | "sent" | "error"; message: string }>({
+    status: "idle",
+    message: "",
+  });
+  const resendVerification = useCallback(async () => {
+    setVerifyResend({ status: "sending", message: "" });
+    try {
+      const res = await api.resendVerification();
+      setVerifyResend({ status: "sent", message: res.message });
+    } catch (error) {
+      setVerifyResend({ status: "error", message: apiErrorMessage(error, "auth") });
+    }
+  }, []);
   const player = useMemo(() => playerState ? playerFromState(playerState) : getPlaceholderPlayer(), [playerState]);
   // Onboarding: the welcome overlay (intro) and the portrait pulse (sheet). Each is
   // acked at most once, optimistically hidden regardless of the network result — a
@@ -295,6 +311,35 @@ export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () =
         </aside>
 
         <section className="dashboard-content" aria-live="polite">
+          {playerState && playerState.user.emailVerified === false && !verifyBannerDismissed ? (
+            <div className="verify-banner" role="status">
+              <span className="verify-banner-text">
+                {verifyResend.status === "sent"
+                  ? "Verification email sent."
+                  : verifyResend.status === "error"
+                    ? verifyResend.message
+                    : "Verify your email to make sure account recovery works — check your inbox."}
+              </span>
+              {verifyResend.status !== "sent" ? (
+                <button
+                  className="verify-banner-resend"
+                  type="button"
+                  onClick={resendVerification}
+                  disabled={verifyResend.status === "sending"}
+                >
+                  {verifyResend.status === "sending" ? "Sending…" : "Resend email"}
+                </button>
+              ) : null}
+              <button
+                className="verify-banner-close"
+                type="button"
+                aria-label="Dismiss"
+                onClick={() => setVerifyBannerDismissed(true)}
+              >
+                ×
+              </button>
+            </div>
+          ) : null}
           {loadError ? (
             <section className="dashboard-panel">
               <DashboardCard>

@@ -2,17 +2,20 @@ import bcrypt from "bcryptjs";
 import type { FastifyInstance } from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import Redis from "ioredis";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { createDb, players, sessions, users, worlds } from "@massalia/db";
 import {
   clearSession,
+  consumeEmailVerification,
   consumePasswordResetTx,
+  createEmailVerification,
   createPasswordReset,
   createSession,
   getAuthUser,
+  isEmailVerified,
   requireAuth,
 } from "../services/auth.js";
-import { sendPasswordResetEmail } from "../services/email.js";
+import { sendPasswordResetEmail, sendVerificationEmail } from "../services/email.js";
 import { deleteAccount } from "../services/account.js";
 
 const db = createDb();
@@ -45,6 +48,12 @@ type AuthPayload = {
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+// Base for emailed links. Reset/verify links are query params on root (GitHub
+// Pages 404s SPA paths), e.g. `${webBaseUrl()}/?verify=TOKEN`.
+function webBaseUrl() {
+  return (process.env.WEB_ORIGIN ?? "https://playmassalia.com").replace(/\/$/, "");
 }
 
 function httpError(message: string, statusCode: number) {
@@ -123,6 +132,17 @@ export async function authRoutes(app: FastifyInstance) {
       .returning({ id: users.id, email: users.email });
     const user = created[0]!;
     const token = await createSession(reply, user.id);
+
+    // Soft verification is non-blocking: a token/email problem must never fail or
+    // delay registration. Create the token (fast, local) then fire-and-forget the
+    // network send — which itself never throws — so register returns immediately.
+    try {
+      const verifyToken = await createEmailVerification(user.id);
+      void sendVerificationEmail(user.email, `${webBaseUrl()}/?verify=${verifyToken}`).catch(() => {});
+    } catch (error) {
+      console.error(`Verification token on register failed for ${user.id}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
     return { user, hasCharacter: false, token };
   });
 
@@ -181,9 +201,7 @@ export async function authRoutes(app: FastifyInstance) {
     const user = found[0];
     if (user && !user.deletedAt) {
       const token = await createPasswordReset(user.id);
-      // Reset link is a query param on root, NOT a path — GitHub Pages 404s SPA paths.
-      const base = (process.env.WEB_ORIGIN ?? "https://playmassalia.com").replace(/\/$/, "");
-      await sendPasswordResetEmail(email, `${base}/?reset=${token}`);
+      await sendPasswordResetEmail(email, `${webBaseUrl()}/?reset=${token}`);
     }
 
     return { ok: true, message: "If that email is registered, a reset link is on its way." };
@@ -209,7 +227,12 @@ export async function authRoutes(app: FastifyInstance) {
     const user = await db.transaction(async (tx) => {
       const consumed = await consumePasswordResetTx(tx, token);
       if (!consumed) return null;
-      await tx.update(users).set({ passwordHash }).where(eq(users.id, consumed.id));
+      // Receiving and using a reset link proves ownership of the address, so mark
+      // the email verified too (COALESCE keeps an earlier verification timestamp).
+      await tx
+        .update(users)
+        .set({ passwordHash, emailVerifiedAt: sql`COALESCE(${users.emailVerifiedAt}, now())` })
+        .where(eq(users.id, consumed.id));
       await tx.delete(sessions).where(eq(sessions.userId, consumed.id));
       return consumed;
     });
@@ -223,10 +246,35 @@ export async function authRoutes(app: FastifyInstance) {
     return { user: { id: user.id, email: user.email }, hasCharacter: await hasCharacter(user.id), token: sessionToken };
   });
 
+  // Verify an email from the emailed link. No auth: the token IS the proof.
+  // Single-use/expiry handled in consumeEmailVerification; invalid → generic 400.
+  app.post("/verify-email", { config: { rateLimit: { max: 8, timeWindow: 60_000 } } }, async (request, reply) => {
+    const body = request.body as { token?: unknown } | undefined;
+    const token = typeof body?.token === "string" ? body.token : "";
+    const verified = await consumeEmailVerification(token);
+    if (!verified) {
+      reply.code(400);
+      return { error: "This verification link is invalid or has expired." };
+    }
+    return { ok: true };
+  });
+
+  // Resend the verification email to the logged-in user. 409 if already verified.
+  app.post("/resend-verification", { config: { rateLimit: { max: 3, timeWindow: 3_600_000 } } }, async (request, reply) => {
+    const authed = await requireAuth(request);
+    if (await isEmailVerified(authed.id)) {
+      reply.code(409);
+      return { error: "Your email is already verified." };
+    }
+    const token = await createEmailVerification(authed.id);
+    await sendVerificationEmail(authed.email, `${webBaseUrl()}/?verify=${token}`);
+    return { ok: true, message: "Verification email sent." };
+  });
+
   app.get("/me", async (request) => {
     const user = await getAuthUser(request);
     if (!user) return { user: null, hasCharacter: false };
-    return { user, hasCharacter: await hasCharacter(user.id) };
+    return { user, hasCharacter: await hasCharacter(user.id), emailVerified: await isEmailVerified(user.id) };
   });
 
   // TODO: Add Discord OAuth callbacks here after Phase 1 email/password auth settles.
