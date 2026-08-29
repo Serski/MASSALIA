@@ -619,7 +619,7 @@ export default function AtlasPanel() {
 
       {tab === "map" ? (
         <DashboardCard className="dashboard-map-card">
-          <ProvinceMap enableFullscreen />
+          <ProvinceMap />
         </DashboardCard>
       ) : tab === "standings" ? (
         <StandingsView />
