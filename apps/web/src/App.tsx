@@ -853,7 +853,7 @@ export function App() {
   // Standalone route for previewing the read-only campaign theatre. The same
   // map is also mounted inside Dashboard → Atlas → Map.
   if (pathname === "/map" || pathname === "/map/") {
-    return <ProvinceMap />;
+    return <ProvinceMap enableFullscreen />;
   }
 
   if (authRouteMode) {

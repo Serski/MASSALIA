@@ -120,6 +120,10 @@
   margin: 0 auto;
 }
 
+.pmap-fullscreen .pmap-header {
+  padding-right: 72px;
+}
+
 .pmap-close {
   position: absolute;
   top: 16px;

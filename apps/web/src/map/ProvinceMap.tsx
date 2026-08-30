@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import "./ProvinceMap.css";
 import { api, apiErrorMessage, streamMap, type MapPolity, type MapState } from "../api.js";
 
@@ -16,14 +17,17 @@ import { api, apiErrorMessage, streamMap, type MapPolity, type MapState } from "
  * the gesture ends (that is the only moment the label-threshold layer re-renders).
  */
 
-type Province = {
+type DisplayRegion = {
   id: string;
-  type: "land" | "sea" | "wasteland";
+  type: "land" | "sea";
   terrain: string;
   coastal: boolean;
+  frontier: boolean;
+  colonyCandidate: boolean;
+  memberProvinceIds: string[];
   d: string;
 };
-type GeoData = { width: number; height: number; provinces: Province[] };
+type RegionData = { width: number; height: number; regions: DisplayRegion[] };
 type Town = { name: string; x: number; y: number; polity: string; approx: boolean };
 type Ownership = { owner: string | null; controller: string | null };
 type Theatre = {
@@ -38,6 +42,7 @@ type Theatre = {
   colonyCandidateProvinceIds: string[];
   initialOwners: Record<string, string>;
   activeTownNames: string[];
+  displayLandRegionCount: number;
 };
 
 type Rect = { x: number; y: number; w: number; h: number };
@@ -62,7 +67,7 @@ const TOWN_LABEL_PX = 12;
 const TOWN_DOT_PX = 4;
 
 const STATIC = {
-  provinces: "/map/provinces_px.json",
+  regions: "/map/regions_px.json",
   rivers: "/map/rivers_px.json",
   terrain: "/map/terrain_px.png",
   towns: "/map/towns_px.json",
@@ -85,6 +90,20 @@ function seededOwnership(theatre: Theatre): Record<string, Ownership> {
       return [id, { owner, controller: owner }];
     }),
   );
+}
+
+function regionOwnership(region: DisplayRegion, ownership: Record<string, Ownership>): Ownership & { mixed: boolean } {
+  const memberState = region.memberProvinceIds.map((id) => ownership[id] ?? { owner: null, controller: null });
+  const choose = (field: "owner" | "controller") => {
+    const counts = new Map<string | null, number>();
+    for (const state of memberState) counts.set(state[field], (counts.get(state[field]) ?? 0) + 1);
+    return [...counts].sort(([a, aCount], [b, bCount]) => bCount - aCount || String(a).localeCompare(String(b)))[0]?.[0] ?? null;
+  };
+  return {
+    owner: choose("owner"),
+    controller: choose("controller"),
+    mixed: new Set(memberState.map((state) => `${state.owner ?? ""}|${state.controller ?? ""}`)).size > 1,
+  };
 }
 
 // Clamp a desired camera into the theatre: width in [theatre/MAX_ZOOM, theatre],
@@ -116,7 +135,7 @@ function zoomAt(cam: Rect, theatre: Rect, factor: number, fx: number, fy: number
 }
 
 export function ProvinceMap({ enableFullscreen = false }: { enableFullscreen?: boolean } = {}) {
-  const [geo, setGeo] = useState<GeoData | null>(null);
+  const [geo, setGeo] = useState<RegionData | null>(null);
   const [theatre, setTheatre] = useState<Theatre | null>(null);
   const [rivers, setRivers] = useState<string[]>([]);
   const [towns, setTowns] = useState<Town[]>([]);
@@ -124,12 +143,12 @@ export function ProvinceMap({ enableFullscreen = false }: { enableFullscreen?: b
   const [polities, setPolities] = useState<Record<string, MapPolity>>({});
   const [own, setOwn] = useState<Record<string, Ownership>>({});
   const [tick, setTick] = useState(0);
-  const [hover, setHover] = useState<Province | null>(null);
+  const [hover, setHover] = useState<DisplayRegion | null>(null);
   const [status, setStatus] = useState("");
   const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
-    fetch(STATIC.provinces).then((response) => response.json()).then(setGeo).catch(() => setStatus("Failed to load map geometry."));
+    fetch(STATIC.regions).then((response) => response.json()).then(setGeo).catch(() => setStatus("Failed to load map geometry."));
     fetch(STATIC.rivers).then((response) => response.json()).then((data) => setRivers(data.rivers)).catch(() => {});
     fetch(STATIC.towns)
       .then((response) => response.json())
@@ -174,17 +193,10 @@ export function ProvinceMap({ enableFullscreen = false }: { enableFullscreen?: b
     };
   }, []);
 
-  const activeIds = useMemo(() => new Set(theatre?.activeProvinceIds ?? []), [theatre]);
-  const playableLandIds = useMemo(() => new Set(theatre?.playableLandProvinceIds ?? []), [theatre]);
-  const activeSeaIds = useMemo(() => new Set(theatre?.activeSeaProvinceIds ?? []), [theatre]);
-  const frontierIds = useMemo(() => new Set(theatre?.frontierProvinceIds ?? []), [theatre]);
-  const colonyIds = useMemo(() => new Set(theatre?.colonyCandidateProvinceIds ?? []), [theatre]);
   const activeTownNames = useMemo(() => new Set(theatre?.activeTownNames ?? []), [theatre]);
 
-  const activeProvinces = useMemo(() => geo?.provinces.filter((province) => activeIds.has(province.id)) ?? [], [activeIds, geo]);
-  const land = useMemo(() => geo?.provinces.filter((province) => province.type === "land" && playableLandIds.has(province.id)) ?? [], [geo, playableLandIds]);
-  const sea = useMemo(() => geo?.provinces.filter((province) => province.type === "sea" && activeSeaIds.has(province.id)) ?? [], [activeSeaIds, geo]);
-  const waste = useMemo(() => geo?.provinces.filter((province) => province.type === "wasteland" && activeIds.has(province.id)) ?? [], [activeIds, geo]);
+  const land = useMemo(() => geo?.regions.filter((region) => region.type === "land") ?? [], [geo]);
+  const sea = useMemo(() => geo?.regions.filter((region) => region.type === "sea") ?? [], [geo]);
   const visibleTowns = useMemo(() => towns.filter((town) => activeTownNames.has(town.name)), [activeTownNames, towns]);
   const massalia = useMemo(() => towns.find((town) => town.name === "Massalia") ?? null, [towns]);
 
@@ -361,22 +373,27 @@ export function ProvinceMap({ enableFullscreen = false }: { enableFullscreen?: b
   // Wheel is registered non-passive so preventDefault stops page scroll / browser
   // zoom. Rapid trackpad wheels update the ref + rAF; state commits when they stop.
   const wheelTimer = useRef<number | null>(null);
-  useEffect(() => {
-    const svg = svgRef.current;
-    if (!svg) return;
-    const onWheel = (event: WheelEvent) => {
-      if (!theatreRect || !cameraRef.current) return;
-      event.preventDefault();
-      const factor = event.deltaY < 0 ? 1.15 : 1 / 1.15;
-      const focal = clientToViewBox(event.clientX, event.clientY, cameraRef.current);
-      cameraRef.current = zoomAt(cameraRef.current, theatreRect, factor, focal.x, focal.y);
-      scheduleFrame();
-      if (wheelTimer.current != null) window.clearTimeout(wheelTimer.current);
-      wheelTimer.current = window.setTimeout(() => commitCamera(), 140);
-    };
-    svg.addEventListener("wheel", onWheel, { passive: false });
-    return () => svg.removeEventListener("wheel", onWheel);
-  }, [clientToViewBox, commitCamera, scheduleFrame, theatreRect]);
+  const wheelLogicRef = useRef<(event: WheelEvent) => void>(() => {});
+  wheelLogicRef.current = (event) => {
+    if (!theatreRect || !cameraRef.current) return;
+    event.preventDefault();
+    const factor = event.deltaY < 0 ? 1.15 : 1 / 1.15;
+    const focal = clientToViewBox(event.clientX, event.clientY, cameraRef.current);
+    cameraRef.current = zoomAt(cameraRef.current, theatreRect, factor, focal.x, focal.y);
+    scheduleFrame();
+    if (wheelTimer.current != null) window.clearTimeout(wheelTimer.current);
+    wheelTimer.current = window.setTimeout(() => commitCamera(), 140);
+  };
+  const nativeWheelListener = useRef<(event: WheelEvent) => void>((event) => wheelLogicRef.current(event));
+  const setSvgElement = useCallback((element: SVGSVGElement | null) => {
+    if (svgRef.current) svgRef.current.removeEventListener("wheel", nativeWheelListener.current);
+    svgRef.current = element;
+    if (element) element.addEventListener("wheel", nativeWheelListener.current, { passive: false });
+  }, []);
+  useEffect(() => () => {
+    if (wheelTimer.current != null) window.clearTimeout(wheelTimer.current);
+    if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+  }, []);
 
   const onKeyDown = useCallback((event: React.KeyboardEvent<SVGSVGElement>) => {
     if (!theatreRect || !cameraRef.current) return;
@@ -394,8 +411,13 @@ export function ProvinceMap({ enableFullscreen = false }: { enableFullscreen?: b
   useEffect(() => {
     if (!fullscreen) return;
     const onKey = (event: KeyboardEvent) => event.key === "Escape" && setFullscreen(false);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
   }, [fullscreen]);
 
   // --- Static map layers (memoised so camera moves never re-create paths) ----
@@ -406,34 +428,43 @@ export function ProvinceMap({ enableFullscreen = false }: { enableFullscreen?: b
         <defs>
           <mask id={FOG_MASK_ID}>
             <rect width={geo.width} height={geo.height} fill="white" />
-            {activeProvinces.map((province) => <path key={province.id} d={province.d} fill="black" stroke="black" strokeWidth={2} />)}
+            {geo.regions.map((region) => <path key={region.id} d={region.d} fill="black" fillRule="evenodd" stroke="black" strokeWidth={2} />)}
           </mask>
         </defs>
 
         <image href={STATIC.terrain} width={geo.width} height={geo.height} />
         <g>
-          {sea.map((province) => <path key={province.id} d={province.d} fill="transparent" stroke="#5d84a8" strokeWidth={0.45} />)}
+          {sea.map((region) => (
+            <path
+              key={region.id}
+              d={region.d}
+              fill="transparent"
+              fillRule="evenodd"
+              stroke="#496d91"
+              strokeWidth={0.85}
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
         </g>
         <g>
-          {waste.map((province) => <path key={province.id} d={province.d} fill="#5b5b5b" stroke="#4c4c4c" strokeWidth={0.5} />)}
-        </g>
-        <g>
-          {land.map((province) => {
-            const ownership = own[province.id];
+          {land.map((region) => {
+            const ownership = regionOwnership(region, own);
             const occupied = ownership && ownership.controller !== ownership.owner;
-            const colony = !ownership?.owner && colonyIds.has(province.id);
+            const colony = !ownership.owner && region.colonyCandidate;
             return (
               <path
-                key={province.id}
-                data-province={province.id}
-                d={province.d}
+                key={region.id}
+                data-region={region.id}
+                d={region.d}
+                fillRule="evenodd"
                 fill={ownership?.owner ? (polities[ownership.owner]?.color || UNCLAIMED_COLOR) : colony ? COLONY_COLOR : UNCLAIMED_COLOR}
                 fillOpacity={ownership?.owner ? 0.62 : colony ? 0.34 : 0.16}
-                stroke={occupied ? (polities[ownership.controller ?? ""]?.color || UNCLAIMED_COLOR) : frontierIds.has(province.id) ? "#c7ab72" : "#5a5f66"}
-                strokeWidth={occupied ? 1.6 : frontierIds.has(province.id) ? 1.0 : 0.58}
-                strokeDasharray={occupied ? "4 3" : undefined}
+                stroke={occupied ? (polities[ownership.controller ?? ""]?.color || UNCLAIMED_COLOR) : region.frontier ? "#d2b16f" : "#302d28"}
+                strokeWidth={occupied ? 2.1 : region.frontier ? 1.9 : 1.35}
+                strokeDasharray={occupied || ownership.mixed ? "5 3" : undefined}
+                vectorEffect="non-scaling-stroke"
                 style={{ transition: "fill 300ms ease, fill-opacity 300ms ease", cursor: "help" }}
-                onMouseEnter={() => { if (!draggingRef.current) setHover(province); }}
+                onMouseEnter={() => { if (!draggingRef.current) setHover(region); }}
                 onMouseLeave={() => { if (!draggingRef.current) setHover(null); }}
               />
             );
@@ -443,12 +474,12 @@ export function ProvinceMap({ enableFullscreen = false }: { enableFullscreen?: b
           {rivers.map((river, index) => <path key={index} d={river} />)}
         </g>
 
-        {/* Permanent campaign boundary: retain realistic relief while removing
-            province borders and gameplay detail beyond the selected theatre. */}
-        <rect width={geo.width} height={geo.height} fill="#111a1b" opacity={0.76} mask={`url(#${FOG_MASK_ID})`} pointerEvents="none" />
+        {/* Permanent campaign boundary: retain the selected relief while hiding
+            all region borders and gameplay detail beyond the theatre. */}
+        <rect width={geo.width} height={geo.height} fill="#000" mask={`url(#${FOG_MASK_ID})`} pointerEvents="none" />
       </>
     );
-  }, [activeProvinces, colonyIds, frontierIds, geo, land, own, polities, rivers, sea, waste]);
+  }, [geo, land, own, polities, rivers, sea]);
 
   if (!geo || !theatre || !theatreRect || !camera) {
     return <p style={{ padding: 24, fontFamily: "Spectral, serif" }}>Charting the Mediterranean…</p>;
@@ -463,14 +494,14 @@ export function ProvinceMap({ enableFullscreen = false }: { enableFullscreen?: b
   const dotPx = TOWN_DOT_PX * unitPerPx;
   const labelledTowns = zoom >= LABEL_ZOOM_THRESHOLD ? visibleTowns : visibleTowns.filter((town) => town.name === "Massalia");
 
-  const hoverOwn = hover ? own[hover.id] : undefined;
+  const hoverRegionOwn = hover ? regionOwnership(hover, own) : undefined;
   const hoverDescription = hover
-    ? `${hover.id} · ${hover.terrain}${hover.coastal ? " · coastal" : ""}${
-        hoverOwn?.owner ? ` · ${polities[hoverOwn.owner]?.name ?? hoverOwn.owner}` : colonyIds.has(hover.id) ? " · open to colonization" : " · unclaimed"
-      }${hoverOwn && hoverOwn.controller !== hoverOwn.owner ? ` · occupied by ${polities[hoverOwn.controller ?? ""]?.name ?? hoverOwn.controller}` : ""}`
-    : `Three provinces inland · ${land.length} land provinces · tick ${tick}`;
+    ? `${hover.id} · ${hover.terrain}${hover.coastal ? " · coastal" : ""} · ${hover.memberProvinceIds.length} districts${
+        hoverRegionOwn?.owner ? ` · ${polities[hoverRegionOwn.owner]?.name ?? hoverRegionOwn.owner}` : hover.colonyCandidate ? " · open to colonization" : " · unclaimed"
+      }${hoverRegionOwn?.mixed ? " · divided control" : hoverRegionOwn && hoverRegionOwn.controller !== hoverRegionOwn.owner ? ` · occupied by ${polities[hoverRegionOwn.controller ?? ""]?.name ?? hoverRegionOwn.controller}` : ""}`
+    : `Three regions inland · ${land.length} larger land regions · tick ${tick}`;
 
-  return (
+  const map = (
     <div className={`pmap${fullscreen ? " pmap-fullscreen" : ""}`}>
       {fullscreen ? <button type="button" className="pmap-close" onClick={() => setFullscreen(false)}>Close</button> : null}
       <div className="pmap-header">
@@ -479,7 +510,7 @@ export function ProvinceMap({ enableFullscreen = false }: { enableFullscreen?: b
         <span className="pmap-legend">
           <i aria-hidden="true" style={{ width: 12, height: 12, background: COLONY_COLOR, border: "1px solid #5a4a2f", display: "inline-block" }} />
           Open frontier
-          <i aria-hidden="true" style={{ width: 12, height: 12, background: "#18201f", opacity: 0.8, display: "inline-block", marginLeft: 8 }} />
+          <i aria-hidden="true" style={{ width: 12, height: 12, background: "#000", display: "inline-block", marginLeft: 8 }} />
           Beyond the campaign
         </span>
       </div>
@@ -487,12 +518,12 @@ export function ProvinceMap({ enableFullscreen = false }: { enableFullscreen?: b
 
       <div className="pmap-stage" ref={stageRef} style={{ aspectRatio: `${theatreRect.w} / ${theatreRect.h}` }}>
         <svg
-          ref={svgRef}
+          ref={setSvgElement}
           className="pmap-svg"
           viewBox={`${camera.x} ${camera.y} ${camera.w} ${camera.h}`}
           role="img"
           tabIndex={0}
-          aria-label={`${theatre.name}: ${theatre.description}. Drag to pan, scroll or pinch to zoom.`}
+          aria-label={`${theatre.name}: ${theatre.description} Drag to pan, scroll or pinch to zoom.`}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={endPointer}
@@ -524,4 +555,5 @@ export function ProvinceMap({ enableFullscreen = false }: { enableFullscreen?: b
       </div>
     </div>
   );
+  return fullscreen ? createPortal(map, document.body) : map;
 }

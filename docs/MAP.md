@@ -1,6 +1,6 @@
 # Map System
 
-The Atlas currently presents a read-only Western and Central Mediterranean campaign theatre over the generated relief map. The complete map remains available as source data, while the first campaign exposes only a coastal band.
+The Atlas currently presents a read-only Western and Central Mediterranean campaign theatre over the generated relief map. The complete fine mesh remains available as source data, while players see a cleaner layer of larger campaign regions.
 
 ## First Theatre
 
@@ -10,12 +10,13 @@ The Atlas currently presents a read-only Western and Central Mediterranean campa
 node tools/map-gen/build_theatre.mjs
 ```
 
-The generator selects:
+The generator selects and builds:
 
-- land up to three province-adjacency steps inland from the chosen coasts;
+- land roughly three large regions inland from the chosen coasts;
 - Mediterranean and Atlantic Iberia, western/southern France, Italy, coastal Morocco and Algeria;
 - the Balearics, Corsica, Sardinia and Sicily;
-- nearby sea cells that connect the theatre;
+- larger land and sea regions made by merging connected fine-mesh cells;
+- nearby sea regions selected by adjacency, giving the fog an irregular region-shaped edge;
 - unowned provinces in Iberia and western France as future colony sites.
 
 Switzerland, Dalmatia, the Balkans, the eastern Mediterranean and deep continental interiors remain outside the first theatre. They are still rendered as terrain beneath permanent campaign-boundary fog and can be enabled by a later theatre definition.
@@ -25,17 +26,17 @@ Switzerland, Dalmatia, the Balkans, the eastern Mediterranean and deep continent
 `ProvinceMap.tsx` composes one SVG from:
 
 - `terrain_px.png` for realistic relief;
-- `provinces_px.json` for province paths;
+- `regions_px.json` for the generated larger campaign-region paths and their fine-cell membership;
 - `rivers_px.json` for rivers;
 - `towns_px.json` for town labels;
 - `polities.json` and API state for ownership colors;
-- `theatre.json` for the active cells, frontier, colony candidates and viewport.
+- `theatre.json` for the active fine cells, frontier, colony candidates and viewport.
 
-The map is shown both at `/map` and in Dashboard → Atlas → Map. Ownership from the API replaces the static seed preview when available. The UI has no conquest controls.
+The map is shown both at `/map` and in Dashboard → Atlas → Map. It opens around Massalia and supports pan, zoom and fullscreen. Ownership from the API replaces the static seed preview when available. A larger region derives its display state from its member fine cells. The UI has no conquest controls.
 
 ## Data And Safety
 
-All 1,023 generated provinces and their adjacency pairs remain in the reference tables. `seedMap.ts` creates mutable ownership/history rows only for land in the active theatre, leaving the rest available for later expansion without making it playable now.
+All 1,023 generated fine cells and their adjacency pairs remain in the reference tables. `seedMap.ts` creates mutable ownership/history rows only for land in the active theatre, leaving the rest available for later expansion without making it playable now. The generated region layer is non-destructive and can always be rebuilt.
 
 Map mutation routes are disabled unless the server is deliberately started with `MAP_MUTATIONS_ENABLED=true`. Keep this false until movement, war, occupation and authorization rules are complete.
 

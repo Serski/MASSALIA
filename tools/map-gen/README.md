@@ -10,16 +10,17 @@ Run:
 node tools/map-gen/build_theatre.mjs
 ```
 
-This derives `apps/web/public/map/theatre.json` from the full province geometry and adjacency graph. It selects a three-province-deep coastal theatre, connected sea cells, major western/central Mediterranean islands, frontier boundaries, colony candidates and a display viewport. Edit the geographic selection functions in that script when expanding the campaign.
+This derives `apps/web/public/map/theatre.json` and `regions_px.json` from the full province geometry and adjacency graph. It selects a coastal theatre approximately three large regions deep, merges connected fine cells into larger land and sea regions, includes the major western/central Mediterranean islands, and generates frontier boundaries, colony candidates and a display viewport. Edit the geographic selection and region-size constants in that script when expanding the campaign.
 
 ## Browser assets
 
 - `provinces_px.json`: 1,023 land, sea and wasteland SVG paths.
+- `regions_px.json`: generated larger SVG regions with their underlying province IDs.
 - `rivers_px.json`: 78 river paths.
 - `towns_px.json`: 26 towns with pixel and longitude/latitude positions.
 - `polities.json`: campaign polity names and colors.
 - `terrain_px.png`: hillshaded terrain underlay; macro relief is real and fine ridge detail is procedural.
-- `theatre.json`: generated first-theatre mask and preview state.
+- `theatre.json`: generated first-theatre selection and preview state.
 
 ## Database seed data
 
