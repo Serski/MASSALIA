@@ -1,0 +1,482 @@
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import "./World2Map.css";
+
+/**
+ * Standalone hand-drawn world map for the /map-v2 review route.
+ *
+ * The shipped terrain export (`terrain2.webp`) is the visible art; the generated
+ * region polygons (`world2.json`) sit on top as a transparent interaction layer.
+ * Land and sea zones highlight on hover and select on tap; fog regions are dark
+ * and inert. Nothing here is wired to the database — it is a static preview.
+ *
+ * The pan/zoom camera is duplicated from ProvinceMap (kept independent so that
+ * file is untouched): during a drag or pinch the SVG viewBox is written directly
+ * through a ref inside requestAnimationFrame, and React state commits only when
+ * the gesture ends — so a drag triggers zero React re-renders.
+ */
+
+type ProvinceType = "land" | "sea" | "fog";
+type Province = {
+  id: string;
+  type: ProvinceType;
+  path: string;
+  towns: string[];
+  neighbors: string[];
+  coastal: boolean;
+};
+type Town = { id: string; name: string; x: number; y: number };
+type World = { width: number; height: number; provinces: Province[]; towns: Town[] };
+
+type Rect = { x: number; y: number; w: number; h: number };
+
+const WORLD_SRC = "/map2/world2.json";
+const TERRAIN_SRC = "/map2/terrain2.webp";
+
+// --- Camera tuning (mirrors ProvinceMap) -------------------------------------
+// Opening frame width as a fraction of the full world width, centred on the town
+// of Massalia. 0.42 frames the Gulf of Lion coast — Iberia's edge to Liguria,
+// with Corsica and Sardinia to the east — while keeping Massalia central.
+const OPENING_FRACTION = 0.42;
+const MAX_ZOOM = 10;
+// Zoom (= worldWidth / cameraWidth) at or beyond which every town label appears;
+// below it only Massalia is named, so the wide opening frame stays uncluttered.
+const LABEL_ZOOM_THRESHOLD = 3;
+const TOWN_LABEL_PX = 12;
+const TOWN_DOT_PX = 4;
+// A press that moves more than this many screen pixels is a pan, not a tap, and
+// must not trigger selection.
+const TAP_SLOP_PX = 6;
+
+// Palette.
+const SELECT_GOLD = "#d8b56a";
+const HOVER_WASH = "#c8ad73";
+const SEA_LATTICE = "#4d82b8";
+const FOG_DARK = "#0b0a08";
+
+// Clamp a desired camera into the world: width in [world/MAX_ZOOM, world], height
+// derived from the world aspect (no distortion), origin kept inside.
+function clampCamera(cam: Rect, world: Rect): Rect {
+  const aspect = world.w / world.h;
+  const w = Math.min(world.w, Math.max(world.w / MAX_ZOOM, cam.w));
+  const h = w / aspect;
+  const x = Math.min(world.x + world.w - w, Math.max(world.x, cam.x));
+  const y = Math.min(world.y + world.h - h, Math.max(world.y, cam.y));
+  return { x, y, w, h };
+}
+
+function openingFrame(world: Rect, focus: { x: number; y: number } | null): Rect {
+  const w = OPENING_FRACTION * world.w;
+  const h = w / (world.w / world.h);
+  const cx = focus?.x ?? world.x + world.w / 2;
+  const cy = focus?.y ?? world.y + world.h / 2;
+  return clampCamera({ x: cx - w / 2, y: cy - h / 2, w, h }, world);
+}
+
+// Zoom by `factor` (>1 zooms in) keeping the viewBox point (fx,fy) fixed on screen.
+function zoomAt(cam: Rect, world: Rect, factor: number, fx: number, fy: number): Rect {
+  const rx = (fx - cam.x) / cam.w;
+  const ry = (fy - cam.y) / cam.h;
+  const w = cam.w / factor;
+  const h = cam.h / factor;
+  return clampCamera({ x: fx - rx * w, y: fy - ry * h, w, h }, world);
+}
+
+export function World2Map() {
+  const [world, setWorld] = useState<World | null>(null);
+  const [status, setStatus] = useState("");
+  const [hover, setHover] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(WORLD_SRC)
+      .then((response) => response.json() as Promise<World>)
+      .then(setWorld)
+      .catch(() => setStatus("Failed to load the world map."));
+  }, []);
+
+  const worldRect = useMemo<Rect | null>(
+    () => (world ? { x: 0, y: 0, w: world.width, h: world.height } : null),
+    [world],
+  );
+  const massalia = useMemo(() => world?.towns.find((town) => town.name === "Massalia") ?? null, [world]);
+  const townsById = useMemo(() => new Map((world?.towns ?? []).map((town) => [town.id, town])), [world]);
+  const provincesById = useMemo(() => new Map((world?.provinces ?? []).map((province) => [province.id, province])), [world]);
+
+  const land = useMemo(() => world?.provinces.filter((p) => p.type === "land") ?? [], [world]);
+  const seaZones = useMemo(() => world?.provinces.filter((p) => p.type === "sea") ?? [], [world]);
+  const fog = useMemo(() => world?.provinces.filter((p) => p.type === "fog") ?? [], [world]);
+
+  // --- Camera plumbing (mirrors ProvinceMap) --------------------------------
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const cameraRef = useRef<Rect | null>(null);
+  const [camera, setCamera] = useState<Rect | null>(null);
+  const [stageWidthPx, setStageWidthPx] = useState(0);
+  const rafRef = useRef<number | null>(null);
+  const draggingRef = useRef(false);
+  const movedRef = useRef(false);
+  const downPointRef = useRef<{ x: number; y: number } | null>(null);
+  const didInitCamera = useRef(false);
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const gestureRef = useRef<{ startCam: Rect; startDist: number; startMid: { x: number; y: number } } | null>(null);
+  const lastTapRef = useRef(0);
+
+  const applyViewBox = useCallback((cam: Rect) => {
+    svgRef.current?.setAttribute("viewBox", `${cam.x} ${cam.y} ${cam.w} ${cam.h}`);
+  }, []);
+
+  // Any React render re-asserts the live camera onto the SVG, so a mid-gesture
+  // state update never snaps the viewBox back.
+  useLayoutEffect(() => {
+    if (cameraRef.current) applyViewBox(cameraRef.current);
+  });
+
+  // The opening frame, computed once the world data has settled.
+  useEffect(() => {
+    if (didInitCamera.current || !worldRect || !world) return;
+    const frame = openingFrame(worldRect, massalia ? { x: massalia.x, y: massalia.y } : null);
+    cameraRef.current = frame;
+    setCamera(frame);
+    didInitCamera.current = true;
+  }, [worldRect, world, massalia]);
+
+  // Track the stage's rendered pixel width so labels/markers hold a constant
+  // on-screen size across zoom and resize.
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const measure = () => setStageWidthPx(el.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [world]);
+
+  const scheduleFrame = useCallback(() => {
+    if (rafRef.current != null) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      if (cameraRef.current) applyViewBox(cameraRef.current);
+    });
+  }, [applyViewBox]);
+
+  const commitCamera = useCallback(() => {
+    if (cameraRef.current) setCamera(cameraRef.current);
+  }, []);
+
+  const setCameraNow = useCallback((next: Rect) => {
+    cameraRef.current = next;
+    applyViewBox(next);
+    setCamera(next);
+  }, [applyViewBox]);
+
+  const clientToViewBox = useCallback((clientX: number, clientY: number, cam: Rect) => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0 || rect.height === 0) return { x: cam.x + cam.w / 2, y: cam.y + cam.h / 2 };
+    return {
+      x: cam.x + ((clientX - rect.left) / rect.width) * cam.w,
+      y: cam.y + ((clientY - rect.top) / rect.height) * cam.h,
+    };
+  }, []);
+
+  const stepZoom = useCallback((factor: number, clientX?: number, clientY?: number) => {
+    if (!worldRect || !cameraRef.current) return;
+    const cam = cameraRef.current;
+    const focal = clientX != null && clientY != null ? clientToViewBox(clientX, clientY, cam) : { x: cam.x + cam.w / 2, y: cam.y + cam.h / 2 };
+    setCameraNow(zoomAt(cam, worldRect, factor, focal.x, focal.y));
+  }, [clientToViewBox, setCameraNow, worldRect]);
+
+  const goHome = useCallback(() => {
+    if (!worldRect) return;
+    setCameraNow(openingFrame(worldRect, massalia ? { x: massalia.x, y: massalia.y } : null));
+  }, [massalia, setCameraNow, worldRect]);
+
+  const goFit = useCallback(() => {
+    if (!worldRect) return;
+    setCameraNow({ ...worldRect });
+  }, [setCameraNow, worldRect]);
+
+  // --- Pointer gestures (mirrors ProvinceMap, plus tap-vs-pan tracking) ------
+  const onPointerDown = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
+    if (!worldRect || !cameraRef.current) return;
+    try { svgRef.current?.setPointerCapture(event.pointerId); } catch { /* capture is best-effort */ }
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const points = [...pointersRef.current.values()];
+    if (points.length === 1) {
+      movedRef.current = false;
+      downPointRef.current = { x: event.clientX, y: event.clientY };
+      const now = event.timeStamp;
+      if (now - lastTapRef.current < 300) {
+        stepZoom(1.8, event.clientX, event.clientY);
+        lastTapRef.current = 0;
+      } else {
+        lastTapRef.current = now;
+      }
+      draggingRef.current = true;
+      gestureRef.current = { startCam: { ...cameraRef.current }, startDist: 0, startMid: { x: event.clientX, y: event.clientY } };
+    } else if (points.length === 2) {
+      movedRef.current = true; // a two-finger gesture is never a tap
+      const [a, b] = points;
+      const dist = Math.hypot(a!.x - b!.x, a!.y - b!.y) || 1;
+      gestureRef.current = { startCam: { ...cameraRef.current }, startDist: dist, startMid: { x: (a!.x + b!.x) / 2, y: (a!.y + b!.y) / 2 } };
+    }
+  }, [stepZoom, worldRect]);
+
+  const onPointerMove = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
+    if (!worldRect || !gestureRef.current || !pointersRef.current.has(event.pointerId)) return;
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const points = [...pointersRef.current.values()];
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0) return;
+    const gesture = gestureRef.current;
+
+    if (points.length === 1) {
+      const down = downPointRef.current;
+      if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) > TAP_SLOP_PX) movedRef.current = true;
+      const dxUnits = ((event.clientX - gesture.startMid.x) / rect.width) * gesture.startCam.w;
+      const dyUnits = ((event.clientY - gesture.startMid.y) / rect.height) * gesture.startCam.h;
+      cameraRef.current = clampCamera({ ...gesture.startCam, x: gesture.startCam.x - dxUnits, y: gesture.startCam.y - dyUnits }, worldRect);
+      scheduleFrame();
+    } else if (points.length >= 2) {
+      const [a, b] = points;
+      const dist = Math.hypot(a!.x - b!.x, a!.y - b!.y) || 1;
+      const scale = dist / (gesture.startDist || dist);
+      const startW = gesture.startCam.w;
+      const aspect = worldRect.w / worldRect.h;
+      const w = Math.min(worldRect.w, Math.max(worldRect.w / MAX_ZOOM, startW / scale));
+      const h = w / aspect;
+      const fx = gesture.startCam.x + ((gesture.startMid.x - rect.left) / rect.width) * gesture.startCam.w;
+      const fy = gesture.startCam.y + ((gesture.startMid.y - rect.top) / rect.height) * gesture.startCam.h;
+      const midX = (a!.x + b!.x) / 2;
+      const midY = (a!.y + b!.y) / 2;
+      const x = fx - ((midX - rect.left) / rect.width) * w;
+      const y = fy - ((midY - rect.top) / rect.height) * h;
+      cameraRef.current = clampCamera({ x, y, w, h }, worldRect);
+      scheduleFrame();
+    }
+  }, [scheduleFrame, worldRect]);
+
+  const endPointer = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
+    try { if (svgRef.current?.hasPointerCapture(event.pointerId)) svgRef.current.releasePointerCapture(event.pointerId); } catch { /* best-effort */ }
+    pointersRef.current.delete(event.pointerId);
+    if (pointersRef.current.size === 0) {
+      draggingRef.current = false;
+      gestureRef.current = null;
+      commitCamera();
+      // A tap (no meaningful pan movement) selects the region under the pointer.
+      // Hit-testing via elementFromPoint is capture-proof and works for touch and
+      // mouse alike, unlike a click handler swallowed by the SVG pointer capture.
+      if (!movedRef.current) {
+        const el = document.elementFromPoint(event.clientX, event.clientY) as Element | null;
+        const rid = el?.closest("[data-rid]")?.getAttribute("data-rid") ?? null;
+        setSelected(rid);
+      }
+    } else if (pointersRef.current.size === 1 && cameraRef.current) {
+      const remaining = [...pointersRef.current.values()][0]!;
+      gestureRef.current = { startCam: { ...cameraRef.current }, startDist: 0, startMid: { x: remaining.x, y: remaining.y } };
+      movedRef.current = true; // dropping from a pinch to a pan is never a tap
+    }
+  }, [commitCamera]);
+
+  // Wheel registered non-passive so preventDefault stops page scroll / browser zoom.
+  const wheelTimer = useRef<number | null>(null);
+  const wheelLogicRef = useRef<(event: WheelEvent) => void>(() => {});
+  wheelLogicRef.current = (event) => {
+    if (!worldRect || !cameraRef.current) return;
+    event.preventDefault();
+    const factor = event.deltaY < 0 ? 1.15 : 1 / 1.15;
+    const focal = clientToViewBox(event.clientX, event.clientY, cameraRef.current);
+    cameraRef.current = zoomAt(cameraRef.current, worldRect, factor, focal.x, focal.y);
+    scheduleFrame();
+    if (wheelTimer.current != null) window.clearTimeout(wheelTimer.current);
+    wheelTimer.current = window.setTimeout(() => commitCamera(), 140);
+  };
+  const nativeWheelListener = useRef<(event: WheelEvent) => void>((event) => wheelLogicRef.current(event));
+  const setSvgElement = useCallback((element: SVGSVGElement | null) => {
+    if (svgRef.current) svgRef.current.removeEventListener("wheel", nativeWheelListener.current);
+    svgRef.current = element;
+    if (element) element.addEventListener("wheel", nativeWheelListener.current, { passive: false });
+  }, []);
+  useEffect(() => () => {
+    if (wheelTimer.current != null) window.clearTimeout(wheelTimer.current);
+    if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  const onKeyDown = useCallback((event: React.KeyboardEvent<SVGSVGElement>) => {
+    if (!worldRect || !cameraRef.current) return;
+    const cam = cameraRef.current;
+    const panStep = cam.w * 0.15;
+    if (event.key === "+" || event.key === "=") { event.preventDefault(); stepZoom(1.3); }
+    else if (event.key === "-" || event.key === "_") { event.preventDefault(); stepZoom(1 / 1.3); }
+    else if (event.key === "ArrowLeft") { event.preventDefault(); setCameraNow(clampCamera({ ...cam, x: cam.x - panStep }, worldRect)); }
+    else if (event.key === "ArrowRight") { event.preventDefault(); setCameraNow(clampCamera({ ...cam, x: cam.x + panStep }, worldRect)); }
+    else if (event.key === "ArrowUp") { event.preventDefault(); setCameraNow(clampCamera({ ...cam, y: cam.y - panStep }, worldRect)); }
+    else if (event.key === "ArrowDown") { event.preventDefault(); setCameraNow(clampCamera({ ...cam, y: cam.y + panStep }, worldRect)); }
+    else if (event.key === "Escape") { setSelected(null); }
+  }, [setCameraNow, stepZoom, worldRect]);
+
+  // Region hover (desktop). Selection is handled in endPointer via a tap hit-test.
+  const onRegionEnter = useCallback((id: string) => { if (!draggingRef.current) setHover(id); }, []);
+  const onRegionLeave = useCallback((id: string) => { setHover((current) => (current === id ? null : current)); }, []);
+
+  // --- Static map layers (memoised so camera moves never re-create paths) ----
+  const staticLayers = useMemo(() => {
+    if (!world) return null;
+    return (
+      <>
+        <image href={TERRAIN_SRC} width={world.width} height={world.height} />
+
+        {/* Sea zones: hairline lattice-blue boundaries at low opacity, still
+            hoverable/selectable as a transparent hit layer. */}
+        <g>
+          {seaZones.map((province) => (
+            <path
+              key={province.id}
+              data-rid={province.id}
+              d={province.path}
+              fill="transparent"
+              fillRule="evenodd"
+              stroke={SEA_LATTICE}
+              strokeOpacity={0.5}
+              strokeWidth={0.8}
+              vectorEffect="non-scaling-stroke"
+              style={{ cursor: "pointer" }}
+              onMouseEnter={() => onRegionEnter(province.id)}
+              onMouseLeave={() => onRegionLeave(province.id)}
+            />
+          ))}
+        </g>
+
+        {/* Land regions: an invisible interaction layer over the drawn art, with
+            a light gold wash on hover. */}
+        <g>
+          {land.map((province) => (
+            <path
+              key={province.id}
+              data-rid={province.id}
+              d={province.path}
+              fillRule="evenodd"
+              fill={HOVER_WASH}
+              fillOpacity={hover === province.id ? 0.16 : 0}
+              stroke="none"
+              style={{ cursor: "pointer", transition: "fill-opacity 120ms ease" }}
+              onMouseEnter={() => onRegionEnter(province.id)}
+              onMouseLeave={() => onRegionLeave(province.id)}
+            />
+          ))}
+        </g>
+
+        {/* Fog: dark and inert. */}
+        <g pointerEvents="none">
+          {fog.map((province) => (
+            <path key={province.id} d={province.path} fill={FOG_DARK} fillOpacity={0.72} fillRule="evenodd" />
+          ))}
+        </g>
+      </>
+    );
+  }, [world, land, seaZones, fog, hover, onRegionEnter, onRegionLeave]);
+
+  if (!world || !worldRect || !camera) {
+    return <p style={{ padding: 24, fontFamily: "Spectral, serif" }}>Charting the known world…</p>;
+  }
+
+  const zoom = worldRect.w / camera.w;
+  const unitPerPx = stageWidthPx > 0 ? camera.w / stageWidthPx : camera.w / worldRect.w;
+  const labelPx = TOWN_LABEL_PX * unitPerPx;
+  const dotPx = TOWN_DOT_PX * unitPerPx;
+  const labelledTowns = zoom >= LABEL_ZOOM_THRESHOLD ? world.towns : world.towns.filter((town) => town.name === "Massalia");
+
+  const selectedProvince = selected ? provincesById.get(selected) ?? null : null;
+  const hoverProvince = hover ? provincesById.get(hover) ?? null : null;
+  const headerNote = hoverProvince
+    ? `${hoverProvince.id} · ${hoverProvince.type}${hoverProvince.coastal ? " · coastal" : ""}`
+    : `${land.length} land regions · ${seaZones.length} sea zones · ${world.towns.length} towns`;
+
+  return (
+    <div className="w2map">
+      <div className="w2map-header">
+        <strong>The Known World</strong>
+        <span style={{ fontSize: 13 }}>{headerNote}</span>
+        <span className="w2map-legend">
+          <i aria-hidden="true" style={{ width: 12, height: 12, background: FOG_DARK, display: "inline-block" }} />
+          Beyond the world
+        </span>
+      </div>
+      {status ? <div className="w2map-status">{status}</div> : null}
+
+      <div className="w2map-stage" ref={stageRef} style={{ aspectRatio: `${worldRect.w} / ${worldRect.h}` }}>
+        <svg
+          ref={setSvgElement}
+          className="w2map-svg"
+          viewBox={`${camera.x} ${camera.y} ${camera.w} ${camera.h}`}
+          role="img"
+          tabIndex={0}
+          aria-label="The hand-drawn world map. Drag to pan, scroll or pinch to zoom, tap a region to inspect it."
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={endPointer}
+          onPointerCancel={endPointer}
+          onKeyDown={onKeyDown}
+        >
+          {staticLayers}
+
+          {/* Selected region: gold outline on top of everything. */}
+          {selectedProvince ? (
+            <path
+              d={selectedProvince.path}
+              fill={SELECT_GOLD}
+              fillOpacity={0.14}
+              fillRule="evenodd"
+              stroke={SELECT_GOLD}
+              strokeWidth={2.4}
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="none"
+            />
+          ) : null}
+
+          <g pointerEvents="none">
+            {labelledTowns.map((town) => (
+              <g key={town.id}>
+                <circle cx={town.x} cy={town.y} r={town.name === "Massalia" ? dotPx * 1.5 : dotPx} fill="#fff" stroke="#3c3c3c" strokeWidth={dotPx * 0.35} />
+                <text x={town.x + dotPx * 1.75} y={town.y - dotPx * 1.25} fontSize={town.name === "Massalia" ? labelPx * 1.15 : labelPx} fill="#fff" stroke="#3c3c3c" strokeWidth={labelPx * 0.02} fontWeight="bold">
+                  {town.name}
+                </text>
+              </g>
+            ))}
+          </g>
+        </svg>
+
+        {selectedProvince ? (
+          <div className="w2map-card" role="dialog" aria-label={`Region ${selectedProvince.id}`}>
+            <button type="button" className="w2map-card-close" onClick={() => setSelected(null)}>Close</button>
+            <div className="w2map-card-body">
+              <h2 className="w2map-card-title">{selectedProvince.id}</h2>
+              <p className="w2map-card-sub">Region name and politics come later.</p>
+              <div className="w2map-card-label">Type</div>
+              <div style={{ fontSize: 13, textTransform: "capitalize" }}>
+                {selectedProvince.type}{selectedProvince.coastal ? " · coastal" : ""}
+              </div>
+              <div className="w2map-card-label">Towns</div>
+              {selectedProvince.towns.length ? (
+                <ul className="w2map-card-towns">
+                  {selectedProvince.towns.map((townId) => (
+                    <li key={townId}>{townsById.get(townId)?.name ?? townId}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="w2map-card-empty">No towns in this region.</p>
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="w2map-controls">
+          <button type="button" className="w2map-btn" aria-label="Zoom in" title="Zoom in" onClick={() => stepZoom(1.3)}>+</button>
+          <button type="button" className="w2map-btn" aria-label="Zoom out" title="Zoom out" onClick={() => stepZoom(1 / 1.3)}>−</button>
+          <button type="button" className="w2map-btn" aria-label="Home" title="Home (Massalia)" onClick={goHome}>⌂</button>
+          <button type="button" className="w2map-btn" aria-label="Fit world" title="Fit the whole world" onClick={goFit}>▣</button>
+        </div>
+      </div>
+    </div>
+  );
+}

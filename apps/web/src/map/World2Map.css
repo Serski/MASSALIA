@@ -1,0 +1,207 @@
+/* Hand-drawn world map ("world2") camera + region interaction layer for the
+   standalone /map-v2 route. Self-contained (no .dashboard-shell), prefixed
+   .w2map-. The camera CSS mirrors ProvinceMap.css; the card mirrors the
+   dashboard bottom-sheet visual language. */
+
+.w2map {
+  padding: 12px;
+  font-family: "Spectral", serif;
+  color: var(--dash-stone, #d7ccb7);
+}
+
+.w2map-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.w2map-header .w2map-legend {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.w2map-status {
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--dash-gold-bright, #d1ae63);
+}
+
+/* Aspect-locked to the world so a fully zoomed-out camera equals the world
+   exactly, with no letterboxing at any zoom. */
+.w2map-stage {
+  position: relative;
+  width: 100%;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #9db7cb;
+}
+
+.w2map-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  /* Panning the map never scrolls the page; pinching never zooms the browser. */
+  touch-action: none;
+  cursor: grab;
+  outline: none;
+}
+
+.w2map-svg:active {
+  cursor: grabbing;
+}
+
+.w2map-svg:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--dash-gold, #b58a45);
+}
+
+/* Camera controls, bottom-right of the stage. */
+.w2map-controls {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: grid;
+  gap: 6px;
+  justify-items: stretch;
+}
+
+.w2map-btn {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--dash-parchment, #ece0cc);
+  background: rgba(20, 13, 10, 0.82);
+  border: 1px solid rgba(181, 138, 69, 0.5);
+  border-radius: 8px;
+  cursor: pointer;
+  backdrop-filter: blur(3px);
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.w2map-btn:hover {
+  border-color: var(--dash-gold, #b58a45);
+  background: rgba(30, 20, 14, 0.9);
+}
+
+.w2map-btn:focus-visible {
+  outline: none;
+  border-color: var(--dash-gold-bright, #d1ae63);
+}
+
+/* Selected-region card — the dashboard bottom-sheet language as an anchored
+   card. Fixed to the viewport so it stays visible however far the aspect-locked
+   stage scrolls, and never covers the whole map. */
+.w2map-card {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 4;
+  width: min(320px, calc(100% - 32px));
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #221a14, #15100c);
+  border: 1px solid var(--dash-gold, #b58a45);
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: w2CardUp 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  overflow: hidden;
+}
+
+@keyframes w2CardUp {
+  from { transform: translateY(16px); opacity: 0.5; }
+  to { transform: none; opacity: 1; }
+}
+
+.w2map-card-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  padding: 4px 10px;
+  color: var(--dash-stone-dim, #9a8c72);
+  font-family: var(--font-display, "Cinzel", serif);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: none;
+  border: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28));
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.w2map-card-close:hover {
+  color: var(--dash-parchment, #ece0cc);
+  border-color: var(--dash-gold, #b58a45);
+}
+
+.w2map-card-body {
+  padding: 16px 18px 18px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.w2map-card-title {
+  margin: 2px 0 0;
+  color: var(--dash-parchment, #ece0cc);
+  font-family: var(--font-display, "Cinzel", serif);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.w2map-card-sub {
+  margin: 2px 0 0;
+  color: var(--dash-stone-dim, #9a8c72);
+  font-size: 11px;
+  font-style: italic;
+}
+
+.w2map-card-label {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  margin: 16px 0 8px;
+  color: var(--dash-gold, #b58a45);
+  font-family: var(--font-display, "Cinzel", serif);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.w2map-card-label::after {
+  flex: 1;
+  height: 1px;
+  content: "";
+  background: var(--dash-line, rgba(181, 138, 69, 0.28));
+}
+
+.w2map-card-towns {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.w2map-card-towns li {
+  padding: 3px 9px;
+  font-size: 12.5px;
+  color: var(--dash-parchment, #ece0cc);
+  background: rgba(181, 138, 69, 0.12);
+  border: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28));
+  border-radius: 999px;
+}
+
+.w2map-card-empty {
+  margin: 0;
+  color: var(--dash-stone-dim, #9a8c72);
+  font-size: 12.5px;
+  font-style: italic;
+}
