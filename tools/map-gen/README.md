@@ -2,6 +2,30 @@
 
 The generated Western Mediterranean source map uses Lambert Conformal Conic projection and a shared 2400 × 1991 pixel coordinate system.
 
+## Hand-drawn world map (world2)
+
+`build_world2.py` derives the hand-drawn world map from the three committed
+Photoshop source copies in `sources/` (never the Desktop originals), all in the
+same 3126 × 2696 pixel space:
+
+- `sources/MASS_BASE01.psd` — art layers plus the 105 named town shapes and the `02_land.png` land layer.
+- `sources/MASS_BASE01.png` — flattened export of the drawn region borders (black), sea lattice (blue) and coastline.
+- `sources/MASS_BASE01_TERRAIN.png` — art-only export that ships verbatim as the terrain underlay.
+
+It emits `apps/web/public/map2/terrain2.webp` (lossless, full resolution) and
+`apps/web/public/map2/world2.json` (region geometry, towns, adjacency), and is
+deterministic — the same sources always produce the same outputs. It aborts with
+a report if any validation gate fails (town/region counts, exact tiling, no
+disconnected playable region, output size).
+
+Set up a virtualenv and run it with:
+
+```sh
+python3 -m venv .venv-world2
+.venv-world2/bin/pip install -r tools/map-gen/requirements-world2.txt
+.venv-world2/bin/python tools/map-gen/build_world2.py
+```
+
 ## First campaign theatre
 
 Run:
