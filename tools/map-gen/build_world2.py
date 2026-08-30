@@ -80,6 +80,20 @@ def slugify(name: str) -> str:
     return s.strip("-")
 
 
+def flatten_over_white(path) -> "Image.Image":
+    """Open a raster as RGBA and alpha-composite it over an opaque white
+    background, returning an RGB image.
+
+    MASS_BASE01.png is RGBA with large fully-transparent areas whose stored RGB
+    is near-black. A plain ``.convert("RGB")`` keeps those invisible near-black
+    values, which then read as phantom ink/walls and destroy the drawn regions.
+    Compositing over white first makes only *visible* pixels count.
+    """
+    img = Image.open(str(path)).convert("RGBA")
+    background = Image.new("RGBA", img.size, (255, 255, 255, 255))
+    return Image.alpha_composite(background, img).convert("RGB")
+
+
 # --- Report scaffolding ------------------------------------------------------
 REPORT: list[str] = []
 FAILURES: list[str] = []
@@ -146,7 +160,7 @@ def load_land_and_towns():
 
 # --- 2. Walls from the flattened PNG -----------------------------------------
 def load_walls():
-    flat = np.array(Image.open(str(FLAT_PATH)).convert("RGB"))
+    flat = np.array(flatten_over_white(FLAT_PATH))
     if flat.shape[:2] != (H, W):
         raise SystemExit(f"Flattened PNG size {flat.shape[:2]} != expected {(H, W)}")
     r = flat[..., 0].astype(int)
@@ -442,24 +456,42 @@ def main() -> int:
         fail(f"duplicate town ids: {dups}")
     assigned = [t for t in towns if t.get("region")]
     say(f"towns assigned to a land region: {len(assigned)}/{len(towns)}")
+    if len(assigned) != len(towns):
+        fail(f"{len(towns) - len(assigned)} town(s) not placed in a land region")
     for t in towns:
         if t.get("region") is None:
             continue
         rtype = next(r["type"] for r in regions if r["id"] == t["region"])
         if rtype != "land":
             fail(f"town {t['id']} assigned to non-land region {t['region']} ({rtype})")
+    max_snap = max((s["dist"] for s in snaps), default=0.0)
+    say(f"town snaps: {len(snaps)}, max {max_snap}px")
+    if max_snap > 7:
+        fail(f"town snap distance {max_snap}px exceeds 7px")
 
     # region-count gates
     n_land = sum(1 for r in regions if r["type"] == "land")
     n_sea = sum(1 for r in regions if r["type"] == "sea")
     n_fog = sum(1 for r in regions if r["type"] == "fog")
     say(f"regions -> land: {n_land}   sea: {n_sea}   fog: {n_fog}")
-    if not (90 <= n_land <= 130):
-        fail(f"land region count {n_land} outside 90..130")
+    if not (130 <= n_land <= 155):
+        fail(f"playable land region count {n_land} outside 130..155")
     if not (25 <= n_sea <= 40):
         fail(f"sea zone count {n_sea} outside 25..40")
     if n_fog != 2:
         fail(f"fog region count {n_fog} != 2")
+
+    # playable-land size distribution: no giant slab, sensible typical size
+    playable_areas = sorted(r["area"] for r in regions if r["type"] == "land")
+    if playable_areas:
+        p_max = playable_areas[-1]
+        p_min = playable_areas[0]
+        p_med = playable_areas[len(playable_areas) // 2]
+        say(f"playable land area  max/median/min = {p_max} / {p_med} / {p_min} px")
+        if p_max > 90000:
+            fail(f"largest playable land region {p_max}px exceeds 90000px")
+        if not (6000 <= p_med <= 14000):
+            fail(f"playable land median {p_med}px outside 6000..14000")
 
     # every land & sea pixel assigned exactly once
     land_assigned = (land_lbl > 0)
@@ -485,7 +517,7 @@ def main() -> int:
     if os.environ.get("WORLD2_SKIP_TERRAIN") == "1" and TERRAIN_OUT.exists():
         say(f"terrain2.webp: reused existing ({TERRAIN_OUT.stat().st_size / 1024:.1f} KiB)")
     else:
-        terrain = Image.open(str(TERRAIN_PATH)).convert("RGB")
+        terrain = flatten_over_white(TERRAIN_PATH)
         terrain.save(str(TERRAIN_OUT), format="WEBP", lossless=True, quality=100, method=6)
         say(f"terrain2.webp: {terrain.size} lossless, {TERRAIN_OUT.stat().st_size / 1024:.1f} KiB")
 
@@ -529,6 +561,9 @@ def main() -> int:
     say(f"multi-part land regions (mainland + offshore islands): {len(multipart)}")
     for r in sorted(multipart, key=lambda r: -r["components"])[:10]:
         say(f"  {r['id']}: {r['components']} parts, {r['area']}px")
+    multi_town = [r for r in regions if len(town_of_region[r["id"]]) > 1]
+    max_towns = max((len(town_of_region[r["id"]]) for r in regions), default=0)
+    say(f"regions with >1 town: {len(multi_town)} (max towns in a region: {max_towns})")
     say(f"town snaps: {len(snaps)}")
     for s in snaps:
         say(f"  snap {s['id']}: {s['from']} -> {s['to']} ({s['dist']}px)")
