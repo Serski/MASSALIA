@@ -3,7 +3,6 @@ import { ApiError, api, apiErrorMessage } from "./api.js";
 import { LegalPage, type LegalPageKind } from "./legal.js";
 import { CharacterCreation } from "./CharacterCreation.js";
 import { Dashboard } from "./dashboard/Dashboard.js";
-import { ProvinceMap } from "./map/ProvinceMap.js";
 import { World2Map } from "./map/World2Map.js";
 import { assetPath, nobleHouses, professions, type Alignment, type House, type Profession } from "./data/league.js";
 
@@ -851,15 +850,14 @@ export function App() {
     return <Dashboard onExit={() => navigateTo("/")} onRequireLogin={() => navigateTo("/login")} onRequireCharacter={() => navigateTo("/create")} />;
   }
 
-  // Standalone route for previewing the read-only campaign theatre. The same
-  // map is also mounted inside Dashboard → Atlas → Map.
-  if (pathname === "/map" || pathname === "/map/") {
-    return <ProvinceMap enableFullscreen />;
-  }
-
-  // Standalone review route for the hand-drawn world map (world2). Independent
-  // of the shipped /map and the dashboard Atlas until a later switch.
-  if (pathname === "/map-v2" || pathname === "/map-v2/") {
+  // Standalone route for the campaign map. Now the hand-drawn world map, the
+  // same one mounted inside Dashboard → Atlas → Map. /map-v2 remains as an alias.
+  if (
+    pathname === "/map" ||
+    pathname === "/map/" ||
+    pathname === "/map-v2" ||
+    pathname === "/map-v2/"
+  ) {
     return <World2Map />;
   }
 
