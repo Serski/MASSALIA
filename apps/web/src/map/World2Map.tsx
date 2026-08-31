@@ -27,10 +27,21 @@ type Province = {
 type Town = { id: string; name: string; x: number; y: number };
 type World = { width: number; height: number; provinces: Province[]; towns: Town[] };
 
+type Polity = { name: string; color: string };
+type Politics = {
+  version: number;
+  polities: Record<string, Polity>;
+  owners: Record<string, string>;
+  explicitlyEmpty: string[];
+};
+
 type Rect = { x: number; y: number; w: number; h: number };
 
 const WORLD_SRC = "/map2/world2.json";
 const TERRAIN_SRC = "/map2/terrain2.webp";
+const POLITICS_SRC = "/map2/politics2.json";
+// Opacity of a polity-colour tint filled beneath the hover/selection styling.
+const OWNER_TINT_OPACITY = 0.5;
 
 // --- Camera tuning (mirrors ProvinceMap) -------------------------------------
 // Opening frame width as a fraction of the full world width, centred on the town
@@ -83,6 +94,7 @@ function zoomAt(cam: Rect, world: Rect, factor: number, fx: number, fy: number):
 
 export function World2Map() {
   const [world, setWorld] = useState<World | null>(null);
+  const [politics, setPolitics] = useState<Politics | null>(null);
   const [status, setStatus] = useState("");
   const [hover, setHover] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -92,6 +104,11 @@ export function World2Map() {
       .then((response) => response.json() as Promise<World>)
       .then(setWorld)
       .catch(() => setStatus("Failed to load the world map."));
+    // Politics are cosmetic; a load failure leaves the map untinted, not broken.
+    fetch(POLITICS_SRC)
+      .then((response) => response.json() as Promise<Politics>)
+      .then(setPolitics)
+      .catch(() => {});
   }, []);
 
   const worldRect = useMemo<Rect | null>(
@@ -347,6 +364,26 @@ export function World2Map() {
           ))}
         </g>
 
+        {/* Ownership tint: owned land regions filled in their polity colour at
+            half opacity, beneath the hover/selection styling. Non-interactive so
+            the interaction layer above keeps hit-testing. */}
+        <g pointerEvents="none">
+          {land.map((province) => {
+            const polityId = politics?.owners[province.id];
+            const color = polityId ? politics?.polities[polityId]?.color : undefined;
+            if (!color) return null;
+            return (
+              <path
+                key={province.id}
+                d={province.path}
+                fill={color}
+                fillOpacity={OWNER_TINT_OPACITY}
+                fillRule="evenodd"
+              />
+            );
+          })}
+        </g>
+
         {/* Land regions: an invisible interaction layer over the drawn art, with
             a light gold wash on hover. */}
         <g>
@@ -374,7 +411,7 @@ export function World2Map() {
         </g>
       </>
     );
-  }, [world, land, seaZones, fog, hover, onRegionEnter, onRegionLeave]);
+  }, [world, land, seaZones, fog, hover, politics, onRegionEnter, onRegionLeave]);
 
   if (!world || !worldRect || !camera) {
     return <p style={{ padding: 24, fontFamily: "Spectral, serif" }}>Charting the known world…</p>;
@@ -387,6 +424,8 @@ export function World2Map() {
   const labelledTowns = zoom >= LABEL_ZOOM_THRESHOLD ? world.towns : world.towns.filter((town) => town.name === "Massalia");
 
   const selectedProvince = selected ? provincesById.get(selected) ?? null : null;
+  const selectedOwnerId = selectedProvince ? politics?.owners[selectedProvince.id] : undefined;
+  const selectedOwner = selectedOwnerId ? politics?.polities[selectedOwnerId] ?? null : null;
   const hoverProvince = hover ? provincesById.get(hover) ?? null : null;
   const headerNote = hoverProvince
     ? `${hoverProvince.id} · ${hoverProvince.type}${hoverProvince.coastal ? " · coastal" : ""}`
@@ -451,7 +490,16 @@ export function World2Map() {
             <button type="button" className="w2map-card-close" onClick={() => setSelected(null)}>Close</button>
             <div className="w2map-card-body">
               <h2 className="w2map-card-title">{selectedProvince.id}</h2>
-              <p className="w2map-card-sub">Region name and politics come later.</p>
+              <p className="w2map-card-sub">Region name comes later.</p>
+              <div className="w2map-card-label">Owner</div>
+              {selectedOwner ? (
+                <div className="w2map-card-owner">
+                  <span className="w2map-owner-chip" style={{ background: selectedOwner.color }} aria-hidden="true" />
+                  {selectedOwner.name}
+                </div>
+              ) : (
+                <p className="w2map-card-empty">Unclaimed</p>
+              )}
               <div className="w2map-card-label">Type</div>
               <div style={{ fontSize: 13, textTransform: "capitalize" }}>
                 {selectedProvince.type}{selectedProvince.coastal ? " · coastal" : ""}

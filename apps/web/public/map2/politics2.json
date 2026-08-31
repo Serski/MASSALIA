@@ -1,0 +1,229 @@
+{
+ "version": 1,
+ "polities": {
+  "massalia": {
+   "name": "Massalia",
+   "color": "#e0a33c"
+  },
+  "syracuse": {
+   "name": "Syracuse",
+   "color": "#22357a"
+  },
+  "akra-leuke": {
+   "name": "Akra Leuke",
+   "color": "#6f9dd6"
+  },
+  "roman_republic": {
+   "name": "Roman Republic",
+   "color": "#c93a30"
+  },
+  "etruscans": {
+   "name": "Etruscans",
+   "color": "#e0c040"
+  },
+  "samnites": {
+   "name": "Samnites",
+   "color": "#cf7a3a"
+  },
+  "italiote-league": {
+   "name": "Italiote League",
+   "color": "#4a86dd"
+  },
+  "mamertines": {
+   "name": "Mamertines",
+   "color": "#59c4d4"
+  },
+  "neapolis": {
+   "name": "Neapolis",
+   "color": "#3f6fb5"
+  },
+  "lucani": {
+   "name": "Lucani",
+   "color": "#a56b52"
+  },
+  "messapi": {
+   "name": "Messapi",
+   "color": "#b58a45"
+  },
+  "arverni": {
+   "name": "Arverni",
+   "color": "#6f5bd6"
+  },
+  "carthage": {
+   "name": "Carthage",
+   "color": "#9fb59a"
+  },
+  "saluvii": {
+   "name": "Saluvii",
+   "color": "#8a6a8f"
+  },
+  "vocontii": {
+   "name": "Vocontii",
+   "color": "#4f6f5f"
+  },
+  "cavares": {
+   "name": "Cavares",
+   "color": "#6f8f6f"
+  },
+  "allobriges": {
+   "name": "Allobriges",
+   "color": "#63a063"
+  },
+  "helvii": {
+   "name": "Helvii",
+   "color": "#77a077"
+  },
+  "volcae": {
+   "name": "Volcae",
+   "color": "#5f8f5f"
+  },
+  "veltanii": {
+   "name": "Veltani",
+   "color": "#557f66"
+  },
+  "gabati": {
+   "name": "Gabati",
+   "color": "#6a936a"
+  },
+  "ruteni": {
+   "name": "Ruteni",
+   "color": "#7d9f6d"
+  },
+  "celtici": {
+   "name": "Celtici",
+   "color": "#8fae9c"
+  },
+  "cunetes": {
+   "name": "Cunetes",
+   "color": "#6fa08e"
+  },
+  "turdetani": {
+   "name": "Turdetani",
+   "color": "#7fae9c"
+  },
+  "mauretania": {
+   "name": "Mauretania",
+   "color": "#8fa0ac"
+  },
+  "lusitani": {
+   "name": "Lusitani",
+   "color": "#b39288"
+  },
+  "vettones": {
+   "name": "Vettones",
+   "color": "#c0a49a"
+  },
+  "astures": {
+   "name": "Astures",
+   "color": "#a6a8bc"
+  },
+  "lacetani": {
+   "name": "Lacetani",
+   "color": "#b1a06a"
+  },
+  "ilercavones": {
+   "name": "Lercavones",
+   "color": "#a08a54"
+  },
+  "vascones": {
+   "name": "Vascones",
+   "color": "#79a56a"
+  },
+  "llergetae": {
+   "name": "Ilergatae",
+   "color": "#a9955f"
+  },
+  "convenae": {
+   "name": "Convenae",
+   "color": "#6e8e60"
+  },
+  "ausci": {
+   "name": "Ausci",
+   "color": "#84a474"
+  },
+  "trusates": {
+   "name": "Tarusates",
+   "color": "#7a9a6a"
+  }
+ },
+ "owners": {
+  "R050": "massalia",
+  "R052": "massalia",
+  "R059": "massalia",
+  "R060": "massalia",
+  "R065": "massalia",
+  "R131": "syracuse",
+  "R096": "akra-leuke",
+  "R081": "roman_republic",
+  "R086": "roman_republic",
+  "R064": "etruscans",
+  "R067": "etruscans",
+  "R073": "etruscans",
+  "R075": "etruscans",
+  "R076": "samnites",
+  "R085": "samnites",
+  "R087": "samnites",
+  "R102": "italiote-league",
+  "R103": "italiote-league",
+  "R107": "italiote-league",
+  "R110": "italiote-league",
+  "R117": "mamertines",
+  "R095": "neapolis",
+  "R099": "lucani",
+  "R094": "messapi",
+  "R015": "arverni",
+  "R100": "carthage",
+  "R106": "carthage",
+  "R108": "carthage",
+  "R111": "carthage",
+  "R112": "carthage",
+  "R113": "carthage",
+  "R114": "carthage",
+  "R115": "carthage",
+  "R119": "carthage",
+  "R122": "carthage",
+  "R123": "carthage",
+  "R126": "carthage",
+  "R127": "carthage",
+  "R132": "carthage",
+  "R135": "carthage",
+  "R136": "carthage",
+  "R137": "carthage",
+  "R138": "carthage",
+  "R139": "carthage",
+  "R047": "saluvii",
+  "R034": "vocontii",
+  "R032": "cavares",
+  "R020": "allobriges",
+  "R025": "allobriges",
+  "R019": "helvii",
+  "R042": "volcae",
+  "R045": "volcae",
+  "R031": "veltanii",
+  "R036": "gabati",
+  "R026": "ruteni",
+  "R068": "celtici",
+  "R071": "celtici",
+  "R079": "cunetes",
+  "R082": "turdetani",
+  "R083": "turdetani",
+  "R092": "turdetani",
+  "R109": "mauretania",
+  "R128": "mauretania",
+  "R130": "mauretania",
+  "R039": "lusitani",
+  "R054": "lusitani",
+  "R070": "vettones",
+  "R029": "astures",
+  "R069": "lacetani",
+  "R072": "ilercavones",
+  "R044": "vascones",
+  "R056": "llergetae",
+  "R038": "convenae",
+  "R027": "ausci",
+  "R018": "trusates"
+ },
+ "explicitlyEmpty": [
+  "R046"
+ ]
+}
