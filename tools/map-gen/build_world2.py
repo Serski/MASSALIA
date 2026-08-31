@@ -61,6 +61,8 @@ BORDER_MIN_PX = 6          # min shared border for adjacency / coastal contact
 APPROX_TOL = 1.2           # polygon simplification tolerance, px
 RETRACE_TOLS = [0.8, 0.5, 0.3, 0.0]  # finer retraces when shapely rejects a region
 COORD_DP = 1               # SVG coordinate decimal places
+CHAIKIN_ITERS = 2          # Chaikin corner-cutting smoothing passes per region
+ID_MATCH_PX = 5.0          # max centroid drift when inheriting ids from old world2.json
 
 STRUCT4 = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=bool)  # 4-connectivity
 
@@ -224,37 +226,162 @@ def partition(domain: np.ndarray, wall: np.ndarray, min_px: int):
 
 
 # --- 5. Trace a region mask to an SVG path -----------------------------------
+def chaikin_closed(ring, iterations: int):
+    """Chaikin corner-cutting on a closed ring (open list of unique vertices,
+    no closing duplicate). Returns a new open list of smoothed vertices."""
+    pts = ring
+    for _ in range(iterations):
+        n = len(pts)
+        out = []
+        for i in range(n):
+            ax, ay = pts[i]
+            bx, by = pts[(i + 1) % n]
+            out.append((0.75 * ax + 0.25 * bx, 0.75 * ay + 0.25 * by))
+            out.append((0.25 * ax + 0.75 * bx, 0.25 * ay + 0.75 * by))
+        pts = out
+    return pts
+
+
+def _ring_to_open(points):
+    """Round to COORD_DP, drop consecutive duplicates, and strip a closing
+    duplicate. Returns an open list of (x, y) tuples (no repeated first point)."""
+    out = []
+    for x, y in points:
+        p = (round(float(x), COORD_DP), round(float(y), COORD_DP))
+        if not out or out[-1] != p:
+            out.append(p)
+    if len(out) >= 2 and out[0] == out[-1]:
+        out.pop()
+    return out
+
+
+def _subpath(open_ring):
+    return "M" + " L".join(f"{x},{y}" for x, y in open_ring) + " Z"
+
+
+def path_vertices_mean(path: str):
+    """Mean of every vertex in an SVG path (all sub-rings). Used for id
+    inheritance: the pre-smoothing path is generated identically to the old
+    world2.json path, so identical geometry yields an identical centroid."""
+    xs, ys = [], []
+    for sub in path.split("M"):
+        sub = sub.strip()
+        if not sub:
+            continue
+        for tok in sub.replace("Z", "").split("L"):
+            tok = tok.strip()
+            if not tok:
+                continue
+            x, y = tok.split(",")
+            xs.append(float(x))
+            ys.append(float(y))
+    if not xs:
+        return (0.0, 0.0)
+    return (sum(xs) / len(xs), sum(ys) / len(ys))
+
+
 def trace_region(mask: np.ndarray, ox: int, oy: int):
-    """Return (svg_path, ok, used_tol) for a bbox-cropped region ``mask`` whose
-    top-left maps to source pixel (ox, oy). Pads the mask so edge-touching
-    regions still close, traces every contour ring, simplifies, and validates
-    each ring with shapely; retraces at finer tolerances if any ring is invalid.
+    """Return (svg_path, ok, used_tol, raw_path) for a bbox-cropped region
+    ``mask`` whose top-left maps to source pixel (ox, oy).
+
+    Pads the mask so edge-touching regions still close, traces every contour
+    ring, simplifies (approximate_polygon), applies a Chaikin corner-cutting
+    smoothing pass, and validates the smoothed rings with shapely; retraces at
+    finer tolerances if any ring is invalid. ``raw_path`` is the pre-smoothing
+    path — generated exactly as the old pipeline did, so it anchors stable ids.
     """
     padded = np.pad(mask.astype(float), 1, mode="constant", constant_values=0)
     contours = find_contours(padded, 0.5)
     if not contours:
-        return "", False, None
+        return "", False, None, ""
 
-    for tol in [APPROX_TOL] + RETRACE_TOLS:
-        subpaths = []
-        rings_ok = True
+    def simplify(tol):
+        """Simplified open rings at ``tol``, or None if any ring is invalid."""
+        rings = []
         for contour in contours:
             approx = approximate_polygon(contour, tolerance=tol) if tol > 0 else contour
             # padded-crop (row, col) -> source (x, y): x = col-1+ox, y = row-1+oy.
             pts = [(round(float(c - 1 + ox), COORD_DP), round(float(r - 1 + oy), COORD_DP)) for r, c in approx]
-            if len(pts) < 4:
+            if pts and pts[0] == pts[-1]:
+                pts = pts[:-1]
+            if len(pts) < 3:
                 continue
-            if pts[0] != pts[-1]:
-                pts.append(pts[0])
-            ring = Polygon(pts)
-            if ring.is_empty or (not ring.is_valid):
-                rings_ok = False
+            if Polygon(pts + [pts[0]]).is_empty or not Polygon(pts + [pts[0]]).is_valid:
+                return None
+            rings.append(pts)
+        return rings or None
+
+    tols = [APPROX_TOL] + RETRACE_TOLS
+
+    # Phase A: the pre-smoothing rings at the first valid tolerance. This is
+    # exactly what the old pipeline emitted, so its centroid anchors the region's
+    # stable id independently of any smoothing retrace below.
+    raw_rings = raw_idx = None
+    for i, tol in enumerate(tols):
+        rings = simplify(tol)
+        if rings is not None:
+            raw_rings, raw_idx = rings, i
+            break
+    if raw_rings is None:
+        return "", False, None, ""
+    raw_path = " ".join(_subpath(ring) for ring in raw_rings)
+
+    # Phase B: Chaikin-smoothed rings, re-validated with shapely. Start from the
+    # raw tolerance and only step finer if smoothing breaks validity.
+    for i in range(raw_idx, len(tols)):
+        rings = raw_rings if i == raw_idx else simplify(tols[i])
+        if rings is None:
+            continue
+        smoothed = []
+        smooth_ok = True
+        for ring in rings:
+            open_ring = _ring_to_open(chaikin_closed(ring, CHAIKIN_ITERS))
+            if len(open_ring) < 3 or Polygon(open_ring + [open_ring[0]]).is_empty or not Polygon(open_ring + [open_ring[0]]).is_valid:
+                smooth_ok = False
                 break
-            d = "M" + " L".join(f"{x},{y}" for x, y in pts[:-1]) + " Z"
-            subpaths.append(d)
-        if rings_ok and subpaths:
-            return " ".join(subpaths), True, tol
-    return "", False, None
+            smoothed.append(open_ring)
+        if smooth_ok:
+            return " ".join(_subpath(ring) for ring in smoothed), True, tols[i], raw_path
+
+    # Smoothing never validated (extremely rare): keep the valid unsmoothed path.
+    return raw_path, True, tols[raw_idx], raw_path
+
+
+def inherit_region_ids(regions, old_provinces):
+    """Give each new region the id of the old region whose centroid it matches
+    one-to-one within ID_MATCH_PX, and reuse it. Records problems via fail() and
+    returns the maximum matched centroid drift (px)."""
+    old = [(p["id"], p["type"], path_vertices_mean(p["path"])) for p in old_provinces]
+    if len(regions) != len(old):
+        fail(f"region count {len(regions)} != old world2.json {len(old)}; cannot inherit ids one-to-one")
+    used: dict = {}
+    unmatched = []
+    max_drift = 0.0
+    for rec in regions:
+        nx, ny = path_vertices_mean(rec["raw_path"])
+        best_id, best_type, best_d = None, None, None
+        for oid, otype, (ox_c, oy_c) in old:
+            d = ((nx - ox_c) ** 2 + (ny - oy_c) ** 2) ** 0.5
+            if best_d is None or d < best_d:
+                best_d, best_id, best_type = d, oid, otype
+        if best_d is None or best_d > ID_MATCH_PX:
+            unmatched.append((rec, best_id, best_d))
+            continue
+        if best_id in used:
+            fail(f"old id {best_id} matched by two new regions (not one-to-one)")
+        used[best_id] = rec
+        rec["id"] = best_id
+        max_drift = max(max_drift, best_d)
+        if best_type != rec["type"]:
+            fail(f"region inherited id {best_id} but type {rec['type']} != old {best_type}")
+    for rec, bid, bd in unmatched:
+        drift = "n/a" if bd is None else f"{bd:.2f}px"
+        fail(f"new region {rec['partition']}#{rec['local']} has no old centroid within "
+             f"{ID_MATCH_PX}px (nearest {bid} at {drift})")
+    for oid, _, _ in old:
+        if oid not in used:
+            fail(f"old id {oid} not inherited by any new region")
+    return max_drift
 
 
 # --- 6. Adjacency & coastal --------------------------------------------------
@@ -286,6 +413,14 @@ def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     say("=== MASSALIA world2 generator ===")
     say(f"sources: {SRC}")
+
+    # Load the existing world2.json up front (before it is overwritten) so region
+    # ids can be inherited from it.
+    if not JSON_OUT.exists():
+        say("ABORT: existing world2.json not found; id inheritance requires it.")
+        return 1
+    old_provinces = json.loads(JSON_OUT.read_text())["provinces"]
+    say(f"old world2.json: {len(old_provinces)} provinces (for id inheritance)")
 
     land, towns = load_land_and_towns()
     say(f"land pixels: {int(land.sum())} ({land.sum() / (W * H):.3f} of canvas)")
@@ -336,8 +471,9 @@ def main() -> int:
         rec["cx"], rec["cy"] = float(xs.mean() + ox), float(ys.mean() + oy)
         comp_lbl, ncc = ndimage.label(sub, structure=STRUCT4)
         rec["components"] = ncc
-        path, ok, tol = trace_region(sub, ox, oy)
+        path, ok, tol, raw_path = trace_region(sub, ox, oy)
         rec["path"] = path
+        rec["raw_path"] = raw_path
         if not ok:
             fail(f"could not trace region {rec['partition']}#{rec['local']} to a valid polygon")
         elif tol != APPROX_TOL:
@@ -361,11 +497,17 @@ def main() -> int:
                          f"joined to other land (fill artifact)")
                     break
 
-    # --- Final R-id ordering: type (land, sea, fog) then centroid (y, x) ------
+    # --- Inherit stable region ids from the existing world2.json --------------
+    # Region ids must not change: politics2.json references them. The partition is
+    # unchanged, so each new region's pre-smoothing centroid coincides with an old
+    # region's; match one-to-one within ID_MATCH_PX and reuse the old id.
+    max_drift = inherit_region_ids(regions, old_provinces)
+    say(f"id inheritance: {len(regions)} regions matched to old ids, "
+        f"max centroid drift {max_drift:.3f}px")
+
+    # Output order: type (land, sea, fog) then centroid (y, x). Ids stay inherited.
     type_rank = {"land": 0, "sea": 1, "fog": 2}
     regions.sort(key=lambda r: (type_rank[r["type"]], round(r["cy"], 3), round(r["cx"], 3), r["partition"], r["local"]))
-    for idx, rec in enumerate(regions, start=1):
-        rec["id"] = f"R{idx:03d}"
 
     # Global label image for adjacency (unique index per region across both partitions).
     gid = {}
@@ -492,6 +634,20 @@ def main() -> int:
             fail(f"largest playable land region {p_max}px exceeds 90000px")
         if not (6000 <= p_med <= 14000):
             fail(f"playable land median {p_med}px outside 6000..14000")
+
+    # politics2.json integrity: every referenced region still exists as land
+    pol_path = OUT_DIR / "politics2.json"
+    if pol_path.exists():
+        pol = json.loads(pol_path.read_text())
+        land_id_set = {rec["id"] for rec in regions if rec["type"] == "land"}
+        referenced = sorted(set(pol.get("owners", {}).keys()) | set(pol.get("explicitlyEmpty", [])))
+        missing = [r for r in referenced if r not in land_id_set]
+        if missing:
+            fail(f"politics2.json references regions no longer land after regen: {missing}")
+        else:
+            say(f"politics2.json: all {len(referenced)} referenced regions still land ✓")
+    else:
+        say("politics2.json: not present (skipping reference check)")
 
     # every land & sea pixel assigned exactly once
     land_assigned = (land_lbl > 0)
