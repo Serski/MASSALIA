@@ -1,7 +1,7 @@
-/* Hand-drawn world map ("world2") camera + region interaction layer for the
-   standalone /map-v2 route. Self-contained (no .dashboard-shell), prefixed
-   .w2map-. The camera CSS mirrors ProvinceMap.css; the card mirrors the
-   dashboard bottom-sheet visual language. */
+/* Hand-drawn world map ("world2") camera + region interaction layer, used by the
+   /map route and the dashboard Atlas. Self-contained (no .dashboard-shell),
+   prefixed .w2map-. Region info shows as an anchored popover on desktop and a
+   bottom sheet on phones. */
 
 .w2map {
   padding: 12px;
@@ -31,14 +31,19 @@
   color: var(--dash-gold-bright, #d1ae63);
 }
 
-/* Aspect-locked to the world so a fully zoomed-out camera equals the world
-   exactly, with no letterboxing at any zoom. */
+/* On desktop the stage is aspect-locked to the world (inline aspect-ratio); on
+   phones it takes a fixed viewport height (see the media query below). Input is
+   fully contained: no text selection, no scroll chaining to the page behind it. */
 .w2map-stage {
   position: relative;
   width: 100%;
   border-radius: 6px;
   overflow: hidden;
   background: #9db7cb;
+  user-select: none;
+  -webkit-user-select: none;
+  overscroll-behavior: contain;
+  touch-action: none;
 }
 
 .w2map-svg {
@@ -67,6 +72,7 @@
   display: grid;
   gap: 6px;
   justify-items: stretch;
+  z-index: 3;
 }
 
 .w2map-btn {
@@ -95,36 +101,13 @@
   border-color: var(--dash-gold-bright, #d1ae63);
 }
 
-/* Selected-region card — the dashboard bottom-sheet language as an anchored
-   card. Fixed to the viewport so it stays visible however far the aspect-locked
-   stage scrolls, and never covers the whole map. */
-.w2map-card {
-  position: fixed;
-  left: 16px;
-  bottom: 16px;
-  z-index: 4;
-  width: min(320px, calc(100% - 32px));
-  max-height: 60vh;
-  display: flex;
-  flex-direction: column;
-  background: linear-gradient(180deg, #221a14, #15100c);
-  border: 1px solid var(--dash-gold, #b58a45);
-  border-radius: 14px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
-  animation: w2CardUp 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
-  overflow: hidden;
-}
-
-@keyframes w2CardUp {
-  from { transform: translateY(16px); opacity: 0.5; }
-  to { transform: none; opacity: 1; }
-}
-
-.w2map-card-close {
+/* --- Region info: shared content ------------------------------------------ */
+.w2map-info-close {
   position: absolute;
-  top: 10px;
-  right: 12px;
-  padding: 4px 10px;
+  top: 8px;
+  right: 10px;
+  z-index: 3;
+  padding: 3px 9px;
   color: var(--dash-stone-dim, #9a8c72);
   font-family: var(--font-display, "Cinzel", serif);
   font-size: 10px;
@@ -136,77 +119,52 @@
   cursor: pointer;
 }
 
-.w2map-card-close:hover {
+.w2map-info-close:hover {
   color: var(--dash-parchment, #ece0cc);
   border-color: var(--dash-gold, #b58a45);
 }
 
-.w2map-card-body {
-  padding: 16px 18px 18px;
+.w2map-info-body {
+  padding: 12px 14px 14px;
   overflow-y: auto;
   scrollbar-width: thin;
 }
 
-.w2map-card-title {
+.w2map-info-title {
   margin: 2px 0 0;
   color: var(--dash-parchment, #ece0cc);
   font-family: var(--font-display, "Cinzel", serif);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
 }
 
-.w2map-card-sub {
+.w2map-info-sub {
   margin: 2px 0 0;
   color: var(--dash-stone-dim, #9a8c72);
   font-size: 11px;
   font-style: italic;
 }
 
-.w2map-card-label {
+.w2map-info-label {
   display: flex;
   gap: 9px;
   align-items: center;
-  margin: 16px 0 8px;
+  margin: 12px 0 6px;
   color: var(--dash-gold, #b58a45);
   font-family: var(--font-display, "Cinzel", serif);
   font-size: 10px;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
-.w2map-card-label::after {
+.w2map-info-label::after {
   flex: 1;
   height: 1px;
   content: "";
   background: var(--dash-line, rgba(181, 138, 69, 0.28));
 }
 
-.w2map-card-towns {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.w2map-card-towns li {
-  padding: 3px 9px;
-  font-size: 12.5px;
-  color: var(--dash-parchment, #ece0cc);
-  background: rgba(181, 138, 69, 0.12);
-  border: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28));
-  border-radius: 999px;
-}
-
-.w2map-card-empty {
-  margin: 0;
-  color: var(--dash-stone-dim, #9a8c72);
-  font-size: 12.5px;
-  font-style: italic;
-}
-
-.w2map-card-owner {
+.w2map-info-owner {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -221,4 +179,106 @@
   border-radius: 3px;
   border: 1px solid rgba(0, 0, 0, 0.45);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.w2map-info-empty {
+  margin: 0;
+  color: var(--dash-stone-dim, #9a8c72);
+  font-size: 12.5px;
+  font-style: italic;
+}
+
+.w2map-info-towns {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.w2map-info-towns li {
+  padding: 3px 9px;
+  font-size: 12.5px;
+  color: var(--dash-parchment, #ece0cc);
+  background: rgba(181, 138, 69, 0.12);
+  border: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28));
+  border-radius: 999px;
+}
+
+/* --- Desktop: anchored popover -------------------------------------------- */
+/* Positioned imperatively (left/top set in JS) so it tracks the region while the
+   camera pans and zooms. Small framed panel in the game's UI language. */
+.w2map-popover {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 4;
+  width: 240px;
+  max-width: calc(100% - 20px);
+  max-height: calc(100% - 20px);
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #221a14, #15100c);
+  border: 1px solid var(--dash-gold, #b58a45);
+  border-radius: 12px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.6);
+  overscroll-behavior: contain;
+  animation: w2PopIn 0.16s ease both;
+}
+
+@keyframes w2PopIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+
+/* --- Phones: bottom sheet -------------------------------------------------- */
+.w2map-sheet {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  max-height: 70%;
+  background: linear-gradient(180deg, #221a14, #15100c);
+  border: 1px solid var(--dash-gold, #b58a45);
+  border-radius: 16px;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.6);
+  overscroll-behavior: contain;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  animation: w2SheetUp 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes w2SheetUp {
+  from { transform: translateY(18px); opacity: 0.6; }
+  to { transform: none; opacity: 1; }
+}
+
+/* --- Phone breakpoint (matches the dashboard's 620px) --------------------- */
+@media (max-width: 620px) {
+  .w2map-stage {
+    height: 65vh;       /* fallback for browsers without svh */
+    height: 65svh;
+    min-height: 460px;
+  }
+
+  /* At least 44px touch targets for the camera controls. */
+  .w2map-controls {
+    gap: 8px;
+    right: 12px;
+    bottom: 12px;
+  }
+
+  .w2map-btn {
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+    border-radius: 10px;
+  }
+
+  .w2map-info-body {
+    padding: 14px 16px 16px;
+  }
 }
