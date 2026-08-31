@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { CULTURE_WEBP } from "../dashboard/shared.js";
 import "./World2Map.css";
 
 /**
@@ -28,7 +29,7 @@ type Province = {
 type Town = { id: string; name: string; x: number; y: number };
 type World = { width: number; height: number; provinces: Province[]; towns: Town[] };
 
-type Polity = { name: string; color: string };
+type Polity = { name: string; color: string; culture?: string };
 type Politics = {
   version: number;
   polities: Record<string, Polity>;
@@ -62,6 +63,8 @@ const LABEL_ZOOM_THRESHOLD = 2.3;
 // across zoom by counter-scaling against the current camera width.
 const TOWN_LABEL_PX = 19;
 const TOWN_DOT_PX = 6.4;
+// Culture marker size on screen (px), held constant across zoom by counter-scaling.
+const CULTURE_ICON_PX = 22;
 // A press that moves more than this many screen pixels is a pan, not a tap.
 const TAP_SLOP_PX = 6;
 // Anchored-popover placement.
@@ -180,6 +183,21 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
   const land = useMemo(() => world?.provinces.filter((p) => p.type === "land") ?? [], [world]);
   const seaZones = useMemo(() => world?.provinces.filter((p) => p.type === "sea") ?? [], [world]);
   const fog = useMemo(() => world?.provinces.filter((p) => p.type === "fog") ?? [], [world]);
+
+  // Town id -> culture icon URL, for towns whose region has a culture-bearing
+  // owner. Stable across camera moves (depends only on world + politics).
+  const townCultureIcon = useMemo(() => {
+    const out = new Map<string, string>();
+    if (!world || !politics) return out;
+    for (const province of world.provinces) {
+      const owner = politics.owners[province.id];
+      const culture = owner ? politics.polities[owner]?.culture : undefined;
+      const icon = culture ? CULTURE_WEBP[culture] : undefined;
+      if (!icon) continue;
+      for (const townId of province.towns) out.set(townId, icon);
+    }
+    return out;
+  }, [world, politics]);
 
   // --- Camera plumbing ------------------------------------------------------
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -574,6 +592,7 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
   const unitPerPx = camera ? (box.w > 0 ? camera.w / box.w : camera.w / worldRect.w) : 0;
   const labelPx = TOWN_LABEL_PX * unitPerPx;
   const dotPx = TOWN_DOT_PX * unitPerPx;
+  const iconPx = CULTURE_ICON_PX * unitPerPx;
   const labelledTowns = zoom >= LABEL_ZOOM_THRESHOLD ? world.towns : world.towns.filter((town) => town.name === "Massalia");
 
   const selectedProvince = selected ? provincesById.get(selected) ?? null : null;
@@ -589,6 +608,9 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
         <div className="w2map-info-label">Owner</div>
         {selectedOwner ? (
           <div className="w2map-info-owner">
+            {selectedOwner.culture && CULTURE_WEBP[selectedOwner.culture] ? (
+              <img className="w2map-owner-icon" src={CULTURE_WEBP[selectedOwner.culture]} alt="" width={16} height={16} />
+            ) : null}
             <span className="w2map-owner-chip" style={{ background: selectedOwner.color }} aria-hidden="true" />
             {selectedOwner.name}
           </div>
@@ -652,15 +674,27 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
               />
             ) : null}
 
+            {/* Town markers + labels: culture icon when the town's region has a
+                culture-bearing owner, else the plain dot. Same layer as before,
+                so it commits at gesture end (no re-renders mid-drag). */}
             <g pointerEvents="none">
-              {labelledTowns.map((town) => (
-                <g key={town.id}>
-                  <circle cx={town.x} cy={town.y} r={town.name === "Massalia" ? dotPx * 1.5 : dotPx} fill="#fff" stroke="#3c3c3c" strokeWidth={dotPx * 0.35} />
-                  <text x={town.x + dotPx * 1.75} y={town.y - dotPx * 1.25} fontSize={town.name === "Massalia" ? labelPx * 1.15 : labelPx} fill="#fff" stroke="#3c3c3c" strokeWidth={labelPx * 0.02} fontWeight="bold">
-                    {town.name}
-                  </text>
-                </g>
-              ))}
+              {labelledTowns.map((town) => {
+                const icon = townCultureIcon.get(town.id);
+                const isMassalia = town.name === "Massalia";
+                const markerHalf = icon ? iconPx / 2 : isMassalia ? dotPx * 1.5 : dotPx;
+                return (
+                  <g key={town.id}>
+                    {icon ? (
+                      <image href={icon} x={town.x - iconPx / 2} y={town.y - iconPx / 2} width={iconPx} height={iconPx} preserveAspectRatio="xMidYMid meet" />
+                    ) : (
+                      <circle cx={town.x} cy={town.y} r={isMassalia ? dotPx * 1.5 : dotPx} fill="#fff" stroke="#3c3c3c" strokeWidth={dotPx * 0.35} />
+                    )}
+                    <text x={town.x + markerHalf + labelPx * 0.25} y={town.y - dotPx * 1.25} fontSize={isMassalia ? labelPx * 1.15 : labelPx} fill="#fff" stroke="#3c3c3c" strokeWidth={labelPx * 0.02} fontWeight="bold">
+                      {town.name}
+                    </text>
+                  </g>
+                );
+              })}
             </g>
           </svg>
         ) : (

@@ -3,103 +3,128 @@
  "polities": {
   "massalia": {
    "name": "Massalia",
-   "color": "#e0a33c"
+   "color": "#e0a33c",
+   "culture": "greek"
   },
   "syracuse": {
    "name": "Syracuse",
-   "color": "#22357a"
+   "color": "#22357a",
+   "culture": "greek"
   },
   "akra-leuke": {
    "name": "Akra Leuke",
-   "color": "#6f9dd6"
+   "color": "#6f9dd6",
+   "culture": "greek"
   },
   "roman_republic": {
    "name": "Roman Republic",
-   "color": "#c93a30"
+   "color": "#c93a30",
+   "culture": "italic"
   },
   "etruscans": {
    "name": "Etruscans",
-   "color": "#e0c040"
+   "color": "#e0c040",
+   "culture": "italic"
   },
   "samnites": {
    "name": "Samnites",
-   "color": "#cf7a3a"
+   "color": "#cf7a3a",
+   "culture": "italic"
   },
   "italiote-league": {
    "name": "Italiote League",
-   "color": "#4a86dd"
+   "color": "#4a86dd",
+   "culture": "greek"
   },
   "mamertines": {
    "name": "Mamertines",
-   "color": "#59c4d4"
+   "color": "#59c4d4",
+   "culture": "italic"
   },
   "neapolis": {
    "name": "Neapolis",
-   "color": "#3f6fb5"
+   "color": "#3f6fb5",
+   "culture": "greek"
   },
   "lucani": {
    "name": "Lucani",
-   "color": "#a56b52"
+   "color": "#a56b52",
+   "culture": "italic"
   },
   "messapi": {
    "name": "Messapi",
-   "color": "#b58a45"
+   "color": "#b58a45",
+   "culture": "italic"
   },
   "arverni": {
    "name": "Arverni",
-   "color": "#6f5bd6"
+   "color": "#6f5bd6",
+   "culture": "gaulish"
   },
   "carthage": {
    "name": "Carthage",
-   "color": "#9fb59a"
+   "color": "#9fb59a",
+   "culture": "punic"
   },
   "saluvii": {
    "name": "Saluvii",
-   "color": "#8a6a8f"
+   "color": "#8a6a8f",
+   "culture": "gaulish"
   },
   "vocontii": {
    "name": "Vocontii",
-   "color": "#4f6f5f"
+   "color": "#4f6f5f",
+   "culture": "gaulish"
   },
   "cavares": {
    "name": "Cavares",
-   "color": "#6f8f6f"
+   "color": "#6f8f6f",
+   "culture": "gaulish"
   },
   "allobriges": {
    "name": "Allobriges",
-   "color": "#63a063"
+   "color": "#63a063",
+   "culture": "gaulish"
   },
   "helvii": {
    "name": "Helvii",
-   "color": "#77a077"
+   "color": "#77a077",
+   "culture": "gaulish"
   },
   "volcae": {
    "name": "Volcae",
-   "color": "#5f8f5f"
+   "color": "#5f8f5f",
+   "culture": "gaulish"
   },
   "veltanii": {
    "name": "Veltani",
-   "color": "#557f66"
+   "color": "#557f66",
+   "culture": "gaulish"
   },
   "gabati": {
    "name": "Gabati",
-   "color": "#6a936a"
+   "color": "#6a936a",
+   "culture": "gaulish"
   },
   "ruteni": {
    "name": "Ruteni",
-   "color": "#7d9f6d"
+   "color": "#7d9f6d",
+   "culture": "gaulish"
   },
   "celtici": {
    "name": "Celtici",
-   "color": "#8fae9c"
+   "color": "#8fae9c",
+   "culture": "gaulish"
   },
   "cunetes": {
    "name": "Cunetes",
-   "color": "#6fa08e"
+   "color": "#6fa08e",
+   "culture": "gaulish"
   },
   "turdetani": {
    "name": "Turdetani",
-   "color": "#7fae9c"
+   "color": "#7fae9c",
+   "culture": "gaulish"
   },
   "mauretania": {
    "name": "Mauretania",
@@ -107,43 +132,53 @@
   },
   "lusitani": {
    "name": "Lusitani",
-   "color": "#b39288"
+   "color": "#b39288",
+   "culture": "gaulish"
   },
   "vettones": {
    "name": "Vettones",
-   "color": "#c0a49a"
+   "color": "#c0a49a",
+   "culture": "gaulish"
   },
   "astures": {
    "name": "Astures",
-   "color": "#a6a8bc"
+   "color": "#a6a8bc",
+   "culture": "gaulish"
   },
   "lacetani": {
    "name": "Lacetani",
-   "color": "#b1a06a"
+   "color": "#b1a06a",
+   "culture": "gaulish"
   },
   "ilercavones": {
    "name": "Lercavones",
-   "color": "#a08a54"
+   "color": "#a08a54",
+   "culture": "gaulish"
   },
   "vascones": {
    "name": "Vascones",
-   "color": "#79a56a"
+   "color": "#79a56a",
+   "culture": "gaulish"
   },
   "llergetae": {
    "name": "Ilergatae",
-   "color": "#a9955f"
+   "color": "#a9955f",
+   "culture": "gaulish"
   },
   "convenae": {
    "name": "Convenae",
-   "color": "#6e8e60"
+   "color": "#6e8e60",
+   "culture": "gaulish"
   },
   "ausci": {
    "name": "Ausci",
-   "color": "#84a474"
+   "color": "#84a474",
+   "culture": "gaulish"
   },
   "trusates": {
    "name": "Tarusates",
-   "color": "#7a9a6a"
+   "color": "#7a9a6a",
+   "culture": "gaulish"
   }
  },
  "owners": {

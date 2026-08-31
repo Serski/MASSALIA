@@ -649,6 +649,16 @@ export function GoodGlyph({ good, fallback = "📦" }: { good: string; fallback?
   return <AssetIcon file={file} alt="" className="asset-icon good-glyph" fallback={emoji} />;
 }
 
+// Culture artwork for the world map's towns and owner popover, keyed by the
+// `culture` field in map2/politics2.json. 128x128 lossless WebP with alpha, under
+// public/icons/cultures/ (not assets/), so the values are already-resolved URLs.
+export const CULTURE_WEBP: Record<string, string> = {
+  punic: assetPath("icons/cultures/punic.webp"),
+  greek: assetPath("icons/cultures/greek.webp"),
+  italic: assetPath("icons/cultures/italic.webp"),
+  gaulish: assetPath("icons/cultures/gaulish.webp"),
+};
+
 // Building art lives in assets/buildings/. Class buildings carry one image per
 // tier (<id>-<tier>.webp, e.g. estate-1.webp); commons have a single image
 // (<id>.webp, e.g. vineyard.webp). EXACT on-disk filenames — do not rename.
