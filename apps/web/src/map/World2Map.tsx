@@ -579,10 +579,6 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
   const selectedProvince = selected ? provincesById.get(selected) ?? null : null;
   const selectedOwnerId = selectedProvince ? politics?.owners[selectedProvince.id] : undefined;
   const selectedOwner = selectedOwnerId ? politics?.polities[selectedOwnerId] ?? null : null;
-  const hoverProvince = hover ? provincesById.get(hover) ?? null : null;
-  const headerNote = hoverProvince
-    ? `${hoverProvince.id} · ${hoverProvince.type}${hoverProvince.coastal ? " · coastal" : ""}`
-    : `${land.length} land regions · ${seaZones.length} sea zones · ${world.towns.length} towns`;
 
   const infoBody = selectedProvince ? (
     <>
@@ -619,14 +615,6 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
 
   return (
     <div className={fill ? "w2map w2map-fill" : "w2map"}>
-      <div className="w2map-header">
-        <strong>The Known World</strong>
-        <span style={{ fontSize: 13 }}>{headerNote}</span>
-        <span className="w2map-legend">
-          <i aria-hidden="true" style={{ width: 12, height: 12, background: FOG_DARK, display: "inline-block" }} />
-          Beyond the world
-        </span>
-      </div>
       {status ? <div className="w2map-status">{status}</div> : null}
 
       <div

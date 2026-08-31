@@ -9,22 +9,6 @@
   color: var(--dash-stone, #d7ccb7);
 }
 
-.w2map-header {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.w2map-header .w2map-legend {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-}
-
 .w2map-status {
   margin-bottom: 8px;
   font-size: 12px;
@@ -77,10 +61,6 @@
   display: flex;
   flex-direction: column;
   padding: 8px;
-}
-
-.w2map-fill .w2map-header {
-  flex: none;
 }
 
 .w2map-fill .w2map-stage {

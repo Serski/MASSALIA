@@ -595,13 +595,7 @@ export default function AtlasPanel() {
   // is the live leaderboards; Cities and Diplomacy are live world-state readouts.
   const [tab, setTab] = useState<"map" | "standings" | "cities" | "diplomacy">("map");
   return (
-    <section className="dashboard-panel atlas-dashboard-panel" aria-labelledby="atlas-dashboard-title">
-      <div className="dashboard-panel-heading">
-        <p className="section-eyebrow">League map</p>
-        <h1 id="atlas-dashboard-title">Atlas</h1>
-        <p>The campaign map, the city standings, and the wider world to come.</p>
-      </div>
-
+    <section className="dashboard-panel atlas-dashboard-panel" aria-label="Atlas">
       <div className="cs-tabs" role="tablist">
         <button type="button" role="tab" aria-selected={tab === "map"} className={`cs-tab${tab === "map" ? " on" : ""}`} onClick={() => setTab("map")}>
           Map
