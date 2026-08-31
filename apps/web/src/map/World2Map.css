@@ -64,6 +64,32 @@
   box-shadow: inset 0 0 0 2px var(--dash-gold, #b58a45);
 }
 
+/* Fill mode: the map owns a locked pane (dashboard Atlas). The stage fills all
+   remaining height instead of aspect-locking (desktop) or the standalone 65svh
+   rule (mobile /map). Higher specificity than the mobile rule below, so it wins. */
+.w2map-fill {
+  /* flex:1 so the map fills the (flex) map card's width; height:100% + stretch
+     fills its height. */
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+}
+
+.w2map-fill .w2map-header {
+  flex: none;
+}
+
+.w2map-fill .w2map-stage {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  aspect-ratio: auto;
+}
+
 /* Camera controls, bottom-right of the stage. */
 .w2map-controls {
   position: absolute;

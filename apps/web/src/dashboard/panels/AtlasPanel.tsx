@@ -619,7 +619,7 @@ export default function AtlasPanel() {
 
       {tab === "map" ? (
         <DashboardCard className="dashboard-map-card">
-          <World2Map />
+          <World2Map fill />
         </DashboardCard>
       ) : tab === "standings" ? (
         <StandingsView />

@@ -73,6 +73,12 @@ const SELECT_GOLD = "#d8b56a";
 const HOVER_WASH = "#c8ad73";
 const SEA_LATTICE = "#4d82b8";
 const FOG_DARK = "#0b0a08";
+// CK2-style borders. The seam-seal stroke (world units) fattens each owned
+// region's fill outward so independently-smoothed neighbours meet with no
+// terrain crack; the border stroke is a constant one-screen-pixel dark warm line.
+const SEAL_STROKE_WIDTH = 2.5;
+const BORDER_COLOR = "rgba(45, 36, 26, 0.55)";
+const BORDER_WIDTH = 1;
 
 const WORLD_ASPECT = (world: Rect) => world.w / world.h;
 
@@ -137,7 +143,7 @@ function pathCentroid(path: string): { x: number; y: number } {
   return n ? { x: sx / n, y: sy / n } : { x: 0, y: 0 };
 }
 
-export function World2Map() {
+export function World2Map({ fill = false }: { fill?: boolean } = {}) {
   const [world, setWorld] = useState<World | null>(null);
   const [politics, setPolitics] = useState<Politics | null>(null);
   const [status, setStatus] = useState("");
@@ -488,16 +494,45 @@ export function World2Map() {
           ))}
         </g>
 
-        {/* Ownership tint beneath the hover/selection styling. Non-interactive. */}
+        {/* Seam-seal: owned land filled AND stroked in the polity colour so
+            independently-smoothed neighbours overlap with no terrain crack.
+            Unowned regions are skipped — the terrain shows through anyway. */}
         <g pointerEvents="none">
           {land.map((province) => {
             const polityId = politics?.owners[province.id];
             const color = polityId ? politics?.polities[polityId]?.color : undefined;
             if (!color) return null;
             return (
-              <path key={province.id} d={province.path} fill={color} fillOpacity={OWNER_TINT_OPACITY} fillRule="evenodd" />
+              <path
+                key={province.id}
+                d={province.path}
+                fill={color}
+                fillOpacity={OWNER_TINT_OPACITY}
+                stroke={color}
+                strokeOpacity={OWNER_TINT_OPACITY}
+                strokeWidth={SEAL_STROKE_WIDTH}
+                strokeLinejoin="round"
+                fillRule="evenodd"
+              />
             );
           })}
+        </g>
+
+        {/* CK2-style borders: every land region outlined in a constant
+            one-screen-pixel dark warm line. Sea keeps its hairline (above). */}
+        <g pointerEvents="none">
+          {land.map((province) => (
+            <path
+              key={province.id}
+              d={province.path}
+              fill="none"
+              fillRule="evenodd"
+              stroke={BORDER_COLOR}
+              strokeWidth={BORDER_WIDTH}
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
         </g>
 
         {/* Land regions: an invisible interaction layer with a hover wash. */}
@@ -583,7 +618,7 @@ export function World2Map() {
   ) : null;
 
   return (
-    <div className="w2map">
+    <div className={fill ? "w2map w2map-fill" : "w2map"}>
       <div className="w2map-header">
         <strong>The Known World</strong>
         <span style={{ fontSize: 13 }}>{headerNote}</span>
@@ -597,7 +632,7 @@ export function World2Map() {
       <div
         className="w2map-stage"
         ref={setStageElement}
-        style={isMobile ? undefined : { aspectRatio: `${worldRect.w} / ${worldRect.h}` }}
+        style={fill || isMobile ? undefined : { aspectRatio: `${worldRect.w} / ${worldRect.h}` }}
       >
         {camera ? (
           <svg

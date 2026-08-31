@@ -1095,10 +1095,57 @@
 }
 
 .dashboard-shell .dashboard-map-card{
-  /* The ProvinceMap stage is aspect-locked to the theatre, so it sets its own
-     height; no fixed min-height (which would leave dead space below the map). */
+  /* The World2Map stage sizes itself (aspect-locked, 65svh, or fill), so no
+     fixed min-height, which would leave dead space below the map. */
   padding: 0;
   overflow: hidden;
+}
+
+/* Lock the content pane to the viewport whenever the Atlas map is shown, so the
+   map owns every gesture and the page never scrolls. Scoped via :has() to the
+   map card, so the Atlas list sub-tabs and every other panel keep normal
+   scrolling. The shell becomes a fixed-height flex column: the header keeps its
+   natural height and the body fills the rest ("100dvh minus header"), no hard-
+   coded header height needed. */
+.dashboard-shell:has(.dashboard-map-card){
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-shell:has(.dashboard-map-card) .dashboard-body{
+  flex: 1;
+  min-height: 0;
+}
+
+.dashboard-shell:has(.dashboard-map-card) .dashboard-content{
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-shell:has(.dashboard-map-card) .atlas-dashboard-panel{
+  flex: 1;
+  min-height: 0;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: clamp(12px, 2vw, 20px);
+}
+
+.dashboard-shell:has(.dashboard-map-card) .atlas-dashboard-panel .dashboard-map-card{
+  flex: 1;
+  min-height: 0;
+  /* The card is display:grid with padding by default; flex + zero padding lets
+     the map fill it edge to edge (its own 8px inset gives the breathing room). */
+  display: flex;
+  padding: 0;
 }
 
 .dashboard-shell .dashboard-mobile-tabs{
