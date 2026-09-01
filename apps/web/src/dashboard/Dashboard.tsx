@@ -11,6 +11,7 @@ const MarketPanel = lazy(() => import("./panels/MarketPanel.js"));
 const FamilyPanel = lazy(() => import("./panels/FamilyPanel.js"));
 const PoliticsPanel = lazy(() => import("./panels/PoliticsPanel.js"));
 const AtlasPanel = lazy(() => import("./panels/AtlasPanel.js"));
+const StandingsPanel = lazy(() => import("./panels/StandingsPanel.js"));
 // First-run welcome overlay: lazy so it never weighs on the main bundle (Suspense
 // fallback null — it must never block the dashboard from rendering).
 const WelcomeOverlay = lazy(() => import("./WelcomeOverlay.js"));
@@ -31,6 +32,7 @@ const dashboardNav: DashboardNavItem[] = [
   { id: "family", label: "Family", icon: "family" }, // badge is player.familyPending (dynamic)
   { id: "politics", label: "Politics", icon: "politics" },
   { id: "atlas", label: "Atlas", icon: "atlas" },
+  { id: "standings", label: "Standings", icon: "standings" },
 ];
 
 const mobilePrimaryNav: DashboardNavItem[] = dashboardNav.filter((item) =>
@@ -38,7 +40,7 @@ const mobilePrimaryNav: DashboardNavItem[] = dashboardNav.filter((item) =>
 );
 
 const mobileMoreNav: DashboardNavItem[] = dashboardNav.filter((item) =>
-  ["politics", "atlas"].includes(item.id),
+  ["politics", "atlas", "standings"].includes(item.id),
 );
 
 // TODO: Replace with authenticated player profile/session state once auth is connected.
@@ -111,6 +113,7 @@ const panelComponents: Record<DashboardSection, LazyExoticComponent<ComponentTyp
   family: FamilyPanel,
   politics: PoliticsPanel,
   atlas: AtlasPanel,
+  standings: StandingsPanel,
 };
 
 export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () => void; onRequireLogin: () => void; onRequireCharacter: () => void }) {

@@ -3,9 +3,9 @@ import { contentUrl, type PlayerState, type FestivalLive, type OlympiadStatus } 
 import { assetPath, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 
-export type DashboardSection = "court" | "ledger" | "market" | "family" | "politics" | "atlas";
+export type DashboardSection = "court" | "ledger" | "market" | "family" | "politics" | "atlas" | "standings";
 
-export type IconName = "court" | "ledger" | "market" | "family" | "politics" | "atlas" | "guide";
+export type IconName = "court" | "ledger" | "market" | "family" | "politics" | "atlas" | "standings" | "guide";
 
 export type FourStats = {
   prestige: number;
@@ -183,6 +183,16 @@ export function iconPath(icon: IconName) {
           <path d="M4 12h16" />
           <path d="M12 4c2 2.2 3 4.8 3 8s-1 5.8-3 8" />
           <path d="M12 4c-2 2.2-3 4.8-3 8s1 5.8 3 8" />
+        </>
+      );
+    case "standings":
+      // A podium: the leaderboards.
+      return (
+        <>
+          <path d="M9 20V10h6v10" />
+          <path d="M3 20v-6h6v6" />
+          <path d="M15 20v-4h6v4" />
+          <path d="M3 20h18" />
         </>
       );
     case "guide":

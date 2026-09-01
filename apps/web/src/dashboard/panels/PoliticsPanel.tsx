@@ -3,6 +3,8 @@ import { api, ApiError, type ChamberSeat, type ChamberView, type ChamberVotesVie
 import { assetPath, type House } from "../../data/league.js";
 import { AssetIcon, DashboardCard, DigestList, PanelBanner, type PanelProps, PanelRow, PersonRow, formatDuration, ideologyReadout, titleCase, useCountdownSeconds } from "../shared.js";
 import { PublicProfile, type ProfileTarget } from "../PublicProfile.js";
+import { CitiesView } from "./CitiesView.js";
+import { DiplomacyView } from "./DiplomacyView.js";
 
 const partyNews = [
   { id: "champion", icon: "📣", text: <>A member seeks the party's backing for <b>Archon</b>.</> },
@@ -691,7 +693,7 @@ function PartyGovernmentSection({ party, onRefresh }: { party: "palaioi" | "dyna
 }
 
 export default function PoliticsPanel({ player, onRefresh }: PanelProps) {
-  const [tab, setTab] = useState<"council" | "party">("council");
+  const [tab, setTab] = useState<"council" | "party" | "cities" | "diplomacy">("council");
   const [note, setNote] = useState("");
   const censureSeconds = useCountdownSeconds(player.censured ? player.censureExpiresAt : null);
   const joined = player.party !== "Unaligned";
@@ -740,6 +742,12 @@ export default function PoliticsPanel({ player, onRefresh }: PanelProps) {
         <button type="button" role="tab" aria-selected={tab === "party"} className={`cs-tab${tab === "party" ? " on" : ""}`} onClick={() => setTab("party")}>
           Your Party {joined ? <span className="party-tab-tag">{PARTY_ICON[player.party.toLowerCase()] ? <AssetIcon file={PARTY_ICON[player.party.toLowerCase()]!} alt="" className="asset-icon party-icon" /> : null} · {player.party}</span> : <span className="party-tab-lock" aria-label="locked">🔒</span>}
         </button>
+        <button type="button" role="tab" aria-selected={tab === "cities"} className={`cs-tab${tab === "cities" ? " on" : ""}`} onClick={() => setTab("cities")}>
+          Cities
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "diplomacy"} className={`cs-tab${tab === "diplomacy" ? " on" : ""}`} onClick={() => setTab("diplomacy")}>
+          Diplomacy
+        </button>
       </div>
 
       {tab === "council" ? (
@@ -749,6 +757,10 @@ export default function PoliticsPanel({ player, onRefresh }: PanelProps) {
           <OfficesSection player={player} onRefresh={onRefresh} />
           {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
         </div>
+      ) : tab === "cities" ? (
+        <CitiesView />
+      ) : tab === "diplomacy" ? (
+        <DiplomacyView />
       ) : joined ? (
         <div className="pol-page">
           <PanelBanner

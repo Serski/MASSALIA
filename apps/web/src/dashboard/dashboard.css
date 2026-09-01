@@ -1103,8 +1103,8 @@
 
 /* Lock the content pane to the viewport whenever the Atlas map is shown, so the
    map owns every gesture and the page never scrolls. Scoped via :has() to the
-   map card, so the Atlas list sub-tabs and every other panel keep normal
-   scrolling. The shell becomes a fixed-height flex column: the header keeps its
+   map card, which only the Atlas panel renders, so every other panel (Standings
+   included) keeps normal scrolling. The shell becomes a fixed-height flex column: the header keeps its
    natural height and the body fills the rest ("100dvh minus header"), no hard-
    coded header height needed. */
 .dashboard-shell:has(.dashboard-map-card){
@@ -3460,7 +3460,7 @@
 .dashboard-shell .stat-tab-icon{ width: 15px; height: 15px; margin-right: 6px; vertical-align: -3px; }
 .dashboard-shell .stat-tab-coin{ display: inline-block; margin-right: 5px; font-size: 13px; line-height: 1; filter: saturate(0.85); }
 
-/* Atlas list rows (Standings / Cities / Diplomacy) carry inline layout styles;
+/* List rows (Standings panel, Politics → Cities / Diplomacy) carry inline layout styles;
    these add only a rounded hover wash + smooth transition — life on hover. */
 .dashboard-shell .atlas-row{
   border-radius: 6px;
