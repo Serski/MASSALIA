@@ -238,6 +238,65 @@
    "name": "Edetani",
    "color": "#7d5bb5",
    "culture": "gaulish"
+  },
+  "insubres": {
+   "name": "Insubres",
+   "color": "#1f3a6e",
+   "culture": "gaulish"
+  },
+  "veragri": {
+   "name": "Veragri",
+   "color": "#9a6a66",
+   "culture": "gaulish"
+  },
+  "friniates": {
+   "name": "Friniates",
+   "color": "#5e55a8",
+   "culture": "gaulish"
+  },
+  "segusiavi": {
+   "name": "Segusiavi",
+   "color": "#e08a72",
+   "culture": "gaulish"
+  },
+  "lingones": {
+   "name": "Lingones",
+   "color": "#4a4a4f",
+   "culture": "gaulish"
+  },
+  "pictones": {
+   "name": "Pictones",
+   "color": "#8fb8e0",
+   "culture": "gaulish"
+  },
+  "namnetes": {
+   "name": "Namnetes",
+   "color": "#8aa08c",
+   "culture": "gaulish"
+  },
+  "osismii": {
+   "name": "Osismii",
+   "color": "#dd8fb0",
+   "culture": "gaulish"
+  },
+  "aedui": {
+   "name": "Aedui",
+   "color": "#a11f30",
+   "culture": "gaulish"
+  },
+  "celtiberi": {
+   "name": "Celtiberi",
+   "color": "#79cdd6",
+   "culture": "gaulish"
+  },
+  "vaccaei": {
+   "name": "Vaccaei",
+   "color": "#1f4d2e",
+   "culture": "gaulish"
+  },
+  "unclaimed": {
+   "name": "Unclaimed",
+   "color": "#c9c9c4"
   }
  },
  "owners": {
@@ -337,9 +396,25 @@
   "R133": "massyli",
   "R101": "bastetani",
   "R089": "contestani",
-  "R077": "edetani"
+  "R077": "edetani",
+  "R037": "insubres",
+  "R024": "veragri",
+  "R063": "friniates",
+  "R016": "segusiavi",
+  "R012": "lingones",
+  "R013": "pictones",
+  "R010": "namnetes",
+  "R008": "osismii",
+  "R011": "aedui",
+  "R014": "aedui",
+  "R066": "celtiberi",
+  "R048": "vaccaei",
+  "R046": "unclaimed",
+  "R098": "unclaimed",
+  "R120": "unclaimed",
+  "R125": "unclaimed",
+  "R062": "unclaimed",
+  "R035": "unclaimed"
  },
- "explicitlyEmpty": [
-  "R046"
- ]
+ "explicitlyEmpty": []
 }
