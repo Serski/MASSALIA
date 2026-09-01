@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { CULTURE_WEBP } from "../dashboard/shared.js";
+import { CULTURE_WEBP, titleCase } from "../dashboard/shared.js";
 import "./World2Map.css";
 
 /**
@@ -37,12 +37,24 @@ type Politics = {
   explicitlyEmpty: string[];
 };
 
+// Display names for land regions (names2.json) — the R-ids never reach the player.
+type Names = { version: number; names: Record<string, string> };
+// Town survey numbers (townstats.json, mirrored from content/cities/cities.json).
+type TownStats = { population: number; garrison: number; walls: number };
+type TownStatsFile = { version: number; towns: Record<string, TownStats> };
+
 type Rect = { x: number; y: number; w: number; h: number };
 type Box = { w: number; h: number };
 
 const WORLD_SRC = "/map2/world2.json";
 const TERRAIN_SRC = "/map2/terrain2.webp";
 const POLITICS_SRC = "/map2/politics2.json";
+const NAMES_SRC = "/map2/names2.json";
+const TOWNSTATS_SRC = "/map2/townstats.json";
+// Massalia's crest is the game's lion mark; every other state gets a shield.
+const LION_SRC = "/assets/MASSALIA%20LION.png";
+const UNCLAIMED_GREY = "#8f8a82";
+const TOWN_ACTIONS = ["Attack", "Raid", "Scout", "Colonise"] as const;
 const OWNER_TINT_OPACITY = 0.5;
 
 // The app's phone breakpoint (matches the dashboard's 620px).
@@ -146,12 +158,42 @@ function pathCentroid(path: string): { x: number; y: number } {
   return n ? { x: sx / n, y: sy / n } : { x: 0, y: 0 };
 }
 
+// The owning state's crest: the lion for Massalia, otherwise a simple shield in
+// the polity colour (neutral grey when the region is unclaimed).
+function StateCrest({ polityId, color }: { polityId: string | null; color: string }) {
+  if (polityId === "massalia") {
+    return <img className="w2map-crest w2map-crest-lion" src={LION_SRC} alt="" width={44} height={44} />;
+  }
+  return (
+    <svg className="w2map-crest" viewBox="0 0 24 28" width={44} height={44} aria-hidden="true">
+      <path
+        d="M12 1.5 L22 5 V13 C22 19.6 17.6 24.6 12 26.6 C6.4 24.6 2 19.6 2 13 V5 Z"
+        fill={color}
+        stroke="rgba(0, 0, 0, 0.55)"
+        strokeWidth={1.2}
+        strokeLinejoin="round"
+      />
+      <path d="M12 4.2 L19.4 6.8 V12.6 C19.4 15.2 18.4 17.6 16.8 19.6 C13.2 16.6 12.4 10.8 12 4.2 Z" fill="rgba(255, 255, 255, 0.14)" />
+    </svg>
+  );
+}
+
+// 1..5 wall level as filled/empty pips (matches the Cities table).
+function wallPips(level: number): string {
+  const n = Math.max(0, Math.min(5, level));
+  return "■".repeat(n) + "□".repeat(5 - n);
+}
+
 export function World2Map({ fill = false }: { fill?: boolean } = {}) {
   const [world, setWorld] = useState<World | null>(null);
   const [politics, setPolitics] = useState<Politics | null>(null);
   const [status, setStatus] = useState("");
   const [hover, setHover] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  // A selected town swaps the region panel for the town panel (same anchor logic).
+  const [selectedTown, setSelectedTown] = useState<string | null>(null);
+  const [names, setNames] = useState<Record<string, string>>({});
+  const [townStats, setTownStats] = useState<Record<string, TownStats>>({});
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" && "matchMedia" in window ? window.matchMedia(MOBILE_QUERY).matches : false,
   );
@@ -166,6 +208,15 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
       .then((response) => response.json() as Promise<Politics>)
       .then(setPolitics)
       .catch(() => {});
+    // Names and town surveys are cosmetic too: missing files degrade to fallbacks.
+    fetch(NAMES_SRC)
+      .then((response) => response.json() as Promise<Names>)
+      .then((file) => setNames(file.names ?? {}))
+      .catch(() => {});
+    fetch(TOWNSTATS_SRC)
+      .then((response) => response.json() as Promise<TownStatsFile>)
+      .then((file) => setTownStats(file.towns ?? {}))
+      .catch(() => {});
   }, []);
 
   const worldRect = useMemo<Rect | null>(
@@ -175,6 +226,12 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
   const massalia = useMemo(() => world?.towns.find((town) => town.name === "Massalia") ?? null, [world]);
   const townsById = useMemo(() => new Map((world?.towns ?? []).map((town) => [town.id, town])), [world]);
   const provincesById = useMemo(() => new Map((world?.provinces ?? []).map((province) => [province.id, province])), [world]);
+  // Town id -> the region that holds it (a tapped town also selects its region).
+  const townRegionById = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const province of world?.provinces ?? []) for (const townId of province.towns) out.set(townId, province.id);
+    return out;
+  }, [world]);
   const centroidById = useMemo(
     () => new Map((world?.provinces ?? []).map((province) => [province.id, pathCentroid(province.path)])),
     [world],
@@ -425,15 +482,22 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
       // an empty tap clears the selection. elementFromPoint is capture-proof.
       if (!movedRef.current) {
         const el = document.elementFromPoint(event.clientX, event.clientY) as Element | null;
-        const rid = el?.closest("[data-rid]")?.getAttribute("data-rid") ?? null;
-        setSelected(rid);
+        const hit = el?.closest("[data-town], [data-rid]") ?? null;
+        const townId = hit?.getAttribute("data-town") ?? null;
+        if (townId) {
+          setSelected(townRegionById.get(townId) ?? null);
+          setSelectedTown(townId);
+        } else {
+          setSelected(hit?.getAttribute("data-rid") ?? null);
+          setSelectedTown(null);
+        }
       }
     } else if (pointersRef.current.size === 1 && cameraRef.current) {
       const remaining = [...pointersRef.current.values()][0]!;
       gestureRef.current = { startCam: { ...cameraRef.current }, startDist: 0, startMid: { x: remaining.x, y: remaining.y } };
       movedRef.current = true; // dropping from a pinch to a pan is never a tap
     }
-  }, [commitCamera]);
+  }, [commitCamera, townRegionById]);
 
   // Wheel is registered non-passive on the map container so preventDefault stops
   // the page behind it from scrolling; stopPropagation keeps it off the dashboard.
@@ -472,18 +536,20 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
     else if (event.key === "ArrowRight") { event.preventDefault(); setCameraNow(clampCamera({ ...cam, x: cam.x + panStep }, worldRect, aspect)); }
     else if (event.key === "ArrowUp") { event.preventDefault(); setCameraNow(clampCamera({ ...cam, y: cam.y - panStep }, worldRect, aspect)); }
     else if (event.key === "ArrowDown") { event.preventDefault(); setCameraNow(clampCamera({ ...cam, y: cam.y + panStep }, worldRect, aspect)); }
-    else if (event.key === "Escape") { setSelected(null); }
+    else if (event.key === "Escape") { setSelected(null); setSelectedTown(null); }
   }, [setCameraNow, stepZoom, worldRect, currentAspect]);
 
   // Region hover (desktop). Selection is handled in endPointer via a tap hit-test.
   const onRegionEnter = useCallback((id: string) => { if (!draggingRef.current) setHover(id); }, []);
   const onRegionLeave = useCallback((id: string) => { setHover((current) => (current === id ? null : current)); }, []);
 
-  // Keep the selected region's anchor centroid in a ref for imperative tracking.
+  // Keep the panel's anchor (the open town, else the selected region's centroid)
+  // in a ref for imperative tracking during camera moves.
   useEffect(() => {
-    selectedCentroidRef.current = selected ? centroidById.get(selected) ?? null : null;
+    const town = selectedTown ? townsById.get(selectedTown) ?? null : null;
+    selectedCentroidRef.current = town ? { x: town.x, y: town.y } : selected ? centroidById.get(selected) ?? null : null;
     if (cameraRef.current) positionPopover(cameraRef.current);
-  }, [selected, centroidById, positionPopover]);
+  }, [selected, selectedTown, centroidById, townsById, positionPopover]);
 
   // --- Static map layers (memoised so camera moves never re-create paths) ----
   const staticLayers = useMemo(() => {
@@ -596,41 +662,115 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
   const labelledTowns = zoom >= LABEL_ZOOM_THRESHOLD ? world.towns : world.towns.filter((town) => town.name === "Massalia");
 
   const selectedProvince = selected ? provincesById.get(selected) ?? null : null;
-  const selectedOwnerId = selectedProvince ? politics?.owners[selectedProvince.id] : undefined;
+  const selectedOwnerId = selectedProvince ? politics?.owners[selectedProvince.id] ?? null : null;
   const selectedOwner = selectedOwnerId ? politics?.polities[selectedOwnerId] ?? null : null;
+  const selectedTownObj = selectedTown ? townsById.get(selectedTown) ?? null : null;
+  const stateName = selectedOwner?.name ?? "Unclaimed";
+  const stateColor = selectedOwner?.color ?? UNCLAIMED_GREY;
+  const cultureIcon = selectedOwner?.culture ? CULTURE_WEBP[selectedOwner.culture] : undefined;
+  // Land regions are named in names2.json; sea zones read as open water. The id
+  // itself is never shown: it rides along on the dialog as data-region only
+  // (not data-rid, so the map's tap hit-test can never match the dialog).
+  const regionName = selectedProvince
+    ? selectedProvince.type === "land"
+      ? names[selectedProvince.id] ?? "Uncharted land"
+      : selectedProvince.type === "sea"
+        ? "Open sea"
+        : "Beyond the known world"
+    : "";
+  const terrain = selectedProvince
+    ? `${titleCase(selectedProvince.type)}${selectedProvince.coastal ? " · Coastal" : ""}`
+    : "";
+  const closeInfo = () => {
+    setSelected(null);
+    setSelectedTown(null);
+  };
 
-  const infoBody = selectedProvince ? (
+  const regionBody = selectedProvince ? (
     <>
-      <button type="button" className="w2map-info-close" onClick={() => setSelected(null)} aria-label="Close">Close</button>
+      <button type="button" className="w2map-info-close" onClick={closeInfo} aria-label="Close">Close</button>
       <div className="w2map-info-body">
-        <h2 className="w2map-info-title">{selectedProvince.id}</h2>
-        <p className="w2map-info-sub">Region name comes later.</p>
-        <div className="w2map-info-label">Owner</div>
-        {selectedOwner ? (
-          <div className="w2map-info-owner">
-            {selectedOwner.culture && CULTURE_WEBP[selectedOwner.culture] ? (
-              <img className="w2map-owner-icon" src={CULTURE_WEBP[selectedOwner.culture]} alt="" width={16} height={16} />
-            ) : null}
-            <span className="w2map-owner-chip" style={{ background: selectedOwner.color }} aria-hidden="true" />
-            {selectedOwner.name}
+        <div className="w2map-state">
+          <StateCrest polityId={selectedOwnerId} color={stateColor} />
+          <div className="w2map-state-text">
+            <h2 className="w2map-state-name">
+              {stateName}
+              {cultureIcon ? <img className="w2map-owner-icon" src={cultureIcon} alt="" width={16} height={16} /> : null}
+            </h2>
+            <p className="w2map-region-name">{regionName}</p>
           </div>
-        ) : (
-          <p className="w2map-info-empty">Unclaimed</p>
-        )}
-        <div className="w2map-info-label">Type</div>
-        <div style={{ fontSize: 13, textTransform: "capitalize" }}>
-          {selectedProvince.type}{selectedProvince.coastal ? " · coastal" : ""}
         </div>
+        <div className="w2map-info-label">Culture</div>
+        <div className="w2map-info-row">{selectedOwner?.culture ? titleCase(selectedOwner.culture) : "—"}</div>
+        <div className="w2map-info-label">Terrain</div>
+        <div className="w2map-info-row">{terrain}</div>
         <div className="w2map-info-label">Towns</div>
         {selectedProvince.towns.length ? (
           <ul className="w2map-info-towns">
             {selectedProvince.towns.map((townId) => (
-              <li key={townId}>{townsById.get(townId)?.name ?? townId}</li>
+              <li key={townId}>
+                <button type="button" className="w2map-town-chip" onClick={() => setSelectedTown(townId)}>
+                  {townsById.get(townId)?.name ?? "Unnamed town"}
+                </button>
+              </li>
             ))}
           </ul>
         ) : (
           <p className="w2map-info-empty">No towns in this region.</p>
         )}
+      </div>
+    </>
+  ) : null;
+
+  // The town panel: survey rows from townstats.json (Massalian towns), "No survey
+  // yet" elsewhere, and the four action buttons — rendered in the game's button
+  // style but inert until a later pass wires them up.
+  const stats = selectedTownObj ? townStats[selectedTownObj.id] : undefined;
+  const townBody = selectedTownObj ? (
+    <>
+      <button type="button" className="w2map-info-close" onClick={closeInfo} aria-label="Close">Close</button>
+      <div className="w2map-info-body">
+        <button type="button" className="w2map-back" onClick={() => setSelectedTown(null)}>
+          ‹ {regionName}
+        </button>
+        <div className="w2map-state w2map-state-town">
+          <StateCrest polityId={selectedOwnerId} color={stateColor} />
+          <div className="w2map-state-text">
+            <h2 className="w2map-state-name">{selectedTownObj.name}</h2>
+            <p className="w2map-region-name">{stateName} · {regionName}</p>
+          </div>
+        </div>
+        <div className="w2map-info-label">Survey</div>
+        <dl className="w2map-stats">
+          <div className="w2map-stat">
+            <dt>Population</dt>
+            <dd>{stats ? stats.population.toLocaleString() : <span className="w2map-stat-none">No survey yet</span>}</dd>
+          </div>
+          <div className="w2map-stat">
+            <dt>Garrison</dt>
+            <dd>{stats ? stats.garrison.toLocaleString() : <span className="w2map-stat-none">No survey yet</span>}</dd>
+          </div>
+          <div className="w2map-stat">
+            <dt>Walls</dt>
+            <dd>
+              {stats ? (
+                <>
+                  <span className="w2map-stat-pips" aria-hidden="true">{wallPips(stats.walls)}</span> Level {stats.walls}
+                </>
+              ) : (
+                <span className="w2map-stat-none">No survey yet</span>
+              )}
+            </dd>
+          </div>
+        </dl>
+        <div className="w2map-info-label">Actions</div>
+        <div className="w2map-actions">
+          {TOWN_ACTIONS.map((action) => (
+            <button key={action} type="button" className="w2map-action" disabled aria-disabled="true" title="Not yet available">
+              {action}
+            </button>
+          ))}
+        </div>
       </div>
     </>
   ) : null;
@@ -675,19 +815,21 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
             ) : null}
 
             {/* Town markers + labels: culture icon when the town's region has a
-                culture-bearing owner, else the plain dot. Same layer as before,
-                so it commits at gesture end (no re-renders mid-drag). */}
+                culture-bearing owner, else the plain dot. Markers are tappable
+                (data-town; the tap hit-test in endPointer checks them first);
+                labels stay inert. Same layer as before, so it commits at gesture
+                end (no re-renders mid-drag). */}
             <g pointerEvents="none">
               {labelledTowns.map((town) => {
                 const icon = townCultureIcon.get(town.id);
                 const isMassalia = town.name === "Massalia";
                 const markerHalf = icon ? iconPx / 2 : isMassalia ? dotPx * 1.5 : dotPx;
                 return (
-                  <g key={town.id}>
+                  <g key={town.id} data-town={town.id}>
                     {icon ? (
-                      <image href={icon} x={town.x - iconPx / 2} y={town.y - iconPx / 2} width={iconPx} height={iconPx} preserveAspectRatio="xMidYMid meet" />
+                      <image href={icon} x={town.x - iconPx / 2} y={town.y - iconPx / 2} width={iconPx} height={iconPx} preserveAspectRatio="xMidYMid meet" pointerEvents="visiblePainted" style={{ cursor: "pointer" }} />
                     ) : (
-                      <circle cx={town.x} cy={town.y} r={isMassalia ? dotPx * 1.5 : dotPx} fill="#fff" stroke="#3c3c3c" strokeWidth={dotPx * 0.35} />
+                      <circle cx={town.x} cy={town.y} r={isMassalia ? dotPx * 1.5 : dotPx} fill="#fff" stroke="#3c3c3c" strokeWidth={dotPx * 0.35} pointerEvents="visiblePainted" style={{ cursor: "pointer" }} />
                     )}
                     <text x={town.x + markerHalf + labelPx * 0.25} y={town.y - dotPx * 1.25} fontSize={isMassalia ? labelPx * 1.15 : labelPx} fill="#fff" stroke="#3c3c3c" strokeWidth={labelPx * 0.02} fontWeight="bold">
                       {town.name}
@@ -708,11 +850,13 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
             ref={popoverRef}
             className={isMobile ? "w2map-sheet" : "w2map-popover"}
             role="dialog"
-            aria-label={`Region ${selectedProvince.id}`}
+            aria-label={selectedTownObj ? selectedTownObj.name : `${stateName} — ${regionName}`}
+            data-region={selectedProvince.id}
+            data-town-id={selectedTownObj?.id}
             onPointerDown={(e) => e.stopPropagation()}
             onWheel={(e) => e.stopPropagation()}
           >
-            {infoBody}
+            {townBody ?? regionBody}
           </div>
         ) : null}
 

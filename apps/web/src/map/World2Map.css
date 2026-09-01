@@ -136,21 +136,6 @@
   scrollbar-width: thin;
 }
 
-.w2map-info-title {
-  margin: 2px 0 0;
-  color: var(--dash-parchment, #ece0cc);
-  font-family: var(--font-display, "Cinzel", serif);
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.w2map-info-sub {
-  margin: 2px 0 0;
-  color: var(--dash-stone-dim, #9a8c72);
-  font-size: 11px;
-  font-style: italic;
-}
-
 .w2map-info-label {
   display: flex;
   gap: 9px;
@@ -168,23 +153,6 @@
   height: 1px;
   content: "";
   background: var(--dash-line, rgba(181, 138, 69, 0.28));
-}
-
-.w2map-info-owner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--dash-parchment, #ece0cc);
-}
-
-.w2map-owner-chip {
-  width: 13px;
-  height: 13px;
-  flex: none;
-  border-radius: 3px;
-  border: 1px solid rgba(0, 0, 0, 0.45);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 
 .w2map-owner-icon {
@@ -210,13 +178,162 @@
   gap: 6px;
 }
 
-.w2map-info-towns li {
+/* Town chips are buttons: tapping one opens the town panel. */
+.w2map-town-chip {
   padding: 3px 9px;
+  font: inherit;
   font-size: 12.5px;
   color: var(--dash-parchment, #ece0cc);
   background: rgba(181, 138, 69, 0.12);
   border: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28));
   border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.w2map-town-chip:hover {
+  border-color: var(--dash-gold, #b58a45);
+  background: rgba(181, 138, 69, 0.22);
+}
+
+.w2map-town-chip:focus-visible {
+  outline: none;
+  border-color: var(--dash-gold-bright, #d1ae63);
+}
+
+/* --- State-led header: crest + state name, region name beneath ------------ */
+.w2map-state {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding-right: 56px; /* clear the Close button */
+}
+
+.w2map-crest {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+.w2map-state-text {
+  min-width: 0;
+}
+
+.w2map-state-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: var(--dash-parchment, #ece0cc);
+  font-family: var(--font-display, "Cinzel", serif);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.w2map-region-name {
+  margin: 3px 0 0;
+  color: var(--dash-stone-dim, #9a8c72);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.w2map-info-row {
+  font-size: 13px;
+  color: var(--dash-parchment, #ece0cc);
+}
+
+/* --- Town panel ------------------------------------------------------------ */
+.w2map-back {
+  display: inline-block;
+  margin: 0 0 10px;
+  padding: 3px 9px 3px 7px;
+  color: var(--dash-stone, #d7ccb7);
+  font-family: var(--font-display, "Cinzel", serif);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: none;
+  border: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28));
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.w2map-back:hover {
+  color: var(--dash-parchment, #ece0cc);
+  border-color: var(--dash-gold, #b58a45);
+}
+
+.w2map-stats {
+  margin: 0;
+  display: grid;
+  gap: 0;
+}
+
+.w2map-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28));
+  font-size: 13px;
+}
+
+.w2map-stat:last-child {
+  border-bottom: none;
+}
+
+.w2map-stat dt {
+  color: var(--dash-stone, #d7ccb7);
+}
+
+.w2map-stat dd {
+  margin: 0;
+  color: var(--dash-parchment, #ece0cc);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.w2map-stat-pips {
+  margin-right: 6px;
+  color: var(--dash-gold, #b58a45);
+  letter-spacing: 1px;
+}
+
+.w2map-stat-none {
+  color: var(--dash-stone-dim, #9a8c72);
+  font-style: italic;
+}
+
+/* The four town actions: the game's gold button (see .panel-btn in the
+   dashboard), self-contained here because /map renders outside the shell.
+   Inert for now — disabled, with only a quiet dim to say so. */
+.w2map-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.w2map-action {
+  padding: 8px 10px;
+  color: #1a1208;
+  font-family: var(--font-display, "Cinzel", serif);
+  font-size: 9.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, var(--dash-gold-bright, #d2a55c), var(--dash-bronze, #8c6428));
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.w2map-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+  filter: saturate(0.85);
 }
 
 /* --- Desktop: anchored popover -------------------------------------------- */
@@ -293,5 +410,20 @@
 
   .w2map-info-body {
     padding: 14px 16px 16px;
+  }
+
+  /* Comfortable touch targets for chips and the town actions. */
+  .w2map-town-chip {
+    padding: 6px 12px;
+    font-size: 13.5px;
+  }
+
+  .w2map-action {
+    padding: 11px 12px;
+    font-size: 10.5px;
+  }
+
+  .w2map-back {
+    padding: 6px 11px 6px 9px;
   }
 }

@@ -1,0 +1,51 @@
+{
+ "version": 1,
+ "source": "content/cities/cities.json start values: population, garrison, fortifications (as walls). Massalian towns only; mirrored because the content file is read server-side.",
+ "towns": {
+  "massalia": {
+   "population": 20000,
+   "garrison": 1000,
+   "walls": 4
+  },
+  "nikaia": {
+   "population": 4000,
+   "garrison": 150,
+   "walls": 3
+  },
+  "antipolis": {
+   "population": 2000,
+   "garrison": 100,
+   "walls": 2
+  },
+  "olbia-provence": {
+   "population": 5000,
+   "garrison": 150,
+   "walls": 3
+  },
+  "athinopolis": {
+   "population": 1000,
+   "garrison": 50,
+   "walls": 1
+  },
+  "monoikos": {
+   "population": 500,
+   "garrison": 30,
+   "walls": 1
+  },
+  "agathe": {
+   "population": 3000,
+   "garrison": 100,
+   "walls": 2
+  },
+  "emporion": {
+   "population": 7000,
+   "garrison": 250,
+   "walls": 3
+  },
+  "rhoda": {
+   "population": 3000,
+   "garrison": 120,
+   "walls": 2
+  }
+ }
+}
