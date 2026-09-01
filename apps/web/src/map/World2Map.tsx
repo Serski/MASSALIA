@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { CULTURE_WEBP, titleCase } from "../dashboard/shared.js";
+import { CULTURE_WEBP, POLITY_CREST, titleCase } from "../dashboard/shared.js";
 import "./World2Map.css";
 
 /**
@@ -51,8 +51,7 @@ const TERRAIN_SRC = "/map2/terrain2.webp";
 const POLITICS_SRC = "/map2/politics2.json";
 const NAMES_SRC = "/map2/names2.json";
 const TOWNSTATS_SRC = "/map2/townstats.json";
-// Massalia's crest is the game's lion mark; every other state gets a shield.
-const LION_SRC = "/assets/MASSALIA%20LION.png";
+// Shield colour for regions nobody holds (states with no crest art use their own colour).
 const UNCLAIMED_GREY = "#8f8a82";
 const TOWN_ACTIONS = ["Attack", "Raid", "Scout", "Colonise"] as const;
 const OWNER_TINT_OPACITY = 0.5;
@@ -158,11 +157,13 @@ function pathCentroid(path: string): { x: number; y: number } {
   return n ? { x: sx / n, y: sy / n } : { x: 0, y: 0 };
 }
 
-// The owning state's crest: the lion for Massalia, otherwise a simple shield in
-// the polity colour (neutral grey when the region is unclaimed).
+// The owning state's crest: its faction emblem from POLITY_CREST (the same art the
+// Diplomacy list uses; Massalia's lion lives there too), else a simple shield in
+// the polity colour, neutral grey when the region is unclaimed.
 function StateCrest({ polityId, color }: { polityId: string | null; color: string }) {
-  if (polityId === "massalia") {
-    return <img className="w2map-crest w2map-crest-lion" src={LION_SRC} alt="" width={44} height={44} />;
+  const crest = polityId ? POLITY_CREST[polityId] : undefined;
+  if (crest) {
+    return <img className="w2map-crest" src={crest} alt="" width={44} height={44} />;
   }
   return (
     <svg className="w2map-crest" viewBox="0 0 24 28" width={44} height={44} aria-hidden="true">

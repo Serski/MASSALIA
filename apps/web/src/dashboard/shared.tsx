@@ -547,18 +547,24 @@ export function assetIconUrl(file: string): string {
 
 export function AssetIcon({
   file,
+  src,
   alt,
   className = "asset-icon",
   fallback = null,
 }: {
-  file: string;
+  /** File under public/assets/ (resolved via assetIconUrl) … */
+  file?: string;
+  /** … or an already-resolved URL (e.g. a POLITY_CREST / CULTURE_WEBP value). */
+  src?: string;
   alt: string;
   className?: string;
   fallback?: ReactNode;
 }) {
   const [ok, setOk] = useState(true);
   if (!ok) return <>{fallback}</>;
-  return <img src={assetIconUrl(file)} alt={alt} className={className} loading="lazy" onError={() => setOk(false)} />;
+  const url = src ?? (file ? assetIconUrl(file) : "");
+  if (!url) return <>{fallback}</>;
+  return <img src={url} alt={alt} className={className} loading="lazy" onError={() => setOk(false)} />;
 }
 
 // The four leadership stats → their icon files (shared by the Atlas ruler pills and
@@ -668,6 +674,37 @@ export const CULTURE_WEBP: Record<string, string> = {
   italic: assetPath("icons/cultures/italic.webp"),
   gaulish: assetPath("icons/cultures/gaulish.webp"),
   iberian: assetPath("icons/cultures/iberian.webp"),
+};
+
+// Faction crests, keyed by politics2.json polity id, as resolved URLs. One source
+// for both the world map popover and the Diplomacy list, so they cannot drift.
+// The emblems are the existing diplomacy assets under public/assets/<faction>.webp;
+// Massalia keeps the game's lion mark. Polities absent here have no art yet and
+// fall back to the colour shield on the map (and no emblem in Diplomacy).
+// Where the politics2 id spells a tribe differently from its asset, the asset is
+// matched by identity: gabati→gabali, allobriges→allobroges, trusates→tarusates,
+// llergetae→ilergetae, roman_republic→rome.
+export const POLITY_CREST: Record<string, string> = {
+  massalia: assetIconUrl("MASSALIA LION.png"),
+  carthage: assetIconUrl("carthage.webp"),
+  roman_republic: assetIconUrl("rome.webp"),
+  syracuse: assetIconUrl("syracuse.webp"),
+  cadurci: assetIconUrl("cadurci.webp"),
+  ruteni: assetIconUrl("ruteni.webp"),
+  helvii: assetIconUrl("helvii.webp"),
+  gabati: assetIconUrl("gabali.webp"),
+  volcae: assetIconUrl("volcae.webp"),
+  allobriges: assetIconUrl("allobroges.webp"),
+  cavares: assetIconUrl("cavares.webp"),
+  vocontii: assetIconUrl("vocontii.webp"),
+  saluvii: assetIconUrl("saluvii.webp"),
+  veltanii: assetIconUrl("veltanii.webp"),
+  ligurians: assetIconUrl("ligurians.webp"),
+  ausci: assetIconUrl("ausci.webp"),
+  convenae: assetIconUrl("convenae.webp"),
+  trusates: assetIconUrl("tarusates.webp"),
+  llergetae: assetIconUrl("ilergetae.webp"),
+  lacetani: assetIconUrl("lacetani.webp"),
 };
 
 // Building art lives in assets/buildings/. Class buildings carry one image per

@@ -1,19 +1,23 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { api, ApiError, type FactionView, type FactionGroup, type FactionCharacterView, type FactionRefView } from "../../api.js";
-import { AssetIcon, DashboardCard, StatPips } from "../shared.js";
+import { AssetIcon, DashboardCard, POLITY_CREST, StatPips } from "../shared.js";
 import { BottomSheet } from "../sheets.js";
 
 // --- League Diplomacy (Atlas Phase 2a) — a Politics tab ---------------------
 
-// Only Rome & Carthage have emblems yet; the other factions render text-only.
-const FACTION_ICON: Record<string, string> = {
-  rome: "rome.webp", carthage: "carthage.webp", syracuse: "syracuse.webp",
-  cadurci: "cadurci.webp", ruteni: "ruteni.webp", helvii: "helvii.webp", gabali: "gabali.webp",
-  volcae: "volcae.webp", allobroges: "allobroges.webp", cavares: "cavares.webp",
-  vocontii: "vocontii.webp", saluvii: "saluvii.webp", veltanii: "veltanii.webp",
-  ligurians: "ligurians.webp", ausci: "ausci.webp", convenae: "convenae.webp",
-  tarusates: "tarusates.webp", ilergetae: "ilergetae.webp", lacetani: "lacetani.webp",
+// Faction emblems come from the shared POLITY_CREST (keyed by politics2 polity id),
+// so the Diplomacy list and the world-map popover always show the same art. The
+// diplomacy content spells a few factions differently from politics2; map those.
+const FACTION_POLITY_ID: Record<string, string> = {
+  rome: "roman_republic",
+  gabali: "gabati",
+  allobroges: "allobriges",
+  tarusates: "trusates",
+  ilergetae: "llergetae",
 };
+function factionCrest(factionId: string): string | undefined {
+  return POLITY_CREST[FACTION_POLITY_ID[factionId] ?? factionId];
+}
 const FACTION_GROUP_META: { id: FactionGroup; label: string }[] = [
   { id: "gauls", label: "Gauls" },
   { id: "celto-ligurian", label: "Celto-Ligurian" },
@@ -200,7 +204,7 @@ function FactionDetail({ faction, onClose }: { faction: FactionView | null; onCl
       {faction ? (
         <>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-            {FACTION_ICON[faction.id] ? <AssetIcon file={FACTION_ICON[faction.id]!} alt="" className="asset-icon faction-icon" /> : null}
+            {factionCrest(faction.id) ? <AssetIcon src={factionCrest(faction.id)} alt="" className="asset-icon faction-icon" /> : null}
             <span style={{ color: "var(--dash-stone-dim)", textTransform: "uppercase", letterSpacing: "0.05em", fontSize: "0.78em", fontWeight: 700 }}>
               {groupLabel}
             </span>
@@ -286,7 +290,7 @@ export function DiplomacyView() {
                   aria-label={`${f.name} — ${f.bandLabel}, opinion ${signedOpinion(f.opinion)}. Open details.`}
                 >
                   <span aria-hidden="true" style={{ width: 3, alignSelf: "stretch", background: color, borderRadius: 0 }} />
-                  {FACTION_ICON[f.id] ? <AssetIcon file={FACTION_ICON[f.id]!} alt="" className="asset-icon faction-emblem" /> : <span className="faction-emblem" aria-hidden="true" />}
+                  {factionCrest(f.id) ? <AssetIcon src={factionCrest(f.id)} alt="" className="asset-icon faction-emblem" /> : <span className="faction-emblem" aria-hidden="true" />}
                   <span style={{ minWidth: 0, flex: 1 }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 2, minWidth: 0, color: "var(--dash-parchment)", fontFamily: "var(--font-display)", fontSize: "1.05rem", lineHeight: 1.15 }}>
                       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{f.name}</span>
