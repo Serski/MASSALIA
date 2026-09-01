@@ -657,6 +657,7 @@ export const CULTURE_WEBP: Record<string, string> = {
   greek: assetPath("icons/cultures/greek.webp"),
   italic: assetPath("icons/cultures/italic.webp"),
   gaulish: assetPath("icons/cultures/gaulish.webp"),
+  iberian: assetPath("icons/cultures/iberian.webp"),
 };
 
 // Building art lives in assets/buildings/. Class buildings carry one image per

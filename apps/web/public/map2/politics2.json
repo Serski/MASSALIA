@@ -114,17 +114,17 @@
   "celtici": {
    "name": "Celtici",
    "color": "#8fae9c",
-   "culture": "gaulish"
+   "culture": "iberian"
   },
   "cunetes": {
    "name": "Cunetes",
    "color": "#8f2f2a",
-   "culture": "gaulish"
+   "culture": "iberian"
   },
   "turdetani": {
    "name": "Turdetani",
    "color": "#7fae9c",
-   "culture": "gaulish"
+   "culture": "iberian"
   },
   "mauretania": {
    "name": "Mauretania",
@@ -133,37 +133,37 @@
   "lusitani": {
    "name": "Lusitani",
    "color": "#b39288",
-   "culture": "gaulish"
+   "culture": "iberian"
   },
   "vettones": {
    "name": "Vettones",
    "color": "#2f4e8f",
-   "culture": "gaulish"
+   "culture": "iberian"
   },
   "astures": {
    "name": "Astures",
    "color": "#a6a8bc",
-   "culture": "gaulish"
+   "culture": "iberian"
   },
   "lacetani": {
    "name": "Lacetani",
    "color": "#c8a52a",
-   "culture": "gaulish"
+   "culture": "iberian"
   },
   "ilercavones": {
    "name": "Lercavones",
    "color": "#a08a54",
-   "culture": "gaulish"
+   "culture": "iberian"
   },
   "vascones": {
    "name": "Vascones",
    "color": "#79a56a",
-   "culture": "gaulish"
+   "culture": "iberian"
   },
   "llergetae": {
    "name": "Ilergatae",
    "color": "#a9955f",
-   "culture": "gaulish"
+   "culture": "iberian"
   },
   "convenae": {
    "name": "Convenae",
@@ -218,7 +218,7 @@
   "lacetanni": {
    "name": "Lacetanni",
    "color": "#9b4fa0",
-   "culture": "gaulish"
+   "culture": "iberian"
   },
   "massyli": {
    "name": "Massyli",
@@ -227,17 +227,17 @@
   "bastetani": {
    "name": "Bastetani",
    "color": "#d98a3d",
-   "culture": "gaulish"
+   "culture": "iberian"
   },
   "contestani": {
    "name": "Contestani",
    "color": "#2f5d3a",
-   "culture": "gaulish"
+   "culture": "iberian"
   },
   "edetani": {
    "name": "Edetani",
    "color": "#7d5bb5",
-   "culture": "gaulish"
+   "culture": "iberian"
   },
   "insubres": {
    "name": "Insubres",
@@ -287,16 +287,101 @@
   "celtiberi": {
    "name": "Celtiberi",
    "color": "#79cdd6",
-   "culture": "gaulish"
+   "culture": "iberian"
   },
   "vaccaei": {
    "name": "Vaccaei",
    "color": "#1f4d2e",
-   "culture": "gaulish"
+   "culture": "iberian"
   },
   "unclaimed": {
    "name": "Unclaimed",
    "color": "#c9c9c4"
+  },
+  "oretani": {
+   "name": "Oretani",
+   "color": "#a68a12",
+   "culture": "iberian"
+  },
+  "deitani": {
+   "name": "Deitani",
+   "color": "#8f5a5f",
+   "culture": "iberian"
+  },
+  "turmodigi": {
+   "name": "Turmodigi",
+   "color": "#7a66c9",
+   "culture": "iberian"
+  },
+  "cantabri": {
+   "name": "Cantabri",
+   "color": "#ef9e8a",
+   "culture": "iberian"
+  },
+  "callaeci": {
+   "name": "Callaeci",
+   "color": "#5d5d66",
+   "culture": "iberian"
+  },
+  "unelli": {
+   "name": "Unelli",
+   "color": "#a8cdee",
+   "culture": "gaulish"
+  },
+  "caletes": {
+   "name": "Caletes",
+   "color": "#2e6b40",
+   "culture": "gaulish"
+  },
+  "menapii": {
+   "name": "Menapii",
+   "color": "#ee9ecd",
+   "culture": "gaulish"
+  },
+  "dumnonii": {
+   "name": "Dumnonii",
+   "color": "#1d5230",
+   "culture": "gaulish"
+  },
+  "durotriges": {
+   "name": "Durotriges",
+   "color": "#8a5fb0",
+   "culture": "gaulish"
+  },
+  "cantiaci": {
+   "name": "Cantiaci",
+   "color": "#3f6fc4",
+   "culture": "gaulish"
+  },
+  "trinovantes": {
+   "name": "Trinovantes",
+   "color": "#e585a8",
+   "culture": "gaulish"
+  },
+  "dobunni": {
+   "name": "Dobunni",
+   "color": "#5f9e4f",
+   "culture": "gaulish"
+  },
+  "epirus": {
+   "name": "Epirus",
+   "color": "#e59433",
+   "culture": "greek"
+  },
+  "illyrians": {
+   "name": "Illyrians",
+   "color": "#4e8f52",
+   "culture": "gaulish"
+  },
+  "sparta": {
+   "name": "Sparta",
+   "color": "#7c1518",
+   "culture": "greek"
+  },
+  "mago": {
+   "name": "Mago",
+   "color": "#93714f",
+   "culture": "punic"
   }
  },
  "owners": {
@@ -414,7 +499,28 @@
   "R120": "unclaimed",
   "R125": "unclaimed",
   "R062": "unclaimed",
-  "R035": "unclaimed"
+  "R035": "unclaimed",
+  "R084": "oretani",
+  "R097": "deitani",
+  "R053": "turmodigi",
+  "R033": "cantabri",
+  "R022": "callaeci",
+  "R009": "unelli",
+  "R007": "caletes",
+  "R006": "menapii",
+  "R004": "dumnonii",
+  "R003": "durotriges",
+  "R005": "cantiaci",
+  "R002": "trinovantes",
+  "R001": "dobunni",
+  "R105": "epirus",
+  "R093": "illyrians",
+  "R080": "illyrians",
+  "R074": "illyrians",
+  "R061": "illyrians",
+  "R040": "illyrians",
+  "R129": "sparta",
+  "R091": "mago"
  },
  "explicitlyEmpty": []
 }
