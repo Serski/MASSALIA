@@ -93,7 +93,7 @@
   },
   "volcae": {
    "name": "Volcae",
-   "color": "#5f8f5f",
+   "color": "#3e6b3a",
    "culture": "gaulish"
   },
   "veltanii": {
@@ -103,12 +103,12 @@
   },
   "gabati": {
    "name": "Gabati",
-   "color": "#6a936a",
+   "color": "#d8c48a",
    "culture": "gaulish"
   },
   "ruteni": {
    "name": "Ruteni",
-   "color": "#7d9f6d",
+   "color": "#a9b84e",
    "culture": "gaulish"
   },
   "celtici": {
@@ -118,7 +118,7 @@
   },
   "cunetes": {
    "name": "Cunetes",
-   "color": "#6fa08e",
+   "color": "#8f2f2a",
    "culture": "gaulish"
   },
   "turdetani": {
@@ -137,7 +137,7 @@
   },
   "vettones": {
    "name": "Vettones",
-   "color": "#c0a49a",
+   "color": "#2f4e8f",
    "culture": "gaulish"
   },
   "astures": {
@@ -147,7 +147,7 @@
   },
   "lacetani": {
    "name": "Lacetani",
-   "color": "#b1a06a",
+   "color": "#c8a52a",
    "culture": "gaulish"
   },
   "ilercavones": {
@@ -172,12 +172,71 @@
   },
   "ausci": {
    "name": "Ausci",
-   "color": "#84a474",
+   "color": "#d4766a",
    "culture": "gaulish"
   },
   "trusates": {
    "name": "Tarusates",
    "color": "#7a9a6a",
+   "culture": "gaulish"
+  },
+  "ligurians": {
+   "name": "Ligurians",
+   "color": "#7a3f33",
+   "culture": "gaulish"
+  },
+  "boii": {
+   "name": "Boii",
+   "color": "#9ccc70",
+   "culture": "gaulish"
+  },
+  "veneti": {
+   "name": "Venetii",
+   "color": "#7fd4c8",
+   "culture": "gaulish"
+  },
+  "sordones": {
+   "name": "Sordones",
+   "color": "#b8467d",
+   "culture": "gaulish"
+  },
+  "tarbelli": {
+   "name": "Tarbelli",
+   "color": "#8a5a3a",
+   "culture": "gaulish"
+  },
+  "lemovices": {
+   "name": "Lemovices",
+   "color": "#d1a93a",
+   "culture": "gaulish"
+  },
+  "cadurci": {
+   "name": "Cadurci",
+   "color": "#8fb8d8",
+   "culture": "gaulish"
+  },
+  "lacetanni": {
+   "name": "Lacetanni",
+   "color": "#9b4fa0",
+   "culture": "gaulish"
+  },
+  "massyli": {
+   "name": "Massyli",
+   "color": "#e8b4c0"
+  },
+  "bastetani": {
+   "name": "Bastetani",
+   "color": "#d98a3d",
+   "culture": "gaulish"
+  },
+  "contestani": {
+   "name": "Contestani",
+   "color": "#2f5d3a",
+   "culture": "gaulish"
+  },
+  "edetani": {
+   "name": "Edetani",
+   "color": "#7d5bb5",
    "culture": "gaulish"
   }
  },
@@ -256,7 +315,29 @@
   "R056": "llergetae",
   "R038": "convenae",
   "R027": "ausci",
-  "R018": "trusates"
+  "R018": "trusates",
+  "R088": "carthage",
+  "R090": "carthage",
+  "R104": "carthage",
+  "R116": "carthage",
+  "R118": "carthage",
+  "R124": "carthage",
+  "R134": "carthage",
+  "R021": "arverni",
+  "R049": "ligurians",
+  "R041": "boii",
+  "R051": "boii",
+  "R055": "boii",
+  "R030": "veneti",
+  "R057": "sordones",
+  "R028": "tarbelli",
+  "R017": "lemovices",
+  "R023": "cadurci",
+  "R058": "lacetanni",
+  "R133": "massyli",
+  "R101": "bastetani",
+  "R089": "contestani",
+  "R077": "edetani"
  },
  "explicitlyEmpty": [
   "R046"
