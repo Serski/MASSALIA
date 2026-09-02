@@ -169,11 +169,15 @@ function openingFrame(world: Rect, focus: { x: number; y: number } | null, fract
 }
 
 // Zoom by `factor` (>1 zooms in) keeping the viewBox point (fx,fy) fixed on screen.
+// The width is clamped to [fit/MAX_ZOOM, fit] BEFORE the origin is derived from
+// it, so a wheel or pinch that runs past the cap leaves the view exactly where it
+// is instead of sliding the focal point a little further on every extra tick.
 function zoomAt(cam: Rect, world: Rect, factor: number, fx: number, fy: number, aspect: number): Rect {
+  const fit = fitFrame(world, aspect);
+  const w = Math.min(fit.w, Math.max(fit.w / MAX_ZOOM, cam.w / factor));
+  const h = w / aspect;
   const rx = (fx - cam.x) / cam.w;
   const ry = (fy - cam.y) / cam.h;
-  const w = cam.w / factor;
-  const h = cam.h / factor;
   return clampCamera({ x: fx - rx * w, y: fy - ry * h, w, h }, world, aspect);
 }
 
