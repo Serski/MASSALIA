@@ -1,0 +1,1922 @@
+[
+  {
+    "id": "pri2-altar-asylum",
+    "weight": 6,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "A runaway slave has thrown his arms around the altar of Artemis and claimed asylum. His master stands at the temple steps with two men and a rope.",
+    "choices": [
+      {
+        "id": "protect",
+        "label": "Invoke the goddess's protection and negotiate his sale to another house",
+        "tags": [
+          "mercy",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The master rages and accepts a price. The slave goes to a gentler house. The altar has done what altars are for."
+      },
+      {
+        "id": "release",
+        "label": "Tell the master to wait until the man lets go",
+        "tags": [
+          "refuse_aid",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": -1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "He lets go on the third day, from thirst. The master pays a fee for the temple's patience. You wash the altar afterward."
+      }
+    ]
+  },
+  {
+    "id": "pri2-lightning-oak",
+    "weight": 6,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "Lightning splits the great oak by the sacred spring. The chora is at the temple by noon, asking what it means.",
+    "choices": [
+      {
+        "id": "omen",
+        "label": "Read it as a warning and call a fast",
+        "tags": [
+          "offering",
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Three days without meat. Nothing terrible happens, which is taken as proof the fast worked."
+      },
+      {
+        "id": "shrine",
+        "label": "Consecrate the split oak as a new shrine",
+        "tags": [
+          "festival",
+          "reformist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_ideology",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "Ligurians and Greeks both leave offerings at the split. The temple collects them, and is thoughtful about whose gods are answering."
+      }
+    ]
+  },
+  {
+    "id": "pri2-votive-gold",
+    "weight": 4,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "The temple treasury holds old votive gold no one has counted in a generation. The roof needs work; so, privately, does your house.",
+    "choices": [
+      {
+        "id": "roof",
+        "label": "Melt what the roof needs and account for every gram",
+        "tags": [
+          "labor",
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          }
+        ],
+        "resultText": "A new roof, an honest ledger, and a treasury lighter by exactly what the priests can defend."
+      },
+      {
+        "id": "pocket",
+        "label": "Melt a little more than the roof needs",
+        "tags": [
+          "deception",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 50
+          },
+          {
+            "type": "change_trait",
+            "traitId": "temple-defiler",
+            "operation": "add"
+          },
+          {
+            "type": "change_composure",
+            "amount": -15
+          }
+        ],
+        "resultText": "The roof is fine. Your house is finer. An old sacristan counts what was there, and tells someone who tells someone."
+      }
+    ]
+  },
+  {
+    "id": "pri2-false-relic",
+    "weight": 5,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "A trader offers the temple a lock of hair from the Ephesian Artemis's own priestess, the one who came with the founders. It is beautifully boxed and probably goat.",
+    "choices": [
+      {
+        "id": "buy",
+        "label": "Buy it and display it",
+        "tags": [
+          "offering",
+          "deception"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -20
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Pilgrims come to see it. The offerings pay for the box within a year. You do not open the box."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse it publicly",
+        "tags": [
+          "judge_fairly",
+          "expose_secret"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "He sells it to Olbia's temple. Olbia's pilgrimage doubles. You are right, and poorer."
+      }
+    ]
+  },
+  {
+    "id": "pri2-healing-spring",
+    "weight": 6,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "A spring in the temple precinct has cured, the story goes, a Gaulish woman's blindness. Now there is a queue, and a question of whether to charge.",
+    "choices": [
+      {
+        "id": "free",
+        "label": "Let the water be free",
+        "tags": [
+          "gift",
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          }
+        ],
+        "resultText": "The queue grows. So do the offerings, left unasked. The goddess, it seems, prefers not to invoice."
+      },
+      {
+        "id": "charge",
+        "label": "Charge an obol a cup, for the temple",
+        "tags": [
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 20
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": -1
+          }
+        ],
+        "resultText": "The queue shrinks to those who can pay. The cures, oddly, shrink with it."
+      }
+    ]
+  },
+  {
+    "id": "pri2-carthaginian-offering",
+    "weight": 5,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "A Carthaginian captain wants to offer a silver bull to Artemis for a safe passage. He calls her Tanit. The temple has never taken Punic silver.",
+    "choices": [
+      {
+        "id": "accept",
+        "label": "Accept the bull and call her by her name",
+        "tags": [
+          "reformist_act",
+          "offering"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 25
+          },
+          {
+            "type": "change_ideology",
+            "amount": 3
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": -2
+          }
+        ],
+        "resultText": "The bull stands in the treasury. The old families ask whose goddess it honors. You say: the one who answers."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse; Artemis is not Tanit",
+        "tags": [
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -3
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 2
+          }
+        ],
+        "resultText": "He offers it to the sea instead. The old families praise you. The sea, presumably, is pleased."
+      }
+    ]
+  },
+  {
+    "id": "pri2-roman-sacrifice",
+    "weight": 5,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "Roman envoys ask to sacrifice at Artemis's altar by their own rite, with covered heads. The sacristans are scandalized.",
+    "choices": [
+      {
+        "id": "allow",
+        "label": "Allow it, and learn the rite",
+        "tags": [
+          "reformist_act",
+          "study"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_ideology",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "Covered heads, a pig, Latin. The goddess takes it. You now know more about Rome than the council does."
+      },
+      {
+        "id": "greek",
+        "label": "Insist on the Greek rite",
+        "tags": [
+          "traditionalist_act",
+          "offering"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "They uncover their heads and manage. Later, one of them tells you Rome will have this temple's goddess in Rome one day. He is right."
+      }
+    ]
+  },
+  {
+    "id": "pri2-initiate-daughter",
+    "weight": 6,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "A Kleitos daughter is to be initiated, and the family wants the rite shortened for her health. The rite has never been shortened.",
+    "choices": [
+      {
+        "id": "full",
+        "label": "The full rite, slowly",
+        "tags": [
+          "traditionalist_act",
+          "offering"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_ideology",
+            "amount": -1
+          },
+          {
+            "type": "change_party_favor",
+            "party": "dynatoi",
+            "amount": -1
+          }
+        ],
+        "resultText": "She faints once and finishes. Her father does not forgive you and her mother sends a gift every year."
+      },
+      {
+        "id": "shorten",
+        "label": "Shorten it and say nothing",
+        "tags": [
+          "mercy",
+          "skip_rite"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": -1
+          },
+          {
+            "type": "change_party_favor",
+            "party": "dynatoi",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          }
+        ],
+        "resultText": "A quick rite, a grateful House. The old sacristan counts the verses and says nothing, loudly."
+      }
+    ]
+  },
+  {
+    "id": "pri2-sacred-snake",
+    "weight": 6,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "The temple's sacred snake has died. The sacristans want a new one from Epidauros; a Gaulish hand says the hills have snakes just as holy.",
+    "choices": [
+      {
+        "id": "epidauros",
+        "label": "Send for one from Epidauros",
+        "tags": [
+          "traditionalist_act",
+          "pilgrimage"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -20
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_ideology",
+            "amount": -2
+          }
+        ],
+        "resultText": "Six months, one snake, a great deal of ceremony at the docks. It bites a sacristan on arrival, which is taken as auspicious."
+      },
+      {
+        "id": "hills",
+        "label": "Take a snake from the hills",
+        "tags": [
+          "reformist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          }
+        ],
+        "resultText": "A hill-snake in the holy basket. It thrives. Ligurians start coming to the temple to see their snake in Greek company."
+      }
+    ]
+  },
+  {
+    "id": "pri2-dream-reading",
+    "weight": 7,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "A rich widow brings a dream: a ship, a wolf, and her dead husband saying a name. She will pay for a reading and pay more for the right one.",
+    "choices": [
+      {
+        "id": "honest",
+        "label": "Read it honestly",
+        "tags": [
+          "public_oath",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          }
+        ],
+        "resultText": "The name is her steward's. She pays the fee and dismisses him. You did not tell her to; the dream did."
+      },
+      {
+        "id": "flatter",
+        "label": "Read it as she wants",
+        "tags": [
+          "deception",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 25
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": -1
+          }
+        ],
+        "resultText": "The name is her son's. She is comforted and generous. The steward keeps stealing."
+      }
+    ]
+  },
+  {
+    "id": "pri2-plague-sacrifice",
+    "weight": 5,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "Fever in the lower city. The people want a great sacrifice; the physicians want the temple to say 'boil the water' with the goddess's authority.",
+    "choices": [
+      {
+        "id": "both",
+        "label": "Sacrifice, and proclaim the physicians' rule as the goddess's will",
+        "tags": [
+          "offering",
+          "reformist_act",
+          "study"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_ideology",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          }
+        ],
+        "resultText": "The altars smoke and the water boils. The fever breaks in a month. Both parties claim it."
+      },
+      {
+        "id": "sacrifice",
+        "label": "Sacrifice only; physic is not the temple's",
+        "tags": [
+          "traditionalist_act",
+          "offering"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The altars smoke. The fever breaks in two months. The physicians say what they think of the temple, in the agora."
+      }
+    ]
+  },
+  {
+    "id": "pri2-curse-tablet",
+    "weight": 5,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "A lead curse-tablet is found buried by the temple gate, naming a councilor and asking Artemis to rot his ships. The hand is a citizen's.",
+    "choices": [
+      {
+        "id": "burn",
+        "label": "Burn it and say nothing",
+        "tags": [
+          "mercy",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "Lead in the brazier. The councilor's ships sail fine. The citizen, months later, comes to the temple with a very large offering and a look."
+      },
+      {
+        "id": "expose",
+        "label": "Take it to the Ephors",
+        "tags": [
+          "expose_secret",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "A trial, a fine, a family shamed. The goddess's gate is clean and nobody buries anything there again. They bury it elsewhere."
+      }
+    ]
+  },
+  {
+    "id": "pri2-choregos-accounts",
+    "weight": 6,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "The Artemisia's accounts are short by a chest of silver. The choregos is a Timon and the shortfall is between his House and the temple's honor.",
+    "choices": [
+      {
+        "id": "audit",
+        "label": "Audit him publicly",
+        "tags": [
+          "judge_fairly",
+          "frontline"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": -2
+          }
+        ],
+        "resultText": "The chest turns up in a Timon storeroom, 'mislaid'. The festival is paid for. House Timon prays at Apollo's temple now."
+      },
+      {
+        "id": "quiet",
+        "label": "Let him make it good quietly, with interest",
+        "tags": [
+          "scheme",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 1
+          }
+        ],
+        "resultText": "The chest returns with a second, smaller chest. The temple's honor is intact and its ledger is creative."
+      }
+    ]
+  },
+  {
+    "id": "pri2-hunting-festival",
+    "weight": 6,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "The hunters' guild wants a festival hunt in Artemis's name, with the goddess's blessing on their spears. The last one killed a boy.",
+    "choices": [
+      {
+        "id": "bless",
+        "label": "Bless it and ride with them",
+        "tags": [
+          "hunt",
+          "festival"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Two boars and no boys. The feast is under the goddess's eye and the hunters' guild owes you the first haunch every year."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse; the goddess hunts, men pray",
+        "tags": [
+          "traditionalist_act",
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_ideology",
+            "amount": -1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "They hunt without the blessing. Nobody dies. They do not ask again, and the haunches go elsewhere."
+      }
+    ]
+  },
+  {
+    "id": "pri2-ephesos-tribute",
+    "weight": 6,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "The mother temple at Ephesos sends for the yearly tribute, doubled, citing a new roof. Massalia's temple has a roof of its own to think about.",
+    "choices": [
+      {
+        "id": "pay",
+        "label": "Pay it in full",
+        "tags": [
+          "offering",
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -25
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_ideology",
+            "amount": -1
+          }
+        ],
+        "resultText": "Ephesos writes a letter of thanks that is read at the Artemisia. Massalia's roof leaks another year, gloriously."
+      },
+      {
+        "id": "half",
+        "label": "Send half and a letter about roofs",
+        "tags": [
+          "debate",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": -1
+          }
+        ],
+        "resultText": "Ephesos accepts half and does not write. Massalia's roof is fixed. The goddess, you decide, has two houses and one sense of humor."
+      }
+    ]
+  },
+  {
+    "id": "pri2-temple-slave-child",
+    "weight": 5,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "A temple slave has borne a child. By custom the child is the goddess's. By decency it is hers.",
+    "choices": [
+      {
+        "id": "free",
+        "label": "Free the child at the altar",
+        "tags": [
+          "mercy",
+          "reformist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_ideology",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          }
+        ],
+        "resultText": "A free child in a slave's arms, under the goddess. The sacristans mutter about precedent. The mother does not."
+      },
+      {
+        "id": "custom",
+        "label": "Register the child as the temple's",
+        "tags": [
+          "traditionalist_act",
+          "cruelty"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "Custom kept. The child will sweep the same floor as its mother. You see them both, every day."
+      }
+    ]
+  },
+  {
+    "id": "pri2-priestess-quarrel",
+    "weight": 6,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "The senior priestess and you disagree, publicly, on the order of the procession. She has the older claim; you have the Archon's ear.",
+    "choices": [
+      {
+        "id": "yield",
+        "label": "Yield to her",
+        "tags": [
+          "mercy",
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "She walks first. She is gracious in victory and, for a year, an ally, which is worth more than the order of a procession."
+      },
+      {
+        "id": "archon",
+        "label": "Take it to the Archon",
+        "tags": [
+          "claim_office",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": -1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "You walk first. She walks second, and remembers it in every rite you share for the rest of your lives."
+      }
+    ]
+  },
+  {
+    "id": "pri2-gaulish-priest-visit",
+    "weight": 5,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "A Gaulish priest, a real one, asks to sacrifice to Artemis at her altar, saying she is Arduinna of the boar and the moon. He may be right.",
+    "choices": [
+      {
+        "id": "allow",
+        "label": "Let him sacrifice, and watch",
+        "tags": [
+          "reformist_act",
+          "study"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 4
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_trait",
+            "traitId": "gaulish-rites",
+            "operation": "add"
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": -2
+          }
+        ],
+        "resultText": "A boar, a knife, a hymn in Gaulish. The goddess, you are fairly sure, recognized it. So did the Palaioi, watching from the steps."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse him the altar",
+        "tags": [
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -3
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 2
+          }
+        ],
+        "resultText": "He sacrifices in the hills instead, to Arduinna. Ligurians who used to come to your altar go to the hills that day."
+      }
+    ]
+  },
+  {
+    "id": "pri2-oracle-consultation",
+    "weight": 5,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "The Archon comes in secret to ask the goddess whether to arm the convoy. He wants a yes. The liver, when you look, is ambiguous.",
+    "choices": [
+      {
+        "id": "honest",
+        "label": "Tell him the liver is ambiguous",
+        "tags": [
+          "public_oath",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "He arms the convoy anyway, and says the goddess approved. You say nothing. The convoy is fine."
+      },
+      {
+        "id": "yes",
+        "label": "Give him his yes",
+        "tags": [
+          "deception",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "He arms the convoy and credits the goddess and you. The convoy is fine. You look at livers differently now."
+      }
+    ]
+  },
+  {
+    "id": "pri2-orphan-acolyte",
+    "weight": 6,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "A harbor orphan has been sleeping under the temple portico and sweeping it before the sacristans wake. He asks nothing. He is clearly asking.",
+    "choices": [
+      {
+        "id": "take",
+        "label": "Take him as an acolyte",
+        "tags": [
+          "mercy",
+          "gift"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "He learns the hymns faster than the citizens' sons. In ten years he is the best sacristan the temple has had."
+      },
+      {
+        "id": "send",
+        "label": "Send him to the harbor guild for work",
+        "tags": [
+          "refuse_aid",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "He hauls rope. He still sweeps the portico at dawn, before work, and you stop being able to look at the portico."
+      }
+    ]
+  },
+  {
+    "id": "pri2-theoria-priest",
+    "weight": 5,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "The sacred embassy to Delphi needs a priest of Artemis to walk with it and speak for the city before Apollo. It is an honor and four months.",
+    "choices": [
+      {
+        "id": "go",
+        "label": "Walk with the theoria",
+        "tags": [
+          "pilgrimage",
+          "offering"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -15
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The rock, the smoke, the god's verse. You speak Massalia's name in the sanctuary, and the god, through the priestess, says something about wolves."
+      },
+      {
+        "id": "send",
+        "label": "Send your best acolyte",
+        "tags": [
+          "wait",
+          "patronage"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "He returns with the verse and a new gravity. The wolves, he says, are ours to interpret. You have four months of temple politics to show for it."
+      }
+    ]
+  },
+  {
+    "id": "pri2-comet-panic",
+    "weight": 5,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "A tailed star. The lower city is on the temple steps by dusk, some praying, some selling amulets, one shouting that the goddess has abandoned the city.",
+    "choices": [
+      {
+        "id": "calm",
+        "label": "Speak calmly and name it a sign of change, not ruin",
+        "tags": [
+          "judge_fairly",
+          "offering"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "The crowd goes home. Change comes, as it does. You are quoted as having foreseen it."
+      },
+      {
+        "id": "rite",
+        "label": "Order a great purification and let the fear feed the altars",
+        "tags": [
+          "offering",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 20
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Nine days of smoke and offering. The treasury is full and the city is exhausted. The star fades on its own, as they do."
+      }
+    ]
+  },
+  {
+    "id": "pri2-grove-secrets",
+    "weight": 4,
+    "requires": {
+      "class": "priest",
+      "trait": "herbal-healer"
+    },
+    "scene": "A Gaulish grove-keeper who has watched you heal offers to teach you the plants his people keep secret, on condition you never sell the knowledge.",
+    "choices": [
+      {
+        "id": "learn",
+        "label": "Learn, and swear",
+        "tags": [
+          "study",
+          "reformist_act",
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_trait",
+            "traitId": "oracle-reader",
+            "operation": "add"
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_ideology",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Seven plants, seven seasons, and a way of reading the smoke of a burning herb that tells you more than a liver ever has."
+      },
+      {
+        "id": "decline",
+        "label": "Decline; a Greek priest does not swear to a Gaul",
+        "tags": [
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 1
+          }
+        ],
+        "resultText": "He teaches a Philon physician instead. The physician's cures are talked about. Yours are prayed for."
+      }
+    ]
+  },
+  {
+    "id": "pri2-voice-of-artemis",
+    "weight": 3,
+    "requires": {
+      "class": "priest",
+      "minStat": {
+        "devotion": 15
+      }
+    },
+    "scene": "The senior priestess is dying and names you, before the whole college, as the one who will speak for the goddess at the Artemisia. The college is silent; the silence has an edge.",
+    "choices": [
+      {
+        "id": "accept",
+        "label": "Accept, kneeling",
+        "tags": [
+          "offering",
+          "claim_office"
+        ],
+        "effects": [
+          {
+            "type": "change_trait",
+            "traitId": "artemis-voice",
+            "operation": "add"
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "You speak for the city's patron at her festival. Every word you say from the steps is now the goddess's, and every enemy you have is now hers."
+      },
+      {
+        "id": "decline",
+        "label": "Decline in favor of an elder",
+        "tags": [
+          "mercy",
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          },
+          {
+            "type": "change_composure",
+            "amount": 5
+          }
+        ],
+        "resultText": "An elder speaks. He speaks well. The college remembers who was named and who stepped aside, and both are useful."
+      }
+    ]
+  },
+  {
+    "id": "pri2-wedding-blessing-gaul",
+    "weight": 5,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "A citizen marrying a Ligurian girl asks you to bless the marriage at Artemis's altar. The bride's people will attend, with their own priest.",
+    "choices": [
+      {
+        "id": "bless",
+        "label": "Bless it, both priests at the altar",
+        "tags": [
+          "reformist_act",
+          "festival"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 4
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": -2
+          }
+        ],
+        "resultText": "Two priests, one altar, a bride who cries in two languages. The old families do not attend and hear all about it."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse the altar to a mixed rite",
+        "tags": [
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -3
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "They marry at the western gate. The Ligurian priest blesses it alone, and the couple's first child is named for him."
+      }
+    ]
+  },
+  {
+    "id": "pri2-festival-drunk",
+    "weight": 6,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "At the Artemisia, a drunk citizen of a great House vomits in the procession's path. The procession is yours to halt or to continue.",
+    "choices": [
+      {
+        "id": "halt",
+        "label": "Halt, purify the path, resume",
+        "tags": [
+          "offering",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "Twenty minutes of salt and prayer with the whole city watching. The House sends a silver bowl in the morning, and the citizen, sober, to carry it."
+      },
+      {
+        "id": "continue",
+        "label": "Step round it and continue",
+        "tags": [
+          "skip_rite",
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": -1
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "The procession flows on. The old sacristans note the unpurified stones. The House notes the mercy."
+      }
+    ]
+  },
+  {
+    "id": "pri2-temple-loan",
+    "weight": 6,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "A trader asks the temple for a loan against his cargo, at the goddess's rate. His cargo is silphium and his ship is old.",
+    "choices": [
+      {
+        "id": "lend",
+        "label": "Lend at the sacred rate",
+        "tags": [
+          "gift",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "The ship returns. The loan returns with it, and a jar of silphium for the altar that is not, strictly, interest."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse; the goddess is not a bank",
+        "tags": [
+          "traditionalist_act",
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_ideology",
+            "amount": -1
+          }
+        ],
+        "resultText": "He borrows from a Punic factor at a Punic rate. The ship returns. So does the factor, for his percentage."
+      }
+    ]
+  },
+  {
+    "id": "pri2-scapegoat",
+    "weight": 4,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "In a year of blight the old families ask for the old rite: a beggar led round the walls and driven out with fig-branches, carrying the city's ill-luck.",
+    "choices": [
+      {
+        "id": "perform",
+        "label": "Perform the rite, and see the beggar fed after",
+        "tags": [
+          "traditionalist_act",
+          "offering",
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Fig-branches, hymns, a man walking out of the gate with the city's bad year on his back and a purse in his hand. The blight lifts. It would have anyway. Perhaps."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse; the goddess does not want a beggar",
+        "tags": [
+          "reformist_act",
+          "impiety"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": -1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": -1
+          }
+        ],
+        "resultText": "No rite. The blight lifts in its own time. The old families are sure it lifted later than it would have."
+      }
+    ]
+  },
+  {
+    "id": "pri2-sacred-fish",
+    "weight": 6,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "The fish in the temple pool, sacred and uncounted, have been counted by a sacristan, and there are fewer. Someone is eating the goddess's carp.",
+    "choices": [
+      {
+        "id": "watch",
+        "label": "Sit the pool by night and catch the thief",
+        "tags": [
+          "labor",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "A heron. You sit three nights for a heron. You tell the sacristan it was a heron and he is not sure whether to be relieved."
+      },
+      {
+        "id": "curse",
+        "label": "Pronounce a curse on the thief from the steps",
+        "tags": [
+          "offering",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          }
+        ],
+        "resultText": "The curse is dramatic and effective: three families bring guilt-offerings for fish they did not eat. The heron continues."
+      }
+    ]
+  },
+  {
+    "id": "pri2-archon-funeral",
+    "weight": 5,
+    "requires": {
+      "class": "priest"
+    },
+    "scene": "An Archon has died in office. His House wants a funeral beyond the sumptuary law; the Ephors want the law kept. Both look to the temple.",
+    "choices": [
+      {
+        "id": "law",
+        "label": "Keep the law, and make the plain rite magnificent",
+        "tags": [
+          "traditionalist_act",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_ideology",
+            "amount": -1
+          }
+        ],
+        "resultText": "A plain bier, a great silence, a hymn sung by the whole city. The House is furious and then, hearing the hymn, is not."
+      },
+      {
+        "id": "bend",
+        "label": "Bend the law for an Archon",
+        "tags": [
+          "scheme",
+          "feast"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 20
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": -1
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": -1
+          },
+          {
+            "type": "change_party_favor",
+            "party": "dynatoi",
+            "amount": 1
+          }
+        ],
+        "resultText": "Hired mourners, incense from Arabia, a bier of cedar. The Ephors fine the House, which pays laughing, and the temple, which does not."
+      }
+    ]
+  },
+  {
+    "id": "pri2-college-levy",
+    "weight": 4,
+    "requires": {
+      "class": "priest",
+      "minStat": {
+        "devotion": 20
+      }
+    },
+    "scene": "The college of priests, which does not love a colleague more followed than itself, votes that the temple's debt shall be borne by its most prominent member.",
+    "choices": [
+      {
+        "id": "pay",
+        "label": "Pay the share",
+        "tags": [
+          "back_down",
+          "gift"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -30
+          }
+        ],
+        "resultText": "The debt is paid in your name. The college is grateful in the way colleges are, which is quietly and not for long."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse the levy from the steps",
+        "tags": [
+          "boast",
+          "frontline"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": -2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The college pays it from the treasury and remembers who would not. Your name is left off the next three rites."
+      }
+    ],
+    "defaultChoiceId": "refuse"
+  },
+  {
+    "id": "pri2-blamed-reading",
+    "weight": 4,
+    "requires": {
+      "class": "priest",
+      "minStat": {
+        "prestige": 20
+      }
+    },
+    "scene": "The harvest failed, and the city remembers that you read the spring omens and called them good. Nobody blames the weather.",
+    "choices": [
+      {
+        "id": "great-rite",
+        "label": "Fund a great rite of apology",
+        "tags": [
+          "offering",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -30
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Every altar in the city smokes at your expense. The city forgives the goddess. It takes longer with you."
+      },
+      {
+        "id": "stand",
+        "label": "Stand by the reading",
+        "tags": [
+          "public_oath",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -3
+          }
+        ],
+        "resultText": "The omens were good, you say, and the harvest was a different question. Nobody agrees, and everyone repeats it."
+      }
+    ],
+    "defaultChoiceId": "stand"
+  }
+]

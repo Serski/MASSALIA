@@ -1,0 +1,1776 @@
+[
+  {
+    "id": "sla2-keys",
+    "weight": 4,
+    "requires": {
+      "class": "slave",
+      "minStat": {
+        "intelligence": 8
+      }
+    },
+    "scene": "The steward is dead. The master stands in the courtyard with the household keys in his hand and looks at every face, and stops at yours.",
+    "choices": [
+      {
+        "id": "take",
+        "label": "Take the keys and the burden",
+        "tags": [
+          "labor",
+          "claim_office"
+        ],
+        "effects": [
+          {
+            "type": "change_trait",
+            "traitId": "trusted-steward",
+            "operation": "add"
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Every jar, every account, every quarrel in the house is yours to settle. The other slaves look at you differently. So does the master."
+      },
+      {
+        "id": "suggest",
+        "label": "Suggest the cook; she knows the house better",
+        "tags": [
+          "mercy",
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 5
+          }
+        ],
+        "resultText": "The cook takes the keys. She remembers who named her. You keep your evenings, and your invisibility."
+      }
+    ]
+  },
+  {
+    "id": "sla2-gaulish-fellow",
+    "weight": 6,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "A new slave, a Saluvian taken in a raid, sleeps beside you and speaks no Greek. He is trying to learn, at night, by whispering the words you use.",
+    "choices": [
+      {
+        "id": "teach",
+        "label": "Teach him, and learn his tongue in trade",
+        "tags": [
+          "study",
+          "reformist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_trait",
+            "traitId": "polyglot",
+            "operation": "add"
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_ideology",
+            "amount": 2
+          }
+        ],
+        "resultText": "In a season you can curse in two languages and he can pray in two. The master, discovering it, sends you both to the Gaulish traders as interpreters."
+      },
+      {
+        "id": "ignore",
+        "label": "Keep your sleep; his troubles are not yours",
+        "tags": [
+          "solitude",
+          "refuse_aid"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "He learns from the kitchen boy instead, badly. The kitchen boy is sent to the traders."
+      }
+    ]
+  },
+  {
+    "id": "sla2-mistress-secret",
+    "weight": 5,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "The mistress of the house meets a man in the garden when the master is at council. She has seen that you have seen.",
+    "choices": [
+      {
+        "id": "silent",
+        "label": "Say nothing, and let her know you will say nothing",
+        "tags": [
+          "wait",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 4
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "She leaves small coins in your sleeping-place and does not look at you. It is not friendship. It is better than nothing, and worse."
+      },
+      {
+        "id": "tell",
+        "label": "Tell the master",
+        "tags": [
+          "expose_secret",
+          "rash_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 6
+          }
+        ],
+        "resultText": "He believes you, which surprises everyone. The man does not come again. The mistress does not forget which slave spoke."
+      }
+    ]
+  },
+  {
+    "id": "sla2-festival-coin",
+    "weight": 7,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "The Artemisia. The master gives each slave an obol for the festival and the day off. The wine-sellers know what an obol buys.",
+    "choices": [
+      {
+        "id": "temple",
+        "label": "Spend it on a candle at the temple",
+        "tags": [
+          "offering",
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -1
+          }
+        ],
+        "resultText": "A slave's candle among the citizens'. The priestess does not look at who lit it. The goddess, you decide, does."
+      },
+      {
+        "id": "wine",
+        "label": "Spend it on wine with the quarter",
+        "tags": [
+          "wine",
+          "feast"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": 8
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "One cup, shared four ways, and a song about the Ephors that could get a free man fined. Nobody fines slaves for singing."
+      }
+    ]
+  },
+  {
+    "id": "sla2-theft-frame",
+    "weight": 6,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "A silver cup is missing. The overseer, who dislikes you, finds it in your bedding, where you did not put it.",
+    "choices": [
+      {
+        "id": "speak",
+        "label": "Say the overseer put it there, and say why",
+        "tags": [
+          "public_oath",
+          "frontline"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "You name three thefts he has covered. The master checks. The overseer is sold. You are not flogged, which in this house counts as being believed."
+      },
+      {
+        "id": "take",
+        "label": "Take the flogging and say nothing",
+        "tags": [
+          "back_down",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_trait",
+            "traitId": "survivor",
+            "operation": "add"
+          }
+        ],
+        "resultText": "Twelve strokes. The overseer watches you not name him. He leaves you alone after, which is what you bought with the twelve."
+      }
+    ]
+  },
+  {
+    "id": "sla2-masters-son",
+    "weight": 6,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "The master's son, sixteen, has broken his father's Rhodian vase and asks you to say the cat did it.",
+    "choices": [
+      {
+        "id": "lie",
+        "label": "The cat did it",
+        "tags": [
+          "deception",
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "The cat is exiled to the stable. The boy owes you and, being sixteen, knows it for a year and forgets it for ten."
+      },
+      {
+        "id": "truth",
+        "label": "Refuse to lie for him",
+        "tags": [
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "He confesses on his own, furious. The master, told why, looks at you with an expression you file away carefully."
+      }
+    ]
+  },
+  {
+    "id": "sla2-lent-out",
+    "weight": 6,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "The master lends you for the harvest to a landowner friend. The friend's overseer is known in the quarter, and not kindly.",
+    "choices": [
+      {
+        "id": "work",
+        "label": "Work hard and keep your head down",
+        "tags": [
+          "labor",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 4
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "A month of barley and blisters. The overseer finds nothing to strike. You come home with an obol a day and a back like oak."
+      },
+      {
+        "id": "sick",
+        "label": "Be too sick to be lent",
+        "tags": [
+          "deception",
+          "idle"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "The kitchen boy goes instead. He comes back thin and quiet. You do not ask what you spared yourself."
+      }
+    ]
+  },
+  {
+    "id": "sla2-errand-to-chora",
+    "weight": 6,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "Sent to the chora with a message, you find the road empty, the hills open, and no one who would know for a day.",
+    "choices": [
+      {
+        "id": "deliver",
+        "label": "Deliver the message and come back",
+        "tags": [
+          "labor",
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 3
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "Back by dusk. The master did not think about it, which is the point. Trust compounds like peculium."
+      },
+      {
+        "id": "linger",
+        "label": "Take the long road home through the hills",
+        "tags": [
+          "solitude",
+          "idle"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": 8
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "A day in the open. You come back late, tired, and no one asks. It was worth the risk, and you do not take it again soon."
+      }
+    ]
+  },
+  {
+    "id": "sla2-tutor-child",
+    "weight": 6,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "The master's youngest cannot learn her letters and her tutor beats her for it. She has started hiding in the storeroom, where you keep the accounts.",
+    "choices": [
+      {
+        "id": "teach",
+        "label": "Teach her, quietly, in the storeroom",
+        "tags": [
+          "study",
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "She learns from you in a month what the tutor could not beat into her in a year. She tells her father who taught her. He is thoughtful."
+      },
+      {
+        "id": "send",
+        "label": "Send her back to the tutor",
+        "tags": [
+          "refuse_aid"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 2
+          }
+        ],
+        "resultText": "She stops hiding in the storeroom. She learns eventually. She remembers the storeroom."
+      }
+    ]
+  },
+  {
+    "id": "sla2-temple-flight",
+    "weight": 5,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "Your master's new wife has decided you are insolent, and the whippings have begun. Slaves may flee to Artemis's altar and ask to be sold elsewhere. The temple is three streets away.",
+    "choices": [
+      {
+        "id": "flee",
+        "label": "Go to the altar",
+        "tags": [
+          "flee",
+          "offering"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "Three days at the altar. The priest bargains. You are sold to a merchant's house where nobody has yet decided you are anything."
+      },
+      {
+        "id": "endure",
+        "label": "Endure it; the wife will tire",
+        "tags": [
+          "wait",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_trait",
+            "traitId": "survivor",
+            "operation": "add"
+          }
+        ],
+        "resultText": "She tires in a season. You have a scar she gave you and a stillness she did not intend to."
+      }
+    ]
+  },
+  {
+    "id": "sla2-counterfeit-obols",
+    "weight": 5,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "A slave at the mint offers you obols that are not quite obols, at two for one. Your peculium jar is light.",
+    "choices": [
+      {
+        "id": "buy",
+        "label": "Buy them and pass them carefully",
+        "tags": [
+          "deception",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 8
+          },
+          {
+            "type": "change_composure",
+            "amount": -8
+          }
+        ],
+        "resultText": "The jar is heavier. Every market day you watch the money-changers' faces. One day one of them looks up."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse; a slave caught with false coin is a dead slave",
+        "tags": [
+          "wait",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          }
+        ],
+        "resultText": "The mint slave is caught in a month. You were not near him. You are never near anyone like him again."
+      }
+    ]
+  },
+  {
+    "id": "sla2-night-fire",
+    "weight": 6,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "Fire in the next house at night. The master is at the harbor. The strongbox is in the andron and the mistress is screaming for the children.",
+    "choices": [
+      {
+        "id": "children",
+        "label": "Get the children out first",
+        "tags": [
+          "frontline",
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "Two children on the street in their shifts, and the strongbox scorched but whole. The master, told which came first, agrees with you, slowly."
+      },
+      {
+        "id": "strongbox",
+        "label": "Get the strongbox out first",
+        "tags": [
+          "labor",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 8
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "The strongbox is safe and the children are, in the end, also safe. The master gives you a coin from the box. The mistress does not speak to you for a year."
+      }
+    ]
+  },
+  {
+    "id": "sla2-gaulish-cousin",
+    "weight": 5,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "A Gaulish trader in the agora looks at you twice and says your face is his cousin's face, from a village raided twenty years ago. He is not wrong about the village.",
+    "choices": [
+      {
+        "id": "talk",
+        "label": "Talk to him",
+        "tags": [
+          "reformist_act",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 5
+          }
+        ],
+        "resultText": "You have a name that is not the one the household uses, a village, a grandmother. He comes back every market day. You have, in a way, a family."
+      },
+      {
+        "id": "deny",
+        "label": "Deny it and walk on",
+        "tags": [
+          "deception",
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "He does not come back. You keep the name he said in your mouth all night, and do not say it aloud for years."
+      }
+    ]
+  },
+  {
+    "id": "sla2-physician-slave",
+    "weight": 6,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "The master is sick and the physician's Greek is bad. You know the herb the Gaulish quarter uses for this fever, and the master's wife is looking at you as if you might.",
+    "choices": [
+      {
+        "id": "speak",
+        "label": "Name the herb",
+        "tags": [
+          "reformist_act",
+          "rash_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The physician sneers and tries it. The fever breaks. The physician takes the credit and the master gives you a coin, knowing better."
+      },
+      {
+        "id": "silent",
+        "label": "Say nothing; a slave who cures is a slave who can poison",
+        "tags": [
+          "wait",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "The fever breaks on its own. Nobody looks at you. That is what you wanted, and it costs exactly what it cost."
+      }
+    ]
+  },
+  {
+    "id": "sla2-kitchen-thief",
+    "weight": 6,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "The kitchen boy is stealing bread for a family in the quarter that has none. The cook has noticed and asked you what to do.",
+    "choices": [
+      {
+        "id": "cover",
+        "label": "Cover for him and give him yours",
+        "tags": [
+          "gift",
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -2
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "A family eats. The cook sees you go hungry and puts a little more in your bowl, without a word."
+      },
+      {
+        "id": "stop",
+        "label": "Tell him to stop before he is caught",
+        "tags": [
+          "judge_fairly",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "He stops. The family goes hungry. The cook nods. Everyone is correct and nobody is fed."
+      }
+    ]
+  },
+  {
+    "id": "sla2-literate-secret",
+    "weight": 5,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "The master receives a letter he cannot read, in Punic. You can. He does not know you can.",
+    "choices": [
+      {
+        "id": "reveal",
+        "label": "Offer to read it",
+        "tags": [
+          "claim_office",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "It is a bill. He is relieved, then thoughtful, then asks what else you can read. Your value has doubled, which cuts both ways."
+      },
+      {
+        "id": "hide",
+        "label": "Keep it hidden and read it later",
+        "tags": [
+          "scheme",
+          "deception"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "It is a bill, and a threat. You know what the master owes and to whom. It is the kind of knowing that is a weapon or a grave."
+      }
+    ]
+  },
+  {
+    "id": "sla2-kronia-king",
+    "weight": 6,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "The winter festival where masters serve. This year the household draws lots for the slave-king of the feast, and the lot is yours.",
+    "choices": [
+      {
+        "id": "rule",
+        "label": "Rule the feast with wit",
+        "tags": [
+          "feast",
+          "boast",
+          "festival"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 3
+          }
+        ],
+        "resultText": "You order the master to sing and he sings. The household laughs for a year. He does not, quite, forgive the song, and does not, quite, punish it."
+      },
+      {
+        "id": "mild",
+        "label": "Rule mildly and let the master keep his dignity",
+        "tags": [
+          "mercy",
+          "festival"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": 5
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "A gentle king. The master notices what you did not do, and marks it, in a ledger he keeps for freedoms."
+      }
+    ]
+  },
+  {
+    "id": "sla2-overseer-offer",
+    "weight": 5,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "The overseer offers to make you his deputy: better food, a room, and the job of reporting the others.",
+    "choices": [
+      {
+        "id": "accept",
+        "label": "Accept",
+        "tags": [
+          "claim_office",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 6
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "A room and meat. The quarter stops talking when you enter. It is quieter than you expected, and lonelier."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse; you sleep among your own",
+        "tags": [
+          "mercy",
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 5
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "The kitchen boy takes it and reports everyone, badly. The quarter knows what you refused, and why."
+      }
+    ]
+  },
+  {
+    "id": "sla2-shipwreck-goods",
+    "weight": 5,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "Sent to the shore after a storm, you find a purse washed up among the wreck-wood, sealed, heavy, and nobody's.",
+    "choices": [
+      {
+        "id": "bury",
+        "label": "Bury it beside your peculium jar",
+        "tags": [
+          "profit",
+          "deception"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 12
+          },
+          {
+            "type": "change_composure",
+            "amount": -8
+          }
+        ],
+        "resultText": "The jar is suddenly much closer to fifty. You dig it up at night and count it and feel the sea in it."
+      },
+      {
+        "id": "give",
+        "label": "Give it to the master",
+        "tags": [
+          "public_oath",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 4
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "He gives you a tenth and tells the harbor. Captains hear of the slave who handed in a purse. One of them, later, remembers it usefully."
+      }
+    ]
+  },
+  {
+    "id": "sla2-runaway-hidden",
+    "weight": 5,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "A runaway from the mines is hiding in the master's woodshed. You know because he has your brother's accent.",
+    "choices": [
+      {
+        "id": "feed",
+        "label": "Feed him a night and point him to the harbor",
+        "tags": [
+          "mercy",
+          "deception"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -2
+          }
+        ],
+        "resultText": "He is gone by dawn. The woodshed smells of fear for a week. You do not know if he made it and you tell yourself he did."
+      },
+      {
+        "id": "report",
+        "label": "Report him; a slave who hides slaves is a slave who is sold",
+        "tags": [
+          "refuse_aid",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "The master gives you a coin for the reward. You put it in the jar. It is heavier than the others."
+      }
+    ]
+  },
+  {
+    "id": "sla2-gymnasium-errand",
+    "weight": 6,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "Carrying the master's oil to the gymnasium, you watch the citizens wrestle. The trainer, bored, tells you to hold a pad for a rich boy who cannot hit it.",
+    "choices": [
+      {
+        "id": "hold",
+        "label": "Hold the pad, and learn the footwork",
+        "tags": [
+          "labor",
+          "study"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "You hold the pad every week. The rich boy learns to hit it. You learn to move so it is not hit. The trainer notices which lesson took."
+      },
+      {
+        "id": "decline",
+        "label": "Decline; a slave in the sand is a slave in the sand",
+        "tags": [
+          "back_down",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "The trainer shrugs. You carry oil. The sand stays where it is."
+      }
+    ]
+  },
+  {
+    "id": "sla2-debt-of-master",
+    "weight": 5,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "The master is in debt and there is talk of selling household slaves. The mistress asks you, in the storeroom, what the accounts really say.",
+    "choices": [
+      {
+        "id": "honest",
+        "label": "Tell her the truth: sell the vineyard, not the people",
+        "tags": [
+          "public_oath",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "She sells the vineyard. Nobody is sold. She does not thank you, but the household is intact, and it knows whose sums did it."
+      },
+      {
+        "id": "flatter",
+        "label": "Tell her it is not so bad",
+        "tags": [
+          "deception",
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "Two slaves are sold in spring, the kitchen boy among them. The accounts were what they were. You knew."
+      }
+    ]
+  },
+  {
+    "id": "sla2-agora-philosopher",
+    "weight": 5,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "Waiting for the master outside the stoa, you hear a philosopher say that no man is a slave by nature. He is looking at the citizens when he says it.",
+    "choices": [
+      {
+        "id": "listen",
+        "label": "Come back every day the master is at the stoa",
+        "tags": [
+          "study",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "A season of Stoics from the doorway. You learn the word for what you are, and the argument that you are not."
+      },
+      {
+        "id": "ask",
+        "label": "Ask him, aloud, what he meant",
+        "tags": [
+          "debate",
+          "rash_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "The stoa goes quiet. He answers you as if you were a citizen. The master, arriving, does not know what to do with his face."
+      }
+    ]
+  },
+  {
+    "id": "sla2-mine-shift-swap",
+    "weight": 6,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "The mine overseer will swap you to the surface shift, sorting ore, if you give him half your peculium for the season.",
+    "choices": [
+      {
+        "id": "pay",
+        "label": "Pay for the surface",
+        "tags": [
+          "back_down",
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          },
+          {
+            "type": "change_composure",
+            "amount": 8
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "Daylight, dust instead of dark. The jar grows slower. Your lungs grow slower too, in the good way."
+      },
+      {
+        "id": "dark",
+        "label": "Keep the jar and the dark",
+        "tags": [
+          "labor",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 4
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Another season underground. The jar is heavier. So is the cough. You count both."
+      }
+    ]
+  },
+  {
+    "id": "sla2-mistress-jewel-gift",
+    "weight": 5,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "The mistress gives you a small gold earring, saying it is for your peculium, and asks you to remember who gave it if the master ever asks about the garden.",
+    "choices": [
+      {
+        "id": "take",
+        "label": "Take it and remember",
+        "tags": [
+          "scheme",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "Gold in the jar. A promise in the mouth. Both are heavier than they look."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse it; a bought silence is a sold one",
+        "tags": [
+          "public_oath",
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "She takes it back, pale. She never asks again. The garden, as far as you know, stays empty."
+      }
+    ]
+  },
+  {
+    "id": "sla2-citizen-widow-kindness",
+    "weight": 6,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "A citizen's widow, whose errands you run, gives you her dead husband's sandals, good ones, and says a man who walks the city should walk well.",
+    "choices": [
+      {
+        "id": "wear",
+        "label": "Wear them",
+        "tags": [
+          "gift",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 5
+          }
+        ],
+        "resultText": "Citizens' sandals on a slave's feet. Two men in the agora notice and one of them, for no reason, lets you go first at the fountain."
+      },
+      {
+        "id": "sell",
+        "label": "Sell them to the jar",
+        "tags": [
+          "profit",
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 6
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "Six obols. Bare feet. The widow notices, and gives you bread instead, which does not sell."
+      }
+    ]
+  },
+  {
+    "id": "sla2-archon-visit",
+    "weight": 5,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "The Archon dines at the house and his cup is empty and his slave is nowhere. You are nearest the jar.",
+    "choices": [
+      {
+        "id": "pour",
+        "label": "Pour, and pour well",
+        "tags": [
+          "labor",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 3
+          }
+        ],
+        "resultText": "He notices the pouring and asks whose slave you are. The master, delighted, tells him. Being noticed by an Archon is a coin that spends slowly."
+      },
+      {
+        "id": "fetch",
+        "label": "Fetch his slave and stay invisible",
+        "tags": [
+          "solitude",
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "His slave pours. Nobody notices you. You learn, from the doorway, what the Archon thinks of the Ephors."
+      }
+    ]
+  },
+  {
+    "id": "sla2-herb-garden",
+    "weight": 6,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "The master's physic-garden is dying under a citizen gardener who knows theory. You know dirt. He is watching you watch it.",
+    "choices": [
+      {
+        "id": "offer",
+        "label": "Offer to tend it",
+        "tags": [
+          "labor",
+          "claim_office"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 4
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "The garden lives. The gardener takes the credit and, privately, asks you about the soil. The master's physician buys from the garden now."
+      },
+      {
+        "id": "silent",
+        "label": "Let theory kill it",
+        "tags": [
+          "idle",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "The garden dies. The gardener is dismissed. Nobody knows what you knew, which is the way you like your knowing."
+      }
+    ]
+  },
+  {
+    "id": "sla2-freedom-witness",
+    "weight": 3,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "The old master, dying, has the temple registrar at his bedside. He is freeing three slaves in his will. He looks at the door where you stand and asks the registrar to write a fourth name.",
+    "choices": [
+      {
+        "id": "kneel",
+        "label": "Kneel, and hear your name written",
+        "tags": [
+          "offering",
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_trait",
+            "traitId": "freedman",
+            "operation": "add"
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Your name in the registry, before Artemis and a dying man. He does not live to see you walk out the gate free. You do it at dawn, and come back, because the house is where your work is, and now it is work."
+      },
+      {
+        "id": "ask-brother",
+        "label": "Ask him to write the kitchen boy's name instead",
+        "tags": [
+          "mercy",
+          "gift"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "The boy's name goes in the book. Yours does not. The heir, told what you did, looks at you for a long time and says the registrar will be back within the year. You save toward the fifty anyway."
+      }
+    ]
+  },
+  {
+    "id": "sla2-peculium-theft",
+    "weight": 6,
+    "requires": {
+      "class": "slave"
+    },
+    "scene": "Your jar is lighter. Someone in the quarter has found it. You know who, because he is the one not looking at you.",
+    "choices": [
+      {
+        "id": "confront",
+        "label": "Confront him before the quarter",
+        "tags": [
+          "frontline",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "He gives back half and swears it was all. The quarter watches him more than you now. You bury the jar deeper."
+      },
+      {
+        "id": "move",
+        "label": "Say nothing and move the jar",
+        "tags": [
+          "wait",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "The jar is safe. He does not know you know. That is worth more than the obols, and you count it as such."
+      }
+    ]
+  },
+  {
+    "id": "sla2-jar-seized",
+    "weight": 4,
+    "requires": {
+      "class": "slave",
+      "minStat": {
+        "intelligence": 20
+      }
+    },
+    "scene": "The master is in debt and has remembered that a slave's savings are, in law, the master's. He asks, kindly, where the jar is.",
+    "choices": [
+      {
+        "id": "give",
+        "label": "Give up the jar",
+        "tags": [
+          "back_down",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          }
+        ],
+        "resultText": "Fifty obols nearer freedom, gone into his creditor's hand. He promises to make it good. You start the jar again."
+      },
+      {
+        "id": "hide",
+        "label": "Say there is no jar",
+        "tags": [
+          "deception",
+          "rash_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -2
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "He does not believe you and cannot prove it. The kindness is gone from his voice for a year, and so is the trust that was worth more than the jar."
+      }
+    ],
+    "defaultChoiceId": "give"
+  },
+  {
+    "id": "sla2-overseer-envy",
+    "weight": 4,
+    "requires": {
+      "class": "slave",
+      "minStat": {
+        "prestige": 20
+      }
+    },
+    "scene": "The overseer has decided that a slave the master listens to is a slave who should learn the quarries, and has put your name on the season's list.",
+    "choices": [
+      {
+        "id": "bribe",
+        "label": "Buy your name off the list",
+        "tags": [
+          "scheme",
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -8
+          }
+        ],
+        "resultText": "The list has another name on it by morning. The kitchen boy goes. You keep the house and lose a good deal of the jar, and something else."
+      },
+      {
+        "id": "go",
+        "label": "Go to the quarries",
+        "tags": [
+          "labor",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -2
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "A season of stone. You come back harder and forgotten: the master has a new favorite and the overseer has a smile."
+      }
+    ],
+    "defaultChoiceId": "go"
+  }
+]

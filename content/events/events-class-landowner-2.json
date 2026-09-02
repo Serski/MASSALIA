@@ -1,0 +1,1773 @@
+[
+  {
+    "id": "lan2-wolves",
+    "weight": 6,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "Wolves have come down from the hills after a hard winter and taken six lambs. Your Ligurian shepherds want to hunt them their way.",
+    "choices": [
+      {
+        "id": "hunt",
+        "label": "Hunt with the shepherds",
+        "tags": [
+          "hunt",
+          "reformist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_ideology",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Three wolves and a boar nobody planned on. The shepherds sing about it, and you are the Greek in the song."
+      },
+      {
+        "id": "hire",
+        "label": "Hire a citizen huntsman",
+        "tags": [
+          "traditionalist_act",
+          "patronage"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -15
+          },
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "He kills two wolves and charges for three. The shepherds are polite about it, which is worse than anything."
+      }
+    ]
+  },
+  {
+    "id": "lan2-mill-stream",
+    "weight": 6,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "A neighbor upstream has dammed the mill-stream for his own new wheel. Your mill has turned once this week.",
+    "choices": [
+      {
+        "id": "law",
+        "label": "Take him before the magistrates",
+        "tags": [
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "Water rights older than his wheel. The dam comes down. He builds a smaller one, legally, and you both grind slower."
+      },
+      {
+        "id": "night",
+        "label": "Open the dam yourself one dark night",
+        "tags": [
+          "rash_act",
+          "deception"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          }
+        ],
+        "resultText": "A pick, a moon, a torrent. Your mill turns all week. He rebuilds. This will go on."
+      }
+    ]
+  },
+  {
+    "id": "lan2-tomb-in-field",
+    "weight": 5,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "Plowing a new field turns up a stone-lined tomb: a Ligurian warrior, a bronze sword, gold at the throat.",
+    "choices": [
+      {
+        "id": "gold",
+        "label": "Take the gold, replant the field",
+        "tags": [
+          "defile",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 35
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": -2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The gold sells. The field yields badly for three years. The Ligurian hands will not work it."
+      },
+      {
+        "id": "rebury",
+        "label": "Rebury him with rites and a wall",
+        "tags": [
+          "offering",
+          "reformist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_ideology",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "A stone wall around a stone tomb. Ligurian shepherds leave things at it. Your harvests, they say, are why."
+      }
+    ]
+  },
+  {
+    "id": "lan2-granary-stewardship",
+    "weight": 4,
+    "requires": {
+      "class": "landowner",
+      "minStat": {
+        "prestige": 10
+      }
+    },
+    "scene": "The Archons offer you the keys to the public granary for a year: the city's bread in your keeping, and no pay but the name.",
+    "choices": [
+      {
+        "id": "accept",
+        "label": "Take the keys",
+        "tags": [
+          "claim_office",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_trait",
+            "traitId": "granary-keeper",
+            "operation": "add"
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "A year of counting, weighing, and refusing bribes. When the city hungers, it now knocks at your door."
+      },
+      {
+        "id": "decline",
+        "label": "Decline; your own barns are enough",
+        "tags": [
+          "wait",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          }
+        ],
+        "resultText": "Another House takes the keys and the name. You keep your evenings."
+      }
+    ]
+  },
+  {
+    "id": "lan2-salt-pans",
+    "weight": 5,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "The marsh at the edge of your land could be cut into salt-pans. The work is brutal and the Ligurians who know how want a share, not wages.",
+    "choices": [
+      {
+        "id": "share",
+        "label": "Give them the share",
+        "tags": [
+          "reformist_act",
+          "gift"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 3
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "Salt by autumn, and a village of partners at the marsh edge who defend it like their own. It is."
+      },
+      {
+        "id": "wages",
+        "label": "Wages only, and Greek overseers",
+        "tags": [
+          "traditionalist_act",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 20
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Salt by winter. Two overseers quit. The pans are yours and nobody else's, which is the point and the problem."
+      }
+    ]
+  },
+  {
+    "id": "lan2-bees",
+    "weight": 7,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "Wild bees have swarmed in your oldest olive. A Ligurian boy says he can take them into hives without smoke.",
+    "choices": [
+      {
+        "id": "let",
+        "label": "Let him try",
+        "tags": [
+          "reformist_act",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "He talks to them. You do not believe it and they go into the hives. Thyme honey by autumn, and the boy is on wages."
+      },
+      {
+        "id": "smoke",
+        "label": "Smoke them out the Greek way",
+        "tags": [
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "Honey, smoke, and a swarm that leaves for the neighbor's grove. He thanks you the next year."
+      }
+    ]
+  },
+  {
+    "id": "lan2-transhumance",
+    "weight": 6,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "Ligurian shepherds ask to bring their flocks through your lower fields to the summer hills, as their grandfathers did before there were fields.",
+    "choices": [
+      {
+        "id": "allow",
+        "label": "Allow the passage, and ask for the manure",
+        "tags": [
+          "reformist_act",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 3
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "The flocks pass in a week and leave your fallow rich. The shepherds leave cheese. Old roads, it turns out, pay."
+      },
+      {
+        "id": "fence",
+        "label": "Fence the fields and turn them",
+        "tags": [
+          "traditionalist_act",
+          "refuse_aid"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -3
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          }
+        ],
+        "resultText": "They go round, slowly, through a neighbor's land. Something in the neighbor's fence is broken by autumn, and the neighbor looks at you."
+      }
+    ]
+  },
+  {
+    "id": "lan2-oil-press-loan",
+    "weight": 6,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "A smallholder neighbor asks to use your press for his olives, having none. He can pay in oil, next year, probably.",
+    "choices": [
+      {
+        "id": "lend",
+        "label": "Lend it for a tithe of the oil",
+        "tags": [
+          "gift",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          }
+        ],
+        "resultText": "His oil is better than yours, annoyingly. The tithe is worth having and so is the neighbor."
+      },
+      {
+        "id": "rent",
+        "label": "Rent it at the going rate, in silver",
+        "tags": [
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "He pays, in silver he borrowed. Next year he sells the grove to a Rhodian and moves to Emporion."
+      }
+    ]
+  },
+  {
+    "id": "lan2-assessor",
+    "weight": 6,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "The tax assessor walks your groves with a rod and an opinion. He counts trees generously in his favor.",
+    "choices": [
+      {
+        "id": "walk",
+        "label": "Walk with him and count every tree yourself",
+        "tags": [
+          "labor",
+          "debate"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "Four hundred and six, not four hundred and forty. He is annoyed and correct. The tax is right."
+      },
+      {
+        "id": "dinner",
+        "label": "Invite him to dinner before he finishes counting",
+        "tags": [
+          "scheme",
+          "feast"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "Three hundred and eighty. Excellent wine. He will be back next year, hungry."
+      }
+    ]
+  },
+  {
+    "id": "lan2-vine-blight",
+    "weight": 5,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "A rot is in the new vines. A Greek vintner says pull them; a Gaulish woman from the hill says sulphur and a prayer to something she will not name.",
+    "choices": [
+      {
+        "id": "pull",
+        "label": "Pull the vines",
+        "tags": [
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -20
+          },
+          {
+            "type": "change_ideology",
+            "amount": -1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "Three years lost. The rot does not spread. Hesiod would approve, and Hesiod never planted vines here."
+      },
+      {
+        "id": "sulphur",
+        "label": "Try the Gaulish cure",
+        "tags": [
+          "reformist_act",
+          "offering"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 3
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": -1
+          }
+        ],
+        "resultText": "Sulphur, smoke, and a bundle at the field's corner you do not ask about. The vines live. The priest of Apollo asks what the bundle was."
+      }
+    ]
+  },
+  {
+    "id": "lan2-agathe-land",
+    "weight": 5,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "Land in Agathe's chora is going cheap: the Volcae are near, and the settlers are nervous.",
+    "choices": [
+      {
+        "id": "buy",
+        "label": "Buy it",
+        "tags": [
+          "profit",
+          "rash_act"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -30
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "Good soil, a nervous tenant, and a steward who sleeps with a spear. Agathe's magistrates are glad of one more owner with a stake in the wall."
+      },
+      {
+        "id": "pass",
+        "label": "Pass; buy nothing you cannot walk to",
+        "tags": [
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          }
+        ],
+        "resultText": "A Rhodian buys it. Ten years later he is very rich, or very dead. You hear both stories."
+      }
+    ]
+  },
+  {
+    "id": "lan2-well-diviner",
+    "weight": 6,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "The south field has no water. A diviner with a forked stick will find it for a fee; a Greek engineer will find it for four fees.",
+    "choices": [
+      {
+        "id": "diviner",
+        "label": "Pay the diviner",
+        "tags": [
+          "offering"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "He walks, the stick dips, you dig, there is water. You will never know whether the stick knew or he did."
+      },
+      {
+        "id": "engineer",
+        "label": "Pay the engineer",
+        "tags": [
+          "study"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -15
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          }
+        ],
+        "resultText": "He draws the field, explains the slope, and finds water where the diviner would have. You understand why, which costs extra."
+      }
+    ]
+  },
+  {
+    "id": "lan2-first-fruits",
+    "weight": 7,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "The first olives of the year. Custom says the first basket goes to Artemis; your steward says the first basket is the best oil.",
+    "choices": [
+      {
+        "id": "temple",
+        "label": "Carry the basket to the temple yourself",
+        "tags": [
+          "offering",
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          },
+          {
+            "type": "change_ideology",
+            "amount": -1
+          }
+        ],
+        "resultText": "The priestess anoints the altar with your oil. The rest of the pressing sells better for having been blessed by association."
+      },
+      {
+        "id": "press",
+        "label": "Press it, and send the second basket",
+        "tags": [
+          "skip_rite",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": -1
+          }
+        ],
+        "resultText": "The best oil sells to a Kleitos. The temple gets good oil. The priestess can tell the difference, and says so."
+      }
+    ]
+  },
+  {
+    "id": "lan2-runaway-tenant",
+    "weight": 5,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "A tenant family has slipped away in the night owing two years' rent, leaving the plot and a note in bad Greek apologizing.",
+    "choices": [
+      {
+        "id": "forgive",
+        "label": "Let it go and re-let the plot",
+        "tags": [
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          }
+        ],
+        "resultText": "A new family, better at farming and worse at writing. The note you keep, for reasons you do not examine."
+      },
+      {
+        "id": "pursue",
+        "label": "Send men after them to Emporion",
+        "tags": [
+          "extort",
+          "cruelty"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "They are found, and pay in a cart and two goats. The cart is worth having. The goats look at you."
+      }
+    ]
+  },
+  {
+    "id": "lan2-shipyard-timber",
+    "weight": 6,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "The shipyards want the old oaks on your ridge for keels. They are your grandfather's oaks and worth a fortune in a war year.",
+    "choices": [
+      {
+        "id": "sell",
+        "label": "Sell the oaks",
+        "tags": [
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 35
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": -1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Keels for two pentekonters. The ridge is bare and your grandfather's shade, you feel, is not pleased."
+      },
+      {
+        "id": "keep",
+        "label": "Keep them, and sell the yard the young ash instead",
+        "tags": [
+          "wait",
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_ideology",
+            "amount": -1
+          }
+        ],
+        "resultText": "Masts, not keels. The yard grumbles and pays. The oaks stand, and so, in a manner of speaking, does he."
+      }
+    ]
+  },
+  {
+    "id": "lan2-boundary-oath",
+    "weight": 6,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "The boundary with your Ligurian neighbor has never been sworn. He proposes an oath by his gods and yours, at the stone, with both households watching.",
+    "choices": [
+      {
+        "id": "swear",
+        "label": "Swear it, both ways",
+        "tags": [
+          "public_oath",
+          "reformist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "Wine on the stone, blood on the stone, and a line that neither House's sons will move. It holds for a generation."
+      },
+      {
+        "id": "greek",
+        "label": "Swear by Greek law only, with a magistrate",
+        "tags": [
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "A document, a seal, a stone. He signs it and does not swear. It holds as long as the magistrate lives."
+      }
+    ]
+  },
+  {
+    "id": "lan2-mine-on-land",
+    "weight": 4,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "A prospector finds silver-bearing rock in your hill, or says he does. Mining it needs slaves, a Punic engineer, and a deal with the city.",
+    "choices": [
+      {
+        "id": "mine",
+        "label": "Open the mine",
+        "tags": [
+          "profit",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "Silver, some. Slaves, many. The hill is not the hill your children played on. Your ledger is not the ledger you had."
+      },
+      {
+        "id": "sell-rights",
+        "label": "Sell the rights to a House with more stomach",
+        "tags": [
+          "wait",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 25
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "House Iason opens it. Iason gets richer. The hill gets uglier. You get the silver and the sleep."
+      }
+    ]
+  },
+  {
+    "id": "lan2-kleitos-groves",
+    "weight": 3,
+    "requires": {
+      "class": "landowner",
+      "minStat": {
+        "prestige": 12
+      }
+    },
+    "scene": "The old Kleitos groves, the first olives planted outside the wall by Agathon himself, are for sale after a bad succession. They are more famous than they are profitable.",
+    "choices": [
+      {
+        "id": "buy",
+        "label": "Buy them",
+        "tags": [
+          "patronage",
+          "claim_office"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -45
+          },
+          {
+            "type": "change_trait",
+            "traitId": "master-of-groves",
+            "operation": "add"
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "Trees older than the wooden wall, yours. Olives obey this hand now, and the city knows whose hand."
+      },
+      {
+        "id": "pass",
+        "label": "Pass; fame is not oil",
+        "tags": [
+          "wait",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "A Kleitos cousin keeps them. They are still famous. You are still solvent."
+      }
+    ]
+  },
+  {
+    "id": "lan2-gyptis-claim",
+    "weight": 3,
+    "requires": {
+      "class": "landowner",
+      "minStat": {
+        "prestige": 10
+      }
+    },
+    "scene": "An old Ligurian woman, brought to your estate by your shepherds, says your land was once the dowry of Gyptis herself, and that her people still remember the wedding cup.",
+    "choices": [
+      {
+        "id": "honor",
+        "label": "Honor the claim with a feast for her people at the old stone",
+        "tags": [
+          "feast",
+          "reformist_act",
+          "offering"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -25
+          },
+          {
+            "type": "change_ideology",
+            "amount": 4
+          },
+          {
+            "type": "change_trait",
+            "traitId": "gyptis-heir",
+            "operation": "add"
+          }
+        ],
+        "resultText": "Greek wine in Ligurian cups, at a stone nobody knew was a stone. The tribes remember the cup. Now they remember you."
+      },
+      {
+        "id": "dismiss",
+        "label": "Send her home with a coin and a smile",
+        "tags": [
+          "gift",
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -3
+          },
+          {
+            "type": "change_ideology",
+            "amount": -2
+          }
+        ],
+        "resultText": "She goes. The shepherds are quiet a week. The land is exactly as yours as it was, and no more."
+      }
+    ]
+  },
+  {
+    "id": "lan2-hail",
+    "weight": 5,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "Hail flattens the barley the week before harvest. Your tenants stand in the field not saying anything.",
+    "choices": [
+      {
+        "id": "remit",
+        "label": "Remit the year's rent",
+        "tags": [
+          "mercy",
+          "gift"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -25
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "They stay. They replant. They tell every other tenant in the chora what you did, and you never have to advertise for hands again."
+      },
+      {
+        "id": "collect",
+        "label": "Collect what you can",
+        "tags": [
+          "extort"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Half the rent in goats and grudges. Two families leave at midwinter. The field is very quiet in spring."
+      }
+    ]
+  },
+  {
+    "id": "lan2-neighbor-wedding",
+    "weight": 6,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "A Ligurian neighbor invites your household to his son's wedding: three days, a whole ox, and songs in a language your steward pretends not to know.",
+    "choices": [
+      {
+        "id": "go",
+        "label": "Go, with a gift and your family",
+        "tags": [
+          "feast",
+          "reformist_act",
+          "wine"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -15
+          },
+          {
+            "type": "change_ideology",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 5
+          }
+        ],
+        "resultText": "Three days. You dance, badly. The bride's mother decides you are a good man and tells the whole hill."
+      },
+      {
+        "id": "gift",
+        "label": "Send a gift and your steward",
+        "tags": [
+          "gift"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 1
+          }
+        ],
+        "resultText": "The gift is admired. The steward dances, well. He is asked back; you are not."
+      }
+    ]
+  },
+  {
+    "id": "lan2-public-road",
+    "weight": 5,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "The city's new road to Olbia is surveyed straight through your best lower field. The surveyor is open to suggestion.",
+    "choices": [
+      {
+        "id": "bribe",
+        "label": "Suggest a bend, with silver",
+        "tags": [
+          "scheme",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The road bends. Your field stays. The bend is known, forever, as your bend."
+      },
+      {
+        "id": "accept",
+        "label": "Accept the road and claim the compensation",
+        "tags": [
+          "judge_fairly",
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "A straight road, a fair sum, and a roadside stall your tenants run. The bend that isn't there is also known."
+      }
+    ]
+  },
+  {
+    "id": "lan2-slave-overseer",
+    "weight": 6,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "Your estate overseer, a slave who has run the place for twenty years, asks to buy himself. He knows every field. He also knows every book.",
+    "choices": [
+      {
+        "id": "free",
+        "label": "Free him and hire him back",
+        "tags": [
+          "mercy",
+          "gift"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "He works harder as a freedman than he ever did as a slave, which you had not thought possible. The books stay honest."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse; he is worth more than his price",
+        "tags": [
+          "cruelty",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "He stays. The books stay honest. He stops offering suggestions, and the estate is worse for it in ways you cannot count."
+      }
+    ]
+  },
+  {
+    "id": "lan2-threshing-festival",
+    "weight": 7,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "Threshing is done and the hands expect a feast. The custom is a lamb, wine, and the master dancing once.",
+    "choices": [
+      {
+        "id": "feast",
+        "label": "Give the feast and dance",
+        "tags": [
+          "feast",
+          "festival",
+          "wine"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 5
+          }
+        ],
+        "resultText": "You dance once, badly, and it is the thing the hands remember all winter."
+      },
+      {
+        "id": "coin",
+        "label": "Pay a coin each instead",
+        "tags": [
+          "abstain",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -8
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "Efficient. The hands drink it in the village and dance without you."
+      }
+    ]
+  },
+  {
+    "id": "lan2-granary-rats",
+    "weight": 6,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "Rats in the granary. A Greek says cats; a Gaulish hand says a snake, one particular snake, from a shrine in the hills.",
+    "choices": [
+      {
+        "id": "snake",
+        "label": "Fetch the snake",
+        "tags": [
+          "reformist_act",
+          "offering"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "A hill-snake in the granary, and no rats by the month's end. The hands leave it milk. You leave it alone."
+      },
+      {
+        "id": "cats",
+        "label": "Cats",
+        "tags": [
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          }
+        ],
+        "resultText": "Cats. Fewer rats. A great many cats."
+      }
+    ]
+  },
+  {
+    "id": "lan2-dowry-field",
+    "weight": 5,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "A suitor for your sister asks for the river field as dowry. It is your best field. He is a Miltiades.",
+    "choices": [
+      {
+        "id": "give",
+        "label": "Give the field",
+        "tags": [
+          "gift",
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -20
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_party_favor",
+            "party": "dynatoi",
+            "amount": 1
+          },
+          {
+            "type": "change_ideology",
+            "amount": -1
+          }
+        ],
+        "resultText": "The wedding is splendid. The field grows Miltiades barley. Your sister is happy, and visits with the barley."
+      },
+      {
+        "id": "other",
+        "label": "Offer the hill field instead",
+        "tags": [
+          "scheme",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_party_favor",
+            "party": "dynatoi",
+            "amount": -1
+          }
+        ],
+        "resultText": "He takes the hill field, coolly. The wedding is correct. The barley is yours."
+      }
+    ]
+  },
+  {
+    "id": "lan2-gaulish-plow",
+    "weight": 6,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "A Gaulish hand shows you a heavy wheeled plow his people use in the deep valley soils. It would cut your clay field in half the time.",
+    "choices": [
+      {
+        "id": "build",
+        "label": "Build one",
+        "tags": [
+          "reformist_act",
+          "study"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 3
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "The clay field, plowed in a week. Three neighbors ask to borrow the plow. One asks to borrow the Gaul."
+      },
+      {
+        "id": "scratch",
+        "label": "Keep the Greek scratch-plow",
+        "tags": [
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "It works, as it has always worked, slowly. Hesiod's plow. Hesiod's yields."
+      }
+    ]
+  },
+  {
+    "id": "lan2-temple-lease",
+    "weight": 5,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "The Temple of Artemis leases its sacred land in ten-year lots. A lot beside yours is up, cheap, on condition of an offering each harvest.",
+    "choices": [
+      {
+        "id": "lease",
+        "label": "Take the lease",
+        "tags": [
+          "offering",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "Good land, a yearly lamb, and the priestess walking your rows at harvest. Tenants behave better on sacred ground."
+      },
+      {
+        "id": "pass",
+        "label": "Pass; gods make bad landlords",
+        "tags": [
+          "impiety",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": -1
+          }
+        ],
+        "resultText": "A Timon takes the lease and is insufferable about the lamb. The land yields well. So does his piety, in reputation."
+      }
+    ]
+  },
+  {
+    "id": "lan2-hostage-cattle",
+    "weight": 5,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "The Saluvii, under the new peace, send cattle to graze on the chora as surety. Some have wandered into your barley.",
+    "choices": [
+      {
+        "id": "herd",
+        "label": "Herd them out and send word politely",
+        "tags": [
+          "judge_fairly",
+          "reformist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "A Saluvian herdsman comes for them, apologizes in bad Greek, and leaves a cheese. The peace holds a little harder."
+      },
+      {
+        "id": "keep",
+        "label": "Keep two, as damages",
+        "tags": [
+          "extort"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 20
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "Two good cattle. A chief who counts cattle. A peace that is now your problem too."
+      }
+    ]
+  },
+  {
+    "id": "lan2-old-steward-death",
+    "weight": 5,
+    "requires": {
+      "class": "landowner"
+    },
+    "scene": "Your father's steward dies in the olive rows, as he said he would. His family asks that he be buried on the estate, among the trees he planted.",
+    "choices": [
+      {
+        "id": "bury",
+        "label": "Bury him in the grove",
+        "tags": [
+          "offering",
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          }
+        ],
+        "resultText": "A stone under the oldest tree. The hands work past it every day and nobody steals so much as an olive from that row."
+      },
+      {
+        "id": "village",
+        "label": "Send him to the village burial ground",
+        "tags": [
+          "refuse_aid",
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Correct. His sons stay on for wages, and count the years."
+      }
+    ]
+  },
+  {
+    "id": "lan2-envy-suit",
+    "weight": 4,
+    "requires": {
+      "class": "landowner",
+      "minStat": {
+        "prestige": 20
+      }
+    },
+    "scene": "Your estate is famous now, and fame draws lawyers. A rival House produces an old deed claiming the river field, and two of the magistrates are its cousins.",
+    "choices": [
+      {
+        "id": "settle",
+        "label": "Settle before the hearing",
+        "tags": [
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -30
+          }
+        ],
+        "resultText": "The deed disappears into a chest for a price. You keep the field and lose a season's oil."
+      },
+      {
+        "id": "fight",
+        "label": "Fight it in open court",
+        "tags": [
+          "frontline",
+          "debate"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "You keep the field. The cousins on the bench say things about your House that are recorded, and read for years."
+      }
+    ],
+    "defaultChoiceId": "fight"
+  },
+  {
+    "id": "lan2-grove-pollution",
+    "weight": 4,
+    "requires": {
+      "class": "landowner",
+      "minStat": {
+        "devotion": 20
+      }
+    },
+    "scene": "A laborer dies of a fall in the sacred grove on your land, and the priests declare the whole grove polluted, and you responsible for the purification.",
+    "choices": [
+      {
+        "id": "pay",
+        "label": "Pay for the full rite",
+        "tags": [
+          "offering",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -25
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": -1
+          }
+        ],
+        "resultText": "Nine days of salt and hymns at your expense. The grove is clean. The priests' opinion of your stewardship is not."
+      },
+      {
+        "id": "delay",
+        "label": "Delay until after harvest",
+        "tags": [
+          "skip_rite",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": -3
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The harvest comes in. The grove stays polluted a season, and every hand who works past it makes the sign against you."
+      }
+    ],
+    "defaultChoiceId": "delay"
+  }
+]

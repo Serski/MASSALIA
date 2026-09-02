@@ -1,0 +1,1804 @@
+[
+  {
+    "id": "hop2-gate-weapons",
+    "weight": 7,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "Gate duty. The law says no foreigner bears arms inside the wall. A Gaulish trader with a long knife and a longer argument is holding up the line.",
+    "choices": [
+      {
+        "id": "enforce",
+        "label": "Take the knife, give him a token",
+        "tags": [
+          "judge_fairly",
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_ideology",
+            "amount": -1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "He gets it back at dusk, sharpened, which confuses him. The line moves."
+      },
+      {
+        "id": "wave",
+        "label": "Wave him through; it's a knife, not a sword",
+        "tags": [
+          "reformist_act",
+          "idle"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": -1
+          }
+        ],
+        "resultText": "Nothing happens. The next guard hears you waved him through, and the one after that."
+      }
+    ]
+  },
+  {
+    "id": "hop2-execution-duty",
+    "weight": 5,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "The city's one sword is drawn perhaps once a decade, and the Ephors have named your file to stand the square when it is.",
+    "choices": [
+      {
+        "id": "stand",
+        "label": "Stand the square, eyes forward",
+        "tags": [
+          "labor",
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "It is over quickly. The crowd is silent. You do not eat that night, and you are not the only one."
+      },
+      {
+        "id": "swap",
+        "label": "Trade the duty to a man who wants the fee",
+        "tags": [
+          "scheme",
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "He stands it and buys drinks with the fee. The file knows who paid not to."
+      }
+    ]
+  },
+  {
+    "id": "hop2-marine-duty",
+    "weight": 7,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "The strategos needs marines for a pentekonter escorting the tin ships west. Six weeks on a deck the width of a corridor.",
+    "choices": [
+      {
+        "id": "go",
+        "label": "Volunteer for the deck",
+        "tags": [
+          "frontline",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "One skirmish off Rhoda, a great deal of rowing, and a captain who now asks for you by name."
+      },
+      {
+        "id": "stay",
+        "label": "Stay on the wall",
+        "tags": [
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          }
+        ],
+        "resultText": "The wall is where the politics are. The pentekonter comes back with a story you are not in."
+      }
+    ]
+  },
+  {
+    "id": "hop2-shield-bearer",
+    "weight": 6,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "Your shield-bearer, a Ligurian boy, asks to carry a spear in the next drill. Citizens carry spears. The file is watching your answer.",
+    "choices": [
+      {
+        "id": "let",
+        "label": "Give him a spear and stand him beside you",
+        "tags": [
+          "reformist_act",
+          "frontline"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "He holds the line better than two citizens. The file grumbles, and then the file stops grumbling."
+      },
+      {
+        "id": "refuse",
+        "label": "Tell him the law and hand him the shield",
+        "tags": [
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 1
+          }
+        ],
+        "resultText": "He carries the shield. He carries it very well. He does not ask again, which you notice."
+      }
+    ]
+  },
+  {
+    "id": "hop2-deserter",
+    "weight": 5,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "A man from your file, a friend, is missing at muster. You know which fishing village he is drinking in.",
+    "choices": [
+      {
+        "id": "fetch",
+        "label": "Fetch him back before the strategos counts",
+        "tags": [
+          "mercy",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "You drag him in wet and in time. He owes you his hand. He knows it and hates it a little."
+      },
+      {
+        "id": "report",
+        "label": "Report him, as the oath requires",
+        "tags": [
+          "public_oath",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "He is flogged. He stands the next line beside you, silent, and does not flinch. Neither do you."
+      }
+    ]
+  },
+  {
+    "id": "hop2-pension-veteran",
+    "weight": 6,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "An old file-leader, crippled at the Rhone, has been denied his pension by a clerk's error. The clerk is a Herakleides nephew.",
+    "choices": [
+      {
+        "id": "argue",
+        "label": "Argue his case before the Ephors",
+        "tags": [
+          "debate",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The pension is paid, with arrears. The nephew is reassigned. The old man salutes you, badly, with the wrong hand."
+      },
+      {
+        "id": "pay",
+        "label": "Pay him from your own purse and say nothing",
+        "tags": [
+          "gift",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -15
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          }
+        ],
+        "resultText": "He does not know where the silver comes from. His wife does. The file, eventually, does."
+      }
+    ]
+  },
+  {
+    "id": "hop2-horse-offer",
+    "weight": 5,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "A Salyan chief, after a joint patrol, offers you a horse from his own herd. A hoplite on a horse is a joke, or a cavalryman.",
+    "choices": [
+      {
+        "id": "accept",
+        "label": "Accept and learn to ride it",
+        "tags": [
+          "reformist_act",
+          "hunt"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "You fall off eleven times. The twelfth time you keep up with him. The file calls you 'the Gaul' for a year."
+      },
+      {
+        "id": "decline",
+        "label": "Decline; a spear does not need legs",
+        "tags": [
+          "traditionalist_act",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "He laughs and keeps the horse. Next patrol, he rides ahead of you, pointedly slow."
+      }
+    ]
+  },
+  {
+    "id": "hop2-wall-crack",
+    "weight": 6,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "On the night round you find a crack in the wooden wall's foundation, new, and wide enough for a hand. The engineer's office is closed.",
+    "choices": [
+      {
+        "id": "report",
+        "label": "Rouse the engineer at his house",
+        "tags": [
+          "labor",
+          "rash_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "He comes in his nightshirt, swears, and has a crew on it by dawn. The Ephors mention you in the morning report."
+      },
+      {
+        "id": "log",
+        "label": "Log it for the morning",
+        "tags": [
+          "wait",
+          "idle"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "The morning finds it. So, it turns out, did a smuggler, the night before."
+      }
+    ]
+  },
+  {
+    "id": "hop2-prisoner-ransom",
+    "weight": 5,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "Your file has taken a Ligurian raider alive. His clan sends a boy with a torque and an offer. The strategos is in Nikaia.",
+    "choices": [
+      {
+        "id": "ransom",
+        "label": "Take the torque and let him go",
+        "tags": [
+          "profit",
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 25
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "He walks home. The torque is heavy. The strategos, back from Nikaia, wants to know on whose authority."
+      },
+      {
+        "id": "hold",
+        "label": "Hold him for the strategos",
+        "tags": [
+          "wait",
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "The strategos ransoms him for twice the torque and gives your file a share. Patience pays, in this case literally."
+      }
+    ]
+  },
+  {
+    "id": "hop2-training-ephebes",
+    "weight": 7,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "The gymnasiarch asks you to drill the year's ephebes in the phalanx. They are seventeen, rich, and certain.",
+    "choices": [
+      {
+        "id": "hard",
+        "label": "Drill them as the Rhone drilled you",
+        "tags": [
+          "labor",
+          "frontline"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Three fathers complain. Forty boys can hold a line by winter. The gymnasiarch does not mention the fathers again."
+      },
+      {
+        "id": "easy",
+        "label": "Drill them gently; their fathers vote",
+        "tags": [
+          "scheme",
+          "idle"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": -1
+          }
+        ],
+        "resultText": "No complaints. Forty boys who think a phalanx is a parade. You hope they never learn otherwise."
+      }
+    ]
+  },
+  {
+    "id": "hop2-stolen-armor",
+    "weight": 5,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "A cuirass has gone missing from the armory. The quartermaster wants to blame the Gaulish shield-bearers. You saw a citizen's son wearing it at the baths.",
+    "choices": [
+      {
+        "id": "name",
+        "label": "Name the citizen's son",
+        "tags": [
+          "expose_secret",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": -1
+          }
+        ],
+        "resultText": "The cuirass comes back. The son's father does not come to the next muster feast. The shield-bearers know who spoke."
+      },
+      {
+        "id": "silent",
+        "label": "Let the shield-bearers take it",
+        "tags": [
+          "cruelty",
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_composure",
+            "amount": -10
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 1
+          }
+        ],
+        "resultText": "A Ligurian boy is flogged. The cuirass stays at the baths. You stop going to the baths."
+      }
+    ]
+  },
+  {
+    "id": "hop2-sea-rescue",
+    "weight": 6,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "A fishing boat is swamped inside the harbor mouth in a squall. The harbor guard is your file. The water is cold enough to kill.",
+    "choices": [
+      {
+        "id": "swim",
+        "label": "Go in after them",
+        "tags": [
+          "frontline",
+          "rash_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "Two men out, one not. You cannot get warm for a week. The harbor stops charging you for fish."
+      },
+      {
+        "id": "boat",
+        "label": "Get a boat out, properly",
+        "tags": [
+          "labor",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "All three out, slowly. Nobody sings about the boat. All three of them buy you wine."
+      }
+    ]
+  },
+  {
+    "id": "hop2-hunting-boar",
+    "weight": 6,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "The strategos organizes a boar hunt in the chora with Ligurian trackers. A hoplite with a boar-spear is a hoplite on his own legs.",
+    "choices": [
+      {
+        "id": "hunt",
+        "label": "Take the first spear",
+        "tags": [
+          "hunt",
+          "frontline"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The boar takes your spear and a piece of your calf. The trackers finish it and give you the tusks."
+      },
+      {
+        "id": "beaters",
+        "label": "Walk with the beaters and watch the Ligurians",
+        "tags": [
+          "hunt",
+          "study"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_ideology",
+            "amount": 1
+          }
+        ],
+        "resultText": "You learn how they read a hillside. It is more useful than tusks, and does not scar."
+      }
+    ]
+  },
+  {
+    "id": "hop2-bribe-at-the-gate",
+    "weight": 6,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "A merchant at the gate offers a purse to have a wagon of untaxed wine wave through. The purse is a month's pay.",
+    "choices": [
+      {
+        "id": "take",
+        "label": "Take it",
+        "tags": [
+          "extort",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 30
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "The wine goes in. The purse stays. The merchant's next wagon has a larger purse and a heavier cover."
+      },
+      {
+        "id": "seize",
+        "label": "Seize the wagon",
+        "tags": [
+          "judge_fairly",
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          }
+        ],
+        "resultText": "The Ephors sell the wine and give your file a tithe. The merchant hires a different gate."
+      }
+    ]
+  },
+  {
+    "id": "hop2-mercenary-return",
+    "weight": 5,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "A man from your file is back from Syracusan pay with a scar, a purse, and a look. The file is not sure what to do with him.",
+    "choices": [
+      {
+        "id": "welcome",
+        "label": "Welcome him back to the line",
+        "tags": [
+          "mercy",
+          "feast"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          }
+        ],
+        "resultText": "He tells the file what a real siege is. The file listens. You made that possible."
+      },
+      {
+        "id": "distance",
+        "label": "Keep your distance; sellswords are not citizens",
+        "tags": [
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 1
+          }
+        ],
+        "resultText": "He drinks alone. Next spring he takes Carthaginian pay, and does not come back."
+      }
+    ]
+  },
+  {
+    "id": "hop2-nikaia-relief",
+    "weight": 5,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "Nikaia's walls are pressed by Ligurian raiders. The strategos calls for volunteers to march east tonight.",
+    "choices": [
+      {
+        "id": "march",
+        "label": "March",
+        "tags": [
+          "frontline",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "Two days on the road, one night's fight, a colony that keeps its harvest. Nikaia feeds your file for a week."
+      },
+      {
+        "id": "garrison",
+        "label": "Stay to hold the wall here",
+        "tags": [
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "The wall is held. Nikaia holds too, more thinly. The men who marched have a story."
+      }
+    ]
+  },
+  {
+    "id": "hop2-phalanx-quarrel",
+    "weight": 6,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "Two men in your file have not spoken since a girl. In a line, silence between shields is a gap.",
+    "choices": [
+      {
+        "id": "mediate",
+        "label": "Sit them down with wine and no exits",
+        "tags": [
+          "judge_fairly",
+          "wine"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          }
+        ],
+        "resultText": "By the third cup they are singing. The girl, it turns out, married a Rhodian."
+      },
+      {
+        "id": "separate",
+        "label": "Move one to another file",
+        "tags": [
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          }
+        ],
+        "resultText": "The gap closes. The grudge goes to another file, where it becomes their problem."
+      }
+    ]
+  },
+  {
+    "id": "hop2-archons-bodyguard",
+    "weight": 5,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "The new Archon wants a personal guard and has asked the strategos for names. Yours is on the list, second.",
+    "choices": [
+      {
+        "id": "accept",
+        "label": "Take the post",
+        "tags": [
+          "claim_office"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 20
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "A year at the Archon's shoulder. You hear everything and repeat nothing, which is noticed by both parties."
+      },
+      {
+        "id": "decline",
+        "label": "Decline; guards do not become file-leaders",
+        "tags": [
+          "wait",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "The man who took it hears everything and is never a file-leader. You are, by spring."
+      }
+    ]
+  },
+  {
+    "id": "hop2-lost-shield",
+    "weight": 5,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "You left your shield in a tavern. The tavern-keeper has it and knows exactly what a hoplite without his shield is called.",
+    "choices": [
+      {
+        "id": "pay",
+        "label": "Pay whatever he asks, quietly",
+        "tags": [
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -20
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The shield comes home. The tavern-keeper keeps the story. So, you suspect, does everyone who drinks there."
+      },
+      {
+        "id": "front",
+        "label": "Walk in and take it in front of the room",
+        "tags": [
+          "boast",
+          "frontline"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          }
+        ],
+        "resultText": "The room goes quiet. You take the shield. The tavern-keeper is not paid and does not ask twice."
+      }
+    ]
+  },
+  {
+    "id": "hop2-captured-standard",
+    "weight": 5,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "On patrol you find a Saluvian war-standard abandoned in a stream, a boar on a pole, worth a fortune to them and nothing to anyone else.",
+    "choices": [
+      {
+        "id": "keep",
+        "label": "Carry it home as a trophy",
+        "tags": [
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -8
+          }
+        ],
+        "resultText": "It hangs in the barracks. The Saluvii know where it hangs. Every patrol after this one is watched."
+      },
+      {
+        "id": "return",
+        "label": "Send it back under a truce-branch",
+        "tags": [
+          "mercy",
+          "reformist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "A chief's son rides in to fetch it and stays to drink. Your name is spoken on the hill, respectfully."
+      }
+    ]
+  },
+  {
+    "id": "hop2-plague-cordon",
+    "weight": 5,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "Fever in the Ligurian quarter. The Ephors order it cordoned, and your file is the cordon. Inside, people are asking for water.",
+    "choices": [
+      {
+        "id": "water",
+        "label": "Pass water through the line",
+        "tags": [
+          "mercy",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Buckets over the barrier, twice a day. The fever passes in a month. The quarter remembers the file that passed water."
+      },
+      {
+        "id": "hold",
+        "label": "Hold the line as ordered, nothing in or out",
+        "tags": [
+          "cruelty",
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "Orders held. The fever passes in a month, and takes more with it. The quarter remembers that too."
+      }
+    ]
+  },
+  {
+    "id": "hop2-delphi-escort",
+    "weight": 5,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "The sacred embassy to Delphi needs an armed escort by land through Gaulish country. Two months, and the god at the end of it.",
+    "choices": [
+      {
+        "id": "go",
+        "label": "Escort the theoria",
+        "tags": [
+          "pilgrimage",
+          "frontline"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Mountains, hill-forts, and the shining rock at the end. You see the god's smoke. Nobody in the file has."
+      },
+      {
+        "id": "stay",
+        "label": "Stay; the wall does not go to Delphi",
+        "tags": [
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "The theoria returns transformed. You are exactly as you were, and paid for it."
+      }
+    ]
+  },
+  {
+    "id": "hop2-wrestling-champion",
+    "weight": 6,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "The garrison games. A Ligurian shield-bearer has thrown every citizen in the wrestling. The strategos looks at you.",
+    "choices": [
+      {
+        "id": "wrestle",
+        "label": "Take the sand",
+        "tags": [
+          "duel",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Three falls. You win the third by knowing where he plants his foot. He grins with sand in his teeth and clasps your arm."
+      },
+      {
+        "id": "praise",
+        "label": "Praise him and give him the prize",
+        "tags": [
+          "mercy",
+          "reformist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "He takes the wreath. The shield-bearers cheer for a citizen, once, which is once more than ever before."
+      }
+    ]
+  },
+  {
+    "id": "hop2-night-attack-rumor",
+    "weight": 5,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "A Gaulish girl from the quarter tells you, frightened, that men in her village are counting the guards on the western gate.",
+    "choices": [
+      {
+        "id": "believe",
+        "label": "Believe her and double the watch",
+        "tags": [
+          "frontline",
+          "reformist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_ideology",
+            "amount": 1
+          }
+        ],
+        "resultText": "Nothing comes on the first night. On the third, something turns back at the sight of the torches. She is not thanked in public; you see to it she is in private."
+      },
+      {
+        "id": "dismiss",
+        "label": "Dismiss it; Gaulish girls tell stories",
+        "tags": [
+          "traditionalist_act",
+          "idle"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": -1
+          }
+        ],
+        "resultText": "Nothing comes. Or something comes and turns back for its own reasons. You will never know which."
+      }
+    ]
+  },
+  {
+    "id": "hop2-captains-daughter",
+    "weight": 5,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "A file-leader's daughter is being married to a Rhodian merchant for his ships. She has asked you, at the fountain, whether soldiers ever say no to their captains.",
+    "choices": [
+      {
+        "id": "speak",
+        "label": "Speak to the captain, as a friend",
+        "tags": [
+          "mercy",
+          "rash_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "He hears you out and marries her to the Rhodian anyway. He also, from then on, takes your advice on nothing but tactics."
+      },
+      {
+        "id": "silent",
+        "label": "Stay out of a captain's house",
+        "tags": [
+          "wait",
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "She marries the Rhodian. She greets you at the fountain, later, politely, as a soldier who said nothing."
+      }
+    ]
+  },
+  {
+    "id": "hop2-anchor-file",
+    "weight": 3,
+    "requires": {
+      "class": "hoplite",
+      "minStat": {
+        "militia": 15
+      }
+    },
+    "scene": "The strategos offers you the right file-leader's place, the one that anchors the line. Men who hold it are called veterans while they live and something better after.",
+    "choices": [
+      {
+        "id": "take",
+        "label": "Take the anchor",
+        "tags": [
+          "frontline",
+          "claim_office"
+        ],
+        "effects": [
+          {
+            "type": "change_trait",
+            "traitId": "phalanx-veteran",
+            "operation": "add"
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "You hold the right of the line at the next muster. Nobody drifts. Nobody ever drifts again, on your side."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse; the anchor is where men die",
+        "tags": [
+          "back_down",
+          "flee"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 5
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "Another man takes it. He is very good, and the file speaks of him, and not of you."
+      }
+    ]
+  },
+  {
+    "id": "hop2-ford-line",
+    "weight": 2,
+    "requires": {
+      "class": "hoplite",
+      "minStat": {
+        "militia": 25
+      }
+    },
+    "scene": "The Saluvii come down in strength. The strategos forms the line at the ford where the old songs say Aristeides formed his, and looks for the man who will stand where the water is deepest.",
+    "choices": [
+      {
+        "id": "stand",
+        "label": "Stand in the water",
+        "tags": [
+          "frontline",
+          "duel"
+        ],
+        "effects": [
+          {
+            "type": "change_trait",
+            "traitId": "rhone-blooded",
+            "operation": "add"
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -15
+          }
+        ],
+        "resultText": "The line holds. You do not remember most of it. The men who do remember tell it at every muster feast, and you are in it."
+      },
+      {
+        "id": "second",
+        "label": "Take the second rank and hold the flank",
+        "tags": [
+          "frontline",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The line holds. You did what was needed and none of it is in the song."
+      }
+    ]
+  },
+  {
+    "id": "hop2-duelist-challenge",
+    "weight": 4,
+    "requires": {
+      "class": "hoplite",
+      "trait": "duelist"
+    },
+    "scene": "Word of your duel with the Gaul has traveled. A Saluvian champion with a longer sword and a shorter temper waits outside the gate for the Greek who fights.",
+    "choices": [
+      {
+        "id": "meet",
+        "label": "Meet him",
+        "tags": [
+          "duel",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "He is faster. You are more patient. First blood is yours again. He sends mead, and a message that the next one will not be a Gaul."
+      },
+      {
+        "id": "decline",
+        "label": "Decline; one duel is a story, two is a habit",
+        "tags": [
+          "back_down",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "He shouts for three days and rides home. The story stays a story, and you keep the arm."
+      }
+    ]
+  },
+  {
+    "id": "hop2-sellsword-return",
+    "weight": 4,
+    "requires": {
+      "class": "hoplite",
+      "trait": "sellsword"
+    },
+    "scene": "Back from foreign pay, you find the file has a new leader and an old opinion of men who sold their spears.",
+    "choices": [
+      {
+        "id": "earn",
+        "label": "Earn the place back in the drill",
+        "tags": [
+          "labor",
+          "frontline"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "A month of first-rank drill in a foreign-made cuirass. By the end they have stopped saying 'sellsword' and started saying your name."
+      },
+      {
+        "id": "silver",
+        "label": "Buy the file a feast with foreign silver",
+        "tags": [
+          "feast",
+          "gift",
+          "wine"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -20
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "A very good feast. They eat it, thank you, and keep the opinion."
+      }
+    ]
+  },
+  {
+    "id": "hop2-sword-swallow",
+    "weight": 6,
+    "requires": {
+      "class": "hoplite"
+    },
+    "scene": "A drunk citizen at the tavern insists a hoplite is a coward without a phalanx behind him, and puts his hand on your shoulder to say it.",
+    "choices": [
+      {
+        "id": "walk",
+        "label": "Take the hand off and walk away",
+        "tags": [
+          "back_down",
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "You walk. The tavern laughs for a moment and then remembers what you are. The moment is longer for you than for them."
+      },
+      {
+        "id": "answer",
+        "label": "Answer him without the phalanx",
+        "tags": [
+          "duel",
+          "rash_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          }
+        ],
+        "resultText": "He wakes on the floor. You pay for the table. The tavern-keeper considers it a bargain."
+      }
+    ]
+  },
+  {
+    "id": "hop2-old-wound",
+    "weight": 4,
+    "requires": {
+      "class": "hoplite",
+      "minStat": {
+        "militia": 20
+      }
+    },
+    "scene": "The old wound in your thigh opens in the wet season, as it does now every year, and this year it does not close.",
+    "choices": [
+      {
+        "id": "physician",
+        "label": "Pay a physician and rest the season",
+        "tags": [
+          "abstain",
+          "idle"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -25
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "A season on your back and a physician who charges by the visit. The wound closes. The file drills without you."
+      },
+      {
+        "id": "march",
+        "label": "March on it",
+        "tags": [
+          "labor",
+          "frontline"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": -2
+          }
+        ],
+        "resultText": "You drill and it bleeds and you drill. It closes by winter, badly. The leg is never quite the leg it was."
+      }
+    ],
+    "defaultChoiceId": "march"
+  },
+  {
+    "id": "hop2-strategos-grudge",
+    "weight": 4,
+    "requires": {
+      "class": "hoplite",
+      "minStat": {
+        "prestige": 20
+      }
+    },
+    "scene": "A strategos who was not asked for at Nikaia has found a fault in your file's kit, and fined the file, and named you.",
+    "choices": [
+      {
+        "id": "pay",
+        "label": "Pay the fine for the whole file",
+        "tags": [
+          "gift",
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -30
+          }
+        ],
+        "resultText": "The file does not pay. You do. The strategos notes that you can afford it, and looks for a second fault."
+      },
+      {
+        "id": "protest",
+        "label": "Protest it to the Ephors",
+        "tags": [
+          "debate",
+          "rash_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -2
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": -1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The Ephors halve the fine and record the protest. The strategos assigns your file to the marsh gate for a year."
+      }
+    ],
+    "defaultChoiceId": "pay"
+  }
+]

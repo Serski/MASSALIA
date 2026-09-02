@@ -1,0 +1,1789 @@
+[
+  {
+    "id": "hetaira2-flute-girls",
+    "weight": 7,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "Your salon needs music. A slaver offers two Thracian flute-girls at a price that is really a favor; a free Ligurian harpist offers herself for wages and a room.",
+    "choices": [
+      {
+        "id": "buy",
+        "label": "Buy the Thracians",
+        "tags": [
+          "profit",
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -20
+          },
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "They play beautifully and cost nothing after tonight. The slaver now considers you a friend, which is its own cost."
+      },
+      {
+        "id": "hire",
+        "label": "Hire the Ligurian",
+        "tags": [
+          "reformist_act",
+          "gift"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_ideology",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "She plays songs the patrons have never heard and understands every word they say about her. You compare notes weekly."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-archons-widow",
+    "weight": 6,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "The widow of a former Archon calls on you, veiled, and asks you to teach her daughter how to hold a room. She cannot be seen to have asked.",
+    "choices": [
+      {
+        "id": "teach",
+        "label": "Teach the girl, discreetly",
+        "tags": [
+          "gift",
+          "study"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "Three afternoons on how to listen. The girl marries well and never mentions you. Her mother does, to the right people."
+      },
+      {
+        "id": "fee",
+        "label": "Name a fee worthy of the secret",
+        "tags": [
+          "extort",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 30
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "The widow pays, and remembers being made to. The girl does very well anyway."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-poets-quarrel",
+    "weight": 6,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "Two poets come to blows at your table over which of them you smiled at. One is talented; the other is a Kleitos.",
+    "choices": [
+      {
+        "id": "talent",
+        "label": "Side with the talented one",
+        "tags": [
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_party_favor",
+            "party": "dynatoi",
+            "amount": -1
+          }
+        ],
+        "resultText": "The Kleitos leaves without his cloak. The poem the other one writes about the evening is very good and names no one."
+      },
+      {
+        "id": "kleitos",
+        "label": "Side with the Kleitos",
+        "tags": [
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_party_favor",
+            "party": "dynatoi",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "The talented one leaves. The Kleitos sends a gift. The poem he writes about the evening is bad and names you."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-punic-patron",
+    "weight": 5,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "A Carthaginian factor wants a place at your table on the regular terms. His silver is excellent; his accent, in your salon, is a statement.",
+    "choices": [
+      {
+        "id": "admit",
+        "label": "Admit him",
+        "tags": [
+          "profit",
+          "reformist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 25
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": -2
+          },
+          {
+            "type": "change_ideology",
+            "amount": 2
+          }
+        ],
+        "resultText": "He pays in Punic silver and talks in Punic freely, assuming no one understands. Someone does."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse him, gracefully and publicly",
+        "tags": [
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 2
+          },
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "The refusal is repeated at every old family's table. So is the grace."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-assessor",
+    "weight": 6,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "The city has decided your salon is a shop. The assessor is at the door with a stylus and a look that says he knows what an evening here costs.",
+    "choices": [
+      {
+        "id": "pay",
+        "label": "Show him honest books and pay",
+        "tags": [
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "He is surprised the books exist. He is more surprised they are honest. He assesses you fairly, once."
+      },
+      {
+        "id": "hide",
+        "label": "Show him the other books",
+        "tags": [
+          "deception",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "He assesses you as a modest musician. He also, on his way out, asks about Thursday."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-forged-letter",
+    "weight": 5,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "A love-letter in your hand, addressed to a married councilor, is going round the barbers' quarter. You never wrote it. The hand is very good.",
+    "choices": [
+      {
+        "id": "expose",
+        "label": "Find the forger and expose her",
+        "tags": [
+          "expose_secret",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "A rival's scribe, bought with a bracelet. You return the bracelet to the rival in front of her table."
+      },
+      {
+        "id": "own",
+        "label": "Claim it, and improve on it",
+        "tags": [
+          "boast",
+          "deception"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          }
+        ],
+        "resultText": "You recite the letter at your own table with better lines. The councilor's wife stops coming to the agora. He does not stop coming to you."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-protegee",
+    "weight": 6,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "A girl from the harbor quarter, all elbows and eyes, stands at your door and says she wants to learn what you know.",
+    "choices": [
+      {
+        "id": "take",
+        "label": "Take her in",
+        "tags": [
+          "gift",
+          "patronage"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "She learns the lyre, the silence, and the arithmetic. In five years she is your rival and your heir, and you are proud of both."
+      },
+      {
+        "id": "send",
+        "label": "Send her to the temple with a coin",
+        "tags": [
+          "refuse_aid"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -2
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "She goes to the temple, or somewhere. You think of the elbows and eyes now and then."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-dialogue",
+    "weight": 5,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "A philosopher wants to write you into a dialogue, as the wise woman who teaches the young men about love. He will change your name, a little.",
+    "choices": [
+      {
+        "id": "allow",
+        "label": "Allow it, and correct his Greek",
+        "tags": [
+          "study",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "The dialogue circulates as far as Athens. The name is barely changed. Strangers quote you at you."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse; you are not a character",
+        "tags": [
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "He writes it anyway with a worse woman in it. Everyone knows. You are, in a sense, still in it."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-dying-patron",
+    "weight": 5,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "An old patron is dying and has written you into his will: a house by the harbor. His sons stand at the foot of the bed, doing sums.",
+    "choices": [
+      {
+        "id": "accept",
+        "label": "Accept the house",
+        "tags": [
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 40
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The house is yours after a year of lawyers. The sons never greet you again. The house has a fine view of their warehouse."
+      },
+      {
+        "id": "release",
+        "label": "Release the bequest to the sons",
+        "tags": [
+          "mercy",
+          "gift"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          }
+        ],
+        "resultText": "The sons, astonished, send a gift larger than the rent. The city hears of a hetaira who refused a house, and doesn't know what to do with it."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-salyan-chief",
+    "weight": 5,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "A Salyan chief wants an evening at your salon. He will pay in cattle. The old families will pay in gossip.",
+    "choices": [
+      {
+        "id": "host",
+        "label": "Host him, in style",
+        "tags": [
+          "reformist_act",
+          "feast"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": -2
+          }
+        ],
+        "resultText": "He is courteous, enormous, and recites a poem about a river. Your patrons are outraged for a week and curious for a month."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse; cattle do not fit through the door",
+        "tags": [
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          }
+        ],
+        "resultText": "He sends a torque anyway, with no note. You wear it, once, to see who notices."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-keep-him-drinking",
+    "weight": 5,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "A councilor asks you to keep his rival drinking at your table until the morning's vote is over.",
+    "choices": [
+      {
+        "id": "agree",
+        "label": "Agree, for a price and a favor",
+        "tags": [
+          "scheme",
+          "wine"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 30
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The rival wakes at noon, having missed the vote and had a wonderful evening. The councilor owes you and knows it."
+      },
+      {
+        "id": "warn",
+        "label": "Warn the rival instead",
+        "tags": [
+          "expose_secret",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_party_favor",
+            "party": "dynatoi",
+            "amount": 1
+          }
+        ],
+        "resultText": "The rival goes to bed early and wins the vote. He sends flowers. The councilor sends nothing, pointedly."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-water-law",
+    "weight": 6,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "By law, women in Massalia drink water. A magistrate arrives during a symposium to inspect what is in your cup.",
+    "choices": [
+      {
+        "id": "water",
+        "label": "Show him water, and a smile",
+        "tags": [
+          "deception",
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "Water, all evening, in a cup that everyone knows held wine at sundown. He inspects the smile longest."
+      },
+      {
+        "id": "wine",
+        "label": "Offer him a cup of what you're drinking",
+        "tags": [
+          "wine",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          }
+        ],
+        "resultText": "He drinks it. He fines you. He comes back the next week without the stylus."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-lyre-contest",
+    "weight": 6,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "The Dionysia announces a lyre contest open to women of the city. Hetairai are not named as excluded, which is not the same as included.",
+    "choices": [
+      {
+        "id": "enter",
+        "label": "Enter and play",
+        "tags": [
+          "festival",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "You place second to a citizen's daughter who is genuinely better. The judges look relieved. The crowd is not."
+      },
+      {
+        "id": "coach",
+        "label": "Coach the citizen's daughter instead",
+        "tags": [
+          "patronage",
+          "study"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          }
+        ],
+        "resultText": "She wins with your fingering. Her father does not know who taught her. Her mother does."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-spurned-suitor",
+    "weight": 6,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "A young man you declined has been drinking at your gate for three nights, promising to burn the door. His father is on the council.",
+    "choices": [
+      {
+        "id": "guard",
+        "label": "Hire men and let him see them",
+        "tags": [
+          "frontline"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -15
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "He sees the men and goes home. His father hears about the men and sends an apology and a jar of oil."
+      },
+      {
+        "id": "father",
+        "label": "Send for his father yourself",
+        "tags": [
+          "scheme",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 1
+          }
+        ],
+        "resultText": "The father comes at midnight and takes his son home by the ear. He owes you a discretion, and knows the price of one."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-old-letter",
+    "weight": 5,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "A man you knew when you were seventeen offers to sell you a letter you wrote then. He has a copy, of course.",
+    "choices": [
+      {
+        "id": "pay",
+        "label": "Pay him",
+        "tags": [
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -25
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "You pay. He is back in a year. You knew that when you paid."
+      },
+      {
+        "id": "laugh",
+        "label": "Tell him to publish it",
+        "tags": [
+          "boast",
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "He publishes it. It is a very good letter. Three patrons ask whether you still write like that."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-upper-city-house",
+    "weight": 5,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "A house in the upper city is for sale, among the old families. No hetaira has lived there. The seller needs silver more than he needs neighbors.",
+    "choices": [
+      {
+        "id": "buy",
+        "label": "Buy it",
+        "tags": [
+          "claim_office",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -40
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 3
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": -2
+          }
+        ],
+        "resultText": "You move in at dawn. By dusk, two neighbors have complained to the Ephors and one has called with figs."
+      },
+      {
+        "id": "pass",
+        "label": "Let the harbor keep you",
+        "tags": [
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "The house sells to a Rhodian. The old families complain about him instead."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-priestess-rite",
+    "weight": 5,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "The priestesses of Artemis, who do not speak to hetairai, send a girl to say you may attend a women's rite at the temple, veiled, once.",
+    "choices": [
+      {
+        "id": "attend",
+        "label": "Attend, veiled and silent",
+        "tags": [
+          "offering",
+          "pilgrimage"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 5
+          }
+        ],
+        "resultText": "Incense, a hymn you knew as a child, and a priestess who nods at you very slightly. You are not asked again, and it is enough."
+      },
+      {
+        "id": "decline",
+        "label": "Decline; you know what one rite is worth",
+        "tags": [
+          "skip_rite",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": -1
+          }
+        ],
+        "resultText": "The girl returns your answer. The priestesses, you hear, expected it."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-syracusan-agent",
+    "weight": 5,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "A man with Syracusan manners offers steady silver for steady whispers about which hulls sail west, and when.",
+    "choices": [
+      {
+        "id": "sell",
+        "label": "Sell him harbor gossip",
+        "tags": [
+          "scheme",
+          "profit",
+          "deception"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 30
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "Harmless gossip, you tell yourself. A hull is taken off Sardinia the next month, and you stop telling yourself."
+      },
+      {
+        "id": "report",
+        "label": "Report him to the Ephors",
+        "tags": [
+          "expose_secret"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "He is gone before the guards arrive. The Ephors' clerk begins coming to your salon, on the city's silver."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-maid-freedom",
+    "weight": 6,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "Your maid has counted her savings and asks, with a jar in her hands, whether it is enough to buy herself.",
+    "choices": [
+      {
+        "id": "free",
+        "label": "Free her, and take less than the jar",
+        "tags": [
+          "mercy",
+          "gift"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "She stays on for wages and cries at your door once a year on the anniversary. Your patrons find this unbearably charming."
+      },
+      {
+        "id": "keep",
+        "label": "Tell her the price has risen",
+        "tags": [
+          "cruelty",
+          "extort"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "She puts the jar away. She is very good at her work and never looks at you the same way."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-rival-secret",
+    "weight": 5,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "You learn that your chief rival is a runaway slave from Syracuse with a forged manumission. Her patrons include half the council.",
+    "choices": [
+      {
+        "id": "keep",
+        "label": "Keep it, and let her know you have it",
+        "tags": [
+          "scheme",
+          "blackmail"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "She sends a gift monthly and takes no patron you want. The arrangement is never spoken of and never breaks."
+      },
+      {
+        "id": "bury",
+        "label": "Bury it, and tell no one",
+        "tags": [
+          "mercy",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 5
+          },
+          {
+            "type": "change_trait",
+            "traitId": "keeper-of-secrets",
+            "operation": "add"
+          }
+        ],
+        "resultText": "She never learns what you know. You learn that some secrets are a kind of weight you can carry."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-olbia-offer",
+    "weight": 5,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "A wealthy patron proposes to set you up as a landowner in Olbia: groves, a house, respectability, and the end of the salon.",
+    "choices": [
+      {
+        "id": "refuse",
+        "label": "Refuse, and mean it",
+        "tags": [
+          "claim_office",
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "He is hurt, then relieved, then generous. The salon has never been so well attended as the month after."
+      },
+      {
+        "id": "consider",
+        "label": "Say you will think about it, and keep him thinking",
+        "tags": [
+          "scheme",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 25
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Olives are discussed monthly. So is the rent of the house you have not moved to."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-election-night",
+    "weight": 6,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "A candidate for Archon wants to spend the night of the vote at your salon, where the results will reach him first and the wine second.",
+    "choices": [
+      {
+        "id": "host",
+        "label": "Host his night",
+        "tags": [
+          "symposium",
+          "claim_office"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 20
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 1
+          },
+          {
+            "type": "change_party_favor",
+            "party": "dynatoi",
+            "amount": 1
+          }
+        ],
+        "resultText": "He wins. The first thing the new Archon does is thank his hostess in front of forty men."
+      },
+      {
+        "id": "neutral",
+        "label": "Stay neutral; the loser will still need somewhere to drink",
+        "tags": [
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          }
+        ],
+        "resultText": "He wins somewhere else. The loser drinks at yours for a month, and talks."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-perfume-captain",
+    "weight": 6,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "A captain from Alexandria offers Arabian perfume at cost, in exchange for an introduction to the harbor master's brother.",
+    "choices": [
+      {
+        "id": "trade",
+        "label": "Make the introduction",
+        "tags": [
+          "scheme",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 20
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "The perfume sells itself. The introduction leads to a contract you were not told about, and a second jar."
+      },
+      {
+        "id": "refuse",
+        "label": "Buy the perfume outright, no introductions",
+        "tags": [
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "Full price. The captain respects it and tells other captains that this hetaira cannot be bought with perfume."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-sick-guest",
+    "weight": 5,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "A guest collapses at your table. The other guests are already saying the word 'poison', quietly, and looking at the cups.",
+    "choices": [
+      {
+        "id": "physician",
+        "label": "Send for a physician in front of everyone",
+        "tags": [
+          "judge_fairly",
+          "expose_secret"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Bad oysters. The physician says so loudly. The word 'poison' lingers in one house only, the one that said it first."
+      },
+      {
+        "id": "hush",
+        "label": "Move him to a back room and hush it",
+        "tags": [
+          "deception",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "He recovers. No one speaks of it. Everyone thinks of it, at your table, for a season."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-ephor-song",
+    "weight": 5,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "A satirical song about the Ephors is being sung in every tavern. The Ephors have asked who wrote it. You know exactly who: he wrote it at your table.",
+    "choices": [
+      {
+        "id": "protect",
+        "label": "Say you have never heard the song",
+        "tags": [
+          "deception",
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "The poet is grateful in verse. The Ephors are unconvinced in prose."
+      },
+      {
+        "id": "give",
+        "label": "Give them the name",
+        "tags": [
+          "expose_secret"
+        ],
+        "effects": [
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          }
+        ],
+        "resultText": "The poet is fined and stops coming. The song, now that everyone knows who wrote it, is sung twice as much."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-aphrodite-model",
+    "weight": 4,
+    "requires": {
+      "class": "hetaira",
+      "trait": "muse"
+    },
+    "scene": "A sculptor wants you to model for an Aphrodite bound for a sanctuary in Sicily. Your face on a goddess, forever, on an island that will never know your name.",
+    "choices": [
+      {
+        "id": "sit",
+        "label": "Sit for him",
+        "tags": [
+          "boast",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Marble, and your face on it, sailing west. Pilgrims will pray to your cheekbones for a thousand years."
+      },
+      {
+        "id": "decline",
+        "label": "Decline; a goddess should not owe you",
+        "tags": [
+          "mercy",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "He uses another face. It is a fine statue. You go to see it before it sails, and are sure yours would have been better."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-network-center",
+    "weight": 3,
+    "requires": {
+      "class": "hetaira",
+      "minStat": {
+        "intelligence": 12
+      }
+    },
+    "scene": "Three women who hear everything, a fishwife, a bath-attendant, and a priestess's maid, propose that what they hear should come to you first, for a share.",
+    "choices": [
+      {
+        "id": "accept",
+        "label": "Accept, and pay them well",
+        "tags": [
+          "scheme",
+          "patronage"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -20
+          },
+          {
+            "type": "change_trait",
+            "traitId": "whisper-network",
+            "operation": "add"
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "By the second day of anything, you know it. By the third, someone is paying you to know it."
+      },
+      {
+        "id": "decline",
+        "label": "Decline; a network is a leash",
+        "tags": [
+          "solitude",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 5
+          }
+        ],
+        "resultText": "They take the offer to your rival. Her salon is very well informed for a year, and then very well watched."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-ephor-confidence",
+    "weight": 3,
+    "requires": {
+      "class": "hetaira",
+      "minStat": {
+        "prestige": 12
+      }
+    },
+    "scene": "An Ephor has taken to arriving after the other guests leave, and talking. Not about you. About everything.",
+    "choices": [
+      {
+        "id": "listen",
+        "label": "Listen, and keep it",
+        "tags": [
+          "wait",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_trait",
+            "traitId": "confidante",
+            "operation": "add"
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "He talks until dawn, once a week. You hold the city's business in your head and never spend a word of it. That is the price and the prize."
+      },
+      {
+        "id": "use",
+        "label": "Listen, and spend a little of it",
+        "tags": [
+          "scheme",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 35
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "One word, sold once, buys a house. He notices something has moved in the city, and stops arriving late."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-jewel-theft",
+    "weight": 6,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "A jewel is missing after last night's party. Your slave girl is accused by the guests. You saw a patron's hand pocket it.",
+    "choices": [
+      {
+        "id": "name",
+        "label": "Name the patron",
+        "tags": [
+          "expose_secret",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -15
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "He returns it laughing, calling it a joke. He does not return himself. The girl looks at you as if you were something new."
+      },
+      {
+        "id": "silent",
+        "label": "Let the girl take the blame and lose the jewel",
+        "tags": [
+          "cruelty",
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "The patron keeps coming, generously. The girl keeps her eyes down. You keep the account."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-theatre-patron-seat",
+    "weight": 6,
+    "requires": {
+      "class": "hetaira"
+    },
+    "scene": "A patron offers you his family's seat at the theatre for the Dionysia, in the front, where his wife sat last year.",
+    "choices": [
+      {
+        "id": "take",
+        "label": "Take it, and dress for it",
+        "tags": [
+          "boast",
+          "festival"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": -1
+          }
+        ],
+        "resultText": "The whole theatre sees you sit. The play is Euripides, which helps."
+      },
+      {
+        "id": "decline",
+        "label": "Decline; there are seats he can give you that his wife did not own",
+        "tags": [
+          "mercy",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "He is stung, then thoughtful, then sends a better gift. His wife, you hear, sends a smaller one, anonymously."
+      }
+    ]
+  },
+  {
+    "id": "hetaira2-dropped-patron",
+    "weight": 4,
+    "requires": {
+      "class": "hetaira",
+      "minStat": {
+        "prestige": 20
+      }
+    },
+    "scene": "A patron you dropped has started saying, at every table in the upper city, that you are older than you were and dearer than you are worth.",
+    "choices": [
+      {
+        "id": "season",
+        "label": "Answer with a season no one can call cheap",
+        "tags": [
+          "feast",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -35
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Musicians from Syracuse, wine from Chios, and a month that empties the strongbox. The upper city talks about the season instead of your age. For a season."
+      },
+      {
+        "id": "let-it",
+        "label": "Let him talk",
+        "tags": [
+          "wait",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -2
+          }
+        ],
+        "resultText": "He talks. Some listen. Two patrons find younger salons and a third finds he misses yours, later, which does not pay the rent now."
+      }
+    ],
+    "defaultChoiceId": "let-it"
+  },
+  {
+    "id": "hetaira2-harbor-fever",
+    "weight": 4,
+    "requires": {
+      "class": "hetaira",
+      "minStat": {
+        "intelligence": 20
+      }
+    },
+    "scene": "The harbor fever finds your house. You recover, but slowly, and the wit that filled a room comes back a step behind the rest of you.",
+    "choices": [
+      {
+        "id": "physician",
+        "label": "Pay the best physician in the city",
+        "tags": [
+          "gift",
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -25
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": -1
+          }
+        ],
+        "resultText": "Barley water and Egyptian salves. You are yourself again by spring, nearly. The physician's bill is not nearly anything."
+      },
+      {
+        "id": "endure",
+        "label": "Endure it and keep the salon open",
+        "tags": [
+          "labor",
+          "rash_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": -2
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "You host through the fever. Nobody notices the slowness but you, and you notice it every night."
+      }
+    ],
+    "defaultChoiceId": "endure"
+  }
+]

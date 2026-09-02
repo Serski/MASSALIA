@@ -1,0 +1,1811 @@
+[
+  {
+    "id": "shi2-shipworm",
+    "weight": 6,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "Shipworm in the slipway timbers. Every hull that touches them for a month will carry it. The harbor master does not know yet.",
+    "choices": [
+      {
+        "id": "close",
+        "label": "Close the yard and burn the timbers",
+        "tags": [
+          "labor",
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -25
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "A month of no work and a bonfire the whole harbor smells. Captains who understand worm bring you their hulls forever after."
+      },
+      {
+        "id": "quiet",
+        "label": "Keep building and pitch the hulls heavily",
+        "tags": [
+          "deception",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "Nobody notices for a season. Then a hull opens off Rhoda, and everyone counts backward to your slipway."
+      }
+    ]
+  },
+  {
+    "id": "shi2-roman-order",
+    "weight": 5,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "A Roman quaestor, with Greek learned from a slave and silver learned from a treasury, wants twenty transport hulls by spring. Rome has never built at sea.",
+    "choices": [
+      {
+        "id": "build",
+        "label": "Take the order",
+        "tags": [
+          "profit",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 40
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "Twenty hulls and a Roman who watched every plank. He goes home knowing how a Greek yard works. You go home rich."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse; the sea is Greek",
+        "tags": [
+          "traditionalist_act",
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "He orders from Syracuse. Syracuse builds them badly. Rome learns anyway, slower."
+      }
+    ]
+  },
+  {
+    "id": "shi2-carthaginian-plans",
+    "weight": 5,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "A Punic factor wants the lines of your best pentekonter hull, drawn out, for a price that would build two more.",
+    "choices": [
+      {
+        "id": "sell",
+        "label": "Sell the drawings",
+        "tags": [
+          "profit",
+          "deception"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 45
+          },
+          {
+            "type": "change_trait",
+            "traitId": "carthaginian-sympathizer",
+            "operation": "add"
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "Your lines sail under a Punic ram within two years. Every captain who recognizes them knows where they came from."
+      },
+      {
+        "id": "report",
+        "label": "Report him and keep the drawings",
+        "tags": [
+          "expose_secret",
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 2
+          }
+        ],
+        "resultText": "He is expelled. The council commissions a hull from you to say thank you, and pays late, which is also how the council says thank you."
+      }
+    ]
+  },
+  {
+    "id": "shi2-mast-crack",
+    "weight": 7,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "A mainmast for the League's new escort ship has a crack in the heart of the timber. Replacing it means missing the launch date.",
+    "choices": [
+      {
+        "id": "replace",
+        "label": "Replace it and miss the date",
+        "tags": [
+          "labor",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          }
+        ],
+        "resultText": "A month late, a whole mast. The strategos curses and then, in a gale off Olbia, thanks you by name."
+      },
+      {
+        "id": "fish",
+        "label": "Fish it with iron bands and launch on time",
+        "tags": [
+          "rash_act",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "On time. The bands hold. You watch the weather off Olbia for a year."
+      }
+    ]
+  },
+  {
+    "id": "shi2-pytheas-ship",
+    "weight": 5,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "Followers of Pytheas want a ship built for the Ocean: a deeper keel, a higher bow, and no one alive who has built one.",
+    "choices": [
+      {
+        "id": "build",
+        "label": "Build it, and learn as you go",
+        "tags": [
+          "study",
+          "reformist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -20
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_ideology",
+            "amount": 2
+          }
+        ],
+        "resultText": "She is ugly, deep, and dry in a sea that swamps pentekonters. When she comes back from the north, the yard is famous for a ship it can't explain."
+      },
+      {
+        "id": "standard",
+        "label": "Build them a good pentekonter and take their silver",
+        "tags": [
+          "profit",
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 30
+          },
+          {
+            "type": "change_ideology",
+            "amount": -1
+          }
+        ],
+        "resultText": "A fine pentekonter. It goes north and comes back short two men and a lot of confidence. Nobody blames the ship, aloud."
+      }
+    ]
+  },
+  {
+    "id": "shi2-yard-fire",
+    "weight": 5,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "Fire in the pitch store at midnight. Three hulls on the slips and the wind from the sea.",
+    "choices": [
+      {
+        "id": "fight",
+        "label": "Fight it from the front",
+        "tags": [
+          "frontline",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          }
+        ],
+        "resultText": "One hull lost, two saved, one arm burned. Every yard in the harbor sends men, which you did not expect and do not forget."
+      },
+      {
+        "id": "save-tools",
+        "label": "Save the tools and the drawings, let the hulls go",
+        "tags": [
+          "wait",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -25
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          }
+        ],
+        "resultText": "Three hulls gone, every drawing and adze saved. You are building again in a week. The captains who lost hulls take longer to come back."
+      }
+    ]
+  },
+  {
+    "id": "shi2-apprentice-guild",
+    "weight": 6,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "Your apprentices want to form a guild with the other yards' apprentices, with rules about pay and hours. Your master never allowed it.",
+    "choices": [
+      {
+        "id": "allow",
+        "label": "Allow it, and go to the first meeting",
+        "tags": [
+          "reformist_act",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          }
+        ],
+        "resultText": "They ask for fewer hours and a feast day. You give them the feast day. They work the hours anyway, and better."
+      },
+      {
+        "id": "forbid",
+        "label": "Forbid it in your yard",
+        "tags": [
+          "traditionalist_act",
+          "cruelty"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Your yard stays quiet. The other yards' guild recruits your best apprentice by spring."
+      }
+    ]
+  },
+  {
+    "id": "shi2-captains-debt",
+    "weight": 6,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "A captain owes you for a hull and offers, instead of silver, a tenth of every cargo she carries for five years.",
+    "choices": [
+      {
+        "id": "take",
+        "label": "Take the tenth",
+        "tags": [
+          "profit",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "Tin, amber, wine. The tenth pays three times the hull, if she lives. She lives."
+      },
+      {
+        "id": "silver",
+        "label": "Insist on silver, now",
+        "tags": [
+          "extort"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 20
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "He borrows from a Punic factor to pay you. The factor gets the tenth. You get the silver and the story."
+      }
+    ]
+  },
+  {
+    "id": "shi2-ram-design",
+    "weight": 5,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "The strategos wants a bronze ram cast for the League's flagship. The founder is Syracusan and wants your hull cut to his ram, not his ram to your hull.",
+    "choices": [
+      {
+        "id": "argue",
+        "label": "Argue him into casting to the hull",
+        "tags": [
+          "debate",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "He curses in Doric for an hour and casts it your way. It fits. He says so to the strategos, which surprises you both."
+      },
+      {
+        "id": "yield",
+        "label": "Cut the hull to his ram",
+        "tags": [
+          "back_down",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          }
+        ],
+        "resultText": "The hull is cut, the ram fits, the ship is a little slower. The strategos is happy. You know the half-knot you lost."
+      }
+    ]
+  },
+  {
+    "id": "shi2-league-flagship",
+    "weight": 4,
+    "requires": {
+      "class": "shipbuilder",
+      "minStat": {
+        "intelligence": 12
+      }
+    },
+    "scene": "The League commissions a flagship, the first trireme built in Massalia. No yard here has laid one down. The council is looking at yours.",
+    "choices": [
+      {
+        "id": "accept",
+        "label": "Lay the keel",
+        "tags": [
+          "claim_office",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_trait",
+            "traitId": "pentekonter-architect",
+            "operation": "add"
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "Three banks, a hundred and seventy oars, a hull that turns like a fish. She is the League's and everyone knows whose yard she came from."
+      },
+      {
+        "id": "decline",
+        "label": "Decline; a trireme is Athenian work",
+        "tags": [
+          "back_down",
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "A Syracusan master lays her down in another yard. She is good. You watch her turn and count what you did not learn."
+      }
+    ]
+  },
+  {
+    "id": "shi2-gaulish-hides",
+    "weight": 6,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "Sailcloth is short. Gaulish traders offer hides, which their river-boats use for sail. Greek captains will laugh.",
+    "choices": [
+      {
+        "id": "try",
+        "label": "Rig one hull with hide and see",
+        "tags": [
+          "reformist_act",
+          "study"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          }
+        ],
+        "resultText": "It works in a wet gale where linen would tear. Two captains stop laughing and order it for their storm-sails."
+      },
+      {
+        "id": "wait",
+        "label": "Wait for the linen ship from Egypt",
+        "tags": [
+          "traditionalist_act",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          }
+        ],
+        "resultText": "The linen comes, late and dear. Your hulls sail with Egyptian cloth and Greek pride."
+      }
+    ]
+  },
+  {
+    "id": "shi2-wreck-timber",
+    "weight": 6,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "A wreck on the shoals is full of good Italian oak, and the salvage rights are unclear. Your men could have it out by dawn.",
+    "choices": [
+      {
+        "id": "take",
+        "label": "Take it before dawn",
+        "tags": [
+          "profit",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 30
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "Excellent oak, no questions until the questions come, from a Rhodian with a document."
+      },
+      {
+        "id": "claim",
+        "label": "Register a salvage claim with the harbor master first",
+        "tags": [
+          "judge_fairly",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "The claim is granted, half to the harbor. Half a wreck of Italian oak is still a keel and a half."
+      }
+    ]
+  },
+  {
+    "id": "shi2-pitch-shortage",
+    "weight": 7,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "Pitch from the Ligurian pines has doubled in price after a forest fire. Your hulls need it; so does everyone's.",
+    "choices": [
+      {
+        "id": "gaulish",
+        "label": "Send a man upriver to the Helvii pine-cutters",
+        "tags": [
+          "reformist_act",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          }
+        ],
+        "resultText": "Helvii pitch, cheaper and blacker. Your hulls are the only ones in the harbor that don't smell of shortage."
+      },
+      {
+        "id": "hoard",
+        "label": "Buy every barrel in the harbor before the price is known",
+        "tags": [
+          "profit",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 30
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "You have pitch. Other yards have your prices. They pay them and remember them."
+      }
+    ]
+  },
+  {
+    "id": "shi2-dockside-accident",
+    "weight": 5,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "A hull slips its cradle and a Ligurian laborer's leg is crushed. He is not a citizen and the law owes him nothing.",
+    "choices": [
+      {
+        "id": "pay",
+        "label": "Pay for his physician and his year",
+        "tags": [
+          "mercy",
+          "gift"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -20
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_ideology",
+            "amount": 1
+          }
+        ],
+        "resultText": "He walks with a stick and works the yard as your tally-man. The Ligurian hands would carry a hull for you now."
+      },
+      {
+        "id": "law",
+        "label": "Give him what the law requires: nothing",
+        "tags": [
+          "cruelty",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "His cousins leave your yard by the month's end. The next hull is late."
+      }
+    ]
+  },
+  {
+    "id": "shi2-theoria-vessel",
+    "weight": 5,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "The sacred embassy to Delphi wants a ship built with no iron nails, in the old way, blessed at every stage. It will take twice as long.",
+    "choices": [
+      {
+        "id": "build",
+        "label": "Build it the old way",
+        "tags": [
+          "offering",
+          "traditionalist_act",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "Wooden pegs, priests at every plank, a hull that creaks like a hymn. She carries the god's embassy and comes back with his blessing on the yard."
+      },
+      {
+        "id": "nails",
+        "label": "Use iron below the waterline and say nothing",
+        "tags": [
+          "deception",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 20
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": -1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "She sails. Nobody looks below the waterline. You do, every time she docks."
+      }
+    ]
+  },
+  {
+    "id": "shi2-pirate-commission",
+    "weight": 4,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "A Ligurian captain whose trade is not, strictly, trade wants a fast hull with no name on it. He pays in advance, in Massaliote coin that used to be someone's.",
+    "choices": [
+      {
+        "id": "build",
+        "label": "Build it",
+        "tags": [
+          "profit",
+          "deception"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 45
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "A fast, nameless hull. Within a year it takes a Massaliote wine ship. The wine ship's captain saw the lines."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse and tell the harbor master",
+        "tags": [
+          "expose_secret",
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          }
+        ],
+        "resultText": "The harbor master's patrol finds him at anchor. Your yard is watched, for a season, by men who owe you a hull."
+      }
+    ]
+  },
+  {
+    "id": "shi2-guild-seal",
+    "weight": 3,
+    "requires": {
+      "class": "shipbuilder",
+      "minStat": {
+        "prestige": 12
+      }
+    },
+    "scene": "The old master of the harbor's guild is dead. The guild will name the yard whose hulls do not leak as its head, and every yard has sent its best hull to the mole to be judged.",
+    "choices": [
+      {
+        "id": "compete",
+        "label": "Send your best and stand beside it",
+        "tags": [
+          "boast",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_trait",
+            "traitId": "master-wright",
+            "operation": "add"
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          }
+        ],
+        "resultText": "Your hull is the one they walk on first and get off last. The guild's seal is yours, and hulls from this yard do not leak."
+      },
+      {
+        "id": "abstain",
+        "label": "Stay out of guild politics",
+        "tags": [
+          "solitude",
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 5
+          }
+        ],
+        "resultText": "Another yard takes the seal. Its hulls leak, a little, and everyone knows whose don't."
+      }
+    ]
+  },
+  {
+    "id": "shi2-storm-launch",
+    "weight": 6,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "Launch day, and the sky to the west is the wrong color. The priestess is here, the patron is here, the wine is open.",
+    "choices": [
+      {
+        "id": "launch",
+        "label": "Launch her now, before the squall",
+        "tags": [
+          "rash_act",
+          "festival"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          }
+        ],
+        "resultText": "She hits the water as the rain does. The patron is soaked and delighted. The priestess's blessing is shouted."
+      },
+      {
+        "id": "delay",
+        "label": "Delay to tomorrow and feast anyway",
+        "tags": [
+          "wait",
+          "feast"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "A dry launch at dawn. The patron sulks and then cheers. Two other yards launched in the storm and one hull came back."
+      }
+    ]
+  },
+  {
+    "id": "shi2-emporion-yard",
+    "weight": 5,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "Emporion wants a shipyard of its own and offers you land, slaves, and a share to found it. It is a month's sail from everything you know.",
+    "choices": [
+      {
+        "id": "go",
+        "label": "Found the Emporion yard with a partner",
+        "tags": [
+          "profit",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -20
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "A yard in Iberia with your name on it and a partner who sends honest accounts, mostly. Emporion's hulls sail on Massaliote lines."
+      },
+      {
+        "id": "stay",
+        "label": "Stay; a yard is where its master stands",
+        "tags": [
+          "wait",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "A Rhodian founds it. Emporion's hulls sail on Rhodian lines, which is a shame, professionally."
+      }
+    ]
+  },
+  {
+    "id": "shi2-apprentice-innovation",
+    "weight": 6,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "An apprentice has cut a scarf-joint you have never seen, and it is better than yours. He is fifteen and does not know it.",
+    "choices": [
+      {
+        "id": "adopt",
+        "label": "Adopt it and credit him in the yard",
+        "tags": [
+          "study",
+          "gift"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          }
+        ],
+        "resultText": "Every keel in your yard carries his joint. He knows it now. So do the other yards, who try to hire him."
+      },
+      {
+        "id": "claim",
+        "label": "Adopt it quietly as your own",
+        "tags": [
+          "deception",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Every keel carries the joint. He works out whose it was, at twenty, and leaves."
+      }
+    ]
+  },
+  {
+    "id": "shi2-chain-towers",
+    "weight": 6,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "The harbor chain's towers need timber cribs sunk in the mud. The city asks the yards to bid; the mud asks for more.",
+    "choices": [
+      {
+        "id": "bid-fair",
+        "label": "Bid fair and build it right",
+        "tags": [
+          "judge_fairly",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          }
+        ],
+        "resultText": "Cribs that hold. The chain rises. Punic captains sight the towers and reconsider."
+      },
+      {
+        "id": "bid-low",
+        "label": "Bid low and skimp the cribs",
+        "tags": [
+          "deception",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 25
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "You win the bid. The cribs shift in the winter storms. The chain sags. The city inquires."
+      }
+    ]
+  },
+  {
+    "id": "shi2-captain-mutiny",
+    "weight": 5,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "A captain refuses to take your new hull out, saying she is cursed: a man died in her building. The crew agrees. The patron does not.",
+    "choices": [
+      {
+        "id": "rite",
+        "label": "Pay a priestess to purify her",
+        "tags": [
+          "offering"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "Salt, hymn, a bird. The crew boards. The hull is lucky for twenty years, which everyone attributes to the bird."
+      },
+      {
+        "id": "sail",
+        "label": "Take her out yourself with a scratch crew",
+        "tags": [
+          "frontline",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "You sail her to Olbia and back in a gale. The crew boards the next day, shamed. The curse, you tell them, was seasick."
+      }
+    ]
+  },
+  {
+    "id": "shi2-timber-tax",
+    "weight": 6,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "The council levies a tax on imported timber to protect the chora's oaks. Your Italian oak is at the mole, untaxed until noon.",
+    "choices": [
+      {
+        "id": "unload",
+        "label": "Unload before noon",
+        "tags": [
+          "scheme",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 20
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Every plank ashore by the bell. The tax collector arrives at noon and admires your industry."
+      },
+      {
+        "id": "declare",
+        "label": "Declare it and pay",
+        "tags": [
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          }
+        ],
+        "resultText": "The collector, astonished, records it. The council, hearing of the one yard that paid, sends you its next contract."
+      }
+    ]
+  },
+  {
+    "id": "shi2-river-boats",
+    "weight": 5,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "The Helvii want river barges, flat and broad, built at Massalia and poled upriver. No Greek yard builds flat.",
+    "choices": [
+      {
+        "id": "learn",
+        "label": "Learn flat from a Gaulish wright and build them",
+        "tags": [
+          "reformist_act",
+          "study"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 3
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "Twelve barges and a Gaulish foreman who now runs half your yard. The river trade doubles and comes to your quay first."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse; Massalia builds for the sea",
+        "tags": [
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 1
+          }
+        ],
+        "resultText": "They build their own, upriver, badly. The river trade comes down slower, on worse barges, to someone else's quay."
+      }
+    ]
+  },
+  {
+    "id": "shi2-hull-name",
+    "weight": 7,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "A patron wants his new hull named for his mistress. His wife is paying for the sails.",
+    "choices": [
+      {
+        "id": "mistress",
+        "label": "Name it as he asks",
+        "tags": [
+          "scheme",
+          "wine"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "The hull is launched under her name. The sails arrive late, and very small."
+      },
+      {
+        "id": "goddess",
+        "label": "Suggest Artemis instead, diplomatically",
+        "tags": [
+          "judge_fairly",
+          "offering"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          }
+        ],
+        "resultText": "Artemis it is. The sails arrive on time and generous. The mistress gets a smaller boat, later, from another yard."
+      }
+    ]
+  },
+  {
+    "id": "shi2-old-shipwright",
+    "weight": 5,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "Your master, who taught you the adze, is old and has no work. He comes to the yard each morning and stands where he used to stand.",
+    "choices": [
+      {
+        "id": "hire",
+        "label": "Hire him to teach the apprentices",
+        "tags": [
+          "gift",
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "He teaches them the old joints and the old curses. The apprentices call him grandfather. You did, once."
+      },
+      {
+        "id": "pension",
+        "label": "Send him a pension and ask him not to come",
+        "tags": [
+          "refuse_aid"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -8
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "He stays home. The yard is quieter. You find yourself standing where he stood, some mornings."
+      }
+    ]
+  },
+  {
+    "id": "shi2-navy-inspector-bribe",
+    "weight": 5,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "The naval inspector, who knows your hulls are sound, offers to fail a rival yard's for a consideration.",
+    "choices": [
+      {
+        "id": "pay",
+        "label": "Pay him",
+        "tags": [
+          "scheme",
+          "extort"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 20
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "The rival's hulls fail. Their contracts come to you. The inspector comes to you too, monthly, for the rest of his career."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse, and let your hulls speak",
+        "tags": [
+          "public_oath",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "The rival's hulls pass. Yours pass better. The inspector, having failed to sell you, sells you to the rival, who does not buy either."
+      }
+    ]
+  },
+  {
+    "id": "shi2-women-caulkers",
+    "weight": 5,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "Caulkers are short. The oarsmen's wives from the harbor quarter know the work from their fathers and want the wages.",
+    "choices": [
+      {
+        "id": "hire",
+        "label": "Hire them",
+        "tags": [
+          "reformist_act",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 3
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "Tight seams and a yard that sings. The other masters laugh until their hulls leak and yours do not."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse; a yard is men's work",
+        "tags": [
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 1
+          }
+        ],
+        "resultText": "Hulls wait for caulkers. The wives caulk for a Rhodian yard, which does not laugh."
+      }
+    ]
+  },
+  {
+    "id": "shi2-drowned-apprentice",
+    "weight": 5,
+    "requires": {
+      "class": "shipbuilder"
+    },
+    "scene": "An apprentice drowns at a launch, tangled in a line. His mother comes to the yard. She does not shout. That is worse.",
+    "choices": [
+      {
+        "id": "stone",
+        "label": "Bury him well and carve his name on the slipway",
+        "tags": [
+          "offering",
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -15
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "His name on the stone the hulls slide past. Every apprentice reads it. Every line is coiled properly after."
+      },
+      {
+        "id": "purse",
+        "label": "Send a purse and change the launching rules",
+        "tags": [
+          "gift",
+          "study"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The rules are better. The purse is fair. His mother does not come again, and you do not know if that is a mercy."
+      }
+    ]
+  },
+  {
+    "id": "shi2-convoy-wright",
+    "weight": 3,
+    "requires": {
+      "class": "shipbuilder",
+      "minStat": {
+        "militia": 8
+      }
+    },
+    "scene": "The strategos wants a shipwright aboard the escort convoy west, to mend at sea what breaks at sea. Winter sailing, Punic hulls, and no one to blame but the wright.",
+    "choices": [
+      {
+        "id": "go",
+        "label": "Go aboard",
+        "tags": [
+          "frontline",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_trait",
+            "traitId": "storm-tested",
+            "operation": "add"
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -15
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 20
+          }
+        ],
+        "resultText": "Three gales, one boarding, a sprung plank fixed at night with the sea coming in. You come home knowing what a hull does when it is frightened."
+      },
+      {
+        "id": "send",
+        "label": "Send your best journeyman",
+        "tags": [
+          "wait",
+          "patronage"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          }
+        ],
+        "resultText": "He comes home with the knowledge and, next spring, his own yard."
+      }
+    ]
+  },
+  {
+    "id": "shi2-guild-mole-levy",
+    "weight": 4,
+    "requires": {
+      "class": "shipbuilder",
+      "minStat": {
+        "prestige": 20
+      }
+    },
+    "scene": "The harbor guild levies the yards for the new mole, and the levy is by reputation. Yours is the highest in the harbor.",
+    "choices": [
+      {
+        "id": "pay",
+        "label": "Pay the levy",
+        "tags": [
+          "back_down",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -35
+          }
+        ],
+        "resultText": "Stone goes into the water with your silver in it. The mole is excellent. Your slipway is idle a month for want of timber money."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse and let the guild sulk",
+        "tags": [
+          "boast",
+          "refuse_aid"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The guild builds the mole without you and berths its members first. Your hulls launch into a queue."
+      }
+    ],
+    "defaultChoiceId": "refuse"
+  },
+  {
+    "id": "shi2-storm-surge",
+    "weight": 4,
+    "requires": {
+      "class": "shipbuilder",
+      "minStat": {
+        "intelligence": 20
+      }
+    },
+    "scene": "A winter surge floods the yard and ruins three years of seasoned oak. Green timber is all the market has.",
+    "choices": [
+      {
+        "id": "buy",
+        "label": "Buy seasoned oak from Italy at any price",
+        "tags": [
+          "profit",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -35
+          }
+        ],
+        "resultText": "Italian oak at Italian prices, and a season's profit gone into the mud. The hulls are sound."
+      },
+      {
+        "id": "green",
+        "label": "Build with green timber and say so",
+        "tags": [
+          "public_oath",
+          "rash_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -2
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": -1
+          }
+        ],
+        "resultText": "Honest hulls, honestly warned, and captains who remember which yard built green the year the surge came. You learn nothing you wanted to."
+      }
+    ],
+    "defaultChoiceId": "green"
+  }
+]

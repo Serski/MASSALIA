@@ -1,0 +1,1789 @@
+[
+  {
+    "id": "phi2-cynic",
+    "weight": 6,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "A Cynic has taken up residence in a jar by the harbor and is telling your students that your school is a shop.",
+    "choices": [
+      {
+        "id": "debate",
+        "label": "Debate him in front of the jar",
+        "tags": [
+          "debate",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "He wins, in the sense that he has nothing to lose. You win, in the sense that your students come back the next morning."
+      },
+      {
+        "id": "feed",
+        "label": "Bring him bread and sit with him",
+        "tags": [
+          "gift",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -3
+          }
+        ],
+        "resultText": "He eats, insults you thoughtfully, and admits the jar is cold. Your students see you sit in the dust. It is better teaching than the lecture."
+      }
+    ]
+  },
+  {
+    "id": "phi2-alexandria-letter",
+    "weight": 5,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "A letter from the Museum at Alexandria: they have heard of your work and would house you for a year among the scrolls. The salary is royal. So is the leash.",
+    "choices": [
+      {
+        "id": "go",
+        "label": "Go for the year",
+        "tags": [
+          "study",
+          "pilgrimage"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 30
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The Library, Euclid's students, and a king who reads what you write. You come home with a chest of copies and a habit of looking over your shoulder."
+      },
+      {
+        "id": "stay",
+        "label": "Stay; Massalia is where your questions are",
+        "tags": [
+          "solitude",
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "The letter is framed by your students, who tell it at every symposium. Alexandria writes to someone else."
+      }
+    ]
+  },
+  {
+    "id": "phi2-student-fee-arrears",
+    "weight": 7,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "Three students owe a season's fees. One is a Kleitos, one a fisherman's son, one a Gaulish chief's boy learning Greek.",
+    "choices": [
+      {
+        "id": "forgive-poor",
+        "label": "Forgive the fisherman's son, bill the others",
+        "tags": [
+          "judge_fairly",
+          "gift"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "The Kleitos pays, the chief pays in a horse, the fisherman's son pays in fish for the rest of your life."
+      },
+      {
+        "id": "all",
+        "label": "Bill them all, equally",
+        "tags": [
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 25
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "All three pay. The fisherman's son does not come back. He was the one asking the good questions."
+      }
+    ]
+  },
+  {
+    "id": "phi2-eclipse",
+    "weight": 5,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "You have calculated an eclipse for the day after tomorrow, using a Babylonian table a trader sold you. Announce it and be either a prophet or a fool.",
+    "choices": [
+      {
+        "id": "announce",
+        "label": "Announce it in the agora",
+        "tags": [
+          "boast",
+          "impiety"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": -1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "The sun goes dark on schedule. The priests are furious. The fishmongers now ask you about the weather."
+      },
+      {
+        "id": "private",
+        "label": "Tell your students only",
+        "tags": [
+          "study",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          }
+        ],
+        "resultText": "The sun goes dark. Your students are speechless. One of them tells the priests, who are furious anyway, more quietly."
+      }
+    ]
+  },
+  {
+    "id": "phi2-druid-debate",
+    "weight": 5,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "A Gaulish wise-man, some say druid, has heard of you and proposes a debate at the western gate on whether the soul dies. He speaks Greek. Badly, and well.",
+    "choices": [
+      {
+        "id": "debate",
+        "label": "Meet him at the gate",
+        "tags": [
+          "debate",
+          "reformist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 4
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "He believes the soul passes into another body. You believe you do not know. The crowd prefers his answer and your argument."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse; philosophy is Greek",
+        "tags": [
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -3
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 2
+          }
+        ],
+        "resultText": "He debates a Dynatoi sophist instead. The sophist loses. You are told this by everyone."
+      }
+    ]
+  },
+  {
+    "id": "phi2-corrupting-youth",
+    "weight": 5,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "A magistrate whose son quoted you at dinner has laid a charge: corrupting the young. It has been done before, to better men.",
+    "choices": [
+      {
+        "id": "defend",
+        "label": "Defend yourself in the assembly, as Socrates did not",
+        "tags": [
+          "debate",
+          "frontline"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "You are acquitted by twelve votes and quoted by twelve hundred. The son now quotes you more."
+      },
+      {
+        "id": "apologize",
+        "label": "Apologize and pay a fine",
+        "tags": [
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -20
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "The charge is withdrawn. The son stops quoting you. Your students notice which of Socrates' choices you did not make."
+      }
+    ]
+  },
+  {
+    "id": "phi2-female-student",
+    "weight": 5,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "A citizen's daughter has been listening at the door of the stoa for a month. She asks to sit inside. Her father does not know.",
+    "choices": [
+      {
+        "id": "admit",
+        "label": "Admit her",
+        "tags": [
+          "reformist_act",
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "She is better than the boys. Her father finds out, rages, and then quietly asks what she has learned."
+      },
+      {
+        "id": "door",
+        "label": "Let her keep the door",
+        "tags": [
+          "wait",
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "She listens at the door for a year, and then marries. Her son, later, is your best student, and asks who taught his mother."
+      }
+    ]
+  },
+  {
+    "id": "phi2-plagiarist",
+    "weight": 6,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "A sophist in Syracuse is teaching your treatise as his own, with your best argument and his worse conclusion.",
+    "choices": [
+      {
+        "id": "expose",
+        "label": "Write to Syracuse and expose him",
+        "tags": [
+          "expose_secret",
+          "debate"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          }
+        ],
+        "resultText": "Your letter is read at his school. He leaves Syracuse. The treatise, now famous for being stolen, sells."
+      },
+      {
+        "id": "ignore",
+        "label": "Let ideas travel; they were never yours",
+        "tags": [
+          "mercy",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 5
+          }
+        ],
+        "resultText": "He teaches it for years. Some of his students find the original. The original is better, and they say so."
+      }
+    ]
+  },
+  {
+    "id": "phi2-gaulish-hostages-tutor",
+    "weight": 5,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "The Saluvian hostage-boys in the council house need a philosopher, the Archons say, to learn what a polis is. The fee is civic, which means small.",
+    "choices": [
+      {
+        "id": "teach",
+        "label": "Teach them",
+        "tags": [
+          "study",
+          "reformist_act",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          }
+        ],
+        "resultText": "They learn what a polis is and ask, reasonably, why theirs is not one. You have no good answer. That is the lesson."
+      },
+      {
+        "id": "decline",
+        "label": "Decline; hostages do not need Plato",
+        "tags": [
+          "refuse_aid"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 1
+          }
+        ],
+        "resultText": "A sophist teaches them rhetoric instead. They go home able to argue, and do."
+      }
+    ]
+  },
+  {
+    "id": "phi2-pyrrhonist",
+    "weight": 6,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "A follower of Pyrrho arrives, suspends judgment on everything, and is winning your students by refusing to argue with them.",
+    "choices": [
+      {
+        "id": "engage",
+        "label": "Engage him on his own ground",
+        "tags": [
+          "debate",
+          "study"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "You cannot refute a man who asserts nothing. You learn a great deal trying, and so, watching, do your students."
+      },
+      {
+        "id": "mock",
+        "label": "Mock him at the symposium",
+        "tags": [
+          "boast",
+          "symposium"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": -1
+          }
+        ],
+        "resultText": "The mockery is good and the wine is better. He suspends judgment on both, and keeps your students another month."
+      }
+    ]
+  },
+  {
+    "id": "phi2-archons-adviser",
+    "weight": 5,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "The Archon offers you a place at his shoulder as adviser: real influence, and every conclusion read by a man who needs it to be useful.",
+    "choices": [
+      {
+        "id": "accept",
+        "label": "Accept the place",
+        "tags": [
+          "claim_office",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": -1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Your advice shapes a treaty and a tariff. Your treatise waits. Your students learn that philosophy has an office."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse; a philosopher advises the city from the stoa",
+        "tags": [
+          "public_oath",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "He takes a sophist instead. The tariff is worse. You say so from the stoa, which is exactly where you said you would."
+      }
+    ]
+  },
+  {
+    "id": "phi2-theophrastus-scroll",
+    "weight": 5,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "A student brings you a scroll of Theophrastus on plants, with the passage on poisons marked, heavily, by a previous owner.",
+    "choices": [
+      {
+        "id": "study",
+        "label": "Study the botany, skip the mark",
+        "tags": [
+          "study"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          }
+        ],
+        "resultText": "Plants of the East, and their virtues. You copy the useful parts. The marked passage you leave unmarked in your copy."
+      },
+      {
+        "id": "burn",
+        "label": "Burn the marked page",
+        "tags": [
+          "offering",
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_ideology",
+            "amount": -1
+          }
+        ],
+        "resultText": "One page of Theophrastus in the brazier. The student is scandalized. The scroll is less complete and, you decide, more useful."
+      }
+    ]
+  },
+  {
+    "id": "phi2-syracuse-court",
+    "weight": 5,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "The tyrant of Syracuse invites philosophers to his court. Plato went, twice, and it went badly twice. The stipend is large.",
+    "choices": [
+      {
+        "id": "go",
+        "label": "Go, and keep your mouth judicious",
+        "tags": [
+          "profit",
+          "pilgrimage"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 35
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "Marble, flattery, a ruler who wants to be told he is wise. You are, judiciously. You come home with the stipend and a taste in your mouth."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse, and cite Plato",
+        "tags": [
+          "public_oath",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "Your refusal is quoted in Syracuse, where a sophist takes the stipend and is very well fed."
+      }
+    ]
+  },
+  {
+    "id": "phi2-geometry-mosaic",
+    "weight": 6,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "A rich patron wants a floor mosaic of the five regular solids for his andron, and wants you to explain them to his guests at the unveiling.",
+    "choices": [
+      {
+        "id": "explain",
+        "label": "Explain them, and take the fee",
+        "tags": [
+          "study",
+          "symposium"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 20
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "Twenty drunk men learn the dodecahedron. Two of them remember it. One of them sends his son to your school."
+      },
+      {
+        "id": "decline",
+        "label": "Decline; geometry is not a dinner act",
+        "tags": [
+          "solitude",
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "A sophist explains them, wrong. The mosaic is beautiful. You go to look at it when the patron is out."
+      }
+    ]
+  },
+  {
+    "id": "phi2-lyceum-letter",
+    "weight": 5,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "A letter from Strato at the Lyceum asks for your observations on the tides at the Ocean's edge, for a treatise on the moon. Pytheas's numbers are in your chest.",
+    "choices": [
+      {
+        "id": "send",
+        "label": "Copy them and send them",
+        "tags": [
+          "study",
+          "gift"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          }
+        ],
+        "resultText": "Your name in an Athenian treatise, in a footnote, forever. Your students find the footnote and behave as if it were a statue."
+      },
+      {
+        "id": "keep",
+        "label": "Keep them for your own work",
+        "tags": [
+          "solitude",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "The treatise appears without your numbers, wrong about the tides. You are right, in a drawer."
+      }
+    ]
+  },
+  {
+    "id": "phi2-slave-student",
+    "weight": 5,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "A household slave, sent to fetch you, has been standing at the stoa's edge for a month, listening. He reads. He asks, once, quietly, if he may sit.",
+    "choices": [
+      {
+        "id": "sit",
+        "label": "Let him sit",
+        "tags": [
+          "mercy",
+          "reformist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": -1
+          }
+        ],
+        "resultText": "He sits. Two citizens leave. The rest stay, and the slave asks a question about justice that none of them can answer."
+      },
+      {
+        "id": "no",
+        "label": "Tell him the stoa is for citizens",
+        "tags": [
+          "traditionalist_act",
+          "cruelty"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "He goes. He keeps standing at the edge. You keep noticing."
+      }
+    ]
+  },
+  {
+    "id": "phi2-book-sale",
+    "weight": 6,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "Your library, forty scrolls, would fetch a fortune from a Rhodian collector. You have read them all. Your students have read none.",
+    "choices": [
+      {
+        "id": "sell",
+        "label": "Sell them",
+        "tags": [
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 40
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": -1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "Forty scrolls sail to Rhodes. You have the silver and the memory. Your students have your memory."
+      },
+      {
+        "id": "lend",
+        "label": "Open them to your students",
+        "tags": [
+          "gift",
+          "study"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "Scrolls come back stained with oil and argument. One does not come back at all, which is what libraries are for."
+      }
+    ]
+  },
+  {
+    "id": "phi2-public-clock",
+    "weight": 5,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "You have designed a water-clock for the agora that keeps the hours through the night. The city will fund it if you present it in person, to men who will ask about the cost.",
+    "choices": [
+      {
+        "id": "present",
+        "label": "Present it",
+        "tags": [
+          "boast",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The clock runs. Merchants argue with it. It is called your clock even after it is replaced."
+      },
+      {
+        "id": "plans",
+        "label": "Send the plans and let an engineer present",
+        "tags": [
+          "solitude",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          }
+        ],
+        "resultText": "The clock runs. It is called the engineer's clock. You are paid for the plans, which you wanted less than you thought."
+      }
+    ]
+  },
+  {
+    "id": "phi2-treatise-copying",
+    "weight": 6,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "Your treatise is ready. Copying it for the wider Greek world means scribes and papyrus and a season's silver.",
+    "choices": [
+      {
+        "id": "copy",
+        "label": "Pay for ten copies",
+        "tags": [
+          "patronage",
+          "study"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -25
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "Ten copies, to Athens, Syracuse, Rhodes, Alexandria. Two are argued with in writing. That is fame."
+      },
+      {
+        "id": "one",
+        "label": "One copy, for the stoa",
+        "tags": [
+          "abstain",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "One copy, read by your students, argued with in person. That is teaching."
+      }
+    ]
+  },
+  {
+    "id": "phi2-sophist-brief",
+    "weight": 4,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "A shipping House will pay very well for a speech proving that a contract they broke was never binding. You could prove it. You could prove the opposite by noon.",
+    "choices": [
+      {
+        "id": "argue",
+        "label": "Take the fee and win the case",
+        "tags": [
+          "profit",
+          "deception",
+          "debate"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 40
+          },
+          {
+            "type": "change_trait",
+            "traitId": "sophist",
+            "operation": "add"
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "You win. The contract was never binding, now. Your students learn what an argument can do, and some of them are frightened."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse; truth is not a brief",
+        "tags": [
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "They hire a Syracusan who wins it worse. You are poorer and your students are not frightened."
+      }
+    ]
+  },
+  {
+    "id": "phi2-magistrate-question",
+    "weight": 3,
+    "requires": {
+      "class": "philosopher",
+      "minStat": {
+        "intelligence": 15
+      }
+    },
+    "scene": "A magistrate sits in your stoa, in state, and asks you to define justice for the benefit of the crowd. He expects a compliment.",
+    "choices": [
+      {
+        "id": "question",
+        "label": "Question him until the crowd sees him squirm",
+        "tags": [
+          "debate",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_trait",
+            "traitId": "socratic",
+            "operation": "add"
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": -1
+          }
+        ],
+        "resultText": "He leaves without his definition. The crowd has learned what a definition is. He has learned what a philosopher is, and does not forgive it."
+      },
+      {
+        "id": "flatter",
+        "label": "Give him a definition he can quote",
+        "tags": [
+          "deception",
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": -1
+          }
+        ],
+        "resultText": "He quotes it for a year. It is wrong. You are the only one who minds."
+      }
+    ]
+  },
+  {
+    "id": "phi2-found-school",
+    "weight": 3,
+    "requires": {
+      "class": "philosopher",
+      "minStat": {
+        "prestige": 12
+      }
+    },
+    "scene": "The old wool-warehouse by the stoa is for sale. With a roof and a name it would be a school, yours, with students who pay and a legacy that compounds.",
+    "choices": [
+      {
+        "id": "found",
+        "label": "Buy it and found the school",
+        "tags": [
+          "claim_office",
+          "patronage"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -45
+          },
+          {
+            "type": "change_trait",
+            "traitId": "school-founder",
+            "operation": "add"
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "A roof, a name over the door, and thirty students by autumn. The name over the door is yours, and it outlasts the roof."
+      },
+      {
+        "id": "stoa",
+        "label": "The stoa was good enough for Zeno",
+        "tags": [
+          "solitude",
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_ideology",
+            "amount": -1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          }
+        ],
+        "resultText": "The stoa. The rain. Zeno. Your students bring cloaks."
+      }
+    ]
+  },
+  {
+    "id": "phi2-roman-inquirer",
+    "weight": 5,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "A Roman envoy, a plain man with Greek learned from a slave, asks you what philosophy is for. He seems to want a practical answer.",
+    "choices": [
+      {
+        "id": "teach",
+        "label": "Give him an afternoon",
+        "tags": [
+          "study",
+          "gift"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "He listens to the Stoics longest. He asks about duty and cost. You suspect Rome will take what it needs from Greece and leave the rest."
+      },
+      {
+        "id": "dismiss",
+        "label": "Tell him it is not for anything",
+        "tags": [
+          "boast",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "He nods, writes something down, and leaves. You wonder for years what he wrote."
+      }
+    ]
+  },
+  {
+    "id": "phi2-timaeus-questions",
+    "weight": 5,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "Timaeus the historian, in exile from Sicily, writes asking for the true story of Protis and Gyptis, which every Massaliote knows and no two tell the same.",
+    "choices": [
+      {
+        "id": "research",
+        "label": "Research it properly and send what you find",
+        "tags": [
+          "study",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          }
+        ],
+        "resultText": "Three versions, one stone, and a Ligurian song. He uses all of it. Massalia is in his history the way you wrote it."
+      },
+      {
+        "id": "myth",
+        "label": "Send him the version the city likes",
+        "tags": [
+          "deception",
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "He uses it. It is beautiful and not quite true. The city is very pleased with its history."
+      }
+    ]
+  },
+  {
+    "id": "phi2-student-hermits",
+    "weight": 4,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "Two of your students, having read the Stoics too young, announce they will leave the city to live as sages on a rock in the gulf, eating shellfish.",
+    "choices": [
+      {
+        "id": "go-with",
+        "label": "Go with them for a week",
+        "tags": [
+          "solitude",
+          "study",
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 5
+          }
+        ],
+        "resultText": "A week of shellfish and stars. They come home cured of rocks and full of questions. So, oddly, are you."
+      },
+      {
+        "id": "forbid",
+        "label": "Forbid it and write to their fathers",
+        "tags": [
+          "traditionalist_act",
+          "refuse_aid"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "They stay. They resent it. One of them, at forty, goes to a rock anyway, and writes to thank you for the delay."
+      }
+    ]
+  },
+  {
+    "id": "phi2-lecture-fee-dispute",
+    "weight": 6,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "A patron who promised a fee for a lecture on the gods now says he expected a lecture on the gods, not on whether there are any.",
+    "choices": [
+      {
+        "id": "sue",
+        "label": "Take him before the magistrates",
+        "tags": [
+          "judge_fairly",
+          "debate"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "The magistrates listen to both the lecture and the complaint. They pay you and fine you. Net, you are ahead, and famous."
+      },
+      {
+        "id": "forgive",
+        "label": "Forgive the fee and keep the argument",
+        "tags": [
+          "mercy",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "He tells everyone he cheated a philosopher. Everyone knows what a philosopher he cheated said. You lose a fee and win the season."
+      }
+    ]
+  },
+  {
+    "id": "phi2-astronomer-visitor",
+    "weight": 5,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "A young astronomer from Samos, passing through, argues over wine that the earth goes round the sun. He is very drunk and, you are nearly sure, right.",
+    "choices": [
+      {
+        "id": "listen",
+        "label": "Sit up all night and check his numbers",
+        "tags": [
+          "study",
+          "wine"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 3
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "By dawn you believe him and cannot prove it. Neither can he. You write it down anyway, in case."
+      },
+      {
+        "id": "dismiss",
+        "label": "Send him to bed",
+        "tags": [
+          "abstain",
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          },
+          {
+            "type": "change_ideology",
+            "amount": -1
+          }
+        ],
+        "resultText": "He sails in the morning. Years later a scroll from Samos makes you put down your cup."
+      }
+    ]
+  },
+  {
+    "id": "phi2-tyrant-in-exile",
+    "weight": 5,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "A deposed Sicilian tyrant, living quietly in the upper city, asks you to teach his son philosophy. The fee is enormous and the neighbors are watching.",
+    "choices": [
+      {
+        "id": "take",
+        "label": "Take the son as a student",
+        "tags": [
+          "profit",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 30
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The boy is bright and frightened. Syracuse's factor notes who teaches him. Your neighbors note the silver."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse; you teach citizens",
+        "tags": [
+          "traditionalist_act",
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "The tyrant hires a sophist. Syracuse's factor sends you a jar of oil, unexplained."
+      }
+    ]
+  },
+  {
+    "id": "phi2-students-play",
+    "weight": 6,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "Your students have written a comedy for the Dionysia in which a philosopher, recognizably you, sells wisdom by the jar. They want your blessing.",
+    "choices": [
+      {
+        "id": "bless",
+        "label": "Bless it and sit in the front row",
+        "tags": [
+          "festival",
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "The theatre roars. You laugh at the jar. Students who see you laugh at yourself learn something no lecture teaches."
+      },
+      {
+        "id": "forbid",
+        "label": "Forbid it",
+        "tags": [
+          "traditionalist_act",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_ideology",
+            "amount": -1
+          }
+        ],
+        "resultText": "They stage it anyway with a fake beard. The theatre roars louder for the beard."
+      }
+    ]
+  },
+  {
+    "id": "phi2-night-study",
+    "weight": 7,
+    "requires": {
+      "class": "philosopher"
+    },
+    "scene": "A long winter night, a fresh scroll of Aristotle on the soul, and a symposium at a Kleitos house you had promised to attend.",
+    "choices": [
+      {
+        "id": "scroll",
+        "label": "The scroll",
+        "tags": [
+          "study",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          }
+        ],
+        "resultText": "Dawn, and the whole thing read twice. The Kleitos is offended for a week. Aristotle is not."
+      },
+      {
+        "id": "symposium",
+        "label": "The symposium",
+        "tags": [
+          "symposium",
+          "wine"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "Good wine, a good argument with a shipwright about whether a hull has a soul. The scroll waits, unoffended."
+      }
+    ]
+  },
+  {
+    "id": "phi2-impiety-pamphlet",
+    "weight": 4,
+    "requires": {
+      "class": "philosopher",
+      "minStat": {
+        "prestige": 20
+      }
+    },
+    "scene": "A pamphlet naming your school a nest of atheists is being read at the barbers'. Three fathers have withdrawn their sons by noon.",
+    "choices": [
+      {
+        "id": "sue",
+        "label": "Sue the author for slander",
+        "tags": [
+          "judge_fairly",
+          "frontline"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -25
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The suit costs a season's fees and wins a fine you never collect. The fathers come back slowly, and the pamphlet is quoted forever."
+      },
+      {
+        "id": "ignore",
+        "label": "Let it pass",
+        "tags": [
+          "wait",
+          "solitude"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -2
+          }
+        ],
+        "resultText": "It passes. The three sons do not come back. Their fathers tell other fathers why."
+      }
+    ],
+    "defaultChoiceId": "ignore"
+  },
+  {
+    "id": "phi2-failing-eyes",
+    "weight": 4,
+    "requires": {
+      "class": "philosopher",
+      "minStat": {
+        "intelligence": 20
+      }
+    },
+    "scene": "Twenty years of scrolls by lamplight. The letters swim now, and the physician offers a cure of Egyptian salves and a month without reading.",
+    "choices": [
+      {
+        "id": "cure",
+        "label": "Pay for the cure and the month",
+        "tags": [
+          "abstain",
+          "idle"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -25
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": -1
+          }
+        ],
+        "resultText": "Salves, darkness, a month of dictation. The eyes come back, mostly. The month is gone entirely."
+      },
+      {
+        "id": "read-on",
+        "label": "Read on, and let the eyes go",
+        "tags": [
+          "study",
+          "rash_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": -2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "You finish the treatise. You cannot read your own hand by winter. Your students read to you, and get things wrong."
+      }
+    ],
+    "defaultChoiceId": "read-on"
+  }
+]

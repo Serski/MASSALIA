@@ -1,0 +1,1780 @@
+[
+  {
+    "id": "tra2-bottomry",
+    "weight": 7,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "A captain wants a sea-loan on his hull and cargo: you carry the risk of the sea, he pays a third over if he returns. He is sailing for Alexandria in the wrong month.",
+    "choices": [
+      {
+        "id": "lend",
+        "label": "Lend at the sea-rate",
+        "tags": [
+          "profit",
+          "rash_act"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 20
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "He returns, late, with papyrus and a story about a waterspout. A third over, and a captain who will borrow from you first, always."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse; the sea is not a partner",
+        "tags": [
+          "wait",
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          }
+        ],
+        "resultText": "He borrows from a Punic factor. He returns. The factor's third is the factor's."
+      }
+    ]
+  },
+  {
+    "id": "tra2-weights-inspection",
+    "weight": 7,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "The market wardens are inspecting weights in the agora. Your steward's scale is honest; your warehouse scale has been generous to you for a year.",
+    "choices": [
+      {
+        "id": "fix",
+        "label": "Fix the warehouse scale before they reach it",
+        "tags": [
+          "deception",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The scale is honest by the time the wardens arrive. It is honest afterward too, which costs you the year's generosity."
+      },
+      {
+        "id": "confess",
+        "label": "Show them the scale and pay the fine",
+        "tags": [
+          "public_oath",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          }
+        ],
+        "resultText": "The wardens, who expected to find it, are startled to be shown it. The fine is light. The story is heavy, in your favor."
+      }
+    ]
+  },
+  {
+    "id": "tra2-alexandria-papyrus",
+    "weight": 6,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "An Alexandrian factor offers a standing contract for papyrus at a price that only makes sense if he is being paid to undercut Rhodes.",
+    "choices": [
+      {
+        "id": "sign",
+        "label": "Sign it and ask no questions",
+        "tags": [
+          "profit",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 30
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "Papyrus by the bale, cheap, for two years. Then a Rhodian visits and asks you, politely, whose contract you signed."
+      },
+      {
+        "id": "ask",
+        "label": "Ask the questions first",
+        "tags": [
+          "study",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          }
+        ],
+        "resultText": "Ptolemy's treasury is behind it, and Rhodes knows. You sign for one year, at a rate that will not be remembered against you."
+      }
+    ]
+  },
+  {
+    "id": "tra2-emporion-partner",
+    "weight": 6,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "Your partner at Emporion has stopped writing. A captain says he has taken an Iberian wife and a new counting-house, with your share of the stock.",
+    "choices": [
+      {
+        "id": "sail",
+        "label": "Sail to Emporion and see for yourself",
+        "tags": [
+          "labor",
+          "frontline"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "He has taken a wife, a counting-house, and your share, and is astonished to be asked about it. You leave with the share and a new partner, the wife's brother."
+      },
+      {
+        "id": "write",
+        "label": "Write to Emporion's magistrates",
+        "tags": [
+          "wait",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "The magistrates recover half. The other half is a lesson about partners and distance."
+      }
+    ]
+  },
+  {
+    "id": "tra2-ligurian-salt",
+    "weight": 6,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "Ligurian salt-boilers offer a season's salt for wine, direct, cutting out the Massaliote salt-factor who has cornered the trade.",
+    "choices": [
+      {
+        "id": "deal",
+        "label": "Deal direct",
+        "tags": [
+          "reformist_act",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 3
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 25
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "Salt for wine at the beach, in two languages. The salt-factor complains to the council. The council, which likes cheap salt, does nothing."
+      },
+      {
+        "id": "factor",
+        "label": "Buy from the factor, as custom is",
+        "tags": [
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 1
+          }
+        ],
+        "resultText": "Salt at the factor's price. Custom kept. The Ligurians sell their salt to a Rhodian who does not care about custom."
+      }
+    ]
+  },
+  {
+    "id": "tra2-counting-house-clerk",
+    "weight": 6,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "Your clerk's sums are wrong every month by a little, always in his favor. He is also the only man alive who understands your ledgers.",
+    "choices": [
+      {
+        "id": "confront",
+        "label": "Confront him and dock the difference",
+        "tags": [
+          "judge_fairly",
+          "extort"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "He pays it back, ashamed, and stays. The ledgers are honest for a year, and then you check again."
+      },
+      {
+        "id": "replace",
+        "label": "Train a second clerk and dismiss him",
+        "tags": [
+          "scheme",
+          "labor"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "Two clerks who check each other, and a former clerk telling the harbor you are ungrateful. The sums are right."
+      }
+    ]
+  },
+  {
+    "id": "tra2-iberian-wedding",
+    "weight": 5,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "Your Ilergetae trading partner invites you to his daughter's wedding: a week's sail, a week's feast, and the whole tribe's trade to think about.",
+    "choices": [
+      {
+        "id": "go",
+        "label": "Go, with a gift worth the voyage",
+        "tags": [
+          "feast",
+          "reformist_act",
+          "wine"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -25
+          },
+          {
+            "type": "change_ideology",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "A week of Iberian beer and songs about horses. His sons now sell only to you. His daughter's husband sells to you too."
+      },
+      {
+        "id": "gift",
+        "label": "Send a gift and your apologies",
+        "tags": [
+          "gift"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "The gift is admired. Your apology is accepted. A Rhodian who went to the wedding is now his sons' second choice."
+      }
+    ]
+  },
+  {
+    "id": "tra2-pirate-ransom",
+    "weight": 5,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "Your captain is taken by Ligurian pirates off the Stoechades. The ransom is the value of the ship. The ship is still yours.",
+    "choices": [
+      {
+        "id": "pay",
+        "label": "Pay the ransom",
+        "tags": [
+          "gift",
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -30
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "He comes home thin and loyal. Every sailor on the coast knows which trader pays for his men."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse; ransoms breed pirates",
+        "tags": [
+          "refuse_aid",
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -2
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "He comes home a year later, sold twice, having escaped. He does not sail for you. Nobody who heard the story does either."
+      }
+    ]
+  },
+  {
+    "id": "tra2-carthage-factor-credit",
+    "weight": 5,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "Carthage's factor offers credit at half the Greek rate to any Massaliote who will ship through Punic ports. It is not a secret; it is a policy.",
+    "choices": [
+      {
+        "id": "take",
+        "label": "Take the credit",
+        "tags": [
+          "profit",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 30
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": -2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Cheap silver and Punic harbors. Your ships are seen at Carthage. The old families see the manifests."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse, and say why in the agora",
+        "tags": [
+          "public_oath",
+          "traditionalist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_party_favor",
+            "party": "palaioi",
+            "amount": 2
+          }
+        ],
+        "resultText": "Your speech about Punic silver is quoted for a season. Your credit is at the Greek rate, which is what a speech costs."
+      }
+    ]
+  },
+  {
+    "id": "tra2-warehouse-fire",
+    "weight": 5,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "Fire in the harbor warehouses. Yours is next to the one burning, and the dockworkers are asking what it is worth to them to stay.",
+    "choices": [
+      {
+        "id": "pay",
+        "label": "Pay them double and fight it",
+        "tags": [
+          "frontline",
+          "gift"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "militia",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Your warehouse stands, scorched. The dockworkers, paid double, remember which trader stayed with them in the smoke."
+      },
+      {
+        "id": "save-books",
+        "label": "Save the books and let the goods go",
+        "tags": [
+          "wait",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -25
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          }
+        ],
+        "resultText": "The books are safe; you know exactly what you lost. Your creditors, oddly, respect the exact figure."
+      }
+    ]
+  },
+  {
+    "id": "tra2-tin-route-follow-up",
+    "weight": 4,
+    "requires": {
+      "class": "trader",
+      "trait": "tin-route-pioneer"
+    },
+    "scene": "Word from the north: the tin route you pioneered is being used by a Rhodian who bought the sailing directions from your old captain.",
+    "choices": [
+      {
+        "id": "race",
+        "label": "Send two ships and out-trade him",
+        "tags": [
+          "profit",
+          "frontline"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 20
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Your ships arrive first at the tin-beaches with better wine. The Rhodian arrives second and buys your tin at your price."
+      },
+      {
+        "id": "sell",
+        "label": "Sell the Rhodian the rest of the directions",
+        "tags": [
+          "profit",
+          "scheme"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 30
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "He pays for what he already half-knew. You have the silver and the parts of the route you did not sell."
+      }
+    ]
+  },
+  {
+    "id": "tra2-olympiad-fair",
+    "weight": 5,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "The Olympiad year. Traders from every Greek city meet at Olympia to trade without tariff. It is a month's sail, and every rival will be there.",
+    "choices": [
+      {
+        "id": "go",
+        "label": "Go with your best cargo",
+        "tags": [
+          "festival",
+          "profit",
+          "pilgrimage"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 25
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "Massaliote wine and Ligurian amber, sold under the god's truce to men from Byzantion and Cyrene. Your name is known in cities you will never see."
+      },
+      {
+        "id": "stay",
+        "label": "Stay and trade the empty harbor",
+        "tags": [
+          "wait",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 20
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "The harbor is yours for a month. Prices are excellent. Everyone who went to Olympia comes back with a story you are not in."
+      }
+    ]
+  },
+  {
+    "id": "tra2-dockers-strike",
+    "weight": 6,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "The dockworkers have stopped work over a foreman's cruelty. Your cargo is on the quay in the sun, and the foreman is your foreman.",
+    "choices": [
+      {
+        "id": "dismiss",
+        "label": "Dismiss the foreman and settle",
+        "tags": [
+          "judge_fairly",
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_ideology",
+            "amount": 1
+          }
+        ],
+        "resultText": "Work resumes by noon. The new foreman is one of them. Your cargo moves first, always, after this."
+      },
+      {
+        "id": "scabs",
+        "label": "Hire Gaulish hands to unload",
+        "tags": [
+          "cruelty",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The cargo moves. The dockworkers return in a week and remember. Your cargo moves last, always, after this."
+      }
+    ]
+  },
+  {
+    "id": "tra2-captain-daughter-marriage",
+    "weight": 5,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "Your best captain asks for your niece for his son. It would bind him to your house. It would also bind your house to a captain.",
+    "choices": [
+      {
+        "id": "agree",
+        "label": "Agree to the match",
+        "tags": [
+          "gift",
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "A wedding on the quay. The captain's son is a good boy and the captain now sails as if the ship were his own family's. It is."
+      },
+      {
+        "id": "decline",
+        "label": "Decline gently; the house marries up",
+        "tags": [
+          "traditionalist_act",
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -1
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          }
+        ],
+        "resultText": "He sails for you a year longer, correctly. Then he sails for a Rhodian who married his son to a Rhodian."
+      }
+    ]
+  },
+  {
+    "id": "tra2-volcae-road",
+    "weight": 3,
+    "requires": {
+      "class": "trader",
+      "minStat": {
+        "prestige": 12
+      }
+    },
+    "scene": "A Volcae chief who hates Greeks holds the only road to the Garonne tin. Every trader has tried him. The Ephors ask you to try.",
+    "choices": [
+      {
+        "id": "try",
+        "label": "Go up and talk",
+        "tags": [
+          "debate",
+          "reformist_act"
+        ],
+        "effects": [
+          {
+            "type": "change_trait",
+            "traitId": "silver-tongued",
+            "operation": "add"
+          },
+          {
+            "type": "change_ideology",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          }
+        ],
+        "resultText": "Three days, a great deal of beer, and a chief who ends by calling you a liar and a friend. The road opens. Every trader in Massalia knows who opened it."
+      },
+      {
+        "id": "decline",
+        "label": "Decline; some doors are not for talking through",
+        "tags": [
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_composure",
+            "amount": 3
+          }
+        ],
+        "resultText": "A Rhodian tries. He comes back without his cargo and with a very good story about the chief's beer."
+      }
+    ]
+  },
+  {
+    "id": "tra2-pytheas-copy",
+    "weight": 5,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "A bookseller offers a complete copy of On the Ocean, Pytheas's own account, with the tables. It costs a ship's worth of wine.",
+    "choices": [
+      {
+        "id": "buy",
+        "label": "Buy it and read it twice",
+        "tags": [
+          "study",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -35
+          },
+          {
+            "type": "change_trait",
+            "traitId": "pytheas-disciple",
+            "operation": "add"
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "Tides, tin, amber, a sea like a lung. You believe it. Your captains, reading your sailing orders, begin to believe it too."
+      },
+      {
+        "id": "borrow",
+        "label": "Borrow it for a night and copy the tables",
+        "tags": [
+          "deception",
+          "study"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The tables, in your hand, by dawn. The rest of the book you remember imperfectly, which is how Pytheas is usually remembered."
+      }
+    ]
+  },
+  {
+    "id": "tra2-agathe-glass",
+    "weight": 6,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "A glassmaker in Agathe has a kiln and no market. He offers you everything he makes for three years at a fixed price.",
+    "choices": [
+      {
+        "id": "sign",
+        "label": "Sign for three years",
+        "tags": [
+          "profit",
+          "patronage"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "Agathe glass in every Gaulish hill-fort by the second year, at Massaliote prices. The glassmaker's sons work for you."
+      },
+      {
+        "id": "one",
+        "label": "Sign for one year and see",
+        "tags": [
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "One good year. Then a Rhodian signs for ten."
+      }
+    ]
+  },
+  {
+    "id": "tra2-guild-of-traders",
+    "weight": 6,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "The harbor's traders want a guild with a common warehouse and a common enemy: the Rhodians. You are asked to draft the charter.",
+    "choices": [
+      {
+        "id": "draft",
+        "label": "Draft it and take the first chair",
+        "tags": [
+          "claim_office",
+          "study"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "A charter, a warehouse, and a year of chairing men who agree on nothing but Rhodes. The Rhodians, hearing of it, lower their prices."
+      },
+      {
+        "id": "join",
+        "label": "Join and let another man chair",
+        "tags": [
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "The guild works, mostly. The chair is blamed for the rest. You share the warehouse and none of the blame."
+      }
+    ]
+  },
+  {
+    "id": "tra2-counterfeit-amphorae",
+    "weight": 6,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "A potter offers to stamp Chian seals on your Massaliote wine amphorae. Chian wine sells for triple. Chians, occasionally, visit.",
+    "choices": [
+      {
+        "id": "stamp",
+        "label": "Stamp them",
+        "tags": [
+          "deception",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 35
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "Triple, for a season. A Chian visits, tastes, and laughs so loudly the whole quay hears which trader sells Chian."
+      },
+      {
+        "id": "own-seal",
+        "label": "Make your own seal and sell it as what it is",
+        "tags": [
+          "public_oath",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          }
+        ],
+        "resultText": "Your seal on your wine. In three years, Gaulish chiefs ask for the seal by name, and a potter in Agathe offers to counterfeit it."
+      }
+    ]
+  },
+  {
+    "id": "tra2-roman-supply-contract",
+    "weight": 5,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "A Roman quaestor offers a contract to supply the legions in the south with wine and oil, paid in Roman silver on Roman terms.",
+    "choices": [
+      {
+        "id": "take",
+        "label": "Take it",
+        "tags": [
+          "profit",
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 35
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "Roman silver, paid late and in full. Your ships are known in Ostia. Carthage's factor stops buying your oil."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse; Rome's wars are Rome's",
+        "tags": [
+          "wait",
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          }
+        ],
+        "resultText": "A Rhodian takes it. Rome remembers Rhodes. Your oil sells to Carthage, for now."
+      }
+    ]
+  },
+  {
+    "id": "tra2-customs-officer",
+    "weight": 7,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "The customs officer at the mole suggests your cargo of Punic dye might be recorded as Egyptian, at Egyptian rates, for a consideration.",
+    "choices": [
+      {
+        "id": "agree",
+        "label": "Agree",
+        "tags": [
+          "scheme",
+          "deception"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 20
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "Egyptian dye, on paper. The consideration is small. He suggests it again next month, less small."
+      },
+      {
+        "id": "decline",
+        "label": "Decline and pay the Punic rate",
+        "tags": [
+          "public_oath"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "Punic dye, at Punic rates. The officer marks you as a man who pays, and does not suggest things to you again. He suggests them to your rivals."
+      }
+    ]
+  },
+  {
+    "id": "tra2-shipwrecked-rival",
+    "weight": 5,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "Your chief rival's ship is on the rocks off Olbia. His cargo is yours to buy from the salvagers, cheap, and he is on the beach watching.",
+    "choices": [
+      {
+        "id": "buy",
+        "label": "Buy it cheap",
+        "tags": [
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 30
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "His amphorae, your prices. He walks home. He does not forget the beach, and neither, in fairness, do you."
+      },
+      {
+        "id": "help",
+        "label": "Buy it back for him at cost and lend him a hull",
+        "tags": [
+          "mercy",
+          "gift"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 3
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "He sails home in your hull with his cargo. He is your rival for twenty more years and never once undercuts you in a bad season."
+      }
+    ]
+  },
+  {
+    "id": "tra2-slave-cargo",
+    "weight": 5,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "A Gaulish chief offers captives from a raid: Saluvii, thirty of them, at a price that would make the season. The temple registrar's daughter is your clerk.",
+    "choices": [
+      {
+        "id": "buy",
+        "label": "Buy and sell them on",
+        "tags": [
+          "profit",
+          "cruelty"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 45
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "The season is made. The Saluvii, when they hear which trader bought their cousins, remember. So does your clerk, who stops speaking to you."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse; you trade in things",
+        "tags": [
+          "mercy",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "The chief sells them to a Punic factor. The Saluvii hear which trader refused. It is worth something, later, on a hill road."
+      }
+    ]
+  },
+  {
+    "id": "tra2-wine-to-the-rhone",
+    "weight": 6,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "The Helvii want wine, a hundred amphorae, delivered upriver. The river is low and the Cavares are between you and the Helvii.",
+    "choices": [
+      {
+        "id": "send",
+        "label": "Send it under Cavares escort, for a toll",
+        "tags": [
+          "reformist_act",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": 2
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 25
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "The Cavares take a tenth and deliver ninety. The Helvii are drunk for a month and ask for two hundred next year."
+      },
+      {
+        "id": "wait",
+        "label": "Wait for the spring flood and go alone",
+        "tags": [
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 10
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "Spring, a full river, no toll. The Helvii drank Volcae beer all winter and are less thirsty."
+      }
+    ]
+  },
+  {
+    "id": "tra2-prices-rumor",
+    "weight": 6,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "A sailor in a tavern says the Syracusan grain fleet has been lost in a storm. If true, grain triples by dawn. If false, whoever buys tonight is a fool.",
+    "choices": [
+      {
+        "id": "buy",
+        "label": "Buy every sack in the harbor tonight",
+        "tags": [
+          "rash_act",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 20
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "True. Grain triples. You sell at dawn to men who did not drink in that tavern."
+      },
+      {
+        "id": "verify",
+        "label": "Send a boat to the islands to check",
+        "tags": [
+          "study",
+          "wait"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 2
+          }
+        ],
+        "resultText": "True, but by the time your boat returns the price has moved. You buy what is left, at a price that is still good."
+      }
+    ]
+  },
+  {
+    "id": "tra2-clerks-marriage",
+    "weight": 5,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "Your counting-house clerk, a freedman, asks to marry your steward's daughter. The steward is a citizen and furious.",
+    "choices": [
+      {
+        "id": "bless",
+        "label": "Bless it and give the dowry yourself",
+        "tags": [
+          "gift",
+          "reformist_act",
+          "mercy"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -15
+          },
+          {
+            "type": "change_ideology",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 1
+          }
+        ],
+        "resultText": "A wedding in the counting-house. The steward sulks and then dances. The clerk's sums, from that day, are the most honest in Massalia."
+      },
+      {
+        "id": "forbid",
+        "label": "Forbid it; the house has an order",
+        "tags": [
+          "traditionalist_act",
+          "refuse_aid"
+        ],
+        "effects": [
+          {
+            "type": "change_ideology",
+            "amount": -2
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          }
+        ],
+        "resultText": "The clerk leaves for a Rhodian house, and takes the daughter. The steward blames you for both."
+      }
+    ]
+  },
+  {
+    "id": "tra2-amber-hoard",
+    "weight": 5,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "A Gaulish trader offers a hoard of amber, old pieces with insects in them, from a grave. He does not say a grave. His hands say it.",
+    "choices": [
+      {
+        "id": "buy",
+        "label": "Buy it",
+        "tags": [
+          "profit",
+          "defile"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 40
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": -1
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "The insects sell to a Syracusan collector for four times the price. You do not ask about the grave. The grave, presumably, does not ask about you."
+      },
+      {
+        "id": "refuse",
+        "label": "Refuse; grave-goods are not goods",
+        "tags": [
+          "offering",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "He sells it to a Rhodian. The Rhodian's ship is lost off Sardinia. You are not superstitious, and you note it."
+      }
+    ]
+  },
+  {
+    "id": "tra2-league-envoy",
+    "weight": 5,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "The Archons want a trader to go to Rhoda as envoy, to settle a harbor-fee quarrel that has stopped the League's western trade.",
+    "choices": [
+      {
+        "id": "go",
+        "label": "Go as envoy",
+        "tags": [
+          "claim_office",
+          "debate"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -10
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "A month of Rhodan magistrates and a fee-schedule everyone hates equally, which is a treaty. Your ships pay it first."
+      },
+      {
+        "id": "decline",
+        "label": "Decline; envoys are not paid",
+        "tags": [
+          "profit",
+          "back_down"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 15
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -1
+          }
+        ],
+        "resultText": "A Kleitos goes and settles it worse. Your ships pay the fee. You did not have to go to Rhoda, which is something."
+      }
+    ]
+  },
+  {
+    "id": "tra2-tax-farmer-offer",
+    "weight": 5,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "The city is auctioning the right to collect harbor tax for a year. The winner keeps what he collects above his bid. Your rivals are bidding.",
+    "choices": [
+      {
+        "id": "bid",
+        "label": "Bid, and collect hard",
+        "tags": [
+          "profit",
+          "extort",
+          "claim_office"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 25
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -2
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "You win the bid and collect every obol. The harbor pays and hates you for a year. The year is very profitable."
+      },
+      {
+        "id": "abstain",
+        "label": "Stay out of tax-farming",
+        "tags": [
+          "abstain",
+          "judge_fairly"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          },
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": 1
+          }
+        ],
+        "resultText": "A Timon wins and collects hard. The harbor hates him. You trade, and are, by comparison, beloved."
+      }
+    ]
+  },
+  {
+    "id": "tra2-storm-god-vow",
+    "weight": 6,
+    "requires": {
+      "class": "trader"
+    },
+    "scene": "In a gale off Antipolis your captain vowed a silver ship to Artemis if the hull survived. It survived. He wants you to pay for the silver ship.",
+    "choices": [
+      {
+        "id": "pay",
+        "label": "Pay for the vow",
+        "tags": [
+          "offering",
+          "gift"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -20
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": 2
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": 1
+          }
+        ],
+        "resultText": "A silver ship, a hand long, in the temple. Every sailor in the harbor knows whose hull it is and whose vow was kept."
+      },
+      {
+        "id": "captain",
+        "label": "Tell the captain his vow is his",
+        "tags": [
+          "judge_fairly",
+          "profit"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": 5
+          },
+          {
+            "type": "change_stat",
+            "stat": "devotion",
+            "amount": -1
+          },
+          {
+            "type": "change_composure",
+            "amount": -3
+          }
+        ],
+        "resultText": "He pays for a smaller ship, in bronze. He sails for you another year, and then for a trader who pays for vows."
+      }
+    ]
+  },
+  {
+    "id": "tra2-customs-audit",
+    "weight": 4,
+    "requires": {
+      "class": "trader",
+      "minStat": {
+        "prestige": 20
+      }
+    },
+    "scene": "The customs house audits the harbor's most prominent trader once a decade, and this decade it is you. Ten years of manifests, and a clerk who is enjoying himself.",
+    "choices": [
+      {
+        "id": "pay",
+        "label": "Pay the assessment and be done",
+        "tags": [
+          "back_down",
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -35
+          }
+        ],
+        "resultText": "Ten years of small generosities, totaled and doubled. You pay. The clerk thanks you for your cooperation."
+      },
+      {
+        "id": "contest",
+        "label": "Contest it in the assembly",
+        "tags": [
+          "debate",
+          "boast"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -2
+          },
+          {
+            "type": "change_composure",
+            "amount": -10
+          }
+        ],
+        "resultText": "You win half the points and all of the reputation of a man who argues with the customs house. The half you lost still costs."
+      }
+    ],
+    "defaultChoiceId": "pay"
+  },
+  {
+    "id": "tra2-counting-fever",
+    "weight": 4,
+    "requires": {
+      "class": "trader",
+      "minStat": {
+        "intelligence": 20
+      }
+    },
+    "scene": "A winter of ledgers by lamplight and a fever from the harbor. The physician says a month of rest, or a mind that never quite adds as fast again.",
+    "choices": [
+      {
+        "id": "rest",
+        "label": "Rest the month",
+        "tags": [
+          "idle",
+          "abstain"
+        ],
+        "effects": [
+          {
+            "type": "change_drachmae",
+            "amount": -25
+          },
+          {
+            "type": "change_composure",
+            "amount": -5
+          }
+        ],
+        "resultText": "A month in bed while your clerks trade badly in your name. You recover. The books do not, for a season."
+      },
+      {
+        "id": "work",
+        "label": "Work through it",
+        "tags": [
+          "labor",
+          "rash_act"
+        ],
+        "effects": [
+          {
+            "type": "change_stat",
+            "stat": "intelligence",
+            "amount": -2
+          }
+        ],
+        "resultText": "You keep trading. The fever breaks. The sums come slower now, and you check them twice, and sometimes that is not enough."
+      }
+    ],
+    "defaultChoiceId": "work"
+  }
+]
