@@ -77,6 +77,9 @@ export interface EventDefinition {
   trigger?: string;
   scene: string;
   choices: EventChoice[];
+  // Applied lazily (at the player's next login) to a daily card that expired
+  // unresolved. Must name one of choices[].id; absent = expire with no effect.
+  defaultChoiceId?: string;
 }
 
 // --- Zod validation (loaded content) ---------------------------------------
@@ -142,15 +145,34 @@ export const eventChoiceSchema = z.object({
   tags: z.array(z.string()).optional(),
 });
 
-export const eventDefinitionSchema = z.object({
-  id: z.string(),
-  weight: z.number(),
-  conditions: z.array(conditionSchema).optional(),
-  requires: requiresSchema.optional(),
-  trigger: z.string().optional(),
-  scene: z.string(),
-  choices: z.array(eventChoiceSchema),
-});
+export const eventDefinitionSchema = z
+  .object({
+    id: z.string(),
+    weight: z.number(),
+    conditions: z.array(conditionSchema).optional(),
+    requires: requiresSchema.optional(),
+    trigger: z.string().optional(),
+    scene: z.string(),
+    choices: z.array(eventChoiceSchema),
+    defaultChoiceId: z.string().optional(),
+  })
+  .superRefine((event, ctx) => {
+    // A dangling default would silently expire the card instead of resolving
+    // it; fail content at boot, like every other schema error.
+    if (event.defaultChoiceId === undefined) return;
+    if (event.choices.some((choice) => choice.id === event.defaultChoiceId)) return;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["defaultChoiceId"],
+      message: `Event ${event.id}: defaultChoiceId "${event.defaultChoiceId}" matches none of its choices`,
+    });
+  });
+
+// The choice an expired card falls back to, or null when the event has none.
+export function defaultChoiceFor(event: EventDefinition): EventChoice | null {
+  if (!event.defaultChoiceId) return null;
+  return event.choices.find((choice) => choice.id === event.defaultChoiceId) ?? null;
+}
 
 export function parseEventDefinition(data: unknown): EventDefinition {
   return eventDefinitionSchema.parse(data) as EventDefinition;

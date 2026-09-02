@@ -7,6 +7,7 @@ import {
   assertUniqueEventIds,
   choiceComposureEffectDelta,
   dailyArenasFor,
+  defaultChoiceFor,
   describeChoiceCosts,
   drawEvent,
   eventArena,
@@ -452,5 +453,38 @@ describe("applyCityStat (clamped)", () => {
   it("applies a normal positive delta and rounds to an integer", () => {
     expect(applyCityStat("population", 1000, 200)).toBe(1200);
     expect(applyCityStat("garrison", 100, 2.6)).toBe(103);
+  });
+});
+
+describe("defaultChoiceId — lazy default for an expired card", () => {
+  const raw = {
+    id: "dc-test",
+    weight: 10,
+    scene: "x",
+    choices: [
+      { id: "pay", label: "Pay", effects: [{ type: "change_drachmae", amount: -20 }], resultText: "paid" },
+      { id: "refuse", label: "Refuse", effects: [], resultText: "refused" },
+    ],
+  };
+
+  it("accepts a defaultChoiceId that names one of the choices", () => {
+    const [parsed] = parseEventFile({ ...raw, defaultChoiceId: "refuse" });
+    expect(parsed!.defaultChoiceId).toBe("refuse");
+  });
+
+  it("rejects a defaultChoiceId that matches no choice, naming the event", () => {
+    expect(() => parseEventFile({ ...raw, defaultChoiceId: "flee" })).toThrow(/dc-test.*flee/);
+  });
+
+  it("stays optional — an event without one still parses", () => {
+    const [parsed] = parseEventFile(raw);
+    expect(parsed!.defaultChoiceId).toBeUndefined();
+  });
+
+  it("defaultChoiceFor returns the named choice, or null without a default", () => {
+    const [withDefault] = parseEventFile({ ...raw, defaultChoiceId: "pay" });
+    expect(defaultChoiceFor(withDefault!)?.id).toBe("pay");
+    const [without] = parseEventFile(raw);
+    expect(defaultChoiceFor(without!)).toBeNull();
   });
 });
