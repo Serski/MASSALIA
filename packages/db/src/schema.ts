@@ -290,6 +290,9 @@ export const dailyDecisions = pgTable("daily_decisions", {
   eventId: text("event_id").notNull(),
   resolved: boolean("resolved").notNull().default(false),
   resolvedChoiceId: text("resolved_choice_id"),
+  // True when the card expired unresolved and was settled to the event's
+  // defaultChoiceId at the player's next login (never by a worker tick).
+  resolvedByDefault: boolean("resolved_by_default").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   oneCardPerArenaPerDay: uniqueIndex("daily_decisions_char_day_arena_idx").on(table.characterId, table.utcDay, table.arena),

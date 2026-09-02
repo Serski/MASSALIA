@@ -1,7 +1,17 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, lt } from "drizzle-orm";
 import { createDb, dailyDecisions } from "@massalia/db";
-import { dailyArenasFor, drawEvent, eventArena, gameDate, isCalendarEvent, isEventEligible, type EligibilityContext } from "@massalia/shared";
-import { listEvents, recentEventIds, recordDraw } from "./eventEngine.js";
+import {
+  dailyArenasFor,
+  defaultChoiceFor,
+  drawEvent,
+  eventArena,
+  gameDate,
+  isCalendarEvent,
+  isEventEligible,
+  type EligibilityContext,
+  type EventDefinition,
+} from "@massalia/shared";
+import { applyChoiceEffects, listEvents, recentEventIds, recordDraw } from "./eventEngine.js";
 
 const db = createDb();
 
@@ -19,15 +29,59 @@ export async function getDailySet(characterId: string, now: Date): Promise<Daily
     .where(and(eq(dailyDecisions.characterId, characterId), eq(dailyDecisions.utcDay, utcDayString(now))));
 }
 
+export type AppliedDefault = { cardId: string; eventId: string; choiceId: string };
+
+// Settle every card from a PAST UTC day the player left unresolved to its event's
+// defaultChoiceId: apply the choice's effects (which also records the event in
+// history) and mark the card resolved-by-default. Lazy by design — runs on the
+// first access of a new day (see ensureDailySet), never from a worker tick.
+// Cards whose event has no default keep today's behaviour: expired, no effect.
+// `events` is injectable for tests; production passes the loaded content.
+export async function applyExpiredDefaults(characterId: string, now: Date, events?: EventDefinition[]): Promise<AppliedDefault[]> {
+  const expired = await db
+    .select()
+    .from(dailyDecisions)
+    .where(and(eq(dailyDecisions.characterId, characterId), eq(dailyDecisions.resolved, false), lt(dailyDecisions.utcDay, utcDayString(now))));
+  if (expired.length === 0) return [];
+
+  const byId = new Map((events ?? (await listEvents())).map((event) => [event.id, event] as const));
+  const applied: AppliedDefault[] = [];
+  for (const row of expired) {
+    const event = byId.get(row.eventId);
+    if (!event) {
+      // Content removed since the card was drawn — nothing sensible to apply.
+      console.warn(`applyExpiredDefaults: unknown event ${row.eventId} on card ${row.id}; left unresolved`);
+      continue;
+    }
+    const choice = defaultChoiceFor(event);
+    if (!choice) continue;
+    await applyChoiceEffects(characterId, row.eventId, choice);
+    await markCardResolved(row.id, choice.id, { byDefault: true });
+    applied.push({ cardId: row.id, eventId: row.eventId, choiceId: choice.id });
+  }
+  return applied;
+}
+
 // Return today's curated set, generating it on first access: one weighted card
 // per arena the character qualifies for, excluding recently-seen events.
-export async function ensureDailySet(characterId: string, ctx: EligibilityContext, now: Date, startedMs: number): Promise<DailyCardRow[]> {
+// `events` is injectable for tests; production loads the content pool.
+export async function ensureDailySet(
+  characterId: string,
+  ctx: EligibilityContext,
+  now: Date,
+  startedMs: number,
+  events?: EventDefinition[],
+): Promise<DailyCardRow[]> {
   const existing = await getDailySet(characterId, now);
   if (existing.length > 0) return existing;
 
   const day = utcDayString(now);
+  const content = events ?? (await listEvents());
+  // First access of a new day: settle yesterday's leftovers to their defaults
+  // BEFORE reading history, so a default resolution counts as recently seen.
+  await applyExpiredDefaults(characterId, now, content);
   // Calendar/festival events fire from the festival system — never the daily draw.
-  const eligible = (await listEvents()).filter((event) => !isCalendarEvent(event) && isEventEligible(event, ctx));
+  const eligible = content.filter((event) => !isCalendarEvent(event) && isEventEligible(event, ctx));
   const recent = await recentEventIds(characterId, 5);
 
   // The family arena is included only on the winter day — its once-per-game-year
@@ -53,9 +107,11 @@ export async function findDailyCard(characterId: string, eventId: string, now: D
   return rows.find((row) => row.eventId === eventId) ?? null;
 }
 
-export async function markCardResolved(cardId: string, choiceId: string): Promise<void> {
+// `byDefault` flags a lazy default resolution (applyExpiredDefaults); a player's
+// own resolve leaves the column at its false default.
+export async function markCardResolved(cardId: string, choiceId: string, opts: { byDefault?: boolean } = {}): Promise<void> {
   await db
     .update(dailyDecisions)
-    .set({ resolved: true, resolvedChoiceId: choiceId })
+    .set({ resolved: true, resolvedChoiceId: choiceId, ...(opts.byDefault ? { resolvedByDefault: true } : {}) })
     .where(eq(dailyDecisions.id, cardId));
 }
