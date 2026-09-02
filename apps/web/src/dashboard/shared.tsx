@@ -705,6 +705,12 @@ export const POLITY_CREST: Record<string, string> = {
   trusates: assetIconUrl("tarusates.webp"),
   llergetae: assetIconUrl("ilergetae.webp"),
   lacetani: assetIconUrl("lacetani.webp"),
+  // The Italian realms (AVATARS TRIBES set).
+  etruscans: assetIconUrl("etruscans.webp"),
+  samnites: assetIconUrl("samnites.webp"),
+  "italiote-league": assetIconUrl("italiote-league.webp"),
+  lucani: assetIconUrl("lucani.webp"),
+  mamertines: assetIconUrl("mamertines.webp"),
 };
 
 // Building art lives in assets/buildings/. Class buildings carry one image per
