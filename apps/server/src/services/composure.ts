@@ -5,12 +5,17 @@ import { eq } from "drizzle-orm";
 import { characterTraits, composureLog, createDb, playerCharacters } from "@massalia/db";
 import {
   applyComposureRecovery,
+  choiceComposureEffectDelta,
+  choiceIdeologyDelta,
   clampComposure,
+  describeComposureDelta,
   parseComposureConfig,
   philiaModifiers,
   recoveryPerDay,
   resolveBreak,
   type ComposureConfig,
+  type EventChoice,
+  type Trait,
 } from "@massalia/shared";
 import { getHeldTraits } from "./traits.js";
 import { livingSpouseState } from "./family.js";
@@ -32,6 +37,22 @@ export async function loadComposureConfig(): Promise<ComposureConfig> {
 export function getComposureConfig(): ComposureConfig {
   if (!config) throw new Error("Composure config not loaded. Call loadComposureConfig() at boot.");
   return config;
+}
+
+// Net composure change for a choice = the trait/ideology-driven layer PLUS any
+// explicit change_composure effects. Combined so the preview equals what resolving
+// actually applies — never a hidden composure cost. Shared by the events route
+// (preview + live resolve) and the lazy default path (applyExpiredDefaults), so
+// an expired card pays exactly what the player would have.
+export function composurePreview(choice: EventChoice, traits: Trait[], config: ComposureConfig, spouseTraits: Trait[]): { delta: number; reason: string } {
+  // Her reaction to the choice's tags hits composure with attribution + spouseWeight
+  // (same as routines). Deliberately NO tag-derived philia here — family events move
+  // philia only through their explicit change_philia effects (the double-count guard).
+  const tag = describeComposureDelta(traits, choice.tags ?? [], choiceIdeologyDelta(choice), config, spouseTraits);
+  const explicit = choiceComposureEffectDelta(choice);
+  const delta = tag.delta + explicit;
+  const reason = tag.delta !== 0 ? tag.reason : explicit !== 0 ? "the toll of the act itself" : tag.reason;
+  return { delta, reason };
 }
 
 type CharacterRow = typeof playerCharacters.$inferSelect;

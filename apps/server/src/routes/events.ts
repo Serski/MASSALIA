@@ -1,14 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import {
-  choiceComposureEffectDelta,
-  choiceIdeologyDelta,
   describeChoiceCosts,
-  describeComposureDelta,
   gameDate,
   isCalendarEvent,
   isEventEligible,
   isWithdrawn,
-  type ComposureConfig,
   type EligibilityContext,
   type EventChoice,
   type EventDefinition,
@@ -19,7 +15,7 @@ import { requireAuth } from "../services/auth.js";
 import { ensureCharacterRow, getActivePlayer, getActiveWorld, type CharacterRow } from "../services/character.js";
 import { familyEligibilityContext, livingSpouseState } from "../services/family.js";
 import { getHeldTraits } from "../services/traits.js";
-import { applyComposureDelta, getComposureConfig, recoverComposure } from "../services/composure.js";
+import { applyComposureDelta, composurePreview, getComposureConfig, recoverComposure } from "../services/composure.js";
 import { ensureDailySet, findDailyCard, getDailySet, markCardResolved } from "../services/dailyDecisions.js";
 
 async function actingCharacter(userId: string): Promise<{ row: CharacterRow; startedMs: number } | { error: string; code: number }> {
@@ -49,20 +45,6 @@ async function contextFor(row: CharacterRow, traitIds: string[], now: Date, enri
 
 function isWinterDay(now: Date, startedMs: number): boolean {
   return gameDate(now.getTime(), startedMs).seasonOfYear === 0;
-}
-
-// Net composure change for a choice = the trait/ideology-driven layer PLUS any
-// explicit change_composure effects. Combined so the preview equals what resolving
-// actually applies — never a hidden composure cost.
-function composurePreview(choice: EventChoice, traits: Trait[], config: ComposureConfig, spouseTraits: Trait[]): { delta: number; reason: string } {
-  // Her reaction to the choice's tags hits composure with attribution + spouseWeight
-  // (same as routines). Deliberately NO tag-derived philia here — family events move
-  // philia only through their explicit change_philia effects (the double-count guard).
-  const tag = describeComposureDelta(traits, choice.tags ?? [], choiceIdeologyDelta(choice), config, spouseTraits);
-  const explicit = choiceComposureEffectDelta(choice);
-  const delta = tag.delta + explicit;
-  const reason = tag.delta !== 0 ? tag.reason : explicit !== 0 ? "the toll of the act itself" : tag.reason;
-  return { delta, reason };
 }
 
 function withPreviews(event: EventDefinition, traits: Trait[], spouseTraits: Trait[]) {

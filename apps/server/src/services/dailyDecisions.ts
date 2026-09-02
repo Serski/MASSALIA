@@ -1,5 +1,5 @@
 import { and, eq, lt } from "drizzle-orm";
-import { createDb, dailyDecisions } from "@massalia/db";
+import { createDb, dailyDecisions, playerCharacters } from "@massalia/db";
 import {
   dailyArenasFor,
   defaultChoiceFor,
@@ -12,6 +12,9 @@ import {
   type EventDefinition,
 } from "@massalia/shared";
 import { applyChoiceEffects, listEvents, recentEventIds } from "./eventEngine.js";
+import { applyComposureDelta, composurePreview, getComposureConfig, recoverComposure } from "./composure.js";
+import { getHeldTraits } from "./traits.js";
+import { livingSpouseState } from "./family.js";
 
 const db = createDb();
 
@@ -29,13 +32,14 @@ export async function getDailySet(characterId: string, now: Date): Promise<Daily
     .where(and(eq(dailyDecisions.characterId, characterId), eq(dailyDecisions.utcDay, utcDayString(now))));
 }
 
-export type AppliedDefault = { cardId: string; eventId: string; choiceId: string };
+export type AppliedDefault = { cardId: string; eventId: string; choiceId: string; composureDelta: number };
 
 // Settle every card from a PAST UTC day the player left unresolved to its event's
-// defaultChoiceId: apply the choice's effects (which also records the event in
-// history) and mark the card resolved-by-default. Lazy by design — runs on the
-// first access of a new day (see ensureDailySet), never from a worker tick.
-// Cards whose event has no default keep today's behaviour: expired, no effect.
+// defaultChoiceId: charge composure exactly as a live resolve would, apply the
+// choice's effects (which also records the event in history) and mark the card
+// resolved-by-default. Lazy by design — runs on the first access of a new day
+// (see ensureDailySet), never from a worker tick. Cards whose event has no
+// default keep today's behaviour: expired, no effect.
 // `events` is injectable for tests; production passes the loaded content.
 export async function applyExpiredDefaults(characterId: string, now: Date, events?: EventDefinition[]): Promise<AppliedDefault[]> {
   const expired = await db
@@ -55,9 +59,28 @@ export async function applyExpiredDefaults(characterId: string, now: Date, event
     }
     const choice = defaultChoiceFor(event);
     if (!choice) continue;
+
+    // Composure first, mirroring the resolve route step for step (recover → preview
+    // → apply): the trait/ideology layer plus explicit change_composure, with the
+    // living spouse's reaction and NO tag-derived philia (the double-count guard).
+    // The withdrawn gate is deliberately absent — the default is not the player
+    // acting — and a default may itself break the character; applyComposureDelta
+    // handles that exactly as for a live resolve. Re-read per card: an earlier
+    // default may have changed the traits the next one is judged against.
+    const character = (await db.select().from(playerCharacters).where(eq(playerCharacters.id, characterId)).limit(1))[0];
+    if (!character) {
+      console.warn(`applyExpiredDefaults: character ${characterId} not found for card ${row.id}; left unresolved`);
+      continue;
+    }
+    const heldTraits = await getHeldTraits(characterId);
+    const spouseTraits = (await livingSpouseState(character, now))?.personalityTraits ?? [];
+    await recoverComposure(characterId, now);
+    const { delta, reason } = composurePreview(choice, heldTraits, getComposureConfig(), spouseTraits);
+    await applyComposureDelta(characterId, delta, reason, now);
+
     await applyChoiceEffects(characterId, row.eventId, choice);
     await markCardResolved(row.id, choice.id, { byDefault: true });
-    applied.push({ cardId: row.id, eventId: row.eventId, choiceId: choice.id });
+    applied.push({ cardId: row.id, eventId: row.eventId, choiceId: choice.id, composureDelta: delta });
   }
   return applied;
 }
