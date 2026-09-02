@@ -66,13 +66,9 @@ const MOBILE_QUERY = "(max-width: 620px)";
 const OPENING_FRACTION_DESKTOP = 0.42;
 const OPENING_FRACTION_MOBILE = 0.30;
 const MAX_ZOOM = 10;
-// Zoom (= worldWidth / cameraWidth) at or beyond which every town label appears;
-// below it only Massalia is named. Lowered one step (from 3) so names show as
-// soon as a region is framed.
-const LABEL_ZOOM_THRESHOLD = 2.3;
-// Target on-screen px for town markers (~1.6x the previous 4 / 12), held constant
-// across zoom by counter-scaling against the current camera width.
-const TOWN_LABEL_PX = 19;
+// Target on-screen px for town markers, held constant across zoom by
+// counter-scaling against the current camera width. Towns carry no map label:
+// their names live in the popover and town panel.
 const TOWN_DOT_PX = 6.4;
 // Culture marker size on screen (px), held constant across zoom by counter-scaling.
 const CULTURE_ICON_PX = 22;
@@ -93,6 +89,26 @@ const FOG_DARK = "#0b0a08";
 const SEAL_STROKE_WIDTH = 2.5;
 const BORDER_COLOR = "rgba(45, 36, 26, 0.55)";
 const BORDER_WIDTH = 1;
+// Realm rims: each polity's territory reads as one realm with a continuous
+// border ~2.75 screen px wide just inside its outer edge. Built per polity by the
+// erode technique (#w2-realm-rim): the polity's regions drawn as one union in the
+// rim tone, minus the same union eroded by the rim width, leaves only the rim.
+// The erode radius is in world units, so applyView rewrites it on every camera
+// change to hold the on-screen width (no React involved).
+const REALM_RIM_PX = 2.75;
+const REALM_RIM_COLOR = "rgb(30, 22, 14)";
+const REALM_RIM_OPACITY = 0.75;
+// Realm name labels: one per owning polity, at its largest region's centroid,
+// sized by the realm's total area (world units, clamped) and faded out between
+// these zooms (zoom = worldWidth / cameraWidth) as the camera dives in.
+const REALM_LABEL_SCALE = 0.17;
+const REALM_LABEL_MIN = 14;
+const REALM_LABEL_MAX = 66;
+const REALM_LABEL_FADE_START = 3.4;
+const REALM_LABEL_FADE_END = 5.4;
+const REALM_LABEL_INK = "#1d150e";
+const REALM_LABEL_INK_OPACITY = 0.55;
+const REALM_LABEL_HALO = "rgba(255, 246, 228, 0.72)";
 
 const WORLD_ASPECT = (world: Rect) => world.w / world.h;
 
@@ -136,6 +152,18 @@ function zoomAt(cam: Rect, world: Rect, factor: number, fx: number, fy: number, 
   return clampCamera({ x: fx - rx * w, y: fy - ry * h, w, h }, world, aspect);
 }
 
+// Erode radius (world units) that keeps the realm rim REALM_RIM_PX wide on screen.
+function rimRadiusFor(cam: Rect, box: Box): number {
+  return REALM_RIM_PX * (cam.w / box.w);
+}
+
+// Realm labels are for overview: fully shown up to FADE_START, gone by FADE_END.
+function realmLabelOpacityFor(cam: Rect, world: Rect): number {
+  const zoom = world.w / cam.w;
+  const t = (zoom - REALM_LABEL_FADE_START) / (REALM_LABEL_FADE_END - REALM_LABEL_FADE_START);
+  return Math.max(0, Math.min(1, 1 - t));
+}
+
 // Mean of every vertex in a region path — used to anchor the popover.
 function pathCentroid(path: string): { x: number; y: number } {
   let sx = 0;
@@ -155,6 +183,54 @@ function pathCentroid(path: string): { x: number; y: number } {
     }
   }
   return n ? { x: sx / n, y: sy / n } : { x: 0, y: 0 };
+}
+
+// A region path ("M x,y L x,y … Z" sub-paths) as rings of points.
+function pathRings(path: string): { x: number; y: number }[][] {
+  const rings: { x: number; y: number }[][] = [];
+  for (const sub of path.split("M")) {
+    const s = sub.trim();
+    if (!s) continue;
+    const ring: { x: number; y: number }[] = [];
+    for (const tok of s.replace(/Z/g, "").split("L")) {
+      const t = tok.trim();
+      if (!t) continue;
+      const [x, y] = t.split(",");
+      if (x === undefined || y === undefined) continue;
+      ring.push({ x: parseFloat(x), y: parseFloat(y) });
+    }
+    if (ring.length >= 3) rings.push(ring);
+  }
+  return rings;
+}
+
+// Shoelace area (absolute) and area-weighted centroid of one ring.
+function ringMetrics(ring: { x: number; y: number }[]): { area: number; x: number; y: number } {
+  let twiceArea = 0;
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0; i < ring.length; i += 1) {
+    const p = ring[i]!;
+    const q = ring[(i + 1) % ring.length]!;
+    const cross = p.x * q.y - q.x * p.y;
+    twiceArea += cross;
+    cx += (p.x + q.x) * cross;
+    cy += (p.y + q.y) * cross;
+  }
+  if (Math.abs(twiceArea) < 1e-6) return { area: 0, x: ring[0]!.x, y: ring[0]!.y };
+  return { area: Math.abs(twiceArea) / 2, x: cx / (3 * twiceArea), y: cy / (3 * twiceArea) };
+}
+
+// A region's total area and the centroid of its largest ring (the label anchor).
+function regionMetrics(path: string): { area: number; x: number; y: number } {
+  let area = 0;
+  let largest: { area: number; x: number; y: number } | null = null;
+  for (const ring of pathRings(path)) {
+    const m = ringMetrics(ring);
+    area += m.area;
+    if (!largest || m.area > largest.area) largest = m;
+  }
+  return { area, x: largest?.x ?? 0, y: largest?.y ?? 0 };
 }
 
 // The owning state's crest: its faction emblem from POLITY_CREST (the same art the
@@ -242,6 +318,33 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
   const seaZones = useMemo(() => world?.provinces.filter((p) => p.type === "sea") ?? [], [world]);
   const fog = useMemo(() => world?.provinces.filter((p) => p.type === "fog") ?? [], [world]);
 
+  // Realms: one entry per polity that holds land (Unclaimed excluded) — its
+  // regions, total area, and the centroid of its largest region. Drives the rim
+  // layer and the name labels; stable across camera moves.
+  const realms = useMemo(() => {
+    const out: { id: string; name: string; regions: Province[]; area: number; x: number; y: number }[] = [];
+    if (!world || !politics) return out;
+    const byPolity = new Map<string, Province[]>();
+    for (const province of land) {
+      const owner = politics.owners[province.id];
+      if (!owner || owner === "unclaimed" || !politics.polities[owner]) continue;
+      const list = byPolity.get(owner) ?? [];
+      list.push(province);
+      byPolity.set(owner, list);
+    }
+    for (const [id, regions] of byPolity) {
+      let area = 0;
+      let largest = { area: -1, x: 0, y: 0 };
+      for (const province of regions) {
+        const m = regionMetrics(province.path);
+        area += m.area;
+        if (m.area > largest.area) largest = m;
+      }
+      out.push({ id, name: politics.polities[id]!.name, regions, area, x: largest.x, y: largest.y });
+    }
+    return out;
+  }, [world, land, politics]);
+
   // Town id -> culture icon URL, for towns whose region has a culture-bearing
   // owner. Stable across camera moves (depends only on world + politics).
   const townCultureIcon = useMemo(() => {
@@ -261,6 +364,10 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
+  // Imperative hooks for the camera-dependent bits of the static scene: the rim
+  // erode radius (world units per screen px) and the realm-label fade.
+  const rimRadiusRef = useRef<SVGFEMorphologyElement | null>(null);
+  const labelsRef = useRef<SVGGElement | null>(null);
   const cameraRef = useRef<Rect | null>(null);
   const [camera, setCamera] = useState<Rect | null>(null);
   const [box, setBox] = useState<Box>({ w: 0, h: 0 });
@@ -306,8 +413,11 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
 
   const applyView = useCallback((cam: Rect) => {
     svgRef.current?.setAttribute("viewBox", `${cam.x} ${cam.y} ${cam.w} ${cam.h}`);
+    const b = boxRef.current;
+    if (rimRadiusRef.current && b.w > 0) rimRadiusRef.current.setAttribute("radius", String(rimRadiusFor(cam, b)));
+    if (labelsRef.current && worldRect) labelsRef.current.style.opacity = String(realmLabelOpacityFor(cam, worldRect));
     positionPopover(cam);
-  }, [positionPopover]);
+  }, [positionPopover, worldRect]);
 
   // Any React render re-asserts the live camera onto the SVG + popover.
   useLayoutEffect(() => {
@@ -620,6 +730,20 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
           ))}
         </g>
 
+        {/* Realm rims: per polity, its regions as one union in the rim tone (seam-
+            sealed like the tint), run through #w2-realm-rim so only the outer rim
+            survives. Internal region lines keep the hairline above; unowned and
+            unclaimed land carries no rim. Group opacity applies after the filter. */}
+        <g pointerEvents="none" opacity={REALM_RIM_OPACITY}>
+          {realms.map((realm) => (
+            <g key={realm.id} filter="url(#w2-realm-rim)" fill={REALM_RIM_COLOR} stroke={REALM_RIM_COLOR} strokeWidth={SEAL_STROKE_WIDTH} strokeLinejoin="round">
+              {realm.regions.map((province) => (
+                <path key={province.id} d={province.path} fillRule="evenodd" />
+              ))}
+            </g>
+          ))}
+        </g>
+
         {/* Land regions: an invisible interaction layer with a hover wash. */}
         <g>
           {land.map((province) => (
@@ -646,7 +770,7 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
         </g>
       </>
     );
-  }, [world, land, seaZones, fog, hover, politics, onRegionEnter, onRegionLeave]);
+  }, [world, land, seaZones, fog, hover, politics, realms, onRegionEnter, onRegionLeave]);
 
   // The world must load before we can render anything, but the stage renders as
   // soon as the world is ready (even before the camera) so its box gets measured
@@ -655,12 +779,12 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
     return <p style={{ padding: 24, fontFamily: "Spectral, serif" }}>Charting the known world…</p>;
   }
 
-  const zoom = camera ? worldRect.w / camera.w : 0;
   const unitPerPx = camera ? (box.w > 0 ? camera.w / box.w : camera.w / worldRect.w) : 0;
-  const labelPx = TOWN_LABEL_PX * unitPerPx;
   const dotPx = TOWN_DOT_PX * unitPerPx;
   const iconPx = CULTURE_ICON_PX * unitPerPx;
-  const labelledTowns = zoom >= LABEL_ZOOM_THRESHOLD ? world.towns : world.towns.filter((town) => town.name === "Massalia");
+  // Initial values for the rim radius and label fade; applyView keeps them live.
+  const rimRadius = camera && box.w > 0 ? rimRadiusFor(camera, box) : 0;
+  const realmLabelOpacity = camera ? realmLabelOpacityFor(camera, worldRect) : 1;
 
   const selectedProvince = selected ? provincesById.get(selected) ?? null : null;
   const selectedOwnerId = selectedProvince ? politics?.owners[selectedProvince.id] ?? null : null;
@@ -799,6 +923,15 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
             onPointerCancel={endPointer}
             onKeyDown={onKeyDown}
           >
+            <defs>
+              {/* Realm rim = union minus its erosion (see REALM_RIM_PX). The default
+                  bbox filter region suffices: erosion never grows the shape. */}
+              <filter id="w2-realm-rim" colorInterpolationFilters="sRGB">
+                <feMorphology ref={rimRadiusRef} in="SourceAlpha" operator="erode" radius={rimRadius} result="inner" />
+                <feComposite in="SourceGraphic" in2="inner" operator="out" />
+              </filter>
+            </defs>
+
             {staticLayers}
 
             {/* Selected region: gold outline on top of everything. */}
@@ -815,16 +948,44 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
               />
             ) : null}
 
-            {/* Town markers + labels: culture icon when the town's region has a
-                culture-bearing owner, else the plain dot. Markers are tappable
-                (data-town; the tap hit-test in endPointer checks them first);
-                labels stay inert. Same layer as before, so it commits at gesture
-                end (no re-renders mid-drag). */}
+            {/* Realm name labels: one per owning polity at its largest region's
+                centroid, sized by realm area. Uppercase dark ink with a light halo,
+                inert, and faded imperatively in applyView as the camera dives in. */}
+            <g ref={labelsRef} className="w2map-realm-labels" pointerEvents="none" style={{ opacity: realmLabelOpacity }}>
+              {realms.map((realm) => {
+                const size = Math.max(REALM_LABEL_MIN, Math.min(REALM_LABEL_MAX, REALM_LABEL_SCALE * Math.sqrt(realm.area)));
+                return (
+                  <text
+                    key={realm.id}
+                    x={realm.x}
+                    y={realm.y}
+                    fontSize={size}
+                    fontWeight={700}
+                    letterSpacing={size * 0.12}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fill={REALM_LABEL_INK}
+                    fillOpacity={REALM_LABEL_INK_OPACITY}
+                    stroke={REALM_LABEL_HALO}
+                    strokeWidth={size * 0.14}
+                    strokeLinejoin="round"
+                    paintOrder="stroke"
+                  >
+                    {realm.name.toUpperCase()}
+                  </text>
+                );
+              })}
+            </g>
+
+            {/* Town markers: culture icon when the town's region has a culture-
+                bearing owner, else the plain dot. No name labels on the map (names
+                live in the popover and town panel). Markers are tappable (data-town;
+                the tap hit-test in endPointer checks them first). Same layer as
+                before, so it commits at gesture end (no re-renders mid-drag). */}
             <g pointerEvents="none">
-              {labelledTowns.map((town) => {
+              {world.towns.map((town) => {
                 const icon = townCultureIcon.get(town.id);
                 const isMassalia = town.name === "Massalia";
-                const markerHalf = icon ? iconPx / 2 : isMassalia ? dotPx * 1.5 : dotPx;
                 return (
                   <g key={town.id} data-town={town.id}>
                     {icon ? (
@@ -832,9 +993,6 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
                     ) : (
                       <circle cx={town.x} cy={town.y} r={isMassalia ? dotPx * 1.5 : dotPx} fill="#fff" stroke="#3c3c3c" strokeWidth={dotPx * 0.35} pointerEvents="visiblePainted" style={{ cursor: "pointer" }} />
                     )}
-                    <text x={town.x + markerHalf + labelPx * 0.25} y={town.y - dotPx * 1.25} fontSize={isMassalia ? labelPx * 1.15 : labelPx} fill="#fff" stroke="#3c3c3c" strokeWidth={labelPx * 0.02} fontWeight="bold">
-                      {town.name}
-                    </text>
                   </g>
                 );
               })}

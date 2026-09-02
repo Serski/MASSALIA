@@ -107,6 +107,13 @@
   border-color: var(--dash-gold-bright, #d1ae63);
 }
 
+/* Realm name labels (SVG text): the display face, and a short opacity ease so the
+   zoom-driven fade written by applyView reads smoothly. */
+.w2map-realm-labels {
+  font-family: "Cinzel", "Spectral", serif;
+  transition: opacity 160ms ease;
+}
+
 /* --- Region info: shared content ------------------------------------------ */
 .w2map-info-close {
   position: absolute;
