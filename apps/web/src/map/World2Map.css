@@ -114,6 +114,11 @@
   transition: opacity 160ms ease;
 }
 
+/* Town markers fade up past the town zoom window (opacity written by applyView). */
+.w2map-town-markers {
+  transition: opacity 160ms ease;
+}
+
 /* --- Region info: shared content ------------------------------------------ */
 .w2map-info-close {
   position: absolute;

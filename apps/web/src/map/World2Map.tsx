@@ -89,23 +89,40 @@ const FOG_DARK = "#0b0a08";
 const SEAL_STROKE_WIDTH = 2.5;
 const BORDER_COLOR = "rgba(45, 36, 26, 0.55)";
 const BORDER_WIDTH = 1;
+// Zoom throughout = worldWidth / cameraWidth: 1 at world fit, ~2.4 at the desktop
+// opening frame, 10 at the deepest zoom.
+//
 // Realm rims: each polity's territory reads as one realm with a continuous
-// border ~2.75 screen px wide just inside its outer edge. Built per polity by the
-// erode technique (#w2-realm-rim): the polity's regions drawn as one union in the
-// rim tone, minus the same union eroded by the rim width, leaves only the rim.
-// The erode radius is in world units, so applyView rewrites it on every camera
-// change to hold the on-screen width (no React involved).
-const REALM_RIM_PX = 2.75;
+// border just inside its outer edge. Built per polity by the erode technique
+// (#w2-realm-rim): the polity's regions drawn as one union in the rim tone,
+// minus the same union eroded by the rim width, leaves only the rim. The rim's
+// screen width scales with zoom — faint at overview, 2.75px once a few realms
+// fill the screen — rising linearly in log(zoom) between the two stops.
+const RIM_PX_MIN = 0.9;
+const RIM_PX_MAX = 2.75;
+const RIM_ZOOM_MIN = 1.3;
+const RIM_ZOOM_MAX = 3.2;
+// The erode radius is a filter attribute in world units. Rewriting it forces the
+// filtered groups to re-rasterise, so applyView writes it only when the zoom has
+// moved more than this fraction since the last write, or when a gesture settles.
+// A pure pan never changes the zoom, so a pan performs zero filter writes.
+const RIM_ZOOM_HYSTERESIS = 0.03;
 const REALM_RIM_COLOR = "rgb(30, 22, 14)";
 const REALM_RIM_OPACITY = 0.75;
+// Town markers are hidden at overview and fade in over this zoom window; their
+// tap targets are live only while visible (visibility follows the opacity).
+const TOWN_FADE_START = 2.6;
+const TOWN_FADE_END = 3.4;
 // Realm name labels: one per owning polity, at its largest region's centroid,
-// sized by the realm's total area (world units, clamped) and faded out between
-// these zooms (zoom = worldWidth / cameraWidth) as the camera dives in.
-const REALM_LABEL_SCALE = 0.17;
-const REALM_LABEL_MIN = 14;
-const REALM_LABEL_MAX = 66;
-const REALM_LABEL_FADE_START = 3.4;
-const REALM_LABEL_FADE_END = 5.4;
+// sized by the realm's total area (world units, clamped). Invisible at world fit,
+// fading in over FADE_IN and back out over FADE_OUT as the camera dives in.
+const REALM_LABEL_SCALE = 0.1;
+const REALM_LABEL_MIN = 9;
+const REALM_LABEL_MAX = 40;
+const REALM_LABEL_FADE_IN_START = 1.45;
+const REALM_LABEL_FADE_IN_END = 2.1;
+const REALM_LABEL_FADE_OUT_START = 3.4;
+const REALM_LABEL_FADE_OUT_END = 5.4;
 const REALM_LABEL_INK = "#1d150e";
 const REALM_LABEL_INK_OPACITY = 0.55;
 const REALM_LABEL_HALO = "rgba(255, 246, 228, 0.72)";
@@ -152,16 +169,40 @@ function zoomAt(cam: Rect, world: Rect, factor: number, fx: number, fy: number, 
   return clampCamera({ x: fx - rx * w, y: fy - ry * h, w, h }, world, aspect);
 }
 
-// Erode radius (world units) that keeps the realm rim REALM_RIM_PX wide on screen.
-function rimRadiusFor(cam: Rect, box: Box): number {
-  return REALM_RIM_PX * (cam.w / box.w);
+function zoomOf(cam: Rect, world: Rect): number {
+  return world.w / cam.w;
 }
 
-// Realm labels are for overview: fully shown up to FADE_START, gone by FADE_END.
+// 0 at or before `from`, 1 at or after `to`, linear between.
+function ramp(value: number, from: number, to: number): number {
+  return Math.max(0, Math.min(1, (value - from) / (to - from)));
+}
+
+// On-screen rim width for a zoom: RIM_PX_MIN up to RIM_ZOOM_MIN, RIM_PX_MAX from
+// RIM_ZOOM_MAX, linear in log(zoom) between.
+function rimPxFor(zoom: number): number {
+  const t = ramp(Math.log(zoom), Math.log(RIM_ZOOM_MIN), Math.log(RIM_ZOOM_MAX));
+  return RIM_PX_MIN + t * (RIM_PX_MAX - RIM_PX_MIN);
+}
+
+// Erode radius (world units) that puts rimPxFor(zoom) pixels on screen: exact, so
+// the rim never wobbles when it is (re)written mid-pinch or at gesture end.
+function rimRadiusFor(cam: Rect, box: Box, world: Rect): number {
+  return rimPxFor(zoomOf(cam, world)) * (cam.w / box.w);
+}
+
+// Realm labels: fade in past world fit, fade back out once a region fills the screen.
 function realmLabelOpacityFor(cam: Rect, world: Rect): number {
-  const zoom = world.w / cam.w;
-  const t = (zoom - REALM_LABEL_FADE_START) / (REALM_LABEL_FADE_END - REALM_LABEL_FADE_START);
-  return Math.max(0, Math.min(1, 1 - t));
+  const zoom = zoomOf(cam, world);
+  return Math.min(
+    ramp(zoom, REALM_LABEL_FADE_IN_START, REALM_LABEL_FADE_IN_END),
+    1 - ramp(zoom, REALM_LABEL_FADE_OUT_START, REALM_LABEL_FADE_OUT_END),
+  );
+}
+
+// Town markers: hidden at overview, fading up over the town window.
+function townOpacityFor(cam: Rect, world: Rect): number {
+  return ramp(zoomOf(cam, world), TOWN_FADE_START, TOWN_FADE_END);
 }
 
 // Mean of every vertex in a region path — used to anchor the popover.
@@ -364,10 +405,15 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
-  // Imperative hooks for the camera-dependent bits of the static scene: the rim
-  // erode radius (world units per screen px) and the realm-label fade.
+  // Imperative hooks for the camera-dependent bits of the scene: the rim erode
+  // radius, the realm-label fade and the town-marker fade. The "last written"
+  // refs let applyView skip redundant writes (a pan changes none of them).
   const rimRadiusRef = useRef<SVGFEMorphologyElement | null>(null);
+  const rimZoomRef = useRef<number | null>(null);
   const labelsRef = useRef<SVGGElement | null>(null);
+  const lastLabelOpacityRef = useRef<number | null>(null);
+  const townsRef = useRef<SVGGElement | null>(null);
+  const lastTownOpacityRef = useRef<number | null>(null);
   const cameraRef = useRef<Rect | null>(null);
   const [camera, setCamera] = useState<Rect | null>(null);
   const [box, setBox] = useState<Box>({ w: 0, h: 0 });
@@ -411,17 +457,41 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
     el.style.top = `${top}px`;
   }, []);
 
-  const applyView = useCallback((cam: Rect) => {
+  // Push a camera onto the scene without React. Every call writes the viewBox;
+  // the filter radius is written only when the zoom moved past the hysteresis
+  // (or `settle` is set at gesture end / on commit), and the two fades only when
+  // their value changed — so a pure pan touches the viewBox and popover alone.
+  const applyView = useCallback((cam: Rect, settle = false) => {
     svgRef.current?.setAttribute("viewBox", `${cam.x} ${cam.y} ${cam.w} ${cam.h}`);
-    const b = boxRef.current;
-    if (rimRadiusRef.current && b.w > 0) rimRadiusRef.current.setAttribute("radius", String(rimRadiusFor(cam, b)));
-    if (labelsRef.current && worldRect) labelsRef.current.style.opacity = String(realmLabelOpacityFor(cam, worldRect));
+    if (worldRect) {
+      const zoom = zoomOf(cam, worldRect);
+      const b = boxRef.current;
+      if (rimRadiusRef.current && b.w > 0) {
+        const last = rimZoomRef.current;
+        if (settle || last === null || Math.abs(zoom / last - 1) > RIM_ZOOM_HYSTERESIS) {
+          rimRadiusRef.current.setAttribute("radius", String(rimRadiusFor(cam, b, worldRect)));
+          rimZoomRef.current = zoom;
+        }
+      }
+      const labelOpacity = realmLabelOpacityFor(cam, worldRect);
+      if (labelsRef.current && labelOpacity !== lastLabelOpacityRef.current) {
+        labelsRef.current.style.opacity = String(labelOpacity);
+        lastLabelOpacityRef.current = labelOpacity;
+      }
+      const townOpacity = townOpacityFor(cam, worldRect);
+      if (townsRef.current && townOpacity !== lastTownOpacityRef.current) {
+        townsRef.current.style.opacity = String(townOpacity);
+        townsRef.current.style.visibility = townOpacity > 0 ? "visible" : "hidden";
+        lastTownOpacityRef.current = townOpacity;
+      }
+    }
     positionPopover(cam);
   }, [positionPopover, worldRect]);
 
-  // Any React render re-asserts the live camera onto the SVG + popover.
+  // Any React render re-asserts the live camera onto the SVG + popover. Renders
+  // happen at commit points (gesture end), so this is where the rim settles exactly.
   useLayoutEffect(() => {
-    if (cameraRef.current) applyView(cameraRef.current);
+    if (cameraRef.current) applyView(cameraRef.current, true);
   });
 
   // The opening frame, computed once the world data + container box have settled.
@@ -488,7 +558,7 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
 
   const setCameraNow = useCallback((next: Rect) => {
     cameraRef.current = next;
-    applyView(next);
+    applyView(next, true);
     setCamera(next);
   }, [applyView]);
 
@@ -782,9 +852,11 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
   const unitPerPx = camera ? (box.w > 0 ? camera.w / box.w : camera.w / worldRect.w) : 0;
   const dotPx = TOWN_DOT_PX * unitPerPx;
   const iconPx = CULTURE_ICON_PX * unitPerPx;
-  // Initial values for the rim radius and label fade; applyView keeps them live.
-  const rimRadius = camera && box.w > 0 ? rimRadiusFor(camera, box) : 0;
-  const realmLabelOpacity = camera ? realmLabelOpacityFor(camera, worldRect) : 1;
+  // Render-time values for the rim radius and the two fades (exact at every
+  // commit); applyView keeps them live between commits.
+  const rimRadius = camera && box.w > 0 ? rimRadiusFor(camera, box, worldRect) : 0;
+  const realmLabelOpacity = camera ? realmLabelOpacityFor(camera, worldRect) : 0;
+  const townOpacity = camera ? townOpacityFor(camera, worldRect) : 0;
 
   const selectedProvince = selected ? provincesById.get(selected) ?? null : null;
   const selectedOwnerId = selectedProvince ? politics?.owners[selectedProvince.id] ?? null : null;
@@ -924,9 +996,10 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
             onKeyDown={onKeyDown}
           >
             <defs>
-              {/* Realm rim = union minus its erosion (see REALM_RIM_PX). The default
-                  bbox filter region suffices: erosion never grows the shape. */}
-              <filter id="w2-realm-rim" colorInterpolationFilters="sRGB">
+              {/* Realm rim = union minus its erosion (see RIM_PX_*). The filter
+                  region hugs each group's bbox (objectBoundingBox units, a hair of
+                  slack for anti-aliasing): erosion never grows the shape. */}
+              <filter id="w2-realm-rim" filterUnits="objectBoundingBox" x="-1%" y="-1%" width="102%" height="102%" colorInterpolationFilters="sRGB">
                 <feMorphology ref={rimRadiusRef} in="SourceAlpha" operator="erode" radius={rimRadius} result="inner" />
                 <feComposite in="SourceGraphic" in2="inner" operator="out" />
               </filter>
@@ -979,10 +1052,11 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
 
             {/* Town markers: culture icon when the town's region has a culture-
                 bearing owner, else the plain dot. No name labels on the map (names
-                live in the popover and town panel). Markers are tappable (data-town;
-                the tap hit-test in endPointer checks them first). Same layer as
-                before, so it commits at gesture end (no re-renders mid-drag). */}
-            <g pointerEvents="none">
+                live in the popover and town panel). Hidden at overview: the group
+                fades up over the town window (applyView writes opacity, and
+                visibility so hidden markers take no taps). Markers are tappable
+                (data-town; the tap hit-test in endPointer checks them first). */}
+            <g ref={townsRef} className="w2map-town-markers" pointerEvents="none" style={{ opacity: townOpacity, visibility: townOpacity > 0 ? "visible" : "hidden" }}>
               {world.towns.map((town) => {
                 const icon = townCultureIcon.get(town.id);
                 const isMassalia = town.name === "Massalia";
