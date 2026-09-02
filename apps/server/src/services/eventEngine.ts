@@ -301,7 +301,8 @@ export async function applyChoiceEffects(actingCharacterId: string, eventId: str
   await db.transaction(async (tx) => {
     const result = await applyEffectsInTx(tx, { characterId: actingCharacterId, eventId, effects: choice.effects, cityDef, factionDef });
     ideologyTouched = result.ideologyTouched;
-    // Record the resolution in history (also recorded at draw time).
+    // The ONLY event_history write: an event counts as seen when it is resolved
+    // (by the player or by its lazy default), never merely when it was drawn.
     await tx.insert(eventHistory).values({ characterId: actingCharacterId, eventId });
   });
 
@@ -320,10 +321,6 @@ export async function applyChoiceEffects(actingCharacterId: string, eventId: str
   await broadcastState();
 
   return { resultText: choice.resultText };
-}
-
-export async function recordDraw(characterId: string, eventId: string) {
-  await db.insert(eventHistory).values({ characterId, eventId });
 }
 
 export async function recentEventIds(characterId: string, limit = 5): Promise<string[]> {

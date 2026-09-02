@@ -11,7 +11,7 @@ import {
   type EligibilityContext,
   type EventDefinition,
 } from "@massalia/shared";
-import { applyChoiceEffects, listEvents, recentEventIds, recordDraw } from "./eventEngine.js";
+import { applyChoiceEffects, listEvents, recentEventIds } from "./eventEngine.js";
 
 const db = createDb();
 
@@ -95,8 +95,10 @@ export async function ensureDailySet(
       .insert(dailyDecisions)
       .values({ characterId, utcDay: day, arena, eventId: drawn.id })
       .onConflictDoNothing();
-    await recordDraw(characterId, drawn.id);
-    recent.push(drawn.id); // don't draw the same event into two arenas the same day
+    // History is written when the card is RESOLVED (applyChoiceEffects), not here:
+    // an unresolved card must not buy itself a cooldown. This push only keeps the
+    // same event out of two arenas on the same day.
+    recent.push(drawn.id);
   }
 
   return getDailySet(characterId, now);

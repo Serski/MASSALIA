@@ -95,6 +95,8 @@ suite("daily decisions — lazy default for expired cards (integration)", () => 
     (await db.select({ d: m.dbPkg.playerCharacters.drachmae }).from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.id, id)).limit(1))[0]!.d;
   const effectLogCount = async (characterId: string) =>
     (await db.select({ id: m.dbPkg.effectLog.id }).from(m.dbPkg.effectLog).where(eq(m.dbPkg.effectLog.characterId, characterId))).length;
+  const historyCount = async (characterId: string) =>
+    (await db.select({ id: m.dbPkg.eventHistory.id }).from(m.dbPkg.eventHistory).where(eq(m.dbPkg.eventHistory.characterId, characterId))).length;
   const historyRows = async (characterId: string, eventId: string) =>
     db
       .select()
@@ -161,6 +163,9 @@ suite("daily decisions — lazy default for expired cards (integration)", () => 
     expect(await drachmaeOf(c.id)).toBe(500);
     // No choice was applied: nothing in the effect log for this character.
     expect(await effectLogCount(c.id)).toBe(0);
+    // And drawing today's set wrote no history — an event is "seen" only when
+    // resolved, so neither the lapsed card nor today's fresh card counts yet.
+    expect(await historyCount(c.id)).toBe(0);
   });
 
   it("(c) today's unresolved card is untouched — only PAST days are settled", async () => {
