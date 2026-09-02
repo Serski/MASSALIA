@@ -711,6 +711,25 @@ export const POLITY_CREST: Record<string, string> = {
   "italiote-league": assetIconUrl("italiote-league.webp"),
   lucani: assetIconUrl("lucani.webp"),
   mamertines: assetIconUrl("mamertines.webp"),
+  // The Gaulish tribes (AVATARS TRIBES set, second batch).
+  aedui: assetIconUrl("aedui.webp"),
+  arverni: assetIconUrl("arverni.webp"),
+  boii: assetIconUrl("boii.webp"),
+  caletes: assetIconUrl("caletes.webp"),
+  friniates: assetIconUrl("friniates.webp"),
+  insubres: assetIconUrl("insubres.webp"),
+  lemovices: assetIconUrl("lemovices.webp"),
+  lingones: assetIconUrl("lingones.webp"),
+  menapii: assetIconUrl("menapii.webp"),
+  namnetes: assetIconUrl("namnetes.webp"),
+  osismii: assetIconUrl("osismii.webp"),
+  pictones: assetIconUrl("pictones.webp"),
+  segusiavi: assetIconUrl("segusiavi.webp"),
+  sordones: assetIconUrl("sordones.webp"),
+  tarbelli: assetIconUrl("tarbelli.webp"),
+  unelli: assetIconUrl("unelli.webp"),
+  veneti: assetIconUrl("veneti.webp"),
+  veragri: assetIconUrl("veragri.webp"),
 };
 
 // Building art lives in assets/buildings/. Class buildings carry one image per
