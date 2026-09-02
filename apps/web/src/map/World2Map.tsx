@@ -65,7 +65,9 @@ const MOBILE_QUERY = "(max-width: 620px)";
 // portrait panel is much narrower.
 const OPENING_FRACTION_DESKTOP = 0.42;
 const OPENING_FRACTION_MOBILE = 0.30;
-const MAX_ZOOM = 10;
+// Deepest zoom (= worldWidth / cameraWidth). 7.7 is one plus-step short of the
+// old 10: the relief holds up here and the visibility windows all complete by 5.4.
+const MAX_ZOOM = 7.7;
 // Target on-screen px for town markers, held constant across zoom by
 // counter-scaling against the current camera width. Towns carry no map label:
 // their names live in the popover and town panel.

@@ -4,7 +4,7 @@
 Reads three committed source copies under ``tools/map-gen/sources/`` (never the
 originals on the Desktop) and emits, into ``apps/web/public/map2/``:
 
-  * ``terrain2.webp``  -- lossless full-resolution terrain underlay
+  * ``terrain2.webp``  -- full-resolution terrain underlay (lossy WebP q95)
   * ``world2.json``    -- region geometry, towns, adjacency
 
 Pipeline (all coordinates live in the source 3126x2696 pixel space):
@@ -668,14 +668,15 @@ def main() -> int:
             fail(f"region {rec['id']} is empty")
 
     # --- Terrain -> webp -----------------------------------------------------
-    # WORLD2_SKIP_TERRAIN=1 skips the (slow) lossless re-encode during iteration.
+    # WORLD2_SKIP_TERRAIN=1 skips the (slow) q95 re-encode during iteration.
     import os
     if os.environ.get("WORLD2_SKIP_TERRAIN") == "1" and TERRAIN_OUT.exists():
         say(f"terrain2.webp: reused existing ({TERRAIN_OUT.stat().st_size / 1024:.1f} KiB)")
     else:
         terrain = flatten_over_white(TERRAIN_PATH)
-        terrain.save(str(TERRAIN_OUT), format="WEBP", lossless=True, quality=100, method=6)
-        say(f"terrain2.webp: {terrain.size} lossless, {TERRAIN_OUT.stat().st_size / 1024:.1f} KiB")
+        # Lossy q95 (method 6): visually clean on the relief, ~5x smaller than lossless.
+        terrain.save(str(TERRAIN_OUT), format="WEBP", lossless=False, quality=95, method=6)
+        say(f"terrain2.webp: {terrain.size} q95, {TERRAIN_OUT.stat().st_size / 1024:.1f} KiB")
 
     # --- Emit world2.json ----------------------------------------------------
     out = {
