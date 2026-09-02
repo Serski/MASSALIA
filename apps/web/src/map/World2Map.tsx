@@ -92,6 +92,12 @@ const BORDER_WIDTH = 1;
 // Zoom throughout = worldWidth / cameraWidth: 1 at world fit, ~2.4 at the desktop
 // opening frame, 10 at the deepest zoom.
 //
+// Realm rims are switched off for performance: the per-polity erode filters
+// re-rasterise on every camera change, which is too costly at overview on phones.
+// The code stays dormant behind this flag for a possible future baked version
+// (pre-rendered rim geometry instead of live filters). When false, nothing
+// rim-related mounts and the map DOM carries no <filter> element.
+const REALM_RIMS_ENABLED = false;
 // Realm rims: each polity's territory reads as one realm with a continuous
 // border just inside its outer edge. Built per polity by the erode technique
 // (#w2-realm-rim): the polity's regions drawn as one union in the rim tone,
@@ -466,7 +472,7 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
     if (worldRect) {
       const zoom = zoomOf(cam, worldRect);
       const b = boxRef.current;
-      if (rimRadiusRef.current && b.w > 0) {
+      if (REALM_RIMS_ENABLED && rimRadiusRef.current && b.w > 0) {
         const last = rimZoomRef.current;
         if (settle || last === null || Math.abs(zoom / last - 1) > RIM_ZOOM_HYSTERESIS) {
           rimRadiusRef.current.setAttribute("radius", String(rimRadiusFor(cam, b, worldRect)));
@@ -800,19 +806,22 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
           ))}
         </g>
 
-        {/* Realm rims: per polity, its regions as one union in the rim tone (seam-
-            sealed like the tint), run through #w2-realm-rim so only the outer rim
-            survives. Internal region lines keep the hairline above; unowned and
-            unclaimed land carries no rim. Group opacity applies after the filter. */}
-        <g pointerEvents="none" opacity={REALM_RIM_OPACITY}>
-          {realms.map((realm) => (
-            <g key={realm.id} filter="url(#w2-realm-rim)" fill={REALM_RIM_COLOR} stroke={REALM_RIM_COLOR} strokeWidth={SEAL_STROKE_WIDTH} strokeLinejoin="round">
-              {realm.regions.map((province) => (
-                <path key={province.id} d={province.path} fillRule="evenodd" />
-              ))}
-            </g>
-          ))}
-        </g>
+        {/* Realm rims (dormant unless REALM_RIMS_ENABLED): per polity, its regions
+            as one union in the rim tone (seam-sealed like the tint), run through
+            #w2-realm-rim so only the outer rim survives. Internal region lines keep
+            the hairline above; unowned and unclaimed land carries no rim. Group
+            opacity applies after the filter. */}
+        {REALM_RIMS_ENABLED ? (
+          <g pointerEvents="none" opacity={REALM_RIM_OPACITY}>
+            {realms.map((realm) => (
+              <g key={realm.id} filter="url(#w2-realm-rim)" fill={REALM_RIM_COLOR} stroke={REALM_RIM_COLOR} strokeWidth={SEAL_STROKE_WIDTH} strokeLinejoin="round">
+                {realm.regions.map((province) => (
+                  <path key={province.id} d={province.path} fillRule="evenodd" />
+                ))}
+              </g>
+            ))}
+          </g>
+        ) : null}
 
         {/* Land regions: an invisible interaction layer with a hover wash. */}
         <g>
@@ -854,7 +863,7 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
   const iconPx = CULTURE_ICON_PX * unitPerPx;
   // Render-time values for the rim radius and the two fades (exact at every
   // commit); applyView keeps them live between commits.
-  const rimRadius = camera && box.w > 0 ? rimRadiusFor(camera, box, worldRect) : 0;
+  const rimRadius = REALM_RIMS_ENABLED && camera && box.w > 0 ? rimRadiusFor(camera, box, worldRect) : 0;
   const realmLabelOpacity = camera ? realmLabelOpacityFor(camera, worldRect) : 0;
   const townOpacity = camera ? townOpacityFor(camera, worldRect) : 0;
 
@@ -995,15 +1004,18 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
             onPointerCancel={endPointer}
             onKeyDown={onKeyDown}
           >
-            <defs>
-              {/* Realm rim = union minus its erosion (see RIM_PX_*). The filter
-                  region hugs each group's bbox (objectBoundingBox units, a hair of
-                  slack for anti-aliasing): erosion never grows the shape. */}
-              <filter id="w2-realm-rim" filterUnits="objectBoundingBox" x="-1%" y="-1%" width="102%" height="102%" colorInterpolationFilters="sRGB">
-                <feMorphology ref={rimRadiusRef} in="SourceAlpha" operator="erode" radius={rimRadius} result="inner" />
-                <feComposite in="SourceGraphic" in2="inner" operator="out" />
-              </filter>
-            </defs>
+            {/* Realm rim filter (dormant unless REALM_RIMS_ENABLED): rim = union
+                minus its erosion (see RIM_PX_*). The filter region hugs each
+                group's bbox (objectBoundingBox units, a hair of slack for
+                anti-aliasing): erosion never grows the shape. */}
+            {REALM_RIMS_ENABLED ? (
+              <defs>
+                <filter id="w2-realm-rim" filterUnits="objectBoundingBox" x="-1%" y="-1%" width="102%" height="102%" colorInterpolationFilters="sRGB">
+                  <feMorphology ref={rimRadiusRef} in="SourceAlpha" operator="erode" radius={rimRadius} result="inner" />
+                  <feComposite in="SourceGraphic" in2="inner" operator="out" />
+                </filter>
+              </defs>
+            ) : null}
 
             {staticLayers}
 
