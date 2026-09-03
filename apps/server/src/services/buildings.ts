@@ -14,7 +14,6 @@ import {
   coeffFor,
   goodCategoryFor,
   goodPerDay,
-  isGuarded,
   materialCostForTier,
   MAX_TIER,
   parseBuildingsContent,
