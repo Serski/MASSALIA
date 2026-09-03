@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    # No REDIS_URL on purpose: the queue and the rate limiter stay in-memory.
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/massalia_test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @massalia/shared build
+
+      - name: Build db package
+        run: pnpm --filter @massalia/db build
+
+      - name: Typecheck server
+        run: pnpm --filter @massalia/server exec tsc -p tsconfig.json --noEmit
+
+      - name: Typecheck web
+        run: pnpm --filter @massalia/web exec tsc -p tsconfig.json --noEmit
+
+      - name: Lint
+        run: pnpm -r lint
+
+      - name: Test shared
+        run: pnpm --filter @massalia/shared test
+
+      # The server suites are gated on a *_test database and truncate it between tests.
+      - name: Create test database
+        run: psql "postgres://postgres:postgres@localhost:5432/postgres" -c "CREATE DATABASE massalia_test"
+
+      - name: Migrate test database
+        run: pnpm db:migrate
+
+      - name: Test server
+        run: pnpm --filter @massalia/server test
+
+      - name: Audit
+        run: pnpm audit --audit-level=high
