@@ -1,7 +1,10 @@
 name: Deploy web preview to GitHub Pages
 
+# Deploys only after the CI workflow has passed on main (workflow_run), or by hand.
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches:
       - main
   workflow_dispatch:
@@ -17,6 +20,9 @@ concurrency:
 
 jobs:
   build:
+    # A workflow_run fires on every completion; only a green CI run (or a manual
+    # dispatch) may build and deploy.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
