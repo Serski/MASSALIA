@@ -48,10 +48,14 @@ import { electionConfig } from "@massalia/shared";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../..");
 
-// trustProxy: 1 trusts exactly one hop (Railway's edge proxy) — NOT `true`, which
-// would trust arbitrary client-supplied X-Forwarded-For chains and let an attacker
-// spoof their IP to bypass per-IP rate limiting.
-const app = Fastify({ logger: true, trustProxy: 1 });
+// Trust exactly ONE hop (Railway's edge proxy) — NOT `true`, which would trust
+// arbitrary client-supplied X-Forwarded-For chains and let an attacker spoof their
+// IP to bypass per-IP rate limiting. This is the function form of the former
+// `trustProxy: 1` (proxy-addr compiled a hop count n to `(addr, hop) => hop < n`).
+// fastify >= 5.12 dropped the number from the option's typing AND makes a numeric
+// value fail closed at runtime (trusts no hop at all), which would have left the
+// rate limiter seeing the proxy's address for every client.
+const app = Fastify({ logger: true, trustProxy: (_address: string, hop: number) => hop < 1 });
 const sessionSecret = process.env.SESSION_SECRET;
 
 if (!sessionSecret || sessionSecret.length < 32) {
