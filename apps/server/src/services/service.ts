@@ -1,12 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { characterTraits, createDb, effectLog, playerBuildings, players, playerCharacters } from "@massalia/db";
 import {
   accrueService,
   canReclass,
-  capStat,
   currentAge,
   gateShortfall,
   isReclassTarget,
@@ -23,6 +22,7 @@ import {
   type ReclassReason,
 } from "@massalia/shared";
 import { getAgeConfig } from "./age.js";
+import { lockCharacterOwner } from "./lock.js";
 import { classBuildingIdFor } from "./buildings.js";
 import { broadcastState } from "./worldState.js";
 import type { CharacterRow } from "./character.js";
@@ -163,9 +163,13 @@ export async function serviceStatus(row: CharacterRow, now: Date = new Date()): 
 // Bank accrued salary into the integer wallet and the militia trickle into the
 // militia stat (clamped to the cap), advancing the anchor only by the consumed
 // time. The wallet only ever increases here, so it can never go negative.
+// Runs inside the caller's transaction and takes the player lock FIRST, so the
+// anchor it reads is the committed one; the wallet and militia writes are relative
+// (never the pre-read value written back), so a concurrent spend is never undone.
 
 export async function settleSalary(tx: DbTx, characterId: string, now: Date): Promise<{ drachmae: number; militia: number }> {
   const ranks = getRanksContent();
+  await lockCharacterOwner(tx, characterId);
   const rows = await tx.select().from(playerCharacters).where(eq(playerCharacters.id, characterId)).limit(1);
   const row = rows[0];
   if (!row || row.armyRank === "none") return { drachmae: 0, militia: 0 };
@@ -178,12 +182,13 @@ export async function settleSalary(tx: DbTx, characterId: string, now: Date): Pr
   const accrual = accrueService(def, anchor, now.getTime());
   if (accrual.consumedMs <= 0) return { drachmae: 0, militia: 0 };
 
-  const nextMilitia = capStat(row.militia + accrual.militia, getAgeConfig());
+  // Same cap as capStat (statFloor..statCap), applied in SQL on the live value.
+  const { statCap, statFloor } = getAgeConfig();
   await tx
     .update(playerCharacters)
     .set({
-      drachmae: row.drachmae + accrual.drachmae,
-      militia: nextMilitia,
+      drachmae: sql`${playerCharacters.drachmae} + ${accrual.drachmae}`,
+      militia: sql`LEAST(${statCap}, GREATEST(${statFloor}, ${playerCharacters.militia} + ${accrual.militia}))`,
       lastSalaryAt: new Date(anchor + accrual.consumedMs),
     })
     .where(eq(playerCharacters.id, characterId));

@@ -29,6 +29,8 @@ async function loadModules() {
   const { buildingRoutes } = await import("./buildings.js");
   const { eventRoutes } = await import("./events.js");
   const { interactionRoutes } = await import("./interactions.js");
+  const { serviceRoutes } = await import("./service.js");
+  const service = await import("../services/service.js");
   const { errorHandler } = await import("../errorHandler.js");
   const buildings = await import("../services/buildings.js");
   const engine = await import("../services/eventEngine.js");
@@ -39,7 +41,7 @@ async function loadModules() {
   const family = await import("../services/family.js");
   const interactions = await import("../services/interactions.js");
   const oligarchy = await import("../services/oligarchy.js");
-  return { dbPkg, buildingRoutes, eventRoutes, interactionRoutes, errorHandler, buildings, engine, daily, age, traits, composure, family, interactions, oligarchy };
+  return { dbPkg, buildingRoutes, eventRoutes, interactionRoutes, serviceRoutes, service, errorHandler, buildings, engine, daily, age, traits, composure, family, interactions, oligarchy };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -65,6 +67,7 @@ suite("per-player serialization (integration)", () => {
     await m.family.loadFamilyConfig();
     await m.interactions.loadInteractionsConfig();
     await m.oligarchy.loadPoliticsConfig();
+    await m.service.loadRanksContent();
 
     app = Fastify();
     app.setErrorHandler(m.errorHandler);
@@ -72,6 +75,7 @@ suite("per-player serialization (integration)", () => {
     await app.register(m.buildingRoutes, { prefix: "/api/buildings" });
     await app.register(m.eventRoutes, { prefix: "/api/events" });
     await app.register(m.interactionRoutes, { prefix: "/api/interactions" });
+    await app.register(m.serviceRoutes, { prefix: "/api/service" });
     // Test-only routes for the error handler contract.
     app.get("/boom", async () => {
       throw new Error("relation \"secret\" does not exist");
@@ -169,6 +173,31 @@ suite("per-player serialization (integration)", () => {
     expect(rejected.json()).toEqual({ error: `You need ${total} drachmae for that.` });
     // One debit, one chicken (plus the probe's): never 0 with two chickens.
     expect(await wallet(playerId)).toBe(0);
+    expect(await goodBalance(playerId, "chicken")).toBe(2);
+  });
+
+  it("salary settle racing a vendor buy lands on the exact expected wallet", async () => {
+    // A recruit (8 dr/day, no militia trickle) enlisted 3 in-game days + 1h ago:
+    // accrueService consumes exactly 3 whole days → 24 dr, whatever the ms jitter.
+    const { token, playerId, characterId } = await freshPlayer(1_000_000, "hoplite");
+    await db
+      .update(m.dbPkg.playerCharacters)
+      .set({ armyRank: "recruit", lastSalaryAt: new Date(now.getTime() - 3 * DAY - 3_600_000) })
+      .where(eq(m.dbPkg.playerCharacters.id, characterId));
+    const probe = await post("/api/buildings/vendor", token, { action: "buy", type: "chicken", qty: 1 });
+    expect(probe.statusCode).toBe(200);
+    const price = probe.json().total as number;
+    // Fund exactly the price: the buy must succeed whichever order the lock picks.
+    await setWallet(playerId, price);
+    await warmPools(token);
+    await Promise.all(Array.from({ length: 3 }, () => get("/api/service", token))); // the service module's own pool
+
+    const [collect, buy] = await Promise.all([post("/api/service/collect", token), post("/api/buildings/vendor", token, { action: "buy", type: "chicken", qty: 1 })]);
+    expect(collect.statusCode).toBe(200);
+    expect(collect.json().collected).toEqual({ drachmae: 24, militia: 0 });
+    expect(buy.statusCode).toBe(200);
+    // price + 24 − price: an absolute salary write would have resurrected the spent price.
+    expect(await wallet(playerId)).toBe(24);
     expect(await goodBalance(playerId, "chicken")).toBe(2);
   });
 
