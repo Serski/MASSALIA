@@ -105,7 +105,12 @@ export async function mapRoutes(app: FastifyInstance) {
 
   // Change one province's ownership. Body: { polityId, changeType: 'occupy' | 'annex' }.
   // Validation is a placeholder for the real war system, isolated in services/mapWar.ts.
-  app.post("/state/:provinceId", async (request, reply) => {
+  // map_provinces.id is a TEXT slug, so the param check is the slug shape (400 on
+  // anything else, before the handler runs).
+  const provinceParams = {
+    params: { type: "object", required: ["provinceId"], properties: { provinceId: { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]*$" } } },
+  } as const;
+  app.post("/state/:provinceId", { schema: provinceParams }, async (request, reply) => {
     // The theatre launches read-only. This explicit server-side gate prevents the
     // unfinished war seam from becoming reachable merely because a client knows
     // the route. Enabling it later still requires replacing mapWar's placeholders.

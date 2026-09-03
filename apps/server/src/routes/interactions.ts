@@ -11,9 +11,19 @@ async function actingRow(userId: string): Promise<{ row: CharacterRow } | { erro
   return { row: await ensureCharacterRow(player, worldId) };
 }
 
+// :characterId is a uuid (player_characters.id): reject anything else with a 400
+// before the handler runs, instead of letting Postgres raise on the cast.
+const characterIdParams = {
+  params: {
+    type: "object",
+    required: ["characterId"],
+    properties: { characterId: { type: "string", format: "uuid" } },
+  },
+} as const;
+
 export async function interactionRoutes(app: FastifyInstance) {
   // The public character profile — public facts + the viewer's interaction gates.
-  app.get("/profile/:characterId", async (request, reply) => {
+  app.get("/profile/:characterId", { schema: characterIdParams }, async (request, reply) => {
     const user = await requireAuth(request);
     const acting = await actingRow(user.id);
     if ("error" in acting) {

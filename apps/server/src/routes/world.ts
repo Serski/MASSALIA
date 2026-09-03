@@ -4,7 +4,11 @@ import { getProvinceDetail, getWorldState, subscribeState } from "../services/wo
 export async function worldRoutes(app: FastifyInstance) {
   app.get("/state", async () => getWorldState());
 
-  app.get("/provinces/:provinceId", async (request) => {
+  // provinces.id is a TEXT slug (world-state keys), so the param check is the slug shape.
+  const provinceParams = {
+    params: { type: "object", required: ["provinceId"], properties: { provinceId: { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]*$" } } },
+  } as const;
+  app.get("/provinces/:provinceId", { schema: provinceParams }, async (request) => {
     const { provinceId } = request.params as { provinceId: string };
     return getProvinceDetail(provinceId);
   });

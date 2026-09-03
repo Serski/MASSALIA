@@ -4,6 +4,7 @@ import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
+import { errorHandler } from "./errorHandler.js";
 import { authRoutes } from "./routes/auth.js";
 import { characterRoutes } from "./routes/characters.js";
 import { characterSheetRoutes } from "./routes/character.js";
@@ -56,6 +57,10 @@ const sessionSecret = process.env.SESSION_SECRET;
 if (!sessionSecret || sessionSecret.length < 32) {
   throw new Error("SESSION_SECRET must be set to at least 32 characters");
 }
+
+// One error shape for every route (see errorHandler.ts): 4xx keep their status +
+// message, 5xx are logged and answered with a fixed message.
+app.setErrorHandler(errorHandler);
 
 await app.register(cors, {
   origin: process.env.WEB_ORIGIN ?? "http://localhost:5173",

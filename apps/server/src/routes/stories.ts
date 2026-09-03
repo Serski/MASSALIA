@@ -14,10 +14,19 @@ async function actingRow(userId: string): Promise<{ row: CharacterRow } | { erro
   return { row: await ensureCharacterRow(player, worldId) };
 }
 
+// Route params are validated up front (400 on a malformed id, before any DB read).
+// stories.id is a TEXT slug ("artemisia-silver"), not a uuid — so the check is the
+// slug shape, bounded in length; choice ids follow the same content-id shape.
+const SLUG = { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]*$" } as const;
+const storyParams = { params: { type: "object", required: ["storyId"], properties: { storyId: SLUG } } } as const;
+const storyChoiceParams = {
+  params: { type: "object", required: ["storyId", "choiceId"], properties: { storyId: SLUG, choiceId: SLUG } },
+} as const;
+
 export async function storyRoutes(app: FastifyInstance) {
   // Start (or resume) a story. Gated: an unoffered story throws not_eligible (403);
   // an existing run (active/completed) resumes idempotently.
-  app.post("/:storyId/start", async (request, reply) => {
+  app.post("/:storyId/start", { schema: storyParams }, async (request, reply) => {
     const user = await requireAuth(request);
     const acting = await actingRow(user.id);
     if ("error" in acting) {
@@ -42,7 +51,7 @@ export async function storyRoutes(app: FastifyInstance) {
 
   // Advance by resolving a choice. The completed-replay no-op is a normal 200 with
   // the completed state (a result, not an exception) — do not convert it to an error.
-  app.post("/:storyId/choices/:choiceId", async (request, reply) => {
+  app.post("/:storyId/choices/:choiceId", { schema: storyChoiceParams }, async (request, reply) => {
     const user = await requireAuth(request);
     const acting = await actingRow(user.id);
     if ("error" in acting) {
@@ -66,7 +75,7 @@ export async function storyRoutes(app: FastifyInstance) {
   });
 
   // Read-only state projection (not_started / unknown_story -> 404 via statusCode).
-  app.get("/:storyId", async (request, reply) => {
+  app.get("/:storyId", { schema: storyParams }, async (request, reply) => {
     const user = await requireAuth(request);
     const acting = await actingRow(user.id);
     if ("error" in acting) {
