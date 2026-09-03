@@ -1,8 +1,8 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { createDb, effectLog, players, playerCharacters } from "@massalia/db";
 import {
   canManumit,
-  capStat,
   CLASS_START,
   isManumissionTarget,
   manumissionChoices,
@@ -13,6 +13,7 @@ import { getFamilyConfig } from "./family.js";
 import { getAgeConfig } from "./age.js";
 import { getHeldTraits } from "./traits.js";
 import { broadcastState } from "./worldState.js";
+import { lockPlayer } from "./lock.js";
 
 const db = createDb();
 
@@ -85,18 +86,25 @@ export async function manumit(character: CharacterRow, classId: string): Promise
   const bonus = CLASS_START[classId as ClassId]?.bonus ?? {};
 
   await db.transaction(async (tx) => {
-    const row = (await tx.select().from(playerCharacters).where(eq(playerCharacters.id, character.id)).limit(1))[0];
-    if (!row) throw new Error("Character vanished mid-manumission.");
+    await lockPlayer(tx, character.playerId);
     // Same person: keep stats/traits/age/composure/drachmae; add the class bonus,
-    // clamped to the stat cap. Only the class and those stats change.
-    const next = {
-      classId,
-      prestige: capStat(row.prestige + (bonus.prestige ?? 0), ageCfg),
-      devotion: capStat(row.devotion + (bonus.devotion ?? 0), ageCfg),
-      militia: capStat(row.militia + (bonus.militia ?? 0), ageCfg),
-      intelligence: capStat(row.intelligence + (bonus.intelligence ?? 0), ageCfg),
-    };
-    await tx.update(playerCharacters).set(next).where(eq(playerCharacters.id, character.id));
+    // clamped to the stat cap. Only the class and those stats change. The bonuses
+    // are RELATIVE, capped in SQL to the same statFloor..statCap capStat applies —
+    // never a pre-read value written back.
+    const { statCap, statFloor } = ageCfg;
+    const capped = (column: AnyPgColumn, add: number) => sql`LEAST(${statCap}, GREATEST(${statFloor}, ${column} + ${add}))`;
+    const updated = await tx
+      .update(playerCharacters)
+      .set({
+        classId,
+        prestige: capped(playerCharacters.prestige, bonus.prestige ?? 0),
+        devotion: capped(playerCharacters.devotion, bonus.devotion ?? 0),
+        militia: capped(playerCharacters.militia, bonus.militia ?? 0),
+        intelligence: capped(playerCharacters.intelligence, bonus.intelligence ?? 0),
+      })
+      .where(eq(playerCharacters.id, character.id))
+      .returning({ id: playerCharacters.id });
+    if (!updated.length) throw new Error("Character vanished mid-manumission.");
     // Keep the display profession in sync with the live classId (me/state reads
     // players.professionSlug for the character sheet, resource, and rank).
     await tx.update(players).set({ professionSlug: classId }).where(eq(players.id, character.playerId));
