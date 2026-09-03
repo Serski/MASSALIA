@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type AgendaScopeView } from "../../api.js";
-import { assetPath, type House } from "../../data/league.js";
+import { assetPath } from "../../data/league.js";
 import { AssetIcon, DashboardCard, DigestList, PanelBanner, type PanelProps, PanelRow, PersonRow, formatDuration, ideologyReadout, titleCase, useCountdownSeconds } from "../shared.js";
 import { PublicProfile, type ProfileTarget } from "../PublicProfile.js";
 import { CitiesView } from "./CitiesView.js";

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice } from "../../api.js";
-import { assetPath, type House } from "../../data/league.js";
+import { assetPath } from "../../data/league.js";
 import { DashboardCard, PanelBanner, type PanelProps, timeUntil, titleCase } from "../shared.js";
 import { CardClose, FestivalBanner, OlympicBanner } from "../banners.js";
 

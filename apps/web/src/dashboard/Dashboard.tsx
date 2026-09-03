@@ -1,6 +1,6 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type LazyExoticComponent, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type LazyExoticComponent } from "react";
 import { api, ApiError, apiErrorMessage, type PlayerState } from "../api.js";
-import { assetPath, nobleHouses, professions, type House } from "../data/league.js";
+import { assetPath, nobleHouses, professions } from "../data/league.js";
 import { DashboardCard, type DashboardSection, type IconName, MoreIcon, type PanelProps, type PlayerDashboardState, type PlayerDashboardView, SvgIcon, playerFromState } from "./shared.js";
 import { AvatarImage, CharacterSheet, InventorySheet, type InventoryTab } from "./sheets.js";
 import { SuccessionScreen } from "./SuccessionScreen.js";

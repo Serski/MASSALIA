@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, contentUrl, type ChronicleEntry, type FamilyState, type FamilyCandidate, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type DivorceNotice, type TragedyNotice } from "../../api.js";
-import { assetPath, type House } from "../../data/league.js";
+import { assetPath } from "../../data/league.js";
 import { DashboardCard, type FourStats, PanelBanner, type PanelProps, PersonFace, PersonRow, StatPips, festivalName, titleCase } from "../shared.js";
 
 function ordinalGeneration(n: number): string {

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, type CharacterSheet as CharacterSheetData, type BuildingsCatalog, type BuildingsMine, type OwnedBuilding, type PeopleView } from "../api.js";
-import { type House } from "../data/league.js";
 import { AssetIcon, type FourStats, GoodGlyph, type PlayerDashboardView, PopGlyph, QtyStepper, STAT_PIP_ICON, buildCountdown, formatPerDay, formatRate, ideologyReadout, idleReason } from "./shared.js";
 
 // Everyone starts at Tier 1; real tier tracking lands with profession progression.
