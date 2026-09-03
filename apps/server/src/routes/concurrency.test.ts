@@ -30,6 +30,9 @@ async function loadModules() {
   const { eventRoutes } = await import("./events.js");
   const { interactionRoutes } = await import("./interactions.js");
   const { serviceRoutes } = await import("./service.js");
+  const { festivalRoutes } = await import("./festival.js");
+  const { olympiadRoutes } = await import("./olympiad.js");
+  const festival = await import("../services/festival.js");
   const service = await import("../services/service.js");
   const { errorHandler } = await import("../errorHandler.js");
   const buildings = await import("../services/buildings.js");
@@ -41,7 +44,7 @@ async function loadModules() {
   const family = await import("../services/family.js");
   const interactions = await import("../services/interactions.js");
   const oligarchy = await import("../services/oligarchy.js");
-  return { dbPkg, buildingRoutes, eventRoutes, interactionRoutes, serviceRoutes, service, errorHandler, buildings, engine, daily, age, traits, composure, family, interactions, oligarchy };
+  return { dbPkg, buildingRoutes, eventRoutes, interactionRoutes, serviceRoutes, festivalRoutes, olympiadRoutes, service, festival, errorHandler, buildings, engine, daily, age, traits, composure, family, interactions, oligarchy };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -68,6 +71,7 @@ suite("per-player serialization (integration)", () => {
     await m.interactions.loadInteractionsConfig();
     await m.oligarchy.loadPoliticsConfig();
     await m.service.loadRanksContent();
+    await m.festival.loadCalendarConfig();
 
     app = Fastify();
     app.setErrorHandler(m.errorHandler);
@@ -76,6 +80,8 @@ suite("per-player serialization (integration)", () => {
     await app.register(m.eventRoutes, { prefix: "/api/events" });
     await app.register(m.interactionRoutes, { prefix: "/api/interactions" });
     await app.register(m.serviceRoutes, { prefix: "/api/service" });
+    await app.register(m.festivalRoutes, { prefix: "/api/festivals" });
+    await app.register(m.olympiadRoutes, { prefix: "/api/olympics" });
     // Test-only routes for the error handler contract.
     app.get("/boom", async () => {
       throw new Error("relation \"secret\" does not exist");
@@ -95,6 +101,7 @@ suite("per-player serialization (integration)", () => {
   beforeEach(async () => {
     await db.execute(sql`
       TRUNCATE TABLE daily_decisions, event_history, effect_log, composure_log, character_traits, world_treasury,
+        festival_events, festival_donations, festival_choregos, olympiads, olympic_candidates, olympic_votes, treasuries, treasury_ledger,
         player_buildings, player_pops, resources, player_characters, dynasties, players, sessions, users, worlds CASCADE
     `);
     await db
@@ -274,6 +281,52 @@ suite("per-player serialization (integration)", () => {
     expect(results.filter((r) => !r.claimed)).toHaveLength(1);
     const history = await db.select().from(m.dbPkg.eventHistory).where(eq(m.dbPkg.eventHistory.characterId, characterId));
     expect(history).toHaveLength(1);
+  });
+
+  // The world clock: 1.5 real days in → year 0 of the game (festival instances key on it).
+  const gameYear = 0;
+
+  it("festival: two identical concurrent resolves donate, debit and record exactly once", async () => {
+    const { token, characterId, playerId } = await freshPlayer(500, "trader");
+    // The Dionysia as delivered to this character, unresolved. "choregos-tragedy":
+    // −25 dr, +1 stat, register_choregos 25 (a donation row + a treasury cut).
+    const fe = (await db.insert(m.dbPkg.festivalEvents).values({ characterId, festivalId: "fest-dionysia", eventId: "fest-dionysia", gameYear }).returning())[0]!;
+    await warmPools(token);
+
+    const payload = { festivalId: "fest-dionysia", choiceId: "choregos-tragedy" };
+    const responses = await Promise.all([post("/api/festivals/resolve", token, payload), post("/api/festivals/resolve", token, payload)]);
+    expect(statuses(responses)).toEqual([200, 409]);
+    expect(responses.find((r) => r.statusCode === 409)!.json()).toEqual({ error: "You have already marked this festival." });
+
+    const row = (await db.select().from(m.dbPkg.festivalEvents).where(eq(m.dbPkg.festivalEvents.id, fe.id)).limit(1))[0]!;
+    expect(row.resolved).toBe(true);
+    expect(row.resolvedChoiceId).toBe("choregos-tragedy");
+    expect(await wallet(playerId)).toBe(475);
+    expect(await db.select().from(m.dbPkg.festivalDonations).where(eq(m.dbPkg.festivalDonations.characterId, characterId))).toHaveLength(1);
+    expect(await db.select().from(m.dbPkg.eventHistory).where(eq(m.dbPkg.eventHistory.characterId, characterId))).toHaveLength(1);
+    expect(await db.select().from(m.dbPkg.composureLog).where(eq(m.dbPkg.composureLog.characterId, characterId))).toHaveLength(1);
+    // Exactly one treasury cut was ledgered.
+    expect(await db.select().from(m.dbPkg.treasuryLedger).where(eq(m.dbPkg.treasuryLedger.reason, "cut:festival_donation"))).toHaveLength(1);
+  });
+
+  it("Olympiad: two identical concurrent nominations register the candidacy exactly once", async () => {
+    const { token, characterId } = await freshPlayer(500, "trader");
+    // A cycle in its nomination window + the nominate card delivered, unresolved.
+    await db.insert(m.dbPkg.olympiads).values({ worldId, gameYear, phase: "nomination", nominationEndsAt: new Date(now.getTime() + 2 * DAY) });
+    const fe = (await db.insert(m.dbPkg.festivalEvents).values({ characterId, festivalId: "olympiad", eventId: "olympic-nominate", gameYear }).returning())[0]!;
+    await warmPools(token);
+
+    const responses = await Promise.all([post("/api/olympics/resolve", token, { choiceId: "stand" }), post("/api/olympics/resolve", token, { choiceId: "stand" })]);
+    expect(statuses(responses)).toEqual([200, 409]);
+    expect(responses.find((r) => r.statusCode === 200)!.json().nominated).toBe(true);
+    expect(responses.find((r) => r.statusCode === 409)!.json()).toEqual({ error: "No Olympic event awaits you." });
+
+    const row = (await db.select().from(m.dbPkg.festivalEvents).where(eq(m.dbPkg.festivalEvents.id, fe.id)).limit(1))[0]!;
+    expect(row.resolved).toBe(true);
+    expect(row.resolvedChoiceId).toBe("stand");
+    expect(await db.select().from(m.dbPkg.olympicCandidates).where(eq(m.dbPkg.olympicCandidates.characterId, characterId))).toHaveLength(1);
+    expect(await db.select().from(m.dbPkg.eventHistory).where(eq(m.dbPkg.eventHistory.characterId, characterId))).toHaveLength(1);
+    expect(await db.select().from(m.dbPkg.composureLog).where(eq(m.dbPkg.composureLog.characterId, characterId))).toHaveLength(1);
   });
 
   it("error handler: 4xx keep status + message, 5xx are masked, malformed :characterId is a 400", async () => {
