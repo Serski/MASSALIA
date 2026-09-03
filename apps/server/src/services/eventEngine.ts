@@ -313,30 +313,52 @@ export async function applyChoiceEffects(
   choice: EventChoice,
   opts: { claim?: (tx: Tx) => Promise<boolean> } = {},
 ) {
-  const traitEffects = choice.effects.filter((e) => e.type === "change_trait");
-
-  // World-scoped effects (Atlas Phase 2b-ii) are explicitly-targeted; resolve their
-  // content defaults outside the tx (file IO) only when this choice actually uses one.
-  const hasWorldEffect = choice.effects.some(
-    (e) => e.type === "change_city_stat" || e.type === "change_faction_stance" || e.type === "set_faction_vassal",
-  );
-  const cityDef = hasWorldEffect ? await getCityDefaults() : null;
-  const factionDef = hasWorldEffect ? await getFactionDefaults() : null;
-
+  const defs = await choiceContentDefaults(choice);
   let ideologyTouched = false;
   await db.transaction(async (tx) => {
     // Lock first (applyEffectsInTx re-takes it for free), then claim, then apply.
     await lockCharacterOwner(tx, actingCharacterId);
     if (opts.claim && !(await opts.claim(tx))) throw new ChoiceClaimRejected();
-    const result = await applyEffectsInTx(tx, { characterId: actingCharacterId, eventId, effects: choice.effects, cityDef, factionDef });
-    ideologyTouched = result.ideologyTouched;
-    // The ONLY event_history write: an event counts as seen when it is resolved
-    // (by the player or by its lazy default), never merely when it was drawn.
-    await tx.insert(eventHistory).values({ characterId: actingCharacterId, eventId });
+    ideologyTouched = (await applyChoiceInTx(tx, actingCharacterId, eventId, choice, defs)).ideologyTouched;
   });
+  await finishChoiceEffects(actingCharacterId, choice, ideologyTouched);
+  return { resultText: choice.resultText };
+}
 
+// The three pieces of applyChoiceEffects, exposed for resolvers that own their
+// transaction (festival / Olympiad claim-first resolves):
+//   1. choiceContentDefaults — file IO for world-scoped effects, done BEFORE the tx.
+//   2. applyChoiceInTx      — effects + the ONE event_history row, inside the tx.
+//   3. finishChoiceEffects  — the post-tx passes (trait service, ideology hook, SSE).
+
+export type ChoiceContentDefaults = {
+  cityDef: Awaited<ReturnType<typeof getCityDefaults>> | null;
+  factionDef: Awaited<ReturnType<typeof getFactionDefaults>> | null;
+};
+
+// World-scoped effects (Atlas Phase 2b-ii) are explicitly-targeted; resolve their
+// content defaults outside the tx (file IO) only when this choice actually uses one.
+export async function choiceContentDefaults(choice: EventChoice): Promise<ChoiceContentDefaults> {
+  const hasWorldEffect = choice.effects.some(
+    (e) => e.type === "change_city_stat" || e.type === "change_faction_stance" || e.type === "set_faction_vassal",
+  );
+  return {
+    cityDef: hasWorldEffect ? await getCityDefaults() : null,
+    factionDef: hasWorldEffect ? await getFactionDefaults() : null,
+  };
+}
+
+export async function applyChoiceInTx(tx: Tx, actingCharacterId: string, eventId: string, choice: EventChoice, defs: ChoiceContentDefaults): Promise<{ ideologyTouched: boolean }> {
+  const result = await applyEffectsInTx(tx, { characterId: actingCharacterId, eventId, effects: choice.effects, cityDef: defs.cityDef, factionDef: defs.factionDef });
+  // The ONLY event_history write: an event counts as seen when it is resolved
+  // (by the player or by its lazy default), never merely when it was drawn.
+  await tx.insert(eventHistory).values({ characterId: actingCharacterId, eventId });
+  return { ideologyTouched: result.ideologyTouched };
+}
+
+export async function finishChoiceEffects(actingCharacterId: string, choice: EventChoice, ideologyTouched: boolean): Promise<void> {
   // Rule-enforcing trait changes (idempotent; cap/opposite enforced).
-  for (const effect of traitEffects) {
+  for (const effect of choice.effects) {
     if (effect.type !== "change_trait") continue;
     try {
       await applyChangeTrait(effect.characterId ?? actingCharacterId, effect.traitId, effect.operation);
@@ -348,8 +370,6 @@ export async function applyChoiceEffects(
 
   if (ideologyTouched) await onIdeologyChanged(actingCharacterId);
   await broadcastState();
-
-  return { resultText: choice.resultText };
 }
 
 export async function recentEventIds(characterId: string, limit = 5): Promise<string[]> {

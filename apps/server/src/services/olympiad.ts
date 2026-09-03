@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   advanceOlympiads,
   castOlympiadVote,
@@ -15,9 +15,9 @@ import {
   olympicCandidates,
   players,
   playerCharacters,
+  type DbTx,
 } from "@massalia/db";
 import {
-  capStat,
   competeRoll,
   olympiadConfig,
   OLYMPIAD_GAMES_FESTIVAL_ID,
@@ -28,7 +28,8 @@ import {
   type EventDefinition,
 } from "@massalia/shared";
 import { getCalendarConfig, composurePreview, withPreviews } from "./festival.js";
-import { listEvents, applyChoiceEffects } from "./eventEngine.js";
+import { applyChoiceInTx, choiceContentDefaults, finishChoiceEffects, listEvents } from "./eventEngine.js";
+import { lockCharacterOwner } from "./lock.js";
 import { applyComposureDelta, recoverComposure } from "./composure.js";
 import { addTrait, getHeldTraits, TraitRuleError } from "./traits.js";
 import { getAgeConfig } from "./age.js";
@@ -37,6 +38,14 @@ import { broadcastState } from "./worldState.js";
 const db = createDb();
 
 type CharacterRow = typeof playerCharacters.$inferSelect;
+
+// Thrown inside the resolve transaction when the claim matched no row (a
+// concurrent resolve won); mapped to the same 409 as the "no event" pre-check.
+class OlympicEventAlreadyResolved extends Error {
+  constructor() {
+    super("olympic event already resolved");
+  }
+}
 
 // The festival_event festival ids the Olympiad rides (nominate + Games payoff).
 function olympicFestivalIds(): string[] {
@@ -102,52 +111,85 @@ export async function resolveOlympicEvent(character: CharacterRow, choiceId: str
   const choice = event?.choices.find((c) => c.id === choiceId);
   if (!event || !choice) return { ok: false, code: 404, error: "Unknown Olympic choice." };
 
-  // Composure (tag/ideology layer + explicit), as the festival path does.
-  await recoverComposure(character.id, now);
+  // The composure preview is judged against the traits as read here (pre-tx),
+  // exactly as the HUD previewed them.
   const traits = await getHeldTraits(character.id);
   const { delta, reason } = composurePreview(choice, traits);
-  const composure = await applyComposureDelta(character.id, delta, `olympiad:${fe.festivalId}`, now);
+  const defs = await choiceContentDefaults(choice);
 
-  // Olympic-specific effects resolve BEFORE applyChoiceEffects (which removes the
-  // delegate trait): registering a candidacy, or running the compete roll.
-  let nominated = false;
-  let compete: OlympicCompeteResult | null = null;
-  for (const effect of choice.effects) {
-    if (effect.type === "olympic_nominate") {
-      nominated = await nominateForOlympiad(character.id, fe.gameYear);
-    } else if (effect.type === "olympic_compete") {
-      compete = await runCompete(character.id, effect.mode as CompeteMode);
-    }
+  // Claim-first, in ONE transaction: lock the player, flip the event to resolved
+  // (UPDATE ... WHERE resolved = false RETURNING), then composure, the Olympic
+  // nominate/compete, the content effects and the effect log — all on the tx
+  // handle. A concurrent duplicate loses the claim, rolls back, and gets 409.
+  let out: { composure: Awaited<ReturnType<typeof applyComposureDelta>>; nominated: boolean; compete: OlympicCompeteResult | null; ideologyTouched: boolean };
+  try {
+    out = await db.transaction(async (tx) => {
+      await lockCharacterOwner(tx, character.id);
+      const claimed = await tx
+        .update(festivalEvents)
+        .set({ resolved: true, resolvedChoiceId: choiceId })
+        .where(and(eq(festivalEvents.id, fe.id), eq(festivalEvents.resolved, false)))
+        .returning({ id: festivalEvents.id });
+      if (!claimed.length) throw new OlympicEventAlreadyResolved();
+
+      // Composure (tag/ideology layer + explicit), as the festival path does.
+      await recoverComposure(character.id, now, tx);
+      const composure = await applyComposureDelta(character.id, delta, `olympiad:${fe.festivalId}`, now, tx);
+
+      // Olympic-specific effects resolve BEFORE the content effects (which remove
+      // the delegate trait): registering a candidacy, or running the compete roll.
+      let nominated = false;
+      let compete: OlympicCompeteResult | null = null;
+      for (const effect of choice.effects) {
+        if (effect.type === "olympic_nominate") {
+          nominated = await nominateForOlympiad(character.id, fe.gameYear, tx);
+        } else if (effect.type === "olympic_compete") {
+          compete = await runCompete(tx, character.id, effect.mode as CompeteMode);
+        }
+      }
+
+      // Remaining content effects (+devotion for "support"; change_trait remove the
+      // delegate trait for the Games — runs AFTER the compete roll above).
+      const { ideologyTouched } = await applyChoiceInTx(tx, character.id, event.id, choice, defs);
+      return { composure, nominated, compete, ideologyTouched };
+    });
+  } catch (error) {
+    if (error instanceof OlympicEventAlreadyResolved) return { ok: false, code: 409, error: "No Olympic event awaits you." };
+    throw error;
   }
+  const { composure, nominated, compete } = out;
 
-  // Remaining content effects (+devotion for "support"; change_trait remove the
-  // delegate trait for the Games — runs AFTER the compete roll above).
-  const result = await applyChoiceEffects(character.id, event.id, choice);
-
-  await db.update(festivalEvents).set({ resolved: true, resolvedChoiceId: choiceId }).where(eq(festivalEvents.id, fe.id));
-  await broadcastState();
-
-  return { ok: true, resultText: result.resultText, composureDelta: delta, composureReason: reason, composure: composure.composure, broke: composure.broke, nominated, compete };
-}
-
-// The compete roll: (militia + prestige) vs a mode-scaled threshold. Victory →
-// a big prestige award + the permanent olympionikes trait; an honorable showing →
-// solid prestige, no permanent trait.
-async function runCompete(characterId: string, mode: CompeteMode): Promise<OlympicCompeteResult> {
-  const row = (await db.select({ militia: playerCharacters.militia, prestige: playerCharacters.prestige }).from(playerCharacters).where(eq(playerCharacters.id, characterId)).limit(1))[0];
-  if (!row) return { won: false, prestigeAward: 0, mode };
-  const outcome = competeRoll(row.militia, row.prestige, mode);
-  const next = capStat(row.prestige + outcome.prestigeAward, getAgeConfig());
-  const applied = next - row.prestige;
-  await db.update(playerCharacters).set({ prestige: next }).where(eq(playerCharacters.id, characterId));
-  await db.insert(effectLog).values({ characterId, kind: "change_stat", detail: { stat: "prestige", requested: outcome.prestigeAward, applied, source: `olympic_compete:${mode}` } });
-  if (outcome.won) {
+  // Post-tx: the permanent olympionikes trait goes through the rule-enforcing
+  // trait service (like every change_trait), then the shared post-tx passes.
+  if (compete?.won) {
     try {
-      await addTrait(characterId, OLYMPIONIKES_TRAIT_ID);
+      await addTrait(character.id, OLYMPIONIKES_TRAIT_ID);
     } catch (error) {
       if (!(error instanceof TraitRuleError)) throw error;
     }
   }
+  await finishChoiceEffects(character.id, choice, out.ideologyTouched);
+
+  return { ok: true, resultText: choice.resultText, composureDelta: delta, composureReason: reason, composure: composure.composure, broke: composure.broke, nominated, compete };
+}
+
+// The compete roll: (militia + prestige) vs a mode-scaled threshold. Victory →
+// a big prestige award (+ the permanent olympionikes trait, granted by the caller
+// after the tx); an honorable showing → solid prestige, no permanent trait. Runs
+// inside the caller's locked transaction; the prestige write is relative and
+// capped in SQL (statFloor..statCap, the same bounds capStat applies).
+async function runCompete(tx: DbTx, characterId: string, mode: CompeteMode): Promise<OlympicCompeteResult> {
+  const row = (await tx.select({ militia: playerCharacters.militia, prestige: playerCharacters.prestige }).from(playerCharacters).where(eq(playerCharacters.id, characterId)).limit(1))[0];
+  if (!row) return { won: false, prestigeAward: 0, mode };
+  const outcome = competeRoll(row.militia, row.prestige, mode);
+  const { statCap, statFloor } = getAgeConfig();
+  const updated = await tx
+    .update(playerCharacters)
+    .set({ prestige: sql`LEAST(${statCap}, GREATEST(${statFloor}, ${playerCharacters.prestige} + ${outcome.prestigeAward}))` })
+    .where(eq(playerCharacters.id, characterId))
+    .returning({ prestige: playerCharacters.prestige });
+  const applied = (updated[0]?.prestige ?? row.prestige) - row.prestige;
+  await tx.insert(effectLog).values({ characterId, kind: "change_stat", detail: { stat: "prestige", requested: outcome.prestigeAward, applied, source: `olympic_compete:${mode}` } });
   return { won: outcome.won, prestigeAward: applied, mode };
 }
 

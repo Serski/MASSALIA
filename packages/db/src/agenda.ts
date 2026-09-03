@@ -19,7 +19,7 @@ import {
   type CalendarConfig,
   type PoliticsConfig,
 } from "@massalia/shared";
-import { createDb } from "./client.js";
+import { createDb, type DbExec } from "./client.js";
 import {
   agendaCycles,
   chamberVotes,
@@ -71,15 +71,17 @@ export async function treasuryBalance(worldId: string, owner: TreasuryOwner): Pr
 
 // Move money and write the audit-trail row in one go. delta may be negative (a
 // spend). Never drives a balance below 0 (the caller gates spends with canAfford).
-export async function creditTreasury(worldId: string, owner: TreasuryOwner, delta: number, reason: string, now: Date = new Date()): Promise<number> {
+// `exec` lets a caller run the credit inside its own transaction (the festival
+// donation cut commits together with the donation and the card's claim).
+export async function creditTreasury(worldId: string, owner: TreasuryOwner, delta: number, reason: string, now: Date = new Date(), exec: DbExec = db): Promise<number> {
   if (delta === 0) return treasuryBalance(worldId, owner);
   await ensureTreasuries(worldId);
-  const updated = await db
+  const updated = await exec
     .update(treasuries)
     .set({ balance: sql`GREATEST(0, ${treasuries.balance} + ${delta})`, updatedAt: now })
     .where(and(eq(treasuries.worldId, worldId), eq(treasuries.owner, owner)))
     .returning({ balance: treasuries.balance });
-  await db.insert(treasuryLedger).values({ worldId, owner, delta, reason });
+  await exec.insert(treasuryLedger).values({ worldId, owner, delta, reason });
   return updated[0]?.balance ?? 0;
 }
 
@@ -141,8 +143,8 @@ export async function accrueTreasuries(cfg: PoliticsConfig, now: Date = new Date
 export async function creditSeatPurchaseCut(worldId: string, price: number, cfg: PoliticsConfig, now: Date = new Date()): Promise<number> {
   return creditTreasury(worldId, "league", seatPurchaseCut(price, cfg.treasury), "cut:seat_purchase", now);
 }
-export async function creditFestivalDonationCut(worldId: string, amount: number, cfg: PoliticsConfig, now: Date = new Date()): Promise<number> {
-  return creditTreasury(worldId, "league", festivalDonationCut(amount, cfg.treasury), "cut:festival_donation", now);
+export async function creditFestivalDonationCut(worldId: string, amount: number, cfg: PoliticsConfig, now: Date = new Date(), exec: DbExec = db): Promise<number> {
+  return creditTreasury(worldId, "league", festivalDonationCut(amount, cfg.treasury), "cut:festival_donation", now, exec);
 }
 
 // --- Party leadership (for-life; internal ballot fills a vacancy) ------------

@@ -26,13 +26,22 @@ import {
   type EventDefinition,
   type Trait,
 } from "@massalia/shared";
-import { listEvents, applyChoiceEffects } from "./eventEngine.js";
+import { applyChoiceInTx, choiceContentDefaults, finishChoiceEffects, listEvents } from "./eventEngine.js";
+import { lockCharacterOwner } from "./lock.js";
 import { getPoliticsConfig } from "./oligarchy.js";
 import { applyComposureDelta, getComposureConfig, recoverComposure } from "./composure.js";
 import { getHeldTraits } from "./traits.js";
 import { broadcastState } from "./worldState.js";
 
 const db = createDb();
+
+// Thrown inside the resolve transaction when the claim matched no row (a
+// concurrent resolve won); mapped to the same 409 as the pre-check.
+class FestivalAlreadyResolved extends Error {
+  constructor() {
+    super("festival already resolved");
+  }
+}
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../../..");
 const configFile = path.join(repoRoot, "content/calendar/calendar-config.json");
@@ -143,28 +152,53 @@ export async function resolveFestival(character: CharacterRow, festivalId: strin
     return { ok: false, code: 409, error: "You cannot afford that donation." };
   }
 
-  // Composure (the tag/ideology layer + explicit change_composure), then effects.
-  await recoverComposure(character.id, now);
+  // The composure preview is judged against the traits as read here (pre-tx),
+  // exactly as the HUD previewed them.
   const traits = await getHeldTraits(character.id);
   const { delta, reason } = composurePreview(choice, traits);
-  const composure = await applyComposureDelta(character.id, delta, `festival:${festivalId}`, now);
-  const result = await applyChoiceEffects(character.id, event.id, choice);
+  const defs = await choiceContentDefaults(choice);
 
-  // Record the choregos donation(s) for this festival instance, and route a cut
-  // of each donation to the league treasury (Prompt 3).
-  for (const effect of choice.effects) {
-    if (effect.type === "register_choregos") {
-      await db.insert(festivalDonations).values({ characterId: character.id, festivalId: effect.festivalId, gameYear: gd.yearInGame, amount: effect.amount });
-      await creditFestivalDonationCut(character.worldId, effect.amount, getPoliticsConfig(), now);
-    }
+  // Claim-first, in ONE transaction: lock the player, flip the instance to resolved
+  // (UPDATE ... WHERE resolved = false RETURNING), then composure, effects, the
+  // choregos donation(s) and the treasury cut — all on the tx handle. A concurrent
+  // duplicate loses the claim, rolls back, and gets the same 409 as the pre-check.
+  let out: { composure: Awaited<ReturnType<typeof applyComposureDelta>>; ideologyTouched: boolean };
+  try {
+    out = await db.transaction(async (tx) => {
+      await lockCharacterOwner(tx, character.id);
+      const claimed = await tx
+        .update(festivalEvents)
+        .set({ resolved: true, resolvedChoiceId: choiceId })
+        .where(and(eq(festivalEvents.id, fe.id), eq(festivalEvents.resolved, false)))
+        .returning({ id: festivalEvents.id });
+      if (!claimed.length) throw new FestivalAlreadyResolved();
+
+      // Composure (the tag/ideology layer + explicit change_composure), then effects.
+      await recoverComposure(character.id, now, tx);
+      const composure = await applyComposureDelta(character.id, delta, `festival:${festivalId}`, now, tx);
+      const { ideologyTouched } = await applyChoiceInTx(tx, character.id, event.id, choice, defs);
+
+      // Record the choregos donation(s) for this festival instance, and route a cut
+      // of each donation to the league treasury (Prompt 3).
+      for (const effect of choice.effects) {
+        if (effect.type === "register_choregos") {
+          await tx.insert(festivalDonations).values({ characterId: character.id, festivalId: effect.festivalId, gameYear: gd.yearInGame, amount: effect.amount });
+          await creditFestivalDonationCut(character.worldId, effect.amount, getPoliticsConfig(), now, tx);
+        }
+      }
+      return { composure, ideologyTouched };
+    });
+  } catch (error) {
+    if (error instanceof FestivalAlreadyResolved) return { ok: false, code: 409, error: "You have already marked this festival." };
+    throw error;
   }
-
-  await db.update(festivalEvents).set({ resolved: true, resolvedChoiceId: choiceId }).where(eq(festivalEvents.id, fe.id));
-  await broadcastState();
+  const { composure } = out;
+  // Post-tx passes: trait service, ideology hook, SSE broadcast.
+  await finishChoiceEffects(character.id, choice, out.ideologyTouched);
 
   return {
     ok: true,
-    resultText: result.resultText,
+    resultText: choice.resultText,
     composureDelta: delta,
     composureReason: reason,
     composure: composure.composure,

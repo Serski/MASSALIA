@@ -12,7 +12,7 @@ import {
   type CalendarConfig,
   type OlympiadConfig,
 } from "@massalia/shared";
-import { createDb } from "./client.js";
+import { createDb, type DbExec } from "./client.js";
 import {
   characterTraits,
   festivalEvents,
@@ -135,13 +135,14 @@ export async function deliverOlympicNominationToAll(cfg: CalendarConfig, now: Da
 // --- Ballot DB ops ----------------------------------------------------------
 
 // Register the actor as a candidate (the olympic_nominate effect). Only while the
-// cycle is in nomination. Idempotent (unique on year+character).
-export async function nominateForOlympiad(characterId: string, gameYear: number): Promise<boolean> {
+// cycle is in nomination. Idempotent (unique on year+character). `exec` lets the
+// resolve path write the candidacy inside its own claim-first transaction.
+export async function nominateForOlympiad(characterId: string, gameYear: number, exec: DbExec = db): Promise<boolean> {
   const world = await activeWorld();
   if (!world) return false;
   const cycle = await getOlympiadByYear(gameYear);
   if (!cycle || cycle.phase !== "nomination") return false;
-  await db
+  await exec
     .insert(olympicCandidates)
     .values({ worldId: world.id, olympiadGameYear: gameYear, characterId })
     .onConflictDoNothing();

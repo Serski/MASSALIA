@@ -33,6 +33,12 @@ function describe(databaseUrl: string): string {
   }
 }
 
+// The drizzle handle, its transaction handle, and "either" — for helpers that run
+// on the pool by default but inside a caller's transaction when one is passed.
+export type DbHandle = ReturnType<typeof createDb>;
+export type DbTx = Parameters<Parameters<DbHandle["transaction"]>[0]>[0];
+export type DbExec = DbHandle | DbTx;
+
 export function createDb(databaseUrl = process.env.DATABASE_URL) {
   if (!databaseUrl) {
     throw new Error("DATABASE_URL is required");
