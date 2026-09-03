@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { and, eq } from "drizzle-orm";
+import { and, eq, gte, sql } from "drizzle-orm";
 import { createDb, effectLog, playerBuildings, playerCharacters, playerPops, resources, worldTreasury, worlds } from "@massalia/db";
 import {
   buildingCost,
@@ -36,6 +36,7 @@ import {
   type VendorAction,
 } from "@massalia/shared";
 import { applyComposureDelta } from "./composure.js";
+import { lockPlayer } from "./lock.js";
 
 const db = createDb();
 type DbTx = Parameters<Parameters<ReturnType<typeof createDb>["transaction"]>[0]>[0];
@@ -214,6 +215,86 @@ async function getOrCreateResource(exec: Exec, playerId: string, type: string, n
     .values({ scope: "player", scopeId: playerId, type, amount: "0", ratePerSecond: "0", lastUpdatedAt: now })
     .returning();
   return inserted[0]!;
+}
+
+// --- Wallet / stock primitives ---------------------------------------------
+// Every wallet and stock write is RELATIVE (SET x = x ± n) and every spend is
+// GUARDED (... WHERE x >= n) with the affected row count checked: zero rows means
+// the player cannot afford it. Together with lockPlayer (which every mutating
+// transaction in this file takes first) this is what makes two concurrent
+// requests debit exactly once — the same standard giveDrachmae / buySeat set.
+
+type SpendError = { ok: false; code: number; error: string };
+
+// Thrown from inside a transaction when a guarded debit affects zero rows (or a
+// prerequisite fails after an earlier debit): rolls the whole spend back so a
+// rejection never leaves a half-charged purchase. spendTransaction converts it
+// back into the plain SpendError result the routes already understand.
+export class SpendRejected extends Error {
+  readonly result: SpendError;
+  constructor(result: SpendError) {
+    super(result.error);
+    this.result = result;
+  }
+}
+
+// One locked transaction for a player: takes the advisory lock FIRST, runs `fn`,
+// and maps a SpendRejected throw (rolled back) to its SpendError result.
+async function spendTransaction<T>(playerId: string, fn: (tx: DbTx) => Promise<T>): Promise<T | SpendError> {
+  try {
+    return await db.transaction(async (tx) => {
+      await lockPlayer(tx, playerId);
+      return fn(tx);
+    });
+  } catch (error) {
+    if (error instanceof SpendRejected) return error.result;
+    throw error;
+  }
+}
+
+async function readWallet(exec: Exec, playerId: string): Promise<number> {
+  const rows = await exec.select({ drachmae: playerCharacters.drachmae }).from(playerCharacters).where(eq(playerCharacters.playerId, playerId)).limit(1);
+  return rows[0]?.drachmae ?? 0;
+}
+
+// Guarded relative wallet debit. Returns the new balance, or null when the
+// wallet is short (no row matched — nothing was written).
+export async function debitDrachmae(exec: Exec, playerId: string, amount: number): Promise<number | null> {
+  const paid = await exec
+    .update(playerCharacters)
+    .set({ drachmae: sql`${playerCharacters.drachmae} - ${amount}` })
+    .where(and(eq(playerCharacters.playerId, playerId), gte(playerCharacters.drachmae, amount)))
+    .returning({ drachmae: playerCharacters.drachmae });
+  return paid[0]?.drachmae ?? null;
+}
+
+async function creditDrachmae(exec: Exec, playerId: string, amount: number): Promise<number> {
+  const rows = await exec
+    .update(playerCharacters)
+    .set({ drachmae: sql`${playerCharacters.drachmae} + ${amount}` })
+    .where(eq(playerCharacters.playerId, playerId))
+    .returning({ drachmae: playerCharacters.drachmae });
+  return rows[0]?.drachmae ?? 0;
+}
+
+// Guarded relative stock debit on one resources row. Returns the new amount, or
+// null when the stock is short (nothing written).
+async function debitResource(exec: Exec, rowId: string, qty: number): Promise<number | null> {
+  const rows = await exec
+    .update(resources)
+    .set({ amount: sql`${resources.amount} - ${String(qty)}::numeric` })
+    .where(and(eq(resources.id, rowId), gte(resources.amount, String(qty))))
+    .returning({ amount: resources.amount });
+  return rows[0] ? Number(rows[0].amount) : null;
+}
+
+async function creditResource(exec: Exec, rowId: string, qty: number): Promise<number> {
+  const rows = await exec
+    .update(resources)
+    .set({ amount: sql`${resources.amount} + ${String(qty)}::numeric` })
+    .where(eq(resources.id, rowId))
+    .returning({ amount: resources.amount });
+  return Number(rows[0]?.amount ?? 0);
 }
 
 // --- Staffing (Phase 2): shared-pool allocation + under-staffing -------------
@@ -407,10 +488,9 @@ export async function settleGoods(exec: Exec, ctx: ActingContext, rows: Building
   const banked: Record<string, number> = {};
   for (const [good, { banked: amount, baseRatePerSec }] of accrual) {
     const rowRes = byType.get(good) ?? (await getOrCreateResource(exec, ctx.playerId, good, now));
-    const next = Number(rowRes.amount) + amount;
     await exec
       .update(resources)
-      .set({ amount: String(next), ratePerSecond: String(baseRatePerSec), lastUpdatedAt: now })
+      .set({ amount: sql`${resources.amount} + ${String(amount)}::numeric`, ratePerSecond: String(baseRatePerSec), lastUpdatedAt: now })
       .where(eq(resources.id, rowRes.id));
     if (amount > 0) banked[good] = amount;
   }
@@ -432,12 +512,11 @@ export async function availableGood(ctx: ActingContext, goodType: string, now: D
 
 export async function creditWorldTreasury(exec: Exec, worldId: string, amount: number): Promise<void> {
   if (amount === 0) return;
-  const existing = await exec.select().from(worldTreasury).where(eq(worldTreasury.worldId, worldId)).limit(1);
-  if (existing[0]) {
-    await exec.update(worldTreasury).set({ balance: existing[0].balance + amount }).where(eq(worldTreasury.worldId, worldId));
-  } else {
-    await exec.insert(worldTreasury).values({ worldId, balance: amount }).onConflictDoNothing();
-  }
+  // Relative upsert: never read-then-write the shared world balance.
+  await exec
+    .insert(worldTreasury)
+    .values({ worldId, balance: amount })
+    .onConflictDoUpdate({ target: worldTreasury.worldId, set: { balance: sql`${worldTreasury.balance} + ${amount}` } });
 }
 
 // --- Wallet settle: income − upkeep (continuous), clamp at 0 -----------------
@@ -493,15 +572,15 @@ async function settleWallet(exec: Exec, ctx: ActingContext, rows: BuildingRow[],
   const upkeep = continuousUpkeep(rows, lastMs, now);
   const net = income - upkeep;
 
-  const charRows = await exec.select({ drachmae: playerCharacters.drachmae }).from(playerCharacters).where(eq(playerCharacters.playerId, ctx.playerId)).limit(1);
-  const wallet = charRows[0]?.drachmae ?? 0;
-  let owed = 0;
-  let nextWallet = wallet + net;
-  if (nextWallet < 0) {
-    owed = -nextWallet;
-    nextWallet = 0;
-  }
-  await exec.update(playerCharacters).set({ drachmae: Math.round(nextWallet) }).where(eq(playerCharacters.playerId, ctx.playerId));
+  // `owed` (the forgiven shortfall) is reported from the wallet read under the
+  // player lock; the write itself is relative + clamped so it never depends on it.
+  // wallet is an integer, so round(wallet + net) == wallet + round(net).
+  const wallet = await readWallet(exec, ctx.playerId);
+  const owed = Math.max(0, -(wallet + net));
+  await exec
+    .update(playerCharacters)
+    .set({ drachmae: sql`GREATEST(0, ${playerCharacters.drachmae} + ${Math.round(net)})` })
+    .where(eq(playerCharacters.playerId, ctx.playerId));
   if (existing) {
     await exec.update(resources).set({ amount: "0", lastUpdatedAt: now }).where(eq(resources.id, existing.id));
   } else {
@@ -562,7 +641,7 @@ async function settleStaffing(exec: Exec, ctx: ActingContext, rows: BuildingRow[
       const wheatRow = await getOrCreateResource(exec, ctx.playerId, popsC.foodGood, now);
       const wheat = Number(wheatRow.amount);
       foodDrawn = Math.min(wheat, foodNeeded);
-      if (foodDrawn > 0) await exec.update(resources).set({ amount: String(wheat - foodDrawn) }).where(eq(resources.id, wheatRow.id));
+      if (foodDrawn > 0) await exec.update(resources).set({ amount: sql`${resources.amount} - ${String(foodDrawn)}::numeric` }).where(eq(resources.id, wheatRow.id));
       foodBought = foodNeeded - foodDrawn;
       const band = c.vendor[popsC.foodGood];
       if (foodBought > 0 && band) {
@@ -572,14 +651,14 @@ async function settleStaffing(exec: Exec, ctx: ActingContext, rows: BuildingRow[
     }
     const cost = staffUpkeep + foodCost;
     if (cost > 0) {
-      const charRows = await exec.select({ drachmae: playerCharacters.drachmae }).from(playerCharacters).where(eq(playerCharacters.playerId, ctx.playerId)).limit(1);
-      const wallet = charRows[0]?.drachmae ?? 0;
-      let next = wallet - cost;
-      if (next < 0) {
-        owed = -next;
-        next = 0;
-      }
-      await exec.update(playerCharacters).set({ drachmae: Math.round(next) }).where(eq(playerCharacters.playerId, ctx.playerId));
+      // Same discipline as settleWallet: `owed` from the locked read, the write
+      // relative + clamped (round(wallet - cost) == wallet + round(-cost)).
+      const wallet = await readWallet(exec, ctx.playerId);
+      owed = Math.max(0, cost - wallet);
+      await exec
+        .update(playerCharacters)
+        .set({ drachmae: sql`GREATEST(0, ${playerCharacters.drachmae} + ${Math.round(-cost)})` })
+        .where(eq(playerCharacters.playerId, ctx.playerId));
     }
   }
   const advancedMs = lastMs + days * MS_PER_DAY;
@@ -882,9 +961,9 @@ export async function mine(classId: string, ctx: ActingContext, now: Date): Prom
 // Building/upgrading to a tier costs drachmae (the buildingCost curve, UNCHANGED)
 // AND materials (def.buildCost.materials scaled by materialCostForTier), and
 // requires the player to already OWN the staff (staffCountForTier per type) — pops
-// are a prerequisite, never spent. Everything is validated BEFORE any debit, so a
-// rejection mutates nothing; the debit runs inside the caller's transaction, so an
-// unexpected mid-debit failure rolls the whole build back (no half-charged builds).
+// are a prerequisite, never spent. Every debit is a guarded relative update inside
+// the caller's LOCKED transaction; any shortfall throws SpendRejected, which rolls
+// the whole spend back (no half-charged builds) and surfaces as the 402/409 result.
 
 // Material bill (good -> qty) for a building at a tier, scaled on the curve.
 function materialsForTier(def: ResolvedDef, tier: number): Record<string, number> {
@@ -893,12 +972,10 @@ function materialsForTier(def: ResolvedDef, tier: number): Record<string, number
   return out;
 }
 
-type SpendError = { ok: false; code: number; error: string };
-
-// Within a tx: validate wallet + materials + the owned-staff prerequisite, then
-// debit drachmae + materials (pops untouched). Returns a SpendError to abort with
-// nothing mutated, or null after a successful atomic debit. `goods` is the player's
-// resource balances captured for the material checks; `owned` their pop counts.
+// Within a LOCKED tx: debit drachmae + materials (guarded), then assert the
+// owned-staff prerequisite. Throws SpendRejected on any shortfall so the caller's
+// transaction rolls back with nothing mutated. Rejection order (wallet, materials,
+// staff) is unchanged, so the player sees the same message as before.
 async function chargeConstruction(
   tx: Exec,
   ctx: ActingContext,
@@ -906,32 +983,28 @@ async function chargeConstruction(
   tier: number,
   drachmaeCost: number,
   now: Date,
-): Promise<SpendError | null> {
-  const charRows = await tx.select({ drachmae: playerCharacters.drachmae }).from(playerCharacters).where(eq(playerCharacters.playerId, ctx.playerId)).limit(1);
-  const wallet = charRows[0]?.drachmae ?? 0;
-  if (wallet < drachmaeCost) return { ok: false, code: 402, error: `You need ${drachmaeCost} drachmae for this — you have ${wallet}.` };
+): Promise<void> {
+  const wallet = await debitDrachmae(tx, ctx.playerId, drachmaeCost);
+  if (wallet === null) {
+    throw new SpendRejected({ ok: false, code: 402, error: `You need ${drachmaeCost} drachmae for this — you have ${await readWallet(tx, ctx.playerId)}.` });
+  }
 
   const need = materialsForTier(def, tier);
-  const balByType = new Map((await resourceRows(tx, ctx.playerId)).map((r) => [r.type, Number(r.amount)]));
   for (const [good, qty] of Object.entries(need)) {
-    const have = balByType.get(good) ?? 0;
-    if (have < qty) return { ok: false, code: 402, error: `You need ${qty} ${good} for this — you have ${Math.floor(have)} (short ${Math.ceil(qty - have)}).` };
+    if (qty <= 0) continue;
+    const row = await getOrCreateResource(tx, ctx.playerId, good, now);
+    const left = await debitResource(tx, row.id, qty);
+    if (left === null) {
+      const have = Number(row.amount);
+      throw new SpendRejected({ ok: false, code: 402, error: `You need ${qty} ${good} for this — you have ${Math.floor(have)} (short ${Math.ceil(qty - have)}).` });
+    }
   }
 
   const owned = await popCountsFor(tx, ctx.playerId);
   for (const [type, qty] of Object.entries(staffNeed(def, tier)) as [PopType, number][]) {
     const have = owned[type] ?? 0;
-    if (have < qty) return { ok: false, code: 409, error: `You must own ${qty} ${type} to staff this — you have ${have}. Hire more first.` };
+    if (have < qty) throw new SpendRejected({ ok: false, code: 409, error: `You must own ${qty} ${type} to staff this — you have ${have}. Hire more first.` });
   }
-
-  // All checks passed → debit drachmae + every material (pops are NOT consumed).
-  await tx.update(playerCharacters).set({ drachmae: wallet - drachmaeCost }).where(eq(playerCharacters.playerId, ctx.playerId));
-  for (const [good, qty] of Object.entries(need)) {
-    if (qty <= 0) continue;
-    const row = await getOrCreateResource(tx, ctx.playerId, good, now);
-    await tx.update(resources).set({ amount: String(Number(row.amount) - qty) }).where(eq(resources.id, row.id));
-  }
-  return null;
 }
 
 // --- Build / upgrade ---------------------------------------------------------
@@ -954,12 +1027,11 @@ export async function build(classId: string, ctx: ActingContext, buildingId: str
   const cost = def.cost(1);
   const completesAt = new Date(now.getTime() + buildMs(1));
 
-  return db.transaction(async (tx) => {
+  return spendTransaction(ctx.playerId, async (tx) => {
     const existing = await tx.select().from(playerBuildings).where(and(eq(playerBuildings.ownerPlayerId, ctx.playerId), eq(playerBuildings.buildingId, buildingId))).limit(1);
     if (existing[0]) return { ok: false as const, code: 409, error: "You already hold that building." };
-    // Validate + atomically debit drachmae + materials + assert the staff prereq.
-    const spend = await chargeConstruction(tx, ctx, def, 1, cost, now);
-    if (spend) return spend;
+    // Atomically debit drachmae + materials + assert the staff prereq (throws → rollback).
+    await chargeConstruction(tx, ctx, def, 1, cost, now);
     await tx.insert(playerBuildings).values({ worldId: ctx.worldId, ownerPlayerId: ctx.playerId, buildingId, tier: 1, status: "constructing", completesAt });
     return { ok: true as const, buildingId, tier: 1, completesAt: completesAt.toISOString(), cost, materials: materialsForTier(def, 1) };
   });
@@ -970,7 +1042,7 @@ export async function upgrade(ctx: ActingContext, buildingId: string, now: Date)
   if (!def) return { ok: false, code: 404, error: "No such building." };
   if (!def.isClass) return { ok: false, code: 409, error: "That building has no further tiers." };
 
-  return db.transaction(async (tx) => {
+  return spendTransaction(ctx.playerId, async (tx) => {
     const rows = await tx.select().from(playerBuildings).where(and(eq(playerBuildings.ownerPlayerId, ctx.playerId), eq(playerBuildings.buildingId, buildingId))).limit(1);
     const row = rows[0];
     if (!row) return { ok: false as const, code: 404, error: "You do not own that building." };
@@ -979,8 +1051,7 @@ export async function upgrade(ctx: ActingContext, buildingId: string, now: Date)
     const nextTier = row.tier + 1;
     const cost = def.cost(nextTier);
     // Scaled material bill + the HIGHER staff requirement for the next tier.
-    const spend = await chargeConstruction(tx, ctx, def, nextTier, cost, now);
-    if (spend) return spend;
+    await chargeConstruction(tx, ctx, def, nextTier, cost, now);
     const completesAt = new Date(now.getTime() + buildMs(nextTier));
     await tx.update(playerBuildings).set({ tier: nextTier, status: "constructing", completesAt }).where(eq(playerBuildings.id, row.id));
     return { ok: true as const, buildingId, tier: nextTier, completesAt: completesAt.toISOString(), cost, materials: materialsForTier(def, nextTier) };
@@ -1004,6 +1075,7 @@ export async function hirePops(ctx: ActingContext, popType: string, count: numbe
   const total = def.hireCost * count;
 
   const outcome = await db.transaction(async (tx) => {
+    await lockPlayer(tx, ctx.playerId);
     // Checkpoint: settle history up to now at the CURRENT (pre-hire) staffing before
     // the pop count grows, so the unstaffed window never back-pays at the staffed
     // rate. Every marker resets to now; the future accrues at the new staffing.
@@ -1020,18 +1092,19 @@ export async function hirePops(ctx: ActingContext, popType: string, count: numbe
     if (def.max !== undefined && owned > def.max) {
       return { composureDays: settled.composureDays, result: { ok: false as const, code: 409, error: `You already retain a ${def.label.toLowerCase()}.` } };
     }
-    // Affordability is checked against the SETTLED wallet — income just banked, wages
-    // /upkeep just debited — an honest post-settle balance (may help or hurt the hire).
-    const charRows = await tx.select({ drachmae: playerCharacters.drachmae }).from(playerCharacters).where(eq(playerCharacters.playerId, ctx.playerId)).limit(1);
-    const wallet = charRows[0]?.drachmae ?? 0;
-    if (wallet < total) return { composureDays: settled.composureDays, result: { ok: false as const, code: 402, error: `Hiring ${count} ${popType} costs ${total} drachmae — you have ${wallet}.` } };
-    await tx.update(playerCharacters).set({ drachmae: wallet - total }).where(eq(playerCharacters.playerId, ctx.playerId));
+    // Affordability is the guarded debit against the SETTLED wallet — income just
+    // banked, wages/upkeep just debited — an honest post-settle balance (may help or
+    // hurt the hire). A rejection keeps the settle (as before) but hires nothing.
+    const wallet = await debitDrachmae(tx, ctx.playerId, total);
+    if (wallet === null) {
+      return { composureDays: settled.composureDays, result: { ok: false as const, code: 402, error: `Hiring ${count} ${popType} costs ${total} drachmae — you have ${await readWallet(tx, ctx.playerId)}.` } };
+    }
     if (existing[0]) {
-      await tx.update(playerPops).set({ count: owned }).where(eq(playerPops.id, existing[0].id));
+      await tx.update(playerPops).set({ count: sql`${playerPops.count} + ${count}` }).where(eq(playerPops.id, existing[0].id));
     } else {
       await tx.insert(playerPops).values({ worldId: ctx.worldId, ownerPlayerId: ctx.playerId, popType, count });
     }
-    return { composureDays: settled.composureDays, result: { ok: true as const, popType, hired: count, unitCost: def.hireCost, total, wallet: wallet - total, owned } };
+    return { composureDays: settled.composureDays, result: { ok: true as const, popType, hired: count, unitCost: def.hireCost, total, wallet, owned } };
   });
   // Apply banked shrine composure after the tx, break-aware — exactly as collect does.
   if (outcome.composureDays > 0) await applyComposureDelta(await characterIdFor(ctx.playerId), outcome.composureDays, "building:shrine", now);
@@ -1045,6 +1118,7 @@ export async function hirePops(ctx: ActingContext, popType: string, count: numbe
 // break-aware, exactly as hire/collect do.
 export async function settledPopCount(ctx: ActingContext, popType: string, now: Date): Promise<number> {
   const outcome = await db.transaction(async (tx) => {
+    await lockPlayer(tx, ctx.playerId);
     const settled = await settleAll(tx, ctx, now);
     const counts = await popCountsFor(tx, ctx.playerId);
     return { composureDays: settled.composureDays, count: counts[popType] ?? 0 };
@@ -1071,6 +1145,7 @@ export async function dismissPops(ctx: ActingContext, popType: string, count: nu
   if (!popsC.pops[popType as PopType]) return { ok: false, code: 404, error: "You keep no such people." };
 
   const outcome = await db.transaction(async (tx) => {
+    await lockPlayer(tx, ctx.playerId);
     const existing = await tx
       .select()
       .from(playerPops)
@@ -1082,18 +1157,28 @@ export async function dismissPops(ctx: ActingContext, popType: string, count: nu
     // the pop count drops, so income genuinely earned while staffed banks now instead
     // of being retroactively voided. Every marker resets to now.
     const settled = await settleAll(tx, ctx, now);
-    const owned = have - count; // floored at 0 by the reject above
-    await tx.update(playerPops).set({ count: owned }).where(eq(playerPops.id, existing[0]!.id));
+    // Guarded relative decrement (the reject above already floors it at 0 under the lock).
+    const dropped = await tx
+      .update(playerPops)
+      .set({ count: sql`${playerPops.count} - ${count}` })
+      .where(and(eq(playerPops.id, existing[0]!.id), gte(playerPops.count, count)))
+      .returning({ count: playerPops.count });
+    if (!dropped[0]) return { composureDays: settled.composureDays, result: { ok: false as const, code: 409, error: `You own ${have} ${popType} — you cannot dismiss ${count}.` } };
+    const owned = dropped[0].count;
 
     // Sell-back: property resold refunds sellBack × count (slave only). Credited AFTER
     // the settle (so it reads the settled wallet), same tx, logged like other wallet
     // changes. Free classes have sellBack 0 → no refund, no log.
     const refund = (popsC.pops[popType as PopType]!.sellBack ?? 0) * count;
     if (refund > 0) {
-      const charRow = (await tx.select({ id: playerCharacters.id, drachmae: playerCharacters.drachmae }).from(playerCharacters).where(eq(playerCharacters.playerId, ctx.playerId)).limit(1))[0]!;
-      const nextWallet = charRow.drachmae + refund;
-      await tx.update(playerCharacters).set({ drachmae: nextWallet }).where(eq(playerCharacters.id, charRow.id));
-      await tx.insert(effectLog).values({ characterId: charRow.id, kind: "change_drachmae", detail: { amount: refund, value: nextWallet, source: "pop_sale" } });
+      const credited = (
+        await tx
+          .update(playerCharacters)
+          .set({ drachmae: sql`${playerCharacters.drachmae} + ${refund}` })
+          .where(eq(playerCharacters.playerId, ctx.playerId))
+          .returning({ id: playerCharacters.id, drachmae: playerCharacters.drachmae })
+      )[0]!;
+      await tx.insert(effectLog).values({ characterId: credited.id, kind: "change_drachmae", detail: { amount: refund, value: credited.drachmae, source: "pop_sale" } });
     }
     return { composureDays: settled.composureDays, result: { ok: true as const, popType, dismissed: count, owned, refund } };
   });
@@ -1122,8 +1207,9 @@ export function listPops(): PeopleView {
 // --- Craft (POST /api/buildings/craft) ---------------------------------------
 // Craft one of content.craft (trade-ship / galley): gate on the player owning the
 // recipe's building at tier >= the recipe tier, then consume the recipe materials
-// ATOMICALLY (validate-before-write, same as construction spend) and credit one
-// crafted good to the ledger. Recipes come from content.craft only.
+// ATOMICALLY (guarded relative debits under the player lock — a shortfall rolls the
+// whole craft back, same as construction spend) and credit one crafted good to the
+// ledger. Recipes come from content.craft only.
 
 export type CraftResult =
   | { ok: false; code: number; error: string }
@@ -1134,27 +1220,25 @@ export async function craft(ctx: ActingContext, good: string, now: Date): Promis
   const recipe = c.craft?.[good];
   if (!recipe) return { ok: false, code: 404, error: "The yards craft no such thing." };
 
-  return db.transaction(async (tx) => {
+  return spendTransaction(ctx.playerId, async (tx) => {
     // Gate: own the recipe's building at a high enough tier.
     const row = (await tx.select().from(playerBuildings).where(and(eq(playerBuildings.ownerPlayerId, ctx.playerId), eq(playerBuildings.buildingId, recipe.building))).limit(1))[0];
     if (!row) return { ok: false as const, code: 403, error: `You need a ${recipe.building} to craft a ${good}.` };
     if (row.tier < recipe.tier) return { ok: false as const, code: 409, error: `Crafting a ${good} needs your ${recipe.building} at tier ${recipe.tier} — yours is tier ${row.tier}.` };
 
-    // Validate the whole recipe BEFORE consuming anything.
-    const balByType = new Map((await resourceRows(tx, ctx.playerId)).map((r) => [r.type, Number(r.amount)]));
-    for (const [g, qty] of Object.entries(recipe.recipe)) {
-      const have = balByType.get(g) ?? 0;
-      if (have < qty) return { ok: false as const, code: 402, error: `Crafting a ${good} needs ${qty} ${g} — you have ${Math.floor(have)} (short ${Math.ceil(qty - have)}).` };
-    }
-
-    // Consume the recipe, credit one crafted good.
+    // Consume the recipe with guarded debits: any short ingredient throws and the
+    // transaction rolls back every ingredient already taken.
     for (const [g, qty] of Object.entries(recipe.recipe)) {
       const r = await getOrCreateResource(tx, ctx.playerId, g, now);
-      await tx.update(resources).set({ amount: String(Number(r.amount) - qty) }).where(eq(resources.id, r.id));
+      const left = await debitResource(tx, r.id, qty);
+      if (left === null) {
+        const have = Number(r.amount);
+        throw new SpendRejected({ ok: false, code: 402, error: `Crafting a ${good} needs ${qty} ${g} — you have ${Math.floor(have)} (short ${Math.ceil(qty - have)}).` });
+      }
     }
+    // Credit one crafted good.
     const out = await getOrCreateResource(tx, ctx.playerId, good, now);
-    const balance = Number(out.amount) + 1;
-    await tx.update(resources).set({ amount: String(balance) }).where(eq(resources.id, out.id));
+    const balance = await creditResource(tx, out.id, 1);
     return { ok: true as const, good, consumed: recipe.recipe, balance };
   });
 }
@@ -1179,6 +1263,7 @@ export type CollectResult = {
 
 export async function collect(ctx: ActingContext, now: Date): Promise<CollectResult> {
   const result = await db.transaction(async (tx) => {
+    await lockPlayer(tx, ctx.playerId);
     const s = await settleAll(tx, ctx, now);
     // Report idled buildings by their content id (not the row uuid) for consumers.
     const idledBuildings = s.rows.filter((r) => s.idled.has(r.id)).map((r) => r.buildingId);
@@ -1226,25 +1311,23 @@ export async function vendorTrade(ctx: ActingContext, action: VendorAction, type
   const unitPrice = vendorUnitPrice(band, action, c.seasonal, goodCategoryFor(c.seasonal, type), season);
   const total = unitPrice * qty;
 
-  return db.transaction(async (tx) => {
+  return spendTransaction(ctx.playerId, async (tx) => {
     const rows = await flipActivations(tx, await ownedRows(tx, ctx.playerId), now);
     await settleGoods(tx, ctx, rows, now); // bank pending so the sell sees fresh stock
     const goodRow = await getOrCreateResource(tx, ctx.playerId, type, now);
-    const balance = Number(goodRow.amount);
-    const charRows = await tx.select({ drachmae: playerCharacters.drachmae }).from(playerCharacters).where(eq(playerCharacters.playerId, ctx.playerId)).limit(1);
-    const wallet = charRows[0]?.drachmae ?? 0;
 
     if (action === "buy") {
-      if (wallet < total) return { ok: false as const, code: 402, error: `You need ${total} drachmae for that.` };
-      await tx.update(playerCharacters).set({ drachmae: wallet - total }).where(eq(playerCharacters.playerId, ctx.playerId));
-      await tx.update(resources).set({ amount: String(balance + qty) }).where(eq(resources.id, goodRow.id));
-      return { ok: true as const, action, type, qty, unitPrice, total, wallet: wallet - total, balance: balance + qty };
+      // Guarded debit: zero rows = cannot afford (the settle above still commits).
+      const wallet = await debitDrachmae(tx, ctx.playerId, total);
+      if (wallet === null) return { ok: false as const, code: 402, error: `You need ${total} drachmae for that.` };
+      const balance = await creditResource(tx, goodRow.id, qty);
+      return { ok: true as const, action, type, qty, unitPrice, total, wallet, balance };
     }
-    // sell
-    if (balance < qty) return { ok: false as const, code: 409, error: `You hold only ${Math.floor(balance)} ${type}.` };
-    await tx.update(resources).set({ amount: String(balance - qty) }).where(eq(resources.id, goodRow.id));
-    await tx.update(playerCharacters).set({ drachmae: wallet + total }).where(eq(playerCharacters.playerId, ctx.playerId));
-    return { ok: true as const, action, type, qty, unitPrice, total, wallet: wallet + total, balance: balance - qty };
+    // sell: guarded stock debit, then credit the wallet.
+    const balance = await debitResource(tx, goodRow.id, qty);
+    if (balance === null) return { ok: false as const, code: 409, error: `You hold only ${Math.floor(Number(goodRow.amount))} ${type}.` };
+    const wallet = await creditDrachmae(tx, ctx.playerId, total);
+    return { ok: true as const, action, type, qty, unitPrice, total, wallet, balance };
   });
 }
 
@@ -1252,7 +1335,8 @@ export async function vendorTrade(ctx: ActingContext, action: VendorAction, type
 // Used by the bride's package (family marry): credit goods and add pops WITHOUT
 // charging drachmae. Goods take the same settle-then-add path vendorTrade uses —
 // pending accrual is banked first so the goods marker stays honest, then the grant
-// is added on top. Pops reuse the hire upsert. Both run inside the caller's tx.
+// is added on top. Pops reuse the hire upsert. Both run inside the caller's tx,
+// which must already hold lockPlayer for ctx.playerId.
 
 export async function creditGoods(tx: Exec, ctx: ActingContext, grants: Record<string, number>, now: Date): Promise<void> {
   const entries = Object.entries(grants).filter(([, qty]) => qty > 0);
@@ -1261,7 +1345,7 @@ export async function creditGoods(tx: Exec, ctx: ActingContext, grants: Record<s
   await settleGoods(tx, ctx, rows, now); // bank pending so the grant adds to fresh stock
   for (const [type, qty] of entries) {
     const goodRow = await getOrCreateResource(tx, ctx.playerId, type, now);
-    await tx.update(resources).set({ amount: String(Number(goodRow.amount) + qty) }).where(eq(resources.id, goodRow.id));
+    await creditResource(tx, goodRow.id, qty);
   }
 }
 
@@ -1273,53 +1357,44 @@ export async function grantPops(tx: Exec, ctx: ActingContext, popType: string, c
     .where(and(eq(playerPops.worldId, ctx.worldId), eq(playerPops.ownerPlayerId, ctx.playerId), eq(playerPops.popType, popType)))
     .limit(1);
   if (existing[0]) {
-    await tx.update(playerPops).set({ count: existing[0].count + count }).where(eq(playerPops.id, existing[0].id));
+    await tx.update(playerPops).set({ count: sql`${playerPops.count} + ${count}` }).where(eq(playerPops.id, existing[0].id));
   } else {
     await tx.insert(playerPops).values({ worldId: ctx.worldId, ownerPlayerId: ctx.playerId, popType, count });
   }
 }
 
 // --- Routine consumption hook -----------------------------------------------
-// Resolve a routine card's `requires` block in one transaction: a `waivedBy`
-// building the player owns zeroes the cost; otherwise debit the good (banking
-// pending first) and/or the fee (crediting the world-treasury stub). Returns the
-// waiver state for the response copy.
+// Resolve a routine card's `requires` block: a `waivedBy` building the player owns
+// zeroes the cost; otherwise debit the good (banking pending first) and/or the fee
+// (crediting the world-treasury stub) with guarded relative updates. Returns the
+// waiver state for the response copy. The InTx variant runs inside a caller-owned
+// transaction that already holds lockPlayer (the routine resolve uses it so the
+// debit and the day's claim commit together); a shortfall throws SpendRejected.
 
 export type ConsumeRequirement = { good?: { type: string; qty: number }; fee?: number; waivedBy?: string };
 export type ConsumeResult = { ok: false; code: number; error: string } | { ok: true; waived: boolean };
 
+export async function consumeRoutineRequirementInTx(tx: Exec, ctx: ActingContext, req: ConsumeRequirement, now: Date): Promise<{ ok: true; waived: boolean }> {
+  const rows = await ownedRows(tx, ctx.playerId);
+  const waived = req.waivedBy ? rows.some((r) => r.buildingId === req.waivedBy) : false;
+  if (waived) return { ok: true, waived: true };
+
+  if (req.good) {
+    await settleGoods(tx, ctx, await flipActivations(tx, rows, now), now);
+    const goodRow = await getOrCreateResource(tx, ctx.playerId, req.good.type, now);
+    const left = await debitResource(tx, goodRow.id, req.good.qty);
+    if (left === null) throw new SpendRejected({ ok: false, code: 409, error: `You have no ${req.good.type} for this — the agora sells them.` });
+  }
+  if (req.fee) {
+    const wallet = await debitDrachmae(tx, ctx.playerId, req.fee);
+    if (wallet === null) throw new SpendRejected({ ok: false, code: 402, error: `You cannot spare the ${req.fee}dr.` });
+    await creditWorldTreasury(tx, ctx.worldId, req.fee);
+  }
+  return { ok: true, waived: false };
+}
+
 export async function consumeRoutineRequirement(playerId: string, worldId: string, req: ConsumeRequirement, now: Date): Promise<ConsumeResult> {
   const ctx = await buildingContext(playerId, worldId);
   if (!ctx) return { ok: false, code: 503, error: "No active world." };
-  const owned = await ownedBuildingIds(playerId);
-  const waived = req.waivedBy ? owned.has(req.waivedBy) : false;
-  if (waived) return { ok: true, waived: true };
-
-  // Validate availability live (no writes) before committing anything.
-  if (req.good) {
-    const available = await availableGood(ctx, req.good.type, now);
-    if (available < req.good.qty) {
-      return { ok: false, code: 409, error: `You have no ${req.good.type} for this — the agora sells them.` };
-    }
-  }
-  if (req.fee) {
-    const charRows = await db.select({ drachmae: playerCharacters.drachmae }).from(playerCharacters).where(eq(playerCharacters.playerId, playerId)).limit(1);
-    if ((charRows[0]?.drachmae ?? 0) < req.fee) return { ok: false, code: 402, error: `You cannot spare the ${req.fee}dr.` };
-  }
-
-  await db.transaction(async (tx) => {
-    if (req.good) {
-      const rows = await flipActivations(tx, await ownedRows(tx, playerId), now);
-      await settleGoods(tx, ctx, rows, now);
-      const goodRow = await getOrCreateResource(tx, playerId, req.good.type, now);
-      await tx.update(resources).set({ amount: String(Number(goodRow.amount) - req.good.qty) }).where(eq(resources.id, goodRow.id));
-    }
-    if (req.fee) {
-      const charRows = await tx.select({ drachmae: playerCharacters.drachmae }).from(playerCharacters).where(eq(playerCharacters.playerId, playerId)).limit(1);
-      const wallet = charRows[0]?.drachmae ?? 0;
-      await tx.update(playerCharacters).set({ drachmae: Math.max(0, wallet - req.fee) }).where(eq(playerCharacters.playerId, playerId));
-      await creditWorldTreasury(tx, worldId, req.fee);
-    }
-  });
-  return { ok: true, waived: false };
+  return spendTransaction(playerId, (tx) => consumeRoutineRequirementInTx(tx, ctx, req, now));
 }
