@@ -30,11 +30,21 @@ import { livingSpouseState } from "./family.js";
 import { addTrait, applyChangeTrait, getHeldTraits, removeTrait, TraitRuleError } from "./traits.js";
 import { utcDayString } from "./dailyDecisions.js";
 import { eligibleForCampaign, grantCampaignFavor } from "./elections.js";
-import { consumeRoutineRequirement } from "./buildings.js";
+import { buildingContext, consumeRoutineRequirementInTx, SpendRejected } from "./buildings.js";
+import { lockPlayer } from "./lock.js";
 import { contractPoolKey } from "./merc.js";
 import { broadcastState } from "./worldState.js";
 
 const db = createDb();
+
+// Thrown inside the resolve transaction when the day's claim already exists
+// (re-checked under the player lock); mapped to the same 409 as the pre-check.
+class RoutineAlreadyChosen extends Error {
+  constructor() {
+    super("routine already chosen today");
+  }
+}
+type LadderDef = RoutinesConfig["ladders"][string];
 
 // The campaign routine (Politics Prompt 2) lives in the "campaign" pool — off
 // every class pool — and is surfaced ONLY to declared candidates in an active
@@ -281,14 +291,11 @@ export async function resolveRoutine(row: CharacterRow, routineId: string, now: 
   if (already.length > 0) return { ok: false, code: 409, error: "You have already chosen your routine today." };
 
   // Routine consumption hook: a card may require a good and/or a fee (waivable by
-  // owning a building). Resolve + debit it before claiming the day; a missing good
+  // owning a building). It is debited INSIDE the locked transaction below, together
+  // with the day's claim, so a duplicate submit can never pay twice; a missing good
   // (with no waiver) rejects the pick with copy pointing at the agora.
-  let waived = false;
-  if (card.requires) {
-    const consumed = await consumeRoutineRequirement(row.playerId, row.worldId, card.requires, now);
-    if (!consumed.ok) return { ok: false, code: consumed.code, error: consumed.error };
-    waived = consumed.waived;
-  }
+  const buildCtx = card.requires ? await buildingContext(row.playerId, row.worldId) : null;
+  if (card.requires && !buildCtx) return { ok: false, code: 503, error: "No active world." };
 
   // Repeat penalty: same routine as yesterday halves stat/drachmae/ladder gains.
   const yesterday = utcDayString(new Date(now.getTime() - 86_400_000));
@@ -332,64 +339,100 @@ export async function resolveRoutine(row: CharacterRow, routineId: string, now: 
   const composureReason =
     tag.delta !== 0 ? tag.reason : composureDelta !== 0 ? "the rhythm of the day" : tag.reason;
 
-  // Stat/drachmae effects + effect log + the daily_routines claim, in one tx.
+  // Requirement debit + stat/drachmae effects + effect log + ladder XP + the
+  // daily_routines claim, in one tx under the player lock. The day's claim is
+  // re-checked under the lock first: the second of two concurrent picks sees the
+  // first one's row and gets the same 409 (never a unique-violation 500).
   const appliedCosts: ChoiceCost[] = [];
-  await db.transaction(async (tx) => {
-    for (const effect of penalizedEffects) {
-      if (effect.type === "change_stat") {
-        const rows = await tx.select().from(playerCharacters).where(eq(playerCharacters.id, row.id)).limit(1);
-        const current = rows[0];
-        if (!current) continue;
-        const applied = applyStatGrowth(effect.amount, Number(current.growthMultiplier));
-        const next = capStat(current[effect.stat] + applied, getAgeConfig());
-        await tx.update(playerCharacters).set({ [effect.stat]: next }).where(eq(playerCharacters.id, row.id));
-        await tx.insert(effectLog).values({
-          characterId: row.id,
-          kind: "change_stat",
-          detail: { stat: effect.stat, requested: effect.amount, applied, source: `routine:${card.id}` },
-        });
-        appliedCosts.push({ label: `${signed(applied)} ${STAT_LABELS[effect.stat]}`, tone: applied >= 0 ? "positive" : "negative" });
-      } else if (effect.type === "change_drachmae") {
-        const rows = await tx.select({ drachmae: playerCharacters.drachmae }).from(playerCharacters).where(eq(playerCharacters.id, row.id)).limit(1);
-        const current = rows[0];
-        if (!current) continue;
-        const next = Math.max(0, current.drachmae + effect.amount);
-        await tx.update(playerCharacters).set({ drachmae: next }).where(eq(playerCharacters.id, row.id));
-        await tx.insert(effectLog).values({
-          characterId: row.id,
-          kind: "change_drachmae",
-          detail: { amount: effect.amount, value: next, source: `routine:${card.id}` },
-        });
-        appliedCosts.push({ label: `${signed(effect.amount)} drachmae`, tone: effect.amount >= 0 ? "positive" : "negative" });
-      } else if (effect.type === "change_party_favor") {
-        // Factional standing shift (abroad cards, Step 3) — reuses the event
-        // engine's party-favor upsert. Not subject to the repeat penalty.
-        await tx
-          .insert(partyFavor)
-          .values({ characterId: row.id, party: effect.party, favor: effect.amount })
-          .onConflictDoUpdate({ target: [partyFavor.characterId, partyFavor.party], set: { favor: sql`${partyFavor.favor} + ${effect.amount}` } });
-        await tx.insert(effectLog).values({
-          characterId: row.id,
-          kind: "change_party_favor",
-          detail: { party: effect.party, amount: effect.amount, source: `routine:${card.id}` },
-        });
-        const party = effect.party[0]!.toUpperCase() + effect.party.slice(1);
-        appliedCosts.push({ label: `${signed(effect.amount)} ${party} favor`, tone: effect.amount >= 0 ? "positive" : "negative" });
+  let waived = false;
+  // `null as ...` keeps TS from narrowing the closure-assigned value to `never`.
+  let ladderPlan = null as { ladderDef: LadderDef; progress: ReturnType<typeof ladderProgress> } | null;
+  try {
+    await db.transaction(async (tx) => {
+      await lockPlayer(tx, row.playerId);
+      const claimed = await tx
+        .select({ id: dailyRoutines.id })
+        .from(dailyRoutines)
+        .where(and(eq(dailyRoutines.characterId, row.id), eq(dailyRoutines.utcDay, utcDay)));
+      if (claimed.length > 0) throw new RoutineAlreadyChosen();
+      if (card.requires && buildCtx) waived = (await consumeRoutineRequirementInTx(tx, buildCtx, card.requires, now)).waived;
+
+      for (const effect of penalizedEffects) {
+        if (effect.type === "change_stat") {
+          const rows = await tx.select().from(playerCharacters).where(eq(playerCharacters.id, row.id)).limit(1);
+          const current = rows[0];
+          if (!current) continue;
+          const applied = applyStatGrowth(effect.amount, Number(current.growthMultiplier));
+          const next = capStat(current[effect.stat] + applied, getAgeConfig());
+          await tx.update(playerCharacters).set({ [effect.stat]: next }).where(eq(playerCharacters.id, row.id));
+          await tx.insert(effectLog).values({
+            characterId: row.id,
+            kind: "change_stat",
+            detail: { stat: effect.stat, requested: effect.amount, applied, source: `routine:${card.id}` },
+          });
+          appliedCosts.push({ label: `${signed(applied)} ${STAT_LABELS[effect.stat]}`, tone: applied >= 0 ? "positive" : "negative" });
+        } else if (effect.type === "change_drachmae") {
+          // Relative write, floored at 0 — never a JS-side read-then-write of the wallet.
+          const rows = await tx
+            .update(playerCharacters)
+            .set({ drachmae: sql`GREATEST(0, ${playerCharacters.drachmae} + ${effect.amount})` })
+            .where(eq(playerCharacters.id, row.id))
+            .returning({ drachmae: playerCharacters.drachmae });
+          const current = rows[0];
+          if (!current) continue;
+          await tx.insert(effectLog).values({
+            characterId: row.id,
+            kind: "change_drachmae",
+            detail: { amount: effect.amount, value: current.drachmae, source: `routine:${card.id}` },
+          });
+          appliedCosts.push({ label: `${signed(effect.amount)} drachmae`, tone: effect.amount >= 0 ? "positive" : "negative" });
+        } else if (effect.type === "change_party_favor") {
+          // Factional standing shift (abroad cards, Step 3) — reuses the event
+          // engine's party-favor upsert. Not subject to the repeat penalty.
+          await tx
+            .insert(partyFavor)
+            .values({ characterId: row.id, party: effect.party, favor: effect.amount })
+            .onConflictDoUpdate({ target: [partyFavor.characterId, partyFavor.party], set: { favor: sql`${partyFavor.favor} + ${effect.amount}` } });
+          await tx.insert(effectLog).values({
+            characterId: row.id,
+            kind: "change_party_favor",
+            detail: { party: effect.party, amount: effect.amount, source: `routine:${card.id}` },
+          });
+          const party = effect.party[0]!.toUpperCase() + effect.party.slice(1);
+          appliedCosts.push({ label: `${signed(effect.amount)} ${party} favor`, tone: effect.amount >= 0 ? "positive" : "negative" });
+        }
+        // change_composure handled below as a single combined delta.
       }
-      // change_composure handled below as a single combined delta.
-    }
-    // Daily spouse-reaction philia coupling: a living spouse's net reaction to the
-    // card nudges the bond. Only when nonzero; unmarried/widowed writes nothing.
-    if (spouse && spouse.marriageId !== null && spouse.philia !== null && philiaDelta !== 0) {
-      await tx.update(marriages).set({ philia: clampPhilia(spouse.philia + philiaDelta) }).where(eq(marriages.id, spouse.marriageId));
-      await tx.insert(effectLog).values({
-        characterId: row.id,
-        kind: "change_philia",
-        detail: { amount: philiaDelta, source: "daily:spouse-reaction" },
-      });
-    }
-    await tx.insert(dailyRoutines).values({ characterId: row.id, utcDay, routineId: card.id });
-  });
+      // Daily spouse-reaction philia coupling: a living spouse's net reaction to the
+      // card nudges the bond. Only when nonzero; unmarried/widowed writes nothing.
+      if (spouse && spouse.marriageId !== null && spouse.philia !== null && philiaDelta !== 0) {
+        await tx.update(marriages).set({ philia: clampPhilia(spouse.philia + philiaDelta) }).where(eq(marriages.id, spouse.marriageId));
+        await tx.insert(effectLog).values({
+          characterId: row.id,
+          kind: "change_philia",
+          detail: { amount: philiaDelta, source: "daily:spouse-reaction" },
+        });
+      }
+      // Ladder XP: read + advance under the lock (the trait grant/removal it may
+      // trigger goes through the trait service after the tx, below).
+      if (card.feedsLadder && penalizedLadderXp !== 0) {
+        const ladderDef = cfg.ladders[card.feedsLadder];
+        const column = LADDER_XP_COLUMN[card.feedsLadder as keyof typeof LADDER_XP_COLUMN];
+        if (ladderDef && column) {
+          const xpRows = await tx.select({ xp: playerCharacters[column] }).from(playerCharacters).where(eq(playerCharacters.id, row.id)).limit(1);
+          const currentXp = (xpRows[0]?.xp ?? fresh[column]) as number;
+          const progress = ladderProgress(currentXp, penalizedLadderXp, ladderDef);
+          await tx.update(playerCharacters).set({ [column]: progress.newXp }).where(eq(playerCharacters.id, row.id));
+          ladderPlan = { ladderDef, progress };
+        }
+      }
+      await tx.insert(dailyRoutines).values({ characterId: row.id, utcDay, routineId: card.id });
+    });
+  } catch (error) {
+    if (error instanceof RoutineAlreadyChosen) return { ok: false, code: 409, error: "You have already chosen your routine today." };
+    if (error instanceof SpendRejected) return { ok: false, code: error.result.code, error: error.result.error };
+    throw error;
+  }
 
   // change_trait effects run through the shared trait service AFTER the tx — the same
   // path (and post-tx placement) the event engine and the ladder grant below use, since
@@ -407,15 +450,12 @@ export async function resolveRoutine(row: CharacterRow, routineId: string, now: 
   // Composure via the break-aware service + audit log (same as event resolution).
   const composure = await applyComposureDelta(row.id, composureDelta, `routine:${card.id}`, now);
 
-  // Advance the fed ladder and grant/upgrade the tier trait via the trait service.
+  // Grant/upgrade the fed ladder's tier trait via the trait service (the XP itself
+  // advanced inside the tx above).
   let ladderOut: { id: string; newXp: number; nextThreshold: number | null; traitGranted: string | null } | null = null;
-  if (card.feedsLadder && penalizedLadderXp !== 0) {
-    const ladderDef = cfg.ladders[card.feedsLadder];
-    const column = LADDER_XP_COLUMN[card.feedsLadder as keyof typeof LADDER_XP_COLUMN];
-    if (ladderDef && column) {
-      const currentXp = fresh[column] as number;
-      const progress = ladderProgress(currentXp, penalizedLadderXp, ladderDef);
-      await db.update(playerCharacters).set({ [column]: progress.newXp }).where(eq(playerCharacters.id, row.id));
+  if (card.feedsLadder && ladderPlan) {
+    const { ladderDef, progress } = ladderPlan;
+    {
       if (progress.traitToRemove) await removeTrait(row.id, progress.traitToRemove);
       if (progress.traitToGrant) {
         try {

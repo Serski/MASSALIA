@@ -49,6 +49,7 @@ import {
 } from "@massalia/shared";
 import { getAgeConfig, portraitUrl } from "./age.js";
 import { buildingContext, creditGoods, grantPops } from "./buildings.js";
+import { lockPlayer } from "./lock.js";
 import { addTrait, getAllTraitDefs, getHeldTraits, getTraitDef } from "./traits.js";
 import { applyComposureDelta } from "./composure.js";
 import { broadcastState } from "./worldState.js";
@@ -680,6 +681,7 @@ export async function marry(character: CharacterRow, candidateId: string, now: D
   if (!ctx) return { ok: false, code: 503, error: "No active world." };
 
   await db.transaction(async (tx) => {
+    await lockPlayer(tx, character.playerId);
     // Roll the wife's lifespan now (uniform in spouse.deathAge); she ages toward it.
     await tx.insert(marriages).values({ characterId: character.id, candidateId, spouseDeathAge: rollSpouseDeathAge(cfg) });
     await tx.update(familyCandidates).set({ consumedAt: now }).where(eq(familyCandidates.id, candidateId));
@@ -687,7 +689,8 @@ export async function marry(character: CharacterRow, candidateId: string, now: D
     // spouse + the child-roll anchor (the first roll comes a game year from now).
     const updates: Partial<typeof playerCharacters.$inferInsert> = { spouseCandidateId: candidateId, lastChildRollAt: now };
     if (dowry > 0) {
-      updates.drachmae = character.drachmae + dowry;
+      // Relative credit — never the pre-tx `character.drachmae` written back.
+      await tx.update(playerCharacters).set({ drachmae: sql`${playerCharacters.drachmae} + ${dowry}` }).where(eq(playerCharacters.id, character.id));
       await tx.insert(effectLog).values({ characterId: character.id, kind: "change_drachmae", detail: { amount: dowry, source: "marriage:dowry" } });
     }
     // The bride's package: household goods through the checkpoint-aware credit path,
@@ -756,6 +759,7 @@ export async function giveGift(character: CharacterRow, now: Date = new Date()):
 
   try {
     const out = await db.transaction(async (tx) => {
+      await lockPlayer(tx, character.playerId);
       const paid = await tx
         .update(playerCharacters)
         .set({ drachmae: sql`${playerCharacters.drachmae} - ${GIFT_COST}` })
@@ -800,6 +804,7 @@ export async function holdSymposium(character: CharacterRow, now: Date = new Dat
 
   try {
     const out = await db.transaction(async (tx) => {
+      await lockPlayer(tx, character.playerId);
       const paid = await tx
         .update(playerCharacters)
         .set({ drachmae: sql`${playerCharacters.drachmae} - ${SYMPOSIUM_COST}` })
@@ -877,7 +882,9 @@ export async function divorce(character: CharacterRow, now: Date = new Date()): 
   let drachmaeApplied = 0;
   let favorApplied = 0;
 
+  let walletAfter = 0;
   await db.transaction(async (tx) => {
+    await lockPlayer(tx, character.playerId);
     const cur = (
       await tx
         .select({ prestige: playerCharacters.prestige, devotion: playerCharacters.devotion, drachmae: playerCharacters.drachmae, growth: playerCharacters.growthMultiplier })
@@ -892,19 +899,24 @@ export async function divorce(character: CharacterRow, now: Date = new Date()): 
     const nextPrestige = capStat(cur.prestige + prestigeApplied, getAgeConfig());
     const nextDevotion = capStat(cur.devotion + devotionApplied, getAgeConfig());
     const updates: Partial<typeof playerCharacters.$inferInsert> = { prestige: nextPrestige, devotion: nextDevotion, spouseCandidateId: null };
-    if (returnsDowry) {
-      // Drachmae floors at 0 (the same as every change_drachmae effect path).
-      const nextDrachmae = Math.max(0, cur.drachmae - tier.dowry);
-      drachmaeApplied = nextDrachmae - cur.drachmae;
-      updates.drachmae = nextDrachmae;
-    }
     await tx.update(playerCharacters).set(updates).where(eq(playerCharacters.id, character.id));
+    walletAfter = cur.drachmae;
+    if (returnsDowry) {
+      // Relative write, floored at 0 (the same as every change_drachmae effect path).
+      const paid = await tx
+        .update(playerCharacters)
+        .set({ drachmae: sql`GREATEST(0, ${playerCharacters.drachmae} - ${tier.dowry})` })
+        .where(eq(playerCharacters.id, character.id))
+        .returning({ drachmae: playerCharacters.drachmae });
+      walletAfter = paid[0]?.drachmae ?? cur.drachmae;
+      drachmaeApplied = walletAfter - cur.drachmae;
+    }
     await tx.update(marriages).set({ endedAt: now, endReason: "divorced" }).where(eq(marriages.id, marriageId));
 
     await tx.insert(effectLog).values({ characterId: character.id, kind: "change_stat", detail: { stat: "prestige", requested: tier.prestige, applied: prestigeApplied, source: "divorce" } });
     await tx.insert(effectLog).values({ characterId: character.id, kind: "change_stat", detail: { stat: "devotion", requested: tier.devotion, applied: devotionApplied, source: "divorce" } });
     if (returnsDowry) {
-      await tx.insert(effectLog).values({ characterId: character.id, kind: "change_drachmae", detail: { amount: drachmaeApplied, value: updates.drachmae, source: "divorce" } });
+      await tx.insert(effectLog).values({ characterId: character.id, kind: "change_drachmae", detail: { amount: drachmaeApplied, value: walletAfter, source: "divorce" } });
     }
     if (favorParty) {
       favorApplied = -tier.favor;

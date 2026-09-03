@@ -9,6 +9,7 @@ import { applyChangeTrait, getTraitDef, TraitRuleError } from "./traits.js";
 import { applyComposureDelta } from "./composure.js";
 import { onIdeologyChanged } from "./politics.js";
 import { broadcastState } from "./worldState.js";
+import { lockCharacterOwner } from "./lock.js";
 
 // ---------------------------------------------------------------------------
 // The story play service (Story Engine Phase 4): start · resume · advance ·
@@ -243,6 +244,9 @@ export async function advanceStory(characterId: string, storyId: string, choiceI
   let result: { resultText: string | null; completed: boolean; node: ReturnType<typeof projectNode> };
 
   await db.transaction(async (tx) => {
+    // 0. Serialize against every other mutation of this player (rewards touch the
+    //    wallet/stats) — the per-player advisory lock comes before the row lock.
+    await lockCharacterOwner(tx, characterId);
     // 1. Lock the authoritative row.
     const rows = await tx
       .select()

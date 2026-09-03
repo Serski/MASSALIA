@@ -24,6 +24,7 @@ import { livingSpouseState } from "./family.js";
 import { applyChangeTrait, TraitRuleError } from "./traits.js";
 import { onIdeologyChanged } from "./politics.js";
 import { getAgeConfig } from "./age.js";
+import { lockCharacterOwner } from "./lock.js";
 
 const db = createDb();
 
@@ -95,6 +96,10 @@ export async function findChoice(eventId: string, choiceId: string): Promise<{ e
 // change_trait, and spawn_army remain no-ops here, exactly as before the extraction.
 // `eventId` is free-form provenance only (nothing validates it against loaded content);
 // callers may pass synthetic ids like `story:{storyId}:{choiceId}`.
+// Serialization: the first thing it does is take the acting player's advisory lock
+// (services/lock.ts) — re-entrant, so a caller that already holds it pays nothing —
+// which makes the read-then-write stat/ideology cases below safe; the wallet case
+// is a relative, floored update on top of that.
 export async function applyEffectsInTx(
   tx: Tx,
   args: {
@@ -106,6 +111,7 @@ export async function applyEffectsInTx(
   },
 ): Promise<{ ideologyTouched: boolean }> {
   const { characterId: actingCharacterId, eventId, effects, cityDef, factionDef } = args;
+  await lockCharacterOwner(tx, actingCharacterId);
   let ideologyTouched = false;
   // The caller keeps its own copy of this (pre-tx, to gate the content-default load);
   // recomputed here from the same predicate so the worldId resolution stays verbatim.
@@ -145,11 +151,14 @@ export async function applyEffectsInTx(
           break;
         }
         case "change_drachmae": {
-          const rows = await tx.select({ drachmae: playerCharacters.drachmae }).from(playerCharacters).where(eq(playerCharacters.id, actingCharacterId)).limit(1);
+          // Relative write, floored at 0 — never a JS-side read-then-write of the wallet.
+          const rows = await tx
+            .update(playerCharacters)
+            .set({ drachmae: sql`GREATEST(0, ${playerCharacters.drachmae} + ${effect.amount})` })
+            .where(eq(playerCharacters.id, actingCharacterId))
+            .returning({ drachmae: playerCharacters.drachmae });
           if (!rows[0]) break;
-          const next = Math.max(0, rows[0].drachmae + effect.amount);
-          await tx.update(playerCharacters).set({ drachmae: next }).where(eq(playerCharacters.id, actingCharacterId));
-          await tx.insert(effectLog).values({ characterId: actingCharacterId, kind: "change_drachmae", detail: { amount: effect.amount, value: next } });
+          await tx.insert(effectLog).values({ characterId: actingCharacterId, kind: "change_drachmae", detail: { amount: effect.amount, value: rows[0].drachmae } });
           break;
         }
         case "change_philia": {
@@ -286,7 +295,24 @@ export async function applyEffectsInTx(
 // NOTE: composure (the trait/ideology layer + explicit change_composure effects) is
 // applied by the events route as a single combined delta, so it is intentionally NOT
 // handled here — that keeps the up-front preview equal to what resolving applies.
-export async function applyChoiceEffects(actingCharacterId: string, eventId: string, choice: EventChoice) {
+//
+// `opts.claim` is the claim-first hook for the daily decisions: it runs inside the
+// transaction, after the player lock and BEFORE any effect, and must flip whatever
+// row guards the resolution (UPDATE ... WHERE resolved = false RETURNING). Returning
+// false throws ChoiceClaimRejected, which rolls the transaction back with nothing
+// applied — the way a concurrent duplicate resolve loses.
+export class ChoiceClaimRejected extends Error {
+  constructor() {
+    super("choice already claimed");
+  }
+}
+
+export async function applyChoiceEffects(
+  actingCharacterId: string,
+  eventId: string,
+  choice: EventChoice,
+  opts: { claim?: (tx: Tx) => Promise<boolean> } = {},
+) {
   const traitEffects = choice.effects.filter((e) => e.type === "change_trait");
 
   // World-scoped effects (Atlas Phase 2b-ii) are explicitly-targeted; resolve their
@@ -299,6 +325,9 @@ export async function applyChoiceEffects(actingCharacterId: string, eventId: str
 
   let ideologyTouched = false;
   await db.transaction(async (tx) => {
+    // Lock first (applyEffectsInTx re-takes it for free), then claim, then apply.
+    await lockCharacterOwner(tx, actingCharacterId);
+    if (opts.claim && !(await opts.claim(tx))) throw new ChoiceClaimRejected();
     const result = await applyEffectsInTx(tx, { characterId: actingCharacterId, eventId, effects: choice.effects, cityDef, factionDef });
     ideologyTouched = result.ideologyTouched;
     // The ONLY event_history write: an event counts as seen when it is resolved

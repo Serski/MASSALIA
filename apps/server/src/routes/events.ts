@@ -10,13 +10,13 @@ import {
   type EventDefinition,
   type Trait,
 } from "@massalia/shared";
-import { applyChoiceEffects, findChoice, listEvents } from "../services/eventEngine.js";
+import { findChoice, listEvents } from "../services/eventEngine.js";
 import { requireAuth } from "../services/auth.js";
 import { ensureCharacterRow, getActivePlayer, getActiveWorld, type CharacterRow } from "../services/character.js";
 import { familyEligibilityContext, livingSpouseState } from "../services/family.js";
 import { getHeldTraits } from "../services/traits.js";
 import { applyComposureDelta, composurePreview, getComposureConfig, recoverComposure } from "../services/composure.js";
-import { ensureDailySet, findDailyCard, getDailySet, markCardResolved } from "../services/dailyDecisions.js";
+import { ensureDailySet, findDailyCard, getDailySet, resolveDailyCard } from "../services/dailyDecisions.js";
 
 async function actingCharacter(userId: string): Promise<{ row: CharacterRow; startedMs: number } | { error: string; code: number }> {
   const world = await getActiveWorld();
@@ -157,20 +157,29 @@ export async function eventRoutes(app: FastifyInstance) {
       reply.code(409);
       return { error: "That decision is not part of today's set." };
     }
+    // Cheap pre-check; the claim inside resolveDailyCard is the authoritative one.
     if (card.resolved) {
       reply.code(409);
       return { error: "You have already resolved that decision today." };
     }
 
+    // Claim-first: lock the player, flip the card to resolved (UPDATE ... WHERE
+    // resolved = false RETURNING), then apply the gameplay effects — all in ONE
+    // transaction. A concurrent duplicate loses the claim, rolls back, and gets 409
+    // with nothing applied.
+    const resolved = await resolveDailyCard(card, found.choice);
+    if (!resolved.claimed) {
+      reply.code(409);
+      return { error: "You have already resolved that decision today." };
+    }
+    const result = { resultText: resolved.resultText };
+
     // Combined composure cost for THIS character (trait/ideology layer + explicit
-    // change_composure effects), applied once so it matches the preview exactly.
+    // change_composure effects), applied once — after the claim, so a lost race
+    // never charges it — and from the traits read above, so it matches the preview.
     await recoverComposure(acting.row.id);
     const { delta, reason } = composurePreview(found.choice, traits, getComposureConfig(), spouseTraits);
     const composure = await applyComposureDelta(acting.row.id, delta, reason);
-
-    // Gameplay effects (atomic), then mark the card resolved.
-    const result = await applyChoiceEffects(acting.row.id, eventId, found.choice);
-    await markCardResolved(card.id, choiceId);
 
     const remaining = (await getDailySet(acting.row.id, now)).filter((c) => !c.resolved).length;
     return {

@@ -23,6 +23,7 @@ import { getComposureConfig } from "./composure.js";
 import { getHeldTraits } from "./traits.js";
 import { releaseSeatOf } from "./oligarchy.js";
 import { broadcastState } from "./worldState.js";
+import { lockPlayer, type DbTx } from "./lock.js";
 
 const db = createDb();
 
@@ -96,7 +97,11 @@ async function resolveDeathCause(slot: CharacterRow): Promise<DeathCause> {
 // always-inherited set (house, holdings, drachmae, oligarch seat / is_councilor)
 // is simply NOT reset. Records a successions row + increments the dynasty
 // generation unless `recordKind` is null (a regency starts in trust, no handoff yet).
-async function becomeHeir(
+// Runs inside a caller-owned transaction that already holds lockPlayer(slot.playerId)
+// — the slot's stats, wallet and status are rewritten here, so it serializes against
+// every other mutation of the player. becomeHeir wraps it in its own locked tx.
+async function becomeHeirInTx(
+  tx: DbTx,
   slot: CharacterRow,
   heir: { name: string; sex: Sex; age: number; avatarId: string | null; stats: StatBlock; isRegent?: boolean; regentForChildId?: string | null; drachmae?: number; isCouncilor?: boolean },
   recordKind: "blood" | "adopted" | "regent_handoff" | "fresh" | null,
@@ -115,8 +120,8 @@ async function becomeHeir(
     // pre-0047 row), so only the lethal causes carry a value.
     const resolved = recordKind === "regent_handoff" ? "natural" : await resolveDeathCause(slot);
     const cause = resolved === "natural" ? null : resolved;
-    await db.update(dynasties).set({ generation: sql`${dynasties.generation} + 1` }).where(eq(dynasties.id, slot.dynastyId));
-    await db.insert(successions).values({
+    await tx.update(dynasties).set({ generation: sql`${dynasties.generation} + 1` }).where(eq(dynasties.id, slot.dynastyId));
+    await tx.insert(successions).values({
       dynastyId: slot.dynastyId,
       fromCharacterId: slot.id,
       toCharacterId: slot.id,
@@ -131,7 +136,7 @@ async function becomeHeir(
     });
   }
 
-  await db.update(players).set({ name: heir.name, faceId: heir.avatarId }).where(eq(players.id, slot.playerId));
+  await tx.update(players).set({ name: heir.name, faceId: heir.avatarId }).where(eq(players.id, slot.playerId));
 
   const updates: Partial<typeof playerCharacters.$inferInsert> = {
     status: "alive",
@@ -160,9 +165,22 @@ async function becomeHeir(
   };
   if (heir.drachmae !== undefined) updates.drachmae = heir.drachmae;
   if (heir.isCouncilor !== undefined) updates.isCouncilor = heir.isCouncilor;
-  await db.update(playerCharacters).set(updates).where(eq(playerCharacters.id, slot.id));
+  await tx.update(playerCharacters).set(updates).where(eq(playerCharacters.id, slot.id));
 
-  if (removeChildId) await db.delete(children).where(eq(children.id, removeChildId));
+  if (removeChildId) await tx.delete(children).where(eq(children.id, removeChildId));
+}
+
+async function becomeHeir(
+  slot: CharacterRow,
+  heir: Parameters<typeof becomeHeirInTx>[2],
+  recordKind: Parameters<typeof becomeHeirInTx>[3],
+  now: Date,
+  removeChildId?: string,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await lockPlayer(tx, slot.playerId);
+    await becomeHeirInTx(tx, slot, heir, recordKind, now, removeChildId);
+  });
   await broadcastState();
 }
 
@@ -207,7 +225,10 @@ export async function enforceDeathAndHandoff(characterId: string, now: Date = ne
   // Death: reaching death_age opens succession (status -> deceased; resolved by the player).
   const age = currentAge(row.startAge, row.createdAt.getTime(), now.getTime(), ageCfg);
   if (row.deathAge !== null && age >= row.deathAge) {
-    await db.update(playerCharacters).set({ status: "deceased" }).where(eq(playerCharacters.id, characterId));
+    await db.transaction(async (tx) => {
+      await lockPlayer(tx, row.playerId);
+      await tx.update(playerCharacters).set({ status: "deceased" }).where(and(eq(playerCharacters.id, characterId), eq(playerCharacters.status, "alive")));
+    });
     await broadcastState();
   }
 }
@@ -353,8 +374,13 @@ async function applyAdoptedHeir(row: CharacterRow, cand: CandidateRow, now: Date
   const cfg = getFamilyConfig();
   const candStats: CharacterStats = { prestige: cand.prestige, devotion: cand.devotion, militia: cand.militia, intelligence: cand.intelligence };
   const stats = inheritance(deadStats(row), "adopted", cfg, { candidate: candStats });
-  await db.update(familyCandidates).set({ consumedAt: now }).where(eq(familyCandidates.id, cand.id));
-  await becomeHeir(row, { name: cand.name, sex: cand.sex as Sex, age: cand.age, avatarId: cand.avatarId, stats }, kind, now);
+  // Candidate consumption + the handoff commit together under the player lock.
+  await db.transaction(async (tx) => {
+    await lockPlayer(tx, row.playerId);
+    await tx.update(familyCandidates).set({ consumedAt: now }).where(eq(familyCandidates.id, cand.id));
+    await becomeHeirInTx(tx, row, { name: cand.name, sex: cand.sex as Sex, age: cand.age, avatarId: cand.avatarId, stats }, kind, now);
+  });
+  await broadcastState();
 }
 
 // --- Adoption (and adopt-to-exit during a regency) -------------------------
@@ -413,6 +439,7 @@ export async function adopt(row: CharacterRow, candidateId: string, now: Date = 
   if (row.drachmae < ADOPTION_COST) return { ok: false, code: 409, error: `The rite costs ${ADOPTION_COST} drachmae — you cannot afford it.` };
   try {
     await db.transaction(async (tx) => {
+      await lockPlayer(tx, row.playerId);
       const paid = await tx
         .update(playerCharacters)
         .set({ drachmae: sql`${playerCharacters.drachmae} - ${ADOPTION_COST}`, adoptedCandidateId: cand.id })

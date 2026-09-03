@@ -1,5 +1,6 @@
 import { and, eq, lt } from "drizzle-orm";
 import { createDb, dailyDecisions, playerCharacters } from "@massalia/db";
+import type { DbTx } from "./lock.js";
 import {
   dailyArenasFor,
   defaultChoiceFor,
@@ -9,9 +10,10 @@ import {
   isCalendarEvent,
   isEventEligible,
   type EligibilityContext,
+  type EventChoice,
   type EventDefinition,
 } from "@massalia/shared";
-import { applyChoiceEffects, listEvents, recentEventIds } from "./eventEngine.js";
+import { applyChoiceEffects, ChoiceClaimRejected, listEvents, recentEventIds } from "./eventEngine.js";
 import { applyComposureDelta, composurePreview, getComposureConfig, recoverComposure } from "./composure.js";
 import { getHeldTraits } from "./traits.js";
 import { livingSpouseState } from "./family.js";
@@ -60,13 +62,10 @@ export async function applyExpiredDefaults(characterId: string, now: Date, event
     const choice = defaultChoiceFor(event);
     if (!choice) continue;
 
-    // Composure first, mirroring the resolve route step for step (recover → preview
-    // → apply): the trait/ideology layer plus explicit change_composure, with the
-    // living spouse's reaction and NO tag-derived philia (the double-count guard).
-    // The withdrawn gate is deliberately absent — the default is not the player
-    // acting — and a default may itself break the character; applyComposureDelta
-    // handles that exactly as for a live resolve. Re-read per card: an earlier
-    // default may have changed the traits the next one is judged against.
+    // Traits/spouse are read BEFORE the claim (the composure preview is judged
+    // against them, exactly as the resolve route reads them before resolving).
+    // Re-read per card: an earlier default may have changed the traits the next one
+    // is judged against.
     const character = (await db.select().from(playerCharacters).where(eq(playerCharacters.id, characterId)).limit(1))[0];
     if (!character) {
       console.warn(`applyExpiredDefaults: character ${characterId} not found for card ${row.id}; left unresolved`);
@@ -74,12 +73,23 @@ export async function applyExpiredDefaults(characterId: string, now: Date, event
     }
     const heldTraits = await getHeldTraits(characterId);
     const spouseTraits = (await livingSpouseState(character, now))?.personalityTraits ?? [];
+
+    // Claim-first (mirrors the resolve route step for step): the card flips to
+    // resolved-by-default and the effects apply in ONE locked transaction. Two
+    // first-accesses of the same new day can race here — the loser claims nothing
+    // and applies nothing (no double charge, no double composure).
+    const resolved = await resolveDailyCard(row, choice, { byDefault: true });
+    if (!resolved.claimed) continue;
+
+    // Composure after the claim (recover → preview → apply): the trait/ideology
+    // layer plus explicit change_composure, with the living spouse's reaction and
+    // NO tag-derived philia (the double-count guard). The withdrawn gate is
+    // deliberately absent — the default is not the player acting — and a default
+    // may itself break the character; applyComposureDelta handles that exactly as
+    // for a live resolve.
     await recoverComposure(characterId, now);
     const { delta, reason } = composurePreview(choice, heldTraits, getComposureConfig(), spouseTraits);
     await applyComposureDelta(characterId, delta, reason, now);
-
-    await applyChoiceEffects(characterId, row.eventId, choice);
-    await markCardResolved(row.id, choice.id, { byDefault: true });
     applied.push({ cardId: row.id, eventId: row.eventId, choiceId: choice.id, composureDelta: delta });
   }
   return applied;
@@ -139,4 +149,36 @@ export async function markCardResolved(cardId: string, choiceId: string, opts: {
     .update(dailyDecisions)
     .set({ resolved: true, resolvedChoiceId: choiceId, ...(opts.byDefault ? { resolvedByDefault: true } : {}) })
     .where(eq(dailyDecisions.id, cardId));
+}
+
+// --- Claim-first resolution --------------------------------------------------
+// The claim: flip the card to resolved ONLY if it is still unresolved, and report
+// whether this transaction won. `UPDATE ... WHERE resolved = false RETURNING id` is
+// the whole race guard — under the player lock the second of two concurrent
+// resolves sees the first one's commit and matches zero rows.
+export async function claimDailyCard(tx: DbTx, cardId: string, choiceId: string, opts: { byDefault?: boolean } = {}): Promise<boolean> {
+  const claimed = await tx
+    .update(dailyDecisions)
+    .set({ resolved: true, resolvedChoiceId: choiceId, ...(opts.byDefault ? { resolvedByDefault: true } : {}) })
+    .where(and(eq(dailyDecisions.id, cardId), eq(dailyDecisions.resolved, false)))
+    .returning({ id: dailyDecisions.id });
+  return claimed.length > 0;
+}
+
+export type CardResolution = { claimed: false } | { claimed: true; resultText: string };
+
+// Resolve a daily card to a choice: lock the player → claim the card → apply the
+// choice's effects + event_history, all in ONE transaction (applyChoiceEffects'
+// claim hook). A lost claim rolls everything back and returns { claimed: false } —
+// the caller answers 409 and applies nothing else (composure included).
+export async function resolveDailyCard(card: DailyCardRow, choice: EventChoice, opts: { byDefault?: boolean } = {}): Promise<CardResolution> {
+  try {
+    const result = await applyChoiceEffects(card.characterId, card.eventId, choice, {
+      claim: (tx) => claimDailyCard(tx, card.id, choice.id, opts),
+    });
+    return { claimed: true, resultText: result.resultText };
+  } catch (error) {
+    if (error instanceof ChoiceClaimRejected) return { claimed: false };
+    throw error;
+  }
 }
