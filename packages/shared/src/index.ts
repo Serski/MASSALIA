@@ -25,3 +25,4 @@ export * from "./agenda.js";
 export * from "./composure.js";
 export * from "./buildings.js";
 export * from "./military.js";
+export * from "./mapActions.js";

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { apiBaseUrl } from "../api.js";
 import { CULTURE_WEBP, POLITY_CREST, titleCase } from "../dashboard/shared.js";
+import { mapActionButtons } from "./mapActions.js";
 import "./World2Map.css";
 
 /**
@@ -64,7 +65,6 @@ const TOWNSTATS_SRC = "/map2/townstats.json";
 const MILITARY_SRC = `${apiBaseUrl}/api/map/military`;
 // Shield colour for regions nobody holds (states with no crest art use their own colour).
 const UNCLAIMED_GREY = "#8f8a82";
-const TOWN_ACTIONS = ["Attack", "Raid", "Scout", "Colonise"] as const;
 const OWNER_TINT_OPACITY = 0.5;
 
 // The app's phone breakpoint (matches the dashboard's 620px).
@@ -960,6 +960,18 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
         ) : (
           <p className="w2map-info-empty">No towns in this region.</p>
         )}
+        {selectedProvince.type === "land" ? (
+          <>
+            <div className="w2map-info-label">Actions</div>
+            <div className="w2map-actions">
+              {mapActionButtons({ kind: "region", hasTown: selectedProvince.towns.length > 0, ownerId: selectedOwnerId }).map((b) => (
+                <button key={b.type} type="button" className="w2map-action" disabled={!b.enabled} aria-disabled={!b.enabled} title={b.title}>
+                  {b.label}
+                </button>
+              ))}
+            </div>
+          </>
+        ) : null}
       </div>
     </>
   ) : null;
@@ -967,7 +979,8 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
   // The town panel: population and walls from the public survey (every town),
   // garrison and fleet only when the player is entitled to them (home or intel),
   // "No survey yet" otherwise, and the four action buttons — rendered in the
-  // game's button style but inert until a later pass wires them up.
+  // game's button style but inert until a later pass wires them up. Legality per
+  // button comes from the shared matrix (owner from politics2 via the town's region).
   const stats = selectedTownObj ? townStats[selectedTownObj.id] : undefined;
   const townMil = selectedTownObj ? military.towns[selectedTownObj.id] : undefined;
   const townBody = selectedTownObj ? (
@@ -1022,9 +1035,9 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
         {townMil?.source === "intel" ? <p className="w2map-stat-asof">as of {townMil.scoutedGameDate}</p> : null}
         <div className="w2map-info-label">Actions</div>
         <div className="w2map-actions">
-          {TOWN_ACTIONS.map((action) => (
-            <button key={action} type="button" className="w2map-action" disabled aria-disabled="true" title="Not yet available">
-              {action}
+          {mapActionButtons({ kind: "town", hasTown: true, ownerId: selectedOwnerId }).map((b) => (
+            <button key={b.type} type="button" className="w2map-action" disabled={!b.enabled} aria-disabled={!b.enabled} title={b.title}>
+              {b.label}
             </button>
           ))}
         </div>
