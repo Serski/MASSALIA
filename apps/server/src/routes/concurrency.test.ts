@@ -161,6 +161,33 @@ suite("per-player serialization (integration)", () => {
     Promise.all([...Array.from({ length: 3 }, () => get("/api/buildings/mine", token)), ...Array.from({ length: 3 }, () => get("/api/events/daily", token))]);
   const statuses = (responses: { statusCode: number }[]) => responses.map((r) => r.statusCode).sort((a, b) => a - b);
 
+  // First login: a player row with no character yet (legacy/seed players, or the
+  // create flow's follow-up requests) hit several ensureCharacterRow paths at once.
+  it("first-login provisioning: two parallel first requests for a fresh player yield exactly one character row and no 5xx", async () => {
+    const { users, players, sessions, playerCharacters, houses } = m.dbPkg;
+    // A real house: ensureCharacterRow only honours slugs in HOUSE_START (else it
+    // falls back to xanthippos), and player_characters.house_slug is a FK to houses.
+    await db
+      .insert(houses)
+      .values({ slug: "xanthippos", name: "Xanthippos", initial: "X", alignment: "c", stance: "s", motto: "m", patron: "p", crest: "c" })
+      .onConflictDoNothing();
+    const user = (await db.insert(users).values({ email: `fresh-${Math.random().toString(36).slice(2)}@t`, passwordHash: "x" }).returning())[0]!;
+    const player = (
+      // No profession: ensureCharacterRow falls back to its default class (trader).
+      await db.insert(players).values({ worldId, userId: user.id, name: "Fresh", color: "#654321", houseSlug: "xanthippos" }).returning()
+    )[0]!;
+    const token = crypto.randomBytes(16).toString("base64url");
+    await db.insert(sessions).values({ userId: user.id, tokenHash: hashToken(token), expiresAt: new Date(now.getTime() + DAY) });
+    // Warm the pools with ANOTHER player so this one's first two requests truly overlap.
+    const other = await freshPlayer(100);
+    await warmPools(other.token);
+
+    const responses = await Promise.all([get("/api/buildings/mine", token), get("/api/events/daily", token)]);
+    expect(statuses(responses), JSON.stringify(responses.map((r) => r.json()))).toEqual([200, 200]);
+    const rows = await db.select({ id: playerCharacters.id }).from(playerCharacters).where(eq(playerCharacters.playerId, player.id));
+    expect(rows).toHaveLength(1);
+  });
+
   it("vendor buy: two identical concurrent buys with money for one debit exactly once", async () => {
     const { token, playerId } = await freshPlayer(1_000_000);
     // Probe the seasonal unit price with one real buy, then fund EXACTLY one more.

@@ -22,6 +22,7 @@ import {
 } from "@massalia/shared";
 import { getComposureConfig } from "./composure.js";
 import { getAgeConfig, portraitUrl } from "./age.js";
+import { lockPlayer } from "./lock.js";
 
 const db = createDb();
 type DbTx = Parameters<Parameters<ReturnType<typeof createDb>["transaction"]>[0]>[0];
@@ -70,8 +71,8 @@ function safeClass(slug: string | null | undefined): ClassId {
   return slug && (slug as ClassId) in CLASS_START ? (slug as ClassId) : "trader";
 }
 
-export async function findCharacterRow(playerId: string, worldId: string): Promise<CharacterRow | null> {
-  const rows = await db
+export async function findCharacterRow(playerId: string, worldId: string, exec: Exec = db): Promise<CharacterRow | null> {
+  const rows = await exec
     .select()
     .from(playerCharacters)
     .where(and(eq(playerCharacters.playerId, playerId), eq(playerCharacters.worldId, worldId)))
@@ -86,6 +87,7 @@ export async function createCharacterRow(
   classId: ClassId,
   avatarId = "avatar-30-1",
   now: Date = new Date(),
+  exec: Exec = db,
 ): Promise<CharacterRow> {
   const start = startingCharacter(houseId, classId);
   // Starting composure is config-driven (composure-config.json), not a literal.
@@ -99,12 +101,12 @@ export async function createCharacterRow(
   const capped = (key: keyof CharacterStats) => capStat(start[key] + (bonus[key] ?? 0), ageCfg);
 
   // The dynasty spine (Prompt C): every character founds/continues a dynasty.
-  const dynasty = (await db
+  const dynasty = (await exec
     .insert(dynasties)
     .values({ worldId, name: `House ${houseId}`, houseSlug: houseId, foundingPlayerId: playerId, generation: 1 })
     .returning())[0]!;
 
-  const inserted = await db
+  const inserted = await exec
     .insert(playerCharacters)
     .values({
       dynastyId: dynasty.id,
@@ -135,11 +137,18 @@ export async function createCharacterRow(
 }
 
 // Fetch the player's sheet, auto-provisioning from their house + profession if
-// they predate this table (legacy players + seed characters).
+// they predate this table (legacy players + seed characters). Find-then-create
+// runs under the player lock in one transaction: a first login fires several
+// requests at once (/me/state, /api/events/daily, ...) and without the lock two of
+// them both miss the row and both insert — the loser's 5xx on the unique index
+// player_characters_player_world_idx was the first thing a new player saw.
 export async function ensureCharacterRow(player: PlayerRow, worldId: string): Promise<CharacterRow> {
-  const existing = await findCharacterRow(player.id, worldId);
-  if (existing) return existing;
-  return createCharacterRow(player.id, worldId, safeHouse(player.houseSlug), safeClass(player.professionSlug));
+  return db.transaction(async (tx) => {
+    await lockPlayer(tx, player.id);
+    const existing = await findCharacterRow(player.id, worldId, tx);
+    if (existing) return existing;
+    return createCharacterRow(player.id, worldId, safeHouse(player.houseSlug), safeClass(player.professionSlug), undefined, new Date(), tx);
+  });
 }
 
 export function toCharacterSheet(
