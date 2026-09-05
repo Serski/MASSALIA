@@ -6,17 +6,27 @@ import "./plausible.js";
 import { LEGACY_TOKEN_STORAGE_KEY } from "./api.js";
 import { App } from "./App.js";
 
-// Sessions are cookie-only now; drop the raw token older builds kept in
-// localStorage (a no-op once it is gone). The server still honours that token as
-// a Bearer header for one release, but this client never sends it again.
-try {
-  localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
-} catch {
-  // localStorage unavailable (private mode / blocked): nothing to purge.
+// HTTPS bounce: a plain-http hit on the production host is redirected to the
+// same URL over https before anything else runs (nothing is rendered). The
+// session cookie is Secure, so an http page could never be logged in anyway.
+if (location.protocol === "http:" && location.hostname.endsWith("playmassalia.com")) {
+  location.replace(`https://${location.host}${location.pathname}${location.search}${location.hash}`);
+} else {
+  boot();
 }
 
-createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
+function boot() {
+  // Sessions are cookie-only; drop the raw token older builds kept in localStorage
+  // (a no-op once it is gone). The server no longer accepts it either.
+  try {
+    localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
+  } catch {
+    // localStorage unavailable (private mode / blocked): nothing to purge.
+  }
+
+  createRoot(document.getElementById("root")!).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>,
+  );
+}
