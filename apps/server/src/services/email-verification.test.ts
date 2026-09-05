@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type LightMyRequestResponse } from "fastify";
 import cookie from "@fastify/cookie";
 
 // ---------------------------------------------------------------------------
@@ -56,17 +56,23 @@ suite("email verification (integration)", () => {
   });
 
   // --- helpers ---------------------------------------------------------------
-  const post = (url: string, payload: Record<string, unknown> | undefined, token?: string) =>
+  const post = (url: string, payload: Record<string, unknown> | undefined, cookie?: string) =>
     app.inject({
       method: "POST",
       url,
       ...(payload ? { payload } : {}),
-      headers: { "x-forwarded-for": nextIp(), ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      headers: { "x-forwarded-for": nextIp(), ...(cookie ? { cookie } : {}) },
     });
+  // The signed session cookie a response set, as a `cookie` request-header value
+  // (cookie-only auth: the raw token is no longer in the JSON body).
+  const sessionCookie = (res: LightMyRequestResponse) => {
+    const raw = ([] as string[]).concat(res.headers["set-cookie"] ?? []);
+    return raw.find((c) => c.startsWith("massalia_session="))?.split(";")[0] ?? "";
+  };
   const register = async (email: string, password: string) => {
     const res = await post("/auth/register", { email, password, termsAccepted: true });
     expect(res.statusCode).toBe(200);
-    return res.json() as { user: { id: string; email: string }; token: string };
+    return { ...(res.json() as { user: { id: string; email: string } }), cookie: sessionCookie(res) };
   };
   const verifiedAt = async (userId: string) =>
     (await db.select({ v: m.dbPkg.users.emailVerifiedAt }).from(m.dbPkg.users).where(eq(m.dbPkg.users.id, userId)).limit(1))[0]?.v ?? null;
@@ -121,7 +127,7 @@ suite("email verification (integration)", () => {
 
   // 6 — resend 409 when already verified.
   it("resend-verification returns 409 once the email is verified", async () => {
-    const { user, token: session } = await register("already@t", "correct-horse");
+    const { user, cookie: session } = await register("already@t", "correct-horse");
     const verifyToken = await m.authSvc.createEmailVerification(user.id);
     await m.authSvc.consumeEmailVerification(verifyToken);
 
@@ -132,7 +138,7 @@ suite("email verification (integration)", () => {
 
   // 6b — resend works (200) while unverified.
   it("resend-verification returns 200 while unverified", async () => {
-    const { token: session } = await register("resend@t", "correct-horse");
+    const { cookie: session } = await register("resend@t", "correct-horse");
     const res = await post("/auth/resend-verification", undefined, session);
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ ok: true, message: "Verification email sent." });
@@ -156,7 +162,7 @@ suite("email verification (integration)", () => {
   it("verify-email works with no auth header", async () => {
     const { user } = await register("nosession@t", "correct-horse");
     const token = await m.authSvc.createEmailVerification(user.id);
-    const res = await post("/auth/verify-email", { token }); // no bearer
+    const res = await post("/auth/verify-email", { token }); // no cookie
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ ok: true });
     expect(await verifiedAt(user.id)).not.toBeNull();

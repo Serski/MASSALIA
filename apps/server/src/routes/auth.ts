@@ -131,7 +131,7 @@ export async function authRoutes(app: FastifyInstance) {
       .values({ email, passwordHash, newsletterOptIn })
       .returning({ id: users.id, email: users.email });
     const user = created[0]!;
-    const token = await createSession(reply, user.id);
+    await createSession(reply, user.id);
 
     // Soft verification is non-blocking: a token/email problem must never fail or
     // delay registration. Create the token (fast, local) then fire-and-forget the
@@ -143,7 +143,7 @@ export async function authRoutes(app: FastifyInstance) {
       console.error(`Verification token on register failed for ${user.id}: ${error instanceof Error ? error.message : String(error)}`);
     }
 
-    return { user, hasCharacter: false, token };
+    return { user, hasCharacter: false };
   });
 
   app.post("/login", { config: { rateLimit: { max: 8, timeWindow: 60_000 } } }, async (request, reply) => {
@@ -156,8 +156,8 @@ export async function authRoutes(app: FastifyInstance) {
       return { error: "Invalid email or password." };
     }
 
-    const token = await createSession(reply, user.id);
-    return { user: { id: user.id, email: user.email }, hasCharacter: await hasCharacter(user.id), token };
+    await createSession(reply, user.id);
+    return { user: { id: user.id, email: user.email }, hasCharacter: await hasCharacter(user.id) };
   });
 
   app.post("/logout", async (request, reply) => {
@@ -210,8 +210,8 @@ export async function authRoutes(app: FastifyInstance) {
   // Complete a reset. Password is validated (same rule as register) BEFORE the token
   // is touched, so a rejected password leaves the token usable. On success, one
   // transaction consumes the token (atomic single-use), rewrites the password hash,
-  // and drops every existing session; a fresh session is then issued and the
-  // login-shaped payload returned so the web client reuses its login-success path.
+  // and drops every existing session; a fresh session cookie is then issued and
+  // the login-shaped payload returned so the web client reuses its login-success path.
   app.post("/reset-password", { config: { rateLimit: { max: 8, timeWindow: 60_000 } } }, async (request, reply) => {
     const body = request.body as { token?: unknown; password?: unknown } | undefined;
     const token = typeof body?.token === "string" ? body.token : "";
@@ -242,8 +242,8 @@ export async function authRoutes(app: FastifyInstance) {
       return { error: "This reset link is invalid or has expired. Request a new one." };
     }
 
-    const sessionToken = await createSession(reply, user.id);
-    return { user: { id: user.id, email: user.email }, hasCharacter: await hasCharacter(user.id), token: sessionToken };
+    await createSession(reply, user.id);
+    return { user: { id: user.id, email: user.email }, hasCharacter: await hasCharacter(user.id) };
   });
 
   // Verify an email from the emailed link. No auth: the token IS the proof.

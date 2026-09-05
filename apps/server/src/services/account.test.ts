@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type LightMyRequestResponse } from "fastify";
 import cookie from "@fastify/cookie";
 
 // ---------------------------------------------------------------------------
@@ -57,13 +57,19 @@ suite("account deletion (integration)", () => {
   });
 
   // --- helpers ---------------------------------------------------------------
-  const post = (url: string, payload: Record<string, unknown>, token?: string) =>
+  const post = (url: string, payload: Record<string, unknown>, cookie?: string) =>
     app.inject({
       method: "POST",
       url,
       payload,
-      headers: { "x-forwarded-for": nextIp(), ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      headers: { "x-forwarded-for": nextIp(), ...(cookie ? { cookie } : {}) },
     });
+  // The signed session cookie a response set, as a `cookie` request-header value
+  // (cookie-only auth: the raw token is no longer in the JSON body).
+  const sessionCookie = (res: LightMyRequestResponse) => {
+    const raw = ([] as string[]).concat(res.headers["set-cookie"] ?? []);
+    return raw.find((c) => c.startsWith("massalia_session="))?.split(";")[0] ?? "";
+  };
 
   const userByEmail = async (email: string) =>
     (await db.select().from(m.dbPkg.users).where(eq(m.dbPkg.users.email, email)).limit(1))[0];
@@ -121,11 +127,11 @@ suite("account deletion (integration)", () => {
   it("POST /delete-account with the wrong password → 401, user row + sessions untouched", async () => {
     const reg = await post("/auth/register", { email: "wrong@t", password: "correct-horse", termsAccepted: true });
     expect(reg.statusCode).toBe(200);
-    const token = reg.json().token as string;
+    const cookie = sessionCookie(reg);
     const before = await userByEmail("wrong@t");
     expect(await sessionCount(before!.id)).toBe(1);
 
-    const res = await post("/auth/delete-account", { password: "not-the-password" }, token);
+    const res = await post("/auth/delete-account", { password: "not-the-password" }, cookie);
     expect(res.statusCode).toBe(401);
     expect(res.json().error).toBe("Password is incorrect.");
 
@@ -135,17 +141,17 @@ suite("account deletion (integration)", () => {
     expect(await sessionCount(before!.id)).toBe(1); // session intact
   });
 
-  // 3 — old bearer token is dead after deletion (requireAuth on an authed route).
-  it("a bearer token is rejected (401) on an authed route after the account is deleted", async () => {
+  // 3 — the old session cookie is dead after deletion (requireAuth on an authed route).
+  it("a session cookie is rejected (401) on an authed route after the account is deleted", async () => {
     const reg = await post("/auth/register", { email: "stale@t", password: "correct-horse", termsAccepted: true });
-    const token = reg.json().token as string;
+    const cookie = sessionCookie(reg);
 
-    const del = await post("/auth/delete-account", { password: "correct-horse" }, token);
+    const del = await post("/auth/delete-account", { password: "correct-horse" }, cookie);
     expect(del.statusCode).toBe(200);
     expect(del.json().ok).toBe(true);
 
-    // The same (now-stale) token hits the authed delete-account route again.
-    const reuse = await post("/auth/delete-account", { password: "correct-horse" }, token);
+    // The same (now-stale) cookie hits the authed delete-account route again.
+    const reuse = await post("/auth/delete-account", { password: "correct-horse" }, cookie);
     expect(reuse.statusCode).toBe(401); // requireAuth: session gone + deletedAt set
   });
 
@@ -153,8 +159,8 @@ suite("account deletion (integration)", () => {
   it("after deletion, login with the old email+password is refused and the email re-registers to a fresh id", async () => {
     const reg = await post("/auth/register", { email: "reuse@t", password: "correct-horse", termsAccepted: true });
     const oldId = reg.json().user.id as string;
-    const token = reg.json().token as string;
-    expect((await post("/auth/delete-account", { password: "correct-horse" }, token)).statusCode).toBe(200);
+    const cookie = sessionCookie(reg);
+    expect((await post("/auth/delete-account", { password: "correct-horse" }, cookie)).statusCode).toBe(200);
 
     // 4: pre-deletion credentials no longer log in.
     const login = await post("/auth/login", { email: "reuse@t", password: "correct-horse" });

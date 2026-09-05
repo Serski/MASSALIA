@@ -160,15 +160,14 @@ export async function isEmailVerified(userId: string): Promise<boolean> {
   return Boolean(rows[0]?.emailVerifiedAt);
 }
 
-export async function createSession(reply: FastifyReply, userId: string) {
+// Issue a session: store only the token's hash and hand the raw token to the
+// browser as the signed httpOnly cookie. Nothing is returned — the raw token never
+// leaves the cookie (the web app and API are same-site, so the cookie always flows).
+export async function createSession(reply: FastifyReply, userId: string): Promise<void> {
   const token = createSessionToken();
   const expiresAt = new Date(Date.now() + sessionTtlMs);
   await db.insert(sessions).values({ userId, tokenHash: hashToken(token), expiresAt });
-  // Set the cookie (works on same-site / cookie-friendly browsers) AND return the
-  // raw token so the client can fall back to an Authorization: Bearer header.
-  // Bearer is needed because cross-site cookies are blocked by iOS Safari etc.
   reply.setCookie(sessionCookieName, token, getCookieOptions());
-  return token;
 }
 
 export async function clearSession(request: FastifyRequest, reply: FastifyReply) {
@@ -187,6 +186,9 @@ function readSignedSessionCookie(request: FastifyRequest) {
   return unsigned.value;
 }
 
+// Legacy: sessions opened before the cookie-only switch live in localStorage and
+// arrive as `Authorization: Bearer`. Accepted for ONE release so those sessions
+// keep working, then to be removed (the client no longer sends it).
 function readBearerToken(request: FastifyRequest) {
   const header = request.headers.authorization;
   if (!header || !header.startsWith("Bearer ")) return null;
@@ -195,7 +197,7 @@ function readBearerToken(request: FastifyRequest) {
 }
 
 export async function getAuthUser(request: FastifyRequest): Promise<AuthUser | null> {
-  // Prefer the cookie (when the browser keeps it); otherwise accept a Bearer token.
+  // The cookie is the session; the Bearer fallback is transitional (see above).
   const token = readSignedSessionCookie(request) ?? readBearerToken(request);
   if (!token) return null;
 

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type LightMyRequestResponse } from "fastify";
 import cookie from "@fastify/cookie";
 
 // ---------------------------------------------------------------------------
@@ -61,15 +61,21 @@ suite("password reset (integration)", () => {
   });
 
   // --- helpers ---------------------------------------------------------------
-  const post = (url: string, payload: Record<string, unknown>, token?: string) =>
+  const post = (url: string, payload: Record<string, unknown>, cookie?: string) =>
     app.inject({
       method: "POST",
       url,
       payload,
-      headers: { "x-forwarded-for": nextIp(), ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      headers: { "x-forwarded-for": nextIp(), ...(cookie ? { cookie } : {}) },
     });
-  const get = (url: string, token?: string) =>
-    app.inject({ method: "GET", url, headers: { "x-forwarded-for": nextIp(), ...(token ? { authorization: `Bearer ${token}` } : {}) } });
+  const get = (url: string, cookie?: string) =>
+    app.inject({ method: "GET", url, headers: { "x-forwarded-for": nextIp(), ...(cookie ? { cookie } : {}) } });
+  // The signed session cookie a response set, as a `cookie` request-header value
+  // (cookie-only auth: the raw token is no longer in the JSON body).
+  const sessionCookie = (res: LightMyRequestResponse) => {
+    const raw = ([] as string[]).concat(res.headers["set-cookie"] ?? []);
+    return raw.find((c) => c.startsWith("massalia_session="))?.split(";")[0] ?? "";
+  };
 
   const resetTokenCount = async (userId?: string) => {
     const rows = userId
@@ -82,7 +88,7 @@ suite("password reset (integration)", () => {
   const register = async (email: string, password: string) => {
     const res = await post("/auth/register", { email, password, termsAccepted: true });
     expect(res.statusCode).toBe(200);
-    return res.json() as { user: { id: string }; token: string };
+    return { ...(res.json() as { user: { id: string } }), cookie: sessionCookie(res) };
   };
 
   // 1 — /forgot-password is enumeration-safe: identical generic 200 for a real
@@ -105,7 +111,7 @@ suite("password reset (integration)", () => {
 
     // (c) deleted/tombstoned user — same response, no new token for them
     const del = await register("gone@t", "correct-horse");
-    await post("/auth/delete-account", { password: "correct-horse" }, del.token);
+    await post("/auth/delete-account", { password: "correct-horse" }, del.cookie);
     const c = await post("/auth/forgot-password", { email: "gone@t" });
     expect(c.statusCode).toBe(200);
     expect(c.json()).toEqual({ ok: true, message: GENERIC });
@@ -157,16 +163,19 @@ suite("password reset (integration)", () => {
     const token = await m.authSvc.createPasswordReset(user.id);
     const res = await post("/auth/reset-password", { token, password: "brand-new-password" });
     expect(res.statusCode).toBe(200);
-    const payload = res.json() as { user: { id: string; email: string }; hasCharacter: boolean; token: string };
+    const payload = res.json() as { user: { id: string; email: string }; hasCharacter: boolean };
     expect(payload.user).toEqual({ id: user.id, email: "do-reset@t" });
     expect(payload.hasCharacter).toBe(false);
-    expect(typeof payload.token).toBe("string");
+    // Cookie-only: the session rides the Set-Cookie header, never the body.
+    expect(payload).not.toHaveProperty("token");
+    const cookie = sessionCookie(res);
+    expect(cookie).toMatch(/^massalia_session=./);
 
     // Exactly one session survives — the freshly issued one — old ones evicted.
     expect(await sessionCount(user.id)).toBe(1);
 
-    // The new session token authenticates on an authed route.
-    const me = await get("/auth/me", payload.token);
+    // The new session cookie authenticates on an authed route.
+    const me = await get("/auth/me", cookie);
     expect(me.statusCode).toBe(200);
     expect(me.json().user?.id).toBe(user.id);
 
