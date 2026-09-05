@@ -3,6 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- Same-site first-party setup: scripts only from here + Plausible; API calls,
+         SSE and portraits from api.playmassalia.com. Vite substitutes the API origin
+         for non-production builds (see vite.config.ts). -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' https://plausible.io; connect-src 'self' https://api.playmassalia.com https://plausible.io; img-src 'self' data: https://api.playmassalia.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'"
+    />
     <meta name="theme-color" content="#0b0706" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -18,12 +25,9 @@
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="Massalia — the city and harbour, with the lion medallion" />
     <meta name="twitter:card" content="summary_large_image" />
-    <!-- Privacy-friendly analytics by Plausible -->
+    <!-- Privacy-friendly analytics by Plausible (queue stub lives in src/plausible.ts
+         so the CSP needs no 'unsafe-inline' for scripts) -->
     <script async src="https://plausible.io/js/pa-tjvRliwlySzStk1TJJd6I.js"></script>
-    <script>
-      window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
-      plausible.init()
-    </script>
   </head>
   <body>
     <div id="root"></div>
