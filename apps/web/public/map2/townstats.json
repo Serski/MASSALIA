@@ -1,51 +1,426 @@
 {
  "version": 1,
- "source": "content/cities/cities.json start values: population, garrison, fortifications (as walls). Massalian towns only; mirrored because the content file is read server-side.",
+ "source": "public survey fields only (population, walls) for every town; military strength is server-side and never shipped here",
  "towns": {
-  "massalia": {
-   "population": 20000,
-   "garrison": 1000,
-   "walls": 4
-  },
-  "nikaia": {
-   "population": 4000,
-   "garrison": 150,
-   "walls": 3
-  },
-  "antipolis": {
-   "population": 2000,
-   "garrison": 100,
+  "abdera": {
+   "population": 3000,
    "walls": 2
   },
-  "olbia-provence": {
-   "population": 5000,
-   "garrison": 150,
-   "walls": 3
-  },
-  "athinopolis": {
-   "population": 1000,
-   "garrison": 50,
-   "walls": 1
-  },
-  "monoikos": {
-   "population": 500,
-   "garrison": 30,
+  "abdyla": {
+   "population": 1500,
    "walls": 1
   },
   "agathe": {
    "population": 3000,
-   "garrison": 100,
+   "walls": 2
+  },
+  "akra-leuke": {
+   "population": 4000,
+   "walls": 2
+  },
+  "albiga": {
+   "population": 1500,
+   "walls": 1
+  },
+  "album": {
+   "population": 2000,
+   "walls": 1
+  },
+  "aleria": {
+   "population": 4000,
+   "walls": 2
+  },
+  "alesia": {
+   "population": 4000,
+   "walls": 2
+  },
+  "ancona": {
+   "population": 4000,
+   "walls": 2
+  },
+  "antipolis": {
+   "population": 2000,
+   "walls": 2
+  },
+  "antium": {
+   "population": 5000,
+   "walls": 2
+  },
+  "arelate": {
+   "population": 2500,
+   "walls": 2
+  },
+  "argigentum": {
+   "population": 15000,
+   "walls": 3
+  },
+  "arretium": {
+   "population": 8000,
+   "walls": 3
+  },
+  "arriminium": {
+   "population": 3000,
+   "walls": 1
+  },
+  "athinopolis": {
+   "population": 1000,
+   "walls": 1
+  },
+  "barcino": {
+   "population": 2000,
+   "walls": 1
+  },
+  "baria": {
+   "population": 3000,
+   "walls": 2
+  },
+  "beneventum": {
+   "population": 6000,
+   "walls": 2
+  },
+  "bibracte": {
+   "population": 9000,
+   "walls": 2
+  },
+  "capara": {
+   "population": 1500,
+   "walls": 1
+  },
+  "carales": {
+   "population": 8000,
+   "walls": 3
+  },
+  "cartalias": {
+   "population": 2000,
+   "walls": 1
+  },
+  "cartenna": {
+   "population": 1500,
+   "walls": 1
+  },
+  "carthage": {
+   "population": 60000,
+   "walls": 4
+  },
+  "cirta": {
+   "population": 10000,
+   "walls": 3
+  },
+  "corial": {
+   "population": 1200,
+   "walls": 1
+  },
+  "cosa": {
+   "population": 2500,
+   "walls": 2
+  },
+  "cremona": {
+   "population": 2500,
+   "walls": 1
+  },
+  "croton": {
+   "population": 12000,
+   "walls": 3
+  },
+  "divona": {
+   "population": 2000,
+   "walls": 1
+  },
+  "dubris": {
+   "population": 1000,
+   "walls": 1
+  },
+  "durno": {
+   "population": 1500,
    "walls": 2
   },
   "emporion": {
    "population": 7000,
-   "garrison": 250,
    "walls": 3
+  },
+  "gades": {
+   "population": 12000,
+   "walls": 3
+  },
+  "genava": {
+   "population": 2000,
+   "walls": 1
+  },
+  "genoa": {
+   "population": 4000,
+   "walls": 2
+  },
+  "gergovia": {
+   "population": 5000,
+   "walls": 2
+  },
+  "girba": {
+   "population": 3500,
+   "walls": 1
+  },
+  "heraclea": {
+   "population": 6000,
+   "walls": 2
+  },
+  "hippo": {
+   "population": 7000,
+   "walls": 2
+  },
+  "icosium": {
+   "population": 2000,
+   "walls": 1
+  },
+  "ingena": {
+   "population": 1200,
+   "walls": 1
+  },
+  "iol": {
+   "population": 2500,
+   "walls": 2
+  },
+  "isca": {
+   "population": 1000,
+   "walls": 1
+  },
+  "laca": {
+   "population": 1000,
+   "walls": 1
+  },
+  "lacobriga": {
+   "population": 1500,
+   "walls": 1
+  },
+  "leptis": {
+   "population": 8000,
+   "walls": 2
+  },
+  "lilybaeum": {
+   "population": 10000,
+   "walls": 4
+  },
+  "lixus": {
+   "population": 5000,
+   "walls": 2
+  },
+  "locri": {
+   "population": 8000,
+   "walls": 3
+  },
+  "logdunum": {
+   "population": 1500,
+   "walls": 1
+  },
+  "lucenia": {
+   "population": 5000,
+   "walls": 2
+  },
+  "lulio": {
+   "population": 1500,
+   "walls": 1
+  },
+  "lunan": {
+   "population": 1500,
+   "walls": 1
+  },
+  "luteva": {
+   "population": 1000,
+   "walls": 1
+  },
+  "mago": {
+   "population": 3000,
+   "walls": 2
+  },
+  "mangus": {
+   "population": 1500,
+   "walls": 1
+  },
+  "massalia": {
+   "population": 20000,
+   "walls": 4
+  },
+  "medilanum": {
+   "population": 8000,
+   "walls": 2
+  },
+  "mediolanum": {
+   "population": 2500,
+   "walls": 1
+  },
+  "messana": {
+   "population": 10000,
+   "walls": 3
+  },
+  "mirobriga": {
+   "population": 2000,
+   "walls": 1
+  },
+  "monoikos": {
+   "population": 500,
+   "walls": 1
+  },
+  "mutina": {
+   "population": 3000,
+   "walls": 1
+  },
+  "neapolis": {
+   "population": 25000,
+   "walls": 3
+  },
+  "nemausus": {
+   "population": 4000,
+   "walls": 2
+  },
+  "nikaia": {
+   "population": 4000,
+   "walls": 3
+  },
+  "numantia": {
+   "population": 4000,
+   "walls": 2
+  },
+  "olbia-provence": {
+   "population": 5000,
+   "walls": 3
+  },
+  "olbia-sardinia": {
+   "population": 3000,
+   "walls": 2
+  },
+  "onoba": {
+   "population": 3000,
+   "walls": 1
+  },
+  "ossonoba": {
+   "population": 2000,
+   "walls": 1
+  },
+  "paestum": {
+   "population": 8000,
+   "walls": 3
+  },
+  "panormus": {
+   "population": 12000,
+   "walls": 3
+  },
+  "patavium": {
+   "population": 8000,
+   "walls": 2
+  },
+  "perusia": {
+   "population": 7000,
+   "walls": 3
+  },
+  "pisae": {
+   "population": 3000,
+   "walls": 2
+  },
+  "reginca": {
+   "population": 1200,
+   "walls": 1
+  },
+  "reii": {
+   "population": 1500,
+   "walls": 1
   },
   "rhoda": {
    "population": 3000,
-   "garrison": 120,
    "walls": 2
+  },
+  "rome": {
+   "population": 40000,
+   "walls": 4
+  },
+  "rotomagus": {
+   "population": 2000,
+   "walls": 1
+  },
+  "rusaddir": {
+   "population": 1500,
+   "walls": 1
+  },
+  "saldae": {
+   "population": 2000,
+   "walls": 1
+  },
+  "segodu": {
+   "population": 2500,
+   "walls": 1
+  },
+  "segovia": {
+   "population": 2000,
+   "walls": 1
+  },
+  "segusio": {
+   "population": 2000,
+   "walls": 1
+  },
+  "siga": {
+   "population": 6000,
+   "walls": 2
+  },
+  "spoletium": {
+   "population": 3000,
+   "walls": 2
+  },
+  "syracuse": {
+   "population": 50000,
+   "walls": 4
+  },
+  "tabrura": {
+   "population": 4000,
+   "walls": 2
+  },
+  "taras": {
+   "population": 30000,
+   "walls": 4
+  },
+  "tarraco": {
+   "population": 5000,
+   "walls": 2
+  },
+  "terracina": {
+   "population": 4000,
+   "walls": 2
+  },
+  "thapsus": {
+   "population": 5000,
+   "walls": 2
+  },
+  "thuri": {
+   "population": 8000,
+   "walls": 3
+  },
+  "tingis": {
+   "population": 6000,
+   "walls": 2
+  },
+  "toletum": {
+   "population": 3000,
+   "walls": 2
+  },
+  "tolosa": {
+   "population": 8000,
+   "walls": 2
+  },
+  "turonum": {
+   "population": 2000,
+   "walls": 1
+  },
+  "utica": {
+   "population": 12000,
+   "walls": 3
+  },
+  "valentia": {
+   "population": 2000,
+   "walls": 1
+  },
+  "verona": {
+   "population": 3000,
+   "walls": 1
+  },
+  "vienna": {
+   "population": 3000,
+   "walls": 1
   }
  }
 }

@@ -320,6 +320,20 @@
   font-style: italic;
 }
 
+/* Intel snapshots are dated: a muted "as of {game date}" beside or below the rows. */
+.w2map-stat-asof {
+  display: inline-block;
+  margin: 4px 0 0 8px;
+  color: var(--dash-stone-dim, #9a8c72);
+  font-size: 11px;
+  font-style: italic;
+}
+
+p.w2map-stat-asof {
+  display: block;
+  margin: 6px 0 0;
+}
+
 /* The four town actions: the game's gold button (see .panel-btn in the
    dashboard), self-contained here because /map renders outside the shell.
    Inert for now — disabled, with only a quiet dim to say so. */

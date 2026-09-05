@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { apiBaseUrl } from "../api.js";
 import { CULTURE_WEBP, POLITY_CREST, titleCase } from "../dashboard/shared.js";
 import "./World2Map.css";
 
@@ -39,9 +40,18 @@ type Politics = {
 
 // Display names for land regions (names2.json) — the R-ids never reach the player.
 type Names = { version: number; names: Record<string, string> };
-// Town survey numbers (townstats.json, mirrored from content/cities/cities.json).
-type TownStats = { population: number; garrison: number; walls: number };
+// Public town survey (townstats.json): population and walls for every town. No
+// military number lives in that file — strength comes from the authenticated
+// military read below, and only for what the player is entitled to see.
+type TownStats = { population: number; walls: number };
 type TownStatsFile = { version: number; towns: Record<string, TownStats> };
+// GET /api/map/military: Massalia's live pools ("home", every player) and this
+// dynasty's scouting snapshots ("intel", frozen at scoutedGameDate). A target with
+// no entry is simply unknown to the player ("No survey yet").
+type MilitarySource = "home" | "intel";
+type TownMilitaryView = { garrison: number; pentekonters: number; triremes: number; source: MilitarySource; scoutedGameDate?: string };
+type RegionMilitaryView = { warband: number; source: MilitarySource; scoutedGameDate?: string };
+type MilitaryPayload = { towns: Record<string, TownMilitaryView>; regions: Record<string, RegionMilitaryView> };
 
 type Rect = { x: number; y: number; w: number; h: number };
 type Box = { w: number; h: number };
@@ -51,6 +61,7 @@ const TERRAIN_SRC = "/map2/terrain2.webp";
 const POLITICS_SRC = "/map2/politics2.json";
 const NAMES_SRC = "/map2/names2.json";
 const TOWNSTATS_SRC = "/map2/townstats.json";
+const MILITARY_SRC = `${apiBaseUrl}/api/map/military`;
 // Shield colour for regions nobody holds (states with no crest art use their own colour).
 const UNCLAIMED_GREY = "#8f8a82";
 const TOWN_ACTIONS = ["Attack", "Raid", "Scout", "Colonise"] as const;
@@ -324,6 +335,7 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
   const [selectedTown, setSelectedTown] = useState<string | null>(null);
   const [names, setNames] = useState<Record<string, string>>({});
   const [townStats, setTownStats] = useState<Record<string, TownStats>>({});
+  const [military, setMilitary] = useState<MilitaryPayload>({ towns: {}, regions: {} });
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" && "matchMedia" in window ? window.matchMedia(MOBILE_QUERY).matches : false,
   );
@@ -346,6 +358,14 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
     fetch(TOWNSTATS_SRC)
       .then((response) => response.json() as Promise<TownStatsFile>)
       .then((file) => setTownStats(file.towns ?? {}))
+      .catch(() => {});
+    // Military entitlements, fetched once per map load. Not signed in (or the API
+    // unreachable) simply leaves every strength row at "No survey yet".
+    fetch(MILITARY_SRC, { credentials: "include" })
+      .then((response) => (response.ok ? (response.json() as Promise<MilitaryPayload>) : null))
+      .then((payload) => {
+        if (payload) setMilitary({ towns: payload.towns ?? {}, regions: payload.regions ?? {} });
+      })
       .catch(() => {});
   }, []);
 
@@ -897,6 +917,7 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
     setSelected(null);
     setSelectedTown(null);
   };
+  const regionMil = selectedProvince ? military.regions[selectedProvince.id] : undefined;
 
   const regionBody = selectedProvince ? (
     <>
@@ -916,6 +937,15 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
         <div className="w2map-info-row">{selectedOwner?.culture ? titleCase(selectedOwner.culture) : "—"}</div>
         <div className="w2map-info-label">Terrain</div>
         <div className="w2map-info-row">{terrain}</div>
+        {selectedProvince.type === "land" && selectedProvince.towns.length === 0 ? (
+          <>
+            <div className="w2map-info-label">Warband</div>
+            <div className="w2map-info-row">
+              {regionMil ? regionMil.warband.toLocaleString() : <span className="w2map-stat-none">No survey yet</span>}
+              {regionMil?.source === "intel" ? <span className="w2map-stat-asof">as of {regionMil.scoutedGameDate}</span> : null}
+            </div>
+          </>
+        ) : null}
         <div className="w2map-info-label">Towns</div>
         {selectedProvince.towns.length ? (
           <ul className="w2map-info-towns">
@@ -934,10 +964,12 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
     </>
   ) : null;
 
-  // The town panel: survey rows from townstats.json (Massalian towns), "No survey
-  // yet" elsewhere, and the four action buttons — rendered in the game's button
-  // style but inert until a later pass wires them up.
+  // The town panel: population and walls from the public survey (every town),
+  // garrison and fleet only when the player is entitled to them (home or intel),
+  // "No survey yet" otherwise, and the four action buttons — rendered in the
+  // game's button style but inert until a later pass wires them up.
   const stats = selectedTownObj ? townStats[selectedTownObj.id] : undefined;
+  const townMil = selectedTownObj ? military.towns[selectedTownObj.id] : undefined;
   const townBody = selectedTownObj ? (
     <>
       <button type="button" className="w2map-info-close" onClick={closeInfo} aria-label="Close">Close</button>
@@ -956,11 +988,7 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
         <dl className="w2map-stats">
           <div className="w2map-stat">
             <dt>Population</dt>
-            <dd>{stats ? stats.population.toLocaleString() : <span className="w2map-stat-none">No survey yet</span>}</dd>
-          </div>
-          <div className="w2map-stat">
-            <dt>Garrison</dt>
-            <dd>{stats ? stats.garrison.toLocaleString() : <span className="w2map-stat-none">No survey yet</span>}</dd>
+            <dd>{stats ? stats.population.toLocaleString() : "—"}</dd>
           </div>
           <div className="w2map-stat">
             <dt>Walls</dt>
@@ -970,11 +998,28 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
                   <span className="w2map-stat-pips" aria-hidden="true">{wallPips(stats.walls)}</span> Level {stats.walls}
                 </>
               ) : (
+                "—"
+              )}
+            </dd>
+          </div>
+          <div className="w2map-stat">
+            <dt>Garrison</dt>
+            <dd>{townMil ? townMil.garrison.toLocaleString() : <span className="w2map-stat-none">No survey yet</span>}</dd>
+          </div>
+          <div className="w2map-stat">
+            <dt>Fleet</dt>
+            <dd>
+              {townMil ? (
+                <>
+                  {townMil.pentekonters.toLocaleString()} pentekonters · {townMil.triremes.toLocaleString()} triremes
+                </>
+              ) : (
                 <span className="w2map-stat-none">No survey yet</span>
               )}
             </dd>
           </div>
         </dl>
+        {townMil?.source === "intel" ? <p className="w2map-stat-asof">as of {townMil.scoutedGameDate}</p> : null}
         <div className="w2map-info-label">Actions</div>
         <div className="w2map-actions">
           {TOWN_ACTIONS.map((action) => (
