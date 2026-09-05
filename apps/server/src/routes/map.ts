@@ -24,6 +24,19 @@ const MAP_MUTATIONS_ENABLED = process.env.MAP_MUTATIONS_ENABLED === "true";
 // reset to now). This keeps the schema's owner/controller split meaningful.
 type ChangeType = "occupy" | "annex";
 
+// Open /stream connections per user id. A user may hold at most MAX_STREAMS_PER_USER
+// at once (a few tabs); the next attempt is refused with 429 rather than letting a
+// runaway client pin connections. Decremented when the socket closes.
+export const MAX_STREAMS_PER_USER = 3;
+const openStreams = new Map<string, number>();
+export function openStreamCount(userId: string): number {
+  return openStreams.get(userId) ?? 0;
+}
+
+// Heartbeat cadence: an SSE comment line every 25s keeps proxies/load balancers
+// (which cut idle connections around 30–60s) from dropping a quiet stream.
+export const STREAM_HEARTBEAT_MS = 25_000;
+
 interface StateProvince {
   provinceId: string;
   type: string;
@@ -202,7 +215,36 @@ export async function mapRoutes(app: FastifyInstance) {
     const { createDb } = await import("@massalia/db");
     const { requireAuth } = await import("../services/auth.js");
     const db = (_db ??= createDb());
-    await requireAuth(request);
+    const user = await requireAuth(request);
+
+    const open = openStreamCount(user.id);
+    if (open >= MAX_STREAMS_PER_USER) {
+      reply.code(429);
+      return { error: `You already have ${MAX_STREAMS_PER_USER} map streams open. Close one and try again.` };
+    }
+    openStreams.set(user.id, open + 1);
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      const remaining = openStreamCount(user.id) - 1;
+      if (remaining <= 0) openStreams.delete(user.id);
+      else openStreams.set(user.id, remaining);
+    };
+    // Teardown on disconnect, registered BEFORE the first await so a client that
+    // drops while the snapshot query runs still frees its slot. The request
+    // socket's 'close' is the reliable signal for a dropped in-flight response;
+    // the response's own 'close' covers server-side shutdown. Idempotent.
+    let unsubscribe: (() => void) | null = null;
+    let heartbeat: NodeJS.Timeout | null = null;
+    const teardown = () => {
+      if (heartbeat) clearInterval(heartbeat);
+      unsubscribe?.();
+      release();
+    };
+    request.raw.once("close", teardown);
+    reply.raw.once("close", teardown);
+    const gone = () => request.raw.destroyed || reply.raw.destroyed || reply.raw.writableEnded;
 
     // The stream writes to reply.raw directly, which bypasses @fastify/cors' onSend
     // hook — so echo the CORS headers here or the browser blocks the cross-origin
@@ -220,14 +262,17 @@ export async function mapRoutes(app: FastifyInstance) {
     });
 
     // Initial snapshot (full state) — the only full-state push per connection.
+    const state = await buildState(db);
+    if (gone()) return; // client left during the query; teardown already ran
     reply.raw.write(`event: state\n`);
-    reply.raw.write(`data: ${JSON.stringify(await buildState(db))}\n\n`);
+    reply.raw.write(`data: ${JSON.stringify(state)}\n\n`);
 
     // Thereafter, one small diff per province change.
-    const unsubscribe = subscribeMap((change) => {
+    unsubscribe = subscribeMap((change) => {
       reply.raw.write(`event: change\n`);
       reply.raw.write(`data: ${JSON.stringify(change)}\n\n`);
     });
-    reply.raw.on("close", unsubscribe);
+    // Comment lines are ignored by EventSource but count as traffic for proxies.
+    heartbeat = setInterval(() => reply.raw.write(`: keep-alive\n\n`), STREAM_HEARTBEAT_MS);
   });
 }
