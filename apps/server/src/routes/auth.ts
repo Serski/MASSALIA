@@ -1,7 +1,5 @@
 import bcrypt from "bcryptjs";
 import type { FastifyInstance } from "fastify";
-import rateLimit from "@fastify/rate-limit";
-import Redis from "ioredis";
 import { and, eq, sql } from "drizzle-orm";
 import { createDb, players, sessions, users, worlds } from "@massalia/db";
 import {
@@ -17,27 +15,18 @@ import {
 } from "../services/auth.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../services/email.js";
 import { deleteAccount } from "../services/account.js";
+import { byIp, tooManyRequests } from "../rateLimit.js";
 
 const db = createDb();
 
-// Redis client backing the auth rate limiter. Mirrors services/queue.ts fail-fast
-// options so a Redis blip never blocks request handlers; when REDIS_URL is unset
-// (dev/tests) the limiter falls back to @fastify/rate-limit's in-memory store.
-function createLimiterRedis(): Redis | undefined {
-  const url = process.env.REDIS_URL;
-  if (!url) return undefined;
-  const client = new Redis(url, {
-    enableOfflineQueue: false,
-    connectTimeout: 1000,
-    maxRetriesPerRequest: null,
-    retryStrategy: (times: number) => (times > 3 ? null : Math.min(times * 100, 500)),
-  });
-  // Never crash the server because Redis blinked — the limiter fails open (skipOnError).
-  client.on("error", (error: Error) => {
-    console.warn(`Auth rate-limit Redis error (failing open): ${error.message}`);
-  });
-  return client;
-}
+// The auth routes' own, stricter limits, layered on the global limiter registered
+// in index.ts (rateLimit.ts). Per-route config replaces the global budget for that
+// route. Keyed by client IP (not session) and with the auth-specific message, so
+// they behave exactly as before the global limiter existed.
+const AUTH_RATE_LIMIT_MESSAGE = "Too many attempts. Try again shortly.";
+const authLimit = (max: number, timeWindow: number) => ({
+  rateLimit: { max, timeWindow, keyGenerator: byIp, errorResponseBuilder: tooManyRequests(AUTH_RATE_LIMIT_MESSAGE) },
+});
 
 type AuthPayload = {
   email?: string;
@@ -93,25 +82,7 @@ async function hasCharacter(userId: string) {
 }
 
 export async function authRoutes(app: FastifyInstance) {
-  // Per-client-IP limiter, scoped to this auth plugin (global: false) so only the
-  // register/login routes below opt in — /logout, /me and everything else stay
-  // unlimited. Redis store in prod (shared across instances, survives deploys),
-  // in-memory otherwise. skipOnError fails open: a Redis error lets the request
-  // through rather than blocking auth (matches queue.ts best-effort-Redis policy).
-  const limiterRedis = createLimiterRedis();
-  await app.register(rateLimit, {
-    global: false,
-    max: 8,
-    timeWindow: 60_000,
-    skipOnError: true,
-    ...(limiterRedis ? { redis: limiterRedis } : {}),
-    // @fastify/rate-limit throws whatever this returns; include statusCode so
-    // Fastify responds 429 (not 500), and expose `error` so the web client (api.ts)
-    // shows the friendly message instead of Fastify's generic "Too Many Requests".
-    errorResponseBuilder: () => ({ statusCode: 429, error: "Too many attempts. Try again shortly." }),
-  });
-
-  app.post("/register", { config: { rateLimit: { max: 8, timeWindow: 60_000 } } }, async (request, reply) => {
+  app.post("/register", { config: authLimit(8, 60_000) }, async (request, reply) => {
     const { email, password } = assertAuthPayload(request.body as AuthPayload);
     // Required consent gate (no storage): registration is the point of agreement.
     if ((request.body as AuthPayload).termsAccepted !== true) {
@@ -146,7 +117,7 @@ export async function authRoutes(app: FastifyInstance) {
     return { user, hasCharacter: false };
   });
 
-  app.post("/login", { config: { rateLimit: { max: 8, timeWindow: 60_000 } } }, async (request, reply) => {
+  app.post("/login", { config: authLimit(8, 60_000) }, async (request, reply) => {
     const { email, password } = assertAuthPayload(request.body as AuthPayload);
     const found = await db.select().from(users).where(eq(users.email, email)).limit(1);
     const user = found[0];
@@ -169,7 +140,7 @@ export async function authRoutes(app: FastifyInstance) {
   // Re-authenticate with the password, then scrub PII + drop every session + detach
   // players (see services/account.ts). The session row is deleted inside deleteAccount;
   // clearSession only clears the cookie.
-  app.post("/delete-account", { config: { rateLimit: { max: 5, timeWindow: 60_000 } } }, async (request, reply) => {
+  app.post("/delete-account", { config: authLimit(5, 60_000) }, async (request, reply) => {
     const authed = await requireAuth(request);
     const body = request.body as AuthPayload | undefined;
     const password = typeof body?.password === "string" ? body.password : "";
@@ -189,7 +160,7 @@ export async function authRoutes(app: FastifyInstance) {
   // and an email attempted only for a live (non-deleted) account; nothing about the
   // outcome (existence or delivery) is reflected in the response. Tight rate limit
   // (3/hour/IP) to blunt reset spam.
-  app.post("/forgot-password", { config: { rateLimit: { max: 3, timeWindow: 3_600_000 } } }, async (request, reply) => {
+  app.post("/forgot-password", { config: authLimit(3, 3_600_000) }, async (request, reply) => {
     const body = request.body as { email?: unknown } | undefined;
     const email = typeof body?.email === "string" ? normalizeEmail(body.email) : "";
     if (!email.includes("@") || email.length > 254) {
@@ -212,7 +183,7 @@ export async function authRoutes(app: FastifyInstance) {
   // transaction consumes the token (atomic single-use), rewrites the password hash,
   // and drops every existing session; a fresh session cookie is then issued and
   // the login-shaped payload returned so the web client reuses its login-success path.
-  app.post("/reset-password", { config: { rateLimit: { max: 8, timeWindow: 60_000 } } }, async (request, reply) => {
+  app.post("/reset-password", { config: authLimit(8, 60_000) }, async (request, reply) => {
     const body = request.body as { token?: unknown; password?: unknown } | undefined;
     const token = typeof body?.token === "string" ? body.token : "";
     const password = typeof body?.password === "string" ? body.password : "";
@@ -248,7 +219,7 @@ export async function authRoutes(app: FastifyInstance) {
 
   // Verify an email from the emailed link. No auth: the token IS the proof.
   // Single-use/expiry handled in consumeEmailVerification; invalid → generic 400.
-  app.post("/verify-email", { config: { rateLimit: { max: 8, timeWindow: 60_000 } } }, async (request, reply) => {
+  app.post("/verify-email", { config: authLimit(8, 60_000) }, async (request, reply) => {
     const body = request.body as { token?: unknown } | undefined;
     const token = typeof body?.token === "string" ? body.token : "";
     const verified = await consumeEmailVerification(token);
@@ -260,7 +231,7 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // Resend the verification email to the logged-in user. 409 if already verified.
-  app.post("/resend-verification", { config: { rateLimit: { max: 3, timeWindow: 3_600_000 } } }, async (request, reply) => {
+  app.post("/resend-verification", { config: authLimit(3, 3_600_000) }, async (request, reply) => {
     const authed = await requireAuth(request);
     if (await isEmailVerified(authed.id)) {
       reply.code(409);

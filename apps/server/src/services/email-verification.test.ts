@@ -177,6 +177,8 @@ suite("email verification (integration)", () => {
 
   // 9 — rate-limit config present on both new routes.
   it("verify-email and resend-verification carry their rate-limit config", async () => {
+    // The config also carries the IP key generator + auth message (see authLimit in
+    // routes/auth.ts); these tests pin the limits themselves.
     const routes: Record<string, { max?: number; timeWindow?: number }> = {};
     const probe = Fastify({ trustProxy: true });
     await probe.register(cookie, { secret: "test-session-secret-at-least-32-chars-long" });
@@ -187,8 +189,8 @@ suite("email verification (integration)", () => {
     await probe.register(m.authRoutes, { prefix: "/auth" });
     await probe.ready();
 
-    expect(routes["/auth/verify-email"]).toEqual({ max: 8, timeWindow: 60_000 });
-    expect(routes["/auth/resend-verification"]).toEqual({ max: 3, timeWindow: 3_600_000 });
+    expect(routes["/auth/verify-email"]).toMatchObject({ max: 8, timeWindow: 60_000 });
+    expect(routes["/auth/resend-verification"]).toMatchObject({ max: 3, timeWindow: 3_600_000 });
     await probe.close();
   });
 });

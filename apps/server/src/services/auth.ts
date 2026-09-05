@@ -196,7 +196,20 @@ function readBearerToken(request: FastifyRequest) {
   return token.length > 0 ? token : null;
 }
 
-export async function getAuthUser(request: FastifyRequest): Promise<AuthUser | null> {
+// One session lookup per request: the rate limiter keys on the user id at
+// onRequest and the route's requireAuth asks again moments later.
+const authUserByRequest = new WeakMap<FastifyRequest, Promise<AuthUser | null>>();
+
+export function getAuthUser(request: FastifyRequest): Promise<AuthUser | null> {
+  let pending = authUserByRequest.get(request);
+  if (!pending) {
+    pending = lookupAuthUser(request);
+    authUserByRequest.set(request, pending);
+  }
+  return pending;
+}
+
+async function lookupAuthUser(request: FastifyRequest): Promise<AuthUser | null> {
   // The cookie is the session; the Bearer fallback is transitional (see above).
   const token = readSignedSessionCookie(request) ?? readBearerToken(request);
   if (!token) return null;

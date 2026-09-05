@@ -226,6 +226,8 @@ suite("password reset (integration)", () => {
 
   // 9 — rate-limit config present on both new routes (config inspection).
   it("forgot-password and reset-password carry their rate-limit config", async () => {
+    // The config also carries the IP key generator + auth message (see authLimit in
+    // routes/auth.ts); these tests pin the limits themselves.
     const routes: Record<string, { max?: number; timeWindow?: number }> = {};
     const probe = Fastify({ trustProxy: true });
     await probe.register(cookie, { secret: "test-session-secret-at-least-32-chars-long" });
@@ -236,8 +238,8 @@ suite("password reset (integration)", () => {
     await probe.register(m.authRoutes, { prefix: "/auth" });
     await probe.ready();
 
-    expect(routes["/auth/forgot-password"]).toEqual({ max: 3, timeWindow: 3_600_000 });
-    expect(routes["/auth/reset-password"]).toEqual({ max: 8, timeWindow: 60_000 });
+    expect(routes["/auth/forgot-password"]).toMatchObject({ max: 3, timeWindow: 3_600_000 });
+    expect(routes["/auth/reset-password"]).toMatchObject({ max: 8, timeWindow: 60_000 });
     await probe.close();
   });
 });

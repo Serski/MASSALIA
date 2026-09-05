@@ -5,6 +5,7 @@ import cookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { errorHandler } from "./errorHandler.js";
+import { registerRateLimit } from "./rateLimit.js";
 import { authRoutes } from "./routes/auth.js";
 import { characterRoutes } from "./routes/characters.js";
 import { characterSheetRoutes } from "./routes/character.js";
@@ -71,6 +72,9 @@ await app.register(cors, {
   credentials: true,
 });
 await app.register(cookie, { secret: sessionSecret });
+// Global limiter (rateLimit.ts): after cookie (the key reads the session), before
+// every route (its onRoute hook budgets /api/ mutations). /content/ is exempt.
+await registerRateLimit(app);
 await app.register(fastifyStatic, {
   root: path.join(repoRoot, "content"),
   prefix: "/content/",
