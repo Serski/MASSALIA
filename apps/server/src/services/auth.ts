@@ -186,16 +186,6 @@ function readSignedSessionCookie(request: FastifyRequest) {
   return unsigned.value;
 }
 
-// Legacy: sessions opened before the cookie-only switch live in localStorage and
-// arrive as `Authorization: Bearer`. Accepted for ONE release so those sessions
-// keep working, then to be removed (the client no longer sends it).
-function readBearerToken(request: FastifyRequest) {
-  const header = request.headers.authorization;
-  if (!header || !header.startsWith("Bearer ")) return null;
-  const token = header.slice("Bearer ".length).trim();
-  return token.length > 0 ? token : null;
-}
-
 // One session lookup per request: the rate limiter keys on the user id at
 // onRequest and the route's requireAuth asks again moments later.
 const authUserByRequest = new WeakMap<FastifyRequest, Promise<AuthUser | null>>();
@@ -210,8 +200,8 @@ export function getAuthUser(request: FastifyRequest): Promise<AuthUser | null> {
 }
 
 async function lookupAuthUser(request: FastifyRequest): Promise<AuthUser | null> {
-  // The cookie is the session; the Bearer fallback is transitional (see above).
-  const token = readSignedSessionCookie(request) ?? readBearerToken(request);
+  // The signed session cookie is the only credential; an Authorization header is ignored.
+  const token = readSignedSessionCookie(request);
   if (!token) return null;
 
   const rows = await db

@@ -9,8 +9,8 @@ import cookie from "@fastify/cookie";
 // *_test database (mirrors services/account.test.ts). The web app and API are
 // same-site (playmassalia.com / api.playmassalia.com), so the session travels
 // only as the signed httpOnly cookie: register, login and reset-password must
-// NOT echo the raw token in their JSON. The `Authorization: Bearer` fallback
-// stays accepted for one release so sessions opened before the switch survive.
+// NOT echo the raw token in their JSON, and an `Authorization: Bearer` header
+// (the pre-switch localStorage fallback) is ignored.
 // ---------------------------------------------------------------------------
 
 const dbUrl = process.env.DATABASE_URL ?? "";
@@ -119,9 +119,9 @@ suite("auth responses are cookie-only (integration)", () => {
     expect(res.json()).toEqual({ user: null, hasCharacter: false });
   });
 
-  // Transitional: a session opened before the switch (raw token in localStorage,
-  // sent as a Bearer header) must keep working for one release.
-  it("a legacy Bearer token is still accepted for one release", async () => {
+  // The pre-switch fallback is gone: a raw session token sent as a Bearer header
+  // authenticates nothing, even when it matches a live session row.
+  it("a Bearer token is ignored — only the cookie authenticates", async () => {
     const reg = await post("/auth/register", { email: "legacy@t", password: "correct-horse", termsAccepted: true });
     const userId = reg.json().user.id as string;
     const raw = crypto.randomBytes(32).toString("base64url");
@@ -133,6 +133,10 @@ suite("auth responses are cookie-only (integration)", () => {
 
     const res = await me({ authorization: `Bearer ${raw}` });
     expect(res.statusCode).toBe(200);
-    expect(res.json().user?.id).toBe(userId);
+    expect(res.json()).toEqual({ user: null, hasCharacter: false });
+
+    // The same token as the signed cookie is the real session.
+    const viaCookie = await me({ cookie: `massalia_session=${app.signCookie(raw)}` });
+    expect(viaCookie.json().user?.id).toBe(userId);
   });
 });

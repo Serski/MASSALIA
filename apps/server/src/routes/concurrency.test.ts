@@ -9,7 +9,7 @@ import cookie from "@fastify/cookie";
 // must debit exactly once (vendor buy, build) and resolve a daily card exactly
 // once. Against a REAL Postgres guarded to a *_test database (the suite truncates
 // it); the routes run through a minimal Fastify app via app.inject(), with the
-// production error handler + a Bearer session (mirrors me-onboarding.test.ts).
+// production error handler + a signed session cookie (mirrors me-onboarding.test.ts).
 // Under READ COMMITTED without the player lock + guarded relative writes, both
 // requests read the same balance, both pass the check, and the second write
 // overwrites the first — every assertion here fails in that world.
@@ -148,9 +148,11 @@ suite("per-player serialization (integration)", () => {
     return Number(rows[0]?.amount ?? 0);
   };
 
+  // Sessions travel only as the signed cookie (the raw token is hashed into `sessions`).
+  const sessionCookie = (token: string) => ({ cookie: `massalia_session=${app.signCookie(token)}` });
   const post = (url: string, token: string, payload?: Record<string, unknown>) =>
-    app.inject({ method: "POST", url, payload, headers: { authorization: `Bearer ${token}` } });
-  const get = (url: string, token: string) => app.inject({ method: "GET", url, headers: { authorization: `Bearer ${token}` } });
+    app.inject({ method: "POST", url, payload, headers: sessionCookie(token) });
+  const get = (url: string, token: string) => app.inject({ method: "GET", url, headers: sessionCookie(token) });
 
   // Every service module owns its own pg Pool, and a Pool opens connections lazily.
   // Without this, the second of two "concurrent" requests spends its first ~10ms
@@ -370,12 +372,12 @@ suite("per-player serialization (integration)", () => {
     expect(unauthenticated.statusCode).toBe(401);
     expect(unauthenticated.json()).toEqual({ error: "Authentication required" });
 
-    const malformed = await app.inject({ method: "GET", url: "/api/interactions/profile/not-a-uuid", headers: { authorization: `Bearer ${token}` } });
+    const malformed = await app.inject({ method: "GET", url: "/api/interactions/profile/not-a-uuid", headers: sessionCookie(token) });
     expect(malformed.statusCode).toBe(400);
     expect(typeof malformed.json().error).toBe("string");
 
     // A well-formed uuid passes validation and reaches the handler (404: no such citizen).
-    const missing = await app.inject({ method: "GET", url: `/api/interactions/profile/${crypto.randomUUID()}`, headers: { authorization: `Bearer ${token}` } });
+    const missing = await app.inject({ method: "GET", url: `/api/interactions/profile/${crypto.randomUUID()}`, headers: sessionCookie(token) });
     expect(missing.statusCode).toBe(404);
     expect(missing.json()).toEqual({ error: "No such citizen." });
   });

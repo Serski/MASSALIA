@@ -21,7 +21,7 @@ const DAY = 86_400_000;
 const T0 = Date.UTC(2000, 0, 1);
 
 // Mirror auth.ts's private session-token hashing (sha256 hex) so a row inserted
-// here authenticates via the Authorization: Bearer header.
+// here authenticates via the signed session cookie.
 function hashToken(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
@@ -43,8 +43,8 @@ suite("onboarding seen-flags (integration)", () => {
     m = await loadModules();
     db = m.dbPkg.createDb();
     app = Fastify();
-    // requireAuth reads the (signed) session cookie before falling back to Bearer,
-    // so the cookie plugin must be present for request.cookies / unsignCookie.
+    // requireAuth reads the signed session cookie, so the cookie plugin must be
+    // present for request.cookies / unsignCookie (and app.signCookie below).
     await app.register(cookie, { secret: "test-session-secret-at-least-32-chars-long" });
     await app.register(m.meRoutes, { prefix: "/me" });
     await app.ready();
@@ -98,7 +98,7 @@ suite("onboarding seen-flags (integration)", () => {
       method: "POST",
       url: "/me/onboarding",
       payload: { step },
-      headers: token ? { authorization: `Bearer ${token}` } : {},
+      headers: token ? { cookie: `massalia_session=${app.signCookie(token)}` } : {},
     });
 
   // 1 — a fresh player reads as un-onboarded on both flags.
