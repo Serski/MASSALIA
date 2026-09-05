@@ -1,5 +1,9 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { canAddTrait, effectiveStats, parseTraitsFile, type Trait } from "./traits.js";
+import { startingCharacter } from "./character.js";
+import { canAddTrait, effectiveStats, eligibleStartingTraits, parseTraitsFile, wouldUnderflowStat, type Trait } from "./traits.js";
 
 const bold: Trait = { id: "bold", name: "Bold", description: "x", category: "personality", opposite: "cautious", statMod: { militia: 1 } };
 const cautious: Trait = { id: "cautious", name: "Cautious", description: "x", category: "personality", opposite: "bold" };
@@ -69,5 +73,44 @@ describe("parseTraitsFile", () => {
         { id: "a", name: "A2", description: "d2", category: "class" },
       ]),
     ).toThrow();
+  });
+});
+
+describe("starting-trait eligibility — stat floor", () => {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const catalog = parseTraitsFile(JSON.parse(readFileSync(path.join(here, "../../../content/traits/traits.json"), "utf8")));
+  const sympathizer = catalog.find((trait) => trait.id === "carthaginian-sympathizer")!;
+
+  it("the catalog still carries the −2 prestige Carthaginian Sympathizer flaw", () => {
+    expect(sympathizer.statMod).toEqual({ prestige: -2 });
+  });
+
+  it("a trader from a house with no prestige bonus (prestige 0) is never dealt it", () => {
+    const stats = startingCharacter("leonidas", "trader");
+    expect(stats.prestige).toBe(0);
+    expect(wouldUnderflowStat(sympathizer, stats)).toBe(true);
+    const pool = eligibleStartingTraits(catalog, stats);
+    expect(pool.some((trait) => trait.id === "carthaginian-sympathizer")).toBe(false);
+    // Simulated creation draws over the eligible pool never surface it.
+    for (let i = 0; i < 500; i++) {
+      const pick = pool[Math.floor(Math.random() * pool.length)]!;
+      expect(pick.id).not.toBe("carthaginian-sympathizer");
+    }
+  });
+
+  it("a landowner (prestige 2) stays eligible for it", () => {
+    const stats = startingCharacter("leonidas", "landowner");
+    expect(stats.prestige).toBe(2);
+    expect(wouldUnderflowStat(sympathizer, stats)).toBe(false);
+    expect(eligibleStartingTraits(catalog, stats).some((trait) => trait.id === "carthaginian-sympathizer")).toBe(true);
+  });
+
+  it("only excludes traits that would take a 0 stat negative; positive and neutral traits pass", () => {
+    const zero = { prestige: 0, devotion: 0, militia: 0, intelligence: 0 };
+    expect(wouldUnderflowStat(renowned, zero)).toBe(false);
+    expect(wouldUnderflowStat(proud, zero)).toBe(false);
+    const flaw: Trait = { id: "f", name: "F", description: "x", category: "reputation", statMod: { devotion: -1, militia: 1 } };
+    expect(wouldUnderflowStat(flaw, zero)).toBe(true);
+    expect(wouldUnderflowStat(flaw, { ...zero, devotion: 1 })).toBe(false);
   });
 });

@@ -96,3 +96,26 @@ export function effectiveStats(base: CharacterStats, traits: Trait[]): Character
   }
   return effective;
 }
+
+// --- Starting-trait eligibility ------------------------------------------
+
+// Whether granting `trait` on top of `stats` would push any stat below 0. Used
+// to keep flaws like "−2 prestige" out of a creation-time pool when the class +
+// house start leaves that stat at 0 (a trader with no prestige bonus cannot
+// begin play already in the red).
+export function wouldUnderflowStat(trait: Trait, stats: CharacterStats): boolean {
+  const mod = trait.statMod;
+  if (!mod) return false;
+  return (
+    stats.prestige + (mod.prestige ?? 0) < 0 ||
+    stats.devotion + (mod.devotion ?? 0) < 0 ||
+    stats.militia + (mod.militia ?? 0) < 0 ||
+    stats.intelligence + (mod.intelligence ?? 0) < 0
+  );
+}
+
+// The subset of `catalog` a character with starting `stats` may be dealt at
+// creation: every trait whose statMod keeps all four stats at or above 0.
+export function eligibleStartingTraits(catalog: Trait[], stats: CharacterStats): Trait[] {
+  return catalog.filter((trait) => !wouldUnderflowStat(trait, stats));
+}
