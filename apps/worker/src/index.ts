@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Queue, Worker, type Job } from "bullmq";
 import { completionDelayMs, parseAgeConfig, parseAgendaFile, parseCalendarConfig, parseContractsContent, parseFamilyConfig, parsePoliticsConfig, parseTraitsFile, REAL_MS_PER_SEASON, type AgeConfig, type AgendaScope, type CalendarConfig, type ContractsContent, type FamilyConfig, type PoliticsConfig, type Trait } from "@massalia/shared";
-import { accrueLeagueCities, accrueTreasuries, advanceAgendaCycles, advanceElections, advanceOlympiads, closeDueChamberVotes, closeDueFestivals, deliverOlympicNominationToAll, drawFamilyCandidates, ensurePartyLeaders, fireFestivalsForAll, openAgendaCycleIfDue, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, sweepMercenaryContracts, sweepSpouseDeaths, type AgendaPools, type MercContractCfgMap } from "@massalia/db";
+import { accrueLeagueCities, accrueTreasuries, advanceAgendaCycles, advanceElections, advanceOlympiads, closeDueChamberVotes, closeDueFestivals, deliverOlympicNominationToAll, drawFamilyCandidates, endDbPools, ensurePartyLeaders, fireFestivalsForAll, openAgendaCycleIfDue, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, sweepMercenaryContracts, sweepSpouseDeaths, type AgendaPools, type MercContractCfgMap } from "@massalia/db";
 
 const redisUrl = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
 const connection = {
@@ -278,11 +278,33 @@ const processJob = async (job: Job) => {
 // consuming the queue) so the stale-job cleanup can't race a worker that's already
 // pulling due jobs — then start the Worker. installSweepSchedulers is idempotent
 // across restarts and clears any stale fixed-jobId sweep job from the old scheme.
+let worker: Worker | null = null;
 async function bootstrap() {
   await installSweepSchedulers();
   // A single, non-bursty confirmation line (reliably captured, unlike the parallel
   // first-occurrence ticks): every sweep is scheduled and self-healing.
   console.log(`Sweep schedulers ready (${SWEEPS.length}): ${SWEEPS.map((sweep) => sweep.name).join(", ")}`);
-  new Worker("scheduled-resolution", processJob, { connection });
+  worker = new Worker("scheduled-resolution", processJob, { connection });
 }
 void bootstrap();
+
+// --- Graceful shutdown -------------------------------------------------------
+// Railway sends SIGTERM on every redeploy. worker.close() stops taking jobs and
+// waits for the active ones (each a DB transaction or a sweep) to finish; the
+// queue connection closes alongside. Up to 10s, then the pg pools are ended and
+// the process exits 0. A second signal is ignored.
+const SHUTDOWN_GRACE_MS = 10_000;
+let shuttingDown = false;
+async function shutdown(signal: NodeJS.Signals): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`${signal} received: finishing active jobs (up to ${SHUTDOWN_GRACE_MS / 1000}s)`);
+  const grace = new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), SHUTDOWN_GRACE_MS).unref());
+  const drained = Promise.all([worker?.close() ?? Promise.resolve(), scheduledResolutionQueue.close()]).then(() => "closed" as const);
+  const outcome = await Promise.race([drained, grace]);
+  if (outcome === "timeout") console.warn("Shutdown grace period elapsed with jobs still active; closing pools anyway.");
+  await endDbPools();
+  process.exit(0);
+}
+process.once("SIGTERM", () => void shutdown("SIGTERM"));
+process.once("SIGINT", () => void shutdown("SIGINT"));

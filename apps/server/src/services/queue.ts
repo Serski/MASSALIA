@@ -67,3 +67,13 @@ export async function enqueueChildRoll(characterId: string, delayMs: number) {
     console.warn(`Could not enqueue child roll (Redis down?): ${(error as Error).message}`);
   }
 }
+
+// Graceful shutdown: close the producer connection if one was opened.
+export async function closeQueue(): Promise<void> {
+  if (!queue) return;
+  const open = queue;
+  queue = null;
+  await open.close().catch(() => {
+    /* Redis already gone; nothing to flush */
+  });
+}

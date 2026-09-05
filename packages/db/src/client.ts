@@ -39,6 +39,24 @@ export type DbHandle = ReturnType<typeof createDb>;
 export type DbTx = Parameters<Parameters<DbHandle["transaction"]>[0]>[0];
 export type DbExec = DbHandle | DbTx;
 
+// Graceful shutdown: drain and close every cached pool (waits for checked-out
+// clients to be released, so an in-flight transaction finishes before the
+// connection goes). Idempotent; a later createDb() would open a fresh pool.
+export async function endDbPools(): Promise<void> {
+  const open = [...pools.entries()];
+  pools.clear();
+  await Promise.all(
+    open.map(async ([url, pool]) => {
+      try {
+        await pool.end();
+        console.info(`[db] pool closed for ${describe(url)}`);
+      } catch (error) {
+        console.warn(`[db] pool close failed for ${describe(url)}: ${(error as Error).message}`);
+      }
+    }),
+  );
+}
+
 export function createDb(databaseUrl = process.env.DATABASE_URL) {
   if (!databaseUrl) {
     throw new Error("DATABASE_URL is required");

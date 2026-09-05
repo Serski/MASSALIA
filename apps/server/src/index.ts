@@ -4,7 +4,9 @@ import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
+import { endDbPools } from "@massalia/db";
 import { errorHandler } from "./errorHandler.js";
+import { closeQueue } from "./services/queue.js";
 import { registerRateLimit } from "./rateLimit.js";
 import { registerHealthRoute } from "./health.js";
 import { authRoutes } from "./routes/auth.js";
@@ -131,3 +133,26 @@ await app.register(mercRoutes, { prefix: "/api/merc" });
 
 const port = Number(process.env.PORT ?? 3000);
 await app.listen({ port, host: "0.0.0.0" });
+
+// --- Graceful shutdown -------------------------------------------------------
+// Railway sends SIGTERM on every redeploy. Stop accepting connections, let the
+// in-flight requests (and the transactions inside them) finish for up to 10s,
+// close the BullMQ producer and the pg pools, then exit 0. A second signal is
+// ignored (the first shutdown is already running).
+const SHUTDOWN_GRACE_MS = 10_000;
+let shuttingDown = false;
+async function shutdown(signal: NodeJS.Signals): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  app.log.info(`${signal} received: draining (up to ${SHUTDOWN_GRACE_MS / 1000}s for in-flight requests)`);
+  const grace = new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), SHUTDOWN_GRACE_MS).unref());
+  // app.close(): no new connections, idle keep-alives dropped, in-flight requests
+  // run to completion. Long-lived SSE streams never complete, hence the cap.
+  const outcome = await Promise.race([app.close().then(() => "closed" as const), grace]);
+  if (outcome === "timeout") app.log.warn("Shutdown grace period elapsed with connections still open; closing pools anyway.");
+  await closeQueue();
+  await endDbPools();
+  process.exit(0);
+}
+process.once("SIGTERM", () => void shutdown("SIGTERM"));
+process.once("SIGINT", () => void shutdown("SIGINT"));
