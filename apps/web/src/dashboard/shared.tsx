@@ -730,6 +730,25 @@ export const POLITY_CREST: Record<string, string> = {
   unelli: assetIconUrl("unelli.webp"),
   veneti: assetIconUrl("veneti.webp"),
   veragri: assetIconUrl("veragri.webp"),
+  // The Iberian tribes (AVATARS TRIBES set, third batch).
+  astures: assetIconUrl("astures.webp"),
+  bastetani: assetIconUrl("bastetani.webp"),
+  callaeci: assetIconUrl("callaeci.webp"),
+  cantabri: assetIconUrl("cantabri.webp"),
+  celtiberi: assetIconUrl("celtiberi.webp"),
+  celtici: assetIconUrl("celtici.webp"),
+  contestani: assetIconUrl("contestani.webp"),
+  cunetes: assetIconUrl("cunetes.webp"),
+  deitani: assetIconUrl("deitani.webp"),
+  edetani: assetIconUrl("edetani.webp"),
+  ilercavones: assetIconUrl("ilercavones.webp"),
+  lusitani: assetIconUrl("lusitani.webp"),
+  oretani: assetIconUrl("oretani.webp"),
+  turdetani: assetIconUrl("turdetani.webp"),
+  turmodigi: assetIconUrl("turmodigi.webp"),
+  vaccaei: assetIconUrl("vaccaei.webp"),
+  vascones: assetIconUrl("vascones.webp"),
+  vettones: assetIconUrl("vettones.webp"),
 };
 
 // Building art lives in assets/buildings/. Class buildings carry one image per
