@@ -1,0 +1,636 @@
+{
+  "version": 1,
+  "source": "server-side military seed; never copy into apps/web/public",
+  "towns": {
+    "abdera": {
+      "owner": "bastetani",
+      "garrison": 100,
+      "pentekonters": 2,
+      "triremes": 0
+    },
+    "abdyla": {
+      "owner": "carthage",
+      "garrison": 50,
+      "pentekonters": 1,
+      "triremes": 0
+    },
+    "agathe": {
+      "owner": "massalia",
+      "garrison": 100,
+      "pentekonters": 2,
+      "triremes": 1
+    },
+    "akra-leuke": {
+      "owner": "akra-leuke",
+      "garrison": 450,
+      "pentekonters": 2,
+      "triremes": 1
+    },
+    "albiga": {
+      "owner": "ausci",
+      "garrison": 160,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "album": {
+      "owner": "ligurians",
+      "garrison": 80,
+      "pentekonters": 2,
+      "triremes": 0
+    },
+    "aleria": {
+      "owner": "etruscans",
+      "garrison": 150,
+      "pentekonters": 4,
+      "triremes": 4
+    },
+    "alesia": {
+      "owner": "lingones",
+      "garrison": 250,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "ancona": {
+      "owner": "etruscans",
+      "garrison": 150,
+      "pentekonters": 3,
+      "triremes": 2
+    },
+    "antipolis": {
+      "owner": "massalia",
+      "garrison": 100,
+      "pentekonters": 2,
+      "triremes": 1
+    },
+    "antium": {
+      "owner": "roman_republic",
+      "garrison": 1200,
+      "pentekonters": 2,
+      "triremes": 0
+    },
+    "arelate": {
+      "owner": "massalia",
+      "garrison": 100,
+      "pentekonters": 1,
+      "triremes": 0
+    },
+    "argigentum": {
+      "owner": "carthage",
+      "garrison": 600,
+      "pentekonters": 2,
+      "triremes": 4
+    },
+    "arretium": {
+      "owner": "etruscans",
+      "garrison": 1300,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "arriminium": {
+      "owner": "boii",
+      "garrison": 100,
+      "pentekonters": 1,
+      "triremes": 0
+    },
+    "athinopolis": {
+      "owner": "massalia",
+      "garrison": 50,
+      "pentekonters": 1,
+      "triremes": 0
+    },
+    "barcino": {
+      "owner": "lacetani",
+      "garrison": 280,
+      "pentekonters": 1,
+      "triremes": 0
+    },
+    "baria": {
+      "owner": "deitani",
+      "garrison": 100,
+      "pentekonters": 2,
+      "triremes": 0
+    },
+    "beneventum": {
+      "owner": "samnites",
+      "garrison": 300,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "bibracte": {
+      "owner": "arverni",
+      "garrison": 2300,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "capara": {
+      "owner": "vaccaei",
+      "garrison": 260,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "carales": {
+      "owner": "carthage",
+      "garrison": 350,
+      "pentekonters": 5,
+      "triremes": 10
+    },
+    "cartalias": {
+      "owner": "ilercavones",
+      "garrison": 270,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "cartenna": {
+      "owner": "carthage",
+      "garrison": 50,
+      "pentekonters": 1,
+      "triremes": 0
+    },
+    "carthage": {
+      "owner": "carthage",
+      "garrison": 25500,
+      "pentekonters": 10,
+      "triremes": 60
+    },
+    "cirta": {
+      "owner": "massyli",
+      "garrison": 500,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "corial": {
+      "owner": "unelli",
+      "garrison": 150,
+      "pentekonters": 1,
+      "triremes": 0
+    },
+    "cosa": {
+      "owner": "etruscans",
+      "garrison": 100,
+      "pentekonters": 2,
+      "triremes": 1
+    },
+    "cremona": {
+      "owner": "insubres",
+      "garrison": 100,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "croton": {
+      "owner": "italiote-league",
+      "garrison": 1500,
+      "pentekonters": 4,
+      "triremes": 6
+    },
+    "divona": {
+      "owner": "cadurci",
+      "garrison": 180,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "dubris": {
+      "owner": "cantiaci",
+      "garrison": 240,
+      "pentekonters": 1,
+      "triremes": 0
+    },
+    "durno": {
+      "owner": "durotriges",
+      "garrison": 280,
+      "pentekonters": 1,
+      "triremes": 0
+    },
+    "emporion": {
+      "owner": "massalia",
+      "garrison": 250,
+      "pentekonters": 4,
+      "triremes": 4
+    },
+    "gades": {
+      "owner": "carthage",
+      "garrison": 400,
+      "pentekonters": 6,
+      "triremes": 8
+    },
+    "genava": {
+      "owner": "allobriges",
+      "garrison": 100,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "genoa": {
+      "owner": "ligurians",
+      "garrison": 1150,
+      "pentekonters": 4,
+      "triremes": 0
+    },
+    "gergovia": {
+      "owner": "arverni",
+      "garrison": 300,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "girba": {
+      "owner": "carthage",
+      "garrison": 100,
+      "pentekonters": 2,
+      "triremes": 0
+    },
+    "heraclea": {
+      "owner": "italiote-league",
+      "garrison": 250,
+      "pentekonters": 3,
+      "triremes": 1
+    },
+    "hippo": {
+      "owner": "carthage",
+      "garrison": 250,
+      "pentekonters": 3,
+      "triremes": 2
+    },
+    "icosium": {
+      "owner": "carthage",
+      "garrison": 60,
+      "pentekonters": 1,
+      "triremes": 0
+    },
+    "ingena": {
+      "owner": "namnetes",
+      "garrison": 150,
+      "pentekonters": 1,
+      "triremes": 0
+    },
+    "iol": {
+      "owner": "carthage",
+      "garrison": 80,
+      "pentekonters": 2,
+      "triremes": 0
+    },
+    "isca": {
+      "owner": "dumnonii",
+      "garrison": 250,
+      "pentekonters": 1,
+      "triremes": 0
+    },
+    "laca": {
+      "owner": "tarbelli",
+      "garrison": 140,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "lacobriga": {
+      "owner": "cunetes",
+      "garrison": 250,
+      "pentekonters": 1,
+      "triremes": 0
+    },
+    "leptis": {
+      "owner": "carthage",
+      "garrison": 250,
+      "pentekonters": 4,
+      "triremes": 2
+    },
+    "lilybaeum": {
+      "owner": "carthage",
+      "garrison": 800,
+      "pentekonters": 5,
+      "triremes": 20
+    },
+    "lixus": {
+      "owner": "carthage",
+      "garrison": 150,
+      "pentekonters": 3,
+      "triremes": 0
+    },
+    "locri": {
+      "owner": "italiote-league",
+      "garrison": 300,
+      "pentekonters": 4,
+      "triremes": 4
+    },
+    "logdunum": {
+      "owner": "helvii",
+      "garrison": 160,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "lucenia": {
+      "owner": "samnites",
+      "garrison": 250,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "lulio": {
+      "owner": "aedui",
+      "garrison": 160,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "lunan": {
+      "owner": "ligurians",
+      "garrison": 60,
+      "pentekonters": 1,
+      "triremes": 0
+    },
+    "luteva": {
+      "owner": "gabati",
+      "garrison": 140,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "mago": {
+      "owner": "mago",
+      "garrison": 150,
+      "pentekonters": 3,
+      "triremes": 2
+    },
+    "mangus": {
+      "owner": "carthage",
+      "garrison": 50,
+      "pentekonters": 1,
+      "triremes": 0
+    },
+    "massalia": {
+      "owner": "massalia",
+      "garrison": 1000,
+      "pentekonters": 10,
+      "triremes": 30
+    },
+    "medilanum": {
+      "owner": "insubres",
+      "garrison": 1400,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "mediolanum": {
+      "owner": "trusates",
+      "garrison": 100,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "messana": {
+      "owner": "mamertines",
+      "garrison": 600,
+      "pentekonters": 6,
+      "triremes": 4
+    },
+    "mirobriga": {
+      "owner": "cunetes",
+      "garrison": 260,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "monoikos": {
+      "owner": "massalia",
+      "garrison": 30,
+      "pentekonters": 1,
+      "triremes": 0
+    },
+    "mutina": {
+      "owner": "boii",
+      "garrison": 150,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "neapolis": {
+      "owner": "neapolis",
+      "garrison": 7600,
+      "pentekonters": 4,
+      "triremes": 8
+    },
+    "nemausus": {
+      "owner": "volcae",
+      "garrison": 200,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "nikaia": {
+      "owner": "massalia",
+      "garrison": 150,
+      "pentekonters": 3,
+      "triremes": 2
+    },
+    "numantia": {
+      "owner": "turmodigi",
+      "garrison": 250,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "olbia-provence": {
+      "owner": "massalia",
+      "garrison": 150,
+      "pentekonters": 3,
+      "triremes": 1
+    },
+    "olbia-sardinia": {
+      "owner": "carthage",
+      "garrison": 100,
+      "pentekonters": 2,
+      "triremes": 1
+    },
+    "onoba": {
+      "owner": "turdetani",
+      "garrison": 280,
+      "pentekonters": 2,
+      "triremes": 0
+    },
+    "ossonoba": {
+      "owner": "cunetes",
+      "garrison": 260,
+      "pentekonters": 1,
+      "triremes": 0
+    },
+    "paestum": {
+      "owner": "lucani",
+      "garrison": 300,
+      "pentekonters": 3,
+      "triremes": 1
+    },
+    "panormus": {
+      "owner": "carthage",
+      "garrison": 500,
+      "pentekonters": 5,
+      "triremes": 10
+    },
+    "patavium": {
+      "owner": "veneti",
+      "garrison": 1300,
+      "pentekonters": 2,
+      "triremes": 0
+    },
+    "perusia": {
+      "owner": "etruscans",
+      "garrison": 1300,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "pisae": {
+      "owner": "friniates",
+      "garrison": 100,
+      "pentekonters": 3,
+      "triremes": 1
+    },
+    "reginca": {
+      "owner": "osismii",
+      "garrison": 150,
+      "pentekonters": 2,
+      "triremes": 0
+    },
+    "reii": {
+      "owner": "saluvii",
+      "garrison": 160,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "rhoda": {
+      "owner": "massalia",
+      "garrison": 120,
+      "pentekonters": 2,
+      "triremes": 1
+    },
+    "rome": {
+      "owner": "roman_republic",
+      "garrison": 30000,
+      "pentekonters": 4,
+      "triremes": 6
+    },
+    "rotomagus": {
+      "owner": "caletes",
+      "garrison": 180,
+      "pentekonters": 1,
+      "triremes": 0
+    },
+    "rusaddir": {
+      "owner": "carthage",
+      "garrison": 50,
+      "pentekonters": 1,
+      "triremes": 0
+    },
+    "saldae": {
+      "owner": "carthage",
+      "garrison": 60,
+      "pentekonters": 1,
+      "triremes": 0
+    },
+    "segodu": {
+      "owner": "ruteni",
+      "garrison": 100,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "segovia": {
+      "owner": "celtici",
+      "garrison": 280,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "segusio": {
+      "owner": "vocontii",
+      "garrison": 80,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "siga": {
+      "owner": "carthage",
+      "garrison": 250,
+      "pentekonters": 3,
+      "triremes": 0
+    },
+    "spoletium": {
+      "owner": "samnites",
+      "garrison": 150,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "syracuse": {
+      "owner": "syracuse",
+      "garrison": 15800,
+      "pentekonters": 10,
+      "triremes": 40
+    },
+    "tabrura": {
+      "owner": "carthage",
+      "garrison": 120,
+      "pentekonters": 2,
+      "triremes": 0
+    },
+    "taras": {
+      "owner": "italiote-league",
+      "garrison": 10500,
+      "pentekonters": 5,
+      "triremes": 25
+    },
+    "tarraco": {
+      "owner": "lacetani",
+      "garrison": 200,
+      "pentekonters": 2,
+      "triremes": 0
+    },
+    "terracina": {
+      "owner": "roman_republic",
+      "garrison": 1150,
+      "pentekonters": 2,
+      "triremes": 0
+    },
+    "thapsus": {
+      "owner": "carthage",
+      "garrison": 150,
+      "pentekonters": 3,
+      "triremes": 1
+    },
+    "thuri": {
+      "owner": "italiote-league",
+      "garrison": 1300,
+      "pentekonters": 4,
+      "triremes": 4
+    },
+    "tingis": {
+      "owner": "carthage",
+      "garrison": 200,
+      "pentekonters": 3,
+      "triremes": 1
+    },
+    "toletum": {
+      "owner": "vettones",
+      "garrison": 150,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "tolosa": {
+      "owner": "volcae",
+      "garrison": 2300,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "turonum": {
+      "owner": "aedui",
+      "garrison": 180,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "utica": {
+      "owner": "carthage",
+      "garrison": 400,
+      "pentekonters": 4,
+      "triremes": 6
+    },
+    "valentia": {
+      "owner": "veltanii",
+      "garrison": 180,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "verona": {
+      "owner": "boii",
+      "garrison": 120,
+      "pentekonters": 0,
+      "triremes": 0
+    },
+    "vienna": {
+      "owner": "cavares",
+      "garrison": 120,
+      "pentekonters": 0,
+      "triremes": 0
+    }
+  }
+}

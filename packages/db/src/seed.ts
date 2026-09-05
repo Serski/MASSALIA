@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { HOUSE_START, nobleHouses, parsePoliticsConfig, professions as sharedProfessions, SERVER_DURATION_DAYS } from "@massalia/shared";
 import { ensureChamberSeats } from "./chamber.js";
 import { createDb } from "./client.js";
+import { ensureRegionMilitary, ensureTownMilitary } from "./military.js";
 import {
   buildings,
   factions,
@@ -123,6 +124,9 @@ async function seedCatalog() {
 
 async function seedWorldState() {
   const world = await getOrCreateWorld();
+  // World 2 military pools: the town/region rows every world carries (idempotent).
+  await ensureTownMilitary(db, world.id);
+  await ensureRegionMilitary(db, world.id);
   const userA = await getOrCreateUser("archon@example.com");
   const userB = await getOrCreateUser("legatus@example.com");
 

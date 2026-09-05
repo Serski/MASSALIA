@@ -1,0 +1,202 @@
+{
+  "version": 1,
+  "source": "server-side military seed; never copy into apps/web/public",
+  "regions": {
+    "R001": {
+      "owner": "dobunni",
+      "warband": 400
+    },
+    "R002": {
+      "owner": "trinovantes",
+      "warband": 400
+    },
+    "R006": {
+      "owner": "menapii",
+      "warband": 500
+    },
+    "R013": {
+      "owner": "pictones",
+      "warband": 500
+    },
+    "R016": {
+      "owner": "segusiavi",
+      "warband": 500
+    },
+    "R017": {
+      "owner": "lemovices",
+      "warband": 500
+    },
+    "R020": {
+      "owner": "allobriges",
+      "warband": 800
+    },
+    "R022": {
+      "owner": "callaeci",
+      "warband": 600
+    },
+    "R024": {
+      "owner": "veragri",
+      "warband": 600
+    },
+    "R029": {
+      "owner": "astures",
+      "warband": 1200
+    },
+    "R033": {
+      "owner": "cantabri",
+      "warband": 1200
+    },
+    "R035": {
+      "owner": "unclaimed",
+      "warband": 100
+    },
+    "R038": {
+      "owner": "convenae",
+      "warband": 400
+    },
+    "R039": {
+      "owner": "lusitani",
+      "warband": 600
+    },
+    "R040": {
+      "owner": "illyrians",
+      "warband": 600
+    },
+    "R043": {
+      "owner": "unclaimed",
+      "warband": 100
+    },
+    "R044": {
+      "owner": "vascones",
+      "warband": 800
+    },
+    "R046": {
+      "owner": "unclaimed",
+      "warband": 100
+    },
+    "R054": {
+      "owner": "lusitani",
+      "warband": 500
+    },
+    "R056": {
+      "owner": "llergetae",
+      "warband": 400
+    },
+    "R057": {
+      "owner": "sordones",
+      "warband": 400
+    },
+    "R058": {
+      "owner": "lacetanni",
+      "warband": 400
+    },
+    "R061": {
+      "owner": "illyrians",
+      "warband": 700
+    },
+    "R062": {
+      "owner": "unclaimed",
+      "warband": 100
+    },
+    "R066": {
+      "owner": "celtiberi",
+      "warband": 1500
+    },
+    "R071": {
+      "owner": "celtici",
+      "warband": 800
+    },
+    "R074": {
+      "owner": "illyrians",
+      "warband": 800
+    },
+    "R077": {
+      "owner": "edetani",
+      "warband": 600
+    },
+    "R078": {
+      "owner": "unclaimed",
+      "warband": 100
+    },
+    "R080": {
+      "owner": "illyrians",
+      "warband": 900
+    },
+    "R082": {
+      "owner": "turdetani",
+      "warband": 500
+    },
+    "R084": {
+      "owner": "oretani",
+      "warband": 800
+    },
+    "R089": {
+      "owner": "contestani",
+      "warband": 600
+    },
+    "R090": {
+      "owner": "carthage",
+      "warband": 400
+    },
+    "R092": {
+      "owner": "turdetani",
+      "warband": 800
+    },
+    "R093": {
+      "owner": "illyrians",
+      "warband": 800
+    },
+    "R094": {
+      "owner": "messapi",
+      "warband": 700
+    },
+    "R098": {
+      "owner": "unclaimed",
+      "warband": 100
+    },
+    "R105": {
+      "owner": "epirus",
+      "warband": 4000
+    },
+    "R109": {
+      "owner": "mauretania",
+      "warband": 500
+    },
+    "R120": {
+      "owner": "unclaimed",
+      "warband": 100
+    },
+    "R121": {
+      "owner": "unclaimed",
+      "warband": 100
+    },
+    "R125": {
+      "owner": "unclaimed",
+      "warband": 100
+    },
+    "R128": {
+      "owner": "mauretania",
+      "warband": 600
+    },
+    "R129": {
+      "owner": "sparta",
+      "warband": 2500
+    },
+    "R130": {
+      "owner": "mauretania",
+      "warband": 800
+    },
+    "R134": {
+      "owner": "carthage",
+      "warband": 600
+    },
+    "R137": {
+      "owner": "carthage",
+      "warband": 800
+    },
+    "R140": {
+      "owner": "unclaimed",
+      "warband": 100
+    }
+  }
+}

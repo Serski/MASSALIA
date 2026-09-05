@@ -47,6 +47,7 @@ import { loadFamilyConfig } from "./services/family.js";
 import { loadCalendarConfig, getCalendarConfig } from "./services/festival.js";
 import { loadPoliticsConfig } from "./services/oligarchy.js";
 import { loadStories } from "./services/story.js";
+import { ensureMilitaryPools } from "./services/mapMilitary.js";
 import { electionConfig } from "@massalia/shared";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -103,6 +104,9 @@ electionConfig(getCalendarConfig());
 await loadLeagueContent();
 // Story engine (Pack 3): validate every authored story graph + upsert into `stories`.
 await loadStories();
+// World 2 military pools: backfill the active world's town/region rows from
+// content (ON CONFLICT DO NOTHING — existing pools are never overwritten).
+await ensureMilitaryPools();
 
 // SELECT 1 + Redis PING (2s each); 503 names the failing part. Rate-limit exempt.
 registerHealthRoute(app);

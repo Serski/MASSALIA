@@ -520,7 +520,11 @@
   "R061": "illyrians",
   "R040": "illyrians",
   "R129": "sparta",
-  "R091": "mago"
+  "R091": "mago",
+  "R043": "unclaimed",
+  "R078": "unclaimed",
+  "R121": "unclaimed",
+  "R140": "unclaimed"
  },
  "explicitlyEmpty": []
 }

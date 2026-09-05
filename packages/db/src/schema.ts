@@ -1003,3 +1003,55 @@ export const interactions = pgTable("interactions", {
   byTarget: index("interactions_target_idx").on(table.targetCharacterId, table.createdAt),
   byActor: index("interactions_actor_idx").on(table.actorCharacterId, table.createdAt),
 }));
+
+// --- World 2 military pools (migration 0049) --------------------------------
+// Server-side only. Towns hold a garrison plus a fleet (pentekonters, triremes);
+// townless regions hold a warband. One row per (world, id), seeded from
+// content/map/town-military.json and region-military.json by military.ts and
+// never exposed through apps/web/public. Population and walls stay public.
+export const townMilitary = pgTable("town_military", {
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  townId: text("town_id").notNull(),
+  garrison: integer("garrison").notNull(),
+  pentekonters: integer("pentekonters").notNull(),
+  triremes: integer("triremes").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.worldId, table.townId] }),
+}));
+
+export const regionMilitary = pgTable("region_military", {
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  regionId: text("region_id").notNull(),
+  warband: integer("warband").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.worldId, table.regionId] }),
+}));
+
+// Intel is a per-dynasty SNAPSHOT: the numbers as they stood when scouted plus
+// the game date of the scouting, never a live pointer into the pools. Nothing in
+// this batch writes these rows; the read route only surfaces the requester's own.
+export const townIntel = pgTable("town_intel", {
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  dynastyId: uuid("dynasty_id").references(() => dynasties.id).notNull(),
+  townId: text("town_id").notNull(),
+  garrison: integer("garrison").notNull(),
+  pentekonters: integer("pentekonters").notNull(),
+  triremes: integer("triremes").notNull(),
+  scoutedAt: timestamp("scouted_at", { withTimezone: true }).notNull().defaultNow(),
+  scoutedGameDate: text("scouted_game_date").notNull(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.worldId, table.dynastyId, table.townId] }),
+}));
+
+export const regionIntel = pgTable("region_intel", {
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  dynastyId: uuid("dynasty_id").references(() => dynasties.id).notNull(),
+  regionId: text("region_id").notNull(),
+  warband: integer("warband").notNull(),
+  scoutedAt: timestamp("scouted_at", { withTimezone: true }).notNull().defaultNow(),
+  scoutedGameDate: text("scouted_game_date").notNull(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.worldId, table.dynastyId, table.regionId] }),
+}));
