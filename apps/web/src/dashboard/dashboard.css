@@ -2107,6 +2107,15 @@
   font-weight: 700;
 }
 
+/* "base N · Trait +M" breakdown under an effective stat value. */
+.dashboard-shell .cs-stat-base{
+  margin-top: 2px;
+  color: var(--dash-stone-dim);
+  font-size: 8.5px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
 .dashboard-shell .cs-stat-k{
   margin-top: 3px;
   color: var(--dash-stone-dim);

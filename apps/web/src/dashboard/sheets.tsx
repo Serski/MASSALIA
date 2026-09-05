@@ -697,6 +697,11 @@ export function traitTone(trait: CharacterSheetData["traits"][number]): "asset" 
   return net > 0 ? "asset" : net < 0 ? "flaw" : "neutral";
 }
 
+// "+2" / "−2" (true minus sign) for a stat modifier.
+export function signedMod(n: number): string {
+  return n < 0 ? `−${Math.abs(n)}` : `+${n}`;
+}
+
 export function TraitRows({ traits }: { traits: CharacterSheetData["traits"] }) {
   if (!traits.length) {
     return (
@@ -780,6 +785,13 @@ export function CharacterTab({ player, sheet, onTreated }: { player: PlayerDashb
   // sheet too, falling back to /me/state base while the sheet loads.
   const effective = sheet?.effective ?? player.stats;
   const base = sheet?.base ?? player.stats;
+  // Which held traits move a stat, and by how much in total. Drives the
+  // "base N · Trait A, Trait B +M" line under an effective value.
+  const traitMods = (key: keyof FourStats) => {
+    const movers = (sheet?.traits ?? []).filter((trait) => (trait.statMod?.[key] ?? 0) !== 0);
+    const sum = movers.reduce((acc, trait) => acc + (trait.statMod?.[key] ?? 0), 0);
+    return { names: movers.map((trait) => trait.name), sum };
+  };
   // Prestige NEVER decays (reputation outlives the man) — never mark it declining.
   const declining = (key: keyof FourStats) => key !== "prestige" && player.decaying.includes(key);
   const anyDeclining = statDefs.some((stat) => declining(stat.key));
@@ -791,11 +803,12 @@ export function CharacterTab({ player, sheet, onTreated }: { player: PlayerDashb
           const value = effective[stat.key];
           const delta = value - base[stat.key];
           const isDeclining = declining(stat.key);
+          const mods = delta ? traitMods(stat.key) : null;
           return (
             <div
               key={stat.key}
               className={`cs-stat${stat.key === primary ? " primary" : ""}${isDeclining ? " declining" : ""}`}
-              title={isDeclining ? "Age is taking its toll on this stat." : delta ? `base ${base[stat.key]} · ${delta > 0 ? "+" : ""}${delta} from traits` : undefined}
+              title={isDeclining ? "Age is taking its toll on this stat." : undefined}
             >
               <AssetIcon file={STAT_PIP_ICON[stat.key]} alt="" className="asset-icon cs-stat-icon" />
               <div className="cs-stat-v">
@@ -803,6 +816,12 @@ export function CharacterTab({ player, sheet, onTreated }: { player: PlayerDashb
                 {delta ? <span className="cs-stat-delta">{delta > 0 ? `+${delta}` : delta}</span> : null}
                 {isDeclining ? <span className="cs-stat-decay" aria-label="declining with age">▼</span> : null}
               </div>
+              {mods ? (
+                <div className="cs-stat-base">
+                  base {base[stat.key]}
+                  {mods.names.length ? ` · ${mods.names.join(", ")} ${signedMod(mods.sum)}` : ""}
+                </div>
+              ) : null}
               <div className="cs-stat-k">{stat.label}</div>
             </div>
           );
