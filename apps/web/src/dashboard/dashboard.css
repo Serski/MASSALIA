@@ -1876,6 +1876,29 @@
 .dashboard-shell .sheet-row-tag.tone-neutral{ color: var(--dash-stone-dim); }
 .dashboard-shell .sheet-row-tag.tone-flaw{ color: #d49a86; }
 
+/* Stat-mod chips under a trait row ("−2 prestige"), toned by the mod's sign.
+   Specificity beats `.sheet-row-body span` so chips stay inline. */
+.dashboard-shell .sheet-row-chips{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.dashboard-shell .sheet-row-chips .stat-chip{
+  display: inline-block;
+  margin: 0;
+  padding: 1px 7px;
+  font-family: var(--font-display);
+  font-size: 8.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid var(--dash-line);
+  border-radius: 20px;
+  color: var(--dash-stone);
+}
+.dashboard-shell .sheet-row-chips .stat-chip.tone-asset{ color: #9ec487; border-color: rgba(126, 163, 106, 0.4); }
+.dashboard-shell .sheet-row-chips .stat-chip.tone-flaw{ color: #d49a86; border-color: rgba(187, 106, 82, 0.4); }
+
 .dashboard-shell .sheet-btn{
   padding: 7px 13px;
   color: #20160c;

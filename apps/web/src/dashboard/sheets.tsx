@@ -148,6 +148,7 @@ export function DetailRow({
   tone = "neutral",
   action,
   dim = false,
+  chips,
 }: {
   // ReactNode so a row can show an image emblem (e.g. a pop crest), not just an emoji.
   icon: ReactNode;
@@ -157,6 +158,8 @@ export function DetailRow({
   tone?: "asset" | "neutral" | "flaw";
   action?: ReactNode;
   dim?: boolean;
+  // Optional chip row rendered under the sub line (e.g. a trait's stat mods).
+  chips?: ReactNode;
 }) {
   return (
     <div className={`sheet-row${dim ? " dim" : ""}`}>
@@ -164,6 +167,7 @@ export function DetailRow({
       <div className="sheet-row-body">
         <strong>{name}</strong>
         {sub ? <span>{sub}</span> : null}
+        {chips ? <div className="sheet-row-chips">{chips}</div> : null}
       </div>
       {action ? (
         <div className="sheet-row-action">{action}</div>
@@ -702,6 +706,26 @@ export function signedMod(n: number): string {
   return n < 0 ? `−${Math.abs(n)}` : `+${n}`;
 }
 
+// One chip per non-zero stat modifier on a trait, e.g. "−2 prestige". Each chip
+// takes the asset/flaw tone of its own sign. Traits without statMod render nothing.
+export function TraitStatChips({ trait }: { trait: CharacterSheetData["traits"][number] }) {
+  const mod = trait.statMod;
+  if (!mod) return null;
+  const entries = statDefs
+    .map((stat) => [stat.key, mod[stat.key] ?? 0] as const)
+    .filter(([, value]) => value !== 0);
+  if (!entries.length) return null;
+  return (
+    <>
+      {entries.map(([key, value]) => (
+        <span key={key} className={`stat-chip tone-${value > 0 ? "asset" : "flaw"}`}>
+          {signedMod(value)} {key}
+        </span>
+      ))}
+    </>
+  );
+}
+
 export function TraitRows({ traits }: { traits: CharacterSheetData["traits"] }) {
   if (!traits.length) {
     return (
@@ -720,6 +744,7 @@ export function TraitRows({ traits }: { traits: CharacterSheetData["traits"] }) 
             sub={trait.description}
             tag={tone === "flaw" ? "flaw" : tone}
             tone={tone}
+            chips={<TraitStatChips trait={trait} />}
           />
         );
       })}
