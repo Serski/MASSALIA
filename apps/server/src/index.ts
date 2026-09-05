@@ -6,6 +6,7 @@ import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { errorHandler } from "./errorHandler.js";
 import { registerRateLimit } from "./rateLimit.js";
+import { registerHealthRoute } from "./health.js";
 import { authRoutes } from "./routes/auth.js";
 import { characterRoutes } from "./routes/characters.js";
 import { characterSheetRoutes } from "./routes/character.js";
@@ -101,7 +102,8 @@ await loadLeagueContent();
 // Story engine (Pack 3): validate every authored story graph + upsert into `stories`.
 await loadStories();
 
-app.get("/health", async () => ({ ok: true }));
+// SELECT 1 + Redis PING (2s each); 503 names the failing part. Rate-limit exempt.
+registerHealthRoute(app);
 await app.register(authRoutes, { prefix: "/auth" });
 await app.register(characterRoutes, { prefix: "/characters" });
 await app.register(characterSheetRoutes, { prefix: "/api/character" });
