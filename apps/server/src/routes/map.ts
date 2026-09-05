@@ -24,6 +24,16 @@ const MAP_MUTATIONS_ENABLED = process.env.MAP_MUTATIONS_ENABLED === "true";
 // reset to now). This keeps the schema's owner/controller split meaningful.
 type ChangeType = "occupy" | "annex";
 
+// World 2 military read payload (see GET /military). "home" = live pool of a
+// Massalia-owned target, visible to every player; "intel" = the requester's own
+// dynasty's scouting snapshot. Anything without an entry is simply unknown.
+const HOME_POLITY = "massalia";
+type MilitarySource = "home" | "intel";
+interface MilitaryPayload {
+  towns: Record<string, { garrison: number; pentekonters: number; triremes: number; source: MilitarySource; scoutedGameDate?: string }>;
+  regions: Record<string, { warband: number; source: MilitarySource; scoutedGameDate?: string }>;
+}
+
 // Open /stream connections per user id. A user may hold at most MAX_STREAMS_PER_USER
 // at once (a few tabs); the next attempt is refused with 429 rather than letting a
 // runaway client pin connections. Decremented when the socket closes.
@@ -108,6 +118,61 @@ async function buildState(db: Db): Promise<MapState> {
 export async function mapRoutes(app: FastifyInstance) {
   // Full map ownership state: polities + per-province state + towns. Geometry is
   // loaded separately by the client from static files.
+  // World 2 military read (infrastructure only, no actions). Returns ONLY what the
+  // requester is entitled to see: live pools for anything Massalia owns ("home",
+  // visible to every authenticated player) and the requester's own dynasty's intel
+  // snapshots ("intel", frozen numbers + the game date scouted). Nothing else is
+  // ever included — no other dynasty's intel, no foreign live pool. Read-only, so
+  // it is deliberately NOT behind MAP_MUTATIONS_ENABLED.
+  app.get("/military", async (request, reply) => {
+    const { createDb, townIntel, regionIntel, townMilitary, regionMilitary } = await import("@massalia/db");
+    const { requireAuth } = await import("../services/auth.js");
+    const { ensureCharacterRow, getActivePlayer, getActiveWorldId } = await import("../services/character.js");
+    const { loadMilitaryOwners } = await import("../services/mapMilitary.js");
+    const { and, eq, inArray } = await import("drizzle-orm");
+    const db = (_db ??= createDb());
+    const user = await requireAuth(request);
+    const worldId = await getActiveWorldId();
+    if (!worldId) {
+      reply.code(503);
+      return { error: "No active world exists." };
+    }
+    const player = await getActivePlayer(user.id, worldId);
+    if (!player) {
+      reply.code(404);
+      return { error: "No active character found." };
+    }
+    const character = await ensureCharacterRow(player, worldId);
+    const dynastyId = character.dynastyId;
+    const owners = await loadMilitaryOwners();
+    const homeTowns = Object.entries(owners.towns).filter(([, o]) => o === HOME_POLITY).map(([id]) => id);
+    const homeRegions = Object.entries(owners.regions).filter(([, o]) => o === HOME_POLITY).map(([id]) => id);
+
+    const towns: MilitaryPayload["towns"] = {};
+    const regions: MilitaryPayload["regions"] = {};
+    if (homeTowns.length) {
+      const rows = await db.select().from(townMilitary).where(and(eq(townMilitary.worldId, worldId), inArray(townMilitary.townId, homeTowns)));
+      for (const r of rows) towns[r.townId] = { garrison: r.garrison, pentekonters: r.pentekonters, triremes: r.triremes, source: "home" };
+    }
+    if (homeRegions.length) {
+      const rows = await db.select().from(regionMilitary).where(and(eq(regionMilitary.worldId, worldId), inArray(regionMilitary.regionId, homeRegions)));
+      for (const r of rows) regions[r.regionId] = { warband: r.warband, source: "home" };
+    }
+    if (dynastyId) {
+      const tRows = await db.select().from(townIntel).where(and(eq(townIntel.worldId, worldId), eq(townIntel.dynastyId, dynastyId)));
+      for (const r of tRows) {
+        if (towns[r.townId]) continue; // home outranks a stale snapshot
+        towns[r.townId] = { garrison: r.garrison, pentekonters: r.pentekonters, triremes: r.triremes, source: "intel", scoutedGameDate: r.scoutedGameDate };
+      }
+      const rRows = await db.select().from(regionIntel).where(and(eq(regionIntel.worldId, worldId), eq(regionIntel.dynastyId, dynastyId)));
+      for (const r of rRows) {
+        if (regions[r.regionId]) continue;
+        regions[r.regionId] = { warband: r.warband, source: "intel", scoutedGameDate: r.scoutedGameDate };
+      }
+    }
+    return { towns, regions } satisfies MilitaryPayload;
+  });
+
   app.get("/state", async (request) => {
     const { createDb } = await import("@massalia/db");
     const { requireAuth } = await import("../services/auth.js");
