@@ -25,30 +25,13 @@ export class ApiError extends Error {
   }
 }
 
-// Session token storage. We still send cookies (credentials: "include") for
-// same-site/cookie-friendly browsers, but cross-site cookies are blocked on iOS
-// Safari, so we also keep the token here and send it as an Authorization header.
-const TOKEN_STORAGE_KEY = "massalia_session_token";
-
-export function getStoredToken(): string | null {
-  try {
-    return localStorage.getItem(TOKEN_STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
-
-export function setStoredToken(token: string | null) {
-  try {
-    if (token) {
-      localStorage.setItem(TOKEN_STORAGE_KEY, token);
-    } else {
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
-    }
-  } catch {
-    // localStorage may be unavailable (private mode); cookie path still applies.
-  }
-}
+// The session is the signed httpOnly cookie the API sets; the web app and API are
+// same-site (playmassalia.com / api.playmassalia.com), so every request simply
+// carries it via credentials: "include". Nothing about the session is stored here.
+// Legacy: sessions from the github.io/railway.app era kept a raw token under the
+// localStorage key below and sent it as a Bearer header; main.tsx purges that key
+// once at boot.
+export const LEGACY_TOKEN_STORAGE_KEY = "massalia_session_token";
 
 export function apiErrorMessage(error: unknown, context: "auth" | "creation" = "auth") {
   if (error instanceof ApiError) {
@@ -79,10 +62,6 @@ async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<
   if (options.body) {
     headers["Content-Type"] = "application/json";
   }
-  const token = getStoredToken();
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
   try {
     response = await fetch(`${apiBaseUrl}${path}`, {
       method: options.method ?? "GET",
@@ -103,7 +82,6 @@ async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<
 export type AuthResponse = {
   user: { id: string; email: string } | null;
   hasCharacter: boolean;
-  token?: string;
   emailVerified?: boolean;
 };
 
@@ -242,12 +220,10 @@ export type ChronicleEntry = {
   payload: Record<string, unknown>;
 };
 
-async function authenticate(path: string, body: Record<string, unknown>): Promise<AuthResponse> {
-  const result = await apiFetch<AuthResponse>(path, { method: "POST", body });
-  if (result.token) {
-    setStoredToken(result.token);
-  }
-  return result;
+// Login-shaped POSTs (register / login / reset-password). The response sets the
+// session cookie; the body carries only the user + hasCharacter.
+function authenticate(path: string, body: Record<string, unknown>): Promise<AuthResponse> {
+  return apiFetch<AuthResponse>(path, { method: "POST", body });
 }
 
 // --- Province/map system (map API) ------------------------------------------
@@ -273,49 +249,18 @@ export type MapProvinceChange = {
   changeType: string;
 };
 
-// Subscribe to the map realtime stream. EventSource can't send the Authorization
-// header (and the dev cookie is cross-site SameSite=lax, so it wouldn't flow
-// either), so we consume the SSE with fetch streaming + the Bearer token instead.
-// onState fires once with the initial snapshot; onChange fires per conquest.
-// Returns an unsubscribe function that aborts the request.
+// Subscribe to the map realtime stream. A plain EventSource with credentials: the
+// same-site session cookie authenticates it, and the server route echoes the
+// cookie-friendly CORS headers (see apps/server/src/routes/map.ts). onState fires
+// once with the initial snapshot; onChange fires per conquest. Returns an
+// unsubscribe function that closes the stream.
 export function streamMap(handlers: { onState?: (state: MapState) => void; onChange?: (change: MapProvinceChange) => void; onError?: (error: unknown) => void }): () => void {
-  const controller = new AbortController();
-  const token = getStoredToken();
-  const headers: Record<string, string> = {};
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-
-  (async () => {
-    const response = await fetch(`${apiBaseUrl}/api/map/stream`, { headers, credentials: "include", signal: controller.signal });
-    if (!response.ok || !response.body) throw new ApiError("Map stream failed", response.status);
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      // SSE frames are separated by a blank line.
-      let sep;
-      while ((sep = buffer.indexOf("\n\n")) !== -1) {
-        const frame = buffer.slice(0, sep);
-        buffer = buffer.slice(sep + 2);
-        let event = "message";
-        let data = "";
-        for (const line of frame.split("\n")) {
-          if (line.startsWith("event:")) event = line.slice(6).trim();
-          else if (line.startsWith("data:")) data += line.slice(5).trim();
-        }
-        if (!data) continue;
-        const parsed = JSON.parse(data);
-        if (event === "state") handlers.onState?.(parsed as MapState);
-        else if (event === "change") handlers.onChange?.(parsed as MapProvinceChange);
-      }
-    }
-  })().catch((error) => {
-    if (!controller.signal.aborted) handlers.onError?.(error);
-  });
-
-  return () => controller.abort();
+  const source = new EventSource(`${apiBaseUrl}/api/map/stream`, { withCredentials: true });
+  const parse = <T,>(event: Event) => JSON.parse((event as MessageEvent<string>).data) as T;
+  source.addEventListener("state", (event) => handlers.onState?.(parse<MapState>(event)));
+  source.addEventListener("change", (event) => handlers.onChange?.(parse<MapProvinceChange>(event)));
+  source.onerror = (event) => handlers.onError?.(event);
+  return () => source.close();
 }
 
 export const api = {
@@ -325,8 +270,8 @@ export const api = {
   // Always resolves to the same generic message (enumeration-safe on the server).
   forgotPassword: (email: string) =>
     apiFetch<{ ok: true; message: string }>("/auth/forgot-password", { method: "POST", body: { email } }),
-  // Returns the login-shaped AuthResponse; authenticate() stores the new token so
-  // the caller can enter the app exactly as after a normal login.
+  // Returns the login-shaped AuthResponse (the response sets the session cookie)
+  // so the caller can enter the app exactly as after a normal login.
   resetPassword: (token: string, password: string) =>
     authenticate("/auth/reset-password", { token, password }),
   // Soft email verification: verify from the emailed link (no auth needed), or
@@ -335,21 +280,11 @@ export const api = {
     apiFetch<{ ok: true }>("/auth/verify-email", { method: "POST", body: { token } }),
   resendVerification: () =>
     apiFetch<{ ok: true; message: string }>("/auth/resend-verification", { method: "POST" }),
-  logout: async () => {
-    try {
-      return await apiFetch<{ ok: true }>("/auth/logout", { method: "POST" });
-    } finally {
-      setStoredToken(null);
-    }
-  },
-  // Anonymize-and-detach: clear the local bearer token only AFTER the request
-  // succeeds. On failure (wrong password, rate-limit, network) the server keeps the
-  // session, so the client must too — the inline retry in Settings depends on it.
-  deleteAccount: async (password: string) => {
-    const result = await apiFetch<{ ok: true }>("/auth/delete-account", { method: "POST", body: { password } });
-    setStoredToken(null);
-    return result;
-  },
+  // The server clears the session cookie on success.
+  logout: () => apiFetch<{ ok: true }>("/auth/logout", { method: "POST" }),
+  // Anonymize-and-detach. On failure (wrong password, rate-limit, network) the
+  // server keeps the session cookie, so the inline retry in Settings still works.
+  deleteAccount: (password: string) => apiFetch<{ ok: true }>("/auth/delete-account", { method: "POST", body: { password } }),
   me: () => apiFetch<AuthResponse>("/auth/me"),
   createCharacter: (payload: CreationRequest) => apiFetch("/characters", { method: "POST", body: payload }),
   state: () => apiFetch<PlayerState>("/me/state"),
