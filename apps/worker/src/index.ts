@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Queue, Worker, type Job } from "bullmq";
+import { BACKUP_JOB_NAME, BACKUP_SCHEDULE, runBackup } from "./jobs/backup.js";
 import { completionDelayMs, parseAgeConfig, parseAgendaFile, parseCalendarConfig, parseContractsContent, parseFamilyConfig, parsePoliticsConfig, parseTraitsFile, REAL_MS_PER_SEASON, type AgeConfig, type AgendaScope, type CalendarConfig, type ContractsContent, type FamilyConfig, type PoliticsConfig, type Trait } from "@massalia/shared";
 import { accrueLeagueCities, accrueTreasuries, advanceAgendaCycles, advanceElections, advanceOlympiads, closeDueChamberVotes, closeDueFestivals, deliverOlympicNominationToAll, drawFamilyCandidates, endDbPools, ensurePartyLeaders, fireFestivalsForAll, openAgendaCycleIfDue, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, sweepMercenaryContracts, sweepSpouseDeaths, type AgendaPools, type MercContractCfgMap } from "@massalia/db";
 
@@ -99,12 +100,14 @@ const LEAGUE_DRIFT_SWEEP_MS = 60 * 60 * 1000;
 // next tick instead of wedging. This replaces the old "re-arm with a fixed jobId
 // at the end of the handler" pattern, which BullMQ dedupes against the still-active
 // job — so it NEVER re-fired, leaving every sweep running only once per boot.
-type Sweep = { name: string; every: number; run: () => Promise<string> };
+// A sweep repeats either every N ms or on a cron pattern (BullMQ job scheduler).
+type Schedule = { every: number } | { pattern: string; tz?: string };
+type Sweep = { name: string; schedule: Schedule; run: () => Promise<string> };
 
 const SWEEPS: Sweep[] = [
   {
     name: "festival-sweep",
-    every: FESTIVAL_SWEEP_MS,
+    schedule: { every: FESTIVAL_SWEEP_MS },
     run: async () => {
       const cfg = await calendarConfig();
       const fired = await fireFestivalsForAll(cfg);
@@ -114,7 +117,7 @@ const SWEEPS: Sweep[] = [
   },
   {
     name: "spouse-death-sweep",
-    every: SPOUSE_SWEEP_MS,
+    schedule: { every: SPOUSE_SWEEP_MS },
     run: async () => {
       const { familyCfg: fc, ageCfg: ac } = await configs();
       const deaths = await sweepSpouseDeaths({ familyCfg: fc, ageCfg: ac });
@@ -125,7 +128,7 @@ const SWEEPS: Sweep[] = [
     // The hoplite's mercenary contracts (Step 2): complete every served-out
     // contract (safe return home) even if the player never opens the app.
     name: "merc-contract-sweep",
-    every: MERC_SWEEP_MS,
+    schedule: { every: MERC_SWEEP_MS },
     run: async () => {
       const swept = await sweepMercenaryContracts(await mercContractCfg(), { traitDefs: await traitDefs(), riskCfg: (await mercContent()).risk });
       return `Merc-contract sweep: checked ${swept.checked} abroad, completed ${swept.completed} (${swept.died} died), awarded ${swept.awarded} trait(s)`;
@@ -133,7 +136,7 @@ const SWEEPS: Sweep[] = [
   },
   {
     name: "chamber-sweep",
-    every: CHAMBER_SWEEP_MS,
+    schedule: { every: CHAMBER_SWEEP_MS },
     run: async () => {
       const cfg = await politicsConfig();
       const opened = await openChamberVoteIfDue(cfg);
@@ -143,7 +146,7 @@ const SWEEPS: Sweep[] = [
   },
   {
     name: "election-sweep",
-    every: ELECTION_SWEEP_MS,
+    schedule: { every: ELECTION_SWEEP_MS },
     run: async () => {
       const { calendar, politics } = await bothConfigs();
       const opened = await openElectionsIfDue(calendar);
@@ -156,7 +159,7 @@ const SWEEPS: Sweep[] = [
   },
   {
     name: "olympiad-sweep",
-    every: OLYMPIAD_SWEEP_MS,
+    schedule: { every: OLYMPIAD_SWEEP_MS },
     run: async () => {
       const cfg = await calendarConfig();
       const delivered = await deliverOlympicNominationToAll(cfg);
@@ -168,7 +171,7 @@ const SWEEPS: Sweep[] = [
     // The Agenda & three governments (Prompt 3): treasury accrual, party leaders,
     // the league + party agenda cycles (open → chamber vote → resolve).
     name: "agenda-sweep",
-    every: AGENDA_SWEEP_MS,
+    schedule: { every: AGENDA_SWEEP_MS },
     run: async () => {
       const { calendar, politics } = await bothConfigs();
       const pools = await agendaPools();
@@ -188,11 +191,18 @@ const SWEEPS: Sweep[] = [
     // (population/garrison +%, stability toward baseline). Idempotent per
     // (world, city, year); tax + fortifications and all diplomacy are untouched.
     name: "league-drift-sweep",
-    every: LEAGUE_DRIFT_SWEEP_MS,
+    schedule: { every: LEAGUE_DRIFT_SWEEP_MS },
     run: async () => {
       const { grew, year } = await accrueLeagueCities(await calendarConfig());
       return `League-drift sweep: grew ${grew} cities into year ${year ?? "—"}`;
     },
+  },
+  {
+    // Nightly Postgres backup to the S3-compatible bucket (jobs/backup.ts), 03:30
+    // UTC. Skips with one log line until the BACKUP_S3_* variables are set.
+    name: BACKUP_JOB_NAME,
+    schedule: BACKUP_SCHEDULE,
+    run: () => runBackup(),
   },
 ];
 const SWEEP_BY_NAME = new Map(SWEEPS.map((sweep) => [sweep.name, sweep]));
@@ -205,7 +215,7 @@ async function installSweepSchedulers() {
     try {
       const stale = await scheduledResolutionQueue.getJob(sweep.name);
       if (stale) await stale.remove();
-      await scheduledResolutionQueue.upsertJobScheduler(sweep.name, { every: sweep.every }, { name: sweep.name });
+      await scheduledResolutionQueue.upsertJobScheduler(sweep.name, sweep.schedule, { name: sweep.name });
     } catch (error) {
       console.warn(`Could not install ${sweep.name} scheduler (Redis down?): ${(error as Error).message}`);
     }

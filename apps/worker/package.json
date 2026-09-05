@@ -11,6 +11,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1127.0",
     "@massalia/db": "workspace:*",
     "@massalia/shared": "workspace:*",
     "bullmq": "^5.56.0",
