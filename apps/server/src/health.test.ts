@@ -1,6 +1,6 @@
 import net from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify from "fastify";
 
 // ---------------------------------------------------------------------------
 // /health — the DB probe runs against the *_test database; the failure paths
