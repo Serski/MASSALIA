@@ -1,55 +1,70 @@
 # Architecture
 
-MASSALIA is a TypeScript monorepo split into app packages and shared domain packages.
+MASSALIA is a TypeScript monorepo: app packages (`apps/server`, `apps/web`, `apps/worker`) over shared domain packages (`packages/shared`, `packages/db`) and data-driven content (`content/`). This document describes production as it runs today.
 
 ## Packages
 
-- `apps/server`: Fastify API, session stub, SSE stream, authoritative game services.
-- `apps/web`: Vite React client. React owns HUD and panels; the map system is framework-agnostic TypeScript.
-- `apps/worker`: BullMQ scheduled-resolution worker.
-- `packages/shared`: shared types, event definitions, and timestamp/tick math.
-- `packages/db`: Drizzle schema, migrations, and seed data.
-- `content`: data-driven map, events, traits, and buildings.
+- `apps/server`: Fastify API — sessions, rate limiting, the authoritative game services, the world 2 map read, the map realtime stream.
+- `apps/web`: Vite React client. React owns the HUD and panels; the world 2 map is a framework-agnostic SVG component fed by static assets plus one authenticated read.
+- `apps/worker`: BullMQ worker — the recurring sweeps (festivals, elections, agenda, Olympiads, mercenary contracts, spouse deaths, league drift), per-character scheduled jobs, and the nightly backup.
+- `packages/shared`: pure rules and types — stats, traits, events, elections, the map-action matrix, tick math. No I/O.
+- `packages/db`: Drizzle schema, the append-only SQL migrations, seeds, and the DB-level services the worker calls.
+- `content`: JSON validated at boot — events, traits, buildings, calendar, politics, family, age, interactions, military pools, the world 2 map data.
 
-## Tick Model
+## Tick model
 
-There is no real-time game loop. Actions persist completion timestamps. Resource values are computed lazily when read:
+There is no real-time loop. Actions persist completion timestamps and resources accrue lazily on read (`amount + ratePerSecond × secondsSinceLastUpdate`). One game season is one real day. The worker only resolves moments that must happen at a fixed time and sweeps that must happen even when nobody is online.
 
-```ts
-amount = amount + ratePerSecond * secondsSinceLastUpdate
-```
+## Server authority and the mutation rules
 
-The worker only resolves scheduled moments that must happen at a specific time, such as queued building completion, battle arrival, or later siege ticks.
+The client renders server state and sends intent; it never decides an outcome. Every mutating path follows the same three rules:
 
-## Server Authority
+1. **Player lock.** Any transaction that touches a player's wallet, resources, pops, buildings, stats, traits or cards calls `lockPlayer(tx, playerId)` first — a transaction-scoped advisory lock keyed on `players.id` (`apps/server/src/services/lock.ts`). Reads before the lock are reads from before the previous writer committed, which is exactly the race it closes. First-login provisioning (`ensureCharacterRow`) and hostile actions (poison, assassinate, spymaster posture) run under it too.
+2. **Guarded relative writes.** Money and stock move by `SET x = x - N WHERE x >= N` (or the resource equivalent) with the affected row count checked — the second line of defence even if a caller forgets the lock.
+3. **Claim-first resolution.** A daily card, event, festival or Olympiad is resolved by a conditional `UPDATE … WHERE resolved = false RETURNING` inside the same transaction as its effects; whoever loses the claim applies nothing and returns the already-resolved answer.
 
-The server owns province ownership, faction colors, control status, event outcomes, and scheduled resolutions. The client renders server state and sends player intent. It never decides who owns a province or which effect succeeds.
+Other invariants: content JSON is validated with zod at boot (a malformed file fails the boot); migrations are append-only SQL files applied in name order, one transaction each, recorded in `__massalia_migrations`; 5xx responses are logged and answered with a fixed `{ error }` so no SQL, path or stack reaches a client (`errorHandler.ts`); military numbers never ship under `apps/web/public`.
 
-## Event Engine
+## Sessions
 
-Event definitions live in `content/events`. Choices contain declarative effects. Server services apply effects, record the result, and publish state changes over SSE.
+Sessions are **cookie-only**. `POST /auth/register`, `/auth/login` and `/auth/reset-password` store the sha256 of a random token in `sessions` and set `massalia_session` — signed, `httpOnly`, `SameSite=Lax`, `Secure` when `WEB_ORIGIN` is https, 30-day `maxAge`, path `/`. The web app (`playmassalia.com`) and the API (`api.playmassalia.com`) share a registrable domain, so the cookie is same-site and flows on every credentialed request and on the map `EventSource`. There is no bearer-token path: an `Authorization` header is ignored. The web build carries a Content-Security-Policy (`apps/web/index.html`) that allows scripts only from itself and Plausible and connections only to itself, the API and Plausible; a Vite plugin swaps the API origin for non-production builds.
 
-The current vertical slice includes `set_province_owner` to prove that a server-side event can recolor the political map without client special-casing.
+Passwords are bcrypt (cost 12). Password reset and email verification use the same token discipline (random token emailed, only its hash stored, newest-only, single-use, 60 min / 24 h). Email goes through Resend; without `RESEND_API_KEY` the links are logged instead.
+
+## Rate limiting
+
+`@fastify/rate-limit` is registered once, globally (`apps/server/src/rateLimit.ts`): Redis store when `REDIS_URL` is set (shared across instances, failing open on Redis errors), in-memory otherwise.
+
+- 300 requests per minute per key on every route; the key is the session's user id when a valid cookie is present, else the client IP (`trustProxy` trusts exactly one hop, Railway's edge).
+- 60 per minute on `POST`/`PUT`/`PATCH`/`DELETE` under `/api/`, applied as route config by an `onRoute` hook unless the route declares its own.
+- The auth routes keep their stricter IP-keyed limits: 8/min for register, login, reset-password and verify-email, 5/min for delete-account, 3/hour for forgot-password and resend-verification.
+- `/health` and `/content/` are exempt. A 429 is `{ error: "Too many requests. Try again shortly." }` (auth routes: "Too many attempts…").
+
+## Realtime
+
+`GET /api/map/stream` is a cookie-authenticated SSE stream (full state once, then one `change` event per province change). Each user may hold at most 3 open streams — a fourth is refused with 429 — and a `: keep-alive` comment every 25 s keeps proxies from cutting an idle stream. The legacy `/api/world` state and stream are gone; `broadcastState()` remains a no-op hook after every mutating service.
+
+## Health and shutdown
+
+- `GET /health` runs `SELECT 1` on the shared pool and `PING` on a throwaway Redis client when `REDIS_URL` is set, each capped at 2 s. It answers `200 { ok: true, db: "ok", redis: "ok" | "off" }`, or `503` with the failing part marked `"failed"` and named in `error`. Railway uses it as the server's health check.
+- Both processes handle `SIGTERM`/`SIGINT` once. The server stops accepting connections and lets in-flight requests finish; the worker finishes its active jobs and closes its queue. Each waits up to 10 s, then ends the pg pools (`endDbPools()` in `@massalia/db`) and exits 0. Railway sends `SIGTERM` on every redeploy, so a deploy never cuts a transaction.
 
 ## Deployment
 
-Railway should provide:
+| Piece | Where | How |
+| --- | --- | --- |
+| Web | GitHub Pages, `playmassalia.com` | `.github/workflows/pages.yml` builds and publishes only after a green `CI` run on `main` (`workflow_run`), or by hand. |
+| Server | Railway service `server`, `api.playmassalia.com` | Railpack builder from the repo root (`corepack enable && pnpm install --frozen-lockfile && pnpm build`), start `pnpm railway:start` → migrate then `pnpm --filter @massalia/server start`, health check `/health`. |
+| Worker | Railway service `worker` | Built from `apps/worker/Dockerfile` (Node 22 + PostgreSQL 18 client from PGDG), start `pnpm --filter @massalia/worker start`. |
+| Postgres 18, Redis | Railway services | `DATABASE_URL`, `REDIS_URL`. |
 
-- `DATABASE_URL`
-- `REDIS_URL`
-- `SESSION_SECRET`
-- `WEB_ORIGIN`
+**CI is the deploy gate.** `.github/workflows/ci.yml` builds shared and db, typechecks server, web and worker, lints, runs the shared suite, then the server, db, web and worker suites serially against a `postgres:16` service database (`massalia_test`), then `pnpm audit`. Pages deploys only on a green run, and Railway deploys a commit only once its CI check has passed — deployments for a red commit show as skipped.
 
-The Railway project has four services: `server` (start: `pnpm --filter @massalia/server start`, health check `/health`), `worker` (start: `pnpm --filter @massalia/worker start`), `Postgres` (image `postgres-ssl:18`) and `Redis`. Both app services build from the repo root with Railway's **Railpack** builder (build: `corepack enable && pnpm install --frozen-lockfile && pnpm build`). `nixpacks.toml` describes the same plan for the Nixpacks builder and local `nixpacks build`; Railpack does not read it.
+Environment (`.env.example` lists them all): `DATABASE_URL`, `REDIS_URL`, `SESSION_SECRET` (≥ 32 chars), `WEB_ORIGIN`, `PORT`; `VITE_API_URL` for the web build; `RESEND_API_KEY` / `EMAIL_FROM`; `MAP_MUTATIONS_ENABLED` (keep `false`); `VITE_SOCIAL_LOGIN` (unset in production); `BACKUP_S3_*` for the worker.
 
-### Health, shutdown
+## Backups
 
-- `GET /health` runs `SELECT 1` on Postgres and `PING` on Redis (when `REDIS_URL` is set), each capped at 2 s, and answers `200 { ok: true, db: "ok", redis: "ok" | "off" }` or `503` with the failing part marked `"failed"` and named in `error`. It is exempt from the rate limiter.
-- Both processes handle `SIGTERM`/`SIGINT` once: the server stops accepting connections and lets in-flight requests finish, the worker finishes its active jobs; each waits up to 10 s, then ends the pg pools (`endDbPools()` in `@massalia/db`) and exits 0. Railway sends `SIGTERM` on every redeploy, so a deploy never cuts a transaction.
-
-### Backups
-
-The worker runs a nightly backup at **03:30 UTC** (`apps/worker/src/jobs/backup.ts`, a cron job scheduler alongside the sweeps): `pg_dump --format=custom` of `DATABASE_URL`, gzipped, uploaded to an S3-compatible bucket as `massalia-YYYY-MM-DD.dump.gz`, then every `massalia-*.dump.gz` older than 30 days is deleted. Configure the worker service with:
+The worker runs a nightly backup at **03:30 UTC** (`apps/worker/src/jobs/backup.ts`, a cron job scheduler alongside the sweeps): `pg_dump --format=custom` of `DATABASE_URL`, gzipped, uploaded to an S3-compatible bucket as `massalia-YYYY-MM-DD.dump.gz`, then every `massalia-*.dump.gz` older than 30 days (by the day in its name) is deleted. The worker image ships a PostgreSQL 18 client (`apps/worker/Dockerfile`), matching the Railway Postgres major. Configure the worker service with:
 
 - `BACKUP_S3_ENDPOINT` — the S3-compatible endpoint URL (R2, B2, MinIO, AWS)
 - `BACKUP_S3_BUCKET` — the bucket name
@@ -57,8 +72,6 @@ The worker runs a nightly backup at **03:30 UTC** (`apps/worker/src/jobs/backup.
 - `BACKUP_S3_SECRET` — secret access key
 - `BACKUP_S3_REGION` — optional, default `auto` (path-style addressing is used)
 
-If any of the four is unset the job logs `Nightly backup skipped: …` and does nothing.
-
-**pg_dump in the worker image.** Postgres on Railway is version 18, and `pg_dump` refuses to dump a server newer than itself, so the worker needs a PostgreSQL 18 client. `nixpacks.toml` adds `postgresql_18` for Nixpacks builds; the Railpack runtime image only offers the distro's older `postgresql-client`, so with the current Railpack builder the job fails each night with `pg_dump: error: aborting because of server version mismatch` (logged, self-healing next night) until the worker image carries an 18 client. `apps/worker/Dockerfile` installs `postgresql-client-18` from the PGDG repository for that purpose (switch the worker service to the Dockerfile builder, or run it wherever the worker is built). `PG_DUMP=/path/to/pg_dump` overrides the binary the job spawns.
+If any of the four is unset the job logs `Nightly backup skipped: …` and does nothing. `PG_DUMP=/path/to/pg_dump` overrides the binary the job spawns.
 
 **Restore drill.** Download a dump (e.g. `aws --endpoint-url "$BACKUP_S3_ENDPOINT" s3 cp "s3://$BACKUP_S3_BUCKET/massalia-2026-09-05.dump.gz" .`) and run `scripts/restore.sh massalia-2026-09-05.dump.gz "$SCRATCH_DATABASE_URL"`. It streams the archive through `pg_restore --clean --if-exists --no-owner --no-acl` into the given database (which must exist), asks you to type the database name first unless `--yes` is passed, and prints the largest tables' row counts afterwards. Drill against a scratch database; `pg_restore` must be at least the `pg_dump` major version.

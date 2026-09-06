@@ -1,6 +1,6 @@
 # MASSALIA
 
-MASSALIA is a browser-based grand-strategy game scaffold: persistent seasonal worlds, timestamp-based progression, server-authoritative state, a data-driven event engine, and a layered Crusader Kings-style map.
+MASSALIA is a browser strategy RPG set in Massalia, 300 BC: persistent seasonal worlds, timestamp-based progression, server-authoritative state, a data-driven event engine, and the hand-drawn world 2 map.
 
 ## Quick Start
 
@@ -44,7 +44,7 @@ pnpm dev:api
 pnpm dev:web
 ```
 
-The default local API is `http://localhost:3001`; the web client uses `VITE_API_URL` and sends credentialed requests. For HTTPS production origins such as GitHub Pages to Railway, the API uses a `SameSite=None; Secure; httpOnly` signed cookie. For local HTTP development, cookies cannot use `Secure`, so the server relaxes the cookie to `SameSite=Lax` and `secure=false`.
+The default local API is `http://localhost:3001`; the web client uses `VITE_API_URL` and sends credentialed requests. Sessions are cookie-only: the API sets a signed `httpOnly` `SameSite=Lax` cookie (`Secure` when `WEB_ORIGIN` is https, 30 days). In production `playmassalia.com` and `api.playmassalia.com` are same-site, so the cookie flows everywhere; for local HTTP development it is simply not `Secure`.
 
 ## Architecture Guardrails
 
@@ -53,4 +53,4 @@ The default local API is `http://localhost:3001`; the web client uses `VITE_API_
 - The server is authoritative for ownership, faction colors, map state, events, and outcomes.
 - React is only the HUD and host for the map. Map behavior lives in framework-agnostic `.ts` modules.
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/MAP.md](docs/MAP.md).
+See [AGENTS.md](AGENTS.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/MAP.md](docs/MAP.md).
