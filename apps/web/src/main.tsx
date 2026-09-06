@@ -1,6 +1,5 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import "leaflet/dist/leaflet.css";
 import "./styles.css";
 import "./plausible.js";
 import { LEGACY_TOKEN_STORAGE_KEY } from "./api.js";

@@ -226,43 +226,6 @@ function authenticate(path: string, body: Record<string, unknown>): Promise<Auth
   return apiFetch<AuthResponse>(path, { method: "POST", body });
 }
 
-// --- Province/map system (map API) ------------------------------------------
-export type MapPolity = { id: string; name: string; color: string };
-export type MapStateProvince = {
-  provinceId: string;
-  type: string;
-  terrain: string;
-  coastal: boolean;
-  ownerPolityId: string | null;
-  controllerPolityId: string | null;
-  sinceTick: number;
-};
-export type MapTown = { id: string; name: string; provinceId: string | null; polityId: string | null; lon: number; lat: number; pxX: number; pxY: number };
-export type MapState = { worldId: string; tick: number; polities: MapPolity[]; provinces: MapStateProvince[]; towns: MapTown[] };
-export type MapChangeType = "occupy" | "annex";
-export type MapProvinceChange = {
-  provinceId: string;
-  ownerPolityId: string | null;
-  controllerPolityId: string | null;
-  sinceTick: number;
-  tick: number;
-  changeType: string;
-};
-
-// Subscribe to the map realtime stream. A plain EventSource with credentials: the
-// same-site session cookie authenticates it, and the server route echoes the
-// cookie-friendly CORS headers (see apps/server/src/routes/map.ts). onState fires
-// once with the initial snapshot; onChange fires per conquest. Returns an
-// unsubscribe function that closes the stream.
-export function streamMap(handlers: { onState?: (state: MapState) => void; onChange?: (change: MapProvinceChange) => void; onError?: (error: unknown) => void }): () => void {
-  const source = new EventSource(`${apiBaseUrl}/api/map/stream`, { withCredentials: true });
-  const parse = <T,>(event: Event) => JSON.parse((event as MessageEvent<string>).data) as T;
-  source.addEventListener("state", (event) => handlers.onState?.(parse<MapState>(event)));
-  source.addEventListener("change", (event) => handlers.onChange?.(parse<MapProvinceChange>(event)));
-  source.onerror = (event) => handlers.onError?.(event);
-  return () => source.close();
-}
-
 export const api = {
   register: (email: string, password: string, newsletterOptIn = false, termsAccepted = false) =>
     authenticate("/auth/register", { email, password, newsletterOptIn, termsAccepted }),
@@ -417,11 +380,6 @@ export const api = {
   takeContract: (contractId: string) => apiFetch<MercActionResult>("/api/merc/take", { method: "POST", body: { contractId } }),
   cancelContract: () => apiFetch<MercActionResult>("/api/merc/cancel", { method: "POST" }),
   collectForeign: () => apiFetch<MercActionResult>("/api/merc/collect", { method: "POST" }),
-  // Province/map system: full ownership state, and a conquest ('occupy' takes
-  // control only; 'annex' takes owner + control). Live updates arrive via streamMap.
-  mapState: () => apiFetch<MapState>("/api/map/state"),
-  conquerProvince: (provinceId: string, polityId: string, changeType: MapChangeType) =>
-    apiFetch<{ ok: true; change: MapProvinceChange }>(`/api/map/state/${provinceId}`, { method: "POST", body: { polityId, changeType } }),
 };
 
 // --- Archon & Ephor elections (Politics Prompt 2) ---------------------------

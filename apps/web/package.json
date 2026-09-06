@@ -12,13 +12,11 @@
   "dependencies": {
     "@massalia/shared": "workspace:*",
     "@vitejs/plugin-react": "^4.5.1",
-    "leaflet": "^1.9.4",
-    "vite": "^6.3.5",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "vite": "^6.3.5"
   },
   "devDependencies": {
-    "@types/leaflet": "^1.9.18",
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5"
   }
