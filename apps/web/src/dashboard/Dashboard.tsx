@@ -187,7 +187,14 @@ export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () =
       .then((state) => setPlayerState(state))
       .catch((error) => {
         if (error instanceof ApiError && error.status === 401) {
-          onRequireLogin();
+          // A banned account is 401 everywhere except /auth/me, which answers 403
+          // with the reason — show that instead of bouncing to the login page.
+          api.me()
+            .then(() => onRequireLogin())
+            .catch((probe) => {
+              if (probe instanceof ApiError && probe.status === 403) setLoadError(probe.message);
+              else onRequireLogin();
+            });
           return;
         }
         if (error instanceof ApiError && error.status === 404) {

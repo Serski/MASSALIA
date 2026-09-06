@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
+import net from "node:net";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { and, eq, gt, isNull } from "drizzle-orm";
-import { createDb, emailVerificationTokens, passwordResetTokens, pruneUserSessions, sessions, users } from "@massalia/db";
+import { authEvents, createDb, emailVerificationTokens, passwordResetTokens, pruneUserSessions, sessions, users, type AuthEventKind } from "@massalia/db";
 
 export const sessionCookieName = "massalia_session";
 
@@ -18,6 +19,30 @@ export type AuthUser = {
   id: string;
   email: string;
 };
+
+// --- Request origin (migration 0051) ----------------------------------------
+// The client IP (as resolved by trustProxy) and user agent, recorded on every
+// session and auth event. An unparseable address is stored as NULL rather than
+// failing the insert into the inet column.
+export type RequestMeta = { ip: string | null; userAgent: string | null };
+
+export function requestMeta(request: FastifyRequest): RequestMeta {
+  const ip = request.ip && net.isIP(request.ip) ? request.ip : null;
+  const header = request.headers["user-agent"];
+  const userAgent = typeof header === "string" && header.length ? header.slice(0, 512) : null;
+  return { ip, userAgent };
+}
+
+// One auth_events row per register / login / reset / verify.
+export async function recordAuthEvent(userId: string, kind: AuthEventKind, request: FastifyRequest): Promise<void> {
+  const meta = requestMeta(request);
+  await db.insert(authEvents).values({ userId, kind, ip: meta.ip, userAgent: meta.userAgent });
+}
+
+// The copy a banned user sees (login refusal and /auth/me).
+export function banMessage(reason: string | null): string {
+  return reason ? `This account has been banned. Reason: ${reason}` : "This account has been banned.";
+}
 
 export function getCookieOptions() {
   const webOrigin = process.env.WEB_ORIGIN ?? "http://localhost:5173";
@@ -164,12 +189,14 @@ export async function isEmailVerified(userId: string): Promise<boolean> {
 // browser as the signed httpOnly cookie. Nothing is returned — the raw token never
 // leaves the cookie (the web app and API are same-site, so the cookie always flows).
 // Each login also prunes the user's older sessions down to MAX_SESSIONS_PER_USER
-// (newest kept), in the same transaction as the insert.
-export async function createSession(reply: FastifyReply, userId: string): Promise<void> {
+// (newest kept), in the same transaction as the insert. The session records the
+// request's IP and user agent.
+export async function createSession(request: FastifyRequest, reply: FastifyReply, userId: string): Promise<void> {
   const token = createSessionToken();
   const expiresAt = new Date(Date.now() + sessionTtlMs);
+  const meta = requestMeta(request);
   await db.transaction(async (tx) => {
-    await tx.insert(sessions).values({ userId, tokenHash: hashToken(token), expiresAt });
+    await tx.insert(sessions).values({ userId, tokenHash: hashToken(token), expiresAt, ip: meta.ip, userAgent: meta.userAgent });
     await pruneUserSessions(tx, userId);
   });
   reply.setCookie(sessionCookieName, token, getCookieOptions());
@@ -191,20 +218,33 @@ function readSignedSessionCookie(request: FastifyRequest) {
   return unsigned.value;
 }
 
+// The user behind a live session cookie, plus the flags the auth gate reads.
+export type SessionState = { user: AuthUser; isAdmin: boolean; bannedAt: Date | null; banReason: string | null };
+
 // One session lookup per request: the rate limiter keys on the user id at
 // onRequest and the route's requireAuth asks again moments later.
-const authUserByRequest = new WeakMap<FastifyRequest, Promise<AuthUser | null>>();
+const sessionByRequest = new WeakMap<FastifyRequest, Promise<SessionState | null>>();
 
-export function getAuthUser(request: FastifyRequest): Promise<AuthUser | null> {
-  let pending = authUserByRequest.get(request);
+// The raw session state (banned users included) — for /auth/me, which must tell a
+// banned user why, and for requireAdmin.
+export function getSessionState(request: FastifyRequest): Promise<SessionState | null> {
+  let pending = sessionByRequest.get(request);
   if (!pending) {
-    pending = lookupAuthUser(request);
-    authUserByRequest.set(request, pending);
+    pending = lookupSession(request);
+    sessionByRequest.set(request, pending);
   }
   return pending;
 }
 
-async function lookupAuthUser(request: FastifyRequest): Promise<AuthUser | null> {
+// The authenticated user, or null. A banned user is null here: every authed route
+// answers 401 as if logged out, and only /auth/me and login carry the reason.
+export async function getAuthUser(request: FastifyRequest): Promise<AuthUser | null> {
+  const state = await getSessionState(request);
+  if (!state || state.bannedAt) return null;
+  return state.user;
+}
+
+async function lookupSession(request: FastifyRequest): Promise<SessionState | null> {
   // The signed session cookie is the only credential; an Authorization header is ignored.
   const token = readSignedSessionCookie(request);
   if (!token) return null;
@@ -213,13 +253,17 @@ async function lookupAuthUser(request: FastifyRequest): Promise<AuthUser | null>
     .select({
       id: users.id,
       email: users.email,
+      isAdmin: users.isAdmin,
+      bannedAt: users.bannedAt,
+      banReason: users.banReason,
     })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
     .where(and(eq(sessions.tokenHash, hashToken(token)), gt(sessions.expiresAt, new Date()), isNull(users.deletedAt)))
     .limit(1);
-
-  return rows[0] ?? null;
+  const row = rows[0];
+  if (!row) return null;
+  return { user: { id: row.id, email: row.email }, isAdmin: row.isAdmin, bannedAt: row.bannedAt, banReason: row.banReason };
 }
 
 export async function requireAuth(request: FastifyRequest) {

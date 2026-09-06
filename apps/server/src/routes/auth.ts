@@ -3,14 +3,16 @@ import type { FastifyInstance } from "fastify";
 import { and, eq, sql } from "drizzle-orm";
 import { createDb, players, sessions, users, worlds } from "@massalia/db";
 import {
+  banMessage,
   clearSession,
   consumeEmailVerification,
   consumePasswordResetTx,
   createEmailVerification,
   createPasswordReset,
   createSession,
-  getAuthUser,
+  getSessionState,
   isEmailVerified,
+  recordAuthEvent,
   requireAuth,
 } from "../services/auth.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../services/email.js";
@@ -109,7 +111,8 @@ export async function authRoutes(app: FastifyInstance) {
       .values({ email, passwordHash, newsletterOptIn })
       .returning({ id: users.id, email: users.email });
     const user = created[0]!;
-    await createSession(reply, user.id);
+    await createSession(request, reply, user.id);
+    await recordAuthEvent(user.id, "register", request);
 
     // Soft verification is non-blocking: a token/email problem must never fail or
     // delay registration. Create the token (fast, local) then fire-and-forget the
@@ -133,8 +136,14 @@ export async function authRoutes(app: FastifyInstance) {
       reply.code(401);
       return { error: "Invalid email or password." };
     }
+    // Right password, banned account: say why, open nothing.
+    if (user.bannedAt) {
+      reply.code(403);
+      return { error: banMessage(user.banReason) };
+    }
 
-    await createSession(reply, user.id);
+    await createSession(request, reply, user.id);
+    await recordAuthEvent(user.id, "login", request);
     return { user: { id: user.id, email: user.email }, hasCharacter: await hasCharacter(user.id) };
   });
 
@@ -225,7 +234,8 @@ export async function authRoutes(app: FastifyInstance) {
       return { error: "This reset link is invalid or has expired. Request a new one." };
     }
 
-    await createSession(reply, user.id);
+    await createSession(request, reply, user.id);
+    await recordAuthEvent(user.id, "reset", request);
     return { user: { id: user.id, email: user.email }, hasCharacter: await hasCharacter(user.id) };
   });
 
@@ -239,6 +249,7 @@ export async function authRoutes(app: FastifyInstance) {
       reply.code(400);
       return { error: "This verification link is invalid or has expired." };
     }
+    await recordAuthEvent(verified.id, "verify", request);
     return { ok: true };
   });
 
@@ -254,10 +265,17 @@ export async function authRoutes(app: FastifyInstance) {
     return { ok: true, message: "Verification email sent." };
   });
 
-  app.get("/me", async (request) => {
-    const user = await getAuthUser(request);
-    if (!user) return { user: null, hasCharacter: false };
-    return { user, hasCharacter: await hasCharacter(user.id), emailVerified: await isEmailVerified(user.id) };
+  // A banned user with a live cookie gets 403 + the reason here (every other route
+  // treats them as logged out); anyone else gets the usual bootstrap payload.
+  app.get("/me", async (request, reply) => {
+    const state = await getSessionState(request);
+    if (!state) return { user: null, hasCharacter: false };
+    if (state.bannedAt) {
+      reply.code(403);
+      return { error: banMessage(state.banReason) };
+    }
+    const user = state.user;
+    return { user, hasCharacter: await hasCharacter(user.id), emailVerified: await isEmailVerified(user.id), isAdmin: state.isAdmin };
   });
 
   // TODO: Add Discord OAuth callbacks here after Phase 1 email/password auth settles.

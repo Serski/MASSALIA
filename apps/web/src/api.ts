@@ -86,6 +86,7 @@ export type AuthResponse = {
   user: { id: string; email: string } | null;
   hasCharacter: boolean;
   emailVerified?: boolean;
+  isAdmin?: boolean;
 };
 
 export type CreationRequest = {
