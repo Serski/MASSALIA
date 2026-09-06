@@ -165,8 +165,9 @@ export async function authRoutes(app: FastifyInstance) {
   // Request a reset link. Enumeration-safe: ALWAYS returns the same generic 200,
   // whether the email is unknown, live, or a deleted tombstone. A token is created
   // and an email attempted only for a live (non-deleted) account; nothing about the
-  // outcome (existence or delivery) is reflected in the response. Tight rate limit
-  // (3/hour/IP) to blunt reset spam.
+  // outcome (existence or delivery) is reflected in the response — and the send is
+  // fire-and-forget (as on /register), so response time does not reveal whether an
+  // address is registered. Tight rate limit (3/hour/IP) to blunt reset spam.
   app.post("/forgot-password", { config: authLimit(3, 3_600_000) }, async (request, reply) => {
     const body = request.body as { email?: unknown } | undefined;
     const email = typeof body?.email === "string" ? normalizeEmail(body.email) : "";
@@ -178,8 +179,12 @@ export async function authRoutes(app: FastifyInstance) {
     const found = await db.select().from(users).where(eq(users.email, email)).limit(1);
     const user = found[0];
     if (user && !user.deletedAt) {
-      const token = await createPasswordReset(user.id);
-      await sendPasswordResetEmail(email, `${webBaseUrl()}/?reset=${token}`);
+      try {
+        const token = await createPasswordReset(user.id);
+        void sendPasswordResetEmail(email, `${webBaseUrl()}/?reset=${token}`).catch(() => {});
+      } catch (error) {
+        console.error(`Reset token on forgot-password failed for ${user.id}: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
 
     return { ok: true, message: "If that email is registered, a reset link is on its way." };
