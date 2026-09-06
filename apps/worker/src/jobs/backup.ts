@@ -105,20 +105,36 @@ export function dumpDatabase(databaseUrl: string, pgDump = process.env.PG_DUMP ?
     const gzip = createGzip({ level: 6 });
     const chunks: Buffer[] = [];
     let stderr = "";
+    // The gzip stream ends (stdout closed) and the child reports its exit code in
+    // no fixed order — a failed pg_dump can flush an empty archive before 'close'.
+    // Settle only once BOTH are known, and only resolve on a zero exit.
+    let exitCode: number | null = null;
+    let gzipEnded = false;
+    let settled = false;
+    const settle = () => {
+      if (settled || exitCode === null || !gzipEnded) return;
+      settled = true;
+      if (exitCode === 0) resolve(Buffer.concat(chunks));
+      else reject(new Error(`${pgDump} exited with ${exitCode}: ${stderr.trim()}`));
+    };
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      gzip.destroy();
+      reject(error);
+    };
     child.stderr.on("data", (data: Buffer) => (stderr += data.toString()));
-    child.on("error", (error) => reject(new Error(`${pgDump} could not be started: ${error.message}`)));
+    child.on("error", (error) => fail(new Error(`${pgDump} could not be started: ${error.message}`)));
     gzip.on("data", (chunk: Buffer) => chunks.push(chunk));
-    gzip.on("error", reject);
+    gzip.on("error", fail);
     child.stdout.pipe(gzip);
     child.on("close", (code) => {
-      if (code !== 0) {
-        gzip.destroy();
-        reject(new Error(`${pgDump} exited with ${code}: ${stderr.trim()}`));
-      }
+      exitCode = code ?? 1; // killed by a signal: no code, treat as failure
+      settle();
     });
     gzip.on("end", () => {
-      // 'end' only follows a clean pg_dump exit (a failure destroys the stream above).
-      resolve(Buffer.concat(chunks));
+      gzipEnded = true;
+      settle();
     });
   });
 }

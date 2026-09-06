@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import net from "node:net";
 import { gunzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { backupConfig, backupKey, backupKeyDate, dumpDatabase, isExpiredBackupKey, runBackup, type BackupConfig, type ObjectStore } from "./backup.js";
@@ -107,6 +108,15 @@ describe.runIf(dbUrl.includes("_test") && hasPgDump)("dumpDatabase (integration)
   });
 
   it("rejects with pg_dump's stderr when the database is unreachable", async () => {
-    await expect(dumpDatabase("postgres://postgres@127.0.0.1:1/nothing")).rejects.toThrow(/pg_dump exited with \d+: /);
+    // A port that was bound and released a moment ago: nothing listens, so the
+    // connection is refused everywhere (a fixed port may be live on a CI runner).
+    const server = net.createServer();
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as net.AddressInfo;
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+
+    const attempt = dumpDatabase(`postgres://postgres@127.0.0.1:${port}/nothing`);
+    await expect(attempt).rejects.toThrow(/pg_dump exited with \d+: /);
+    await expect(attempt).rejects.toThrow(/connection|refused|could not connect/i); // pg_dump's own stderr
   });
 });
