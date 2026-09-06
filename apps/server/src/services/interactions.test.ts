@@ -202,6 +202,23 @@ suite("the Interaction Pipeline (integration)", () => {
     expect((gift!.payload as { houseName: string }).houseName.length).toBeGreaterThan(0);
   });
 
+  it("daily inbound cap: a citizen can receive at most dailyInboundCap drachmae in gifts per day", async () => {
+    const cap = m.interactions.getInteractionsConfig().actions.give.dailyInboundCap;
+    expect(cap).toBe(2000);
+    const donor = await oligarch("Patron", 100_000);
+    const target = await createCharacter("Favourite");
+    const spare = await createCharacter("Bystander");
+    expect(await m.interactions.giveDrachmae(donor, target.id, cap)).toMatchObject({ ok: true });
+    const over = await m.interactions.giveDrachmae(donor, target.id, 1);
+    expect(over).toMatchObject({ ok: false, code: 409 });
+    expect(over.ok ? "" : over.error).toMatch(/already received all the gifts the city allows today \(2000 drachmae\)/);
+    expect((await freshRow(target.id)).drachmae).toBe(500 + cap); // the refused gift moved nothing
+    expect((await freshRow(donor.id)).drachmae).toBe(100_000 - cap);
+    expect(await interactionRows(target.id)).toHaveLength(1);
+    // Another citizen's day is their own.
+    expect(await m.interactions.giveDrachmae(donor, spare.id, 10)).toMatchObject({ ok: true });
+  });
+
   it("concurrent gives cannot overdraw the actor — the guarded decrement holds the floor", async () => {
     const donor = await oligarch("Kroisos", 100);
     const a = await createCharacter("AlphaHeir", { drachmae: 0 });
