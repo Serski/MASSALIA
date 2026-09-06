@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Queue, Worker, type Job } from "bullmq";
 import { BACKUP_JOB_NAME, BACKUP_SCHEDULE, runBackup } from "./jobs/backup.js";
 import { completionDelayMs, parseAgeConfig, parseAgendaFile, parseCalendarConfig, parseContractsContent, parseFamilyConfig, parsePoliticsConfig, parseTraitsFile, REAL_MS_PER_SEASON, type AgeConfig, type AgendaScope, type CalendarConfig, type ContractsContent, type FamilyConfig, type PoliticsConfig, type Trait } from "@massalia/shared";
-import { accrueLeagueCities, accrueTreasuries, advanceAgendaCycles, advanceElections, advanceOlympiads, closeDueChamberVotes, closeDueFestivals, deliverOlympicNominationToAll, drawFamilyCandidates, endDbPools, ensurePartyLeaders, fireFestivalsForAll, openAgendaCycleIfDue, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, sweepMercenaryContracts, sweepSpouseDeaths, type AgendaPools, type MercContractCfgMap } from "@massalia/db";
+import { accrueLeagueCities, accrueTreasuries, advanceAgendaCycles, advanceElections, advanceOlympiads, closeDueChamberVotes, closeDueFestivals, createDb, deleteExpiredSessions, deliverOlympicNominationToAll, drawFamilyCandidates, endDbPools, ensurePartyLeaders, fireFestivalsForAll, openAgendaCycleIfDue, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, sweepMercenaryContracts, sweepSpouseDeaths, type AgendaPools, type MercContractCfgMap } from "@massalia/db";
 
 const redisUrl = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
 const connection = {
@@ -100,6 +100,10 @@ const LEAGUE_DRIFT_SWEEP_MS = 60 * 60 * 1000;
 // next tick instead of wedging. This replaces the old "re-arm with a fixed jobId
 // at the end of the handler" pattern, which BullMQ dedupes against the still-active
 // job — so it NEVER re-fired, leaving every sweep running only once per boot.
+// The worker's own DB handle for sweeps that take one (created on first use).
+let _sweepDb: ReturnType<typeof createDb> | null = null;
+const sweepDb = () => (_sweepDb ??= createDb());
+
 // A sweep repeats either every N ms or on a cron pattern (BullMQ job scheduler).
 type Schedule = { every: number } | { pattern: string; tz?: string };
 type Sweep = { name: string; schedule: Schedule; run: () => Promise<string> };
@@ -196,6 +200,13 @@ const SWEEPS: Sweep[] = [
       const { grew, year } = await accrueLeagueCities(await calendarConfig());
       return `League-drift sweep: grew ${grew} cities into year ${year ?? "—"}`;
     },
+  },
+  {
+    // Reclaim expired session rows once a day (04:15 UTC, after the backup).
+    // Expired rows are already dead to auth; this keeps the table small.
+    name: "session-sweep",
+    schedule: { pattern: "15 4 * * *", tz: "UTC" },
+    run: async () => `Session sweep: deleted ${await deleteExpiredSessions(sweepDb())} expired session(s)`,
   },
   {
     // Nightly Postgres backup to the S3-compatible bucket (jobs/backup.ts), 03:30

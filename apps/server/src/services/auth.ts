@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { and, eq, gt, isNull } from "drizzle-orm";
-import { createDb, emailVerificationTokens, passwordResetTokens, sessions, users } from "@massalia/db";
+import { createDb, emailVerificationTokens, passwordResetTokens, pruneUserSessions, sessions, users } from "@massalia/db";
 
 export const sessionCookieName = "massalia_session";
 
@@ -163,10 +163,15 @@ export async function isEmailVerified(userId: string): Promise<boolean> {
 // Issue a session: store only the token's hash and hand the raw token to the
 // browser as the signed httpOnly cookie. Nothing is returned — the raw token never
 // leaves the cookie (the web app and API are same-site, so the cookie always flows).
+// Each login also prunes the user's older sessions down to MAX_SESSIONS_PER_USER
+// (newest kept), in the same transaction as the insert.
 export async function createSession(reply: FastifyReply, userId: string): Promise<void> {
   const token = createSessionToken();
   const expiresAt = new Date(Date.now() + sessionTtlMs);
-  await db.insert(sessions).values({ userId, tokenHash: hashToken(token), expiresAt });
+  await db.transaction(async (tx) => {
+    await tx.insert(sessions).values({ userId, tokenHash: hashToken(token), expiresAt });
+    await pruneUserSessions(tx, userId);
+  });
   reply.setCookie(sessionCookieName, token, getCookieOptions());
 }
 
