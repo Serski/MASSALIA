@@ -62,8 +62,10 @@ describe("Artemisia story content integrity (pure)", () => {
       const tree = parseStoryTree((JSON.parse(readFileSync(resolve(storiesDir, file), "utf8")) as { tree: unknown }).tree);
       for (const node of tree.nodes) {
         if (!node.image) continue;
-        // node.image is a "/content/…" URL path; the static route maps /content → <root>/content.
-        const physical = resolve(root, node.image.replace(/^\//, ""));
+        // node.image is a web-origin path ("/stories/<file>"): the art ships with the
+        // web build under apps/web/public, never through the API's /content/ mount.
+        expect(node.image, `${file}: image "${node.image}" must live under /stories/`).toMatch(/^\/stories\//);
+        const physical = resolve(root, "apps/web/public", node.image.replace(/^\//, ""));
         expect(existsSync(physical), `${file}: image "${node.image}" missing at ${physical}`).toBe(true);
         checked++;
       }

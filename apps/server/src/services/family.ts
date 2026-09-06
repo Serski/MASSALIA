@@ -248,9 +248,11 @@ function childStageFor(age: number, cfg: FamilyConfig): "infant" | "child" {
   return stage as "infant" | "child";
 }
 
+// Child portraits ship with the web build too (apps/web/public/portraits); the
+// config's "family/avatars/<file>" paths contribute only the file name.
 function childPortrait(sex: string, age: number, cfg: FamilyConfig): string {
   const set = sex === "male" ? cfg.children.portraits.boy : cfg.children.portraits.girl;
-  return `/content/${set[childStageFor(age, cfg)]}`;
+  return `/portraits/${set[childStageFor(age, cfg)].split("/").pop()}`;
 }
 
 // Children list (+ lazy coming-of-age) and the pending birth event (the newest

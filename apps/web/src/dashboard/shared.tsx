@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { contentUrl, type PlayerState, type FestivalLive, type OlympiadStatus } from "../api.js";
+import { webAssetUrl, type PlayerState, type FestivalLive, type OlympiadStatus } from "../api.js";
 import { assetPath, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 
@@ -117,7 +117,7 @@ export function playerFromState(state: PlayerState): PlayerDashboardView {
     faceImage: getFaceImage(profession.slug, state.character.faceId),
     currentAge: state.character.currentAge,
     lifeStage: state.character.lifeStage,
-    portrait: contentUrl(state.character.portrait),
+    portrait: webAssetUrl(state.character.portrait),
     deceased: state.character.deceased,
     decaying: state.character.decaying ?? [],
     festival: state.festival ?? null,
@@ -363,7 +363,7 @@ export function PersonFaceIcon() {
 // Mirrors ChildPortrait's graceful-fallback pattern so a missing/broken img never shows.
 export function PersonFace({ portrait }: { portrait?: string | null }) {
   const [ok, setOk] = useState(true);
-  const src = portrait ? contentUrl(portrait) : undefined;
+  const src = portrait ? webAssetUrl(portrait) : undefined;
   if (!src || !ok) return <PersonFaceIcon />;
   return <img src={src} alt="" loading="lazy" onError={() => setOk(false)} />;
 }

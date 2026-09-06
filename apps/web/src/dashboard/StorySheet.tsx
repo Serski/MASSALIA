@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, contentUrl, type StoryAdvanceView, type StoryChoiceView, type StoryNodeView, type StoryReward, type StoryStateView } from "../api.js";
+import { api, ApiError, webAssetUrl, type StoryAdvanceView, type StoryChoiceView, type StoryNodeView, type StoryReward, type StoryStateView } from "../api.js";
 import { BottomSheet } from "./sheets.js";
 import { DashboardCard, PanelBanner } from "./shared.js";
 
@@ -159,7 +159,7 @@ export default function StorySheet({
           ) : (
             <>
               {view.node.body.eyebrow ? <span className="dashboard-label event-kicker">{view.node.body.eyebrow}</span> : null}
-              {view.node.image ? <PanelBanner scene="" art={contentUrl(view.node.image)} /> : null}
+              {view.node.image ? <PanelBanner scene="" art={webAssetUrl(view.node.image)} /> : null}
               {view.node.body.paragraphs.map((paragraph, i) => (
                 <p key={i}>{paragraph}</p>
               ))}

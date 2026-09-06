@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { creationFacesForAge } from "@massalia/shared";
-import { api, apiErrorMessage, contentUrl, type AgeConfig } from "./api.js";
+import { api, apiErrorMessage, portraitUrl, type AgeConfig } from "./api.js";
 import { assetPath, nobleHouses, professions, type Alignment, type House, type Profession } from "./data/league.js";
 import "./characterCreation.css";
 
@@ -13,7 +13,7 @@ function signupStage(startAge: number): "young" | "prime" {
 }
 
 function avatarSignupImage(avatar: AgeAvatar): string | undefined {
-  return contentUrl(`/content/age/${avatar.portraits[signupStage(avatar.startAge)] ?? ""}`);
+  return portraitUrl(avatar.portraits[signupStage(avatar.startAge)]);
 }
 
 const STAT_LABELS: Record<string, string> = { prestige: "Prestige", devotion: "Devotion", militia: "Militia", intelligence: "Intelligence" };

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, contentUrl, type ChronicleEntry, type FamilyState, type FamilyCandidate, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type DivorceNotice, type TragedyNotice } from "../../api.js";
+import { api, ApiError, webAssetUrl, type ChronicleEntry, type FamilyState, type FamilyCandidate, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type DivorceNotice, type TragedyNotice } from "../../api.js";
 import { assetPath } from "../../data/league.js";
 import { DashboardCard, type FourStats, PanelBanner, type PanelProps, PersonFace, PersonRow, StatPips, festivalName, titleCase } from "../shared.js";
 
@@ -77,7 +77,7 @@ function penaltyText(candidate: MarriageCandidate): string | null {
 // placeholder art has no real PNG yet.
 function ChildPortrait({ child }: { child: FamilyChild }) {
   const [ok, setOk] = useState(true);
-  const src = contentUrl(child.portrait);
+  const src = webAssetUrl(child.portrait);
   if (!src || !ok) return <span className="child-av-fallback" aria-hidden="true">{child.name[0]}</span>;
   return <img src={src} alt="" loading="lazy" onError={() => setOk(false)} />;
 }

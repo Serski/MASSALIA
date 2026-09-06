@@ -31,9 +31,13 @@ export function getAgeConfig(): AgeConfig {
   return config;
 }
 
-// Public asset path for a portrait image (the static server mounts content/ at /content/).
+// Web-origin path for a portrait image. The files ship with the web build under
+// apps/web/public/portraits (served by Pages, cached by the browser), not from the
+// API; the config keeps its "avatars/<file>" paths and only the file name is used.
 export function portraitUrl(relativePath: string | null): string | null {
-  return relativePath ? `/content/age/${relativePath}` : null;
+  if (!relativePath) return null;
+  const file = relativePath.split("/").pop();
+  return file ? `/portraits/${file}` : null;
 }
 
 // Lazy old-age decay (mirrors composure's lazy recovery): accrue decay since

@@ -915,10 +915,18 @@ export type MarryResult = {
   party: string;
 };
 
-// Absolute URL for a content asset path returned by the API (e.g. a portrait).
-export function contentUrl(path: string | null | undefined): string | undefined {
+// URL for an image the API refers to by web-origin path (portraits under
+// /portraits/, story art under /stories/). Those files ship with the web build
+// (apps/web/public), so the path is used as-is on the page's own origin.
+export function webAssetUrl(path: string | null | undefined): string | undefined {
   if (!path) return undefined;
-  return `${apiBaseUrl}${path.startsWith("/") ? path : `/${path}`}`;
+  return path.startsWith("/") ? path : `/${path}`;
+}
+
+// Same-origin URL for a portrait named by an age-config path ("avatars/<file>").
+export function portraitUrl(configPath: string | null | undefined): string | undefined {
+  const file = configPath?.split("/").pop();
+  return file ? `/portraits/${file}` : undefined;
 }
 
 // --- Daily Routines (proactive half of the daily loop) ---------------------

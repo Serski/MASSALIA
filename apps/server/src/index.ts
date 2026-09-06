@@ -78,9 +78,12 @@ await app.register(cookie, { secret: sessionSecret });
 // Global limiter (rateLimit.ts): after cookie (the key reads the session), before
 // every route (its onRoute hook budgets /api/ mutations). /content/ is exempt.
 await registerRateLimit(app);
+// Only the JSON content is served by the API; images (portraits, story art) ship
+// with the web build under apps/web/public and never pass through this process.
 await app.register(fastifyStatic, {
   root: path.join(repoRoot, "content"),
   prefix: "/content/",
+  allowedPath: (pathName) => pathName.endsWith(".json"),
 });
 // Validate content JSON at boot — fail fast on a malformed file.
 await loadTraitDefs();
