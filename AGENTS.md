@@ -44,6 +44,19 @@ pnpm dev:web                    # Vite on :5174
 - The worker's backup test runs the real `pg_dump` against that database when the binary is on `PATH`; `PG_DUMP=/path/to/pg_dump` overrides it.
 - Route tests build a minimal Fastify app with `@fastify/cookie` and `app.inject()`; mint a session by inserting the sha256 of a raw token into `sessions` and sending `cookie: massalia_session=${app.signCookie(raw)}`.
 
+## Admin tooling
+
+- The admin API lives under `/admin/*` (`apps/server/src/routes/admin.ts`): `requireAdmin` needs a valid, unbanned session whose user has `is_admin`; every call — reads included — writes an `admin_audit` row. The web page is `/admin` (`apps/web/src/AdminPage.tsx`): user search, the same-IP cluster view (users sharing a register/login IP in the last 30 days, from `auth_events`), ban/unban with a reason, delete sessions, adjust drachmae (relative, under the player lock, logged to `effect_log`), rename (same sanitiser and uniqueness as creation), and a character's `effect_log` / `interactions`.
+- **Making an admin** is manual and needs the database URL — there is no API for it on purpose:
+
+  ```bash
+  DATABASE_URL=postgres://… pnpm --filter @massalia/db exec tsx ../../scripts/make-admin.ts you@example.com
+  # add --revoke to remove the flag
+  ```
+
+  For production, run it through `railway run` (or against a `railway connect` tunnel) with the Postgres service's URL.
+- Bans: `users.banned_at` + `ban_reason`. A banned user's sessions no longer authenticate (401 everywhere), login answers 403 with the reason, and `/auth/me` answers 403 with the reason so the client can show it.
+
 ## Commit discipline
 
 - One item per commit. Stage only that item's files with `git add <path>`; never `git add -A` and never `git rm` ahead of the commit that removes the last import — a staged deletion rides along in whatever commit comes next.
