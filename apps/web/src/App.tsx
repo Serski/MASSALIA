@@ -6,6 +6,10 @@ import { Dashboard } from "./dashboard/Dashboard.js";
 import { World2Map } from "./map/World2Map.js";
 import { assetPath, nobleHouses, professions, type Alignment, type House, type Profession } from "./data/league.js";
 
+// Social sign-in (Discord / Google / Facebook) has no OAuth wiring yet. The buttons
+// render only when VITE_SOCIAL_LOGIN=true at build time — unset in production.
+const SOCIAL_LOGIN_ENABLED = import.meta.env.VITE_SOCIAL_LOGIN === "true";
+
 type DetailKind = "profession" | "house" | "party" | "city";
 type AuthMode = "login" | "signup";
 
@@ -223,11 +227,6 @@ function AuthPanel({
     }
   }
 
-  function handleSocial(provider: string) {
-    // TODO: Confirm final OAuth provider list and redirect/callback URLs before wiring OAuth.
-    setMessage(`TODO: ${provider} OAuth is not connected yet.`);
-  }
-
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (!isModal) {
       return;
@@ -324,16 +323,20 @@ function AuthPanel({
             </form>
           ) : (
             <>
-              <div className="auth-social-row" aria-label="Social sign in">
-                {["Discord", "Google", "Facebook"].map((provider) => (
-                  <button key={provider} type="button" onClick={() => handleSocial(provider)}>
-                    <span aria-hidden="true">{provider[0]}</span>
-                    {provider}
-                  </button>
-                ))}
-              </div>
+              {SOCIAL_LOGIN_ENABLED ? (
+                <>
+                  <div className="auth-social-row" aria-label="Social sign in">
+                    {["Discord", "Google", "Facebook"].map((provider) => (
+                      <button key={provider} type="button" disabled title="Not connected yet">
+                        <span aria-hidden="true">{provider[0]}</span>
+                        {provider}
+                      </button>
+                    ))}
+                  </div>
 
-              <div className="auth-divider"><span>or</span></div>
+                  <div className="auth-divider"><span>or</span></div>
+                </>
+              ) : null}
 
               <form className="auth-form" onSubmit={handleSubmit}>
                 <label>
