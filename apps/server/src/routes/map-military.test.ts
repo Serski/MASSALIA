@@ -70,7 +70,7 @@ suite("GET /api/map/military (integration)", () => {
   // reaches the content-config-dependent creation path.
   async function freshPlayer() {
     const user = (await db.insert(m.dbPkg.users).values({ email: `u-${crypto.randomUUID()}@t`, passwordHash: "x" }).returning())[0]!;
-    const player = (await db.insert(m.dbPkg.players).values({ worldId, userId: user.id, name: "P", color: "#123456" }).returning())[0]!;
+    const player = (await db.insert(m.dbPkg.players).values({ worldId, userId: user.id, name: `P-${crypto.randomUUID().slice(0, 8)}`, color: "#123456" }).returning())[0]!;
     const dynasty = (await db.insert(m.dbPkg.dynasties).values({ worldId, name: "House Test" }).returning())[0]!;
     await db.insert(m.dbPkg.playerCharacters).values({ playerId: player.id, worldId, dynastyId: dynasty.id, houseSlug: "test-house", classId: "trader" });
     const raw = crypto.randomBytes(32).toString("base64url");

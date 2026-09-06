@@ -44,9 +44,12 @@ export function apiErrorMessage(error: unknown, context: "auth" | "creation" = "
       return error.message;
     }
     if (error.status === 409) {
-      return context === "creation"
-        ? "That email is already registered. Log in with it, then return to character creation."
-        : "That email is already registered. Try logging in instead.";
+      if (context === "creation") {
+        // Creation conflicts carry their own friendly copy (name taken, already
+        // has a character); only the email clash keeps the log-in hint.
+        return /email/i.test(error.message) ? "That email is already registered. Log in with it, then return to character creation." : error.message;
+      }
+      return "That email is already registered. Try logging in instead.";
     }
     if (error.status >= 500) {
       return "The server hit a problem. Try again in a moment.";

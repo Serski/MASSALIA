@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   characters,
   createDb,
@@ -10,7 +10,7 @@ import {
   resources,
   worlds,
 } from "@massalia/db";
-import { avatarById, type ClassId } from "@massalia/shared";
+import { avatarById, hasLetter, sanitizeDisplayName, type ClassId } from "@massalia/shared";
 import { requireAuth } from "../services/auth.js";
 import { createCharacterRow, grantStartingPackage } from "../services/character.js";
 import { getAgeConfig } from "../services/age.js";
@@ -39,9 +39,17 @@ const classResourceByProfession: Record<string, string | null> = {
   slave: "freedom",
 };
 
-function sanitizeName(name: unknown) {
-  if (typeof name !== "string") return "";
-  return name.trim().replace(/\s+/g, " ").slice(0, 64);
+// Character names: sanitised (control / zero-width / bidi characters stripped,
+// whitespace collapsed, 64 chars) and required to carry at least one letter;
+// unique per world case-insensitively among active players (migration 0050).
+const NAME_NEEDS_LETTER = "A character name needs at least one letter.";
+const NAME_TAKEN = "That name is already taken in this world. Choose another.";
+
+// A unique-index violation on the name index (drizzle wraps the pg error as `cause`).
+function isNameConflict(error: unknown): boolean {
+  const cause = (error as { cause?: unknown })?.cause ?? error;
+  const pgError = cause as { code?: string; constraint?: string } | undefined;
+  return pgError?.code === "23505" && pgError.constraint === "players_name_world_lower_idx";
 }
 
 function faceFromPayload(payload: CharacterPayload) {
@@ -84,11 +92,15 @@ export async function characterRoutes(app: FastifyInstance) {
   app.post("/", async (request, reply) => {
     const user = await requireAuth(request);
     const payload = request.body as CharacterPayload;
-    const name = sanitizeName(payload.name);
+    const name = sanitizeDisplayName(payload.name);
     const faceId = faceFromPayload(payload);
     if (!name || !faceId) {
       reply.code(400);
       return { error: "Character name and face are required." };
+    }
+    if (!hasLetter(name)) {
+      reply.code(400);
+      return { error: NAME_NEEDS_LETTER };
     }
     // Age pack: the avatar must be one of the configured age avatars (it fixes
     // the start age 20/30 and the start bonus).
@@ -108,8 +120,20 @@ export async function characterRoutes(app: FastifyInstance) {
       reply.code(409);
       return { error: "You already have an active character in this world." };
     }
+    // Friendly pre-check; the unique index inside the transaction is the guarantee.
+    const taken = await db
+      .select({ id: players.id })
+      .from(players)
+      .where(and(eq(players.worldId, world.id), eq(players.isActive, true), sql`lower(${players.name}) = lower(${name})`))
+      .limit(1);
+    if (taken[0]) {
+      reply.code(409);
+      return { error: NAME_TAKEN };
+    }
 
-    const result = await db.transaction(async (tx) => {
+    let result;
+    try {
+      result = await db.transaction(async (tx) => {
       const dynasty = (await tx.insert(dynasties).values({ worldId: world.id, name: `${name} Household`, prestige: 0 }).returning())[0]!;
       const player = (await tx
         .insert(players)
@@ -164,7 +188,14 @@ export async function characterRoutes(app: FastifyInstance) {
       await grantStartingPackage(tx, player.id, world.id, profession.slug as ClassId);
 
       return { player, character };
-    });
+      });
+    } catch (error) {
+      if (isNameConflict(error)) {
+        reply.code(409);
+        return { error: NAME_TAKEN };
+      }
+      throw error;
+    }
 
     // Provision the canonical character sheet (stats, ideology, party, currency,
     // age) so /api/character and the HUD work immediately. The chosen avatar

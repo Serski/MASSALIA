@@ -23,6 +23,7 @@ import { getComposureConfig } from "./composure.js";
 import { getHeldTraits } from "./traits.js";
 import { releaseSeatOf } from "./oligarchy.js";
 import { broadcastState } from "./worldState.js";
+import { uniquePlayerName } from "./playerNames.js";
 import { lockPlayer, type DbTx } from "./lock.js";
 
 const db = createDb();
@@ -107,9 +108,13 @@ async function becomeHeirInTx(
   recordKind: "blood" | "adopted" | "regent_handoff" | "fresh" | null,
   now: Date,
   removeChildId?: string,
-): Promise<void> {
+): Promise<string> {
   const ageCfg = getAgeConfig();
   const startingComposure = getComposureConfig().startingComposure ?? 70;
+  // The heir's name as it will appear on the player row: names are unique per
+  // world among active players, so a clash with another house is disambiguated
+  // ("Kleon II") rather than failing the succession.
+  const heirName = await uniquePlayerName(tx, slot.worldId, heir.name, slot.playerId);
 
   if (recordKind && slot.dynastyId) {
     const fromName = await playerName(slot.playerId);
@@ -128,7 +133,7 @@ async function becomeHeirInTx(
       kind: recordKind,
       fromName,
       fromAge,
-      toName: heir.name,
+      toName: heirName,
       // Hoplite Step 4: a glorious merc death stashed its chronicle line here; carry
       // it into the dynasty ledger. Null for old-age / other handoffs.
       note: slot.pendingDeathNote ?? null,
@@ -136,7 +141,7 @@ async function becomeHeirInTx(
     });
   }
 
-  await tx.update(players).set({ name: heir.name, faceId: heir.avatarId }).where(eq(players.id, slot.playerId));
+  await tx.update(players).set({ name: heirName, faceId: heir.avatarId }).where(eq(players.id, slot.playerId));
 
   const updates: Partial<typeof playerCharacters.$inferInsert> = {
     status: "alive",
@@ -168,6 +173,7 @@ async function becomeHeirInTx(
   await tx.update(playerCharacters).set(updates).where(eq(playerCharacters.id, slot.id));
 
   if (removeChildId) await tx.delete(children).where(eq(children.id, removeChildId));
+  return heirName;
 }
 
 async function becomeHeir(
@@ -176,12 +182,13 @@ async function becomeHeir(
   recordKind: Parameters<typeof becomeHeirInTx>[3],
   now: Date,
   removeChildId?: string,
-): Promise<void> {
-  await db.transaction(async (tx) => {
+): Promise<string> {
+  const heirName = await db.transaction(async (tx) => {
     await lockPlayer(tx, slot.playerId);
-    await becomeHeirInTx(tx, slot, heir, recordKind, now, removeChildId);
+    return becomeHeirInTx(tx, slot, heir, recordKind, now, removeChildId);
   });
   await broadcastState();
+  return heirName;
 }
 
 // Generate one adult successor draft (used for the auto-regent), aged in
@@ -316,8 +323,8 @@ export async function resolveSuccession(row: CharacterRow, candidateId: string |
   if (plan.kind === "blood") {
     const heir = kids.find((k) => k.id === plan.heirChildId)!;
     const stats = inheritance(dead, "blood", cfg, { rng: Math.random });
-    await becomeHeir(row, { name: heir.name, sex: heir.sex, age: cfg.succession.heirStartAge, avatarId: randomAdultAvatar(heir.sex), stats }, "blood", now, heir.id);
-    return { ok: true, heirName: heir.name, kind: "blood" };
+    const heirName = await becomeHeir(row, { name: heir.name, sex: heir.sex, age: cfg.succession.heirStartAge, avatarId: randomAdultAvatar(heir.sex), stats }, "blood", now, heir.id);
+    return { ok: true, heirName, kind: "blood" };
   }
 
   if (plan.kind === "adopted") {
@@ -366,8 +373,8 @@ export async function resolveSuccession(row: CharacterRow, candidateId: string |
     militia: r.militia[0] + Math.floor(Math.random() * (r.militia[1] - r.militia[0] + 1)),
     intelligence: r.intelligence[0] + Math.floor(Math.random() * (r.intelligence[1] - r.intelligence[0] + 1)),
   };
-  await becomeHeir(row, { name, sex: row.sex as Sex, age: cfg.succession.heirStartAge, avatarId: randomAdultAvatar(row.sex as Sex), stats: fresh, drachmae: 10, isCouncilor: false }, "fresh", now);
-  return { ok: true, heirName: name, kind: "fresh" };
+  const heirName = await becomeHeir(row, { name, sex: row.sex as Sex, age: cfg.succession.heirStartAge, avatarId: randomAdultAvatar(row.sex as Sex), stats: fresh, drachmae: 10, isCouncilor: false }, "fresh", now);
+  return { ok: true, heirName, kind: "fresh" };
 }
 
 async function applyAdoptedHeir(row: CharacterRow, cand: CandidateRow, now: Date, kind: "adopted"): Promise<void> {

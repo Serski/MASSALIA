@@ -47,7 +47,8 @@ suite("Ledger / building engine (integration)", () => {
   ) {
     const { users, players, playerCharacters, playerPops, resources } = m.dbPkg;
     const user = (await db.insert(users).values({ email: `u-${Math.random().toString(36).slice(2)}@t`, passwordHash: "x" }).returning())[0]!;
-    const player = (await db.insert(players).values({ worldId, userId: user.id, name: "P", color: "#123456", houseSlug: "test-house" }).returning())[0]!;
+    // Player names are unique per world (0050): one fresh name per fixture.
+    const player = (await db.insert(players).values({ worldId, userId: user.id, name: `P-${Math.random().toString(36).slice(2, 8)}`, color: "#123456", houseSlug: "test-house" }).returning())[0]!;
     await db.insert(playerCharacters).values({ playerId: player.id, worldId, houseSlug: "test-house", classId, drachmae, startAge: 30, deathAge: 90 });
     for (const [popType, count] of Object.entries(pops)) {
       if (count > 0) await db.insert(playerPops).values({ worldId, ownerPlayerId: player.id, popType, count });
@@ -588,7 +589,7 @@ suite("Ledger / building engine (integration)", () => {
   it("(pkg) the free-class starting package grants 10 wheat + 1 slave; a slave-class character gets nothing", async () => {
     const bare = async () => {
       const u = (await db.insert(m.dbPkg.users).values({ email: `pkg-${Math.random().toString(36).slice(2)}@t`, passwordHash: "x" }).returning())[0]!;
-      return (await db.insert(m.dbPkg.players).values({ worldId, userId: u.id, name: "P", color: "#123456", houseSlug: "test-house" }).returning())[0]!.id;
+      return (await db.insert(m.dbPkg.players).values({ worldId, userId: u.id, name: `P-${Math.random().toString(36).slice(2, 8)}`, color: "#123456", houseSlug: "test-house" }).returning())[0]!.id;
     };
     const grainOf = async (pid: string) => Number((await db.select().from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scopeId, pid), eq(m.dbPkg.resources.type, "grain"))).limit(1))[0]?.amount ?? 0);
     const slaveOf = async (pid: string) => (await db.select().from(m.dbPkg.playerPops).where(and(eq(m.dbPkg.playerPops.ownerPlayerId, pid), eq(m.dbPkg.playerPops.popType, "slave"))).limit(1))[0]?.count ?? 0;

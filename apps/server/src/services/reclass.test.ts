@@ -34,7 +34,7 @@ suite("Hoplite re-class (integration)", () => {
   async function makeChar(opts: { classId?: string; wasHoplite?: boolean; wounded?: boolean; startAge?: number; drachmae?: number; isCouncilor?: boolean; prestige?: number; militia?: number; armyRank?: string; status?: string; contractId?: string } = {}) {
     const { users, players, playerCharacters, dynasties, characterTraits } = m.dbPkg;
     const user = (await db.insert(users).values({ email: `u-${Math.random().toString(36).slice(2)}@t`, passwordHash: "x" }).returning())[0]!;
-    const player = (await db.insert(players).values({ worldId, userId: user.id, name: "Agis", color: "#123456", houseSlug: "test-house" }).returning())[0]!;
+    const player = (await db.insert(players).values({ worldId, userId: user.id, name: `Agis-${Math.random().toString(36).slice(2, 8)}`, color: "#123456", houseSlug: "test-house" }).returning())[0]!;
     const dynasty = (await db.insert(dynasties).values({ worldId, name: "House Test", prestige: 0, houseSlug: "test-house", foundingPlayerId: player.id, generation: 1 }).returning())[0]!;
     const c = (await db
       .insert(playerCharacters)

@@ -34,7 +34,8 @@ suite("livingSpousePersonalityTraits (integration)", () => {
   async function createCharacter(name: string, classId = "landowner") {
     const { users, players, playerCharacters } = m.dbPkg;
     const user = (await db.insert(users).values({ email: `${name}-${Math.random().toString(36).slice(2)}@test`, passwordHash: "x" }).returning())[0]!;
-    const player = (await db.insert(players).values({ worldId, userId: user.id, name, color: "#123456" }).returning())[0]!;
+    // Player names are unique per world (0050); the suite reuses names across tests.
+    const player = (await db.insert(players).values({ worldId, userId: user.id, name: `${name}-${Math.random().toString(36).slice(2, 8)}`, color: "#123456" }).returning())[0]!;
     return (
       await db.insert(playerCharacters).values({ playerId: player.id, worldId, houseSlug: "test-house", classId, startAge: 30, deathAge: 90 }).returning()
     )[0]!;
@@ -960,7 +961,7 @@ suite("livingSpousePersonalityTraits (integration)", () => {
 
       const c = await createCharacter("Scandalous");
       await db.insert(m.dbPkg.characterTraits).values({ characterId: c.id, traitId: "notorious-divorcer", gainedAt: now });
-      expect(await m.family.scandalHeadline(now)).toEqual({ name: "Scandalous" }); // fresh
+      expect((await m.family.scandalHeadline(now))?.name).toMatch(/^Scandalous/); // fresh (fixture names carry a unique suffix)
 
       await db.update(m.dbPkg.characterTraits).set({ gainedAt: new Date(now.getTime() - 2 * REAL_MS_PER_SEASON) })
         .where(and(eq(m.dbPkg.characterTraits.characterId, c.id), eq(m.dbPkg.characterTraits.traitId, "notorious-divorcer")));
