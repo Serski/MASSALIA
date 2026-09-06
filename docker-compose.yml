@@ -1,32 +1,21 @@
+# Local Postgres + Redis for development and the DB-gated test suites.
+#   docker compose up -d
+#   DATABASE_URL=postgres://postgres:postgres@localhost:5432/massalia (see .env.example)
+# Postgres 18 matches production; the CI runner uses postgres:16.
 services:
   postgres:
-    image: postgres:16
+    image: postgres:18
     environment:
-      POSTGRES_DB: massalia
-      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: massalia
     ports:
       - "5432:5432"
     volumes:
-      - massalia-postgres:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d massalia"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
+      - massalia-pg:/var/lib/postgresql
   redis:
     image: redis:7
     ports:
       - "6379:6379"
-    volumes:
-      - massalia-redis:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
 
 volumes:
-  massalia-postgres:
-  massalia-redis:
+  massalia-pg:
