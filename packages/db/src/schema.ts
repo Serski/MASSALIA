@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { boolean, check, date, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, date, index, inet, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const worlds = pgTable("worlds", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -22,6 +22,12 @@ export const users = pgTable("users", {
   // Account deletion (anonymize-and-detach): set at deletion time alongside the
   // scrubbed email/passwordHash; NULL for every live account (login/auth gate on it).
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  // Admin tooling (migration 0051): the admin flag (set by scripts/make-admin.ts),
+  // and a ban — a banned user's sessions stop authenticating and login is refused
+  // with the reason.
+  isAdmin: boolean("is_admin").notNull().default(false),
+  bannedAt: timestamp("banned_at", { withTimezone: true }),
+  banReason: text("ban_reason"),
 });
 
 export const sessions = pgTable("sessions", {
@@ -30,7 +36,46 @@ export const sessions = pgTable("sessions", {
   tokenHash: text("token_hash").notNull().unique(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  // Where the session was opened from (migration 0051).
+  ip: inet("ip"),
+  userAgent: text("user_agent"),
 });
+
+// One row per register / login / reset / verify (migration 0051): the raw
+// material for the admin same-IP cluster view.
+export const AUTH_EVENT_KINDS = ["register", "login", "reset", "verify"] as const;
+export type AuthEventKind = (typeof AUTH_EVENT_KINDS)[number];
+export const authEvents = pgTable(
+  "auth_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").references(() => users.id).notNull(),
+    kind: text("kind").$type<AuthEventKind>().notNull(),
+    ip: inet("ip"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    byIp: index("auth_events_ip_created_idx").on(table.ip, table.createdAt),
+    byUser: index("auth_events_user_created_idx").on(table.userId, table.createdAt),
+  }),
+);
+
+// One row per admin API call (migration 0051): who did what to whom.
+export const adminAudit = pgTable(
+  "admin_audit",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    adminUserId: uuid("admin_user_id").references(() => users.id).notNull(),
+    action: text("action").notNull(),
+    targetUserId: uuid("target_user_id").references(() => users.id),
+    detail: jsonb("detail").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    byCreated: index("admin_audit_created_idx").on(table.createdAt),
+  }),
+);
 
 // Password reset tokens (see migration 0045). Mirrors the session-token discipline:
 // only the SHA-256 hash of the raw token is stored. 60-min TTL, newest-only,
