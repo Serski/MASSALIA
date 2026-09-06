@@ -73,7 +73,9 @@ export const interactionsConfigSchema = z
     // in-fiction lock copy calls this "two seasons".
     hostileCooldownHours: z.number().positive(),
     actions: z.object({
-      give: interactionActionSchema,
+      // dailyInboundCap: the most drachmae one character may RECEIVE in gifts per
+      // UTC day, summed over the day's give rows (anti multi-account funnelling).
+      give: interactionActionSchema.extend({ dailyInboundCap: z.number().int().positive().default(2000) }),
       poison: poisonActionSchema,
       assassinate: assassinateActionSchema,
     }),

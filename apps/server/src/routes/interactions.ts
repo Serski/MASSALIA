@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { requireAuth } from "../services/auth.js";
+import { isEmailVerified, requireAuth } from "../services/auth.js";
 import { ensureCharacterRow, getActivePlayer, getActiveWorldId, type CharacterRow } from "../services/character.js";
 import { assassinateAttempt, giveDrachmae, poisonAttempt, publicProfile, setSpymasterPosture, treat } from "../services/interactions.js";
 
@@ -42,6 +42,11 @@ export async function interactionRoutes(app: FastifyInstance) {
   // Send drachmae to another citizen (the first player→player action).
   app.post("/give", async (request, reply) => {
     const user = await requireAuth(request);
+    // Anti multi-account: drachmae only move between verified accounts.
+    if (!(await isEmailVerified(user.id))) {
+      reply.code(403);
+      return { error: "Verify your email before sending drachmae." };
+    }
     const acting = await actingRow(user.id);
     if ("error" in acting) {
       reply.code(acting.code);

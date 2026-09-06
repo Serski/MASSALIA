@@ -11,7 +11,7 @@ import {
   worlds,
 } from "@massalia/db";
 import { avatarById, hasLetter, sanitizeDisplayName, type ClassId } from "@massalia/shared";
-import { requireAuth } from "../services/auth.js";
+import { isEmailVerified, requireAuth } from "../services/auth.js";
 import { createCharacterRow, grantStartingPackage } from "../services/character.js";
 import { getAgeConfig } from "../services/age.js";
 
@@ -91,6 +91,12 @@ async function assertCatalog(payload: CharacterPayload) {
 export async function characterRoutes(app: FastifyInstance) {
   app.post("/", async (request, reply) => {
     const user = await requireAuth(request);
+    // Anti multi-account: a character (and the wallet, seat and gifts that come
+    // with it) needs a verified address. Checked before anything else is read.
+    if (!(await isEmailVerified(user.id))) {
+      reply.code(403);
+      return { error: "Verify your email before creating a character." };
+    }
     const payload = request.body as CharacterPayload;
     const name = sanitizeDisplayName(payload.name);
     const faceId = faceFromPayload(payload);

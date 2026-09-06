@@ -208,6 +208,8 @@ async function hostileCooldownRemainingMs(actorId: string, targetId: string, now
 
 // --- Give drachmae (Interaction Pipeline, Prompt 1) --------------------------
 
+const giftCapMessage = (cap: number) => `That citizen has already received all the gifts the city allows today (${cap} drachmae). Try again tomorrow.`;
+
 export type GiveResult =
   | { ok: false; code: number; error: string }
   | { ok: true; amount: number; wallet: number };
@@ -228,7 +230,7 @@ export async function giveDrachmae(actorRow: CharacterRow, targetCharacterId: st
   }
 
   const targetRows = await db
-    .select({ id: playerCharacters.id, worldId: playerCharacters.worldId, status: playerCharacters.status })
+    .select({ id: playerCharacters.id, playerId: playerCharacters.playerId, worldId: playerCharacters.worldId, status: playerCharacters.status })
     .from(playerCharacters)
     .where(eq(playerCharacters.id, targetCharacterId))
     .limit(1);
@@ -243,6 +245,27 @@ export async function giveDrachmae(actorRow: CharacterRow, targetCharacterId: st
   let wallet: number;
   try {
     wallet = await db.transaction(async (tx) => {
+      // Both wallets move, so both players are locked — always in id order, so two
+      // opposite gifts in flight can never deadlock.
+      for (const playerId of [actorRow.playerId, target.playerId].sort()) await lockPlayer(tx, playerId);
+
+      // Daily inbound cap (anti multi-account funnelling): what the target has
+      // already received today (UTC), summed over the day's give rows, plus this
+      // gift must stay within dailyInboundCap. Read under the target's lock, so
+      // concurrent gifts to one citizen cannot slip past the cap together.
+      const received = await tx
+        .select({ total: sql<string>`coalesce(sum((${interactions.payload}->>'amount')::int), 0)` })
+        .from(interactions)
+        .where(
+          and(
+            eq(interactions.targetCharacterId, targetCharacterId),
+            eq(interactions.type, "give"),
+            sql`${interactions.createdAt} >= date_trunc('day', now() at time zone 'utc') at time zone 'utc'`,
+          ),
+        );
+      const todaySoFar = Number(received[0]?.total ?? 0);
+      if (todaySoFar + amount > give.dailyInboundCap) throw new Error("inbound_cap");
+
       // Conditional deduction: re-checks the balance (and liveness) inside the
       // transaction, so two concurrent gifts can never overdraw the actor.
       const paid = await tx
@@ -274,6 +297,7 @@ export async function giveDrachmae(actorRow: CharacterRow, targetCharacterId: st
     const message = (error as Error).message;
     if (message === "cannot_afford") return { ok: false, code: 409, error: "You cannot afford that gift." };
     if (message === "target_gone") return { ok: false, code: 409, error: LOCK_DEAD };
+    if (message === "inbound_cap") return { ok: false, code: 409, error: giftCapMessage(give.dailyInboundCap) };
     throw error;
   }
 
