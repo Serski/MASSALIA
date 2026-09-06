@@ -690,4 +690,82 @@ suite("the Interaction Pipeline (integration)", () => {
     expect(profile!.viewer.poisonLockReason).toMatch(/two seasons/);
     expect(profile!.viewer.assassinateLockReason).toMatch(/two seasons/);
   });
+
+  // --- Concurrency: the hostile gate + spend are ONE step under the actor's lock ---
+  // Two attempts fired together both pass the early (unlocked) cooldown read; inside
+  // the transaction the second re-reads the cooldown after the first committed its
+  // ledger row and is refused — and a refusal spends nothing.
+  type HostileResult = { ok: true; outcome: string } | { ok: false; code: number; error: string };
+  function expectOneAttemptOneCooldown(results: HostileResult[]) {
+    const accepted = results.filter((r) => r.ok);
+    const refused = results.filter((r): r is { ok: false; code: number; error: string } => !r.ok);
+    expect(accepted).toHaveLength(1);
+    expect(refused).toHaveLength(1);
+    expect(refused[0]).toMatchObject({ code: 429 });
+    expect(refused[0]!.error).toMatch(/two seasons/);
+  }
+
+  it("(race) two parallel assassinations: one commits, the other is the 429 cooldown, one blade paid, one row", async () => {
+    const actor = await oligarch("TwinBlades", 500);
+    const target = await standingTarget("MarkedTwice");
+    const results = await Promise.all([
+      m.interactions.assassinateAttempt(actor, target.id, new Date(), forceFail),
+      m.interactions.assassinateAttempt(actor, target.id, new Date(), forceFail),
+    ]);
+    expectOneAttemptOneCooldown(results);
+    expect((await freshRow(actor.id)).drachmae).toBe(300); // 500 − ONE 200 blade
+    expect(await interactionRows(target.id)).toHaveLength(1);
+  });
+
+  it("(race) two parallel poisons: one commits, the other is the 429 cooldown, one vial spent, one row", async () => {
+    const actor = await oligarch("TwinVials", 0);
+    await seedResource(actor.playerId, "poison", 2);
+    const target = await standingTarget("DosedTwice");
+    const results = await Promise.all([
+      m.interactions.poisonAttempt(actor, target.id, new Date(), forceFail),
+      m.interactions.poisonAttempt(actor, target.id, new Date(), forceFail),
+    ]);
+    expectOneAttemptOneCooldown(results);
+    expect(await resourceAmount(actor.playerId, "poison")).toBe(1); // ONE vial spent
+    expect(await interactionRows(target.id)).toHaveLength(1);
+  });
+
+  it("(race) a poison and an assassination in parallel on the same target: exactly one commits and only its price is paid", async () => {
+    const actor = await oligarch("Mixed", 500);
+    await seedResource(actor.playerId, "poison", 1);
+    const target = await standingTarget("MixedMark");
+    const [poison, blade] = await Promise.all([
+      m.interactions.poisonAttempt(actor, target.id, new Date(), forceFail),
+      m.interactions.assassinateAttempt(actor, target.id, new Date(), forceFail),
+    ]);
+    expectOneAttemptOneCooldown([poison, blade]);
+    const rows = await interactionRows(target.id);
+    expect(rows).toHaveLength(1);
+    const wallet = (await freshRow(actor.id)).drachmae;
+    const vials = await resourceAmount(actor.playerId, "poison");
+    if (poison.ok) {
+      expect(rows[0]!.type).toBe("poison");
+      expect(vials).toBe(0); // the vial went...
+      expect(wallet).toBe(500); // ...and the blade was never paid
+    } else {
+      expect(rows[0]!.type).toBe("assassinate");
+      expect(wallet).toBe(300); // the blade was paid...
+      expect(vials).toBe(1); // ...and the vial stayed
+    }
+  });
+
+  it("(race) two parallel posture switches: one commits, the other hits the cooldown, one changed_at written", async () => {
+    const { playerCharacters } = m.dbPkg;
+    const actor = await seatedActor("TwoWebs", { drachmae: 0 }); // posture 'guard', changed_at NULL
+    await seedSpymaster(actor.playerId);
+    const at = new Date();
+    const results = await Promise.all([m.interactions.setSpymasterPosture(actor, "hunt", at), m.interactions.setSpymasterPosture(actor, "hunt", at)]);
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    const refused = results.find((r) => !r.ok);
+    expect(refused).toMatchObject({ ok: false, code: 409 });
+    expect(refused && !refused.ok ? refused.error : "").toMatch(/needs a season|already keeps/);
+    const after = (await db.select().from(playerCharacters).where(eq(playerCharacters.id, actor.id)).limit(1))[0]!;
+    expect(after.spymasterPosture).toBe("hunt");
+    expect(after.spymasterPostureChangedAt?.getTime()).toBe(at.getTime());
+  });
 });

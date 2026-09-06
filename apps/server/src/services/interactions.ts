@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
-import { characterTraits, createDb, houses, interactions, players, playerCharacters, resources } from "@massalia/db";
+import { characterTraits, createDb, houses, interactions, players, playerCharacters, resources, type DbExec } from "@massalia/db";
 import { assassinateSuccessChance, currentAge, effectiveStats, parseInteractionsConfig, poisonSuccessChance, type CharacterStats, type InteractionsConfig } from "@massalia/shared";
 import type { CharacterRow } from "./character.js";
 import { getAgeConfig } from "./age.js";
@@ -10,6 +10,7 @@ import { seatOf } from "./oligarchy.js";
 import { getHeldTraits } from "./traits.js";
 import { buildingContext, settledPopCount, type ActingContext } from "./buildings.js";
 import { enforceDeathAndHandoff } from "./succession.js";
+import { lockPlayer } from "./lock.js";
 import { broadcastState } from "./worldState.js";
 
 const POISON_TRAIT = "poisoned";
@@ -178,8 +179,8 @@ export async function publicProfile(viewerRow: CharacterRow, characterId: string
 // The whole-unit amount of a player-scoped resource (e.g. poison, remedy) a player
 // holds. Resources are keyed by (scope='player', scopeId=playerId, type); the
 // balance is a numeric string floored to an integer for the gate checks.
-async function heldResourceAmount(playerId: string, type: string): Promise<number> {
-  const rows = await db
+async function heldResourceAmount(playerId: string, type: string, exec: DbExec = db): Promise<number> {
+  const rows = await exec
     .select({ amount: resources.amount })
     .from(resources)
     .where(and(eq(resources.scope, "player"), eq(resources.scopeId, playerId), eq(resources.type, type)))
@@ -192,9 +193,9 @@ async function heldResourceAmount(playerId: string, type: string): Promise<numbe
 // hostileCooldownHours, counted from the attempt regardless of outcome: every real
 // attempt writes a poison/assassinate ledger row (failures included), so the most
 // recent such row against this target starts the clock.
-async function hostileCooldownRemainingMs(actorId: string, targetId: string, now: Date): Promise<number> {
+async function hostileCooldownRemainingMs(actorId: string, targetId: string, now: Date, exec: DbExec = db): Promise<number> {
   const windowMs = getInteractionsConfig().hostileCooldownHours * 3_600_000;
-  const rows = await db
+  const rows = await exec
     .select({ createdAt: interactions.createdAt })
     .from(interactions)
     .where(and(eq(interactions.actorCharacterId, actorId), eq(interactions.targetCharacterId, targetId), inArray(interactions.type, ["poison", "assassinate"])))
@@ -374,8 +375,9 @@ export async function poisonAttempt(
   if (target.id === actorRow.id) return { ok: false, code: 409, error: "You cannot poison yourself." };
   if (target.status !== "alive") return { ok: false, code: 409, error: LOCK_DEAD };
   if (target.prestige < cfg.prestigeFloor) return { ok: false, code: 403, error: POISON_NO_STANDING };
-  // One hostile attempt per pair per window (poison + assassinate share it). Checked
-  // after standing and before any vial is spent — a refusal consumes nothing.
+  // One hostile attempt per pair per window (poison + assassinate share it). This
+  // early read is the cheap refusal (no resolution reads); the authoritative check
+  // repeats under the actor's lock in the transaction below.
   const poisonCooldownMs = await hostileCooldownRemainingMs(actorRow.id, target.id, now);
   if (poisonCooldownMs > 0) return { ok: false, code: 429, error: cooldownLockMessage(poisonCooldownMs) };
   if ((await heldResourceAmount(actorRow.playerId, "poison")) < 1) return { ok: false, code: 409, error: POISON_NO_POISON };
@@ -399,38 +401,45 @@ export async function poisonAttempt(
   // cannot run inside the tx without deadlocking.
   const deathAge = Math.floor(currentAge(target.startAge, target.createdAt.getTime(), now.getTime(), getAgeConfig()));
 
-  try {
-    await db.transaction(async (tx) => {
-      // Guarded consume: one poison is spent whatever the outcome. The >= 1 guard is
-      // the concurrency backstop (two attempts can never spend a single vial).
-      const consumed = await tx
-        .update(resources)
-        .set({ amount: sql`${resources.amount} - 1` })
-        .where(and(eq(resources.scope, "player"), eq(resources.scopeId, actorRow.playerId), eq(resources.type, "poison"), sql`${resources.amount} >= 1`))
-        .returning({ id: resources.id });
-      if (!consumed.length) throw new Error("no_poison");
+  // The gate and the spend are ONE step under the actor's player lock: the cooldown
+  // and the vial count are re-read inside the transaction (after any concurrent
+  // attempt committed), and the ledger row that starts the next clock lands in the
+  // same commit. Two attempts fired together therefore resolve to exactly one
+  // attempt plus one 429 — and a refusal consumes nothing.
+  const refusal = await db.transaction(async (tx): Promise<PoisonResult | null> => {
+    await lockPlayer(tx, actorRow.playerId);
+    const cooldownMs = await hostileCooldownRemainingMs(actorRow.id, target.id, now, tx);
+    if (cooldownMs > 0) return { ok: false, code: 429, error: cooldownLockMessage(cooldownMs) };
+    if ((await heldResourceAmount(actorRow.playerId, "poison", tx)) < 1) return { ok: false, code: 409, error: POISON_NO_POISON };
 
-      if (outcome === "ill") {
-        // The 'poisoned' affliction has no personality cap and no opposite, so this
-        // direct insert is behaviorally identical to addTrait — kept on the tx so the
-        // consume + effect + ledger stay atomic (the trait service takes no tx).
-        await tx.insert(characterTraits).values({ characterId: target.id, traitId: POISON_TRAIT }).onConflictDoNothing();
-      } else if (outcome === "dead") {
-        await tx.update(playerCharacters).set({ deathAge }).where(eq(playerCharacters.id, target.id));
-      }
+    // Guarded consume: one poison is spent whatever the outcome. The >= 1 guard is
+    // the backstop under the lock (two attempts can never spend a single vial).
+    const consumed = await tx
+      .update(resources)
+      .set({ amount: sql`${resources.amount} - 1` })
+      .where(and(eq(resources.scope, "player"), eq(resources.scopeId, actorRow.playerId), eq(resources.type, "poison"), sql`${resources.amount} >= 1`))
+      .returning({ id: resources.id });
+    if (!consumed.length) return { ok: false, code: 409, error: POISON_NO_POISON };
 
-      await tx.insert(interactions).values({
-        worldId: actorRow.worldId,
-        actorCharacterId: actorRow.id,
-        targetCharacterId: target.id,
-        type: "poison",
-        payload: { outcome },
-      });
+    if (outcome === "ill") {
+      // The 'poisoned' affliction has no personality cap and no opposite, so this
+      // direct insert is behaviorally identical to addTrait — kept on the tx so the
+      // consume + effect + ledger stay atomic (the trait service takes no tx).
+      await tx.insert(characterTraits).values({ characterId: target.id, traitId: POISON_TRAIT }).onConflictDoNothing();
+    } else if (outcome === "dead") {
+      await tx.update(playerCharacters).set({ deathAge }).where(eq(playerCharacters.id, target.id));
+    }
+
+    await tx.insert(interactions).values({
+      worldId: actorRow.worldId,
+      actorCharacterId: actorRow.id,
+      targetCharacterId: target.id,
+      type: "poison",
+      payload: { outcome },
     });
-  } catch (error) {
-    if ((error as Error).message === "no_poison") return { ok: false, code: 409, error: POISON_NO_POISON };
-    throw error;
-  }
+    return null;
+  });
+  if (refusal) return refusal;
 
   if (outcome === "dead") await enforceDeathAndHandoff(target.id, now);
   await broadcastState();
@@ -543,8 +552,9 @@ export async function assassinateAttempt(
   if (target.id === actorRow.id) return { ok: false, code: 409, error: "You cannot mark yourself." };
   if (target.status !== "alive") return { ok: false, code: 409, error: LOCK_DEAD };
   if (target.prestige < cfg.prestigeFloor) return { ok: false, code: 403, error: NO_STANDING };
-  // One hostile attempt per pair per window (poison + assassinate share it). Checked
-  // after standing and before the blade is paid — a refusal consumes nothing.
+  // One hostile attempt per pair per window (poison + assassinate share it). This
+  // early read is the cheap refusal; the authoritative check repeats under the
+  // actor's lock in the transaction below, where the blade is paid.
   const bladeCooldownMs = await hostileCooldownRemainingMs(actorRow.id, target.id, now);
   if (bladeCooldownMs > 0) return { ok: false, code: 429, error: cooldownLockMessage(bladeCooldownMs) };
   if (actorRow.drachmae < cost) return { ok: false, code: 409, error: bladeCostMessage(cost) };
@@ -563,33 +573,38 @@ export async function assassinateAttempt(
   const outcome: AssassinateOutcome = rng() < chance ? "dead" : "failed";
   const deathAge = Math.floor(currentAge(target.startAge, target.createdAt.getTime(), now.getTime(), getAgeConfig()));
 
-  try {
-    await db.transaction(async (tx) => {
-      // Guarded decrement (buySeat pattern): the blade is paid whatever the outcome.
-      // The gte + alive guard is the concurrency backstop against overdraw.
-      const paid = await tx
-        .update(playerCharacters)
-        .set({ drachmae: sql`${playerCharacters.drachmae} - ${cost}` })
-        .where(and(eq(playerCharacters.id, actorRow.id), gte(playerCharacters.drachmae, cost), eq(playerCharacters.status, "alive")))
-        .returning({ id: playerCharacters.id });
-      if (!paid.length) throw new Error("cannot_afford");
+  // Gate + payment as ONE step under the actor's player lock (see poisonAttempt):
+  // the cooldown is re-read inside the transaction, the guarded decrement is the
+  // affordability check, and the ledger row lands in the same commit. A refusal
+  // pays nothing.
+  const refusal = await db.transaction(async (tx): Promise<AssassinateResult | null> => {
+    await lockPlayer(tx, actorRow.playerId);
+    const cooldownMs = await hostileCooldownRemainingMs(actorRow.id, target.id, now, tx);
+    if (cooldownMs > 0) return { ok: false, code: 429, error: cooldownLockMessage(cooldownMs) };
 
-      if (outcome === "dead") {
-        await tx.update(playerCharacters).set({ deathAge }).where(eq(playerCharacters.id, target.id));
-      }
+    // Guarded decrement (buySeat pattern): the blade is paid whatever the outcome.
+    // The gte + alive guard is the backstop against overdraw under the lock.
+    const paid = await tx
+      .update(playerCharacters)
+      .set({ drachmae: sql`${playerCharacters.drachmae} - ${cost}` })
+      .where(and(eq(playerCharacters.id, actorRow.id), gte(playerCharacters.drachmae, cost), eq(playerCharacters.status, "alive")))
+      .returning({ id: playerCharacters.id });
+    if (!paid.length) return { ok: false, code: 409, error: bladeCostMessage(cost) };
 
-      await tx.insert(interactions).values({
-        worldId: actorRow.worldId,
-        actorCharacterId: actorRow.id,
-        targetCharacterId: target.id,
-        type: "assassinate",
-        payload: { outcome },
-      });
+    if (outcome === "dead") {
+      await tx.update(playerCharacters).set({ deathAge }).where(eq(playerCharacters.id, target.id));
+    }
+
+    await tx.insert(interactions).values({
+      worldId: actorRow.worldId,
+      actorCharacterId: actorRow.id,
+      targetCharacterId: target.id,
+      type: "assassinate",
+      payload: { outcome },
     });
-  } catch (error) {
-    if ((error as Error).message === "cannot_afford") return { ok: false, code: 409, error: bladeCostMessage(cost) };
-    throw error;
-  }
+    return null;
+  });
+  if (refusal) return refusal;
 
   if (outcome === "dead") await enforceDeathAndHandoff(target.id, now);
   await broadcastState();
@@ -631,10 +646,27 @@ export async function setSpymasterPosture(actorRow: CharacterRow, posture: strin
   if (changed && now.getTime() - changed.getTime() < cooldownMs) return { ok: false, code: 409, error: SPY_COOLDOWN };
   if (actorRow.spymasterPosture === posture) return { ok: false, code: 409, error: SPY_SAME };
 
-  await db
-    .update(playerCharacters)
-    .set({ spymasterPosture: posture, spymasterPostureChangedAt: now })
-    .where(eq(playerCharacters.id, actorRow.id));
-  await broadcastState();
-  return { ok: true, posture };
+  // Check-then-act under the actor's player lock: the cooldown and current posture
+  // are re-read from the row inside the transaction (the caller's row may be stale
+  // by the time a concurrent switch commits) and the update lands in the same commit.
+  const result = await db.transaction(async (tx): Promise<SetPostureResult> => {
+    await lockPlayer(tx, actorRow.playerId);
+    const fresh = (
+      await tx
+        .select({ posture: playerCharacters.spymasterPosture, changedAt: playerCharacters.spymasterPostureChangedAt })
+        .from(playerCharacters)
+        .where(eq(playerCharacters.id, actorRow.id))
+        .limit(1)
+    )[0];
+    if (!fresh) return { ok: false, code: 404, error: "No such citizen." };
+    if (fresh.changedAt && now.getTime() - fresh.changedAt.getTime() < cooldownMs) return { ok: false, code: 409, error: SPY_COOLDOWN };
+    if (fresh.posture === posture) return { ok: false, code: 409, error: SPY_SAME };
+    await tx
+      .update(playerCharacters)
+      .set({ spymasterPosture: posture, spymasterPostureChangedAt: now })
+      .where(eq(playerCharacters.id, actorRow.id));
+    return { ok: true, posture };
+  });
+  if (result.ok) await broadcastState();
+  return result;
 }
