@@ -20,7 +20,8 @@ async function loadModules() {
   const dbPkg = await import("@massalia/db");
   const authSvc = await import("../services/auth.js");
   const { authRoutes } = await import("./auth.js");
-  return { dbPkg, authSvc, authRoutes };
+  const { errorHandler } = await import("../errorHandler.js");
+  return { dbPkg, authSvc, authRoutes, errorHandler };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -42,6 +43,9 @@ suite("auth responses are cookie-only (integration)", () => {
     m = await loadModules();
     db = m.dbPkg.createDb();
     app = Fastify({ trustProxy: true });
+    // The production error handler, so thrown 4xx (e.g. the password rule) answer
+    // with the same { error } body the web client renders.
+    app.setErrorHandler(m.errorHandler);
     await app.register(cookie, { secret: "test-session-secret-at-least-32-chars-long" });
     await app.register(m.authRoutes, { prefix: "/auth" });
     await app.ready();
