@@ -64,6 +64,9 @@ jobs:
       - name: Typecheck web
         run: pnpm --filter @massalia/web exec tsc -p tsconfig.json --noEmit
 
+      - name: Typecheck worker
+        run: pnpm --filter @massalia/worker exec tsc -p tsconfig.json --noEmit
+
       - name: Lint
         run: pnpm -r lint
 
@@ -79,6 +82,18 @@ jobs:
 
       - name: Test server
         run: pnpm --filter @massalia/server test
+
+      # The remaining suites share the same massalia_test database, so they run one
+      # after another (never in parallel with the server suite, which truncates it).
+      - name: Test db
+        run: pnpm --filter @massalia/db test
+
+      - name: Test web
+        run: pnpm --filter @massalia/web test
+
+      # The worker's backup test runs the runner's pg_dump against the service container.
+      - name: Test worker
+        run: pnpm --filter @massalia/worker test
 
       - name: Audit
         run: pnpm audit --audit-level=high
