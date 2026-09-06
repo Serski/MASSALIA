@@ -4,6 +4,7 @@ import { LegalPage, type LegalPageKind } from "./legal.js";
 import { CharacterCreation } from "./CharacterCreation.js";
 import { Dashboard } from "./dashboard/Dashboard.js";
 import { World2Map } from "./map/World2Map.js";
+import { AdminPage } from "./AdminPage.js";
 import { assetPath, nobleHouses, professions, type Alignment, type House, type Profession } from "./data/league.js";
 
 // Social sign-in (Discord / Google / Facebook) has no OAuth wiring yet. The buttons
@@ -866,6 +867,11 @@ export function App() {
 
   if (authRouteMode) {
     return <AuthRoutePage mode={authRouteMode} />;
+  }
+
+  // Admin tooling: the API refuses non-admins (401/403); the page just says so.
+  if (pathname === "/admin" || pathname === "/admin/") {
+    return <AdminPage />;
   }
 
   if (pathname === "/create") {

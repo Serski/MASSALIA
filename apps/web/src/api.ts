@@ -89,6 +89,28 @@ export type AuthResponse = {
   isAdmin?: boolean;
 };
 
+// --- Admin views (routes/admin.ts) ---
+export type AdminCharacter = { characterId: string; playerId: string; worldId: string; name: string; drachmae: number; status: string; isActive: boolean };
+export type AdminUser = {
+  id: string;
+  email: string;
+  createdAt: string;
+  emailVerifiedAt: string | null;
+  isAdmin: boolean;
+  bannedAt: string | null;
+  banReason: string | null;
+  lastSeenAt: string | null;
+  lastIp: string | null;
+  characters: AdminCharacter[];
+};
+export type AdminCluster = {
+  user: { id: string; email: string };
+  windowDays: number;
+  ips: string[];
+  related: { userId: string; email: string; bannedAt: string | null; sharedIps: string[]; lastSeenAt: string }[];
+};
+export type AdminLogRow = Record<string, unknown> & { id: string; createdAt: string };
+
 export type CreationRequest = {
   classSlug: string;
   houseSlug: string;
@@ -253,6 +275,24 @@ export const api = {
   // server keeps the session cookie, so the inline retry in Settings still works.
   deleteAccount: (password: string) => apiFetch<{ ok: true }>("/auth/delete-account", { method: "POST", body: { password } }),
   me: () => apiFetch<AuthResponse>("/auth/me"),
+  // --- Admin (is_admin only; every call is audited server-side) ---
+  adminUsers: (q: string, filters: { banned?: boolean; verified?: boolean } = {}) => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (filters.banned !== undefined) params.set("banned", String(filters.banned));
+    if (filters.verified !== undefined) params.set("verified", String(filters.verified));
+    const query = params.toString();
+    return apiFetch<{ users: AdminUser[] }>(`/admin/users${query ? `?${query}` : ""}`);
+  },
+  adminCluster: (userId: string) => apiFetch<AdminCluster>(`/admin/users/${userId}/cluster`),
+  adminBan: (userId: string, reason: string) => apiFetch<{ ok: true }>(`/admin/users/${userId}/ban`, { method: "POST", body: { reason } }),
+  adminUnban: (userId: string, reason: string) => apiFetch<{ ok: true }>(`/admin/users/${userId}/unban`, { method: "POST", body: { reason } }),
+  adminDeleteSessions: (userId: string) => apiFetch<{ ok: true; deleted: number }>(`/admin/users/${userId}/sessions/delete`, { method: "POST" }),
+  adminAdjustDrachmae: (characterId: string, delta: number, reason: string) =>
+    apiFetch<{ ok: true; drachmae: number }>(`/admin/characters/${characterId}/drachmae`, { method: "POST", body: { delta, reason } }),
+  adminRename: (characterId: string, name: string) => apiFetch<{ ok: true; name: string }>(`/admin/characters/${characterId}/rename`, { method: "POST", body: { name } }),
+  adminEffects: (characterId: string) => apiFetch<{ effects: AdminLogRow[] }>(`/admin/characters/${characterId}/effects`),
+  adminInteractions: (characterId: string) => apiFetch<{ interactions: AdminLogRow[] }>(`/admin/characters/${characterId}/interactions`),
   createCharacter: (payload: CreationRequest) => apiFetch("/characters", { method: "POST", body: payload }),
   state: () => apiFetch<PlayerState>("/me/state"),
   // The Player Chronicle (Timeline): the house's dated, generation-tagged history.
