@@ -113,6 +113,21 @@ suite("auth responses are cookie-only (integration)", () => {
     await expectCookieOnlySession(res, userId);
   });
 
+  it("passwords are capped at 128 characters with a clear message (register, login, reset)", async () => {
+    const tooLong = "p".repeat(129);
+    const reg = await post("/auth/register", { email: "long@t", password: tooLong, termsAccepted: true });
+    expect(reg.statusCode).toBe(400);
+    expect(reg.json()).toEqual({ error: "Password must be at most 128 characters." });
+    // Exactly 128 is fine.
+    expect((await post("/auth/register", { email: "long@t", password: "p".repeat(128), termsAccepted: true })).statusCode).toBe(200);
+    expect((await post("/auth/login", { email: "long@t", password: tooLong })).statusCode).toBe(400);
+    const userId = (await me({ cookie: cookieHeader(await post("/auth/login", { email: "long@t", password: "p".repeat(128) })) })).json().user.id as string;
+    const resetToken = await m.authSvc.createPasswordReset(userId);
+    const reset = await post("/auth/reset-password", { token: resetToken, password: tooLong });
+    expect(reset.statusCode).toBe(400);
+    expect(reset.json()).toEqual({ error: "Password must be at most 128 characters." });
+  });
+
   it("/auth/me without credentials is anonymous", async () => {
     const res = await me();
     expect(res.statusCode).toBe(200);

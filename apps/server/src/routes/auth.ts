@@ -52,10 +52,17 @@ function httpError(message: string, statusCode: number) {
 }
 
 // The password rule enforced at register/login. Reset re-uses this exact check so
-// a reset can never set a password weaker than registration would accept.
+// a reset can never set a password weaker than registration would accept. The
+// upper bound keeps the rule honest — bcrypt silently hashes only the first 72
+// bytes — and bounds the hashing work per request.
+const PASSWORD_MIN_CHARS = 8;
+const PASSWORD_MAX_CHARS = 128;
 function assertPasswordStrength(password: string) {
-  if (password.length < 8) {
-    throw httpError("Password must be at least 8 characters.", 400);
+  if (password.length < PASSWORD_MIN_CHARS) {
+    throw httpError(`Password must be at least ${PASSWORD_MIN_CHARS} characters.`, 400);
+  }
+  if (password.length > PASSWORD_MAX_CHARS) {
+    throw httpError(`Password must be at most ${PASSWORD_MAX_CHARS} characters.`, 400);
   }
 }
 
