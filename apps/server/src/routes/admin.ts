@@ -157,7 +157,7 @@ export async function adminRoutes(app: FastifyInstance) {
         WHERE e.user_id <> ${userId}
           AND e.kind IN ('register', 'login')
           AND e.created_at > ${window}
-          AND host(e.ip) = ANY(${ips}::text[])
+          AND host(e.ip) IN (${sql.join(ips.map((ip) => sql`${ip}`), sql`, `)})
         GROUP BY e.user_id, u.email, u.banned_at
         ORDER BY "lastSeenAt" DESC
         LIMIT ${LIST_LIMIT}
