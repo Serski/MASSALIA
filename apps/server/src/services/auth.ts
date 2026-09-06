@@ -266,6 +266,23 @@ async function lookupSession(request: FastifyRequest): Promise<SessionState | nu
   return { user: { id: row.id, email: row.email }, isAdmin: row.isAdmin, bannedAt: row.bannedAt, banReason: row.banReason };
 }
 
+// Admin gate: a valid, unbanned session whose user carries is_admin. 401 when
+// not logged in (or banned), 403 otherwise — the same shape as every other refusal.
+export async function requireAdmin(request: FastifyRequest): Promise<AuthUser> {
+  const state = await getSessionState(request);
+  if (!state || state.bannedAt) {
+    const error = new Error("Authentication required");
+    (error as Error & { statusCode?: number }).statusCode = 401;
+    throw error;
+  }
+  if (!state.isAdmin) {
+    const error = new Error("Admin access required.");
+    (error as Error & { statusCode?: number }).statusCode = 403;
+    throw error;
+  }
+  return state.user;
+}
+
 export async function requireAuth(request: FastifyRequest) {
   const user = await getAuthUser(request);
   if (!user) {

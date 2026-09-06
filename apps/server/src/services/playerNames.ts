@@ -8,7 +8,7 @@ import { players, type DbExec } from "@massalia/db";
 // then a short id-derived suffix as the last resort.
 const NUMERALS = ["II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
 
-async function nameTaken(exec: DbExec, worldId: string, name: string, exceptPlayerId: string | null): Promise<boolean> {
+export async function nameTaken(exec: DbExec, worldId: string, name: string, exceptPlayerId: string | null): Promise<boolean> {
   const rows = await exec
     .select({ id: players.id })
     .from(players)

@@ -8,8 +8,8 @@ import { getAuthUser } from "./services/auth.js";
 //   * 300 requests / minute per key on every route, where the key is the session's
 //     user id when a valid session cookie is present and request.ip otherwise
 //     (trustProxy in index.ts already resolves the real client behind Railway).
-//   * 60 / minute on POST/PUT/PATCH/DELETE under /api/ (set as route config by an
-//     onRoute hook, so a route may still declare its own tighter config).
+//   * 60 / minute on POST/PUT/PATCH/DELETE under /api/ and /admin/ (set as route
+//     config by an onRoute hook, so a route may still declare its own tighter config).
 //   * The auth routes keep their own stricter, IP-keyed limits (see routes/auth.ts).
 //   * /health and the /content/ static files are exempt.
 //   * Redis store when REDIS_URL is set (shared across instances, survives deploys),
@@ -73,11 +73,11 @@ function exempt(request: FastifyRequest): boolean {
 export async function registerRateLimit(app: FastifyInstance, options: { redis?: Redis | null } = {}): Promise<void> {
   const redis = options.redis === undefined ? createLimiterRedis() : options.redis;
 
-  // Mutations under /api/ default to the tighter budget unless the route brought
-  // its own rateLimit config. Added before the plugin so its onRoute hook (which
-  // reads config.rateLimit) runs after this one.
+  // Mutations under /api/ and /admin/ default to the tighter budget unless the
+  // route brought its own rateLimit config. Added before the plugin so its onRoute
+  // hook (which reads config.rateLimit) runs after this one.
   app.addHook("onRoute", (route) => {
-    if (!route.url.startsWith("/api/")) return;
+    if (!route.url.startsWith("/api/") && !route.url.startsWith("/admin/")) return;
     const methods = ([] as string[]).concat(route.method);
     if (!methods.some((method) => MUTATING_METHODS.has(method))) return;
     if (route.config && (route.config as { rateLimit?: unknown }).rateLimit !== undefined) return;

@@ -36,6 +36,7 @@ import { loadBuildingsContent, loadPopsContent } from "./services/buildings.js";
 import { serviceRoutes } from "./routes/service.js";
 import { loadRanksContent } from "./services/service.js";
 import { mercRoutes } from "./routes/merc.js";
+import { adminRoutes } from "./routes/admin.js";
 import { loadContractsContent } from "./services/merc.js";
 import { loadTraitDefs } from "./services/traits.js";
 import { loadComposureConfig } from "./services/composure.js";
@@ -135,6 +136,7 @@ await app.register(mapRoutes, { prefix: "/api/map" });
 await app.register(buildingRoutes, { prefix: "/api/buildings" });
 await app.register(serviceRoutes, { prefix: "/api/service" });
 await app.register(mercRoutes, { prefix: "/api/merc" });
+await app.register(adminRoutes, { prefix: "/admin" });
 
 const port = Number(process.env.PORT ?? 3000);
 await app.listen({ port, host: "0.0.0.0" });
