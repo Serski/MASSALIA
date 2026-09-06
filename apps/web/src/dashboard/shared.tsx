@@ -749,6 +749,22 @@ export const POLITY_CREST: Record<string, string> = {
   vaccaei: assetIconUrl("vaccaei.webp"),
   vascones: assetIconUrl("vascones.webp"),
   vettones: assetIconUrl("vettones.webp"),
+  // The remaining realms (AVATARS TRIBES set, final batch): Britain, the Greek
+  // and Punic states, Illyria, Numidia and Mauretania.
+  "akra-leuke": assetIconUrl("akra-leuke.webp"),
+  cantiaci: assetIconUrl("cantiaci.webp"),
+  dobunni: assetIconUrl("dobunni.webp"),
+  dumnonii: assetIconUrl("dumnonii.webp"),
+  durotriges: assetIconUrl("durotriges.webp"),
+  epirus: assetIconUrl("epirus.webp"),
+  illyrians: assetIconUrl("illyrians.webp"),
+  mago: assetIconUrl("mago.webp"),
+  massyli: assetIconUrl("massyli.webp"),
+  mauretania: assetIconUrl("mauretania.webp"),
+  messapi: assetIconUrl("messapi.webp"),
+  neapolis: assetIconUrl("neapolis.webp"),
+  sparta: assetIconUrl("sparta.webp"),
+  trinovantes: assetIconUrl("trinovantes.webp"),
 };
 
 // Building art lives in assets/buildings/. Class buildings carry one image per
