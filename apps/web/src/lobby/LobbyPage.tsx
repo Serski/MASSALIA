@@ -146,22 +146,26 @@ export function LobbyPage({ view, onEnterGame, onCreateCharacter, onRequireLogin
           <button className="lobby-btn" type="button" onClick={() => setAttempt((n) => n + 1)}>Try again</button>
         </div>
       ) : view === "account" ? (
-        <div className="lobby-page">
-          <BackToWorlds />
-          <AccountSection
-            user={lobby.user}
-            newsletter={newsletter}
-            savingNewsletter={savingNewsletter}
-            newsletterNote={newsletterNote}
-            onToggleNewsletter={toggleNewsletter}
-            onLogout={logout}
-            onAccountDeleted={onLoggedOut}
-          />
+        <div className="lobby-shell-grid lobby-shell-grid-two">
+          <LeftColumn view={view} user={lobby.user} record={lobby.record} you={lobby.worlds.active?.you ?? null} />
+          <div className="lobby-main">
+            <AccountSection
+              user={lobby.user}
+              newsletter={newsletter}
+              savingNewsletter={savingNewsletter}
+              newsletterNote={newsletterNote}
+              onToggleNewsletter={toggleNewsletter}
+              onLogout={logout}
+              onAccountDeleted={onLoggedOut}
+            />
+          </div>
         </div>
       ) : view === "hall-of-fame" ? (
-        <div className="lobby-page">
-          <BackToWorlds />
-          <HallOfFameSection ended={lobby.worlds.ended} />
+        <div className="lobby-shell-grid lobby-shell-grid-two">
+          <LeftColumn view={view} user={lobby.user} record={lobby.record} you={lobby.worlds.active?.you ?? null} />
+          <div className="lobby-main">
+            <HallOfFameSection ended={lobby.worlds.ended} />
+          </div>
         </div>
       ) : (
         <div className="lobby-shell-grid">
@@ -335,24 +339,6 @@ function newsDate(day: string): string {
   return new Date(`${day}T00:00:00Z`).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 }
 
-// The sub-views' way back to the front.
-function BackToWorlds() {
-  return (
-    <p className="lobby-back">
-      <a
-        className="lobby-link"
-        href="/lobby"
-        onClick={(event) => {
-          event.preventDefault();
-          navigateTo("/lobby");
-        }}
-      >
-        ← Game worlds
-      </a>
-    </p>
-  );
-}
-
 function LobbyToggle({ on, disabled, label, onToggle }: { on: boolean; disabled: boolean; label: string; onToggle: () => void }) {
   return (
     <button
@@ -496,12 +482,12 @@ function HeroCard({ world, onEnterGame, onCreateCharacter }: { world: ActiveWorl
 
 function HallOfFameSection({ ended }: { ended: LobbyResponse["worlds"]["ended"] }) {
   return (
-    <section className="lobby-section" aria-labelledby="lobby-hall-title">
+    <section className="lobby-panel lobby-subview" aria-labelledby="lobby-hall-title">
       <SectionHeading id="lobby-hall-title" eyebrow="Hall of Fame" title="Worlds that were" />
       {ended.length ? (
         <div className="lobby-hall">
           {ended.map((world) => (
-            <article className="lobby-card lobby-hall-card" key={world.id}>
+            <article className="lobby-panel lobby-hall-card" key={world.id}>
               <h3>{world.name}</h3>
               {world.tagline ? <p className="lobby-tagline">{world.tagline}</p> : null}
               <p className="lobby-row-meta">
@@ -563,7 +549,7 @@ function AccountSection({
   };
 
   return (
-    <section className="lobby-section" aria-labelledby="lobby-account-title">
+    <section className="lobby-panel lobby-subview" aria-labelledby="lobby-account-title">
       <SectionHeading id="lobby-account-title" eyebrow="Account" title="Your account" />
       <div className="lobby-setting">
         <span className="lobby-setting-label">Email</span>

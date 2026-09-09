@@ -673,6 +673,47 @@
   color: var(--lobby-gold-bright);
 }
 
+/* --- The sub-views (account, hall of fame): left aside + one centre panel ------- */
+
+.lobby-shell-grid-two {
+  grid-template-columns: 240px minmax(0, 1fr);
+}
+
+.lobby-subview {
+  padding: 20px 22px 12px;
+}
+
+.lobby-subview .lobby-section-head h2 {
+  font-size: 22px;
+}
+
+.lobby-subview .lobby-setting,
+.lobby-subview .lobby-danger {
+  padding-left: 0;
+  padding-right: 0;
+  border-bottom: var(--lobby-divider);
+}
+
+.lobby-subview .lobby-setting:last-child {
+  border-bottom: 0;
+}
+
+.lobby-subview .lobby-hall {
+  margin-bottom: 10px;
+}
+
+.lobby-hall-card {
+  padding: 16px 18px;
+}
+
+.lobby-hall-card h3 {
+  margin: 0;
+  color: var(--lobby-heading);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+}
+
 .lobby-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -686,10 +727,6 @@
     grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
     gap: 36px;
   }
-}
-
-.lobby-back {
-  margin: 0 0 18px;
 }
 
 /* A single-column lobby page (news, guides, the sub-views): same width as the grid. */
@@ -1067,7 +1104,7 @@
 }
 
 .lobby-toggle.on {
-  background: linear-gradient(135deg, var(--gold-bright), var(--bronze));
+  background: var(--lobby-gold-gradient);
 }
 
 .lobby-toggle:disabled {
@@ -1321,12 +1358,12 @@
   justify-content: space-between;
   gap: 8px 14px;
   padding: 11px 2px;
-  font-size: 15px;
-  border-bottom: 1px dashed rgba(181, 138, 69, 0.18);
+  font-size: 14px;
+  border-bottom: var(--lobby-divider);
 }
 
 .lobby-setting-label {
-  color: rgba(236, 224, 204, 0.8);
+  color: rgba(236, 224, 204, 0.7);
 }
 
 .lobby-setting-value {
@@ -1370,7 +1407,7 @@
   font-size: 15px;
   background: rgba(12, 8, 7, 0.5);
   border: 1px solid rgba(181, 138, 69, 0.3);
-  border-radius: 4px;
+  border-radius: var(--lobby-radius-control);
 }
 
 .lobby-danger-actions {
