@@ -609,9 +609,16 @@
   border-radius: 50%;
 }
 
+/* SvgIcon is stroke-only and takes its colour from the dashboard-shell rule;
+   outside that shell the strokes would default to black on black. */
 .lobby-guide-icon svg {
   width: 16px;
   height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .lobby-guide-reading li {
