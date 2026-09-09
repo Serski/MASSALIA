@@ -1,11 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { and, eq } from "drizzle-orm";
-
-// @massalia/db opens a connection at module load (every db helper calls createDb
-// at import time), so it is pulled in lazily inside the handler. That keeps the
-// pure ranking helper below importable — and unit-testable — without a DATABASE_URL.
-type Db = ReturnType<typeof import("@massalia/db").createDb>;
-let _db: Db | null = null;
+import { loadStandingsRoster } from "../services/standings.js";
 
 // The five public leaderboards. "wealth" ranks by drachmae; the rest map 1:1 to
 // the character stat columns.
@@ -75,14 +69,13 @@ export function rankStandings(roster: StandingsInput[], viewerPlayerId: string |
 
 export async function standingsRoutes(app: FastifyInstance) {
   // Every active player in the world, ranked across the five boards. Rank-only:
-  // the underlying stat values are computed here and never serialized.
+  // the underlying stat values are loaded (services/standings.ts) and never serialized.
   app.get("/", async (request, reply) => {
     // Imported lazily: these modules open a DB connection at module load, which
-    // would otherwise pull a DATABASE_URL requirement into the pure unit tests.
-    const { createDb, houses, players, playerCharacters } = await import("@massalia/db");
+    // would otherwise pull a DATABASE_URL requirement into the pure unit tests
+    // (services/standings.ts defers its own @massalia/db import the same way).
     const { requireAuth } = await import("../services/auth.js");
     const { getActivePlayer, getActiveWorldId } = await import("../services/character.js");
-    const db = (_db ??= createDb());
 
     const user = await requireAuth(request);
     const worldId = await getActiveWorldId();
@@ -96,45 +89,7 @@ export async function standingsRoutes(app: FastifyInstance) {
       return { error: "No active character found." };
     }
 
-    // All active players; LEFT JOIN their character (a legacy player may predate
-    // the sheet — they rank with zeroed stats) and house (for the display name).
-    const rows = await db
-      .select({
-        playerId: players.id,
-        name: players.name,
-        houseSlug: players.houseSlug,
-        houseName: houses.name,
-        createdAt: players.createdAt,
-        characterId: playerCharacters.id,
-        classId: playerCharacters.classId,
-        prestige: playerCharacters.prestige,
-        drachmae: playerCharacters.drachmae,
-        devotion: playerCharacters.devotion,
-        militia: playerCharacters.militia,
-        intelligence: playerCharacters.intelligence,
-      })
-      .from(players)
-      .leftJoin(playerCharacters, and(eq(playerCharacters.playerId, players.id), eq(playerCharacters.worldId, worldId)))
-      .leftJoin(houses, eq(houses.slug, players.houseSlug))
-      .where(and(eq(players.worldId, worldId), eq(players.isActive, true)));
-
-    const roster: StandingsInput[] = rows.map((r) => ({
-      playerId: r.playerId,
-      characterId: r.characterId ?? null,
-      name: r.name,
-      house: r.houseName ?? r.houseSlug ?? "—",
-      classId: r.classId ?? "",
-      isUnfree: r.classId === "slave",
-      createdAt: r.createdAt.getTime(),
-      metrics: {
-        prestige: r.prestige ?? 0,
-        wealth: r.drachmae ?? 0,
-        devotion: r.devotion ?? 0,
-        militia: r.militia ?? 0,
-        intelligence: r.intelligence ?? 0,
-      },
-    }));
-
+    const roster = await loadStandingsRoster(worldId);
     return rankStandings(roster, viewer.id);
   });
 }
