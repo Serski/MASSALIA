@@ -1451,6 +1451,43 @@
 
 /* --- Narrow screens ------------------------------------------------------------ */
 
+/* --- Breakpoints ---------------------------------------------------------------- */
+
+/* ≤1100: two columns; the right aside spans the full width below as a row of panels. */
+@media (max-width: 1100px) {
+  .lobby-shell-grid {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+
+  .lobby-aside-right {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 18px;
+    align-items: start;
+  }
+}
+
+/* ≤760: one column; the hero stacks its image over the facts; calendar one per row. */
+@media (max-width: 760px) {
+  .lobby-shell-grid,
+  .lobby-shell-grid-two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lobby-hero-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lobby-hero-art {
+    min-height: 180px;
+  }
+
+  .lobby-calendar-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Below 760px the header wraps: the brand on its own row, the nav below it. */
 @media (max-width: 760px) {
   .lobby-header {
