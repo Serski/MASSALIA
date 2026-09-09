@@ -302,8 +302,8 @@ function OligarchySection({ onRefresh }: PanelProps) {
 // appointment cascade, and the dynasty-spanning office ledger.
 // ---------------------------------------------------------------------------
 
-const OFFICE_LABEL: Record<string, string> = { archon: "Archon", ephor: "Ephor", strategos: "Strategos" };
-const SIDE_LABEL: Record<string, string> = { palaioi: "Palaioi", dynatoi: "Dynatoi" };
+export const OFFICE_LABEL: Record<string, string> = { archon: "Archon", ephor: "Ephor", strategos: "Strategos" };
+export const SIDE_LABEL: Record<string, string> = { palaioi: "Palaioi", dynatoi: "Dynatoi" };
 // Office seals reuse the front-page government art (App.tsx office grid):
 // Archon→ARCHON, Ephor→EPHOR, Strategos→GENERAL, the Oligarchy Council→OLIGARCH.
 const OFFICE_ICON: Record<string, string> = {
@@ -318,10 +318,10 @@ function partyDotClass(party: string | null | undefined): string {
   if (party === "dynatoi") return "seat-dynatoi";
   return "seat-independent";
 }
-function bcYear(gameYear: number): string {
+export function bcYear(gameYear: number): string {
   return `${300 - gameYear} BC`;
 }
-function titleCaseVia(via: string | null): string {
+export function titleCaseVia(via: string | null): string {
   if (!via) return "";
   return via.charAt(0).toUpperCase() + via.slice(1);
 }
