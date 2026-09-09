@@ -27,3 +27,4 @@ export * from "./buildings.js";
 export * from "./military.js";
 export * from "./mapActions.js";
 export * from "./names.js";
+export * from "./news.js";
