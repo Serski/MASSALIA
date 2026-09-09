@@ -419,6 +419,16 @@
   text-decoration: underline;
 }
 
+/* The header nav's current page. */
+.lobby-nav-active,
+.lobby-nav-active:hover {
+  padding: 6px 10px;
+  color: #160e0a;
+  text-decoration: none;
+  background: linear-gradient(135deg, var(--gold-bright), var(--bronze));
+  border-radius: 3px;
+}
+
 .lobby-toggle {
   position: relative;
   flex: 0 0 auto;

@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type LobbyResponse, type NewsEntry } from "../api.js";
-import { assetPath } from "../data/league.js";
 import { SvgIcon } from "../dashboard/shared.js";
 import { maskEmail } from "../dashboard/sheets.js";
 import { GUIDE_CLOSER, GUIDE_FRAMING, GUIDE_READING, GUIDE_READING_HEADER, GUIDE_SECTIONS, GUIDE_TABS, GUIDE_TIP } from "../dashboard/guideContent.js";
 import { OFFICE_LABEL, SIDE_LABEL, bcYear, titleCaseVia } from "../dashboard/panels/PoliticsPanel.js";
-import { DISCORD_INVITE_URL } from "./links.js";
+import { LobbyFrame } from "./LobbyFrame.js";
 import "./lobby.css";
 
 // ---------------------------------------------------------------------------
@@ -131,8 +130,7 @@ export function LobbyPage({ onEnterGame, onCreateCharacter, onRequireLogin, onLo
   };
 
   return (
-    <main className="landing-shell lobby-shell">
-      <LobbyHeader isAdmin={lobby?.user.isAdmin ?? false} onLogout={logout} />
+    <LobbyFrame active="lobby">
       {status === "loading" ? (
         <p className="lobby-quiet" role="status" aria-busy="true">Opening the lobby…</p>
       ) : status === "error" || !lobby ? (
@@ -169,38 +167,7 @@ export function LobbyPage({ onEnterGame, onCreateCharacter, onRequireLogin, onLo
           </div>
         </div>
       )}
-      <footer className="lobby-footer">
-        <nav aria-label="Legal">
-          <a href="?page=terms">Terms of Service</a>
-          <a href="?page=privacy">Privacy Policy</a>
-          <a href="?page=rules">Game Rules</a>
-        </nav>
-        <small>© 320 BC – MMXXVI · THE LEAGUE OF MASSALIA</small>
-      </footer>
-    </main>
-  );
-}
-
-function LobbyHeader({ isAdmin, onLogout }: { isAdmin: boolean; onLogout: () => void }) {
-  return (
-    <header className="lobby-header">
-      <a className="lobby-brand" href="/">
-        <span className="brand-mark" aria-hidden="true">
-          <img src={assetPath("assets/MASSALIA LION.png")} alt="" />
-        </span>
-        <span className="lobby-brand-text">
-          <span>MASSALIA</span>
-          <small>Lobby</small>
-        </span>
-      </a>
-      <nav className="lobby-header-actions" aria-label="Lobby">
-        {DISCORD_INVITE_URL ? (
-          <a className="lobby-link" href={DISCORD_INVITE_URL} target="_blank" rel="noopener noreferrer">Discord</a>
-        ) : null}
-        {isAdmin ? <a className="lobby-link" href="/admin">Admin</a> : null}
-        <button className="lobby-btn lobby-btn-small" type="button" onClick={onLogout}>Log out</button>
-      </nav>
-    </header>
+    </LobbyFrame>
   );
 }
 
