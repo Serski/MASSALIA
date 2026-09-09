@@ -25,6 +25,7 @@ export * from "./agenda.js";
 export * from "./composure.js";
 export * from "./buildings.js";
 export * from "./military.js";
+export * from "./barracks.js";
 export * from "./mapActions.js";
 export * from "./names.js";
 export * from "./news.js";

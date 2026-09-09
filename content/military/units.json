@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "source": "server-side military content; never copy into apps/web/public",
+  "gate": { "militia": 20 },
+  "levy": { "startMen": 100, "growthPerYear": 10, "seasonsPerYear": 4 },
+  "minServiceSeasons": 2,
+  "units": {
+    "peltast": {
+      "label": "Peltast",
+      "icon": "PELTAST.webp",
+      "role": "skirmish",
+      "trainSeasons": 1,
+      "gear": { "timber": 2, "leather": 1 },
+      "upkeepPerDay": { "grain": 1, "oliveoil": 1 },
+      "stats": { "atk": 3, "def": 2, "msl": 5, "mor": 4, "spd": 8, "space": 1 }
+    },
+    "ekdromos": {
+      "label": "Ekdromos",
+      "icon": "EKDROMOS.webp",
+      "role": "line",
+      "trainSeasons": 1,
+      "gear": { "timber": 1, "leather": 1, "iron": 1 },
+      "upkeepPerDay": { "grain": 1, "oliveoil": 1 },
+      "stats": { "atk": 5, "def": 4, "msl": 2, "mor": 5, "spd": 6, "space": 1 }
+    },
+    "hoplite": {
+      "label": "Hoplite",
+      "icon": "HOPLITE.webp",
+      "role": "line",
+      "trainSeasons": 2,
+      "gear": { "timber": 1, "iron": 1, "tin": 2 },
+      "upkeepPerDay": { "grain": 2, "oliveoil": 1 },
+      "stats": { "atk": 7, "def": 8, "msl": 0, "mor": 7, "spd": 3, "space": 1 }
+    },
+    "hippeis": {
+      "label": "Hippeis",
+      "icon": "HIPPEIS.webp",
+      "role": "mounted",
+      "trainSeasons": 2,
+      "gear": { "leather": 2, "iron": 1, "wool": 2, "horse": 1 },
+      "upkeepPerDay": { "grain": 3, "oliveoil": 1 },
+      "stats": { "atk": 6, "def": 4, "msl": 2, "mor": 6, "spd": 10, "space": 3 }
+    }
+  }
+}
