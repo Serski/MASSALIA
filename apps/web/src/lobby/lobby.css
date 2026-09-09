@@ -714,32 +714,10 @@
   font-weight: 700;
 }
 
-.lobby-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 28px;
-  max-width: 1240px;
-  margin: 24px auto 0;
-}
-
-@media (min-width: 960px) {
-  .lobby-grid {
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-    gap: 36px;
-  }
-}
-
 /* A single-column lobby page (news, guides, the sub-views): same width as the grid. */
 .lobby-page {
   max-width: 1240px;
   margin: 24px auto 0;
-}
-
-.lobby-column {
-  display: flex;
-  flex-direction: column;
-  gap: 32px;
-  min-width: 0;
 }
 
 .lobby-section {
@@ -751,8 +729,7 @@
   margin-bottom: 14px;
 }
 
-.lobby-eyebrow,
-.lobby-kicker {
+.lobby-eyebrow {
   margin: 0;
   color: var(--lobby-gold);
   font-family: var(--font-display);
@@ -814,29 +791,6 @@
 
 /* --- Cards, rows, facts ----------------------------------------------------- */
 
-.lobby-card {
-  padding: 22px 24px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent),
-    rgba(31, 20, 15, 0.88);
-  border: 1px solid rgba(181, 138, 69, 0.26);
-  border-radius: 8px;
-  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.22);
-}
-
-.lobby-card h3 {
-  margin: 0;
-  color: #f1e4cc;
-  font-family: var(--font-display);
-  font-size: 19px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-}
-
-.lobby-world-name {
-  font-size: clamp(22px, 2.4vw, 30px) !important;
-}
-
 .lobby-tagline {
   margin: 4px 0 0;
   color: rgba(236, 224, 204, 0.72);
@@ -861,138 +815,9 @@
   100% { box-shadow: 0 0 0 9px rgba(210, 165, 92, 0); }
 }
 
-.lobby-facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 12px 18px;
-  margin: 18px 0 0;
-}
-
-.lobby-facts-stack {
-  grid-template-columns: 1fr;
-  gap: 10px;
-  margin-top: 0;
-}
-
-.lobby-facts div {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.lobby-facts-stack div {
-  flex-direction: row;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px dashed rgba(181, 138, 69, 0.18);
-}
-
-.lobby-facts dt {
-  color: rgba(236, 224, 204, 0.58);
-  font-family: var(--font-display);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.lobby-facts dd {
-  margin: 0;
-  color: #ece0cc;
-  font-size: 15px;
-}
-
-.lobby-facts-stack dd {
-  text-align: right;
-}
-
-.lobby-you {
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(181, 138, 69, 0.2);
-}
-
-.lobby-you p {
-  margin: 0 0 4px;
-}
-
-.lobby-you-name {
-  color: #f1e4cc;
-  font-family: var(--font-display);
-  font-size: 17px;
-  font-weight: 700;
-}
-
-.lobby-you-dynasty {
-  color: var(--gold-bright);
-  font-weight: 600;
-}
-
-.lobby-you-line {
-  color: rgba(236, 224, 204, 0.78);
-  font-size: 15px;
-}
-
-.lobby-you-rank {
-  color: var(--gold-highlight);
-  font-size: 14px;
-}
-
-.lobby-you .lobby-btn-primary {
-  margin-top: 14px;
-}
-
-.lobby-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.lobby-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
-  padding: 10px 2px;
-  border-bottom: 1px dashed rgba(181, 138, 69, 0.18);
-}
-
-.lobby-row-main {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.lobby-row-main strong,
-.lobby-row-link {
-  color: #f1e4cc;
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.lobby-row-link {
-  text-decoration: none;
-}
-
-.lobby-row-link:hover {
-  color: var(--gold-bright);
-  text-decoration: underline;
-}
-
 .lobby-row-meta {
   color: rgba(236, 224, 204, 0.62);
   font-size: 13.5px;
-}
-
-.lobby-notified {
-  color: var(--gold-highlight);
-  font-size: 13.5px;
-  font-style: italic;
 }
 
 /* --- Buttons, links, controls ------------------------------------------------ */
@@ -1130,8 +955,7 @@
 .lobby-btn:focus-visible,
 .lobby-link:focus-visible,
 .lobby-toggle:focus-visible,
-.lobby-input:focus-visible,
-.lobby-row-link:focus-visible {
+.lobby-input:focus-visible {
   outline: 2px solid rgba(241, 211, 132, 0.82);
   outline-offset: 3px;
 }
@@ -1505,18 +1329,6 @@
   .lobby-brand-text {
     gap: 8px;
     font-size: 18px;
-  }
-
-  .lobby-card {
-    padding: 18px 16px;
-  }
-
-  .lobby-facts {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .lobby-you .lobby-btn-primary {
-    width: 100%;
   }
 
   .lobby-hall {
