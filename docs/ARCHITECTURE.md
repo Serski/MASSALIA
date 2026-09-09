@@ -31,6 +31,10 @@ Sessions are **cookie-only**. `POST /auth/register`, `/auth/login` and `/auth/re
 
 Passwords are bcrypt (cost 12). Password reset and email verification use the same token discipline (random token emailed, only its hash stored, newest-only, single-use, 60 min / 24 h). Email goes through Resend; without `RESEND_API_KEY` the links are logged instead.
 
+## Lobby
+
+`/lobby` is the account-level page between the landing and the game (`apps/web/src/lobby/`): the open world and the viewer's seat in it, the calendar of announced worlds (the newsletter opt-in doubles as "notify me"), the ended worlds, the viewer's record across worlds, the news, the guides and the account controls. It reads `GET /api/lobby` (`apps/server/src/routes/lobby.ts`, read-only, no lock) — which ranks the viewer through the same standings roster and ranker as `/api/standings` and serializes rank positions only, never a raw metric — plus the news file. News is content, not a table: `content/news/news.json`, parsed by `@massalia/shared` (`news.ts`), validated at boot by `services/news.ts`, and fetched by the client straight from `/content/news/news.json`. `worlds.status` is `announced | active | ended` (migration 0052) and every game read filters `active`, so an announced world exists only to the Lobby. Because the session cookie is `httpOnly`, the client keeps a boolean **session hint** in `localStorage` (`massalia.session`, set by any login-shaped call, dropped on logout, deletion, a 401 or a null `/auth/me`): the bare `/` with a hint makes one `/auth/me` and lands in `/lobby`; without it the landing renders with no API call. Deliberately absent: world results and a Hall of Fame table (an empty state until a world ends), and achievements (still the placeholder in the character sheet).
+
 ## Rate limiting
 
 `@fastify/rate-limit` is registered once, globally (`apps/server/src/rateLimit.ts`): Redis store when `REDIS_URL` is set (shared across instances, failing open on Redis errors), in-memory otherwise.

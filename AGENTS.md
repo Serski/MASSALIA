@@ -21,6 +21,7 @@ MASSALIA is a browser strategy RPG set in the Greek colony of Massalia around 30
 - Money and stock writes are relative and guarded — `SET drachmae = drachmae - X WHERE drachmae >= X` — and the affected row count is checked.
 - Resolving any card, event, festival or Olympiad is claim-first: a conditional `UPDATE … WHERE resolved = false RETURNING` inside the same transaction as its effects; a lost claim applies nothing.
 - Content JSON under `content/` is validated with zod at server boot; a malformed file fails the boot.
+- The Lobby's news is content too: `content/news/news.json`, parsed by `packages/shared/src/news.ts` and loaded at boot by `apps/server/src/services/news.ts`; the client fetches the file from `/content/news/news.json`.
 - Migrations are append-only SQL files in `packages/db/migrations`, applied in name order, one transaction each; never edit an applied file.
 - Military numbers (garrison, pentekonters, triremes, warband) never ship under `apps/web/public`; `apps/web/test/public-leak-guard.test.ts` enforces it.
 - `MAP_MUTATIONS_ENABLED` stays `false` until movement, war, occupation and authorization rules are real.
