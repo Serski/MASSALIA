@@ -38,6 +38,7 @@ import { loadRanksContent } from "./services/service.js";
 import { mercRoutes } from "./routes/merc.js";
 import { adminRoutes } from "./routes/admin.js";
 import { loadContractsContent } from "./services/merc.js";
+import { loadNewsContent } from "./services/news.js";
 import { loadTraitDefs } from "./services/traits.js";
 import { loadComposureConfig } from "./services/composure.js";
 import { listEvents } from "./services/eventEngine.js";
@@ -101,6 +102,7 @@ await loadBuildingsContent();
 await loadPopsContent();
 await loadRanksContent();
 await loadContractsContent();
+await loadNewsContent();
 // Fail fast on a malformed election block (Politics Prompt 2).
 electionConfig(getCalendarConfig());
 // Atlas Phase 2a: validate the cities + factions content at boot.
