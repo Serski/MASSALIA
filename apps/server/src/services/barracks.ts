@@ -575,3 +575,83 @@ export async function disbandRow(ctx: ActingContext, rowId: string, now: Date): 
     return { composureDays, result: { ok: true, rowId: row.id, unitId: row.unitId, source: row.source, count: row.count, returnedToLevy } };
   });
 }
+
+// --- View (GET /api/barracks and every POST's success payload) ----------------
+// One locked settle (settleAll, so the household and the barracks are both
+// current), this season's offers rolled, then the read model. Below the gate the
+// catalogue, roster and offers are still returned — the tab shows them behind
+// the lock — and only the POSTs refuse.
+
+export type UnitView = { id: string; label: string; icon: string; role: string; trainSeasons: number; gear: Record<string, number>; upkeepPerDay: Record<string, number>; stats: Record<string, number> };
+export type RosterView = {
+  id: string;
+  source: "trained" | "band";
+  unitId: string;
+  label: string;
+  icon: string;
+  count: number;
+  startCount: number;
+  recruitedSeason: number;
+  readyAtSeason: number | null;
+  contractEndSeason: number | null;
+  active: boolean;
+  canDisband: boolean;
+};
+export type OfferView = { id: string; label: string; icon: string; role: string; men: number; upkeepPerDay: Record<string, number>; stats: Record<string, number>; hired: boolean };
+export type BarracksView = {
+  gate: GateView;
+  season: number;
+  levy: { men: number };
+  config: { minServiceSeasons: number; maxActiveBands: number; termSeasons: number };
+  units: UnitView[];
+  roster: RosterView[];
+  offers: OfferView[];
+  activeBands: number;
+};
+
+export async function barracksView(ctx: ActingContext, now: Date): Promise<BarracksView> {
+  const unitsC = getUnitsContent();
+  const bandsC = getBandsContent();
+  const season = seasonFor(ctx, now);
+  const view = await mutate<BarracksView>(ctx, now, async (tx, composureDays) => {
+    await rollOffers(tx, ctx, season);
+    const gate = await gateFor(tx, ctx);
+    const levy = await ensureLevy(tx, ctx, season);
+    const rows = await ownedUnitRows(tx, ctx);
+    const offers = await offersFor(tx, ctx, season);
+    const roster: RosterView[] = rows.map((r) => {
+      const def = r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId);
+      const earliest = r.source === "trained" ? r.recruitedSeason + unitsC.minServiceSeasons : r.recruitedSeason + bandsC.contract.termSeasons;
+      return {
+        id: r.id,
+        source: r.source,
+        unitId: r.unitId,
+        label: def?.label ?? r.unitId,
+        icon: def?.icon ?? "",
+        count: r.count,
+        startCount: r.startCount,
+        recruitedSeason: r.recruitedSeason,
+        readyAtSeason: r.readyAtSeason,
+        contractEndSeason: r.contractEndSeason,
+        active: isActive(r, season),
+        canDisband: gate.met && season >= earliest,
+      };
+    });
+    const result: BarracksView = {
+      gate,
+      season,
+      levy: { men: levy.men },
+      config: { minServiceSeasons: unitsC.minServiceSeasons, maxActiveBands: bandsC.market.maxActiveBands, termSeasons: bandsC.contract.termSeasons },
+      units: Object.entries(unitsC.units).map(([id, u]) => ({ id, label: u.label, icon: u.icon, role: u.role, trainSeasons: u.trainSeasons, gear: u.gear, upkeepPerDay: u.upkeepPerDay, stats: u.stats })),
+      roster,
+      offers: offers.flatMap((o) => {
+        const b = bandDef(bandsC, o.bandId);
+        return b ? [{ id: o.bandId, label: b.label, icon: b.icon, role: b.role, men: b.men, upkeepPerDay: b.upkeepPerDay, stats: b.stats, hired: o.hired }] : [];
+      }),
+      activeBands: rows.filter((r) => r.source === "band").length,
+    };
+    return { composureDays, result };
+  });
+  if ("code" in view && "error" in view) throw new Error("unreachable: barracksView never fails");
+  return view;
+}
