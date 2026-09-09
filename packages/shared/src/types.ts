@@ -1,4 +1,4 @@
-export type WorldStatus = "scheduled" | "active" | "archived";
+export type WorldStatus = "announced" | "active" | "ended";
 export type ControlStatus = "controlled" | "occupied" | "contested";
 
 export interface World {
