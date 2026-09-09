@@ -280,8 +280,20 @@ export type ChronicleEntry = {
   payload: Record<string, unknown>;
 };
 
-// GET /api/lobby — mirrors routes/lobby.ts (LobbyResponse) by hand, like the
-// standings shape below. Rank positions only: no raw metric ever travels here.
+// GET /api/lobby — mirrors routes/lobby.ts (LobbyResponse, LobbyCitizen) by hand,
+// like the standings shape below. Rank positions only: no raw metric ever
+// travels here. Citizens is the top five of the prestige board, nothing more.
+export type LobbyCitizen = {
+  rank: number;
+  characterId: string | null;
+  name: string;
+  houseName: string;
+  professionSlug: string | null;
+  professionName: string | null;
+  faceId: string | null;
+  portrait: string | null;
+};
+
 export type LobbyResponse = {
   user: { email: string; emailVerified: boolean; newsletterOptIn: boolean; isAdmin: boolean; memberSince: string };
   worlds: {
@@ -294,11 +306,17 @@ export type LobbyResponse = {
       gameDateLabel: string;
       seasonEndsIn: number;
       playerCount: number;
+      citizens: LobbyCitizen[];
       you: null | {
         characterId: string | null;
         name: string;
         houseName: string;
+        professionSlug: string | null;
         professionName: string | null;
+        // The aged avatar portrait (as /me/state), null without a character row;
+        // faceId is the class-portrait fallback.
+        portrait: string | null;
+        faceId: string | null;
         dynastyName: string | null;
         generation: number | null;
         prestigeRank: number | null;
