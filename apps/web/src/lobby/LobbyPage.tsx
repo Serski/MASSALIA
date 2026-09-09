@@ -3,7 +3,7 @@ import { api, ApiError, type LobbyResponse } from "../api.js";
 import { maskEmail } from "../dashboard/sheets.js";
 import { OFFICE_LABEL, bcYear } from "../dashboard/panels/PoliticsPanel.js";
 import { navigateTo } from "../navigate.js";
-import { NO_SEAT_PORTRAIT } from "./art.js";
+import { CALENDAR_ANNOUNCED, CALENDAR_ENDED, NO_SEAT_PORTRAIT, heroFor } from "./art.js";
 import { LobbyFrame, LobbySectionHeading as SectionHeading } from "./LobbyFrame.js";
 import { LobbyPortrait } from "./LobbyPortrait.js";
 import type { LobbyView } from "./routes.js";
@@ -148,7 +148,7 @@ export function LobbyPage({ view, onEnterGame, onCreateCharacter, onRequireLogin
         <div className="lobby-shell-grid">
           <LeftColumn view={view} user={lobby.user} record={lobby.record} you={lobby.worlds.active?.you ?? null} />
           <div className="lobby-main">
-            <WorldsSection
+            <CentreColumn
               worlds={lobby.worlds}
               newsletter={newsletter}
               savingNewsletter={savingNewsletter}
@@ -277,14 +277,9 @@ function LobbyToggle({ on, disabled, label, onToggle }: { on: boolean; disabled:
   );
 }
 
-// --- Worlds ------------------------------------------------------------------
+// --- Centre column: the League heading, the hero, the calendar -------------------
 
-function hallOfFameClick(event: { preventDefault: () => void }) {
-  event.preventDefault();
-  navigateTo("/lobby/hall-of-fame");
-}
-
-function WorldsSection({
+function CentreColumn({
   worlds,
   newsletter,
   savingNewsletter,
@@ -301,106 +296,107 @@ function WorldsSection({
 }) {
   const { active, announced, ended } = worlds;
   return (
-    <section className="lobby-section" aria-labelledby="lobby-worlds-title">
-      <SectionHeading id="lobby-worlds-title" eyebrow="Worlds" title="The League" />
+    <>
+      <div className="lobby-worlds-head">
+        <p className="lobby-eyebrow lobby-worlds-eyebrow">Worlds</p>
+        <h2 className="lobby-worlds-title">The League</h2>
+      </div>
 
       {active ? (
-        <ActiveWorldCard world={active} onEnterGame={onEnterGame} onCreateCharacter={onCreateCharacter} />
+        <HeroCard world={active} onEnterGame={onEnterGame} onCreateCharacter={onCreateCharacter} />
       ) : (
-        <p className="lobby-empty">No world is open.</p>
+        <section className="lobby-panel lobby-no-world">
+          <p className="lobby-empty">No world is open.</p>
+        </section>
       )}
 
-      <h3 className="lobby-subhead">Calendar</h3>
-      {announced.length ? (
-        <ul className="lobby-list">
-          {announced.map((world) => (
-            <li className="lobby-row" key={world.id}>
-              <div className="lobby-row-main">
-                <strong>{world.name}</strong>
-                {world.tagline ? <span className="lobby-tagline">{world.tagline}</span> : null}
-                <span className="lobby-row-meta">opens on {longDate(world.startsAt)}</span>
-              </div>
-              {newsletter ? (
-                <span className="lobby-notified">You&apos;ll be emailed when it opens.</span>
-              ) : (
-                <button className="lobby-btn lobby-btn-small" type="button" disabled={savingNewsletter} onClick={onToggleNewsletter}>
-                  Notify me when it opens
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="lobby-empty">No world announced yet.</p>
-      )}
-
-      {ended.length ? (
-        <>
-          <h3 className="lobby-subhead">Ended</h3>
-          <ul className="lobby-list">
-            {ended.map((world) => (
-              <li className="lobby-row" key={world.id}>
-                <div className="lobby-row-main">
-                  <a className="lobby-row-link" href="/lobby/hall-of-fame" onClick={hallOfFameClick}>{world.name}</a>
-                  <span className="lobby-row-meta">
-                    closed on {longDate(world.endsAt)}, {count(world.playerCount, "player", "players")}
-                  </span>
+      {announced.length || ended.length ? (
+        <section className="lobby-calendar" aria-labelledby="lobby-calendar-title">
+          <h3 className="lobby-calendar-title" id="lobby-calendar-title">Calendar</h3>
+          <div className="lobby-calendar-grid">
+            {announced.map((world) => (
+              <article className="lobby-panel lobby-cal-card" key={world.id}>
+                <div className="lobby-cal-head">
+                  <h4>{world.name}</h4>
+                  <span className="lobby-pill lobby-pill-announced">Announced</span>
                 </div>
-                <a className="lobby-link" href="/lobby/hall-of-fame" onClick={hallOfFameClick}>Hall of Fame →</a>
-              </li>
+                <img className="lobby-cal-art" src={CALENDAR_ANNOUNCED} alt="" loading="lazy" />
+                <p className="lobby-cal-line">opens on {longDate(world.startsAt)}</p>
+                {newsletter ? (
+                  <p className="lobby-cal-notified">You&apos;ll be emailed when it opens.</p>
+                ) : (
+                  <button className="lobby-btn lobby-cal-btn" type="button" disabled={savingNewsletter} onClick={onToggleNewsletter}>
+                    Notify me when it opens
+                  </button>
+                )}
+              </article>
             ))}
-          </ul>
-        </>
+            {ended.map((world) => (
+              <article className="lobby-panel lobby-cal-card" key={world.id}>
+                <div className="lobby-cal-head">
+                  <h4>{world.name}</h4>
+                  <span className="lobby-pill lobby-pill-ended">Ended</span>
+                </div>
+                <img className="lobby-cal-art" src={CALENDAR_ENDED} alt="" loading="lazy" />
+                <p className="lobby-cal-line">
+                  closed on {longDate(world.endsAt)} · {count(world.playerCount, "player", "players")}
+                </p>
+                <button className="lobby-btn lobby-cal-btn" type="button" onClick={() => navigateTo("/lobby/hall-of-fame")}>
+                  Hall of fame
+                </button>
+              </article>
+            ))}
+          </div>
+        </section>
       ) : null}
-    </section>
+    </>
   );
 }
 
-function ActiveWorldCard({ world, onEnterGame, onCreateCharacter }: { world: ActiveWorld; onEnterGame: () => void; onCreateCharacter: () => void }) {
+// The open world: name and OPEN NOW in the head bar, the class building render
+// by profession beside the facts, one primary action in the foot.
+function HeroCard({ world, onEnterGame, onCreateCharacter }: { world: ActiveWorld; onEnterGame: () => void; onCreateCharacter: () => void }) {
   const you = world.you;
   return (
-    <article className="lobby-card lobby-world">
-      <p className="lobby-kicker">
-        <span className="lobby-pulse" aria-hidden="true" />
-        Open now
-      </p>
-      <h3 className="lobby-world-name">{world.name}</h3>
-      {world.tagline ? <p className="lobby-tagline">{world.tagline}</p> : null}
-      <dl className="lobby-facts">
-        <div>
-          <dt>In-game date</dt>
-          <dd>{world.gameDateLabel}</dd>
+    <section className="lobby-panel lobby-hero" aria-label={world.name}>
+      <div className="lobby-hero-head">
+        <h3 className="lobby-hero-name">
+          <span className="lobby-pulse" aria-hidden="true" />
+          {world.name}
+        </h3>
+        <span className="lobby-pill">Open now</span>
+      </div>
+      <div className="lobby-hero-body">
+        <div className="lobby-hero-art" style={{ backgroundImage: `url("${heroFor(you?.professionSlug ?? null)}")` }}>
+          {world.tagline ? <p className="lobby-hero-tagline">{world.tagline}</p> : null}
         </div>
-        <div>
-          <dt>Season</dt>
-          <dd>ends in {count(world.seasonEndsIn, "day", "days")}</dd>
-        </div>
-        <div>
-          <dt>Citizens</dt>
-          <dd>{count(world.playerCount, "player", "players")}</dd>
-        </div>
-      </dl>
-      {you ? (
-        <div className="lobby-you">
-          <p className="lobby-you-name">
-            {you.name}
-            {you.dynastyName ? <span className="lobby-you-dynasty"> · {you.dynastyName}</span> : null}
-          </p>
-          <p className="lobby-you-line">
-            {[you.generation !== null ? `${ordinal(you.generation)} generation` : null, you.houseName, you.professionName].filter(Boolean).join(" · ")}
-          </p>
-          <p className="lobby-you-rank">
-            {you.prestigeRank !== null ? `Ranked ${you.prestigeRank} of ${you.rosterSize} by prestige` : `${count(you.rosterSize, "citizen", "citizens")} ranked by prestige`}
-          </p>
-          <button className="lobby-btn lobby-btn-primary" type="button" onClick={onEnterGame}>Continue playing</button>
-        </div>
-      ) : (
-        <div className="lobby-you">
-          <p className="lobby-you-line">You hold no seat in this world yet.</p>
-          <button className="lobby-btn lobby-btn-primary" type="button" onClick={onCreateCharacter}>Found your dynasty</button>
-        </div>
-      )}
-    </article>
+        <dl className="lobby-hero-facts">
+          <div>
+            <dt>In-game date</dt>
+            <dd>{world.gameDateLabel}</dd>
+          </div>
+          <div>
+            <dt>Season ends in</dt>
+            <dd>{count(world.seasonEndsIn, "day", "days")}</dd>
+          </div>
+          <div>
+            <dt>Citizens</dt>
+            <dd>{world.playerCount}</dd>
+          </div>
+          <div>
+            <dt>Your rank</dt>
+            <dd>{you && you.prestigeRank !== null ? `${you.prestigeRank} by prestige` : "No seat yet"}</dd>
+          </div>
+        </dl>
+      </div>
+      <div className="lobby-hero-foot">
+        {you ? (
+          <button className="lobby-btn lobby-btn-primary lobby-hero-cta" type="button" onClick={onEnterGame}>Continue playing</button>
+        ) : (
+          <button className="lobby-btn lobby-btn-primary lobby-hero-cta" type="button" onClick={onCreateCharacter}>Found your dynasty</button>
+        )}
+      </div>
+    </section>
   );
 }
 
