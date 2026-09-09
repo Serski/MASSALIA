@@ -116,7 +116,7 @@ const panelComponents: Record<DashboardSection, LazyExoticComponent<ComponentTyp
   standings: StandingsPanel,
 };
 
-export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () => void; onRequireLogin: () => void; onRequireCharacter: () => void }) {
+export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onExit: () => void; onRequireLogin: () => void; onRequireCharacter: () => void }) {
   const [activeSection, setActiveSection] = useState<DashboardSection>("court");
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [activeSheet, setActiveSheet] = useState<"inventory" | "character" | "guide" | null>(null);
@@ -318,6 +318,10 @@ export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () =
             <SvgIcon icon="guide" />
             Guide
           </button>
+          {/* Leave the city: back to the account-level Lobby (the session stays). */}
+          <button className="sidebar-guide sidebar-lobby" type="button" onClick={onExit}>
+            Lobby
+          </button>
         </aside>
 
         <section className="dashboard-content" aria-live="polite">
@@ -424,12 +428,15 @@ export function Dashboard({ onRequireLogin, onRequireCharacter }: { onExit: () =
               <SvgIcon icon="guide" />
               <span>Guide</span>
             </button>
+            <button type="button" onClick={onExit}>
+              <span>Lobby</span>
+            </button>
           </div>
         </div>
       ) : null}
 
       <InventorySheet open={activeSheet === "inventory"} onClose={closeSheet} player={player} initialTab={inventoryTab} />
-      <CharacterSheet open={activeSheet === "character"} onClose={closeSheet} player={player} onLogout={handleLogout} onAccountDeleted={onRequireLogin} />
+      <CharacterSheet open={activeSheet === "character"} onClose={closeSheet} player={player} onExit={onExit} onLogout={handleLogout} onAccountDeleted={onRequireLogin} />
 
       {activeSheet === "guide" ? (
         <Suspense fallback={null}>

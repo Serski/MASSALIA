@@ -907,10 +907,12 @@ export function AchievementsTab() {
 
 export function SettingsTab({
   player,
+  onExit,
   onLogout,
   onAccountDeleted,
 }: {
   player: PlayerDashboardView;
+  onExit: () => void;
   onLogout: () => void;
   onAccountDeleted: () => void;
 }) {
@@ -997,7 +999,11 @@ export function SettingsTab({
       <SheetLabel>Session</SheetLabel>
       <div className="settings-row">
         <span className="set-l">Signed in as {player.name}</span>
-        <button className="set-act danger" type="button" onClick={onLogout}>Log out</button>
+        <span className="set-r">
+          {/* Leave the city keeps the session and returns to the Lobby; Log out ends it. */}
+          <button className="set-act" type="button" onClick={onExit}>Leave the city</button>
+          <button className="set-act danger" type="button" onClick={onLogout}>Log out</button>
+        </span>
       </div>
 
       {confirmingDelete ? (
@@ -1045,12 +1051,14 @@ export function CharacterSheet({
   open,
   onClose,
   player,
+  onExit,
   onLogout,
   onAccountDeleted,
 }: {
   open: boolean;
   onClose: () => void;
   player: PlayerDashboardView;
+  onExit: () => void;
   onLogout: () => void;
   onAccountDeleted: () => void;
 }) {
@@ -1123,7 +1131,7 @@ export function CharacterSheet({
       />
       {tab === "character" ? <CharacterTab player={player} sheet={sheet} onTreated={reloadSheet} /> : null}
       {tab === "achievements" ? <AchievementsTab /> : null}
-      {tab === "settings" ? <SettingsTab player={player} onLogout={onLogout} onAccountDeleted={onAccountDeleted} /> : null}
+      {tab === "settings" ? <SettingsTab player={player} onExit={onExit} onLogout={onLogout} onAccountDeleted={onAccountDeleted} /> : null}
     </BottomSheet>
   );
 }
