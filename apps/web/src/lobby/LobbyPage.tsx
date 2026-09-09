@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { api, ApiError, type LobbyResponse } from "../api.js";
+import { api, ApiError, type LobbyCitizen, type LobbyResponse, type NewsEntry } from "../api.js";
 import { maskEmail } from "../dashboard/sheets.js";
 import { OFFICE_LABEL, bcYear } from "../dashboard/panels/PoliticsPanel.js";
 import { navigateTo } from "../navigate.js";
-import { CALENDAR_ANNOUNCED, CALENDAR_ENDED, NO_SEAT_PORTRAIT, heroFor } from "./art.js";
+import { CALENDAR_ANNOUNCED, CALENDAR_ENDED, GUIDES_THUMB, NO_SEAT_PORTRAIT, heroFor } from "./art.js";
 import { LobbyFrame, LobbySectionHeading as SectionHeading } from "./LobbyFrame.js";
 import { LobbyPortrait } from "./LobbyPortrait.js";
 import type { LobbyView } from "./routes.js";
@@ -60,6 +60,8 @@ function count(n: number, one: string, many: string): string {
 
 export function LobbyPage({ view, onEnterGame, onCreateCharacter, onRequireLogin, onLoggedOut }: LobbyPageProps) {
   const [lobby, setLobby] = useState<LobbyResponse | null>(null);
+  // The latest dispatches for the worlds view; null = not fetched or failed.
+  const [news, setNews] = useState<NewsEntry[] | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [attempt, setAttempt] = useState(0);
   const [newsletter, setNewsletter] = useState(false);
@@ -92,6 +94,23 @@ export function LobbyPage({ view, onEnterGame, onCreateCharacter, onRequireLogin
       active = false;
     };
   }, [attempt]);
+
+  // Dispatches are only on the front; a failed fetch just shows the empty line.
+  useEffect(() => {
+    if (view !== "worlds") return;
+    let active = true;
+    api
+      .news()
+      .then((entries) => {
+        if (active) setNews(entries);
+      })
+      .catch(() => {
+        if (active) setNews(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [view]);
 
   const logout = async () => {
     try {
@@ -157,7 +176,7 @@ export function LobbyPage({ view, onEnterGame, onCreateCharacter, onRequireLogin
               onCreateCharacter={onCreateCharacter}
             />
           </div>
-          <aside className="lobby-aside-right" />
+          <RightColumn news={news} citizens={lobby.worlds.active?.citizens ?? []} youCharacterId={lobby.worlds.active?.you?.characterId ?? null} />
         </div>
       )}
     </LobbyFrame>
@@ -241,6 +260,79 @@ function RecordPanel({ record, you }: { record: LobbyResponse["record"]; you: Ac
       </dl>
     </section>
   );
+}
+
+// --- Right column: guides, dispatches, citizens ---------------------------------
+
+function go(path: string) {
+  return (event: { preventDefault: () => void }) => {
+    event.preventDefault();
+    navigateTo(path);
+  };
+}
+
+function RightColumn({ news, citizens, youCharacterId }: { news: NewsEntry[] | null; citizens: LobbyCitizen[]; youCharacterId: string | null }) {
+  const latest = news ? news.slice(0, 3) : [];
+  return (
+    <aside className="lobby-aside-right">
+      <section className="lobby-panel lobby-guides-box" aria-label="Guides">
+        <img className="lobby-guides-thumb" src={GUIDES_THUMB} alt="" width={56} height={56} loading="lazy" />
+        <div className="lobby-guides-copy">
+          <h3>Guides</h3>
+          <p>How the city, the market and the offices work, in one place.</p>
+          <a className="lobby-guides-link" href="/guides" onClick={go("/guides")}>Open the guides →</a>
+        </div>
+      </section>
+
+      <section className="lobby-panel lobby-dispatches" aria-labelledby="lobby-dispatches-title">
+        <div className="lobby-panel-head">
+          <p className="lobby-eyebrow" id="lobby-dispatches-title">Dispatches</p>
+          <a className="lobby-panel-head-link" href="/news" onClick={go("/news")}>All news</a>
+        </div>
+        {latest.length ? (
+          <ul className="lobby-dispatch-list">
+            {latest.map((entry) => (
+              <li key={entry.id}>
+                <time dateTime={entry.date}>{newsDate(entry.date)}</time>
+                <a href="/news" onClick={go("/news")}>{entry.title}</a>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="lobby-empty lobby-panel-empty">Nothing posted yet.</p>
+        )}
+      </section>
+
+      <section className="lobby-panel lobby-citizens" aria-labelledby="lobby-citizens-title">
+        <div className="lobby-panel-head">
+          <p className="lobby-eyebrow" id="lobby-citizens-title">Citizens</p>
+          <span className="lobby-panel-head-note">by prestige</span>
+        </div>
+        {citizens.length ? (
+          <ol className="lobby-citizen-list">
+            {citizens.map((citizen) => (
+              <li className={`lobby-citizen${citizen.characterId !== null && citizen.characterId === youCharacterId ? " lobby-citizen-you" : ""}`} key={citizen.characterId ?? citizen.rank}>
+                <span className="lobby-citizen-rank">{ordinal(citizen.rank)}</span>
+                <LobbyPortrait portrait={citizen.portrait} faceId={citizen.faceId} professionSlug={citizen.professionSlug} name={citizen.name} size={40} />
+                <span className="lobby-citizen-body">
+                  <strong>{citizen.name}</strong>
+                  <span>{[citizen.houseName, citizen.professionName].filter(Boolean).join(" · ")}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="lobby-empty lobby-panel-empty">No citizens yet.</p>
+        )}
+      </section>
+    </aside>
+  );
+}
+
+// News dates are calendar days (YYYY-MM-DD), not instants: format them in UTC so
+// the day never shifts with the viewer's timezone.
+function newsDate(day: string): string {
+  return new Date(`${day}T00:00:00Z`).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 }
 
 // The sub-views' way back to the front.
