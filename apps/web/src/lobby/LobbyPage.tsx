@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type LobbyResponse } from "../api.js";
 import { maskEmail } from "../dashboard/sheets.js";
-import { OFFICE_LABEL, SIDE_LABEL, bcYear, titleCaseVia } from "../dashboard/panels/PoliticsPanel.js";
+import { OFFICE_LABEL, bcYear } from "../dashboard/panels/PoliticsPanel.js";
 import { navigateTo } from "../navigate.js";
+import { NO_SEAT_PORTRAIT } from "./art.js";
 import { LobbyFrame, LobbySectionHeading as SectionHeading } from "./LobbyFrame.js";
+import { LobbyPortrait } from "./LobbyPortrait.js";
 import type { LobbyView } from "./routes.js";
 import "./lobby.css";
 
@@ -143,8 +145,9 @@ export function LobbyPage({ view, onEnterGame, onCreateCharacter, onRequireLogin
           <HallOfFameSection ended={lobby.worlds.ended} />
         </div>
       ) : (
-        <div className="lobby-grid">
-          <div className="lobby-column">
+        <div className="lobby-shell-grid">
+          <LeftColumn view={view} user={lobby.user} record={lobby.record} you={lobby.worlds.active?.you ?? null} />
+          <div className="lobby-main">
             <WorldsSection
               worlds={lobby.worlds}
               newsletter={newsletter}
@@ -154,12 +157,89 @@ export function LobbyPage({ view, onEnterGame, onCreateCharacter, onRequireLogin
               onCreateCharacter={onCreateCharacter}
             />
           </div>
-          <div className="lobby-column">
-            <RecordSection user={lobby.user} record={lobby.record} you={lobby.worlds.active?.you ?? null} />
-          </div>
+          <aside className="lobby-aside-right" />
         </div>
       )}
     </LobbyFrame>
+  );
+}
+
+// --- Left column: character card, nav, your record ------------------------------
+
+const LEFT_NAV: Array<{ view: LobbyView; label: string; path: string }> = [
+  { view: "worlds", label: "Game worlds", path: "/lobby" },
+  { view: "account", label: "Account", path: "/lobby/account" },
+  { view: "hall-of-fame", label: "Hall of fame", path: "/lobby/hall-of-fame" },
+];
+
+function LeftColumn({ view, user, record, you }: { view: LobbyView; user: LobbyUser; record: LobbyResponse["record"]; you: ActiveWorld["you"] }) {
+  return (
+    <aside className="lobby-aside-left">
+      <CharacterCard user={user} you={you} />
+      <nav className="lobby-nav" aria-label="Lobby sections">
+        {LEFT_NAV.map((item) => (
+          <a
+            key={item.view}
+            className={`lobby-nav-item${item.view === view ? " lobby-nav-item-active" : ""}`}
+            href={item.path}
+            aria-current={item.view === view ? "page" : undefined}
+            onClick={(event) => {
+              event.preventDefault();
+              navigateTo(item.path);
+            }}
+          >
+            <span className="lobby-nav-dot" aria-hidden="true" />
+            {item.label}
+          </a>
+        ))}
+      </nav>
+      <RecordPanel record={record} you={you} />
+    </aside>
+  );
+}
+
+// The viewer's seat in the open world; without one, the lion and the line that says so.
+function CharacterCard({ user, you }: { user: LobbyUser; you: ActiveWorld["you"] }) {
+  return (
+    <section className="lobby-panel lobby-character" aria-label="Your character">
+      {you ? (
+        <LobbyPortrait className="lobby-character-portrait" portrait={you.portrait} faceId={you.faceId} professionSlug={you.professionSlug} name={you.name} size={132} />
+      ) : (
+        <img className="lobby-portrait lobby-character-portrait" src={NO_SEAT_PORTRAIT} alt="" width={132} height={132} />
+      )}
+      <h2 className="lobby-character-name">{you ? you.name : "No seat in this world"}</h2>
+      {you && you.dynastyName ? (
+        <p className="lobby-character-dynasty">
+          {you.dynastyName}
+          {you.generation !== null ? ` · ${ordinal(you.generation)} generation` : ""}
+        </p>
+      ) : null}
+      <p className="lobby-character-meta">{[you?.professionName ?? null, `Member since ${monthYear(user.memberSince)}`].filter(Boolean).join(" · ")}</p>
+    </section>
+  );
+}
+
+function RecordPanel({ record, you }: { record: LobbyResponse["record"]; you: ActiveWorld["you"] }) {
+  const latest = record.offices[0];
+  const officesLabel = record.offices.length > 1 ? `Offices held (${record.offices.length})` : "Offices held";
+  return (
+    <section className="lobby-panel lobby-record" aria-labelledby="lobby-record-title">
+      <p className="lobby-eyebrow" id="lobby-record-title">Your record</p>
+      <dl className="lobby-record-rows">
+        <div>
+          <dt>Worlds played</dt>
+          <dd>{record.worldsPlayed}</dd>
+        </div>
+        <div>
+          <dt>Prestige rank</dt>
+          <dd>{you && you.prestigeRank !== null ? `${you.prestigeRank} of ${you.rosterSize}` : "No seat yet"}</dd>
+        </div>
+        <div>
+          <dt>{officesLabel}</dt>
+          <dd>{latest ? `${OFFICE_LABEL[latest.office] ?? latest.office} · ${bcYear(latest.startedYear)}` : "None yet"}</dd>
+        </div>
+      </dl>
+    </section>
   );
 }
 
@@ -321,65 +401,6 @@ function ActiveWorldCard({ world, onEnterGame, onCreateCharacter }: { world: Act
         </div>
       )}
     </article>
-  );
-}
-
-// --- Your record ---------------------------------------------------------------
-
-function RecordSection({ user, record, you }: { user: LobbyUser; record: LobbyResponse["record"]; you: ActiveWorld["you"] }) {
-  return (
-    <section className="lobby-section" aria-labelledby="lobby-record-title">
-      <SectionHeading id="lobby-record-title" eyebrow="Your record" title="Across the worlds" />
-      <dl className="lobby-facts lobby-facts-stack">
-        <div>
-          <dt>Worlds played</dt>
-          <dd>{record.worldsPlayed}</dd>
-        </div>
-        {you ? (
-          <div>
-            <dt>Current dynasty</dt>
-            <dd>
-              {you.dynastyName ?? you.name}
-              {you.generation !== null ? `, ${ordinal(you.generation)} generation` : ""}
-            </dd>
-          </div>
-        ) : null}
-        {you && you.prestigeRank !== null ? (
-          <div>
-            <dt>Rank</dt>
-            <dd>
-              {you.prestigeRank} of {you.rosterSize} by prestige
-            </dd>
-          </div>
-        ) : null}
-        <div>
-          <dt>Member since</dt>
-          <dd>{monthYear(user.memberSince)}</dd>
-        </div>
-      </dl>
-
-      <h3 className="lobby-subhead">Offices held</h3>
-      {record.offices.length ? (
-        <ul className="lobby-list">
-          {record.offices.map((office, index) => (
-            <li className="lobby-row" key={index}>
-              <div className="lobby-row-main">
-                <strong>
-                  {OFFICE_LABEL[office.office] ?? office.office}
-                  {office.side ? ` · ${SIDE_LABEL[office.side] ?? office.side}` : ""}
-                </strong>
-                <span className="lobby-row-meta">
-                  {office.worldName} · {office.endedYear === null ? `${bcYear(office.startedYear)}, sitting` : `${bcYear(office.startedYear)} to ${bcYear(office.endedYear)}`}
-                  {office.acquiredVia !== "elected" ? ` · ${titleCaseVia(office.acquiredVia)}` : ""}
-                </span>
-              </div>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="lobby-empty">No office held yet.</p>
-      )}
-    </section>
   );
 }
 

@@ -127,6 +127,184 @@
   margin-left: 8px;
 }
 
+/* --- The shell grid: left aside / centre / right aside ---------------------- */
+
+.lobby-shell-grid {
+  display: grid;
+  grid-template-columns: 240px minmax(420px, 1fr) 260px;
+  gap: 24px;
+  align-items: start;
+  max-width: 1280px;
+  margin: 28px auto 0;
+  padding: 0 clamp(14px, 3vw, 40px) 48px;
+}
+
+.lobby-aside-left,
+.lobby-aside-right {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.lobby-aside-left {
+  gap: 14px;
+}
+
+.lobby-main {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  min-width: 0;
+}
+
+.lobby-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent),
+    var(--lobby-panel);
+  border: 1px solid var(--lobby-line);
+  border-radius: var(--lobby-radius-panel);
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.35);
+}
+
+/* --- Portraits ------------------------------------------------------------------ */
+
+.lobby-portrait {
+  display: block;
+  flex: 0 0 auto;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.lobby-portrait-letter {
+  display: grid;
+  place-items: center;
+  color: var(--lobby-gold-bright);
+  font-family: var(--font-display);
+  font-weight: 700;
+  background: rgba(181, 138, 69, 0.12);
+}
+
+/* --- Character card ----------------------------------------------------------- */
+
+.lobby-character {
+  padding: 22px 20px 20px;
+  text-align: center;
+}
+
+.lobby-character-portrait {
+  margin: 0 auto;
+  border: 2px solid var(--lobby-gold);
+  box-shadow:
+    0 0 0 5px #1f140f,
+    0 0 0 6px rgba(181, 138, 69, 0.45),
+    0 14px 30px rgba(0, 0, 0, 0.6);
+}
+
+.lobby-character-name {
+  margin: 16px 0 0;
+  color: var(--lobby-heading);
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.lobby-character-dynasty {
+  margin: 4px 0 0;
+  color: var(--lobby-gold-bright);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.lobby-character-meta {
+  margin: 2px 0 0;
+  color: rgba(236, 224, 204, 0.66);
+  font-size: 13.5px;
+}
+
+/* --- Left nav ------------------------------------------------------------------- */
+
+.lobby-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lobby-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  color: var(--lobby-text);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-decoration: none;
+  text-transform: uppercase;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent),
+    var(--lobby-panel);
+  border: 1px solid var(--lobby-line);
+  border-radius: var(--lobby-radius-control);
+  transition: border-color var(--lobby-ease), color var(--lobby-ease);
+}
+
+.lobby-nav-item:hover {
+  color: var(--lobby-heading);
+  border-color: var(--lobby-gold-bright);
+}
+
+.lobby-nav-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  background: currentColor;
+  border-radius: 50%;
+}
+
+.lobby-nav-item-active,
+.lobby-nav-item-active:hover {
+  color: var(--lobby-on-gold);
+  background: var(--lobby-gold-gradient);
+  border-color: rgba(255, 232, 166, 0.6);
+}
+
+/* --- Your record ---------------------------------------------------------------- */
+
+.lobby-record {
+  padding: 16px 18px 8px;
+}
+
+.lobby-record-rows {
+  margin: 8px 0 0;
+}
+
+.lobby-record-rows div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  font-size: 14px;
+  border-bottom: var(--lobby-divider);
+}
+
+.lobby-record-rows div:last-child {
+  border-bottom: 0;
+}
+
+.lobby-record-rows dt {
+  color: rgba(236, 224, 204, 0.7);
+}
+
+.lobby-record-rows dd {
+  margin: 0;
+  color: var(--lobby-heading);
+  text-align: right;
+}
+
 .lobby-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -171,9 +349,9 @@
 .lobby-eyebrow,
 .lobby-kicker {
   margin: 0;
-  color: var(--gold);
+  color: var(--lobby-gold);
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
