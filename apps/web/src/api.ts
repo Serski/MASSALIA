@@ -6,10 +6,11 @@ if (import.meta.env.PROD && !configuredApiUrl) {
 
 export const apiBaseUrl = (configuredApiUrl ?? (import.meta.env.DEV ? "http://localhost:3001" : "")).replace(/\/$/, "");
 
-import type { AgeConfig, CharacterSheet, DeathCause, GameDate } from "@massalia/shared";
+import { sortNews, type AgeConfig, type CharacterSheet, type DeathCause, type GameDate, type NewsEntry } from "@massalia/shared";
 
 export type { CharacterSheet } from "@massalia/shared";
 export type { AgeConfig } from "@massalia/shared";
+export type { NewsEntry } from "@massalia/shared";
 
 type RequestOptions = {
   method?: string;
@@ -32,6 +33,38 @@ export class ApiError extends Error {
 // localStorage key below and sent it as a Bearer header; main.tsx purges that key
 // once at boot.
 export const LEGACY_TOKEN_STORAGE_KEY = "massalia_session_token";
+
+// Session HINT. The cookie is httpOnly, so the client cannot tell whether it is
+// logged in without a round trip. This boolean is set when a login-shaped call
+// succeeds and dropped on logout, account deletion, or any 401 — it carries
+// nothing sensitive and grants nothing: the routing layer uses it to skip the
+// landing for a returning player (root → /lobby) and to relabel the landing CTAs.
+// A stale hint costs one /auth/me round trip, after which it is cleared.
+export const SESSION_HINT_KEY = "massalia.session";
+
+function setSessionHint() {
+  try {
+    localStorage.setItem(SESSION_HINT_KEY, "1");
+  } catch {
+    // localStorage unavailable (private mode / blocked): the hint is simply absent.
+  }
+}
+
+function clearSessionHint() {
+  try {
+    localStorage.removeItem(SESSION_HINT_KEY);
+  } catch {
+    // Nothing to clear when storage is unavailable.
+  }
+}
+
+export function hasSessionHint(): boolean {
+  try {
+    return localStorage.getItem(SESSION_HINT_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 export function apiErrorMessage(error: unknown, context: "auth" | "creation" = "auth") {
   if (error instanceof ApiError) {
@@ -77,6 +110,7 @@ async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<
   }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if (response.status === 401) clearSessionHint();
     throw new ApiError(data.error ?? "Request failed", response.status);
   }
   return data as T;
@@ -246,10 +280,47 @@ export type ChronicleEntry = {
   payload: Record<string, unknown>;
 };
 
+// GET /api/lobby — mirrors routes/lobby.ts (LobbyResponse) by hand, like the
+// standings shape below. Rank positions only: no raw metric ever travels here.
+export type LobbyResponse = {
+  user: { email: string; emailVerified: boolean; newsletterOptIn: boolean; isAdmin: boolean; memberSince: string };
+  worlds: {
+    active: null | {
+      id: string;
+      name: string;
+      tagline: string | null;
+      startedAt: string;
+      endsAt: string;
+      gameDateLabel: string;
+      seasonEndsIn: number;
+      playerCount: number;
+      you: null | {
+        characterId: string | null;
+        name: string;
+        houseName: string;
+        professionName: string | null;
+        dynastyName: string | null;
+        generation: number | null;
+        prestigeRank: number | null;
+        rosterSize: number;
+      };
+    };
+    announced: Array<{ id: string; name: string; tagline: string | null; startsAt: string }>;
+    ended: Array<{ id: string; name: string; tagline: string | null; startedAt: string; endsAt: string; playerCount: number }>;
+  };
+  record: {
+    worldsPlayed: number;
+    offices: Array<{ worldName: string; office: string; side: string | null; startedYear: number; endedYear: number | null; acquiredVia: string }>;
+  };
+};
+
 // Login-shaped POSTs (register / login / reset-password). The response sets the
 // session cookie; the body carries only the user + hasCharacter.
 function authenticate(path: string, body: Record<string, unknown>): Promise<AuthResponse> {
-  return apiFetch<AuthResponse>(path, { method: "POST", body });
+  return apiFetch<AuthResponse>(path, { method: "POST", body }).then((result) => {
+    setSessionHint();
+    return result;
+  });
 }
 
 export const api = {
@@ -270,10 +341,15 @@ export const api = {
   resendVerification: () =>
     apiFetch<{ ok: true; message: string }>("/auth/resend-verification", { method: "POST" }),
   // The server clears the session cookie on success.
-  logout: () => apiFetch<{ ok: true }>("/auth/logout", { method: "POST" }),
+  logout: () =>
+    apiFetch<{ ok: true }>("/auth/logout", { method: "POST" }).finally(() => clearSessionHint()),
   // Anonymize-and-detach. On failure (wrong password, rate-limit, network) the
   // server keeps the session cookie, so the inline retry in Settings still works.
-  deleteAccount: (password: string) => apiFetch<{ ok: true }>("/auth/delete-account", { method: "POST", body: { password } }),
+  deleteAccount: (password: string) =>
+    apiFetch<{ ok: true }>("/auth/delete-account", { method: "POST", body: { password } }).then((result) => {
+      clearSessionHint();
+      return result;
+    }),
   me: () => apiFetch<AuthResponse>("/auth/me"),
   // --- Admin (is_admin only; every call is audited server-side) ---
   adminUsers: (q: string, filters: { banned?: boolean; verified?: boolean } = {}) => {
@@ -371,6 +447,11 @@ export const api = {
     apiFetch<{ ok: true }>("/api/offices/appoint-strategos", { method: "POST", body: { candidateCharacterId } }),
   // Player Standings (Atlas Phase 1): five rank-only leaderboards for the world.
   standings: () => apiFetch<StandingsResponse>("/api/standings"),
+  // The account-level Lobby (worlds, your record, account) and the news feed —
+  // a content file served statically (see ageConfig), re-sorted newest first
+  // here in case the file on disk is not.
+  lobby: () => apiFetch<LobbyResponse>("/api/lobby"),
+  news: () => apiFetch<NewsEntry[]>("/content/news/news.json").then(sortNews),
   // Player→player interactions (Interaction Pipeline, Prompt 1): the public
   // profile behind a hemicycle seat / standings row, and the give-drachmae action.
   publicProfile: (characterId: string) => apiFetch<PublicProfileView>(`/api/interactions/profile/${characterId}`),
