@@ -828,6 +828,59 @@ export const playerPops = pgTable("player_pops", {
   ownerIdx: index("player_pops_owner_idx").on(table.worldId, table.ownerPlayerId),
 }));
 
+// --- Barracks (migration 0053) ----------------------------------------------
+// The player's army. Server-side only: unit/band definitions live in
+// content/military/units.json + bands.json and reach the client solely through
+// /api/barracks. Mirrors 0053_barracks.sql exactly. The old `armies` table below
+// is unused and stays unused.
+
+export const PLAYER_UNIT_SOURCES = ["trained", "band"] as const;
+export type PlayerUnitSource = (typeof PLAYER_UNIT_SOURCES)[number];
+
+// One row per trained unit batch or hired band. `unit_id` is the units.json key
+// for trained rows and the bands.json key for band rows.
+export const playerUnits = pgTable("player_units", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  ownerPlayerId: uuid("owner_player_id").references(() => players.id).notNull(),
+  source: text("source").$type<PlayerUnitSource>().notNull(),
+  unitId: text("unit_id").notNull(),
+  count: integer("count").notNull(),
+  startCount: integer("start_count").notNull(),
+  recruitedSeason: integer("recruited_season").notNull(),
+  readyAtSeason: integer("ready_at_season"), // trained only; NULL for bands
+  contractEndSeason: integer("contract_end_season"), // band only; NULL for trained
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  sourceCheck: check("player_units_source_check", sql`${table.source} IN ('trained', 'band')`),
+  countCheck: check("player_units_count_check", sql`${table.count} >= 0`),
+  ownerIdx: index("player_units_owner_idx").on(table.worldId, table.ownerPlayerId),
+}));
+
+// The player's manpower pool; growth is applied closed-form on settle from
+// `last_growth_season`.
+export const playerLevy = pgTable("player_levy", {
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  ownerPlayerId: uuid("owner_player_id").references(() => players.id).notNull(),
+  men: integer("men").notNull(),
+  lastGrowthSeason: integer("last_growth_season").notNull(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.worldId, table.ownerPlayerId] }),
+  menCheck: check("player_levy_men_check", sql`${table.men} >= 0`),
+}));
+
+// The per-player, per-season mercenary market: one row per offered band,
+// `hired` set by a conditional update when the band is taken.
+export const bandOffers = pgTable("band_offers", {
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  ownerPlayerId: uuid("owner_player_id").references(() => players.id).notNull(),
+  seasonIndex: integer("season_index").notNull(),
+  bandId: text("band_id").notNull(),
+  hired: boolean("hired").notNull().default(false),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.worldId, table.ownerPlayerId, table.seasonIndex, table.bandId] }),
+}));
+
 // Stub treasury sink: routine fees accrue here (one row per world). NO spending
 // in this build — a counter the future treasury system will read.
 export const worldTreasury = pgTable("world_treasury", {
