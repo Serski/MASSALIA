@@ -10,6 +10,9 @@ import { navigateTo } from "./navigate.js";
 // The Lobby is lazy: strangers on the landing never pay for it (it pulls the
 // Politics panel in for its office formatters).
 const LobbyPage = lazy(() => import("./lobby/LobbyPage.js").then((module) => ({ default: module.LobbyPage })));
+// The public lobby-framed pages, lazy for the same reason.
+const NewsPage = lazy(() => import("./lobby/NewsPage.js").then((module) => ({ default: module.NewsPage })));
+const GuidesPage = lazy(() => import("./lobby/GuidesPage.js").then((module) => ({ default: module.GuidesPage })));
 
 // Social sign-in (Discord / Google / Facebook) has no OAuth wiring yet. The buttons
 // render only when VITE_SOCIAL_LOGIN=true at build time — unset in production.
@@ -912,6 +915,23 @@ export function App() {
           navigateTo("/login");
         }}
       />
+    );
+  }
+
+  // Public, no session check, no redirect: news and guides share the lobby frame.
+  if (pathname === "/news" || pathname === "/news/") {
+    return (
+      <Suspense fallback={<main className="landing-shell" />}>
+        <NewsPage />
+      </Suspense>
+    );
+  }
+
+  if (pathname === "/guides" || pathname === "/guides/") {
+    return (
+      <Suspense fallback={<main className="landing-shell" />}>
+        <GuidesPage />
+      </Suspense>
     );
   }
 

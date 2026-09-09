@@ -1,20 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { api, ApiError, type LobbyResponse, type NewsEntry } from "../api.js";
-import { SvgIcon } from "../dashboard/shared.js";
+import { api, ApiError, type LobbyResponse } from "../api.js";
 import { maskEmail } from "../dashboard/sheets.js";
-import { GUIDE_CLOSER, GUIDE_FRAMING, GUIDE_READING, GUIDE_READING_HEADER, GUIDE_SECTIONS, GUIDE_TABS, GUIDE_TIP } from "../dashboard/guideContent.js";
 import { OFFICE_LABEL, SIDE_LABEL, bcYear, titleCaseVia } from "../dashboard/panels/PoliticsPanel.js";
-import { LobbyFrame } from "./LobbyFrame.js";
+import { LobbyFrame, LobbySectionHeading as SectionHeading } from "./LobbyFrame.js";
 import "./lobby.css";
 
 // ---------------------------------------------------------------------------
 // The account-level Lobby (/lobby): the worlds (the open one and your seat in
-// it, the calendar of announced worlds, the ended ones), your record, the news
-// of the game, the Hall of Fame (an empty state until results exist), the
-// guides, and your account. Everything on this page is a read of GET /api/lobby
-// plus the static news file; the only writes are the newsletter opt-in, log
-// out and account deletion, through the same api calls the Settings tab uses.
-// Styled with lobby- classes over the landing tokens; no dashboard chrome.
+// it, the calendar of announced worlds, the ended ones), your record, the Hall
+// of Fame (an empty state until results exist) and your account. News and the
+// guides are their own public pages (/news, /guides) reached from the frame's
+// nav. Everything here is a read of GET /api/lobby; the only writes are the
+// newsletter opt-in, log out and account deletion, through the same api calls
+// the Settings tab uses. Styled with lobby- classes over the landing tokens.
 // ---------------------------------------------------------------------------
 
 type LobbyPageProps = {
@@ -26,13 +24,6 @@ type LobbyPageProps = {
 
 type ActiveWorld = NonNullable<LobbyResponse["worlds"]["active"]>;
 type LobbyUser = LobbyResponse["user"];
-
-const LANDING_LINKS = [
-  { href: "/#world", label: "The World" },
-  { href: "/#roles", label: "Professions" },
-  { href: "/#atlas", label: "Atlas" },
-  { href: "/#factions", label: "Factions" },
-];
 
 function ordinal(n: number): string {
   const tail = n % 100;
@@ -57,20 +48,12 @@ function monthYear(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }
 
-// News dates are calendar days (YYYY-MM-DD), not instants: format them in UTC so
-// the day never shifts with the viewer's timezone.
-function newsDate(day: string): string {
-  return new Date(`${day}T00:00:00Z`).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
-}
-
 function count(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
 export function LobbyPage({ onEnterGame, onCreateCharacter, onRequireLogin, onLoggedOut }: LobbyPageProps) {
   const [lobby, setLobby] = useState<LobbyResponse | null>(null);
-  // null = the news file could not be fetched; the section then shows its empty line.
-  const [news, setNews] = useState<NewsEntry[] | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [attempt, setAttempt] = useState(0);
   const [newsletter, setNewsletter] = useState(false);
@@ -83,12 +66,11 @@ export function LobbyPage({ onEnterGame, onCreateCharacter, onRequireLogin, onLo
   useEffect(() => {
     let active = true;
     setStatus("loading");
-    // A failed news fetch degrades to "Nothing posted yet." — it never fails the page.
-    Promise.all([api.lobby(), api.news().catch(() => null)])
-      .then(([lobbyData, newsData]) => {
+    api
+      .lobby()
+      .then((lobbyData) => {
         if (!active) return;
         setLobby(lobbyData);
-        setNews(newsData);
         setNewsletter(lobbyData.user.newsletterOptIn);
         setStatus("ready");
       })
@@ -149,12 +131,10 @@ export function LobbyPage({ onEnterGame, onCreateCharacter, onRequireLogin, onLo
               onEnterGame={onEnterGame}
               onCreateCharacter={onCreateCharacter}
             />
-            <NewsSection news={news} />
             <HallOfFameSection ended={lobby.worlds.ended} />
           </div>
           <div className="lobby-column">
             <RecordSection user={lobby.user} record={lobby.record} you={lobby.worlds.active?.you ?? null} />
-            <GuidesSection />
             <AccountSection
               user={lobby.user}
               newsletter={newsletter}
@@ -168,15 +148,6 @@ export function LobbyPage({ onEnterGame, onCreateCharacter, onRequireLogin, onLo
         </div>
       )}
     </LobbyFrame>
-  );
-}
-
-function SectionHeading({ id, eyebrow, title }: { id: string; eyebrow: string; title: string }) {
-  return (
-    <div className="lobby-section-head">
-      <p className="lobby-eyebrow">{eyebrow}</p>
-      <h2 id={id}>{title}</h2>
-    </div>
   );
 }
 
@@ -377,34 +348,6 @@ function RecordSection({ user, record, you }: { user: LobbyUser; record: LobbyRe
   );
 }
 
-// --- News --------------------------------------------------------------------
-
-function NewsSection({ news }: { news: NewsEntry[] | null }) {
-  return (
-    <section className="lobby-section" aria-labelledby="lobby-news-title">
-      <SectionHeading id="lobby-news-title" eyebrow="News" title="Dispatches" />
-      {news && news.length ? (
-        <div className="lobby-news">
-          {news.map((entry) => (
-            <article className="lobby-news-item" key={entry.id}>
-              <p className="lobby-news-meta">
-                <time dateTime={entry.date}>{newsDate(entry.date)}</time>
-                <span className={`lobby-tag lobby-tag-${entry.tag}`}>{entry.tag}</span>
-              </p>
-              <h3>{entry.title}</h3>
-              {entry.body.map((paragraph, index) => (
-                <p key={index}>{paragraph}</p>
-              ))}
-            </article>
-          ))}
-        </div>
-      ) : (
-        <p className="lobby-empty">Nothing posted yet.</p>
-      )}
-    </section>
-  );
-}
-
 // --- Hall of Fame ---------------------------------------------------------------
 
 function HallOfFameSection({ ended }: { ended: LobbyResponse["worlds"]["ended"] }) {
@@ -427,63 +370,6 @@ function HallOfFameSection({ ended }: { ended: LobbyResponse["worlds"]["ended"] 
       ) : (
         <p className="lobby-empty">No world has ended yet.</p>
       )}
-    </section>
-  );
-}
-
-// --- Guides --------------------------------------------------------------------
-// The in-game Guide's atoms (dashboard/guideContent.tsx) in lobby markup — the
-// strings are imported, never copied, so the wording still lives in one place.
-
-function GuidesSection() {
-  return (
-    <section className="lobby-section" aria-labelledby="lobby-guides-title">
-      <SectionHeading id="lobby-guides-title" eyebrow="Guides" title="How the city works" />
-      <p className="lobby-guide-p">{GUIDE_FRAMING}</p>
-
-      <h3 className="lobby-subhead">The six tabs</h3>
-      <ul className="lobby-guide-tabs">
-        {GUIDE_TABS.map((tab) => (
-          <li key={tab.name}>
-            <span className="lobby-guide-icon" aria-hidden="true">
-              <SvgIcon icon={tab.icon} />
-            </span>
-            <span>
-              <strong>{tab.name}</strong>
-              <span>{tab.line}</span>
-            </span>
-          </li>
-        ))}
-      </ul>
-
-      <h3 className="lobby-subhead">{GUIDE_READING_HEADER}</h3>
-      <ul className="lobby-guide-reading">
-        {GUIDE_READING.map((item) => (
-          <li key={item.name}>
-            <strong>{item.name}</strong> — {item.line}
-          </li>
-        ))}
-      </ul>
-
-      <p className="lobby-guide-tip">{GUIDE_TIP}</p>
-
-      {GUIDE_SECTIONS.map((section) => (
-        <details className="lobby-guide-section" key={section.id}>
-          <summary>{section.title}</summary>
-          {section.paragraphs.map((paragraph, index) => (
-            <p className="lobby-guide-p" key={index}>{paragraph}</p>
-          ))}
-        </details>
-      ))}
-
-      <p className="lobby-guide-closer">{GUIDE_CLOSER}</p>
-
-      <p className="lobby-landing-links">
-        <span>More on the landing:</span>
-        {LANDING_LINKS.map((link) => (
-          <a key={link.href} href={link.href}>{link.label}</a>
-        ))}
-      </p>
     </section>
   );
 }

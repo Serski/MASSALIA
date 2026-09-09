@@ -18,6 +18,16 @@ const NAV: Array<{ id: LobbyNavItem; label: string; path: string }> = [
   { id: "guides", label: "Guides", path: "/guides" },
 ];
 
+// A section's eyebrow + title, shared by the lobby pages.
+export function LobbySectionHeading({ id, eyebrow, title }: { id: string; eyebrow: string; title: string }) {
+  return (
+    <div className="lobby-section-head">
+      <p className="lobby-eyebrow">{eyebrow}</p>
+      <h2 id={id}>{title}</h2>
+    </div>
+  );
+}
+
 export function LobbyFrame({ active, children }: { active: LobbyNavItem; children: ReactNode }) {
   const returning = hasSessionHint();
 
