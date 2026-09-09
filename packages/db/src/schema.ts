@@ -1,13 +1,17 @@
 import { relations, sql } from "drizzle-orm";
 import { boolean, check, date, index, inet, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
+export const WORLD_STATUSES = ["announced", "active", "ended"] as const;
+export type WorldStatus = (typeof WORLD_STATUSES)[number];
+
 export const worlds = pgTable("worlds", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   seed: text("seed").notNull(),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
   endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
-  status: text("status").notNull().default("active"),
+  status: text("status").$type<WorldStatus>().notNull().default("active"),
+  tagline: text("tagline"),
 });
 
 export const users = pgTable("users", {
