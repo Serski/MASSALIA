@@ -350,7 +350,13 @@ export const api = {
       clearSessionHint();
       return result;
     }),
-  me: () => apiFetch<AuthResponse>("/auth/me"),
+  // /auth/me answers 200 with a null user when logged out (a 403 for a banned
+  // account), so the hint is dropped here as well as on the 401 path.
+  me: () =>
+    apiFetch<AuthResponse>("/auth/me").then((result) => {
+      if (!result.user) clearSessionHint();
+      return result;
+    }),
   // --- Admin (is_admin only; every call is audited server-side) ---
   adminUsers: (q: string, filters: { banned?: boolean; verified?: boolean } = {}) => {
     const params = new URLSearchParams();

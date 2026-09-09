@@ -1,11 +1,14 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
-import { ApiError, api, apiErrorMessage } from "./api.js";
+import { lazy, Suspense, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import { ApiError, api, apiErrorMessage, hasSessionHint } from "./api.js";
 import { LegalPage, type LegalPageKind } from "./legal.js";
 import { CharacterCreation } from "./CharacterCreation.js";
 import { Dashboard } from "./dashboard/Dashboard.js";
 import { World2Map } from "./map/World2Map.js";
 import { AdminPage } from "./AdminPage.js";
 import { assetPath, nobleHouses, professions, type Alignment, type House, type Profession } from "./data/league.js";
+// The Lobby is lazy: strangers on the landing never pay for it (it pulls the
+// Politics panel in for its office formatters).
+const LobbyPage = lazy(() => import("./lobby/LobbyPage.js").then((module) => ({ default: module.LobbyPage })));
 
 // Social sign-in (Discord / Google / Facebook) has no OAuth wiring yet. The buttons
 // render only when VITE_SOCIAL_LOGIN=true at build time — unset in production.
@@ -429,6 +432,29 @@ function AuthModal({ mode, onModeChange, onClose }: { mode: AuthMode; onModeChan
 }
 
 function AuthRoutePage({ mode }: { mode: AuthMode }) {
+  // A live session skips the form: /login and /signup send a logged-in user to
+  // the lobby. Nothing renders until /auth/me answers, so the form never flashes.
+  const [showForm, setShowForm] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    api.me()
+      .then((result) => {
+        if (!active) return;
+        if (result.user) navigateTo("/lobby");
+        else setShowForm(true);
+      })
+      .catch(() => {
+        if (active) setShowForm(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (!showForm) {
+    return <main className="landing-shell auth-page-shell" />;
+  }
   return (
     <main className="landing-shell auth-page-shell">
       <AuthPanel mode={mode} onModeChange={(nextMode) => navigateTo(`/${nextMode}`)} />
@@ -599,6 +625,9 @@ function VerifyEmailPage({
 
 function DetailPage({ entry, onOpenAuth }: { entry: DetailEntry; onOpenAuth: (mode: AuthMode) => void }) {
   const emblem = "image" in entry ? entry.image : undefined;
+  // Detail pages render for everyone with no API call; a session hint only
+  // relabels the nav (a stale hint leads to /lobby, which 401s to /login).
+  const returning = hasSessionHint();
 
   return (
     <main className="landing-shell detail-shell">
@@ -615,8 +644,17 @@ function DetailPage({ entry, onOpenAuth }: { entry: DetailEntry; onOpenAuth: (mo
           <a href="/#atlas">Atlas</a>
         </div>
         <div className="nav-actions">
-          <button className="nav-button nav-login" type="button" onClick={() => onOpenAuth("login")}>Login</button>
-          <button className="nav-button nav-signup" type="button" onClick={() => onOpenAuth("signup")}>Sign Up</button>
+          {returning ? (
+            <>
+              <button className="nav-button nav-login" type="button" onClick={() => navigateTo("/lobby")}>Lobby</button>
+              <button className="nav-button nav-signup" type="button" onClick={() => navigateTo("/game")}>Continue playing</button>
+            </>
+          ) : (
+            <>
+              <button className="nav-button nav-login" type="button" onClick={() => onOpenAuth("login")}>Login</button>
+              <button className="nav-button nav-signup" type="button" onClick={() => onOpenAuth("signup")}>Sign Up</button>
+            </>
+          )}
         </div>
       </nav>
 
@@ -794,9 +832,41 @@ export function App() {
     return () => window.removeEventListener("popstate", handleRoute);
   }, []);
 
+  // Root redirect for a returning player (as Travian does): on the bare `/` — no
+  // hash, no search (the ?reset= / ?verify= / ?page= flows preempt routing above)
+  // — a session hint means one /auth/me, then /lobby. Strangers (no hint) get the
+  // landing at once with no API call; a logged-in player never sees it flash.
+  // Deep links (/#world …) and the detail pages render for everyone, unchecked.
+  const isBareRoot = pathname === "/" && !window.location.hash && !window.location.search;
+  const [rootProbe, setRootProbe] = useState<"pending" | "landing">(() => (isBareRoot && hasSessionHint() ? "pending" : "landing"));
+  useEffect(() => {
+    if (!isBareRoot || !hasSessionHint()) {
+      setRootProbe("landing");
+      return;
+    }
+    let active = true;
+    setRootProbe("pending");
+    // Any non-200 counts as no user; a null user has already cleared the hint.
+    api.me()
+      .then((result) => {
+        if (!active) return;
+        if (result.user) navigateTo("/lobby");
+        else setRootProbe("landing");
+      })
+      .catch(() => {
+        if (active) setRootProbe("landing");
+      });
+    return () => {
+      active = false;
+    };
+  }, [isBareRoot]);
+  // A session hint relabels the landing's CTAs; it is read on every render (cheap).
+  const returning = hasSessionHint();
+
   const openAuth = (mode: AuthMode) => setAuthModalMode(mode);
   const closeAuth = () => setAuthModalMode(null);
   const startGame = () => navigateTo("/create");
+  const continuePlaying = () => navigateTo("/game");
 
   // Strip `?reset=TOKEN` from the URL so a refresh/back doesn't re-open the flow.
   const clearResetParam = () => {
@@ -850,8 +920,21 @@ export function App() {
     );
   }
 
+  if (pathname === "/lobby" || pathname === "/lobby/") {
+    return (
+      <Suspense fallback={<main className="landing-shell" />}>
+        <LobbyPage
+          onEnterGame={() => navigateTo("/game")}
+          onCreateCharacter={() => navigateTo("/create")}
+          onRequireLogin={() => navigateTo("/login")}
+          onLoggedOut={() => navigateTo("/")}
+        />
+      </Suspense>
+    );
+  }
+
   if (pathname === "/game") {
-    return <Dashboard onExit={() => navigateTo("/")} onRequireLogin={() => navigateTo("/login")} onRequireCharacter={() => navigateTo("/create")} />;
+    return <Dashboard onExit={() => navigateTo("/lobby")} onRequireLogin={() => navigateTo("/login")} onRequireCharacter={() => navigateTo("/create")} />;
   }
 
   // Standalone route for the campaign map. Now the hand-drawn world map, the
@@ -887,6 +970,10 @@ export function App() {
     );
   }
 
+  if (rootProbe === "pending") {
+    return <main className="landing-shell" />;
+  }
+
   return (
     <main className="landing-shell">
       <section className="landing-hero" aria-label="Massalia campaign launch">
@@ -904,8 +991,17 @@ export function App() {
             <a href="#factions">Factions</a>
           </div>
           <div className="nav-actions">
-            <button className="nav-button nav-login" type="button" onClick={() => openAuth("login")}>Login</button>
-            <button className="nav-button nav-signup" type="button" onClick={startGame}>Sign Up</button>
+            {returning ? (
+              <>
+                <button className="nav-button nav-login" type="button" onClick={() => navigateTo("/lobby")}>Lobby</button>
+                <button className="nav-button nav-signup" type="button" onClick={continuePlaying}>Continue playing</button>
+              </>
+            ) : (
+              <>
+                <button className="nav-button nav-login" type="button" onClick={() => openAuth("login")}>Login</button>
+                <button className="nav-button nav-signup" type="button" onClick={startGame}>Sign Up</button>
+              </>
+            )}
           </div>
         </nav>
 
@@ -925,7 +1021,9 @@ export function App() {
             </p>
             <div className="hero-actions">
               {/* TODO: If entry is via Discord, change this CTA to "Join the Discord" / "Enter the League" and point it to the invite link. The "Play free in your browser" microcopy may also need to change. */}
-              <button className="primary-cta" type="button" onClick={startGame}>Start The Game</button>
+              <button className="primary-cta" type="button" onClick={returning ? continuePlaying : startGame}>
+                {returning ? "Continue playing" : "Start The Game"}
+              </button>
               <p className="cta-note">No download. Play free in your browser.</p>
             </div>
             <dl className="stat-row" aria-label="Live game status">
@@ -1068,7 +1166,9 @@ export function App() {
           <p>No download. Play free in your browser.</p>
         </div>
         {/* TODO: If entry is via Discord, change this CTA to "Join the Discord" / "Enter the League" and point it to the invite link. The "Play free in your browser" microcopy may also need to change. */}
-        <button className="primary-cta" type="button" onClick={startGame}>Start The Game</button>
+        <button className="primary-cta" type="button" onClick={returning ? continuePlaying : startGame}>
+          {returning ? "Continue playing" : "Start The Game"}
+        </button>
       </section>
 
       <LandingFooter />
