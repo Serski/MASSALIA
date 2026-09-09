@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { and, asc, count, countDistinct, desc, eq } from "drizzle-orm";
 import { createDb, dynasties, houses, officeHistory, players, playerCharacters, professions, users, worlds } from "@massalia/db";
-import { formatGameDate, gameDate } from "@massalia/shared";
+import { currentAge, formatGameDate, gameDate, portraitFor } from "@massalia/shared";
+import { getAgeConfig, portraitUrl } from "../services/age.js";
 import { requireAuth } from "../services/auth.js";
 import { findCharacterRow, getActivePlayer, getActiveWorld } from "../services/character.js";
 import { loadStandingsRoster } from "../services/standings.js";
@@ -30,7 +31,12 @@ export type LobbyResponse = {
         characterId: string | null;
         name: string;
         houseName: string;
+        professionSlug: string | null;
         professionName: string | null;
+        // The aged avatar portrait the player sees in game (as /me/state); null
+        // without a character row. faceId is the class-portrait fallback.
+        portrait: string | null;
+        faceId: string | null;
         dynastyName: string | null;
         generation: number | null;
         prestigeRank: number | null;
@@ -45,6 +51,16 @@ export type LobbyResponse = {
     offices: Array<{ worldName: string; office: string; side: string | null; startedYear: number; endedYear: number | null; acquiredVia: string }>;
   };
 };
+
+// The portrait the player sees in game, resolved exactly as /me/state does it:
+// the avatar's stage for the character's current age. null without a character
+// row (or an avatar the config no longer knows).
+function agedPortrait(character: { avatarId: string | null; startAge: number; createdAt: Date } | null, now: number): string | null {
+  if (!character) return null;
+  const ageCfg = getAgeConfig();
+  const age = currentAge(character.startAge, character.createdAt.getTime(), now, ageCfg);
+  return portraitUrl(portraitFor(character.avatarId ?? "", age, ageCfg));
+}
 
 async function activeWorldSection(userId: string, now: number): Promise<LobbyResponse["worlds"]["active"]> {
   const active = await getActiveWorld();
@@ -71,11 +87,11 @@ async function activeWorldSection(userId: string, now: number): Promise<LobbyRes
     // Secondary real-time countdown to the end of the 182-day run (as /me/state).
     seasonEndsIn: Math.max(0, Math.ceil((world.endsAt.getTime() - now) / 86_400_000)),
     playerCount,
-    you: await youSection(userId, world.id),
+    you: await youSection(userId, world.id, now),
   };
 }
 
-async function youSection(userId: string, worldId: string): Promise<NonNullable<LobbyResponse["worlds"]["active"]>["you"]> {
+async function youSection(userId: string, worldId: string, now: number): Promise<NonNullable<LobbyResponse["worlds"]["active"]>["you"]> {
   const player = await getActivePlayer(userId, worldId);
   if (!player) return null;
 
@@ -96,7 +112,10 @@ async function youSection(userId: string, worldId: string): Promise<NonNullable<
     characterId: character?.id ?? null,
     name: player.name,
     houseName: house?.name ?? player.houseSlug ?? "—",
+    professionSlug: player.professionSlug,
     professionName: profession?.name ?? null,
+    portrait: agedPortrait(character, now),
+    faceId: player.faceId,
     dynastyName: dynasty?.name ?? null,
     generation: dynasty?.generation ?? null,
     prestigeRank,

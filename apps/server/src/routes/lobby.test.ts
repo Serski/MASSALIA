@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import Fastify, { type FastifyInstance } from "fastify";
 import cookie from "@fastify/cookie";
+import { currentAge, portraitFor } from "@massalia/shared";
 import type { LobbyResponse } from "./lobby.js";
 import type { StandingsResponse } from "./standings.js";
 
@@ -27,7 +28,8 @@ async function loadModules() {
   const { lobbyRoutes } = await import("./lobby.js");
   const { standingsRoutes } = await import("./standings.js");
   const { errorHandler } = await import("../errorHandler.js");
-  return { dbPkg, lobbyRoutes, standingsRoutes, errorHandler };
+  const age = await import("../services/age.js");
+  return { dbPkg, lobbyRoutes, standingsRoutes, errorHandler, age };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -57,6 +59,8 @@ suite("GET /api/lobby (integration)", () => {
   beforeAll(async () => {
     m = await loadModules();
     db = m.dbPkg.createDb();
+    // The aged portrait needs the age config, loaded at boot in production.
+    await m.age.loadAgeConfig();
     app = Fastify();
     app.setErrorHandler(m.errorHandler);
     await app.register(cookie, { secret: "test-session-secret-at-least-32-chars-long" });
@@ -79,8 +83,11 @@ suite("GET /api/lobby (integration)", () => {
     worldId = (await db.insert(m.dbPkg.worlds).values({ name: "Lobby Test", seed: "lobby", tagline: "The first season", startedAt, endsAt, status: "active" }).returning())[0]!.id;
   });
 
-  // A user with a live session and, optionally, a player + character in the active world.
-  async function freshUser(opts: { character?: { name: string; prestige: number } } = {}) {
+  // A user with a live session and, optionally, a player + character in the active
+  // world. The character carries a real avatar from age-config.json so the aged
+  // portrait resolves; the player's faceId is the class-portrait fallback.
+  const AVATAR_ID = "avatar-30-1";
+  async function freshUser(opts: { character?: { name: string; prestige: number; classId?: string } } = {}) {
     const { users, players, playerCharacters, dynasties, sessions } = m.dbPkg;
     const user = (await db.insert(users).values({ email: `u-${Math.random().toString(36).slice(2)}@t`, passwordHash: "x" }).returning())[0]!;
     const token = crypto.randomBytes(16).toString("base64url");
@@ -89,17 +96,27 @@ suite("GET /api/lobby (integration)", () => {
     const player = (
       await db
         .insert(players)
-        .values({ worldId, userId: user.id, name: opts.character.name, color: "#123456", houseSlug: "test-house", professionSlug: "test-trader" })
+        .values({ worldId, userId: user.id, name: opts.character.name, color: "#123456", houseSlug: "test-house", professionSlug: "test-trader", faceId: "face-test-1" })
         .returning()
     )[0]!;
     const dynasty = (await db.insert(dynasties).values({ worldId, name: `Line of ${opts.character.name}`, houseSlug: "test-house", foundingPlayerId: player.id, generation: 3 }).returning())[0]!;
     const character = (
       await db
         .insert(playerCharacters)
-        .values({ playerId: player.id, worldId, houseSlug: "test-house", classId: "trader", prestige: opts.character.prestige, dynastyId: dynasty.id, startAge: 30, deathAge: 90 })
+        .values({
+          playerId: player.id,
+          worldId,
+          houseSlug: "test-house",
+          classId: opts.character.classId ?? "trader",
+          prestige: opts.character.prestige,
+          dynastyId: dynasty.id,
+          startAge: 30,
+          deathAge: 90,
+          avatarId: AVATAR_ID,
+        })
         .returning()
     )[0]!;
-    return { user, token, playerId: player.id, characterId: character.id };
+    return { user, token, playerId: player.id, characterId: character.id, character };
   }
 
   const sessionCookie = (token: string) => ({ cookie: `massalia_session=${app.signCookie(token)}` });
@@ -159,11 +176,22 @@ suite("GET /api/lobby (integration)", () => {
     expect(you.rosterSize).toBe(board.length);
     expect(you.houseName).toBe(houseRow.name);
     expect(you.houseName).not.toBe("test-house");
+    // The portrait is the one /me/state serves: the avatar's stage for the
+    // character's current age, through the same helpers (/me/state itself cannot
+    // be mounted here without the whole content boot — see me-onboarding.test.ts).
+    const ageCfg = m.age.getAgeConfig();
+    const expectedPortrait = m.age.portraitUrl(portraitFor(AVATAR_ID, currentAge(30, viewer.character!.createdAt.getTime(), Date.now(), ageCfg), ageCfg));
+    expect(typeof you.portrait).toBe("string");
+    expect(you.portrait).toBe(expectedPortrait);
+    expect(you.portrait).toMatch(/^\/portraits\/avatar-30-1-/);
     expect(you).toEqual({
       characterId: viewer.characterId,
       name: "Pytheas",
       houseName: houseRow.name,
+      professionSlug: "test-trader",
       professionName: "Test Trader",
+      portrait: expectedPortrait,
+      faceId: "face-test-1",
       dynastyName: "Line of Pytheas",
       generation: 3,
       prestigeRank: 3,
