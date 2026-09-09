@@ -75,7 +75,11 @@
   }
 }
 
-/* A single-column lobby page (news, guides): same width as the grid. */
+.lobby-back {
+  margin: 0 0 18px;
+}
+
+/* A single-column lobby page (news, guides, the sub-views): same width as the grid. */
 .lobby-page {
   max-width: 1240px;
   margin: 24px auto 0;

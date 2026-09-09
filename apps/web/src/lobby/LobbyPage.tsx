@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type LobbyResponse } from "../api.js";
 import { maskEmail } from "../dashboard/sheets.js";
 import { OFFICE_LABEL, SIDE_LABEL, bcYear, titleCaseVia } from "../dashboard/panels/PoliticsPanel.js";
+import { navigateTo } from "../navigate.js";
 import { LobbyFrame, LobbySectionHeading as SectionHeading } from "./LobbyFrame.js";
+import type { LobbyView } from "./routes.js";
 import "./lobby.css";
 
 // ---------------------------------------------------------------------------
@@ -16,6 +18,8 @@ import "./lobby.css";
 // ---------------------------------------------------------------------------
 
 type LobbyPageProps = {
+  // /lobby → "worlds", /lobby/account → "account", /lobby/hall-of-fame → "hall-of-fame".
+  view: LobbyView;
   onEnterGame: () => void;
   onCreateCharacter: () => void;
   onRequireLogin: () => void;
@@ -52,7 +56,7 @@ function count(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-export function LobbyPage({ onEnterGame, onCreateCharacter, onRequireLogin, onLoggedOut }: LobbyPageProps) {
+export function LobbyPage({ view, onEnterGame, onCreateCharacter, onRequireLogin, onLoggedOut }: LobbyPageProps) {
   const [lobby, setLobby] = useState<LobbyResponse | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [attempt, setAttempt] = useState(0);
@@ -120,6 +124,24 @@ export function LobbyPage({ onEnterGame, onCreateCharacter, onRequireLogin, onLo
           <p>Could not reach the lobby.</p>
           <button className="lobby-btn" type="button" onClick={() => setAttempt((n) => n + 1)}>Try again</button>
         </div>
+      ) : view === "account" ? (
+        <div className="lobby-page">
+          <BackToWorlds />
+          <AccountSection
+            user={lobby.user}
+            newsletter={newsletter}
+            savingNewsletter={savingNewsletter}
+            newsletterNote={newsletterNote}
+            onToggleNewsletter={toggleNewsletter}
+            onLogout={logout}
+            onAccountDeleted={onLoggedOut}
+          />
+        </div>
+      ) : view === "hall-of-fame" ? (
+        <div className="lobby-page">
+          <BackToWorlds />
+          <HallOfFameSection ended={lobby.worlds.ended} />
+        </div>
       ) : (
         <div className="lobby-grid">
           <div className="lobby-column">
@@ -131,23 +153,31 @@ export function LobbyPage({ onEnterGame, onCreateCharacter, onRequireLogin, onLo
               onEnterGame={onEnterGame}
               onCreateCharacter={onCreateCharacter}
             />
-            <HallOfFameSection ended={lobby.worlds.ended} />
           </div>
           <div className="lobby-column">
             <RecordSection user={lobby.user} record={lobby.record} you={lobby.worlds.active?.you ?? null} />
-            <AccountSection
-              user={lobby.user}
-              newsletter={newsletter}
-              savingNewsletter={savingNewsletter}
-              newsletterNote={newsletterNote}
-              onToggleNewsletter={toggleNewsletter}
-              onLogout={logout}
-              onAccountDeleted={onLoggedOut}
-            />
           </div>
         </div>
       )}
     </LobbyFrame>
+  );
+}
+
+// The sub-views' way back to the front.
+function BackToWorlds() {
+  return (
+    <p className="lobby-back">
+      <a
+        className="lobby-link"
+        href="/lobby"
+        onClick={(event) => {
+          event.preventDefault();
+          navigateTo("/lobby");
+        }}
+      >
+        ← Game worlds
+      </a>
+    </p>
   );
 }
 
@@ -168,6 +198,11 @@ function LobbyToggle({ on, disabled, label, onToggle }: { on: boolean; disabled:
 }
 
 // --- Worlds ------------------------------------------------------------------
+
+function hallOfFameClick(event: { preventDefault: () => void }) {
+  event.preventDefault();
+  navigateTo("/lobby/hall-of-fame");
+}
 
 function WorldsSection({
   worlds,
@@ -226,12 +261,12 @@ function WorldsSection({
             {ended.map((world) => (
               <li className="lobby-row" key={world.id}>
                 <div className="lobby-row-main">
-                  <a className="lobby-row-link" href="#lobby-hall">{world.name}</a>
+                  <a className="lobby-row-link" href="/lobby/hall-of-fame" onClick={hallOfFameClick}>{world.name}</a>
                   <span className="lobby-row-meta">
                     closed on {longDate(world.endsAt)}, {count(world.playerCount, "player", "players")}
                   </span>
                 </div>
-                <a className="lobby-link" href="#lobby-hall">Hall of Fame ↓</a>
+                <a className="lobby-link" href="/lobby/hall-of-fame" onClick={hallOfFameClick}>Hall of Fame →</a>
               </li>
             ))}
           </ul>
@@ -352,7 +387,7 @@ function RecordSection({ user, record, you }: { user: LobbyUser; record: LobbyRe
 
 function HallOfFameSection({ ended }: { ended: LobbyResponse["worlds"]["ended"] }) {
   return (
-    <section className="lobby-section" id="lobby-hall" aria-labelledby="lobby-hall-title">
+    <section className="lobby-section" aria-labelledby="lobby-hall-title">
       <SectionHeading id="lobby-hall-title" eyebrow="Hall of Fame" title="Worlds that were" />
       {ended.length ? (
         <div className="lobby-hall">

@@ -7,6 +7,7 @@ import { World2Map } from "./map/World2Map.js";
 import { AdminPage } from "./AdminPage.js";
 import { assetPath, nobleHouses, professions, type Alignment, type House, type Profession } from "./data/league.js";
 import { navigateTo } from "./navigate.js";
+import { lobbyViewFor } from "./lobby/routes.js";
 // The Lobby is lazy: strangers on the landing never pay for it (it pulls the
 // Politics panel in for its office formatters).
 const LobbyPage = lazy(() => import("./lobby/LobbyPage.js").then((module) => ({ default: module.LobbyPage })));
@@ -935,10 +936,12 @@ export function App() {
     );
   }
 
-  if (pathname === "/lobby" || pathname === "/lobby/") {
+  const lobbyView = lobbyViewFor(pathname);
+  if (lobbyView) {
     return (
       <Suspense fallback={<main className="landing-shell" />}>
         <LobbyPage
+          view={lobbyView}
           onEnterGame={() => navigateTo("/game")}
           onCreateCharacter={() => navigateTo("/create")}
           onRequireLogin={() => navigateTo("/login")}
