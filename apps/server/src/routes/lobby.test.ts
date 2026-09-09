@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import crypto from "node:crypto";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import Fastify, { type FastifyInstance } from "fastify";
 import cookie from "@fastify/cookie";
 import type { LobbyResponse } from "./lobby.js";
@@ -140,6 +140,12 @@ suite("GET /api/lobby (integration)", () => {
     const viewer = await freshUser({ character: { name: "Pytheas", prestige: 5 } });
     await freshUser({ character: { name: "Gyptis", prestige: 20 } });
 
+    // houseName must be houses.name for the player's house_slug, never the slug.
+    // Read the row back rather than pinning a literal: the DB-gated suites share
+    // one database and the test-house row keeps whichever suite seeded it first.
+    const houseRow = (await db.select({ name: m.dbPkg.houses.name }).from(m.dbPkg.houses).where(eq(m.dbPkg.houses.slug, "test-house")).limit(1))[0]!;
+    expect(houseRow.name).not.toBe("test-house");
+
     const body = await lobby(viewer.token);
     const standings = await app.inject({ method: "GET", url: "/api/standings", headers: sessionCookie(viewer.token) });
     expect(standings.statusCode).toBe(200);
@@ -151,10 +157,12 @@ suite("GET /api/lobby (integration)", () => {
     const you = body.worlds.active!.you!;
     expect(you.prestigeRank).toBe(mine.rank);
     expect(you.rosterSize).toBe(board.length);
+    expect(you.houseName).toBe(houseRow.name);
+    expect(you.houseName).not.toBe("test-house");
     expect(you).toEqual({
       characterId: viewer.characterId,
       name: "Pytheas",
-      houseName: "Test House",
+      houseName: houseRow.name,
       professionName: "Test Trader",
       dynastyName: "Line of Pytheas",
       generation: 3,
