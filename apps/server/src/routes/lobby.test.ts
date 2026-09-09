@@ -146,6 +146,7 @@ suite("GET /api/lobby (integration)", () => {
     expect(body.worlds.active!.gameDateLabel).toBe("Spring, 300 BC");
     expect(body.worlds.active!.seasonEndsIn).toBe(182);
     expect(body.worlds.active!.playerCount).toBe(0);
+    expect(body.worlds.active!.citizens).toEqual([]);
     expect(body.worlds.active!.you).toBeNull();
     expect(body.worlds.announced).toEqual([]);
     expect(body.worlds.ended).toEqual([]);
@@ -201,6 +202,62 @@ suite("GET /api/lobby (integration)", () => {
     expect(body.record.worldsPlayed).toBe(1);
   });
 
+  it("citizens: the top five of the prestige board, in board order, with the card fields", async () => {
+    const seats = [
+      await freshUser({ character: { name: "Kleon", prestige: 50 } }),
+      await freshUser({ character: { name: "Pytheas", prestige: 5 } }),
+      await freshUser({ character: { name: "Gyptis", prestige: 20 } }),
+      await freshUser({ character: { name: "Protis", prestige: 35 } }),
+      await freshUser({ character: { name: "Euxenos", prestige: 10 } }),
+      await freshUser({ character: { name: "Nannos", prestige: 1 } }),
+    ];
+    const viewer = seats[1]!;
+    const body = await lobby(viewer.token);
+    const standings = await app.inject({ method: "GET", url: "/api/standings", headers: sessionCookie(viewer.token) });
+    const board = (standings.json() as StandingsResponse).boards.prestige;
+    expect(board).toHaveLength(6);
+
+    const citizens = body.worlds.active!.citizens;
+    expect(citizens).toHaveLength(5);
+    expect(citizens.map((c) => c.rank)).toEqual([1, 2, 3, 4, 5]);
+    expect(citizens.map((c) => [c.characterId, c.name])).toEqual(board.slice(0, 5).map((row) => [row.characterId, row.name]));
+    expect(citizens.map((c) => c.name)).toEqual(["Kleon", "Protis", "Gyptis", "Euxenos", "Pytheas"]);
+
+    const houseRow = (await db.select({ name: m.dbPkg.houses.name }).from(m.dbPkg.houses).where(eq(m.dbPkg.houses.slug, "test-house")).limit(1))[0]!;
+    const ageCfg = m.age.getAgeConfig();
+    for (const [index, citizen] of citizens.entries()) {
+      const seat = seats.find((s) => s.characterId === citizen.characterId)!;
+      expect(citizen).toEqual({
+        rank: index + 1,
+        characterId: seat.characterId,
+        name: citizen.name,
+        houseName: houseRow.name,
+        professionSlug: "test-trader",
+        professionName: "Test Trader",
+        faceId: "face-test-1",
+        portrait: m.age.portraitUrl(portraitFor(AVATAR_ID, currentAge(30, seat.character!.createdAt.getTime(), Date.now(), ageCfg), ageCfg)),
+      });
+      expect(typeof citizen.portrait).toBe("string");
+    }
+    // The viewer's own rank still comes from the same board.
+    expect(body.worlds.active!.you!.prestigeRank).toBe(5);
+  });
+
+  it("citizens: a slave never appears above a free player, however high the stat", async () => {
+    const free = [
+      await freshUser({ character: { name: "Kleon", prestige: 50 } }),
+      await freshUser({ character: { name: "Pytheas", prestige: 5 } }),
+      await freshUser({ character: { name: "Gyptis", prestige: 20 } }),
+    ];
+    const slave = await freshUser({ character: { name: "Doulos", prestige: 99, classId: "slave" } });
+    const body = await lobby(free[1]!.token);
+    const citizens = body.worlds.active!.citizens;
+    expect(citizens).toHaveLength(4);
+    expect(citizens.map((c) => c.rank)).toEqual([1, 2, 3, 4]);
+    expect(citizens[3]!.characterId).toBe(slave.characterId);
+    expect(citizens.slice(0, 3).map((c) => c.characterId).sort()).toEqual(free.map((f) => f.characterId).sort());
+  });
+
   it("an announced world is listed under announced and never as the active world", async () => {
     const soon = new Date(now.getTime() + 10 * DAY);
     const later = new Date(now.getTime() + 30 * DAY);
@@ -252,9 +309,13 @@ suite("GET /api/lobby (integration)", () => {
 
   it("the JSON never carries a raw metric key", async () => {
     const viewer = await freshUser({ character: { name: "Euxenos", prestige: 10 } });
+    await freshUser({ character: { name: "Kleon", prestige: 50 } });
     await db.insert(m.dbPkg.officeHistory).values({ worldId, characterId: viewer.characterId!, office: "archon", side: "palaioi", startedYear: 7, acquiredVia: "elected" });
     const body = await lobby(viewer.token);
     const keys = collectKeys(body, new Set());
     for (const forbidden of FORBIDDEN_KEYS) expect(keys.has(forbidden), forbidden).toBe(false);
+    // The redesign's additions are the only new keys: portrait, faceId, professionSlug, rank.
+    expect(body.worlds.active!.citizens.length).toBeGreaterThan(0);
+    for (const key of ["portrait", "faceId", "professionSlug", "rank"]) expect(keys.has(key), key).toBe(true);
   });
 });

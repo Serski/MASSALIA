@@ -1,12 +1,12 @@
 import type { FastifyInstance } from "fastify";
-import { and, asc, count, countDistinct, desc, eq } from "drizzle-orm";
+import { and, asc, count, countDistinct, desc, eq, inArray } from "drizzle-orm";
 import { createDb, dynasties, houses, officeHistory, players, playerCharacters, professions, users, worlds } from "@massalia/db";
 import { currentAge, formatGameDate, gameDate, portraitFor } from "@massalia/shared";
 import { getAgeConfig, portraitUrl } from "../services/age.js";
 import { requireAuth } from "../services/auth.js";
-import { findCharacterRow, getActivePlayer, getActiveWorld } from "../services/character.js";
+import { findCharacterRow, getActivePlayer, getActiveWorld, type PlayerRow } from "../services/character.js";
 import { loadStandingsRoster } from "../services/standings.js";
-import { rankStandings } from "./standings.js";
+import { rankStandings, type StandingRow } from "./standings.js";
 
 const db = createDb();
 
@@ -14,7 +14,19 @@ const db = createDb();
 // one with their seat in it, the announced ones, the ended ones) and their
 // record across worlds. Read-only — nothing here mutates, so no player lock.
 // Rank only, never a stat value: the prestige position comes out of the same
-// ranker as /api/standings and the metric itself is never serialized.
+// ranker as /api/standings and the metric itself is never serialized. Citizens
+// is the top five of that board — no presence or online tracking of any kind.
+export type LobbyCitizen = {
+  rank: number;
+  characterId: string | null;
+  name: string;
+  houseName: string;
+  professionSlug: string | null;
+  professionName: string | null;
+  faceId: string | null;
+  portrait: string | null;
+};
+
 export type LobbyResponse = {
   user: { email: string; emailVerified: boolean; newsletterOptIn: boolean; isAdmin: boolean; memberSince: string };
   worlds: {
@@ -27,6 +39,8 @@ export type LobbyResponse = {
       gameDateLabel: string;
       seasonEndsIn: number;
       playerCount: number;
+      // The first five rows of the prestige board, in board order.
+      citizens: LobbyCitizen[];
       you: null | {
         characterId: string | null;
         name: string;
@@ -76,6 +90,11 @@ async function activeWorldSection(userId: string, now: number): Promise<LobbyRes
 
   const playerCount = (await db.select({ n: count() }).from(players).where(and(eq(players.worldId, world.id), eq(players.isActive, true))))[0]?.n ?? 0;
 
+  // One ranking per request — the same roster + ranker as /api/standings — shared
+  // by the viewer's own rank and the Citizens list. Only positions survive.
+  const viewer = await getActivePlayer(userId, world.id);
+  const prestigeBoard = rankStandings(await loadStandingsRoster(world.id), viewer?.id ?? null).boards.prestige;
+
   return {
     id: world.id,
     name: world.name,
@@ -87,14 +106,61 @@ async function activeWorldSection(userId: string, now: number): Promise<LobbyRes
     // Secondary real-time countdown to the end of the 182-day run (as /me/state).
     seasonEndsIn: Math.max(0, Math.ceil((world.endsAt.getTime() - now) / 86_400_000)),
     playerCount,
-    you: await youSection(userId, world.id, now),
+    citizens: await citizensSection(prestigeBoard.slice(0, 5), world.id, now),
+    you: viewer ? await youSection(viewer, world.id, prestigeBoard, now) : null,
   };
 }
 
-async function youSection(userId: string, worldId: string, now: number): Promise<NonNullable<LobbyResponse["worlds"]["active"]>["you"]> {
-  const player = await getActivePlayer(userId, worldId);
-  if (!player) return null;
+// The top of the prestige board with what a card needs: one query for the five
+// players (house + profession names, the character for the aged portrait),
+// then reordered by the board — the query returns rows in no particular order.
+async function citizensSection(top: StandingRow[], worldId: string, now: number): Promise<LobbyCitizen[]> {
+  if (!top.length) return [];
+  const rows = await db
+    .select({
+      playerId: players.id,
+      name: players.name,
+      faceId: players.faceId,
+      professionSlug: players.professionSlug,
+      houseSlug: players.houseSlug,
+      houseName: houses.name,
+      professionName: professions.name,
+      characterId: playerCharacters.id,
+      avatarId: playerCharacters.avatarId,
+      startAge: playerCharacters.startAge,
+      createdAt: playerCharacters.createdAt,
+    })
+    .from(players)
+    .leftJoin(playerCharacters, and(eq(playerCharacters.playerId, players.id), eq(playerCharacters.worldId, worldId)))
+    .leftJoin(houses, eq(houses.slug, players.houseSlug))
+    .leftJoin(professions, eq(professions.slug, players.professionSlug))
+    .where(
+      inArray(
+        players.id,
+        top.map((row) => row.playerId),
+      ),
+    );
+  const byPlayer = new Map(rows.map((row) => [row.playerId, row]));
+  return top.flatMap((row) => {
+    const p = byPlayer.get(row.playerId);
+    if (!p) return [];
+    const character = p.characterId && p.startAge !== null && p.createdAt !== null ? { avatarId: p.avatarId, startAge: p.startAge, createdAt: p.createdAt } : null;
+    return [
+      {
+        rank: row.rank,
+        characterId: p.characterId ?? null,
+        name: p.name,
+        houseName: p.houseName ?? p.houseSlug ?? "—",
+        professionSlug: p.professionSlug,
+        professionName: p.professionName ?? null,
+        faceId: p.faceId,
+        portrait: agedPortrait(character, now),
+      },
+    ];
+  });
+}
 
+async function youSection(player: PlayerRow, worldId: string, prestigeBoard: StandingRow[], now: number): Promise<NonNullable<LobbyResponse["worlds"]["active"]>["you"]> {
   const house = player.houseSlug ? (await db.select({ name: houses.name }).from(houses).where(eq(houses.slug, player.houseSlug)).limit(1))[0] : undefined;
   const profession = player.professionSlug
     ? (await db.select({ name: professions.name }).from(professions).where(eq(professions.slug, player.professionSlug)).limit(1))[0]
@@ -104,8 +170,6 @@ async function youSection(userId: string, worldId: string, now: number): Promise
     ? (await db.select({ name: dynasties.name, generation: dynasties.generation }).from(dynasties).where(eq(dynasties.id, character.dynastyId)).limit(1))[0]
     : undefined;
 
-  // The same roster + ranker as /api/standings; only the position survives.
-  const prestigeBoard = rankStandings(await loadStandingsRoster(worldId), player.id).boards.prestige;
   const prestigeRank = prestigeBoard.find((row) => row.playerId === player.id)?.rank ?? null;
 
   return {
