@@ -110,6 +110,7 @@ suite("the Interaction Pipeline (integration)", () => {
     // Poison resolution reaches the buildings/traits/age/family/composure services.
     await m.buildings.loadBuildingsContent();
     await m.buildings.loadPopsContent();
+    await (await import("./barracks.js")).loadBarracksContent(); // settleAll now settles the barracks too
     await m.traits.loadTraitDefs();
     await m.age.loadAgeConfig();
     await m.family.loadFamilyConfig();

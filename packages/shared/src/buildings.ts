@@ -211,11 +211,17 @@ export function parseBuildingsContent(data: unknown): BuildingsContent {
 
 // --- Season helpers (pure) --------------------------------------------------
 
+// Whole seasons (= whole real days) since world start, clamped at 0. The ONE
+// definition of the season index: seasonAt derives the season name from it and
+// the barracks (levy growth, training, contracts) counts on it.
+export function seasonIndexAt(nowMs: number, worldStartedMs: number): number {
+  return Math.max(0, Math.floor((nowMs - worldStartedMs) / MS_PER_DAY));
+}
+
 // Which season a wall-clock instant falls in (mirrors calendar.gameDate without
 // importing it, so this module stays dependency-light).
 export function seasonAt(nowMs: number, worldStartedMs: number): SeasonName {
-  const seasonIndex = Math.max(0, Math.floor((nowMs - worldStartedMs) / MS_PER_DAY));
-  return SEASON_NAMES[seasonIndex % SEASON_NAMES.length]!;
+  return SEASON_NAMES[seasonIndexAt(nowMs, worldStartedMs) % SEASON_NAMES.length]!;
 }
 
 export function coeffFor(seasonal: SeasonalConfig, category: BuildingCategory, season: SeasonName): SeasonalCoeff {

@@ -80,6 +80,7 @@ suite("death cause (integration)", () => {
     await m.interactions.loadInteractionsConfig();
     await m.buildings.loadBuildingsContent();
     await m.buildings.loadPopsContent();
+    await (await import("./barracks.js")).loadBarracksContent(); // settleAll now settles the barracks too
     await m.traits.loadTraitDefs();
     await m.age.loadAgeConfig();
     await m.family.loadFamilyConfig();

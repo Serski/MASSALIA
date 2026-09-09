@@ -34,6 +34,7 @@ import {
   type SeasonName,
   type VendorAction,
 } from "@massalia/shared";
+import { settleBarracks, type BarracksSettle } from "./barracks.js";
 import { applyComposureDelta } from "./composure.js";
 import { lockPlayer } from "./lock.js";
 
@@ -688,16 +689,17 @@ async function settleShrine(exec: Exec, ctx: ActingContext, rows: BuildingRow[],
 // pop counts so history banks at the staffing that actually prevailed and every
 // marker resets to `now`. Composure is returned (never applied here) — the caller
 // applies it AFTER the transaction, break-aware, exactly as collect does.
-type FullSettle = { rows: BuildingRow[]; idled: Set<string>; banked: Record<string, number>; wallet: WalletSettle; staff: StaffSettle; composureDays: number };
+type FullSettle = { rows: BuildingRow[]; idled: Set<string>; banked: Record<string, number>; wallet: WalletSettle; staff: StaffSettle; barracks: BarracksSettle; composureDays: number };
 
-async function settleAll(exec: Exec, ctx: ActingContext, now: Date): Promise<FullSettle> {
+export async function settleAll(exec: Exec, ctx: ActingContext, now: Date): Promise<FullSettle> {
   const rows = await flipActivations(exec, await ownedRows(exec, ctx.playerId), now);
   const idled = await staffingFor(exec, ctx, rows, now);
   const banked = await settleGoods(exec, ctx, rows, now, idled);
   const wallet = await settleWallet(exec, ctx, rows, now, idled);
   const staff = await settleStaffing(exec, ctx, rows, now); // owned-pop wages + food; after income is banked
+  const barracks = await settleBarracks(exec, ctx, now); // unit + band upkeep, insolvency, contract ends; after household charges
   const composureDays = await settleShrine(exec, ctx, rows, idled, now);
-  return { rows, idled, banked, wallet, staff, composureDays };
+  return { rows, idled, banked, wallet, staff, barracks, composureDays };
 }
 
 // --- Catalog (GET /api/buildings) -------------------------------------------

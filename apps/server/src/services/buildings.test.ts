@@ -89,6 +89,7 @@ suite("Ledger / building engine (integration)", () => {
     db = m.dbPkg.createDb();
     await m.buildings.loadBuildingsContent();
     await m.buildings.loadPopsContent();
+    await (await import("./barracks.js")).loadBarracksContent(); // settleAll now settles the barracks too
   });
 
   beforeEach(async () => {
