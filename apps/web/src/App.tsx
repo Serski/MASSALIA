@@ -6,6 +6,7 @@ import { Dashboard } from "./dashboard/Dashboard.js";
 import { World2Map } from "./map/World2Map.js";
 import { AdminPage } from "./AdminPage.js";
 import { assetPath, nobleHouses, professions, type Alignment, type House, type Profession } from "./data/league.js";
+import { navigateTo } from "./navigate.js";
 // The Lobby is lazy: strangers on the landing never pay for it (it pulls the
 // Politics panel in for its office formatters).
 const LobbyPage = lazy(() => import("./lobby/LobbyPage.js").then((module) => ({ default: module.LobbyPage })));
@@ -126,12 +127,6 @@ const detailRoutes: Record<DetailKind, keyof typeof detailCollections> = {
 
 function getDetailPath(entry: DetailEntry) {
   return `/${detailRoutes[entry.kind]}/${entry.slug}`;
-}
-
-function navigateTo(path: string) {
-  window.history.pushState({}, "", path);
-  window.dispatchEvent(new PopStateEvent("popstate"));
-  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function Crest({ initial, image, label, className = "" }: { initial: string; image?: string; label: string; className?: string }) {
