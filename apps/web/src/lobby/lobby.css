@@ -1,14 +1,54 @@
-/* The Lobby (/lobby). Landing tokens (Cinzel / Spectral, the gold ramp) over the
-   landing-shell background; every class here is lobby- prefixed and nothing
-   leans on the dashboard-shell rules. Two columns from 960px, one below. */
+/* The Lobby (/lobby and its sub-views, /news, /guides). Design tokens scoped to
+   the shell over the app's own @font-face (styles.css); every class is lobby-
+   prefixed and nothing leans on the dashboard-shell rules. */
 
 .lobby-shell {
+  --lobby-bg: #0b0706;
+  --lobby-panel: rgba(31, 20, 15, 0.9);
+  --lobby-text: #ece0cc;
+  --lobby-heading: #f1e4cc;
+  --lobby-gold: #b58a45;
+  --lobby-gold-bright: #d2a55c;
+  --lobby-bronze: #8c6428;
+  --lobby-gold-highlight: #d9bd78;
+  --lobby-ended: #c9c0a8;
+  --lobby-on-gold: #160e0a;
+  --lobby-line: rgba(181, 138, 69, 0.26);
+  --lobby-divider: 1px dashed rgba(181, 138, 69, 0.18);
+  --lobby-radius-panel: 8px;
+  --lobby-radius-control: 4px;
+  --lobby-radius-pill: 3px;
+  --lobby-gold-gradient: linear-gradient(135deg, #d2a55c, #8c6428);
+  --lobby-ease: 160ms ease;
+
   position: relative;
-  z-index: 1;
   min-height: 100vh;
-  padding: 0 clamp(14px, 4vw, 48px) 40px;
-  color: #ece0cc;
+  color: var(--lobby-text);
   font-family: var(--font-body);
+  background: var(--lobby-bg);
+}
+
+/* --- Background: the front art under a darkening gradient, both fixed --------- */
+
+.lobby-bg-art,
+.lobby-bg-shade {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.lobby-bg-art {
+  background: url("/assets/MASSALIA FRONT.jpg") center 30% / cover no-repeat;
+}
+
+.lobby-bg-shade {
+  background: linear-gradient(180deg, rgba(11, 7, 6, 0.55) 0%, rgba(11, 7, 6, 0.72) 45%, rgba(11, 7, 6, 0.94) 100%);
+}
+
+.lobby-shell > :not(.lobby-bg-art):not(.lobby-bg-shade) {
+  position: relative;
+  z-index: 2;
 }
 
 /* --- Header ------------------------------------------------------------------ */
@@ -18,10 +58,10 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px 20px;
-  max-width: 1240px;
+  gap: 20px;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 18px 0 16px;
+  padding: 16px clamp(14px, 3vw, 40px);
   border-bottom: 1px solid rgba(181, 138, 69, 0.28);
 }
 
@@ -29,8 +69,15 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  color: var(--gold-bright);
+  color: var(--lobby-gold-bright);
   text-decoration: none;
+}
+
+.lobby-brand-lion {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.6));
 }
 
 .lobby-brand-text {
@@ -38,14 +85,14 @@
   align-items: baseline;
   gap: 12px;
   font-family: var(--font-display);
-  font-size: clamp(20px, 2.1vw, 28px);
+  font-size: 24px;
   font-weight: 800;
   letter-spacing: 0.16em;
 }
 
 .lobby-brand-text small {
-  color: var(--gold);
-  font-size: 12px;
+  color: var(--lobby-gold);
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -55,10 +102,30 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 18px;
+  gap: 2px;
 }
 
-/* --- Layout ------------------------------------------------------------------ */
+.lobby-header-actions .lobby-link {
+  padding: 10px 16px;
+  color: var(--lobby-text);
+  font-size: 11.5px;
+  letter-spacing: 0.14em;
+  border-radius: var(--lobby-radius-pill);
+  transition: color var(--lobby-ease), background var(--lobby-ease);
+}
+
+.lobby-header-actions .lobby-link:hover {
+  color: var(--lobby-gold-bright);
+  text-decoration: none;
+}
+
+.lobby-header-actions .lobby-btn {
+  margin-left: 14px;
+}
+
+.lobby-header-actions .lobby-btn + .lobby-btn {
+  margin-left: 8px;
+}
 
 .lobby-grid {
   display: grid;
@@ -358,18 +425,18 @@
   text-transform: uppercase;
   background: rgba(181, 138, 69, 0.08);
   border: 1px solid rgba(181, 138, 69, 0.4);
-  border-radius: 4px;
+  border-radius: var(--lobby-radius-control);
   cursor: pointer;
   transition:
-    border-color 160ms ease,
-    background 160ms ease,
-    color 160ms ease,
-    transform 160ms ease;
+    border-color var(--lobby-ease),
+    background var(--lobby-ease),
+    color var(--lobby-ease),
+    transform var(--lobby-ease);
 }
 
 .lobby-btn:hover:not(:disabled) {
-  color: #fff3dc;
-  border-color: var(--gold-bright);
+  color: var(--lobby-heading);
+  border-color: var(--lobby-gold-bright);
   background: rgba(181, 138, 69, 0.16);
   transform: translateY(-1px);
 }
@@ -380,9 +447,10 @@
 }
 
 .lobby-btn-small {
-  min-height: 34px;
-  padding: 0 14px;
+  min-height: 36px;
+  padding: 0 16px;
   font-size: 10.5px;
+  letter-spacing: 0.14em;
 }
 
 .lobby-btn-primary {
@@ -398,9 +466,9 @@
 }
 
 .lobby-btn-primary:hover:not(:disabled) {
-  color: #160e0a;
-  background: linear-gradient(135deg, #e0b56a, var(--bronze));
-  filter: brightness(1.05);
+  color: var(--lobby-on-gold);
+  background: linear-gradient(135deg, var(--gold-bright), var(--bronze));
+  filter: brightness(1.08);
 }
 
 .lobby-btn-danger {
@@ -431,12 +499,12 @@
 
 /* The header nav's current page. */
 .lobby-nav-active,
-.lobby-nav-active:hover {
-  padding: 6px 10px;
-  color: #160e0a;
+.lobby-header-actions .lobby-nav-active,
+.lobby-header-actions .lobby-nav-active:hover {
+  color: var(--lobby-on-gold);
   text-decoration: none;
-  background: linear-gradient(135deg, var(--gold-bright), var(--bronze));
-  border-radius: 3px;
+  background: var(--lobby-gold-gradient);
+  border-radius: var(--lobby-radius-pill);
 }
 
 .lobby-toggle {
@@ -774,9 +842,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px 20px;
-  max-width: 1240px;
+  max-width: 1280px;
   margin: 48px auto 0;
-  padding-top: 18px;
+  padding: 18px clamp(14px, 3vw, 40px) 28px;
   color: rgba(236, 224, 204, 0.5);
   font-size: 12px;
   letter-spacing: 0.08em;
@@ -800,11 +868,20 @@
 
 /* --- Narrow screens ------------------------------------------------------------ */
 
-@media (max-width: 480px) {
+/* Below 760px the header wraps: the brand on its own row, the nav below it. */
+@media (max-width: 760px) {
   .lobby-header {
-    padding-top: 14px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
   }
 
+  .lobby-header-actions .lobby-link {
+    padding: 8px 10px;
+  }
+}
+
+@media (max-width: 480px) {
   .lobby-brand-text {
     gap: 8px;
     font-size: 18px;

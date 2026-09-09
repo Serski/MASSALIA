@@ -18,6 +18,9 @@ const NAV: Array<{ id: LobbyNavItem; label: string; path: string }> = [
   { id: "guides", label: "Guides", path: "/guides" },
 ];
 
+// The small label beside the brand names the page.
+const BRAND_LABEL: Record<LobbyNavItem, string> = { lobby: "Lobby", news: "News", guides: "Guides" };
+
 // A section's eyebrow + title, shared by the lobby pages.
 export function LobbySectionHeading({ id, eyebrow, title }: { id: string; eyebrow: string; title: string }) {
   return (
@@ -40,15 +43,17 @@ export function LobbyFrame({ active, children }: { active: LobbyNavItem; childre
   };
 
   return (
-    <main className="landing-shell lobby-shell">
+    <main className="lobby-shell">
+      {/* The front art and its darkening gradient as fixed layers (not
+          background-attachment: fixed, which stutters on iOS). */}
+      <div className="lobby-bg-art" aria-hidden="true" />
+      <div className="lobby-bg-shade" aria-hidden="true" />
       <header className="lobby-header">
         <a className="lobby-brand" href="/">
-          <span className="brand-mark" aria-hidden="true">
-            <img src={assetPath("assets/MASSALIA LION.png")} alt="" />
-          </span>
+          <img className="lobby-brand-lion" src={assetPath("assets/MASSALIA LION.png")} alt="" />
           <span className="lobby-brand-text">
             <span>MASSALIA</span>
-            <small>Lobby</small>
+            <small>{BRAND_LABEL[active]}</small>
           </span>
         </a>
         <nav className="lobby-header-actions" aria-label="Lobby">
