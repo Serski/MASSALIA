@@ -240,15 +240,17 @@ export async function mapRoutes(app: FastifyInstance) {
       reply.code(503);
       return { error: "No active world exists." };
     }
-    const body = request.body as { type?: unknown; regionId?: unknown; rowIds?: unknown } | undefined;
+    const body = request.body as { type?: unknown; regionId?: unknown; rows?: unknown } | undefined;
     const type = body?.type;
     const regionId = body?.regionId;
-    const rowIds = body?.rowIds;
-    if ((type !== "scout" && type !== "raid" && type !== "attack") || typeof regionId !== "string" || !Array.isArray(rowIds) || !rowIds.every((id) => typeof id === "string")) {
+    const rows = body?.rows;
+    const rowOk = (r: unknown): r is { rowId: string; count: number } =>
+      typeof r === "object" && r !== null && typeof (r as { rowId?: unknown }).rowId === "string" && Number.isInteger((r as { count?: unknown }).count) && ((r as { count: number }).count) >= 1;
+    if ((type !== "scout" && type !== "raid" && type !== "attack") || typeof regionId !== "string" || !Array.isArray(rows) || !rows.every(rowOk)) {
       reply.code(400);
-      return { error: "type, regionId and rowIds are required." };
+      return { error: "type, regionId and rows [{ rowId, count }] are required." };
     }
-    const result = await act(ctx, { type, regionId, rowIds: rowIds as string[] }, new Date());
+    const result = await act(ctx, { type, regionId, rows: rows as { rowId: string; count: number }[] }, new Date());
     if (!result.ok) {
       reply.code(result.code);
       return { error: result.error };

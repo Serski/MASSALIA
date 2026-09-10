@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { forceStats, HOME_POLITY_ID, routeFor, verdictsFor, type MapActionType } from "@massalia/shared";
 import { api, apiBaseUrl, ApiError, type BarracksRosterRow, type MapActReport, type MapActType, type MapReachView, type ReachEntry } from "../api.js";
-import { CULTURE_WEBP, formatDuration, POLITY_CREST, titleCase, useCountdownSeconds } from "../dashboard/shared.js";
+import { AssetIcon, CULTURE_WEBP, formatDuration, POLITY_CREST, titleCase, useCountdownSeconds } from "../dashboard/shared.js";
 import { mapActionButtons, withReach, type MapActionButton } from "./mapActions.js";
 
 // Attack, Raid and Scout are the actions that resolve (Colonise waits for 3c).
@@ -1314,11 +1314,20 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
 const ACTION_LABEL: Record<MapActType, string> = { attack: "Attack", raid: "Raid", scout: "Scout" };
 const FAST_SPD = 6;
 
+// A roster icon the way the Barracks roster shows it: the unit's or band's
+// artwork, an emoji when the file is missing.
+function RowIcon({ file, source }: { file: string; source: BarracksRosterRow["source"] }) {
+  return <AssetIcon file={file} alt="" className="asset-icon w2map-pick-icon" fallback={<span aria-hidden="true">{source === "band" ? "⚔️" : "🛡️"}</span>} />;
+}
+
 function RecoveringRow({ row }: { row: BarracksRosterRow }) {
   const left = useCountdownSeconds(row.arrivesAt);
   return (
     <li className="w2map-pick-row dim">
-      <span className="w2map-pick-label">{row.label} · {row.count}</span>
+      <span className="w2map-pick-check">
+        <RowIcon file={row.icon} source={row.source} />
+        <span className="w2map-pick-label">{row.label} · {row.count}</span>
+      </span>
       <span className="w2map-pick-note">recovering · {formatDuration(left)}</span>
     </li>
   );
@@ -1346,6 +1355,8 @@ function ForcePicker({
   onActed: (res: { report: MapActReport; reach: MapReachView; roster: BarracksRosterRow[] }) => void;
 }) {
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
+  // How many men of a trained row march (default the whole row); bands go whole.
+  const [counts, setCounts] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -1357,8 +1368,9 @@ function ForcePicker({
   const others = rows.filter((r) => r.active && r.movingTo !== null);
   const selected = eligible.filter((r) => picked.has(r.id));
   const base = selected[0]?.basedAt ?? null;
+  const sentOf = (r: BarracksRosterRow) => (r.source === "band" ? r.count : Math.min(r.count, Math.max(1, counts[r.id] ?? r.count)));
 
-  const force = forceStats(selected.map((r) => ({ spd: r.stats.spd ?? 0, space: r.stats.space ?? 1, count: r.count })));
+  const force = forceStats(selected.map((r) => ({ spd: r.stats.spd ?? 0, space: r.stats.space ?? 1, count: sentOf(r) })));
   const verdicts = entry ? verdictsFor(entry, force, { range: fleet.range, space: fleet.space }) : null;
   let verdict = verdicts ? (type === "attack" ? verdicts.attack : verdicts.raid) : { ok: false, reason: "That land cannot be reached." };
   if (verdict.ok && type === "scout" && !selected.some((r) => (r.stats.spd ?? 0) >= FAST_SPD)) verdict = { ok: false, reason: `A scouting party needs a man at Spd ${FAST_SPD} or more.` };
@@ -1376,7 +1388,7 @@ function ForcePicker({
     setBusy(true);
     setError("");
     try {
-      const res = await api.mapAct(type, regionId, [...picked]);
+      const res = await api.mapAct(type, regionId, selected.map((r) => ({ rowId: r.id, count: sentOf(r) })));
       onActed(res);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "That could not be done.");
@@ -1406,12 +1418,26 @@ function ForcePicker({
                     const otherBase = base !== null && base !== baseId;
                     return (
                       <li key={r.id} className={`w2map-pick-row${otherBase ? " dim" : ""}`} title={otherBase ? "A force marches from one base." : undefined}>
-                        <label className="w2map-pick-check">
-                          <input type="checkbox" checked={picked.has(r.id)} disabled={otherBase || busy} onChange={() => toggle(r.id)} />
+                        <span className="w2map-pick-check">
+                          <input type="checkbox" checked={picked.has(r.id)} disabled={otherBase || busy} onChange={() => toggle(r.id)} aria-label={`${r.label}, ${r.count}`} />
+                          <RowIcon file={r.icon} source={r.source} />
                           <span className="w2map-pick-label">{r.label} · {r.count}</span>
-                        </label>
+                          {r.source === "trained" ? (
+                            <input
+                              type="number"
+                              className="w2map-pick-count"
+                              min={1}
+                              max={r.count}
+                              value={sentOf(r)}
+                              disabled={otherBase || busy || !picked.has(r.id)}
+                              onChange={(e) => setCounts((prev) => ({ ...prev, [r.id]: Math.min(r.count, Math.max(1, parseInt(e.target.value, 10) || 1)) }))}
+                              aria-label={`men from ${r.label}`}
+                            />
+                          ) : null}
+                        </span>
                         <span className="w2map-pick-note">
                           Atk {r.stats.atk ?? 0} · Def {r.stats.def ?? 0} · Msl {r.stats.msl ?? 0} · Mor {r.stats.mor ?? 0} · Spd {r.stats.spd ?? 0} · Space {r.stats.space ?? 1}
+                          {r.source === "band" ? " · A band marches as one." : ""}
                         </span>
                       </li>
                     );
@@ -1474,7 +1500,16 @@ function BattleReport({ report, onClose }: { report: MapActReport; onClose: () =
               </thead>
               <tbody>
                 {report.attacker.rows.map((r) => (
-                  <tr key={r.id}><td>{r.label}{r.broke ? " (broke)" : ""}</td><td>{r.start}</td><td>{r.end}</td></tr>
+                  <tr key={r.id}>
+                    <td>
+                      <span className="w2map-pick-check">
+                        <RowIcon file={r.icon} source="trained" />
+                        <span>{r.label}{r.broke ? " (broke)" : ""}</span>
+                      </span>
+                    </td>
+                    <td>{r.start}</td>
+                    <td>{r.end}</td>
+                  </tr>
                 ))}
                 {report.defender ? <tr className="w2map-report-enemy"><td>{report.defender.label}</td><td>{report.defender.start}</td><td>{report.defender.end}</td></tr> : null}
               </tbody>

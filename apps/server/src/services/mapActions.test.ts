@@ -100,7 +100,12 @@ suite("Map actions (integration)", () => {
       await m.lock.lockPlayer(tx, ctx.playerId);
       return m.barracks.settleBarracks(tx, ctx, when);
     });
-  const act = (ctx: Ctx, type: "scout" | "raid" | "attack", regionId: string, rowIds: string[], when = at(9)) => m.actions.act(ctx, { type, regionId, rowIds }, when);
+  // Whole rows by id (the count is read back from the row); partial sends use actRows.
+  const act = async (ctx: Ctx, type: "scout" | "raid" | "attack", regionId: string, rowIds: string[], when = at(9)) => {
+    const all = await rows(ctx);
+    return m.actions.act(ctx, { type, regionId, rows: rowIds.map((id) => ({ rowId: id, count: all.find((r) => r.id === id)?.count ?? 1 })) }, when);
+  };
+  const actRows = (ctx: Ctx, type: "scout" | "raid" | "attack", regionId: string, sent: { rowId: string; count: number }[], when = at(9)) => m.actions.act(ctx, { type, regionId, rows: sent }, when);
   const recordChronicle = async (characterId: string) => {
     const entries = await m.dbPkg.gatherChronicleForCharacter(characterId);
     for (const e of entries) if (e.type === "map_action" || e.type === "holding_reverted") chronicleLines.push(`${e.label} — ${m.shared.renderCampaignLine(e.type, e.payload as never)}`);
@@ -305,6 +310,41 @@ suite("Map actions (integration)", () => {
     expect(await act(ctx, "raid", "R047", [peltasts.id], at(8.5))).toMatchObject({ ok: false, code: 409, error: "The passes are closed until spring." });
     // Spring, the next instant: the same scout goes through.
     expect(await act(ctx, "scout", "R046", [peltasts.id], at(9))).toMatchObject({ ok: true });
+  });
+
+  it("partial force: sending 20 of 30 hoplites splits the row — the 20 march as their own row, the 10 stay home", async () => {
+    const { ctx, characterId } = await makePlayer();
+    await setWarband("R046", 20, at(9));
+    const home = await insertRow(ctx, { unitId: "hoplite", count: 30 });
+    // A refusal after the count check (hoplites cannot scout) leaves the row whole.
+    const r = await actRows(ctx, "scout", "R046", [{ rowId: home.id, count: 20 }], at(9));
+    expect(r).toMatchObject({ ok: false, code: 409 });
+    expect(await rows(ctx)).toHaveLength(1);
+    expect((await rows(ctx))[0]).toMatchObject({ count: 30, startCount: 30 });
+    const raid = await actRows(ctx, "raid", "R046", [{ rowId: home.id, count: 20 }], at(9));
+    expect(raid).toMatchObject({ ok: true });
+    if (!raid.ok) return;
+    const after = await rows(ctx);
+    const stayed = after.find((x) => x.id === home.id)!;
+    expect(stayed).toMatchObject({ count: 10, startCount: 10, basedAt: "R060", movingTo: null, arrivesAt: null });
+    const marched = after.find((x) => x.id !== home.id)!;
+    expect(marched).toMatchObject({ unitId: "hoplite", source: "trained", startCount: 20, basedAt: "R060", movingTo: "R060", recruitedSeason: home.recruitedSeason, readyAt: home.readyAt, createdAt: home.createdAt });
+    expect(marched.count).toBe(20 - raid.report.attacker.losses);
+    expect(raid.report.attacker.rows).toHaveLength(1);
+    expect(raid.report.attacker.rows[0]).toMatchObject({ id: marched.id, start: 20, icon: "HOPLITE.webp" });
+    expect(raid.report.line).toMatch(/^Raided Salyes with 20 hoplites/);
+    expect(await logs(characterId, "barracks_split")).toHaveLength(1);
+    // Bad counts are refused before anything moves.
+    expect(await actRows(ctx, "raid", "R046", [{ rowId: home.id, count: 11 }], at(9.1))).toMatchObject({ ok: false, code: 400 });
+    expect(await actRows(ctx, "raid", "R046", [{ rowId: home.id, count: 0 }], at(9.1))).toMatchObject({ ok: false, code: 400 });
+  });
+
+  it("a band at less than its full count is refused: a band marches as one", async () => {
+    const { ctx } = await makePlayer();
+    const band = await insertRow(ctx, { source: "band", unitId: "iberian-caetrati", count: 40 });
+    expect(await actRows(ctx, "raid", "R046", [{ rowId: band.id, count: 20 }])).toMatchObject({ ok: false, code: 409, error: "A band marches as one." });
+    expect(await rows(ctx)).toHaveLength(1);
+    expect(await actRows(ctx, "raid", "R046", [{ rowId: band.id, count: 40 }])).toMatchObject({ ok: true });
   });
 
   it("a town target is refused with the towns message; home ground and fog too", async () => {

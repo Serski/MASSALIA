@@ -117,11 +117,13 @@ suite("/api/map/reach (integration)", () => {
     await db.insert(m.dbPkg.playerUnits).values({ worldId, ownerPlayerId: p.playerId, source: "trained", unitId: "peltast", count: 40, startCount: 40, recruitedSeason: 7, readyAt: new Date(recruitedAt.getTime() + DAY), createdAt: recruitedAt });
     const rowId = (await db.select({ id: m.dbPkg.playerUnits.id }).from(m.dbPkg.playerUnits).where(eq(m.dbPkg.playerUnits.ownerPlayerId, p.playerId)))[0]!.id;
     const post = (payload: unknown) => app.inject({ method: "POST", url: "/api/map/act", headers: { cookie: `massalia_session=${app.signCookie(p.token)}` }, payload: payload as Record<string, unknown> });
-    const town = await post({ type: "raid", regionId: "R047", rowIds: [rowId] });
+    const town = await post({ type: "raid", regionId: "R047", rows: [{ rowId, count: 40 }] });
     expect(town.statusCode).toBe(409);
     expect(town.json<{ error: string }>().error).toBe("Towns are for a later season.");
-    expect((await post({ type: "pillage", regionId: "R046", rowIds: [rowId] })).statusCode).toBe(400);
-    const res = await post({ type: "raid", regionId: "R046", rowIds: [rowId] });
+    expect((await post({ type: "pillage", regionId: "R046", rows: [{ rowId, count: 40 }] })).statusCode).toBe(400);
+    expect((await post({ type: "raid", regionId: "R046", rowIds: [rowId] })).statusCode).toBe(400); // the old body shape
+    expect((await post({ type: "raid", regionId: "R046", rows: [{ rowId, count: 1.5 }] })).statusCode).toBe(400);
+    const res = await post({ type: "raid", regionId: "R046", rows: [{ rowId, count: 40 }] });
     expect(res.statusCode).toBe(200);
     const v = res.json<{ report: { type: string; winner: string; regionName: string; plunder: { drachmae: number } | null; line: string }; reach: { reach: Record<string, unknown> }; force: { men: number }; roster: { id: string; movingTo: string | null }[] }>();
     expect(v.report).toMatchObject({ type: "raid", winner: "attacker", regionName: "Salyes" });
@@ -130,7 +132,7 @@ suite("/api/map/reach (integration)", () => {
     expect(v.force.men).toBe(0); // the party is recovering
     expect(v.roster.find((r) => r.id === rowId)!.movingTo).toBe("R060");
     expect(v.reach.reach.R046).toBeDefined();
-    expect((await app.inject({ method: "POST", url: "/api/map/act", payload: { type: "raid", regionId: "R046", rowIds: [rowId] } })).statusCode).toBe(401);
+    expect((await app.inject({ method: "POST", url: "/api/map/act", payload: { type: "raid", regionId: "R046", rows: [{ rowId, count: 40 }] } })).statusCode).toBe(401);
   });
 
   it("a row still training does not count toward the force, so Attack fails for want of men", async () => {

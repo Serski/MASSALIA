@@ -509,13 +509,33 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
     }
   }
 
-  // 6b. Arrivals. A row mid-relocation whose arrives_at has passed now stands at
-  // its destination. Nothing starts a move yet; the resolution is here so the
-  // relocation prompt only adds the start.
+  // 6b. Arrivals. A row mid-relocation (or recovering from an action) whose
+  // arrives_at has passed now stands at its destination. A trained row arriving
+  // at a base folds into a ready, unmoving trained row of the same unit already
+  // there: counts add, start counts add, the later created_at is kept (so the
+  // disband gate stays conservative) and the arriving row is deleted. Bands
+  // never merge. With nothing to fold into the row just lands.
   for (const r of rows) {
     if (r.movingTo === null || r.arrivesAt === null || r.arrivesAt.getTime() > now.getTime()) continue;
-    await exec.update(playerUnits).set({ basedAt: r.movingTo, movingTo: null, arrivesAt: null }).where(eq(playerUnits.id, r.id));
-    await logEffect(exec, characterId, "barracks_arrive", { unitId: r.unitId, count: r.count, from: r.basedAt, to: r.movingTo, source: "barracks" });
+    const target =
+      r.source === "trained"
+        ? (
+            await exec
+              .select()
+              .from(playerUnits)
+              .where(and(eq(playerUnits.worldId, ctx.worldId), eq(playerUnits.ownerPlayerId, ctx.playerId), eq(playerUnits.source, "trained"), eq(playerUnits.unitId, r.unitId), eq(playerUnits.basedAt, r.movingTo)))
+              .orderBy(asc(playerUnits.createdAt), asc(playerUnits.id))
+          ).find((t) => t.id !== r.id && t.movingTo === null && isActive(t, now))
+        : undefined;
+    if (target) {
+      const createdAt = target.createdAt.getTime() >= r.createdAt.getTime() ? target.createdAt : r.createdAt;
+      await exec.update(playerUnits).set({ count: target.count + r.count, startCount: target.startCount + r.startCount, createdAt }).where(eq(playerUnits.id, target.id));
+      await exec.delete(playerUnits).where(eq(playerUnits.id, r.id));
+      await logEffect(exec, characterId, "barracks_arrive", { unitId: r.unitId, count: r.count, from: r.basedAt, to: r.movingTo, mergedInto: target.id, source: "barracks" });
+    } else {
+      await exec.update(playerUnits).set({ basedAt: r.movingTo, movingTo: null, arrivesAt: null }).where(eq(playerUnits.id, r.id));
+      await logEffect(exec, characterId, "barracks_arrive", { unitId: r.unitId, count: r.count, from: r.basedAt, to: r.movingTo, source: "barracks" });
+    }
     out.arrived.push({ rowId: r.id, unitId: r.unitId, source: r.source, count: r.count });
   }
 

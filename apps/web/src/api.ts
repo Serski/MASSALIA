@@ -532,8 +532,8 @@ export const api = {
   // Map actions (military prompt 3b): Scout, Raid or Attack a townless region
   // with whole roster rows; resolves in the request and returns the report with
   // fresh reach and roster payloads.
-  mapAct: (type: MapActType, regionId: string, rowIds: string[]) =>
-    apiFetch<MapActResponse>("/api/map/act", { method: "POST", body: { type, regionId, rowIds } }),
+  mapAct: (type: MapActType, regionId: string, rows: { rowId: string; count: number }[]) =>
+    apiFetch<MapActResponse>("/api/map/act", { method: "POST", body: { type, regionId, rows } }),
   craftGood: (good: string) => apiFetch<CraftResult>("/api/buildings/craft", { method: "POST", body: { good } }),
   // The hoplite's home army (Hoplite Step 1): rank ladder + daily salary.
   service: () => apiFetch<ServiceView>("/api/service"),
@@ -1505,7 +1505,7 @@ export type MapActReport = {
   ships: Record<string, number>;
   winner: "attacker" | "defender" | "stand" | null;
   rounds: number;
-  attacker: { rows: { id: string; unitId: string; label: string; start: number; end: number; broke: boolean }[]; losses: number };
+  attacker: { rows: { id: string; unitId: string; label: string; icon: string; start: number; end: number; broke: boolean }[]; losses: number };
   defender: { label: string; start: number; end: number; losses: number } | null;
   plunder: { drachmae: number; grain: number } | null;
   conquest: { regionId: string; previousOwner: string | null } | null;

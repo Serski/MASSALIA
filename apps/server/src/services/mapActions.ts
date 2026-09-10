@@ -45,7 +45,9 @@ const MS_PER_HOUR = 3_600_000;
 const FAST_SPD = 6;
 
 export type MapActionType = "scout" | "raid" | "attack";
-export type MapActInput = { type: MapActionType; regionId: string; rowIds: string[] };
+// Whole rows or, for a trained row, part of it: `count` men march (1..row.count).
+// A band marches whole under its contract.
+export type MapActInput = { type: MapActionType; regionId: string; rows: { rowId: string; count: number }[] };
 
 export type MapActReport = {
   type: MapActionType;
@@ -60,7 +62,7 @@ export type MapActReport = {
   ships: Record<string, number>;
   winner: "attacker" | "defender" | "stand" | null;
   rounds: number;
-  attacker: { rows: { id: string; unitId: string; label: string; start: number; end: number; broke: boolean }[]; losses: number };
+  attacker: { rows: { id: string; unitId: string; label: string; icon: string; start: number; end: number; broke: boolean }[]; losses: number };
   defender: { label: string; start: number; end: number; losses: number } | null;
   plunder: { drachmae: number; grain: number } | null;
   conquest: { regionId: string; previousOwner: string | null } | null;
@@ -160,19 +162,30 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
     const holdings = await listHoldings(tx, ctx);
     if (holdings.some((h) => h.regionId === regionId)) return fail(409, "You hold this land.");
 
-    // 2. Rows: ours, active, not moving, one base, at least one; a scout needs speed.
-    const ids = [...new Set(input.rowIds)];
+    // 2. Rows: ours, active, not moving, one base, at least one; a scout needs
+    // speed. Each sent count is a whole number within the row; a band goes whole.
+    const sent = new Map<string, number>();
+    for (const r of input.rows) sent.set(r.rowId, (sent.get(r.rowId) ?? 0) + r.count);
+    const ids = [...sent.keys()];
     if (ids.length === 0) return fail(400, "Choose at least one row.");
-    const rows = await tx
+    const owned = await tx
       .select()
       .from(playerUnits)
       .where(and(eq(playerUnits.worldId, ctx.worldId), eq(playerUnits.ownerPlayerId, ctx.playerId), inArray(playerUnits.id, ids)));
-    if (rows.length !== ids.length) return fail(404, "No such unit.");
+    if (owned.length !== ids.length) return fail(404, "No such unit.");
     const labelOf = (r: UnitRow) => (r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId))?.label ?? r.unitId;
-    for (const r of rows) {
+    const iconOf = (r: UnitRow) => (r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId))?.icon ?? "";
+    for (const r of owned) {
       if (!isActive(r, now)) return fail(409, `${labelOf(r)} are still training.`);
       if (r.movingTo !== null) return fail(409, `${labelOf(r)} are still on the march.`);
+      const n = sent.get(r.id)!;
+      if (!Number.isInteger(n) || n < 1 || n > r.count) return fail(400, `Send a whole number of men, up to the ${r.count} in the row.`);
+      if (r.source === "band" && n !== r.count) return fail(409, "A band marches as one.");
     }
+    // The checks below run on the rows as they would march (count = sent); the
+    // split itself is made only once every check has passed, so a refusal never
+    // leaves a row divided.
+    const rows: UnitRow[] = owned.map((r) => ({ ...r, count: sent.get(r.id)! }));
     const base = rows[0]!.basedAt;
     if (rows.some((r) => r.basedAt !== base)) return fail(409, "A force marches from one base.");
     const baseIds = new Set([topology.massaliaRegion, ...holdings.map((h) => h.regionId)]);
@@ -200,6 +213,40 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
       if (stats.space < view.force.space) return fail(409, REACH_REASON.hulls(view.force.space, stats.space));
       if (stats.range < steps) return fail(409, REACH_REASON.range(steps, stats.range));
       ships = assembled.ships;
+    }
+
+    // 4b. Split, under the lock, now that nothing can refuse: a trained row sent
+    // short of its count becomes two rows — the sent men as a new row (the one
+    // that fights and recovers), the rest staying home in the original, both
+    // reduced by the men that left.
+    const characterForSplit = await characterOf(tx, ctx.playerId);
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i]!;
+      const whole = owned.find((o) => o.id === r.id)!;
+      if (r.count === whole.count) continue;
+      const inserted = (
+        await tx
+          .insert(playerUnits)
+          .values({
+            worldId: whole.worldId,
+            ownerPlayerId: whole.ownerPlayerId,
+            source: whole.source,
+            unitId: whole.unitId,
+            count: r.count,
+            startCount: r.count,
+            recruitedSeason: whole.recruitedSeason,
+            readyAt: whole.readyAt,
+            contractEndAt: null,
+            basedAt: whole.basedAt,
+            movingTo: null,
+            arrivesAt: null,
+            createdAt: whole.createdAt,
+          })
+          .returning()
+      )[0]!;
+      await tx.update(playerUnits).set({ count: whole.count - r.count, startCount: Math.max(whole.count - r.count, whole.startCount - r.count) }).where(eq(playerUnits.id, whole.id));
+      await tx.insert(effectLog).values({ characterId: characterForSplit.id, kind: "barracks_split", detail: { fromRowId: whole.id, rowId: inserted.id, unitId: whole.unitId, sent: r.count, left: whole.count - r.count, source: "map" }, createdAt: now });
+      rows[i] = inserted;
     }
 
     // 5. Defender: the region's warband after regeneration.
@@ -239,7 +286,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
         ships,
         winner: null,
         rounds: 0,
-        attacker: { rows: rows.map((r) => ({ id: r.id, unitId: r.unitId, label: labelOf(r), start: r.count, end: r.count, broke: false })), losses: 0 },
+        attacker: { rows: rows.map((r) => ({ id: r.id, unitId: r.unitId, label: labelOf(r), icon: iconOf(r), start: r.count, end: r.count, broke: false })), losses: 0 },
         defender: null,
         plunder: null,
         conquest: null,
@@ -311,7 +358,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
         attacker: {
           rows: rows.map((r) => {
             const side = result.attacker.rows.find((x) => x.id === r.id)!;
-            return { id: r.id, unitId: r.unitId, label: labelOf(r), start: side.start, end: side.end, broke: side.broke };
+            return { id: r.id, unitId: r.unitId, label: labelOf(r), icon: iconOf(r), start: side.start, end: side.end, broke: side.broke };
           }),
           losses: result.attacker.losses,
         },

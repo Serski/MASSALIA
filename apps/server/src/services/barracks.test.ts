@@ -380,6 +380,32 @@ suite("Barracks (integration)", () => {
       expect(s.drachmaeDirect).toBe(drachmae);
     });
 
+    it("arrival merges a trained row into the ready same-unit row at its base, keeping the later created_at; a lone row just lands; bands never merge", async () => {
+      const { ctx, characterId } = await makePlayer({ drachmae: 10_000 });
+      await giveAll(ctx, { grain: 10_000, oliveoil: 10_000, wine: 1000, chicken: 1000, herbal: 1000 });
+      // 10 hoplites at home since 5, ready; 20 hoplites created at 6, back from a raid at 9.5.
+      const home = await insertRow(ctx, { source: "trained", unitId: "hoplite", count: 10, recruitedSeason: 5, readyAt: 6, createdSeason: 5 });
+      const back = await insertRow(ctx, { source: "trained", unitId: "hoplite", count: 20, recruitedSeason: 6, readyAt: 7, createdSeason: 6 });
+      await db.update(m.dbPkg.playerUnits).set({ movingTo: "R060", arrivesAt: at(9.5) }).where(eq(m.dbPkg.playerUnits.id, back.id));
+      // A peltast row coming home with no peltasts at the base lands alone.
+      const lone = await insertRow(ctx, { source: "trained", unitId: "peltast", count: 5, recruitedSeason: 6, readyAt: 7, createdSeason: 6 });
+      await db.update(m.dbPkg.playerUnits).set({ movingTo: "R060", arrivesAt: at(9.5) }).where(eq(m.dbPkg.playerUnits.id, lone.id));
+      // Two bands of the same company never fold together.
+      await insertRow(ctx, { source: "band", unitId: "volcae-irregulars", count: 40, recruitedSeason: 5, contractEndAt: 30, createdSeason: 5 });
+      const bandBack = await insertRow(ctx, { source: "band", unitId: "volcae-irregulars", count: 40, recruitedSeason: 6, contractEndAt: 30, createdSeason: 6 });
+      await db.update(m.dbPkg.playerUnits).set({ movingTo: "R060", arrivesAt: at(9.5) }).where(eq(m.dbPkg.playerUnits.id, bandBack.id));
+      const s = await settle(ctx, 10);
+      expect(s.arrived.map((a) => a.rowId).sort()).toEqual([back.id, lone.id, bandBack.id].sort());
+      const after = await rows(ctx);
+      expect(after.find((r) => r.id === back.id)).toBeUndefined();
+      expect(after.find((r) => r.id === home.id)).toMatchObject({ count: 30, startCount: 30, createdAt: at(6), basedAt: "R060", movingTo: null, arrivesAt: null });
+      expect(after.find((r) => r.id === lone.id)).toMatchObject({ count: 5, basedAt: "R060", movingTo: null, arrivesAt: null });
+      expect(after.filter((r) => r.unitId === "volcae-irregulars")).toHaveLength(2);
+      const arrivals = (await logs(characterId, "barracks_arrive")).map((e) => e.detail as { unitId: string; mergedInto?: string });
+      expect(arrivals.find((a) => a.unitId === "hoplite")?.mergedInto).toBe(home.id);
+      expect(arrivals.find((a) => a.unitId === "peltast")?.mergedInto).toBeUndefined();
+    });
+
     it("with no rows and no marker nothing happens and no marker is written", async () => {
       const { ctx } = await makePlayer();
       const s = await settle(ctx, 10);
