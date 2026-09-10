@@ -529,6 +529,11 @@ export const api = {
   // Map reach (military prompt 3a): which land provinces the player's force can
   // Attack, Raid or Colonise from its bases, with a one-line reason when not.
   mapReach: () => apiFetch<MapReachView>("/api/map/reach"),
+  // Map actions (military prompt 3b): Scout, Raid or Attack a townless region
+  // with whole roster rows; resolves in the request and returns the report with
+  // fresh reach and roster payloads.
+  mapAct: (type: MapActType, regionId: string, rowIds: string[]) =>
+    apiFetch<MapActResponse>("/api/map/act", { method: "POST", body: { type, regionId, rowIds } }),
   craftGood: (good: string) => apiFetch<CraftResult>("/api/buildings/craft", { method: "POST", body: { good } }),
   // The hoplite's home army (Hoplite Step 1): rank ladder + daily salary.
   service: () => apiFetch<ServiceView>("/api/service"),
@@ -1427,6 +1432,10 @@ export type BarracksRosterRow = {
   recruitedSeason: number;
   readyAt: string | null; // ISO; trained only — the instant training completes
   contractEndAt: string | null; // ISO; band only — the instant the contract ends
+  basedAt: string; // region id the row stands in
+  movingTo: string | null; // region id of a relocation or recovery in flight
+  arrivesAt: string | null; // ISO; when that movement completes
+  stats: Record<string, number>; // the unit's or band's stat block (for the force picker)
   active: boolean;
   canDisband: boolean;
 };
@@ -1472,4 +1481,37 @@ export type MapReachView = {
   fleet: { ships: Record<string, number>; range: number; space: number };
   // Keyed by region id; a region absent here keeps the legality matrix's own verdict.
   reach: Record<string, ReachEntry>;
+};
+
+// --- Map actions (POST /api/map/act; mirrors apps/server/src/services/mapActions.ts) ---
+
+export type MapActType = "scout" | "raid" | "attack";
+
+export type MapActReport = {
+  type: MapActType;
+  regionId: string;
+  regionName: string;
+  base: string;
+  route: "land" | "sea";
+  steps: number;
+  recoveryDays: number;
+  arrivesAt: string;
+  destination: string;
+  ships: Record<string, number>;
+  winner: "attacker" | "defender" | "stand" | null;
+  rounds: number;
+  attacker: { rows: { id: string; unitId: string; label: string; start: number; end: number; broke: boolean }[]; losses: number };
+  defender: { label: string; start: number; end: number; losses: number } | null;
+  plunder: { drachmae: number; grain: number } | null;
+  conquest: { regionId: string; previousOwner: string | null } | null;
+  intel: { warband: number; scoutedGameDate: string } | null;
+  line: string;
+};
+
+export type MapActResponse = {
+  report: MapActReport;
+  reach: MapReachView;
+  force: MapReachView["force"];
+  fleet: MapReachView["fleet"];
+  roster: BarracksRosterRow[];
 };

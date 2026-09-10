@@ -78,6 +78,54 @@ export function forceStats(force: ReachForceRow[]): ForceStats {
   };
 }
 
+export type ReachSteps = { landSteps: number | null; seaSteps: number | null };
+export type ReachVerdicts = { attack: ReachVerdict; raid: ReachVerdict; colonise: ReachVerdict };
+
+// The three verdicts for one target from its steps, the force and the fleet —
+// the rule the record is built from, exported so a client can re-run it for a
+// hand-picked force against the steps the server reported.
+export function verdictsFor(steps: ReachSteps, force: ForceStats, fleet: FleetStats): ReachVerdicts {
+  const land = steps.landSteps;
+  const sea = steps.seaSteps;
+
+  // The sea route, and why it fails when it does (range before hulls).
+  const seaOk = sea !== null && sea <= fleet.range && force.space <= fleet.space;
+  const seaReason = sea === null ? null : sea > fleet.range ? REACH_REASON.range(sea, fleet.range) : force.space > fleet.space ? REACH_REASON.hulls(force.space, fleet.space) : null;
+
+  // Attack: 1 land step, or by sea.
+  let attack: ReachVerdict;
+  if (force.men === 0) attack = { ok: false, reason: REACH_REASON.noMen };
+  else if (land === 1 || seaOk) attack = { ok: true };
+  else if (sea === null) attack = { ok: false, reason: REACH_REASON.noBase };
+  else attack = { ok: false, reason: seaReason! };
+
+  // Raid: 1 land step, 2 with a fast force, or by sea.
+  let raid: ReachVerdict;
+  if (force.men === 0) raid = { ok: false, reason: REACH_REASON.noMen };
+  else if (land === 1 || (land === 2 && force.fast) || seaOk) raid = { ok: true };
+  else if (land === null && sea === null) raid = { ok: false, reason: REACH_REASON.noBase };
+  else if (land === 2 && !force.fast) raid = { ok: false, reason: REACH_REASON.tooFar };
+  else if (sea === null) raid = { ok: false, reason: REACH_REASON.noBase };
+  else raid = { ok: false, reason: seaReason! };
+
+  // Colonise: Attack's reach, without the men rule (legality by target kind
+  // and owner stays with allowedMapActions).
+  let colonise: ReachVerdict;
+  if (land === 1 || seaOk) colonise = { ok: true };
+  else if (sea === null) colonise = { ok: false, reason: REACH_REASON.noBase };
+  else colonise = { ok: false, reason: seaReason! };
+
+  return { attack, raid, colonise };
+}
+
+// The route an action would take for a target: land when its land steps satisfy
+// the action (1, or 2 for a fast raiding party), else sea.
+export function routeFor(type: "attack" | "raid", steps: ReachSteps, force: ForceStats): { route: "land" | "sea"; steps: number } | null {
+  const byLand = type === "attack" ? steps.landSteps === 1 : steps.landSteps === 1 || (steps.landSteps === 2 && force.fast);
+  if (byLand) return { route: "land", steps: steps.landSteps! };
+  return steps.seaSteps === null ? null : { route: "sea", steps: steps.seaSteps };
+}
+
 export function computeReach(input: ReachInput): Record<string, ReachEntry> {
   const t = input.topology;
   const bases = new Set(input.bases.filter((b) => t.land.has(b)));
@@ -139,35 +187,7 @@ export function computeReach(input: ReachInput): Record<string, ReachEntry> {
       const d = seaSteps.get(s);
       if (d !== undefined && (sea === null || d < sea)) sea = d;
     }
-
-    // The sea route, and why it fails when it does (range before hulls).
-    const seaOk = sea !== null && sea <= fleet.range && force.space <= fleet.space;
-    const seaReason = sea === null ? null : sea > fleet.range ? REACH_REASON.range(sea, fleet.range) : force.space > fleet.space ? REACH_REASON.hulls(force.space, fleet.space) : null;
-
-    // Attack: 1 land step, or by sea.
-    let attack: ReachVerdict;
-    if (force.men === 0) attack = { ok: false, reason: REACH_REASON.noMen };
-    else if (land === 1 || seaOk) attack = { ok: true };
-    else if (sea === null) attack = { ok: false, reason: REACH_REASON.noBase };
-    else attack = { ok: false, reason: seaReason! };
-
-    // Raid: 1 land step, 2 with a fast force, or by sea.
-    let raid: ReachVerdict;
-    if (force.men === 0) raid = { ok: false, reason: REACH_REASON.noMen };
-    else if (land === 1 || (land === 2 && force.fast) || seaOk) raid = { ok: true };
-    else if (land === null && sea === null) raid = { ok: false, reason: REACH_REASON.noBase };
-    else if (land === 2 && !force.fast) raid = { ok: false, reason: REACH_REASON.tooFar };
-    else if (sea === null) raid = { ok: false, reason: REACH_REASON.noBase };
-    else raid = { ok: false, reason: seaReason! };
-
-    // Colonise: Attack's reach, without the men rule (legality by target kind
-    // and owner stays with allowedMapActions).
-    let colonise: ReachVerdict;
-    if (land === 1 || seaOk) colonise = { ok: true };
-    else if (sea === null) colonise = { ok: false, reason: REACH_REASON.noBase };
-    else colonise = { ok: false, reason: seaReason! };
-
-    out[id] = { landSteps: land, seaSteps: sea, attack, raid, colonise };
+    out[id] = { landSteps: land, seaSteps: sea, ...verdictsFor({ landSteps: land, seaSteps: sea }, force, fleet) };
   }
   return out;
 }

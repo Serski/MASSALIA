@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { api, apiBaseUrl, type ReachEntry } from "../api.js";
-import { CULTURE_WEBP, POLITY_CREST, titleCase } from "../dashboard/shared.js";
+import { forceStats, HOME_POLITY_ID, routeFor, verdictsFor, type MapActionType } from "@massalia/shared";
+import { api, apiBaseUrl, ApiError, type BarracksRosterRow, type MapActReport, type MapActType, type MapReachView, type ReachEntry } from "../api.js";
+import { CULTURE_WEBP, formatDuration, POLITY_CREST, titleCase, useCountdownSeconds } from "../dashboard/shared.js";
 import { mapActionButtons, withReach } from "./mapActions.js";
 import "./World2Map.css";
 
@@ -342,6 +343,13 @@ export function World2Map({ fill = false, refreshToken }: { fill?: boolean; refr
   // Reach per land region (null until fetched, or when not signed in): gates the
   // Attack / Raid / Colonise buttons beyond the legality matrix.
   const [reach, setReach] = useState<Record<string, ReachEntry> | null>(null);
+  const [reachBases, setReachBases] = useState<MapReachView["bases"]>([]);
+  const [reachFleet, setReachFleet] = useState<MapReachView["fleet"]>({ ships: {}, range: 0, space: 0 });
+  // The force picker (Attack / Raid / Scout on a townless region), the roster it
+  // lists, and the battle report after an action. Whole rows only.
+  const [picker, setPicker] = useState<{ type: MapActType; regionId: string } | null>(null);
+  const [roster, setRoster] = useState<BarracksRosterRow[] | null>(null);
+  const [report, setReport] = useState<MapActReport | null>(null);
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" && "matchMedia" in window ? window.matchMedia(MOBILE_QUERY).matches : false,
   );
@@ -382,13 +390,27 @@ export function World2Map({ fill = false, refreshToken }: { fill?: boolean; refr
     api
       .mapReach()
       .then((view) => {
-        if (!cancelled) setReach(view.reach ?? {});
+        if (cancelled) return;
+        setReach(view.reach ?? {});
+        setReachBases(view.bases ?? []);
+        setReachFleet(view.fleet ?? { ships: {}, range: 0, space: 0 });
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, [refreshToken]);
+
+  // Regions the player holds render as Massalia's own (colour, crest, and the
+  // legality matrix's home rule), with a note in the panel. Nothing else on the
+  // map knows the player, so the holding rides on the polity layer.
+  const held = useMemo(() => new Set(reachBases.filter((b) => b.kind !== "massalia").map((b) => b.regionId)), [reachBases]);
+  const politicsView = useMemo<Politics | null>(() => {
+    if (!politics || held.size === 0) return politics;
+    const owners = { ...politics.owners };
+    for (const id of held) owners[id] = HOME_POLITY_ID;
+    return { ...politics, owners };
+  }, [politics, held]);
 
   const worldRect = useMemo<Rect | null>(
     () => (world ? { x: 0, y: 0, w: world.width, h: world.height } : null),
@@ -417,11 +439,11 @@ export function World2Map({ fill = false, refreshToken }: { fill?: boolean; refr
   // layer and the name labels; stable across camera moves.
   const realms = useMemo(() => {
     const out: { id: string; name: string; regions: Province[]; area: number; x: number; y: number }[] = [];
-    if (!world || !politics) return out;
+    if (!world || !politicsView) return out;
     const byPolity = new Map<string, Province[]>();
     for (const province of land) {
-      const owner = politics.owners[province.id];
-      if (!owner || owner === "unclaimed" || !politics.polities[owner]) continue;
+      const owner = politicsView.owners[province.id];
+      if (!owner || owner === "unclaimed" || !politicsView.polities[owner]) continue;
       const list = byPolity.get(owner) ?? [];
       list.push(province);
       byPolity.set(owner, list);
@@ -434,25 +456,25 @@ export function World2Map({ fill = false, refreshToken }: { fill?: boolean; refr
         area += m.area;
         if (m.area > largest.area) largest = m;
       }
-      out.push({ id, name: politics.polities[id]!.name, regions, area, x: largest.x, y: largest.y });
+      out.push({ id, name: politicsView.polities[id]!.name, regions, area, x: largest.x, y: largest.y });
     }
     return out;
-  }, [world, land, politics]);
+  }, [world, land, politicsView]);
 
   // Town id -> culture icon URL, for towns whose region has a culture-bearing
   // owner. Stable across camera moves (depends only on world + politics).
   const townCultureIcon = useMemo(() => {
     const out = new Map<string, string>();
-    if (!world || !politics) return out;
+    if (!world || !politicsView) return out;
     for (const province of world.provinces) {
-      const owner = politics.owners[province.id];
-      const culture = owner ? politics.polities[owner]?.culture : undefined;
+      const owner = politicsView.owners[province.id];
+      const culture = owner ? politicsView.polities[owner]?.culture : undefined;
       const icon = culture ? CULTURE_WEBP[culture] : undefined;
       if (!icon) continue;
       for (const townId of province.towns) out.set(townId, icon);
     }
     return out;
-  }, [world, politics]);
+  }, [world, politicsView]);
 
   // --- Camera plumbing ------------------------------------------------------
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -817,8 +839,8 @@ export function World2Map({ fill = false, refreshToken }: { fill?: boolean; refr
             Unowned regions are skipped — the terrain shows through anyway. */}
         <g pointerEvents="none">
           {land.map((province) => {
-            const polityId = politics?.owners[province.id];
-            const color = polityId ? politics?.polities[polityId]?.color : undefined;
+            const polityId = politicsView?.owners[province.id];
+            const color = polityId ? politicsView?.polities[polityId]?.color : undefined;
             if (!color) return null;
             return (
               <path
@@ -896,7 +918,7 @@ export function World2Map({ fill = false, refreshToken }: { fill?: boolean; refr
         </g>
       </>
     );
-  }, [world, land, seaZones, fog, hover, politics, realms, onRegionEnter, onRegionLeave]);
+  }, [world, land, seaZones, fog, hover, politicsView, realms, onRegionEnter, onRegionLeave]);
 
   // The world must load before we can render anything, but the stage renders as
   // soon as the world is ready (even before the camera) so its box gets measured
@@ -915,8 +937,9 @@ export function World2Map({ fill = false, refreshToken }: { fill?: boolean; refr
   const townOpacity = camera ? townOpacityFor(camera, worldRect) : 0;
 
   const selectedProvince = selected ? provincesById.get(selected) ?? null : null;
-  const selectedOwnerId = selectedProvince ? politics?.owners[selectedProvince.id] ?? null : null;
-  const selectedOwner = selectedOwnerId ? politics?.polities[selectedOwnerId] ?? null : null;
+  const selectedOwnerId = selectedProvince ? politicsView?.owners[selectedProvince.id] ?? null : null;
+  const selectedOwner = selectedOwnerId ? politicsView?.polities[selectedOwnerId] ?? null : null;
+  const selectedHeld = selectedProvince ? held.has(selectedProvince.id) : false;
   const selectedTownObj = selectedTown ? townsById.get(selectedTown) ?? null : null;
   const stateName = selectedOwner?.name ?? "Unclaimed";
   const stateColor = selectedOwner?.color ?? UNCLAIMED_GREY;
@@ -945,6 +968,29 @@ export function World2Map({ fill = false, refreshToken }: { fill?: boolean; refr
   const regionActions = selectedProvince
     ? withReach(mapActionButtons({ kind: "region", hasTown: selectedProvince.towns.length > 0, ownerId: selectedOwnerId }), regionReach)
     : null;
+
+  // Attack / Raid / Scout on a townless region open the force picker; the
+  // roster is fetched fresh each time (the Barracks may have changed).
+  const openPicker = (type: MapActType, regionId: string) => {
+    setPicker({ type, regionId });
+    setRoster(null);
+    api
+      .barracks()
+      .then((view) => setRoster(view.roster))
+      .catch(() => setRoster([]));
+  };
+  const onActed = (regionId: string, res: { report: MapActReport; reach: MapReachView; roster: BarracksRosterRow[] }) => {
+    setReach(res.reach.reach ?? {});
+    setReachBases(res.reach.bases ?? []);
+    setReachFleet(res.reach.fleet ?? { ships: {}, range: 0, space: 0 });
+    setRoster(res.roster);
+    if (res.report.intel) {
+      setMilitary((m) => ({ ...m, regions: { ...m.regions, [regionId]: { warband: res.report.intel!.warband, source: "intel", scoutedGameDate: res.report.intel!.scoutedGameDate } } }));
+    }
+    setPicker(null);
+    setReport(res.report);
+  };
+  const actionable = (type: MapActionType): type is MapActType => type === "attack" || type === "raid" || type === "scout";
   const townActions = selectedTown ? withReach(mapActionButtons({ kind: "town", hasTown: true, ownerId: selectedOwnerId }), townReach) : null;
 
   const regionBody = selectedProvince ? (
@@ -990,10 +1036,19 @@ export function World2Map({ fill = false, refreshToken }: { fill?: boolean; refr
         )}
         {selectedProvince.type === "land" ? (
           <>
+            {selectedHeld ? <p className="w2map-held">Held by your house — a base for your forces.</p> : null}
             <div className="w2map-info-label">Actions</div>
             <div className="w2map-actions">
               {regionActions!.buttons.map((b) => (
-                <button key={b.type} type="button" className="w2map-action" disabled={!b.enabled} aria-disabled={!b.enabled} title={b.title}>
+                <button
+                  key={b.type}
+                  type="button"
+                  className="w2map-action"
+                  disabled={!b.enabled}
+                  aria-disabled={!b.enabled}
+                  title={b.title}
+                  onClick={b.enabled && actionable(b.type) && selectedProvince.towns.length === 0 ? () => openPicker(b.type as MapActType, selectedProvince.id) : undefined}
+                >
                   {b.label}
                 </button>
               ))}
@@ -1199,11 +1254,207 @@ export function World2Map({ fill = false, refreshToken }: { fill?: boolean; refr
           </div>
         ) : null}
 
+        {picker && world ? (
+          <ForcePicker
+            type={picker.type}
+            regionId={picker.regionId}
+            regionName={names[picker.regionId] ?? picker.regionId}
+            entry={reach?.[picker.regionId]}
+            fleet={reachFleet}
+            roster={roster}
+            onClose={() => setPicker(null)}
+            onActed={(res) => onActed(picker.regionId, res)}
+          />
+        ) : null}
+        {report ? <BattleReport report={report} onClose={() => setReport(null)} /> : null}
+
         <div className="w2map-controls">
           <button type="button" className="w2map-btn" aria-label="Zoom in" title="Zoom in" onClick={() => stepZoom(1.3)}>+</button>
           <button type="button" className="w2map-btn" aria-label="Zoom out" title="Zoom out" onClick={() => stepZoom(1 / 1.3)}>−</button>
           <button type="button" className="w2map-btn" aria-label="Home" title="Home (Massalia)" onClick={goHome}>⌂</button>
           <button type="button" className="w2map-btn" aria-label="Fit world" title="Fit the whole world" onClick={goFit}>▣</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Force picker: the player's roster rows grouped by base, whole rows only, with
+// a live verdict for this action on this target — the shared reach rule run
+// against the steps the server reported and the fleet in stock. The server
+// stays authoritative: its 409 lands in the sheet as is.
+// ---------------------------------------------------------------------------
+
+const ACTION_LABEL: Record<MapActType, string> = { attack: "Attack", raid: "Raid", scout: "Scout" };
+const FAST_SPD = 6;
+
+function RecoveringRow({ row }: { row: BarracksRosterRow }) {
+  const left = useCountdownSeconds(row.arrivesAt);
+  return (
+    <li className="w2map-pick-row dim">
+      <span className="w2map-pick-label">{row.label} · {row.count}</span>
+      <span className="w2map-pick-note">{row.active ? `recovering · ${formatDuration(left)}` : "training"}</span>
+    </li>
+  );
+}
+
+function ForcePicker({
+  type,
+  regionId,
+  regionName,
+  entry,
+  fleet,
+  roster,
+  onClose,
+  onActed,
+}: {
+  type: MapActType;
+  regionId: string;
+  regionName: string;
+  entry: ReachEntry | undefined;
+  fleet: MapReachView["fleet"];
+  roster: BarracksRosterRow[] | null;
+  onClose: () => void;
+  onActed: (res: { report: MapActReport; reach: MapReachView; roster: BarracksRosterRow[] }) => void;
+}) {
+  const [picked, setPicked] = useState<Set<string>>(() => new Set());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const rows = roster ?? [];
+  const eligible = rows.filter((r) => r.active && r.movingTo === null);
+  const byBase = new Map<string, BarracksRosterRow[]>();
+  for (const r of eligible) byBase.set(r.basedAt, [...(byBase.get(r.basedAt) ?? []), r]);
+  const others = rows.filter((r) => !r.active || r.movingTo !== null);
+  const selected = eligible.filter((r) => picked.has(r.id));
+  const base = selected[0]?.basedAt ?? null;
+
+  const force = forceStats(selected.map((r) => ({ spd: r.stats.spd ?? 0, space: r.stats.space ?? 1, count: r.count })));
+  const verdicts = entry ? verdictsFor(entry, force, { range: fleet.range, space: fleet.space }) : null;
+  let verdict = verdicts ? (type === "attack" ? verdicts.attack : verdicts.raid) : { ok: false, reason: "That land cannot be reached." };
+  if (verdict.ok && type === "scout" && !selected.some((r) => (r.stats.spd ?? 0) >= FAST_SPD)) verdict = { ok: false, reason: `A scouting party needs a man at Spd ${FAST_SPD} or more.` };
+  const route = entry && selected.length > 0 ? routeFor(type === "attack" ? "attack" : "raid", entry, force) : null;
+
+  const toggle = (id: string) =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const go = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const res = await api.mapAct(type, regionId, [...picked]);
+      onActed(res);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "That could not be done.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="w2map-modal" role="dialog" aria-label={`${ACTION_LABEL[type]} ${regionName}`} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+      <div className="w2map-modal-card">
+        <button type="button" className="w2map-info-close" onClick={onClose} aria-label="Close">Close</button>
+        <div className="w2map-info-body">
+          <div className="w2map-info-label">{ACTION_LABEL[type]} · {regionName}</div>
+          {roster === null ? (
+            <p className="w2map-info-empty">Mustering…</p>
+          ) : eligible.length === 0 ? (
+            <p className="w2map-info-empty">No men under arms.</p>
+          ) : (
+            [...byBase.entries()].map(([baseId, list]) => (
+              <div key={baseId}>
+                <p className="w2map-pick-base">From {baseId}</p>
+                <ul className="w2map-pick-list">
+                  {list.map((r) => {
+                    const otherBase = base !== null && base !== baseId;
+                    return (
+                      <li key={r.id} className={`w2map-pick-row${otherBase ? " dim" : ""}`} title={otherBase ? "A force marches from one base." : undefined}>
+                        <label className="w2map-pick-check">
+                          <input type="checkbox" checked={picked.has(r.id)} disabled={otherBase || busy} onChange={() => toggle(r.id)} />
+                          <span className="w2map-pick-label">{r.label} · {r.count}</span>
+                        </label>
+                        <span className="w2map-pick-note">
+                          Atk {r.stats.atk ?? 0} · Def {r.stats.def ?? 0} · Msl {r.stats.msl ?? 0} · Mor {r.stats.mor ?? 0} · Spd {r.stats.spd ?? 0} · Space {r.stats.space ?? 1}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))
+          )}
+          {others.length > 0 ? (
+            <ul className="w2map-pick-list">
+              {others.map((r) => (
+                <RecoveringRow key={r.id} row={r} />
+              ))}
+            </ul>
+          ) : null}
+          <div className={`w2map-verdict${verdict.ok ? " ok" : ""}`}>
+            {selected.length === 0 ? (
+              <span>Choose the rows that march.</span>
+            ) : (
+              <>
+                <span>{force.men} men · space {force.space}{force.fast ? " · fast" : ""}</span>
+                {route ? <span>{route.route === "land" ? `by land · ${route.steps} step${route.steps === 1 ? "" : "s"}` : `by sea · ${route.steps} sea${route.steps === 1 ? "" : "s"} · space ${force.space} of ${fleet.space} aboard`}</span> : null}
+                <span>{verdict.ok ? "Within reach." : verdict.reason}</span>
+              </>
+            )}
+          </div>
+          {error ? <p className="w2map-action-why" role="alert">{error}</p> : null}
+          <div className="w2map-actions">
+            <button type="button" className="w2map-action" disabled={busy || selected.length === 0 || !verdict.ok} onClick={go}>
+              {busy ? "…" : "Go"}
+            </button>
+            <button type="button" className="w2map-action ghost" disabled={busy} onClick={onClose}>Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// The report after an action: the outcome line, both sides row by row, plunder
+// or conquest, and the recovery time. Scout shows the intel line.
+function BattleReport({ report, onClose }: { report: MapActReport; onClose: () => void }) {
+  const hours = report.recoveryDays * 24;
+  const sailed = Object.entries(report.ships)
+    .map(([id, n]) => `${n} ${id === "trade-ship" ? "pentekonter" : "trireme"}${n === 1 ? "" : "s"}`)
+    .join(", ");
+  return (
+    <div className="w2map-modal" role="dialog" aria-label={`${ACTION_LABEL[report.type]} ${report.regionName}`} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+      <div className="w2map-modal-card">
+        <button type="button" className="w2map-info-close" onClick={onClose} aria-label="Close">Close</button>
+        <div className="w2map-info-body">
+          <div className="w2map-info-label">{ACTION_LABEL[report.type]} · {report.regionName}</div>
+          <p className="w2map-report-line">{report.line}</p>
+          {report.type !== "scout" ? (
+            <table className="w2map-report-table">
+              <thead>
+                <tr><th>Rows</th><th>Start</th><th>End</th></tr>
+              </thead>
+              <tbody>
+                {report.attacker.rows.map((r) => (
+                  <tr key={r.id}><td>{r.label}{r.broke ? " (broke)" : ""}</td><td>{r.start}</td><td>{r.end}</td></tr>
+                ))}
+                {report.defender ? <tr className="w2map-report-enemy"><td>{report.defender.label}</td><td>{report.defender.start}</td><td>{report.defender.end}</td></tr> : null}
+              </tbody>
+            </table>
+          ) : null}
+          {report.plunder ? <p className="w2map-report-note">Plunder: {report.plunder.drachmae} drachmae, {report.plunder.grain} grain.</p> : null}
+          {report.conquest ? <p className="w2map-report-note">{report.regionName} is yours. The survivors hold it.</p> : null}
+          {report.rounds > 0 ? <p className="w2map-report-note">{report.rounds} round{report.rounds === 1 ? "" : "s"} fought{sailed ? ` · sailed with ${sailed}` : ""}.</p> : null}
+          <p className="w2map-report-note">The party {report.destination === report.regionId ? "settles in" : "returns"} in {hours}h.</p>
+          <div className="w2map-actions">
+            <button type="button" className="w2map-action" onClick={onClose}>Close</button>
+          </div>
         </div>
       </div>
     </div>

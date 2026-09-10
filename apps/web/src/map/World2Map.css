@@ -460,3 +460,82 @@ p.w2map-stat-asof {
     padding: 6px 11px 6px 9px;
   }
 }
+
+/* --- Force picker + battle report (barracks prompt 3b) ---------------------- */
+.w2map-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(10, 7, 5, 0.55);
+}
+
+.w2map-modal-card {
+  position: relative;
+  width: min(440px, 100%);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: var(--dash-parchment, #ece0cc);
+  background: rgba(20, 13, 10, 0.96);
+  border: 1px solid rgba(181, 138, 69, 0.5);
+  border-radius: 12px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+}
+
+.w2map-modal-card .w2map-info-body { padding-top: 36px; }
+
+.w2map-pick-base {
+  margin: 8px 0 4px;
+  color: var(--dash-stone-dim, #9a8c72);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.w2map-pick-list { list-style: none; margin: 0 0 8px; padding: 0; }
+
+.w2map-pick-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28));
+}
+
+.w2map-pick-row.dim { opacity: 0.5; }
+.w2map-pick-check { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+.w2map-pick-label { font-size: 13px; }
+.w2map-pick-note { color: var(--dash-stone-dim, #9a8c72); font-size: 11px; }
+
+.w2map-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 10px 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  border: 1px solid rgba(187, 106, 82, 0.5);
+  border-radius: 8px;
+  background: rgba(187, 106, 82, 0.12);
+}
+
+.w2map-verdict.ok { border-color: rgba(181, 138, 69, 0.5); background: rgba(181, 138, 69, 0.12); }
+
+.w2map-action.ghost {
+  color: var(--dash-stone, #c9bb9f);
+  background: none;
+  border: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28));
+}
+
+.w2map-held { margin: 0 0 10px; color: var(--dash-gold-bright, #d1ae63); font-size: 12px; }
+
+.w2map-report-line { margin: 0 0 10px; font-family: "Spectral", serif; font-size: 14px; line-height: 1.4; }
+.w2map-report-table { width: 100%; margin: 0 0 10px; font-size: 12px; border-collapse: collapse; }
+.w2map-report-table th,
+.w2map-report-table td { padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28)); }
+.w2map-report-table th { color: var(--dash-stone-dim, #9a8c72); font-weight: 600; }
+.w2map-report-enemy td { color: #e0a49a; }
+.w2map-report-note { margin: 0 0 8px; color: var(--dash-stone, #c9bb9f); font-size: 12px; }
