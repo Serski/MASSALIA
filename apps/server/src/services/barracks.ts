@@ -85,10 +85,20 @@ export function getBandsContent(): BandsContent {
 export type UnitRow = typeof playerUnits.$inferSelect;
 export type LevyRow = typeof playerLevy.$inferSelect;
 
-// Trained rows are active once training completes; band rows are always active.
-export function isActive(row: Pick<UnitRow, "source" | "readyAtSeason">, season: number): boolean {
+// Trained rows are active once training completes (ready_at reached); band rows
+// are always active. Timers are durations from the action, not season boundaries.
+export function isActive(row: Pick<UnitRow, "source" | "readyAt">, now: Date): boolean {
   if (row.source === "band") return true;
-  return row.readyAtSeason !== null && season >= row.readyAtSeason;
+  return row.readyAt !== null && now.getTime() >= row.readyAt.getTime();
+}
+
+// A wait, for refusal messages: "22h 14m", "45m", or "less than a minute".
+function remainingText(ms: number): string {
+  const minutes = Math.ceil(ms / 60_000);
+  if (minutes < 1) return "less than a minute";
+  const h = Math.floor(minutes / 60);
+  const mm = minutes % 60;
+  return h > 0 ? `${h}h ${mm}m` : `${mm}m`;
 }
 
 export function seasonFor(ctx: ActingContext, now: Date): number {
@@ -251,13 +261,15 @@ export async function offersFor(exec: Exec, ctx: ActingContext, season: number):
 
 // --- Settle (3g) -------------------------------------------------------------
 // Whole-day upkeep on its own marker, run from settleAll right after the
-// household (settleStaffing). Per whole day, every ACTIVE row owes its upkeep:
-// trained rows per man (× count), bands per band. Goods come from stock first;
-// the shortfall is auto-bought at the seasonal vendor price like pop food.
-// Bands additionally cost drachmae directly. If the day's total exceeds the
-// wallet, rows are disbanded until it fits (bands by drachmae desc, then trained
-// by hippeis > hoplite > ekdromos > peltast; trained men return to the levy).
-// Then band contracts that reached their end roll for renewal.
+// household (settleStaffing). Per whole day, every row owes its upkeep for the
+// days it stood ready: a band from hire, a trained row only for whole days after
+// ready_at (rowDays below). Trained rows pay per man (× count), bands per band.
+// Goods come from stock first; the shortfall is auto-bought at the seasonal
+// vendor price like pop food. Bands additionally cost drachmae directly. If the
+// gap's total exceeds the wallet, rows are disbanded until it fits (bands by
+// drachmae desc, then trained by hippeis > hoplite > ekdromos > peltast; trained
+// men return to the levy). Then band contracts whose contract_end_at has passed
+// roll for renewal.
 
 export type BarracksDisband = { rowId: string; unitId: string; source: "trained" | "band"; count: number };
 export type BarracksSettle = {
@@ -277,10 +289,11 @@ const emptySettle = (): BarracksSettle => ({ days: 0, drachmaeDirect: 0, purchas
 
 type UpkeepPlan = { drachmaeDirect: number; purchases: number; cost: number; draws: Record<string, number>; buys: Record<string, number> };
 
-// Removal order under insolvency: bands by drachmae/day descending (ties by id),
-// then trained rows in TRAINED_REMOVAL_ORDER (ties by age, oldest first).
-function nextInsolvencyVictim(live: UnitRow[], season: number): UnitRow | null {
-  const active = live.filter((r) => isActive(r, season));
+// Removal order under insolvency, among the rows that owe anything this gap
+// (`chargeable`): bands by drachmae/day descending (ties by id), then trained
+// rows in TRAINED_REMOVAL_ORDER (ties by age, oldest first).
+function nextInsolvencyVictim(live: UnitRow[], chargeable: (r: UnitRow) => boolean): UnitRow | null {
+  const active = live.filter(chargeable);
   const bandsC = getBandsContent();
   const bandRows = active
     .filter((r) => r.source === "band")
@@ -341,33 +354,45 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
       stock.set(g, { rowId: row.id, amount: Number(row.amount) });
     }
 
-    // 3 + 4. Per-day demand across the active rows × days, then how much of each
+    // 3. Per-row chargeable days within this gap. A band owes every day; a trained
+    // row owes only the whole days after ready_at (0 while still training). The
+    // gap is [lastMs, now): days since max(lastMs, readyAt), capped at `days`.
+    const nowMs = now.getTime();
+    const rowDays = (r: UnitRow): number => {
+      if (r.source === "band") return days;
+      if (r.readyAt === null) return 0;
+      const readyMs = r.readyAt.getTime();
+      if (readyMs > nowMs) return 0;
+      return Math.min(days, wholeDaysBetween(Math.max(lastMs, readyMs), nowMs));
+    };
+    const chargeable = (r: UnitRow) => rowDays(r) > 0;
+
+    // 4. Demand across the rows, each × its own rowDays, then how much of each
     // good stock covers and what the shortfall costs at the vendor. Pure — it is
     // re-run after each insolvency removal and only applied once at the end.
     const plan = (live: UnitRow[]): UpkeepPlan => {
       let drachmaeDirect = 0;
-      const perDay: Record<string, number> = {};
+      const demand: Record<string, number> = {};
       for (const r of live) {
-        if (!isActive(r, season)) continue;
+        const d = rowDays(r);
+        if (d <= 0) continue;
         if (r.source === "trained") {
           const def = unitDef(unitsC, r.unitId);
           if (!def) continue;
-          for (const [g, q] of Object.entries(def.upkeepPerDay)) perDay[g] = (perDay[g] ?? 0) + q * r.count;
+          for (const [g, q] of Object.entries(def.upkeepPerDay)) demand[g] = (demand[g] ?? 0) + q * r.count * d;
         } else {
           const def = bandDef(bandsC, r.unitId);
           if (!def) continue;
           for (const [g, q] of Object.entries(def.upkeepPerDay)) {
-            if (g === "drachmae") drachmaeDirect += q;
-            else perDay[g] = (perDay[g] ?? 0) + q; // per band, not × count
+            if (g === "drachmae") drachmaeDirect += q * d;
+            else demand[g] = (demand[g] ?? 0) + q * d; // per band, not × count
           }
         }
       }
-      drachmaeDirect *= days;
       const draws: Record<string, number> = {};
       const buys: Record<string, number> = {};
       let purchases = 0;
-      for (const [g, q] of Object.entries(perDay)) {
-        const need = q * days;
+      for (const [g, need] of Object.entries(demand)) {
         const drawn = Math.min(stock.get(g)?.amount ?? 0, need);
         if (drawn > 0) draws[g] = drawn;
         const short = need - drawn;
@@ -387,7 +412,7 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
     let p = plan(live);
     const wallet = await readWallet(exec, ctx.playerId);
     while (Math.round(p.cost) > wallet) {
-      const victim = nextInsolvencyVictim(live, season);
+      const victim = nextInsolvencyVictim(live, chargeable);
       if (!victim) break;
       live = live.filter((r) => r.id !== victim.id);
       await exec.delete(playerUnits).where(eq(playerUnits.id, victim.id));
@@ -418,18 +443,21 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
     out.bought = p.buys;
   }
 
-  // 6. Contract ends. A band whose term has run rolls seededRoll([rowId, endSeason])
-  // against its renew chance: under it the contract extends by termSeasons (and
-  // rolls again if that end has also passed — a long absence resolves every
-  // term in turn, each on its own seed); otherwise the band leaves.
+  // 6. Contract ends. A band whose contract_end_at has passed rolls
+  // seededRoll([rowId, endMs]) against its renew chance: under it the contract
+  // extends by termSeasons days (and rolls again if that end has also passed — a
+  // long absence resolves every term in turn, each on its own seed); otherwise
+  // the band leaves.
+  const termMs = bandsC.contract.termSeasons * MS_PER_DAY;
   for (const r of rows) {
-    if (r.source !== "band" || r.contractEndSeason === null) continue;
-    let end = r.contractEndSeason;
+    if (r.source !== "band" || r.contractEndAt === null) continue;
+    const startMs = r.contractEndAt.getTime();
+    let end = startMs;
     let stays = true;
-    while (stays && end <= season) {
+    while (stays && end <= now.getTime()) {
       if (seededRoll([r.id, String(end)]) < renewChance(r.unitId)) {
-        end += bandsC.contract.termSeasons;
-        await logEffect(exec, characterId, "barracks_renew", { bandId: r.unitId, count: r.count, contractEndSeason: end, source: "barracks" });
+        end += termMs;
+        await logEffect(exec, characterId, "barracks_renew", { bandId: r.unitId, count: r.count, contractEndAt: new Date(end).toISOString(), source: "barracks" });
       } else {
         stays = false;
       }
@@ -438,8 +466,8 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
       await exec.delete(playerUnits).where(eq(playerUnits.id, r.id));
       await logEffect(exec, characterId, "barracks_disband", { unitId: r.unitId, count: r.count, source: "contract_end" });
       out.departed.push({ rowId: r.id, unitId: r.unitId, source: "band", count: r.count });
-    } else if (end !== r.contractEndSeason) {
-      await exec.update(playerUnits).set({ contractEndSeason: end }).where(eq(playerUnits.id, r.id));
+    } else if (end !== startMs) {
+      await exec.update(playerUnits).set({ contractEndAt: new Date(end) }).where(eq(playerUnits.id, r.id));
       out.renewed.push(r.id);
     }
   }
@@ -470,7 +498,7 @@ async function mutate<T>(ctx: ActingContext, now: Date, fn: (tx: DbTx, composure
   return outcome.result;
 }
 
-export type RecruitResult = Failure | { ok: true; rowId: string; unitId: string; count: number; readyAtSeason: number; levy: number };
+export type RecruitResult = Failure | { ok: true; rowId: string; unitId: string; count: number; readyAt: string; levy: number };
 
 export async function recruitUnits(ctx: ActingContext, unitId: string, count: number, now: Date): Promise<RecruitResult> {
   const def = unitDef(getUnitsContent(), unitId);
@@ -499,20 +527,21 @@ export async function recruitUnits(ctx: ActingContext, unitId: string, count: nu
     for (const n of needs) {
       if (!(await debitResource(tx, stock.get(n.good)!.id, n.qty))) throw new Error(`barracks: gear debit of ${n.qty} ${n.good} failed under lock`);
     }
-    const readyAtSeason = season + def.trainSeasons;
+    // Training is a duration from this instant: ready_at = now + trainSeasons days.
+    const readyAt = new Date(now.getTime() + def.trainSeasons * MS_PER_DAY);
     const inserted = (
       await tx
         .insert(playerUnits)
-        .values({ worldId: ctx.worldId, ownerPlayerId: ctx.playerId, source: "trained", unitId, count, startCount: count, recruitedSeason: season, readyAtSeason, contractEndSeason: null, createdAt: now })
+        .values({ worldId: ctx.worldId, ownerPlayerId: ctx.playerId, source: "trained", unitId, count, startCount: count, recruitedSeason: season, readyAt, contractEndAt: null, createdAt: now })
         .returning()
     )[0]!;
     if (!(await levyDraw(tx, ctx, count))) throw new Error("barracks: levy draw failed under lock");
-    await logEffect(tx, await characterIdFor(tx, ctx.playerId), "barracks_recruit", { unitId, count, readyAtSeason, source: "barracks" });
-    return { composureDays, result: { ok: true, rowId: inserted.id, unitId, count, readyAtSeason, levy: levy.men - count } };
+    await logEffect(tx, await characterIdFor(tx, ctx.playerId), "barracks_recruit", { unitId, count, readyAt: readyAt.toISOString(), source: "barracks" });
+    return { composureDays, result: { ok: true, rowId: inserted.id, unitId, count, readyAt: readyAt.toISOString(), levy: levy.men - count } };
   });
 }
 
-export type HireResult = Failure | { ok: true; rowId: string; bandId: string; men: number; contractEndSeason: number };
+export type HireResult = Failure | { ok: true; rowId: string; bandId: string; men: number; contractEndAt: string };
 
 export async function hireBand(ctx: ActingContext, bandId: string, now: Date): Promise<HireResult> {
   const bandsC = getBandsContent();
@@ -536,16 +565,24 @@ export async function hireBand(ctx: ActingContext, bandId: string, now: Date): P
       .where(and(eq(bandOffers.worldId, ctx.worldId), eq(bandOffers.ownerPlayerId, ctx.playerId), eq(bandOffers.seasonIndex, season), eq(bandOffers.bandId, bandId), eq(bandOffers.hired, false)))
       .returning({ bandId: bandOffers.bandId });
     if (!claimed.length) return fail(409, "That band has already been taken.");
-    const contractEndSeason = season + bandsC.contract.termSeasons;
+    // The contract is a duration from this instant: contract_end_at = now + termSeasons days.
+    const contractEndAt = new Date(now.getTime() + bandsC.contract.termSeasons * MS_PER_DAY);
     const inserted = (
       await tx
         .insert(playerUnits)
-        .values({ worldId: ctx.worldId, ownerPlayerId: ctx.playerId, source: "band", unitId: bandId, count: def.men, startCount: def.men, recruitedSeason: season, readyAtSeason: null, contractEndSeason, createdAt: now })
+        .values({ worldId: ctx.worldId, ownerPlayerId: ctx.playerId, source: "band", unitId: bandId, count: def.men, startCount: def.men, recruitedSeason: season, readyAt: null, contractEndAt, createdAt: now })
         .returning()
     )[0]!;
-    await logEffect(tx, await characterIdFor(tx, ctx.playerId), "barracks_hire", { bandId, men: def.men, contractEndSeason, source: "barracks" });
-    return { composureDays, result: { ok: true, rowId: inserted.id, bandId, men: def.men, contractEndSeason } };
+    await logEffect(tx, await characterIdFor(tx, ctx.playerId), "barracks_hire", { bandId, men: def.men, contractEndAt: contractEndAt.toISOString(), source: "barracks" });
+    return { composureDays, result: { ok: true, rowId: inserted.id, bandId, men: def.men, contractEndAt: contractEndAt.toISOString() } };
   });
+}
+
+// The instant a row may be released: created_at + minServiceSeasons days (trained)
+// or + termSeasons days (band). Shared by disbandRow and the view's canDisband.
+function releaseAtMs(row: Pick<UnitRow, "source" | "createdAt">, unitsC: UnitsContent, bandsC: BandsContent): number {
+  const seasons = row.source === "trained" ? unitsC.minServiceSeasons : bandsC.contract.termSeasons;
+  return row.createdAt.getTime() + seasons * MS_PER_DAY;
 }
 
 export type DisbandResult = Failure | { ok: true; rowId: string; unitId: string; source: "trained" | "band"; count: number; returnedToLevy: number };
@@ -558,15 +595,15 @@ export async function disbandRow(ctx: ActingContext, rowId: string, now: Date): 
     const fail = (code: number, error: string): Outcome<DisbandResult> => ({ composureDays, result: { ok: false, code, error } });
     const row = (await ownedUnitRows(tx, ctx)).find((r) => r.id === rowId);
     if (!row) return fail(404, "No such unit.");
-    const season = seasonFor(ctx, now);
-    if (row.source === "trained") {
-      const earliest = row.recruitedSeason + unitsC.minServiceSeasons;
-      if (season < earliest) return fail(409, `Trained men serve at least ${unitsC.minServiceSeasons} seasons; they may be released from season ${earliest}.`);
-    } else {
-      // The first term must have been served (recruited + termSeasons — the same
-      // instant as the original contract_end_season before any renewal).
-      const earliest = row.recruitedSeason + bandsC.contract.termSeasons;
-      if (season < earliest) return fail(409, `The band's first term runs to season ${earliest}.`);
+    // Service gates are elapsed time from the row's creation (the recruit / hire
+    // instant): minServiceSeasons days for trained men, the first termSeasons days
+    // for a band (the original contract_end_at, before any renewal).
+    const earliestMs = releaseAtMs(row, unitsC, bandsC);
+    if (now.getTime() < earliestMs) {
+      const wait = remainingText(earliestMs - now.getTime());
+      return row.source === "trained"
+        ? fail(409, `Trained men serve at least ${unitsC.minServiceSeasons} seasons; ${wait} to go.`)
+        : fail(409, `The band's first term has ${wait} to run.`);
     }
     const returnedToLevy = row.source === "trained" ? row.count : 0;
     if (returnedToLevy > 0) await levyReturn(tx, ctx, returnedToLevy);
@@ -592,8 +629,8 @@ export type RosterView = {
   count: number;
   startCount: number;
   recruitedSeason: number;
-  readyAtSeason: number | null;
-  contractEndSeason: number | null;
+  readyAt: string | null; // ISO; trained only
+  contractEndAt: string | null; // ISO; band only
   active: boolean;
   canDisband: boolean;
 };
@@ -601,6 +638,7 @@ export type OfferView = { id: string; label: string; icon: string; role: string;
 export type BarracksView = {
   gate: GateView;
   season: number;
+  now: string; // server time (ISO) — countdowns anchor to this, not the device clock
   levy: { men: number };
   config: { minServiceSeasons: number; maxActiveBands: number; termSeasons: number };
   units: UnitView[];
@@ -621,7 +659,6 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
     const offers = await offersFor(tx, ctx, season);
     const roster: RosterView[] = rows.map((r) => {
       const def = r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId);
-      const earliest = r.source === "trained" ? r.recruitedSeason + unitsC.minServiceSeasons : r.recruitedSeason + bandsC.contract.termSeasons;
       return {
         id: r.id,
         source: r.source,
@@ -631,15 +668,16 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
         count: r.count,
         startCount: r.startCount,
         recruitedSeason: r.recruitedSeason,
-        readyAtSeason: r.readyAtSeason,
-        contractEndSeason: r.contractEndSeason,
-        active: isActive(r, season),
-        canDisband: gate.met && season >= earliest,
+        readyAt: r.readyAt?.toISOString() ?? null,
+        contractEndAt: r.contractEndAt?.toISOString() ?? null,
+        active: isActive(r, now),
+        canDisband: gate.met && now.getTime() >= releaseAtMs(r, unitsC, bandsC),
       };
     });
     const result: BarracksView = {
       gate,
       season,
+      now: now.toISOString(),
       levy: { men: levy.men },
       config: { minServiceSeasons: unitsC.minServiceSeasons, maxActiveBands: bandsC.market.maxActiveBands, termSeasons: bandsC.contract.termSeasons },
       units: Object.entries(unitsC.units).map(([id, u]) => ({ id, label: u.label, icon: u.icon, role: u.role, trainSeasons: u.trainSeasons, gear: u.gear, upkeepPerDay: u.upkeepPerDay, stats: u.stats })),

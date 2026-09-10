@@ -7,8 +7,9 @@ import cookie from "@fastify/cookie";
 // ---------------------------------------------------------------------------
 // /api/barracks through a minimal Fastify app (app.inject + a minted session
 // cookie, the production error handler). GET below and above the militia gate;
-// recruit / hire / disband happy paths and one refusal each. The routes run on
-// the real clock, so the world starts 9.5 days ago → season 9.
+// recruit / hire / disband happy paths and one refusal each; the timestamp
+// timers (readyAt / contractEndAt / now) in the payload. The routes run on the
+// real clock, so the world starts 9.5 days ago → season 9.
 // ---------------------------------------------------------------------------
 
 const dbUrl = process.env.DATABASE_URL ?? "";
@@ -33,10 +34,11 @@ type Mods = Awaited<ReturnType<typeof loadModules>>;
 type View = {
   gate: { stat: string; required: number; current: number; met: boolean };
   season: number;
+  now: string;
   levy: { men: number };
   config: { minServiceSeasons: number; maxActiveBands: number; termSeasons: number };
   units: { id: string; gear: Record<string, number>; stats: Record<string, number> }[];
-  roster: { id: string; source: string; unitId: string; count: number; active: boolean; canDisband: boolean }[];
+  roster: { id: string; source: string; unitId: string; count: number; readyAt: string | null; contractEndAt: string | null; active: boolean; canDisband: boolean }[];
   offers: { id: string; men: number; hired: boolean; upkeepPerDay: Record<string, number> }[];
   activeBands: number;
 };
@@ -104,6 +106,8 @@ suite("/api/barracks (integration)", () => {
     const v = res.json<View>();
     expect(v.gate).toEqual({ stat: "militia", required: 20, current: 5, met: false });
     expect(v.season).toBe(9);
+    // Server time, ISO, within a few seconds of the request.
+    expect(Math.abs(Date.parse(v.now) - Date.now())).toBeLessThan(10_000);
     expect(v.levy).toEqual({ men: 120 });
     expect(v.config).toEqual({ minServiceSeasons: 2, maxActiveBands: 2, termSeasons: 2 });
     expect(v.units.map((u) => u.id)).toEqual(["peltast", "ekdromos", "hoplite", "hippeis"]);
@@ -131,7 +135,9 @@ suite("/api/barracks (integration)", () => {
     expect(ok.statusCode).toBe(200);
     const v = ok.json<View>();
     expect(v.roster).toHaveLength(1);
-    expect(v.roster[0]).toMatchObject({ source: "trained", unitId: "peltast", count: 5, active: false, canDisband: false });
+    expect(v.roster[0]).toMatchObject({ source: "trained", unitId: "peltast", count: 5, active: false, canDisband: false, contractEndAt: null });
+    // A peltast trains for one season = one day from the recruit instant.
+    expect(Math.abs(Date.parse(v.roster[0]!.readyAt!) - (Date.parse(v.now) + DAY))).toBeLessThan(1_000);
     expect(v.levy.men).toBe(115);
     const short = await post(p.token, "recruit", { unitId: "peltast", count: 6 }); // 12 timber needed, 10 left
     expect(short.statusCode).toBe(409);
@@ -149,24 +155,27 @@ suite("/api/barracks (integration)", () => {
     expect(ok.statusCode).toBe(200);
     const v = ok.json<View>();
     expect(v.activeBands).toBe(1);
-    expect(v.roster[0]).toMatchObject({ source: "band", unitId: offers[0]!.id, count: offers[0]!.men, active: true, canDisband: false });
+    expect(v.roster[0]).toMatchObject({ source: "band", unitId: offers[0]!.id, count: offers[0]!.men, active: true, canDisband: false, readyAt: null });
+    // The contract runs termSeasons = two days from the hire instant.
+    expect(Math.abs(Date.parse(v.roster[0]!.contractEndAt!) - (Date.parse(v.now) + 2 * DAY))).toBeLessThan(1_000);
     expect(v.offers.find((o) => o.id === offers[0]!.id)!.hired).toBe(true);
     expect((await post(p.token, "hire", {})).statusCode).toBe(400);
   });
 
   it("POST /disband: a served row is released and men return; a fresh row is 409; an unknown row is 404", async () => {
     const p = await freshPlayer({ goods: { timber: 20, leather: 20 } });
-    // A batch recruited at season 5, ready at 6 — past minServiceSeasons by now.
+    // A batch recruited 4.5 days ago, ready 3.5 days ago — past minServiceSeasons (2 days) by now.
+    const recruitedAt = new Date(startedAt.getTime() + 5 * DAY);
     const served = (
       await db
         .insert(m.dbPkg.playerUnits)
-        .values({ worldId, ownerPlayerId: p.playerId, source: "trained", unitId: "peltast", count: 7, startCount: 7, recruitedSeason: 5, readyAtSeason: 6, contractEndSeason: null, createdAt: new Date(startedAt.getTime() + 5 * DAY) })
+        .values({ worldId, ownerPlayerId: p.playerId, source: "trained", unitId: "peltast", count: 7, startCount: 7, recruitedSeason: 5, readyAt: new Date(recruitedAt.getTime() + DAY), contractEndAt: null, createdAt: recruitedAt })
         .returning()
     )[0]!;
     await db.insert(m.dbPkg.resources).values({ scope: "player", scopeId: p.playerId, type: "grain", amount: "1000", ratePerSecond: "0", lastUpdatedAt: startedAt });
     await db.insert(m.dbPkg.resources).values({ scope: "player", scopeId: p.playerId, type: "oliveoil", amount: "1000", ratePerSecond: "0", lastUpdatedAt: startedAt });
     const before = (await get(p.token)).json<View>();
-    expect(before.roster.find((r) => r.id === served.id)).toMatchObject({ active: true, canDisband: true });
+    expect(before.roster.find((r) => r.id === served.id)).toMatchObject({ active: true, canDisband: true, readyAt: new Date(recruitedAt.getTime() + DAY).toISOString() });
     const recruited = await post(p.token, "recruit", { unitId: "peltast", count: 2 });
     expect(recruited.statusCode).toBe(200);
     const fresh = recruited.json<View>().roster.find((r) => r.unitId === "peltast" && r.count === 2)!;
