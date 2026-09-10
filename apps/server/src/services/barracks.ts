@@ -318,6 +318,20 @@ const emptySettle = (): BarracksSettle => ({ days: 0, drachmaeDirect: 0, purchas
 
 type UpkeepPlan = { drachmaeDirect: number; purchases: number; cost: number; draws: Record<string, number>; buys: Record<string, number> };
 
+// One row's upkeep per day, from content: a trained row per man (× count), a
+// band per band (drachmae included). null for a row whose definition is gone.
+// The settle's plan multiplies this by the row's chargeable days; the view's
+// `upkeep` block sums it over the active roster — one arithmetic, two readers.
+export function rowUpkeepPerDay(r: Pick<UnitRow, "source" | "unitId" | "count">, unitsC: UnitsContent, bandsC: BandsContent): Record<string, number> | null {
+  if (r.source === "trained") {
+    const def = unitDef(unitsC, r.unitId);
+    if (!def) return null;
+    return Object.fromEntries(Object.entries(def.upkeepPerDay).map(([g, q]) => [g, q * r.count]));
+  }
+  const def = bandDef(bandsC, r.unitId);
+  return def ? { ...def.upkeepPerDay } : null;
+}
+
 // Removal order under insolvency, among the rows that owe anything this gap
 // (`chargeable`): bands by drachmae/day descending (ties by id), then trained
 // rows in TRAINED_REMOVAL_ORDER (ties by age, oldest first).
@@ -405,17 +419,11 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
       for (const r of live) {
         const d = rowDays(r);
         if (d <= 0) continue;
-        if (r.source === "trained") {
-          const def = unitDef(unitsC, r.unitId);
-          if (!def) continue;
-          for (const [g, q] of Object.entries(def.upkeepPerDay)) demand[g] = (demand[g] ?? 0) + q * r.count * d;
-        } else {
-          const def = bandDef(bandsC, r.unitId);
-          if (!def) continue;
-          for (const [g, q] of Object.entries(def.upkeepPerDay)) {
-            if (g === "drachmae") drachmaeDirect += q * d;
-            else demand[g] = (demand[g] ?? 0) + q * d; // per band, not × count
-          }
+        const perDay = rowUpkeepPerDay(r, unitsC, bandsC);
+        if (!perDay) continue;
+        for (const [g, q] of Object.entries(perDay)) {
+          if (g === "drachmae") drachmaeDirect += q * d;
+          else demand[g] = (demand[g] ?? 0) + q * d;
         }
       }
       const draws: Record<string, number> = {};
@@ -683,6 +691,11 @@ export type RosterView = {
   canDisband: boolean;
 };
 export type OfferView = { id: string; label: string; icon: string; role: string; men: number; upkeepPerDay: Record<string, number>; stats: Record<string, number>; hired: boolean };
+// The army's upkeep per day from the same per-row arithmetic the settle charges:
+// totals across the active roster (zero-valued goods omitted) and each active
+// row's own line. A row still training contributes nothing and has no entry.
+export type UpkeepView = { perDay: Record<string, number>; rows: Record<string, Record<string, number>>; note: string };
+export const UPKEEP_NOTE = "Shortfalls are bought at the market's seasonal price.";
 export type BarracksView = {
   gate: GateView;
   season: number;
@@ -693,6 +706,7 @@ export type BarracksView = {
   roster: RosterView[];
   offers: OfferView[];
   activeBands: number;
+  upkeep: UpkeepView;
 };
 
 export async function barracksView(ctx: ActingContext, now: Date): Promise<BarracksView> {
@@ -726,6 +740,15 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
         canDisband: gate.met && now.getTime() >= releaseAtMs(r, unitsC, bandsC),
       };
     });
+    // Upkeep: every active row (moving rows still eat), summed and per row.
+    const upkeep: UpkeepView = { perDay: {}, rows: {}, note: UPKEEP_NOTE };
+    for (const r of rows) {
+      if (!isActive(r, now)) continue;
+      const line = rowUpkeepPerDay(r, unitsC, bandsC);
+      if (!line) continue;
+      upkeep.rows[r.id] = line;
+      for (const [g, q] of Object.entries(line)) if (q > 0) upkeep.perDay[g] = (upkeep.perDay[g] ?? 0) + q;
+    }
     const result: BarracksView = {
       gate,
       season,
@@ -739,6 +762,7 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
         return b ? [{ id: o.bandId, label: b.label, icon: b.icon, role: b.role, men: b.men, upkeepPerDay: b.upkeepPerDay, stats: b.stats, hired: o.hired }] : [];
       }),
       activeBands: rows.filter((r) => r.source === "band").length,
+      upkeep,
     };
     return { composureDays, result };
   });

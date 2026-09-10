@@ -1461,6 +1461,9 @@ export type BarracksView = {
   roster: BarracksRosterRow[];
   offers: BarracksOffer[];
   activeBands: number;
+  // The army's upkeep per day (zero-valued goods omitted) and each active row's
+  // own line; a row still training has no entry.
+  upkeep: { perDay: Record<string, number>; rows: Record<string, Record<string, number>>; note: string };
 };
 
 // --- Map reach (GET /api/map/reach; mirrors packages/shared/src/reach.ts) ---

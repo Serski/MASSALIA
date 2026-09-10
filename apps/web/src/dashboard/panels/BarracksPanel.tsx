@@ -64,6 +64,24 @@ function unitUpkeep(upkeep: Record<string, number>): string {
   return `Upkeep ${upkeep.grain ?? 0} grain, ${upkeep.oliveoil ?? 0} oil a day`;
 }
 
+// A per-day line from an upkeep map in a fixed order, drachmae last:
+// "2 grain · 1 oil" / "40 drachmae · 4 wine · 4 chicken · 2 herbs".
+const UPKEEP_ORDER = ["grain", "oliveoil", "wine", "chicken", "herbal", "drachmae"];
+const UPKEEP_NAME: Record<string, string> = { grain: "grain", oliveoil: "oil", wine: "wine", chicken: "chicken", herbal: "herbs", drachmae: "drachmae" };
+function upkeepParts(map: Record<string, number>): string[] {
+  const keys = [...UPKEEP_ORDER.filter((g) => (map[g] ?? 0) > 0), ...Object.keys(map).filter((g) => !UPKEEP_ORDER.includes(g) && (map[g] ?? 0) > 0)];
+  return keys.map((g) => `${map[g]} ${UPKEEP_NAME[g] ?? goodName(g)}`);
+}
+function upkeepLine(map: Record<string, number>): string {
+  return upkeepParts(map).join(" · ");
+}
+// "210 grain, 120 oil and 40 drachmae" for the roster header.
+function upkeepSentence(map: Record<string, number>): string {
+  const parts = upkeepParts(map);
+  if (parts.length <= 1) return parts[0] ?? "";
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
 // Band upkeep: "Upkeep 40 dr, 4 wine, 4 chicken, 2 herbs a day" (+ grain for mounted bands).
 function bandUpkeep(upkeep: Record<string, number>): string {
   const parts = [`${upkeep.drachmae ?? 0} dr`, `${upkeep.wine ?? 0} wine`, `${upkeep.chicken ?? 0} chicken`, `${upkeep.herbal ?? 0} herbs`];
@@ -221,6 +239,7 @@ function RosterRow({
   row,
   offset,
   releaseAt,
+  upkeep,
   locked,
   lockReason,
   busy,
@@ -234,6 +253,8 @@ function RosterRow({
   row: BarracksRosterRow;
   offset: number;
   releaseAt: string | null;
+  /** the row's per-day upkeep from the view, and the per-man figures for a trained row */
+  upkeep: { row: Record<string, number> | null; perMan: Record<string, number> | null };
   locked: boolean;
   lockReason: string;
   busy: boolean;
@@ -258,6 +279,12 @@ function RosterRow({
   }, [row.id, serviceTarget, serviceLeft, onZero]);
 
   const status = row.source === "band" ? `Contract · ${clock(timerLeft)}` : row.active ? "Ready" : `Training · ${clock(timerLeft)}`;
+  // The row's own upkeep under the status: per man and for the row (trained), the band total (band).
+  const eats = upkeep.row
+    ? row.source === "band"
+      ? `${upkeepLine(upkeep.row)} a day`
+      : `${upkeep.perMan ? `${upkeepLine(upkeep.perMan)} a day per man, ` : ""}${upkeepLine(upkeep.row)} for the row`
+    : null;
   const serviceReason = serviceTarget && serviceLeft > 0 ? `${SERVICE_REASON} ${formatDuration(serviceLeft)} to go.` : SERVICE_REASON;
   const disabledReason = locked ? lockReason : row.canDisband ? null : serviceReason;
   const count = row.count === row.startCount ? String(row.count) : `${row.count} of ${row.startCount}`;
@@ -292,7 +319,17 @@ function RosterRow({
       <PanelRow
         icon={<UnitGlyph file={row.icon} fallback={row.source === "band" ? "⚔️" : "🛡️"} />}
         title={`${row.label} · ${count}`}
-        sub={status}
+        sub={
+          eats ? (
+            <>
+              {status}
+              <br />
+              {eats}
+            </>
+          ) : (
+            status
+          )
+        }
         action={action}
       />
       <RowError message={error} />
@@ -450,6 +487,9 @@ export default function BarracksPanel({ onRefresh }: PanelProps) {
 
       <DashboardCard>
         <div className="panel-label">Roster</div>
+        {roster.length > 0 && Object.keys(view.upkeep.perDay).length > 0 ? (
+          <p className="barracks-copy">Your men eat {upkeepSentence(view.upkeep.perDay)} a day.</p>
+        ) : null}
         {roster.length === 0 ? (
           <p className="barracks-copy">No men under arms.</p>
         ) : (
@@ -459,6 +499,7 @@ export default function BarracksPanel({ onRefresh }: PanelProps) {
               row={row}
               offset={offset}
               releaseAt={releaseAtIso(row, view)}
+              upkeep={{ row: view.upkeep.rows[row.id] ?? null, perMan: row.source === "trained" ? (view.units.find((u) => u.id === row.unitId)?.upkeepPerDay ?? null) : null }}
               locked={locked}
               lockReason={lockReason}
               busy={busy}

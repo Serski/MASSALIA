@@ -358,6 +358,28 @@ suite("Barracks (integration)", () => {
       expect((await logs(characterId, "barracks_arrive")).map((e) => e.detail)).toEqual([{ unitId: "hoplite", count: 5, from: "R060", to: "R046", source: "barracks" }]);
     });
 
+    it("the view's upkeep.perDay for 30 hoplites and one band equals what one full-stock day of settle charges", async () => {
+      const { ctx } = await makePlayer({ drachmae: 100_000 });
+      await giveAll(ctx, { grain: 10_000, oliveoil: 10_000, wine: 1000, chicken: 1000, herbal: 1000 });
+      await insertRow(ctx, { source: "trained", unitId: "hoplite", count: 30, recruitedSeason: 7, readyAt: 9, createdSeason: 9 });
+      await insertRow(ctx, { source: "band", unitId: "salluvii-warband", count: 30, recruitedSeason: 9, contractEndAt: 20 });
+      // A row still training contributes nothing and has no entry.
+      const training = await insertRow(ctx, { source: "trained", unitId: "peltast", count: 10, recruitedSeason: 9, readyAt: 12, createdSeason: 9 });
+      const view = await m.barracks.barracksView(ctx, at(9));
+      expect(view.upkeep.note).toBe("Shortfalls are bought at the market's seasonal price.");
+      expect(view.upkeep.rows[training.id]).toBeUndefined();
+      expect(Object.keys(view.upkeep.rows)).toHaveLength(2);
+      // hoplite 2 grain + 1 oil per man × 30; Salluvii 75 dr, 4 wine, 4 chicken, 2 herbs per band.
+      expect(view.upkeep.perDay).toEqual({ grain: 60, oliveoil: 30, drachmae: 75, wine: 4, chicken: 4, herbal: 2 });
+      // One day later the settle draws exactly those goods and that pay.
+      const s = await settle(ctx, 10);
+      expect(s.days).toBe(1);
+      expect(s.bought).toEqual({});
+      const { drachmae, ...goods } = view.upkeep.perDay;
+      expect(s.drawn).toEqual(goods);
+      expect(s.drachmaeDirect).toBe(drachmae);
+    });
+
     it("with no rows and no marker nothing happens and no marker is written", async () => {
       const { ctx } = await makePlayer();
       const s = await settle(ctx, 10);
