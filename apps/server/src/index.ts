@@ -41,6 +41,7 @@ import { barracksRoutes } from "./routes/barracks.js";
 import { adminRoutes } from "./routes/admin.js";
 import { loadContractsContent } from "./services/merc.js";
 import { loadBarracksContent } from "./services/barracks.js";
+import { loadMapGraph } from "./services/mapGraph.js";
 import { loadNewsContent } from "./services/news.js";
 import { loadTraitDefs } from "./services/traits.js";
 import { loadComposureConfig } from "./services/composure.js";
@@ -106,6 +107,7 @@ await loadPopsContent();
 await loadRanksContent();
 await loadContractsContent();
 await loadBarracksContent();
+await loadMapGraph();
 await loadNewsContent();
 // Fail fast on a malformed election block (Politics Prompt 2).
 electionConfig(getCalendarConfig());

@@ -1,0 +1,2127 @@
+{
+  "version": 1,
+  "source": "derived from apps/web/public/map2/world2.json by packages/db/scripts/derive-map-graph.ts; do not hand-edit provinces",
+  "massaliaRegion": "R060",
+  "provinces": {
+    "R001": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R002",
+        "R003"
+      ],
+      "towns": []
+    },
+    "R002": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R001",
+        "R003",
+        "R005"
+      ],
+      "towns": []
+    },
+    "R003": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R001",
+        "R002",
+        "R004",
+        "R005"
+      ],
+      "towns": [
+        "durno"
+      ]
+    },
+    "R004": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R003"
+      ],
+      "towns": [
+        "isca"
+      ]
+    },
+    "R005": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R002",
+        "R003"
+      ],
+      "towns": [
+        "dubris"
+      ]
+    },
+    "R006": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R007",
+        "R174"
+      ],
+      "towns": []
+    },
+    "R007": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R006",
+        "R009",
+        "R011",
+        "R012",
+        "R174"
+      ],
+      "towns": [
+        "rotomagus"
+      ]
+    },
+    "R008": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R010"
+      ],
+      "towns": [
+        "reginca"
+      ]
+    },
+    "R009": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R007",
+        "R010",
+        "R011"
+      ],
+      "towns": [
+        "corial"
+      ]
+    },
+    "R010": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R008",
+        "R009",
+        "R011",
+        "R013"
+      ],
+      "towns": [
+        "ingena"
+      ]
+    },
+    "R011": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R007",
+        "R009",
+        "R010",
+        "R012",
+        "R013",
+        "R014",
+        "R015"
+      ],
+      "towns": [
+        "lulio"
+      ]
+    },
+    "R012": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R007",
+        "R011",
+        "R015",
+        "R016",
+        "R174"
+      ],
+      "towns": [
+        "alesia"
+      ]
+    },
+    "R013": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R010",
+        "R011",
+        "R014",
+        "R018"
+      ],
+      "towns": []
+    },
+    "R014": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R011",
+        "R013",
+        "R017"
+      ],
+      "towns": [
+        "turonum"
+      ]
+    },
+    "R015": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R011",
+        "R012",
+        "R016",
+        "R017",
+        "R019",
+        "R021"
+      ],
+      "towns": [
+        "bibracte"
+      ]
+    },
+    "R016": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R012",
+        "R015",
+        "R019",
+        "R174"
+      ],
+      "towns": []
+    },
+    "R017": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R014",
+        "R015",
+        "R018",
+        "R021",
+        "R023"
+      ],
+      "towns": []
+    },
+    "R018": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R013",
+        "R017",
+        "R023",
+        "R027"
+      ],
+      "towns": [
+        "mediolanum"
+      ]
+    },
+    "R019": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R015",
+        "R016",
+        "R020",
+        "R021",
+        "R025",
+        "R032",
+        "R174"
+      ],
+      "towns": [
+        "logdunum"
+      ]
+    },
+    "R020": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R019",
+        "R024",
+        "R025",
+        "R174"
+      ],
+      "towns": []
+    },
+    "R021": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R015",
+        "R017",
+        "R019",
+        "R023",
+        "R026",
+        "R031",
+        "R032"
+      ],
+      "towns": [
+        "gergovia"
+      ]
+    },
+    "R022": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R029",
+        "R039",
+        "R043"
+      ],
+      "towns": []
+    },
+    "R023": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R017",
+        "R018",
+        "R021",
+        "R026",
+        "R027"
+      ],
+      "towns": [
+        "divona"
+      ]
+    },
+    "R024": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R020",
+        "R025",
+        "R030",
+        "R037",
+        "R041",
+        "R174"
+      ],
+      "towns": []
+    },
+    "R025": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R019",
+        "R020",
+        "R024",
+        "R032",
+        "R034",
+        "R037"
+      ],
+      "towns": [
+        "genava"
+      ]
+    },
+    "R026": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R021",
+        "R023",
+        "R027",
+        "R031",
+        "R036",
+        "R042"
+      ],
+      "towns": [
+        "segodu"
+      ]
+    },
+    "R027": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R018",
+        "R023",
+        "R026",
+        "R028",
+        "R038",
+        "R042"
+      ],
+      "towns": [
+        "albiga"
+      ]
+    },
+    "R028": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R027",
+        "R038",
+        "R044",
+        "R058"
+      ],
+      "towns": [
+        "laca"
+      ]
+    },
+    "R029": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R022",
+        "R033",
+        "R039",
+        "R048"
+      ],
+      "towns": []
+    },
+    "R030": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R024",
+        "R040",
+        "R041",
+        "R174"
+      ],
+      "towns": [
+        "patavium"
+      ]
+    },
+    "R031": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R021",
+        "R026",
+        "R032",
+        "R036",
+        "R045",
+        "R046"
+      ],
+      "towns": [
+        "valentia"
+      ]
+    },
+    "R032": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R019",
+        "R021",
+        "R025",
+        "R031",
+        "R034",
+        "R046",
+        "R047"
+      ],
+      "towns": [
+        "vienna"
+      ]
+    },
+    "R033": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R029",
+        "R035",
+        "R048",
+        "R053"
+      ],
+      "towns": []
+    },
+    "R034": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R025",
+        "R032",
+        "R037",
+        "R047",
+        "R049"
+      ],
+      "towns": [
+        "segusio"
+      ]
+    },
+    "R035": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R033",
+        "R044",
+        "R053"
+      ],
+      "towns": []
+    },
+    "R036": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R026",
+        "R031",
+        "R042",
+        "R045"
+      ],
+      "towns": [
+        "luteva"
+      ]
+    },
+    "R037": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R024",
+        "R025",
+        "R034",
+        "R041",
+        "R049",
+        "R051"
+      ],
+      "towns": [
+        "cremona",
+        "medilanum"
+      ]
+    },
+    "R038": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R027",
+        "R028",
+        "R042",
+        "R056",
+        "R058"
+      ],
+      "towns": []
+    },
+    "R039": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R022",
+        "R029",
+        "R043",
+        "R048",
+        "R054"
+      ],
+      "towns": []
+    },
+    "R040": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R030",
+        "R061",
+        "R174"
+      ],
+      "towns": []
+    },
+    "R041": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R024",
+        "R030",
+        "R037",
+        "R051",
+        "R055"
+      ],
+      "towns": [
+        "verona"
+      ]
+    },
+    "R042": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R026",
+        "R027",
+        "R036",
+        "R038",
+        "R045",
+        "R050",
+        "R056",
+        "R057"
+      ],
+      "towns": [
+        "tolosa"
+      ]
+    },
+    "R043": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R022",
+        "R039",
+        "R054",
+        "R062"
+      ],
+      "towns": []
+    },
+    "R044": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R028",
+        "R035",
+        "R053",
+        "R058"
+      ],
+      "towns": []
+    },
+    "R045": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R031",
+        "R036",
+        "R042",
+        "R046",
+        "R050",
+        "R052"
+      ],
+      "towns": [
+        "nemausus"
+      ]
+    },
+    "R046": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R031",
+        "R032",
+        "R045",
+        "R047",
+        "R052",
+        "R060"
+      ],
+      "towns": []
+    },
+    "R047": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R032",
+        "R034",
+        "R046",
+        "R049",
+        "R059",
+        "R060"
+      ],
+      "towns": [
+        "reii"
+      ]
+    },
+    "R048": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R029",
+        "R033",
+        "R039",
+        "R053",
+        "R054",
+        "R066",
+        "R070"
+      ],
+      "towns": [
+        "capara"
+      ]
+    },
+    "R049": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R034",
+        "R037",
+        "R047",
+        "R051",
+        "R059",
+        "R063"
+      ],
+      "towns": [
+        "album",
+        "genoa",
+        "lunan"
+      ]
+    },
+    "R050": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R042",
+        "R045",
+        "R052",
+        "R057"
+      ],
+      "towns": [
+        "agathe"
+      ]
+    },
+    "R051": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R037",
+        "R041",
+        "R049",
+        "R055",
+        "R063"
+      ],
+      "towns": [
+        "mutina"
+      ]
+    },
+    "R052": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R045",
+        "R046",
+        "R050",
+        "R060"
+      ],
+      "towns": [
+        "arelate"
+      ]
+    },
+    "R053": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R033",
+        "R035",
+        "R044",
+        "R048",
+        "R058",
+        "R066",
+        "R072"
+      ],
+      "towns": [
+        "numantia"
+      ]
+    },
+    "R054": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R039",
+        "R043",
+        "R048",
+        "R062",
+        "R068",
+        "R070"
+      ],
+      "towns": []
+    },
+    "R055": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R041",
+        "R051",
+        "R063",
+        "R064",
+        "R067"
+      ],
+      "towns": [
+        "arriminium"
+      ]
+    },
+    "R056": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R038",
+        "R042",
+        "R057",
+        "R058",
+        "R065",
+        "R069"
+      ],
+      "towns": []
+    },
+    "R057": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R042",
+        "R050",
+        "R056",
+        "R065"
+      ],
+      "towns": []
+    },
+    "R058": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R028",
+        "R038",
+        "R044",
+        "R053",
+        "R056",
+        "R069",
+        "R072"
+      ],
+      "towns": []
+    },
+    "R059": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R047",
+        "R049",
+        "R060"
+      ],
+      "towns": [
+        "antipolis",
+        "athinopolis",
+        "monoikos",
+        "nikaia",
+        "olbia-provence"
+      ]
+    },
+    "R060": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R046",
+        "R047",
+        "R052",
+        "R059"
+      ],
+      "towns": [
+        "massalia"
+      ]
+    },
+    "R061": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R040",
+        "R074",
+        "R174"
+      ],
+      "towns": []
+    },
+    "R062": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R043",
+        "R054",
+        "R068",
+        "R071"
+      ],
+      "towns": []
+    },
+    "R063": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R049",
+        "R051",
+        "R055",
+        "R064",
+        "R075"
+      ],
+      "towns": [
+        "pisae"
+      ]
+    },
+    "R064": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R055",
+        "R063",
+        "R067",
+        "R075",
+        "R076"
+      ],
+      "towns": [
+        "arretium",
+        "perusia"
+      ]
+    },
+    "R065": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R056",
+        "R057",
+        "R069"
+      ],
+      "towns": [
+        "emporion",
+        "rhoda"
+      ]
+    },
+    "R066": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R048",
+        "R053",
+        "R070",
+        "R072",
+        "R077",
+        "R084"
+      ],
+      "towns": []
+    },
+    "R067": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R055",
+        "R064",
+        "R076"
+      ],
+      "towns": [
+        "ancona"
+      ]
+    },
+    "R068": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R054",
+        "R062",
+        "R070",
+        "R071",
+        "R082",
+        "R083"
+      ],
+      "towns": [
+        "segovia"
+      ]
+    },
+    "R069": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R056",
+        "R058",
+        "R065",
+        "R072"
+      ],
+      "towns": [
+        "barcino",
+        "tarraco"
+      ]
+    },
+    "R070": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R048",
+        "R054",
+        "R066",
+        "R068",
+        "R082",
+        "R084"
+      ],
+      "towns": [
+        "toletum"
+      ]
+    },
+    "R071": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R062",
+        "R068",
+        "R079",
+        "R083"
+      ],
+      "towns": []
+    },
+    "R072": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R053",
+        "R058",
+        "R066",
+        "R069",
+        "R077"
+      ],
+      "towns": [
+        "cartalias"
+      ]
+    },
+    "R073": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R078"
+      ],
+      "towns": [
+        "aleria"
+      ]
+    },
+    "R074": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R061",
+        "R080",
+        "R174"
+      ],
+      "towns": []
+    },
+    "R075": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R063",
+        "R064",
+        "R076",
+        "R081"
+      ],
+      "towns": [
+        "cosa"
+      ]
+    },
+    "R076": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R064",
+        "R067",
+        "R075",
+        "R081",
+        "R085",
+        "R086",
+        "R087"
+      ],
+      "towns": [
+        "spoletium"
+      ]
+    },
+    "R077": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R066",
+        "R072",
+        "R084",
+        "R089"
+      ],
+      "towns": []
+    },
+    "R078": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R073"
+      ],
+      "towns": []
+    },
+    "R079": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R071",
+        "R083"
+      ],
+      "towns": [
+        "lacobriga",
+        "mirobriga",
+        "ossonoba"
+      ]
+    },
+    "R080": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R074",
+        "R093",
+        "R174"
+      ],
+      "towns": []
+    },
+    "R081": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R075",
+        "R076",
+        "R086"
+      ],
+      "towns": [
+        "antium",
+        "rome"
+      ]
+    },
+    "R082": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R068",
+        "R070",
+        "R083",
+        "R084",
+        "R092"
+      ],
+      "towns": []
+    },
+    "R083": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R068",
+        "R071",
+        "R079",
+        "R082",
+        "R092",
+        "R100"
+      ],
+      "towns": [
+        "onoba"
+      ]
+    },
+    "R084": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R066",
+        "R070",
+        "R077",
+        "R082",
+        "R089",
+        "R092",
+        "R097",
+        "R101"
+      ],
+      "towns": []
+    },
+    "R085": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R076",
+        "R087",
+        "R094",
+        "R099"
+      ],
+      "towns": [
+        "lucenia"
+      ]
+    },
+    "R086": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R076",
+        "R081",
+        "R087",
+        "R095"
+      ],
+      "towns": [
+        "terracina"
+      ]
+    },
+    "R087": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R076",
+        "R085",
+        "R086",
+        "R095",
+        "R099"
+      ],
+      "towns": [
+        "beneventum"
+      ]
+    },
+    "R088": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R090",
+        "R098"
+      ],
+      "towns": [
+        "olbia-sardinia"
+      ]
+    },
+    "R089": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R077",
+        "R084",
+        "R096",
+        "R097"
+      ],
+      "towns": []
+    },
+    "R090": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R088",
+        "R098",
+        "R104"
+      ],
+      "towns": []
+    },
+    "R091": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [],
+      "towns": [
+        "mago"
+      ]
+    },
+    "R092": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R082",
+        "R083",
+        "R084",
+        "R100",
+        "R101"
+      ],
+      "towns": []
+    },
+    "R093": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R080",
+        "R105",
+        "R174"
+      ],
+      "towns": []
+    },
+    "R094": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R085",
+        "R099",
+        "R102",
+        "R103"
+      ],
+      "towns": []
+    },
+    "R095": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R086",
+        "R087",
+        "R099"
+      ],
+      "towns": [
+        "neapolis"
+      ]
+    },
+    "R096": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R089",
+        "R097"
+      ],
+      "towns": [
+        "akra-leuke"
+      ]
+    },
+    "R097": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R084",
+        "R089",
+        "R096",
+        "R101"
+      ],
+      "towns": [
+        "baria"
+      ]
+    },
+    "R098": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R088",
+        "R090",
+        "R104"
+      ],
+      "towns": []
+    },
+    "R099": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R085",
+        "R087",
+        "R094",
+        "R095",
+        "R103"
+      ],
+      "towns": [
+        "paestum"
+      ]
+    },
+    "R100": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R083",
+        "R092",
+        "R101"
+      ],
+      "towns": [
+        "gades"
+      ]
+    },
+    "R101": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R084",
+        "R092",
+        "R097",
+        "R100"
+      ],
+      "towns": [
+        "abdera"
+      ]
+    },
+    "R102": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R094",
+        "R103"
+      ],
+      "towns": [
+        "taras"
+      ]
+    },
+    "R103": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R094",
+        "R099",
+        "R102",
+        "R107"
+      ],
+      "towns": [
+        "heraclea"
+      ]
+    },
+    "R104": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R090",
+        "R098"
+      ],
+      "towns": [
+        "carales"
+      ]
+    },
+    "R105": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R093",
+        "R174"
+      ],
+      "towns": []
+    },
+    "R106": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R108",
+        "R109"
+      ],
+      "towns": [
+        "abdyla"
+      ]
+    },
+    "R107": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R103",
+        "R110"
+      ],
+      "towns": [
+        "croton",
+        "thuri"
+      ]
+    },
+    "R108": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R106",
+        "R109",
+        "R114"
+      ],
+      "towns": [
+        "tingis"
+      ]
+    },
+    "R109": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R106",
+        "R108",
+        "R114",
+        "R121",
+        "R128"
+      ],
+      "towns": []
+    },
+    "R110": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R107"
+      ],
+      "towns": [
+        "locri"
+      ]
+    },
+    "R111": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R112",
+        "R119",
+        "R175"
+      ],
+      "towns": [
+        "iol"
+      ]
+    },
+    "R112": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R111",
+        "R115",
+        "R175"
+      ],
+      "towns": [
+        "cartenna"
+      ]
+    },
+    "R113": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R121",
+        "R122"
+      ],
+      "towns": [
+        "rusaddir"
+      ]
+    },
+    "R114": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R108",
+        "R109",
+        "R120",
+        "R128",
+        "R130"
+      ],
+      "towns": [
+        "lixus"
+      ]
+    },
+    "R115": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R112",
+        "R122",
+        "R175"
+      ],
+      "towns": [
+        "mangus"
+      ]
+    },
+    "R116": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R118",
+        "R124"
+      ],
+      "towns": [
+        "lilybaeum"
+      ]
+    },
+    "R117": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R118",
+        "R131"
+      ],
+      "towns": [
+        "messana"
+      ]
+    },
+    "R118": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R116",
+        "R117",
+        "R124",
+        "R131"
+      ],
+      "towns": [
+        "panormus"
+      ]
+    },
+    "R119": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R111",
+        "R123",
+        "R175"
+      ],
+      "towns": [
+        "icosium"
+      ]
+    },
+    "R120": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R114",
+        "R125",
+        "R130"
+      ],
+      "towns": []
+    },
+    "R121": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R109",
+        "R113",
+        "R128",
+        "R175"
+      ],
+      "towns": []
+    },
+    "R122": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R113",
+        "R115",
+        "R175"
+      ],
+      "towns": [
+        "siga"
+      ]
+    },
+    "R123": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R119",
+        "R126",
+        "R133",
+        "R175"
+      ],
+      "towns": [
+        "saldae"
+      ]
+    },
+    "R124": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R116",
+        "R118",
+        "R131"
+      ],
+      "towns": [
+        "argigentum"
+      ]
+    },
+    "R125": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R120",
+        "R130",
+        "R175"
+      ],
+      "towns": []
+    },
+    "R126": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R123",
+        "R127",
+        "R133",
+        "R134"
+      ],
+      "towns": [
+        "hippo"
+      ]
+    },
+    "R127": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R126",
+        "R132",
+        "R134"
+      ],
+      "towns": [
+        "utica"
+      ]
+    },
+    "R128": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R109",
+        "R114",
+        "R121",
+        "R130",
+        "R175"
+      ],
+      "towns": []
+    },
+    "R129": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [],
+      "towns": []
+    },
+    "R130": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R114",
+        "R120",
+        "R125",
+        "R128",
+        "R175"
+      ],
+      "towns": []
+    },
+    "R131": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R117",
+        "R118",
+        "R124"
+      ],
+      "towns": [
+        "syracuse"
+      ]
+    },
+    "R132": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R127",
+        "R134",
+        "R135"
+      ],
+      "towns": [
+        "carthage"
+      ]
+    },
+    "R133": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R123",
+        "R126",
+        "R134",
+        "R175"
+      ],
+      "towns": [
+        "cirta"
+      ]
+    },
+    "R134": {
+      "type": "land",
+      "coastal": false,
+      "neighbors": [
+        "R126",
+        "R127",
+        "R132",
+        "R133",
+        "R135",
+        "R136",
+        "R175"
+      ],
+      "towns": []
+    },
+    "R135": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R132",
+        "R134",
+        "R136"
+      ],
+      "towns": [
+        "thapsus"
+      ]
+    },
+    "R136": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R134",
+        "R135",
+        "R137",
+        "R175"
+      ],
+      "towns": [
+        "tabrura"
+      ]
+    },
+    "R137": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R136",
+        "R138",
+        "R175"
+      ],
+      "towns": []
+    },
+    "R138": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R137",
+        "R175"
+      ],
+      "towns": [
+        "girba"
+      ]
+    },
+    "R139": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [
+        "R175"
+      ],
+      "towns": [
+        "leptis"
+      ]
+    },
+    "R140": {
+      "type": "land",
+      "coastal": true,
+      "neighbors": [],
+      "towns": []
+    },
+    "R141": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R144",
+        "R146"
+      ],
+      "towns": []
+    },
+    "R142": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R143"
+      ],
+      "towns": []
+    },
+    "R143": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R142",
+        "R144"
+      ],
+      "towns": []
+    },
+    "R144": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R141",
+        "R143",
+        "R145",
+        "R146"
+      ],
+      "towns": []
+    },
+    "R145": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R144",
+        "R146",
+        "R147",
+        "R148"
+      ],
+      "towns": []
+    },
+    "R146": {
+      "type": "sea",
+      "coastal": false,
+      "neighbors": [
+        "R141",
+        "R144",
+        "R145",
+        "R147",
+        "R149",
+        "R156",
+        "R162"
+      ],
+      "towns": []
+    },
+    "R147": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R145",
+        "R146",
+        "R148",
+        "R149"
+      ],
+      "towns": []
+    },
+    "R148": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R145",
+        "R147"
+      ],
+      "towns": []
+    },
+    "R149": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R146",
+        "R147",
+        "R156"
+      ],
+      "towns": []
+    },
+    "R150": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R151",
+        "R153",
+        "R154"
+      ],
+      "towns": []
+    },
+    "R151": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R150",
+        "R153",
+        "R155"
+      ],
+      "towns": []
+    },
+    "R152": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R157"
+      ],
+      "towns": []
+    },
+    "R153": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R150",
+        "R151",
+        "R154",
+        "R155",
+        "R158",
+        "R161"
+      ],
+      "towns": []
+    },
+    "R154": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R150",
+        "R153",
+        "R159",
+        "R161"
+      ],
+      "towns": []
+    },
+    "R155": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R151",
+        "R153",
+        "R160",
+        "R163"
+      ],
+      "towns": []
+    },
+    "R156": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R146",
+        "R149",
+        "R159",
+        "R162"
+      ],
+      "towns": []
+    },
+    "R157": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R152",
+        "R164",
+        "R165"
+      ],
+      "towns": []
+    },
+    "R158": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R153",
+        "R161",
+        "R163"
+      ],
+      "towns": []
+    },
+    "R159": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R154",
+        "R156",
+        "R161"
+      ],
+      "towns": []
+    },
+    "R160": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R155",
+        "R163"
+      ],
+      "towns": []
+    },
+    "R161": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R153",
+        "R154",
+        "R158",
+        "R159"
+      ],
+      "towns": []
+    },
+    "R162": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R146",
+        "R156"
+      ],
+      "towns": []
+    },
+    "R163": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R155",
+        "R158",
+        "R160",
+        "R166",
+        "R167"
+      ],
+      "towns": []
+    },
+    "R164": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R157",
+        "R165",
+        "R166",
+        "R168"
+      ],
+      "towns": []
+    },
+    "R165": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R157",
+        "R164",
+        "R169"
+      ],
+      "towns": []
+    },
+    "R166": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R163",
+        "R164",
+        "R167",
+        "R168",
+        "R170",
+        "R171"
+      ],
+      "towns": []
+    },
+    "R167": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R163",
+        "R166",
+        "R170"
+      ],
+      "towns": []
+    },
+    "R168": {
+      "type": "sea",
+      "coastal": false,
+      "neighbors": [
+        "R164",
+        "R166",
+        "R169",
+        "R171",
+        "R172"
+      ],
+      "towns": []
+    },
+    "R169": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R165",
+        "R168",
+        "R172"
+      ],
+      "towns": []
+    },
+    "R170": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R166",
+        "R167",
+        "R171",
+        "R173"
+      ],
+      "towns": []
+    },
+    "R171": {
+      "type": "sea",
+      "coastal": false,
+      "neighbors": [
+        "R166",
+        "R168",
+        "R170",
+        "R173"
+      ],
+      "towns": []
+    },
+    "R172": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R168",
+        "R169",
+        "R173"
+      ],
+      "towns": []
+    },
+    "R173": {
+      "type": "sea",
+      "coastal": true,
+      "neighbors": [
+        "R170",
+        "R171",
+        "R172"
+      ],
+      "towns": []
+    },
+    "R174": {
+      "type": "fog",
+      "coastal": true,
+      "neighbors": [
+        "R006",
+        "R007",
+        "R012",
+        "R016",
+        "R019",
+        "R020",
+        "R024",
+        "R030",
+        "R040",
+        "R061",
+        "R074",
+        "R080",
+        "R093",
+        "R105"
+      ],
+      "towns": []
+    },
+    "R175": {
+      "type": "fog",
+      "coastal": true,
+      "neighbors": [
+        "R111",
+        "R112",
+        "R115",
+        "R119",
+        "R121",
+        "R122",
+        "R123",
+        "R125",
+        "R128",
+        "R130",
+        "R133",
+        "R134",
+        "R136",
+        "R137",
+        "R138",
+        "R139"
+      ],
+      "towns": []
+    }
+  }
+}

@@ -12,7 +12,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/migrate.ts",
     "db:seed": "tsx src/seed.ts",
-    "db:seed:map": "tsx src/seedMap.ts"
+    "db:seed:map": "tsx src/seedMap.ts",
+    "map:graph": "tsx scripts/derive-map-graph.ts"
   },
   "dependencies": {
     "@massalia/shared": "workspace:*",
