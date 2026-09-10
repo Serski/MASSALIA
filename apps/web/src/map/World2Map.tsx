@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { forceStats, HOME_POLITY_ID, routeFor, verdictsFor, type MapActionType } from "@massalia/shared";
+import { forceStats, HOME_POLITY_ID, renderForce, routeFor, verdictsFor, type CampaignForcePart, type MapActionType } from "@massalia/shared";
 import { api, apiBaseUrl, ApiError, type BarracksRosterRow, type MapActReport, type MapActType, type MapReachView, type ReachEntry } from "../api.js";
-import { AssetIcon, CULTURE_WEBP, formatDuration, POLITY_CREST, titleCase, useCountdownSeconds } from "../dashboard/shared.js";
+import { AssetIcon, CULTURE_WEBP, formatClock, formatDuration, marchLine, POLITY_CREST, titleCase, unitPlural, useCountdownSeconds } from "../dashboard/shared.js";
 import { mapActionButtons, withReach, type MapActionButton } from "./mapActions.js";
 
 // Attack, Raid and Scout are the actions that resolve (Colonise waits for 3c).
@@ -364,6 +364,28 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   const [picker, setPicker] = useState<{ type: MapActType; regionId: string } | null>(null);
   const [roster, setRoster] = useState<BarracksRosterRow[] | null>(null);
   const [report, setReport] = useState<MapActReport | null>(null);
+  // The player's men in the selected region: the garrison standing there and
+  // any party heading there, with a countdown to the earliest arrival (server
+  // clock). At zero the roster is refetched once so the settle can land them.
+  const menHere = useMemo(() => {
+    const rows = roster ?? [];
+    const garrison = selected ? rows.filter((r) => r.basedAt === selected && r.movingTo === null && r.active) : [];
+    const heading = selected ? rows.filter((r) => r.movingTo === selected) : [];
+    const arrivals = heading.map((r) => r.arrivesAt).filter((a): a is string => a !== null).sort();
+    return { garrison, heading, earliest: arrivals[0] ?? null };
+  }, [roster, selected]);
+  const menLeft = useCountdownSeconds(menHere.earliest ? new Date(Date.parse(menHere.earliest) - clockOffset).toISOString() : null);
+  const rosterRefetched = useRef(new Set<string>());
+  useEffect(() => {
+    if (!menHere.earliest || menLeft > 0) return;
+    const key = `${selected}:${menHere.earliest}`;
+    if (rosterRefetched.current.has(key)) return;
+    rosterRefetched.current.add(key);
+    api
+      .barracks()
+      .then((view) => setRoster(view.roster))
+      .catch(() => {});
+  }, [menHere.earliest, menLeft, selected]);
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" && "matchMedia" in window ? window.matchMedia(MOBILE_QUERY).matches : false,
   );
@@ -401,6 +423,12 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   // the player (a barracks change). Not signed in leaves the matrix's verdicts.
   useEffect(() => {
     let cancelled = false;
+    api
+      .barracks()
+      .then((view) => {
+        if (!cancelled) setRoster(view.roster);
+      })
+      .catch(() => {});
     api
       .mapReach()
       .then((view) => {
@@ -993,6 +1021,26 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   const regionActions = selectedProvince
     ? withWinter(withReach(mapActionButtons({ kind: "region", hasTown: selectedProvince.towns.length > 0, ownerId: selectedOwnerId }), regionReach))
     : null;
+  // "Your garrison: 30 hoplites · Your men: 20 peltasts returning in 02:14:07".
+  const forceParts = (rows: BarracksRosterRow[]): CampaignForcePart[] => {
+    const merged = new Map<string, CampaignForcePart>();
+    for (const r of rows) {
+      const key = `${r.source}:${r.unitId}`;
+      const m = merged.get(key);
+      if (m) m.count += r.count;
+      else merged.set(key, r.source === "trained" ? { count: r.count, label: r.label, plural: unitPlural(r.label), source: "trained" } : { count: r.count, label: r.label, source: "band" });
+    }
+    return [...merged.values()];
+  };
+  const yourMenLine = (() => {
+    const parts: string[] = [];
+    if (menHere.garrison.length > 0) parts.push(`Your garrison: ${renderForce(forceParts(menHere.garrison))}`);
+    if (menHere.heading.length > 0) {
+      const returning = menHere.heading.every((r) => r.basedAt === r.movingTo);
+      parts.push(`Your men: ${renderForce(forceParts(menHere.heading))} ${returning ? "returning" : "arriving"} in ${formatClock(menLeft)}`);
+    }
+    return parts.length ? parts.join(" · ") : null;
+  })();
 
   // Attack / Raid / Scout on a townless region open the force picker; the
   // roster is fetched fresh each time (the Barracks may have changed).
@@ -1064,6 +1112,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
         )}
         {selectedProvince.type === "land" ? (
           <>
+            {yourMenLine ? <p className="w2map-your-men">{yourMenLine}</p> : null}
             {selectedHeld ? <p className="w2map-held">Held by your house — a base for your forces.</p> : null}
             <div className="w2map-info-label">Actions</div>
             <div className="w2map-actions">
@@ -1324,7 +1373,7 @@ function RowIcon({ file, source }: { file: string; source: BarracksRosterRow["so
   return <AssetIcon file={file} alt="" className="asset-icon w2map-pick-icon" fallback={<span aria-hidden="true">{source === "band" ? "⚔️" : "🛡️"}</span>} />;
 }
 
-function RecoveringRow({ row }: { row: BarracksRosterRow }) {
+function RecoveringRow({ row, names }: { row: BarracksRosterRow; names: Record<string, string> }) {
   const left = useCountdownSeconds(row.arrivesAt);
   return (
     <li className="w2map-pick-row dim">
@@ -1332,7 +1381,7 @@ function RecoveringRow({ row }: { row: BarracksRosterRow }) {
         <RowIcon file={row.icon} source={row.source} />
         <span className="w2map-pick-label">{row.label} · {row.count}</span>
       </span>
-      <span className="w2map-pick-note">recovering · {formatDuration(left)}</span>
+      <span className="w2map-pick-note">{marchLine(row, names, left) ?? `recovering · ${formatDuration(left)}`}</span>
     </li>
   );
 }
@@ -1453,7 +1502,7 @@ export function ForcePicker({
           {others.length > 0 ? (
             <ul className="w2map-pick-list">
               {others.map((r) => (
-                <RecoveringRow key={r.id} row={r} />
+                <RecoveringRow key={r.id} row={r} names={names} />
               ))}
             </ul>
           ) : null}

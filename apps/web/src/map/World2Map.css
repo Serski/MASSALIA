@@ -597,3 +597,6 @@ p.w2map-stat-asof {
   border-radius: 6px;
 }
 .w2map-pick-count:disabled { opacity: 0.45; }
+
+/* The player's own men in the selected region (garrison, or a party on the way). */
+.w2map-your-men { margin: 0 0 8px; color: var(--dash-gold-bright, #d1ae63); font-size: 12px; }

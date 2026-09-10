@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, type BarracksOffer, type BarracksRosterRow, type BarracksUnit, type BarracksView } from "../../api.js";
-import { AssetIcon, DashboardCard, formatDuration, GoodGlyph, type PanelProps, PanelRow, QtyStepper, useCountdownSeconds } from "../shared.js";
+import { AssetIcon, DashboardCard, formatClock, formatDuration, GoodGlyph, marchLine, type PanelProps, PanelRow, QtyStepper, REGION_NAMES_SRC, useCountdownSeconds } from "../shared.js";
 
 // The Barracks tab (military prompt 2). Renders the GET /api/barracks view and
 // sends recruit / hire / disband intents. The server is authoritative: every
@@ -28,17 +28,6 @@ function statsLine(stats: Record<string, number>): string {
 }
 
 const MS_PER_DAY = 86_400_000;
-
-// hh:mm:ss, with a days prefix past 24h: "22:14:07", "1d 03:12:44".
-function clock(totalSeconds: number): string {
-  const s = Math.max(0, totalSeconds);
-  const d = Math.floor(s / 86400);
-  const rest = s % 86400;
-  const hh = String(Math.floor(rest / 3600)).padStart(2, "0");
-  const mm = String(Math.floor((rest % 3600) / 60)).padStart(2, "0");
-  const ss = String(rest % 60).padStart(2, "0");
-  return d > 0 ? `${d}d ${hh}:${mm}:${ss}` : `${hh}:${mm}:${ss}`;
-}
 
 // Shift a server-clock instant onto the device clock. useCountdownSeconds reads
 // Date.now(), so counting down to (target − offset) on the device is exactly
@@ -235,11 +224,12 @@ function OfferRow({
   );
 }
 
-function RosterRow({
+export function RosterRow({
   row,
   offset,
   releaseAt,
   upkeep,
+  names,
   locked,
   lockReason,
   busy,
@@ -255,6 +245,8 @@ function RosterRow({
   releaseAt: string | null;
   /** the row's per-day upkeep from the view, and the per-man figures for a trained row */
   upkeep: { row: Record<string, number> | null; perMan: Record<string, number> | null };
+  /** region id → display name, for the march line */
+  names: Record<string, string>;
   locked: boolean;
   lockReason: string;
   busy: boolean;
@@ -277,8 +269,16 @@ function RosterRow({
   useEffect(() => {
     if (serviceTarget && serviceLeft <= 0) onZero(`${row.id}:release:${serviceTarget}`);
   }, [row.id, serviceTarget, serviceLeft, onZero]);
+  // A row on the march (recovering from an action, or relocating) counts down
+  // to its arrival; at zero one refetch lets the settle land or merge it.
+  const marchTarget = row.movingTo !== null ? row.arrivesAt : null;
+  const marchLeft = useCountdownSeconds(onDeviceClock(marchTarget, offset));
+  useEffect(() => {
+    if (marchTarget && marchLeft <= 0) onZero(`${row.id}:march:${marchTarget}`);
+  }, [row.id, marchTarget, marchLeft, onZero]);
 
-  const status = row.source === "band" ? `Contract · ${clock(timerLeft)}` : row.active ? "Ready" : `Training · ${clock(timerLeft)}`;
+  const status =
+    marchLine(row, names, marchLeft) ?? (row.source === "band" ? `Contract · ${formatClock(timerLeft)}` : row.active ? "Ready" : `Training · ${formatClock(timerLeft)}`);
   // The row's own upkeep under the status: per man and for the row (trained), the band total (band).
   const eats = upkeep.row
     ? row.source === "band"
@@ -346,6 +346,14 @@ export default function BarracksPanel({ onRefresh }: PanelProps) {
   // One inline error at a time, under the row whose action failed.
   const [rowError, setRowError] = useState<{ key: string; message: string } | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  // Region display names for the march lines (the map's public names file).
+  const [names, setNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    fetch(REGION_NAMES_SRC)
+      .then((r) => r.json() as Promise<{ names?: Record<string, string> }>)
+      .then((file) => setNames(file.names ?? {}))
+      .catch(() => {});
+  }, []);
   // Countdown crossings already answered with a refetch (row id + target instant),
   // so a timer sitting at zero never refetches twice.
   const refetched = useRef(new Set<string>());
@@ -500,6 +508,7 @@ export default function BarracksPanel({ onRefresh }: PanelProps) {
               offset={offset}
               releaseAt={releaseAtIso(row, view)}
               upkeep={{ row: view.upkeep.rows[row.id] ?? null, perMan: row.source === "trained" ? (view.units.find((u) => u.id === row.unitId)?.upkeepPerDay ?? null) : null }}
+              names={names}
               locked={locked}
               lockReason={lockReason}
               busy={busy}

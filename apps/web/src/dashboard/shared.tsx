@@ -450,6 +450,38 @@ export function formatDuration(totalSeconds: number) {
   return `${s}s`;
 }
 
+// hh:mm:ss, with a days prefix past 24h: "22:14:07", "1d 03:12:44". The
+// barracks countdowns and the map's march lines share it.
+export function formatClock(totalSeconds: number): string {
+  const s = Math.max(0, totalSeconds);
+  const d = Math.floor(s / 86400);
+  const rest = s % 86400;
+  const hh = String(Math.floor(rest / 3600)).padStart(2, "0");
+  const mm = String(Math.floor((rest % 3600) / 60)).padStart(2, "0");
+  const ss = String(rest % 60).padStart(2, "0");
+  return d > 0 ? `${d}d ${hh}:${mm}:${ss}` : `${hh}:${mm}:${ss}`;
+}
+
+// "Returning to Massalia · 02:14:07" for a party coming home, "Marching to
+// Salyes · 02:14:07" for one bound elsewhere; the region name from the map's
+// names file, the id when it is missing.
+export function marchLine(row: { basedAt: string; movingTo: string | null }, names: Record<string, string>, secondsLeft: number): string | null {
+  if (row.movingTo === null) return null;
+  const verb = row.movingTo === row.basedAt ? "Returning to" : "Marching to";
+  return `${verb} ${names[row.movingTo] ?? row.movingTo} · ${formatClock(secondsLeft)}`;
+}
+
+// Unit plurals for client-side prose ("20 peltasts"): the roster payload
+// carries labels only, so the four units are tabled here; anything else takes
+// an "s". Bands' labels are already plural.
+export const UNIT_PLURAL: Record<string, string> = { Peltast: "Peltasts", Ekdromos: "Ekdromoi", Hoplite: "Hoplites", Hippeis: "Hippeis" };
+export function unitPlural(label: string): string {
+  return UNIT_PLURAL[label] ?? `${label}s`;
+}
+
+// The public names file the map shows (region id → display name).
+export const REGION_NAMES_SRC = "/map2/names2.json";
+
 export function useCountdownSeconds(untilIso: string | null) {
   const [remaining, setRemaining] = useState(() => remainingSeconds(untilIso));
   useEffect(() => {
