@@ -1414,6 +1414,7 @@ export type BarracksGate = { stat: "militia"; required: number; current: number;
 export type BarracksUnit = {
   id: string;
   label: string;
+  plural: string; // "Peltasts", "Ekdromoi"
   icon: string;
   role: string;
   trainSeasons: number;

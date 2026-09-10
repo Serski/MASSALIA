@@ -115,6 +115,7 @@ suite("/api/barracks (integration)", () => {
     expect(v.config).toEqual({ minServiceSeasons: 2, maxActiveBands: 2, termSeasons: 2 });
     expect(v.summary).toEqual({ underArms: 0, levyMen: 120, growthPerYear: 10, seasonsPerYear: 4 });
     expect(v.units.map((u) => u.id)).toEqual(["peltast", "ekdromos", "hoplite", "hippeis"]);
+    expect(v.units.map((u) => (u as { plural?: string }).plural)).toEqual(["Peltasts", "Ekdromoi", "Hoplites", "Hippeis"]);
     expect(v.units.find((u) => u.id === "hoplite")!.gear).toEqual({ timber: 1, iron: 1, tin: 2 });
     expect(v.offers).toHaveLength(3);
     expect(v.offers.every((o) => !o.hired && o.men >= 10 && typeof o.upkeepPerDay.drachmae === "number")).toBe(true);

@@ -725,7 +725,7 @@ export async function disbandRow(ctx: ActingContext, rowId: string, now: Date): 
 // catalogue, roster and offers are still returned — the tab shows them behind
 // the lock — and only the POSTs refuse.
 
-export type UnitView = { id: string; label: string; icon: string; role: string; trainSeasons: number; gear: Record<string, number>; upkeepPerDay: Record<string, number>; stats: Record<string, number> };
+export type UnitView = { id: string; label: string; plural: string; icon: string; role: string; trainSeasons: number; gear: Record<string, number>; upkeepPerDay: Record<string, number>; stats: Record<string, number> };
 export type RosterView = {
   id: string;
   source: "trained" | "band";
@@ -819,7 +819,7 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
       now: now.toISOString(),
       levy: { men: levy.men },
       config: { minServiceSeasons: unitsC.minServiceSeasons, maxActiveBands: bandsC.market.maxActiveBands, termSeasons: bandsC.contract.termSeasons },
-      units: Object.entries(unitsC.units).map(([id, u]) => ({ id, label: u.label, icon: u.icon, role: u.role, trainSeasons: u.trainSeasons, gear: u.gear, upkeepPerDay: u.upkeepPerDay, stats: u.stats })),
+      units: Object.entries(unitsC.units).map(([id, u]) => ({ id, label: u.label, plural: u.plural, icon: u.icon, role: u.role, trainSeasons: u.trainSeasons, gear: u.gear, upkeepPerDay: u.upkeepPerDay, stats: u.stats })),
       roster,
       offers: offers.flatMap((o) => {
         const b = bandDef(bandsC, o.bandId);
