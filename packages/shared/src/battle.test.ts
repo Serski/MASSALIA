@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parseBattleContent, parseUnitsContent, type UnitStats } from "./barracks.js";
-import { resolveBattle, type BattleConfig, type BattleRow } from "./battle.js";
+import { resolveBattle, SKIRMISH_MSL, type BattleConfig, type BattleRow } from "./battle.js";
 import { parseBuildingsContent } from "./buildings.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -77,6 +77,53 @@ describe("resolveBattle", () => {
       expect(x.end).toBeLessThanOrEqual(x.start);
     }
     expect(r.attacker.losses).toBe(r.attacker.rows.reduce((n, x) => n + (x.start - x.end), 0));
+  });
+
+  it("skirmish: a fast row with msl >= 4 fires every round and is neither hit nor hits in melee; a slow one does not", () => {
+    // Skirmisher: msl 4, spd 5 vs an enemy at spd 1; atk 0 so any enemy loss is missile fire.
+    const sk = row("sk", 10, { msl: SKIRMISH_MSL, spd: 5, def: 1, mor: 10 });
+    // Enemy: a big, slow melee block with no missiles; it would kill in melee if it could reach.
+    const brute = row("brute", 300, { atk: 1, def: 1, msl: 0, mor: 10, spd: 1 });
+    const cfg: BattleConfig = { ...exact, rounds: 3 };
+    const r = resolveBattle({ attacker: [sk], defender: [brute], seed: "sk", config: cfg, mode: "attack" });
+    expect(r.rounds.map((x) => x.skirmish.attacker)).toEqual([["sk"], ["sk"], ["sk"]]);
+    // Fires every round: 10 × 4 × 1 / (1 + 0) = 40 casualties a round, 120 over three; never touched in melee.
+    for (const x of r.rounds) {
+      expect(x.missile).toEqual({ attacker: 0, defender: 40 });
+      expect(x.melee).toEqual({ attacker: 0, defender: 0 });
+    }
+    expect(r.attacker.rows[0]).toMatchObject({ start: 10, end: 10 });
+    expect(r.defender.rows[0]).toMatchObject({ start: 300, end: 180, broke: false });
+    expect(r.winner).toBe("stand");
+    // The same row at spd 1 (not faster) melees: round 1 it fires once, then the brute reaches it.
+    // Three brutes kill 3 a round in melee; the fight lasts into round 2, where nobody fires.
+    const slow = resolveBattle({ attacker: [row("sk", 10, { msl: SKIRMISH_MSL, spd: 1, def: 1, mor: 10 })], defender: [row("brute", 3, { atk: 1, def: 100, msl: 0, mor: 10, spd: 1 })], seed: "sk", config: cfg, mode: "attack" });
+    expect(slow.rounds[0]!.skirmish.attacker).toEqual([]);
+    expect(slow.rounds[0]!.melee.attacker).toBe(3);
+    // Round 2 exists (the row breaks only after 6 of 10 fall) and nobody fires in it.
+    expect(slow.rounds.length).toBeGreaterThanOrEqual(2);
+    expect(slow.rounds[1]!.missile).toBeNull();
+    expect(slow.rounds[1]!.melee.attacker).toBe(3);
+  });
+
+  it("skirmish is judged against the enemy's headcount-weighted speed, not its fastest row", () => {
+    // Enemy: 1 fast scout (spd 9) among 99 slow men → weighted spd ≈ 1.08 < the peltast's 8.
+    const r = resolveBattle({ attacker: [unit("peltast", 10)], defender: [row("slow", 99, { atk: 1, def: 3, spd: 1 }), row("scout", 1, { atk: 1, def: 3, spd: 9 })], seed: "w", config: battle, mode: "attack" });
+    expect(r.rounds[0]!.skirmish.attacker).toEqual(["peltast"]);
+    expect(r.rounds[0]!.melee.attacker).toBe(0);
+  });
+
+  it("raid: the attacker wins unbroken with more kills than losses in absolute men", () => {
+    // 10 raiders kill 3 and lose 2 → win; kill 2 and lose 2 → defender.
+    const cfg: BattleConfig = { ...exact, rounds: 1 };
+    const win = resolveBattle({ attacker: [row("r", 10, { atk: 3, def: 10, mor: 10, spd: 1 })], defender: [row("d", 10, { atk: 2, def: 10, mor: 10, spd: 1 })], seed: "raid", config: { ...cfg, raid: { ...cfg.raid, rounds: 1 } }, mode: "raid" });
+    expect(win.defender.losses).toBe(3);
+    expect(win.attacker.losses).toBe(2);
+    expect(win.winner).toBe("attacker");
+    const tie = resolveBattle({ attacker: [row("r", 10, { atk: 2, def: 10, mor: 10, spd: 1 })], defender: [row("d", 10, { atk: 2, def: 10, mor: 10, spd: 1 })], seed: "raid", config: { ...cfg, raid: { ...cfg.raid, rounds: 1 } }, mode: "raid" });
+    expect(tie.defender.losses).toBe(2);
+    expect(tie.attacker.losses).toBe(2);
+    expect(tie.winner).toBe("defender");
   });
 
   it("raid never returns stand and stops after raid.rounds", () => {

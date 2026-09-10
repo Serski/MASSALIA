@@ -4,9 +4,14 @@ import { seededRoll, type BattleContent, type UnitStats } from "./barracks.js";
 // Battle — the pure, deterministic resolver for Raid and Attack (barracks spec
 // §10 as ruled in prompt 3b). Two sides of rows fight simultaneous phases:
 //
-//   missile  round 1 only: each side inflicts Σ(count × msl) × lethality /
-//            (enemy avgDef + defenseFloor) casualties on the other.
-//   melee    every round, the same with atk.
+//   skirmish a participating row with msl >= 4 whose spd strictly exceeds the
+//            enemy's headcount-weighted spd skirmishes this round: it fires in
+//            the missile phase every round and stays out of melee on both
+//            sides (neither hits nor can be hit there).
+//   missile  round 1 for every row, every round for skirmishers: the firing
+//            rows inflict Σ(count × msl) × lethality / (enemy avgDef +
+//            defenseFloor) casualties, spread over every enemy participant.
+//   melee    every round between the non-skirmishing rows, the same with atk.
 //   morale   after each round a row breaks when its losses exceed
 //            mor × moraleStep of its start; a broken row leaves the fight and,
 //            if the enemy is faster (headcount-weighted spd), suffers pursuit
@@ -18,9 +23,10 @@ import { seededRoll, type BattleContent, type UnitStats } from "./barracks.js";
 // the input and the seed — no Math.random, no clock.
 //
 // Attack runs `rounds` rounds or until a side breaks; the side still standing
-// wins, both standing is "stand" (the attacker withdraws). Raid runs
-// raid.rounds rounds; the attacker wins if unbroken and it inflicted a larger
-// share of losses than it took, else the defender — never "stand".
+// wins, both standing is "stand" (the attacker withdraws), both broken is a
+// defender win. Raid runs raid.rounds rounds; the attacker wins if unbroken
+// and its kills exceed its losses in absolute men, else the defender — never
+// "stand".
 // ---------------------------------------------------------------------------
 
 export type BattleRow = { id: string; label: string; count: number; stats: UnitStats };
@@ -30,9 +36,13 @@ export type BattleInput = { attacker: BattleRow[]; defender: BattleRow[]; seed: 
 
 export type BattleSideName = "attacker" | "defender";
 export type BattlePhase = "missile" | "melee" | "pursuit";
+export const SKIRMISH_MSL = 4;
+
 export type BattleRound = {
   round: number;
-  /** casualties suffered by each side in the phase (missile only in round 1) */
+  /** row ids skirmishing this round (firing every round, out of melee) */
+  skirmish: { attacker: string[]; defender: string[] };
+  /** casualties suffered by each side in the phase (null when nobody fired) */
   missile: { attacker: number; defender: number } | null;
   melee: { attacker: number; defender: number };
   /** row ids that broke after this round's morale check */
@@ -61,6 +71,13 @@ function inflicted(from: Live[], onto: Live[], stat: "msl" | "atk", cfg: BattleC
   return (power(from, stat) * cfg.lethality) / (weighted(onto, "def") + cfg.defenseFloor);
 }
 
+// The rows of `side` that skirmish this round: msl >= SKIRMISH_MSL and spd
+// strictly above the enemy's headcount-weighted spd over its participants.
+function skirmishers(side: Live[], enemy: Live[]): Live[] {
+  const enemySpd = weighted(participants(enemy), "spd");
+  return participants(side).filter((r) => r.stats.msl >= SKIRMISH_MSL && r.stats.spd > enemySpd);
+}
+
 // Stochastic rounding of `value` on the row's own seed: the integer part always,
 // the fractional part when the roll lands under it.
 function roundOn(value: number, seedParts: string[]): number {
@@ -69,11 +86,10 @@ function roundOn(value: number, seedParts: string[]): number {
   return whole + (frac > 0 && seededRoll(seedParts) < frac ? 1 : 0);
 }
 
-// Apply `total` casualties to a side: spread across participating rows by
-// headcount, each share rounded on its own seed, clamped to [0, count].
-// Returns the men actually lost.
-function applyCasualties(side: Live[], total: number, seed: string, round: number, phase: BattlePhase, sideName: BattleSideName): number {
-  const rows = participants(side);
+// Apply `total` casualties to the given rows (a side's participants, or its
+// non-skirmishers in melee): spread by headcount, each share rounded on its own
+// seed, clamped to [0, count]. Returns the men actually lost.
+function applyCasualties(rows: Live[], total: number, seed: string, round: number, phase: BattlePhase, sideName: BattleSideName): number {
   const h = headcount(rows);
   if (total <= 0 || h === 0) return 0;
   let lost = 0;
@@ -104,23 +120,50 @@ export function resolveBattle(input: BattleInput): BattleResult {
 
   for (let round = 1; round <= maxRounds; round++) {
     if (participants(att).length === 0 || participants(def).length === 0) break;
-    const entry: BattleRound = { round, missile: null, melee: { attacker: 0, defender: 0 }, broke: { attacker: [], defender: [] }, pursuit: { attacker: 0, defender: 0 } };
+    // Who skirmishes this round is fixed from the state at its start.
+    const skA = skirmishers(att, def);
+    const skD = skirmishers(def, att);
+    const isSk = (ids: Live[]) => new Set(ids.map((r) => r.id));
+    const skAIds = isSk(skA);
+    const skDIds = isSk(skD);
+    const entry: BattleRound = {
+      round,
+      skirmish: { attacker: [...skAIds], defender: [...skDIds] },
+      missile: null,
+      melee: { attacker: 0, defender: 0 },
+      broke: { attacker: [], defender: [] },
+      pursuit: { attacker: 0, defender: 0 },
+    };
 
-    // Missile (round 1) and melee: both sides compute from the same pre-phase
-    // state, then both apply — simultaneous.
-    const phases: ("missile" | "melee")[] = round === 1 ? ["missile", "melee"] : ["melee"];
-    for (const phase of phases) {
-      const stat = phase === "missile" ? "msl" : "atk";
+    // Missile: in round 1 every participant fires; afterwards only skirmishers.
+    // Targets are every enemy participant. Both sides compute from the same
+    // pre-phase state, then both apply — simultaneous.
+    {
       const a = participants(att);
       const d = participants(def);
-      const onDef = inflicted(a, d, stat, cfg);
-      const onAtt = inflicted(d, a, stat, cfg);
-      const losses = {
-        attacker: applyCasualties(att, onAtt, input.seed, round, phase, "attacker"),
-        defender: applyCasualties(def, onDef, input.seed, round, phase, "defender"),
+      const firingA = round === 1 ? a : skA;
+      const firingD = round === 1 ? d : skD;
+      if (firingA.length > 0 || firingD.length > 0) {
+        const onDef = inflicted(firingA, d, "msl", cfg);
+        const onAtt = inflicted(firingD, a, "msl", cfg);
+        entry.missile = {
+          attacker: applyCasualties(a, onAtt, input.seed, round, "missile", "attacker"),
+          defender: applyCasualties(d, onDef, input.seed, round, "missile", "defender"),
+        };
+      }
+    }
+
+    // Melee: the non-skirmishing rows of each side fight each other; a
+    // skirmishing row neither hits nor can be hit here.
+    {
+      const a = participants(att).filter((r) => !skAIds.has(r.id));
+      const d = participants(def).filter((r) => !skDIds.has(r.id));
+      const onDef = inflicted(a, d, "atk", cfg);
+      const onAtt = inflicted(d, a, "atk", cfg);
+      entry.melee = {
+        attacker: applyCasualties(a, onAtt, input.seed, round, "melee", "attacker"),
+        defender: applyCasualties(d, onDef, input.seed, round, "melee", "defender"),
       };
-      if (phase === "missile") entry.missile = losses;
-      else entry.melee = losses;
     }
 
     // Morale, both sides from the post-melee state: a row breaks when its losses
@@ -147,13 +190,11 @@ export function resolveBattle(input: BattleInput): BattleResult {
   const defender = summarise(def);
   let winner: BattleWinner;
   if (input.mode === "raid") {
-    // The attacker wins a raid unbroken and with the better exchange (losses as
-    // a share of starting headcount); a side with nobody on the field loses.
-    const attStart = headcount(att.map((r) => ({ ...r, count: r.start })));
-    const defStart = headcount(def.map((r) => ({ ...r, count: r.start })));
-    const attShare = attStart > 0 ? attacker.losses / attStart : 1;
-    const defShare = defStart > 0 ? defender.losses / defStart : 1;
-    winner = attStart === 0 ? "defender" : defStart === 0 ? "attacker" : !attacker.broke && defShare > attShare ? "attacker" : "defender";
+    // The attacker wins a raid unbroken and with more kills than losses in
+    // absolute men; a side with nobody on the field loses.
+    if (att.length === 0) winner = "defender";
+    else if (def.length === 0) winner = "attacker";
+    else winner = !attacker.broke && defender.losses > attacker.losses ? "attacker" : "defender";
   } else if (defender.broke && !attacker.broke) winner = "attacker";
   else if (attacker.broke) winner = "defender"; // including both broken: the attack failed
   else winner = "stand";
