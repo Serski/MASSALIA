@@ -329,7 +329,9 @@ function wallPips(level: number): string {
 // `refreshToken`: any value whose identity changes when the player's state was
 // refreshed (the dashboard passes its player object), so reach is refetched
 // after the barracks changes without polling.
-export function World2Map({ fill = false, refreshToken }: { fill?: boolean; refreshToken?: unknown } = {}) {
+// `onRefresh`: the dashboard's state refresh, called after an action's data
+// arrives so the header (drachmae) follows the report without polling.
+export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: boolean; refreshToken?: unknown; onRefresh?: () => void } = {}) {
   const [world, setWorld] = useState<World | null>(null);
   const [politics, setPolitics] = useState<Politics | null>(null);
   const [status, setStatus] = useState("");
@@ -989,6 +991,7 @@ export function World2Map({ fill = false, refreshToken }: { fill?: boolean; refr
     }
     setPicker(null);
     setReport(res.report);
+    onRefresh?.();
   };
   const actionable = (type: MapActionType): type is MapActType => type === "attack" || type === "raid" || type === "scout";
   const townActions = selectedTown ? withReach(mapActionButtons({ kind: "town", hasTown: true, ownerId: selectedOwnerId }), townReach) : null;
@@ -1259,6 +1262,7 @@ export function World2Map({ fill = false, refreshToken }: { fill?: boolean; refr
             type={picker.type}
             regionId={picker.regionId}
             regionName={names[picker.regionId] ?? picker.regionId}
+            names={names}
             entry={reach?.[picker.regionId]}
             fleet={reachFleet}
             roster={roster}
@@ -1303,6 +1307,7 @@ function ForcePicker({
   type,
   regionId,
   regionName,
+  names,
   entry,
   fleet,
   roster,
@@ -1312,6 +1317,7 @@ function ForcePicker({
   type: MapActType;
   regionId: string;
   regionName: string;
+  names: Record<string, string>;
   entry: ReachEntry | undefined;
   fleet: MapReachView["fleet"];
   roster: BarracksRosterRow[] | null;
@@ -1361,8 +1367,10 @@ function ForcePicker({
     <div className="w2map-modal" role="dialog" aria-label={`${ACTION_LABEL[type]} ${regionName}`} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
       <div className="w2map-modal-card">
         <button type="button" className="w2map-info-close" onClick={onClose} aria-label="Close">Close</button>
-        <div className="w2map-info-body">
+        <div className="w2map-modal-head">
           <div className="w2map-info-label">{ACTION_LABEL[type]} · {regionName}</div>
+        </div>
+        <div className="w2map-pick-scroll">
           {roster === null ? (
             <p className="w2map-info-empty">Mustering…</p>
           ) : eligible.length === 0 ? (
@@ -1370,7 +1378,7 @@ function ForcePicker({
           ) : (
             [...byBase.entries()].map(([baseId, list]) => (
               <div key={baseId}>
-                <p className="w2map-pick-base">From {baseId}</p>
+                <p className="w2map-pick-base">From {names[baseId] ?? baseId}</p>
                 <ul className="w2map-pick-list">
                   {list.map((r) => {
                     const otherBase = base !== null && base !== baseId;
@@ -1397,6 +1405,8 @@ function ForcePicker({
               ))}
             </ul>
           ) : null}
+        </div>
+        <div className="w2map-modal-footer">
           <div className={`w2map-verdict${verdict.ok ? " ok" : ""}`}>
             {selected.length === 0 ? (
               <span>Choose the rows that march.</span>

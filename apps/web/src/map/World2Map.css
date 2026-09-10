@@ -451,6 +451,20 @@ p.w2map-stat-asof {
     font-size: 13.5px;
   }
 
+  /* The picker and report ride as bottom sheets, the full height the info
+     sheet may use, with the footer above the safe area. */
+  .w2map-modal {
+    padding: 8px;
+    align-items: end;
+  }
+
+  .w2map-modal-card {
+    width: 100%;
+    max-height: 100%;
+    border-radius: 16px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
   .w2map-action {
     padding: 11px 12px;
     font-size: 10.5px;
@@ -472,12 +486,16 @@ p.w2map-stat-asof {
   background: rgba(10, 7, 5, 0.55);
 }
 
+/* The card is bound to the viewport (85vh, or the stage when smaller); the row
+   list is the only scrolling region and the footer with the verdict and the
+   buttons stays pinned at the bottom. */
 .w2map-modal-card {
   position: relative;
   width: min(440px, 100%);
-  max-height: 100%;
+  max-height: min(85vh, 100%);
   display: flex;
   flex-direction: column;
+  min-height: 0;
   color: var(--dash-parchment, #ece0cc);
   background: rgba(20, 13, 10, 0.96);
   border: 1px solid rgba(181, 138, 69, 0.5);
@@ -486,6 +504,30 @@ p.w2map-stat-asof {
 }
 
 .w2map-modal-card .w2map-info-body { padding-top: 36px; }
+
+.w2map-modal-head {
+  flex: none;
+  padding: 36px 14px 0;
+}
+
+.w2map-pick-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: 0 14px;
+  overscroll-behavior: contain;
+}
+
+.w2map-modal-footer {
+  flex: none;
+  padding: 8px 14px 14px;
+  border-top: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28));
+  background: rgba(20, 13, 10, 0.98);
+  border-radius: 0 0 12px 12px;
+}
+
+.w2map-modal-footer .w2map-verdict { margin: 0 0 8px; }
 
 .w2map-pick-base {
   margin: 8px 0 4px;

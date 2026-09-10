@@ -6,11 +6,11 @@ import { DashboardCard, type PanelProps } from "../shared.js";
 // its own sidebar entry; Cities and Diplomacy are tabs under Politics.
 // `player` is a fresh object on every dashboard refresh, so passing it as the
 // map's refresh token refetches reach after a barracks change.
-export default function AtlasPanel({ player }: PanelProps) {
+export default function AtlasPanel({ player, onRefresh }: PanelProps) {
   return (
     <section className="dashboard-panel atlas-dashboard-panel" aria-label="Atlas">
       <DashboardCard className="dashboard-map-card">
-        <World2Map fill refreshToken={player} />
+        <World2Map fill refreshToken={player} onRefresh={onRefresh} />
       </DashboardCard>
     </section>
   );
