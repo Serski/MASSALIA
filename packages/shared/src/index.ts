@@ -29,5 +29,6 @@ export * from "./barracks.js";
 export * from "./mapActions.js";
 export * from "./mapGraph.js";
 export * from "./reach.js";
+export * from "./battle.js";
 export * from "./names.js";
 export * from "./news.js";

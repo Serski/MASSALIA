@@ -29,6 +29,24 @@ export type ShipRole = (typeof SHIP_ROLES)[number];
 export type ShipDef = { label: string; role: ShipRole; range: number; troopSpace: number; naval: number };
 export type ShipsContent = { version: number; source: string; ships: Record<string, ShipDef> };
 
+// Battle constants and NPC defender stat blocks (content/military/battle.json).
+// The resolver in battle.ts reads them; nothing else in content is required.
+export const NPC_KINDS = ["warband", "garrison"] as const;
+export type NpcKind = (typeof NPC_KINDS)[number];
+export type NpcDef = { label: string; stats: UnitStats };
+export type BattleContent = {
+  version: number;
+  source: string;
+  rounds: number;
+  lethality: number;
+  defenseFloor: number;
+  moraleStep: number;
+  pursuitLoss: number;
+  raid: { rounds: number; plunderPerKill: number; grainPerKill: number };
+  regen: { warbandPerDay: number };
+  npc: Record<NpcKind, NpcDef>;
+};
+
 export type UnitStats = { atk: number; def: number; msl: number; mor: number; spd: number; space: number };
 
 export type UnitDef = {
@@ -194,6 +212,32 @@ export function parseBandsContent(data: unknown, knownGoods: Iterable<string>): 
     throw new Error(`bands.json must define at least market.offersPerSeason (${parsed.market.offersPerSeason}) bands, got ${ids.length}`);
   }
   return parsed;
+}
+
+const battleContentSchema = z
+  .object({
+    version: z.number().int().positive(),
+    source: z.string(),
+    rounds: z.number().int().positive(),
+    lethality: z.number().positive(),
+    defenseFloor: z.number().nonnegative(),
+    moraleStep: z.number().positive(),
+    pursuitLoss: z.number().min(0).max(1),
+    raid: z
+      .object({ rounds: z.number().int().positive(), plunderPerKill: z.number().nonnegative(), grainPerKill: z.number().nonnegative() })
+      .strict(),
+    regen: z.object({ warbandPerDay: z.number().int().nonnegative() }).strict(),
+    npc: z
+      .object({
+        warband: z.object({ label: z.string().min(1), stats: statsSchema }).strict(),
+        garrison: z.object({ label: z.string().min(1), stats: statsSchema }).strict(),
+      })
+      .strict(),
+  })
+  .strict();
+
+export function parseBattleContent(data: unknown): BattleContent {
+  return battleContentSchema.parse(data) as BattleContent;
 }
 
 // Ship ids must be vendor goods (the player's stock is the fleet).

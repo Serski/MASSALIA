@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "source": "server-side military content; never copy into apps/web/public",
+  "rounds": 3,
+  "lethality": 0.15,
+  "defenseFloor": 4,
+  "moraleStep": 0.05,
+  "pursuitLoss": 0.10,
+  "raid": { "rounds": 1, "plunderPerKill": 3, "grainPerKill": 1 },
+  "regen": { "warbandPerDay": 5 },
+  "npc": {
+    "warband":  { "label": "Tribal warband", "stats": { "atk": 5, "def": 3, "msl": 1, "mor": 4, "spd": 6, "space": 1 } },
+    "garrison": { "label": "Town garrison",  "stats": { "atk": 6, "def": 7, "msl": 1, "mor": 6, "spd": 3, "space": 1 } }
+  }
+}
