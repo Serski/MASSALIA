@@ -516,6 +516,14 @@ export const api = {
     apiFetch<HireResult>("/api/buildings/hire", { method: "POST", body: { popType, count } }),
   dismissPeople: (popType: string, count: number) =>
     apiFetch<DismissResult>("/api/buildings/dismiss", { method: "POST", body: { popType, count } }),
+  // The Barracks (military prompt 2). GET settles and returns the view; every POST
+  // returns the same BarracksView so the tab re-renders from one payload. Errors
+  // are the server's one-line message via ApiError.
+  barracks: () => apiFetch<BarracksView>("/api/barracks"),
+  barracksRecruit: (unitId: string, count: number) =>
+    apiFetch<BarracksView>("/api/barracks/recruit", { method: "POST", body: { unitId, count } }),
+  barracksHire: (bandId: string) => apiFetch<BarracksView>("/api/barracks/hire", { method: "POST", body: { bandId } }),
+  barracksDisband: (rowId: string) => apiFetch<BarracksView>("/api/barracks/disband", { method: "POST", body: { rowId } }),
   craftGood: (good: string) => apiFetch<CraftResult>("/api/buildings/craft", { method: "POST", body: { good } }),
   // The hoplite's home army (Hoplite Step 1): rank ladder + daily salary.
   service: () => apiFetch<ServiceView>("/api/service"),
@@ -1386,4 +1394,56 @@ export type EventResolution = {
   composure: number;
   broke: boolean;
   grantedTrait: string | null;
+};
+
+// --- Barracks (GET /api/barracks; mirrors apps/server/src/services/barracks.ts) ---
+
+export type BarracksGate = { stat: "militia"; required: number; current: number; met: boolean };
+
+export type BarracksUnit = {
+  id: string;
+  label: string;
+  icon: string;
+  role: string;
+  trainSeasons: number;
+  gear: Record<string, number>;
+  upkeepPerDay: Record<string, number>;
+  stats: Record<string, number>;
+};
+
+export type BarracksRosterRow = {
+  id: string;
+  source: "trained" | "band";
+  unitId: string;
+  label: string;
+  icon: string;
+  count: number;
+  startCount: number;
+  recruitedSeason: number;
+  readyAtSeason: number | null;
+  contractEndSeason: number | null;
+  active: boolean;
+  canDisband: boolean;
+};
+
+export type BarracksOffer = {
+  id: string;
+  label: string;
+  icon: string;
+  role: string;
+  men: number;
+  upkeepPerDay: Record<string, number>;
+  stats: Record<string, number>;
+  hired: boolean;
+};
+
+export type BarracksView = {
+  gate: BarracksGate;
+  season: number;
+  levy: { men: number };
+  config: { minServiceSeasons: number; maxActiveBands: number; termSeasons: number };
+  units: BarracksUnit[];
+  roster: BarracksRosterRow[];
+  offers: BarracksOffer[];
+  activeBands: number;
 };

@@ -35,6 +35,11 @@ export const GUIDE_TABS: GuideTab[] = [
     line: "Marry well: every bride arrives with a retinue, some with dowries besides. A new draw of brides arrives each season if none please you. Raise children; secure your heir.",
   },
   {
+    icon: "barracks",
+    name: "Barracks",
+    line: "Raise men from your levy or hire bands passing through the city. They eat every day whether they march or not.",
+  },
+  {
     icon: "politics",
     name: "Politics",
     line: "Parties, elections, offices. Join the PALAIOI or DYNATOI and climb toward the archonship.",

@@ -5,7 +5,7 @@ import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 
 export type DashboardSection = "court" | "ledger" | "market" | "family" | "politics" | "atlas" | "standings";
 
-export type IconName = "court" | "ledger" | "market" | "family" | "politics" | "atlas" | "standings" | "guide";
+export type IconName = "court" | "ledger" | "market" | "family" | "barracks" | "politics" | "atlas" | "standings" | "guide";
 
 export type FourStats = {
   prestige: number;
@@ -166,6 +166,19 @@ export function iconPath(icon: IconName) {
           <circle cx="16" cy="9" r="2.5" />
           <path d="M4 20c.8-4 2.7-6 5-6s4.2 2 5 6" />
           <path d="M13 15c1-.8 2-1.2 3-1.2 2 0 3.5 1.8 4 5.2" />
+        </>
+      );
+    case "barracks":
+      // Two crossed spears, tips up, behind a round shield.
+      return (
+        <>
+          <circle cx="12" cy="12" r="6" />
+          <path d="M4 20l3.8-3.8" />
+          <path d="M20 20l-3.8-3.8" />
+          <path d="M4 4l3.8 3.8" />
+          <path d="M20 4l-3.8 3.8" />
+          <path d="M4 4h3M4 4v3" />
+          <path d="M20 4h-3M20 4v3" />
         </>
       );
     case "politics":
