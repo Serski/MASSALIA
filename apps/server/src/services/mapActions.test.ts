@@ -165,7 +165,7 @@ suite("Map actions (integration)", () => {
     expect(row).toMatchObject({ movingTo: "R060", arrivesAt: at(10), count: 40 - r.report.attacker.losses });
     expect((await logs(characterId, "battle_loss")).length).toBe(r.report.attacker.losses > 0 ? 1 : 0);
     expect(await holdingsOf(ctx)).toHaveLength(0);
-    expect(r.report.line).toMatch(/^Raided Salyes with 40 peltasts: \d+ tribesmen slain, \d+ of ours lost, \d+ drachmae and \d+ grain of plunder\.$/);
+    expect(r.report.line).toMatch(/^Raided Salyes with 40 peltasts: \d+ tribesm[ae]n slain, (none|\d+) of ours lost, \d+ drachmae and \d+ grain of plunder\.$/);
     await recordChronicle(characterId);
   });
 
@@ -186,7 +186,7 @@ suite("Map actions (integration)", () => {
     expect((await rows(ctx)).find((x) => x.id === hoplites.id)).toMatchObject({ basedAt: "R046", movingTo: "R046", arrivesAt: at(10) });
     expect(r.reach.bases.map((b) => b.regionId)).toEqual(["R060", "R046"]);
     expect(r.reach.reach.R046).toBeUndefined(); // our own land is a base now, not a target
-    expect(r.report.line).toMatch(/^Took Salyes with 30 hoplites: \d+ tribesmen slain, \d+ of ours lost\. The land is ours\.$/);
+    expect(r.report.line).toMatch(/^Took Salyes with 30 hoplites: \d+ tribesm[ae]n slain, (none|\d+) of ours lost\. The land is ours\.$/);
     // A second attack on our own holding is refused.
     const again = await act(ctx, "attack", "R046", [hoplites.id], at(11));
     expect(again).toMatchObject({ ok: false, code: 409 });

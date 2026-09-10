@@ -177,13 +177,15 @@ export type CampaignPayload = {
 
 // The one sentence for a campaign entry, shared by the web register and the
 // server's report so the wording never drifts.
+const tribesmen = (n: number) => `${n} ${n === 1 ? "tribesman" : "tribesmen"}`;
+
 export function renderCampaignLine(type: "map_action" | "holding_reverted", p: CampaignPayload): string {
   const place = p.regionName ?? p.regionId;
   if (type === "holding_reverted") return `${place} slipped from our hands: no garrison held it.`;
   const force = p.force ? ` with ${p.force}` : "";
-  if (p.action === "scout") return `Scouted ${place}${force}: ${p.warband ?? 0} tribesmen under arms.`;
-  const killed = `${p.killed ?? 0} tribesmen slain`;
-  const lost = `${p.lost ?? 0} of ours lost`;
+  if (p.action === "scout") return `Scouted ${place}${force}: ${tribesmen(p.warband ?? 0)} under arms.`;
+  const killed = `${tribesmen(p.killed ?? 0)} slain`;
+  const lost = (p.lost ?? 0) === 0 ? "none of ours lost" : `${p.lost} of ours lost`;
   if (p.action === "raid") {
     if (p.winner === "attacker") {
       const dr = p.plunder?.drachmae ?? 0;

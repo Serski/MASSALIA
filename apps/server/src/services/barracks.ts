@@ -678,6 +678,7 @@ export type RosterView = {
   basedAt: string; // region id the row stands in
   movingTo: string | null; // region id of a relocation in flight
   arrivesAt: string | null; // ISO; when that relocation completes
+  stats: Record<string, number>; // the unit's or band's stat block (for the force picker)
   active: boolean;
   canDisband: boolean;
 };
@@ -720,6 +721,7 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
         basedAt: r.basedAt,
         movingTo: r.movingTo,
         arrivesAt: r.arrivesAt?.toISOString() ?? null,
+        stats: def?.stats ?? {},
         active: isActive(r, now),
         canDisband: gate.met && now.getTime() >= releaseAtMs(r, unitsC, bandsC),
       };
