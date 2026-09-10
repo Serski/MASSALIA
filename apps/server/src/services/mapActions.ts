@@ -39,7 +39,7 @@ import { readRegionWarband, regionContentOwner, writeRegionWarband } from "./map
 const db = createDb();
 type DbTx = Parameters<Parameters<ReturnType<typeof createDb>["transaction"]>[0]>[0];
 
-const MS_PER_DAY = 86_400_000;
+const MS_PER_HOUR = 3_600_000;
 const FAST_SPD = 6;
 
 export type MapActionType = "scout" | "raid" | "attack";
@@ -52,7 +52,7 @@ export type MapActReport = {
   base: string;
   route: "land" | "sea";
   steps: number;
-  recoveryDays: number;
+  recoveryHours: number;
   arrivesAt: string;
   destination: string;
   ships: Record<string, number>;
@@ -197,8 +197,9 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
     const warband = await readRegionWarband(tx, ctx.worldId, regionId, now);
     const character = await characterOf(tx, ctx.playerId);
     const regionName = await regionDisplayName(regionId);
-    const recoveryDays = Math.max(1, steps);
-    const arrivesAt = new Date(now.getTime() + recoveryDays * MS_PER_DAY);
+    // Recovery: max(1, steps) × hoursPerStep hours from now, for any action.
+    const recoveryHours = Math.max(1, steps) * battleC.recovery.hoursPerStep;
+    const arrivesAt = new Date(now.getTime() + recoveryHours * MS_PER_HOUR);
     const men = rows.reduce((n, r) => n + r.count, 0);
     const forceText = describeForce(rows);
 
@@ -223,7 +224,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
         base,
         route,
         steps,
-        recoveryDays,
+        recoveryHours,
         arrivesAt: arrivesAt.toISOString(),
         destination,
         ships,
@@ -292,7 +293,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
         base,
         route,
         steps,
-        recoveryDays,
+        recoveryHours,
         arrivesAt: arrivesAt.toISOString(),
         destination,
         ships,

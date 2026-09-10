@@ -43,6 +43,7 @@ export type BattleContent = {
   moraleStep: number;
   pursuitLoss: number;
   raid: { rounds: number; plunderPerKill: number; grainPerKill: number };
+  recovery: { hoursPerStep: number }; // recovery after an action: max(1, steps) × hoursPerStep hours
   regen: { warbandPerDay: number };
   npc: Record<NpcKind, NpcDef>;
 };
@@ -226,6 +227,7 @@ const battleContentSchema = z
     raid: z
       .object({ rounds: z.number().int().positive(), plunderPerKill: z.number().nonnegative(), grainPerKill: z.number().nonnegative() })
       .strict(),
+    recovery: z.object({ hoursPerStep: z.number().positive() }).strict(),
     regen: z.object({ warbandPerDay: z.number().int().nonnegative() }).strict(),
     npc: z
       .object({

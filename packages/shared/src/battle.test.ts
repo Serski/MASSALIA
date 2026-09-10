@@ -23,6 +23,9 @@ describe("battle content", () => {
   it("parses the real file and rejects an unknown key", () => {
     expect(battle.rounds).toBe(3);
     expect(battle.npc.warband.stats.spd).toBe(6);
+    expect(battle.raid).toEqual({ rounds: 1, plunderPerKill: 20, grainPerKill: 5 });
+    expect(battle.recovery).toEqual({ hoursPerStep: 3 });
+    expect(() => parseBattleContent({ ...read("content/military/battle.json"), recovery: { hoursPerStep: 0 } })).toThrow();
     expect(() => parseBattleContent({ ...read("content/military/battle.json"), extra: 1 })).toThrow();
     expect(() => parseBattleContent({ ...read("content/military/battle.json"), pursuitLoss: 2 })).toThrow();
   });

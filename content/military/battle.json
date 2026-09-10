@@ -6,7 +6,8 @@
   "defenseFloor": 4,
   "moraleStep": 0.05,
   "pursuitLoss": 0.10,
-  "raid": { "rounds": 1, "plunderPerKill": 3, "grainPerKill": 1 },
+  "raid": { "rounds": 1, "plunderPerKill": 20, "grainPerKill": 5 },
+  "recovery": { "hoursPerStep": 3 },
   "regen": { "warbandPerDay": 5 },
   "npc": {
     "warband":  { "label": "Tribal warband", "stats": { "atk": 5, "def": 3, "msl": 1, "mor": 4, "spd": 6, "space": 1 } },

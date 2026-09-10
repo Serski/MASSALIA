@@ -1434,7 +1434,7 @@ function ForcePicker({
 // The report after an action: the outcome line, both sides row by row, plunder
 // or conquest, and the recovery time. Scout shows the intel line.
 function BattleReport({ report, onClose }: { report: MapActReport; onClose: () => void }) {
-  const hours = report.recoveryDays * 24;
+  const hours = report.recoveryHours;
   const sailed = Object.entries(report.ships)
     .map(([id, n]) => `${n} ${id === "trade-ship" ? "pentekonter" : "trireme"}${n === 1 ? "" : "s"}`)
     .join(", ");

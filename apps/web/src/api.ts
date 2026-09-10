@@ -1497,7 +1497,7 @@ export type MapActReport = {
   base: string;
   route: "land" | "sea";
   steps: number;
-  recoveryDays: number;
+  recoveryHours: number;
   arrivesAt: string;
   destination: string;
   ships: Record<string, number>;

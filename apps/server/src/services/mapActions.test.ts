@@ -17,6 +17,9 @@ const suite = describe.runIf(dbUrl.includes("_test"));
 const DAY = 86_400_000;
 const T0 = Date.UTC(2000, 0, 1);
 const at = (seasons: number) => new Date(T0 + seasons * DAY);
+const HOUR = 3_600_000;
+// Recovery after an action: max(1, steps) × 3 hours (battle.json recovery.hoursPerStep).
+const recovered = (from: Date, steps: number) => new Date(from.getTime() + Math.max(1, steps) * 3 * HOUR);
 
 async function loadModules() {
   const dbPkg = await import("@massalia/db");
@@ -134,12 +137,12 @@ suite("Map actions (integration)", () => {
     const r = await act(ctx, "scout", "R046", [peltasts.id]);
     expect(r).toMatchObject({ ok: true });
     if (!r.ok) return;
-    expect(r.report).toMatchObject({ type: "scout", regionId: "R046", regionName: "Salyes", route: "land", steps: 1, recoveryDays: 1, destination: "R060", intel: { warband: 100 }, winner: null });
-    expect(r.report.arrivesAt).toBe(at(10).toISOString());
+    expect(r.report).toMatchObject({ type: "scout", regionId: "R046", regionName: "Salyes", route: "land", steps: 1, recoveryHours: 3, destination: "R060", intel: { warband: 100 }, winner: null });
+    expect(r.report.arrivesAt).toBe(recovered(at(9), 1).toISOString());
     const intel = (await db.select().from(m.dbPkg.regionIntel).where(and(eq(m.dbPkg.regionIntel.dynastyId, dynastyId), eq(m.dbPkg.regionIntel.regionId, "R046"))))[0]!;
     expect(intel).toMatchObject({ warband: 100 });
     expect(typeof intel.scoutedGameDate).toBe("string");
-    expect((await rows(ctx)).find((x) => x.id === peltasts.id)).toMatchObject({ movingTo: "R060", arrivesAt: at(10), count: 10 });
+    expect((await rows(ctx)).find((x) => x.id === peltasts.id)).toMatchObject({ movingTo: "R060", arrivesAt: recovered(at(9), 1), count: 10 });
     // The moving party is out of the roster's force.
     expect(r.force.men).toBe(10); // the hoplites still stand
     expect(await logs(characterId, "map_action")).toHaveLength(1);
@@ -157,12 +160,12 @@ suite("Map actions (integration)", () => {
     expect(r.report.defender!.start).toBe(20);
     const killed = r.report.defender!.losses;
     expect(killed).toBeGreaterThan(0);
-    expect(r.report.plunder).toEqual({ drachmae: killed * 3, grain: killed });
-    expect(await wallet(ctx)).toBe(100 + killed * 3);
-    expect(await stock(ctx, "grain")).toBe(5000 - 3 * 40 + killed); // 3 whole days after ready_at (at 6) × 40 peltasts × 1 grain, then the plunder
+    expect(r.report.plunder).toEqual({ drachmae: killed * 20, grain: killed * 5 });
+    expect(await wallet(ctx)).toBe(100 + killed * 20);
+    expect(await stock(ctx, "grain")).toBe(5000 - 3 * 40 + killed * 5); // 3 whole days after ready_at (at 6) × 40 peltasts × 1 grain, then the plunder
     expect(await warband("R046")).toBe(20 - killed);
     const row = (await rows(ctx)).find((x) => x.id === peltasts.id)!;
-    expect(row).toMatchObject({ movingTo: "R060", arrivesAt: at(10), count: 40 - r.report.attacker.losses });
+    expect(row).toMatchObject({ movingTo: "R060", arrivesAt: recovered(at(9), 1), count: 40 - r.report.attacker.losses });
     expect((await logs(characterId, "battle_loss")).length).toBe(r.report.attacker.losses > 0 ? 1 : 0);
     expect(await holdingsOf(ctx)).toHaveLength(0);
     expect(r.report.line).toMatch(/^Raided Salyes with 40 peltasts: \d+ tribesm[ae]n slain, (none|\d+) of ours lost, \d+ drachmae and \d+ grain of plunder\.$/);
@@ -181,9 +184,9 @@ suite("Map actions (integration)", () => {
     expect(r.report.destination).toBe("R046");
     const h = await holdingsOf(ctx);
     expect(h).toHaveLength(1);
-    expect(h[0]).toMatchObject({ regionId: "R046", kind: "conquest", previousOwner: "unclaimed", since: at(9), lastGarrisonedAt: at(10) });
+    expect(h[0]).toMatchObject({ regionId: "R046", kind: "conquest", previousOwner: "unclaimed", since: at(9), lastGarrisonedAt: recovered(at(9), 1) });
     expect(await warband("R046")).toBe(0);
-    expect((await rows(ctx)).find((x) => x.id === hoplites.id)).toMatchObject({ basedAt: "R046", movingTo: "R046", arrivesAt: at(10) });
+    expect((await rows(ctx)).find((x) => x.id === hoplites.id)).toMatchObject({ basedAt: "R046", movingTo: "R046", arrivesAt: recovered(at(9), 1) });
     expect(r.reach.bases.map((b) => b.regionId)).toEqual(["R060", "R046"]);
     expect(r.reach.reach.R046).toBeUndefined(); // our own land is a base now, not a target
     expect(r.report.line).toMatch(/^Took Salyes with 30 hoplites: \d+ tribesm[ae]n slain, (none|\d+) of ours lost\. The land is ours\.$/);
@@ -206,7 +209,7 @@ suite("Map actions (integration)", () => {
     expect(await holdingsOf(ctx)).toHaveLength(0);
     expect(await warband("R046")).toBe(100 - r.report.defender!.losses);
     const survivor = (await rows(ctx)).find((x) => x.id === hoplites.id);
-    if (survivor) expect(survivor).toMatchObject({ basedAt: "R060", movingTo: "R060", arrivesAt: at(10) });
+    if (survivor) expect(survivor).toMatchObject({ basedAt: "R060", movingTo: "R060", arrivesAt: recovered(at(9), 1) });
     else expect(r.report.attacker.rows[0]!.end).toBe(0);
     expect(r.report.line).toMatch(/^Attacked Salyes with 5 hoplites and were broken/);
     await recordChronicle(characterId);
@@ -238,8 +241,8 @@ suite("Map actions (integration)", () => {
     const r = await act(ctx, "raid", "R078", [peltasts.id]);
     expect(r).toMatchObject({ ok: true });
     if (!r.ok) return;
-    expect(r.report).toMatchObject({ route: "sea", steps: 2, recoveryDays: 2, ships: { "trade-ship": 1, galley: 5 } });
-    expect(r.report.arrivesAt).toBe(at(11).toISOString());
+    expect(r.report).toMatchObject({ route: "sea", steps: 2, recoveryHours: 6, ships: { "trade-ship": 1, galley: 5 } });
+    expect(r.report.arrivesAt).toBe(recovered(at(9), 2).toISOString());
     // Ships are counted, never debited.
     expect(await stock(ctx, "trade-ship")).toBe(1);
     expect(await stock(ctx, "galley")).toBe(5);
