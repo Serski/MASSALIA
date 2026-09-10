@@ -19,6 +19,16 @@ import { z } from "zod";
 export const UNIT_ROLES = ["line", "skirmish", "missile", "mounted"] as const;
 export type UnitRole = (typeof UNIT_ROLES)[number];
 
+// Ships (content/military/ships.json). Players own no pentekonters or triremes
+// of their own: their hulls are the `trade-ship` (pentekonter role) and `galley`
+// (trireme role) goods, so every ship id must be a vendor good. `range` is sea
+// provinces from a base's coast, `troopSpace` the force space one hull carries,
+// `naval` its fighting weight (unused until the battle resolver).
+export const SHIP_ROLES = ["transport", "warship"] as const;
+export type ShipRole = (typeof SHIP_ROLES)[number];
+export type ShipDef = { label: string; role: ShipRole; range: number; troopSpace: number; naval: number };
+export type ShipsContent = { version: number; source: string; ships: Record<string, ShipDef> };
+
 export type UnitStats = { atk: number; def: number; msl: number; mor: number; spd: number; space: number };
 
 export type UnitDef = {
@@ -145,6 +155,29 @@ function bandsContentSchema(goods: ReadonlySet<string>) {
     .strict();
 }
 
+function shipsContentSchema(goods: ReadonlySet<string>) {
+  const shipSchema = z
+    .object({
+      label: z.string().min(1),
+      role: z.enum(SHIP_ROLES),
+      range: z.number().int().positive(),
+      troopSpace: z.number().int().nonnegative(),
+      naval: z.number().int().nonnegative(),
+    })
+    .strict();
+  return z
+    .object({
+      version: z.number().int().positive(),
+      source: z.string(),
+      ships: z.record(z.string(), shipSchema).superRefine((map, ctx) => {
+        for (const id of Object.keys(map)) {
+          if (!goods.has(id)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `ship id "${id}" is not a vendor good` });
+        }
+      }),
+    })
+    .strict();
+}
+
 // `knownGoods`: the resource ids gear and upkeep may name (the buildings.json
 // vendor keys). JSON object keys are unique by construction, so id uniqueness is
 // guaranteed by the record shape; kebab-case is checked explicitly.
@@ -160,6 +193,13 @@ export function parseBandsContent(data: unknown, knownGoods: Iterable<string>): 
   if (ids.length < parsed.market.offersPerSeason) {
     throw new Error(`bands.json must define at least market.offersPerSeason (${parsed.market.offersPerSeason}) bands, got ${ids.length}`);
   }
+  return parsed;
+}
+
+// Ship ids must be vendor goods (the player's stock is the fleet).
+export function parseShipsContent(data: unknown, knownGoods: Iterable<string>): ShipsContent {
+  const parsed = shipsContentSchema(new Set(knownGoods)).parse(data) as ShipsContent;
+  if (Object.keys(parsed.ships).length === 0) throw new Error("ships.json must define at least one ship");
   return parsed;
 }
 

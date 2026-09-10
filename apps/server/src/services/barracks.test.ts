@@ -25,8 +25,9 @@ async function loadModules() {
   const shared = await import("@massalia/shared");
   const buildings = await import("./buildings.js");
   const barracks = await import("./barracks.js");
+  const mapGraph = await import("./mapGraph.js");
   const lock = await import("./lock.js");
-  return { dbPkg, shared, buildings, barracks, lock };
+  return { dbPkg, shared, buildings, barracks, mapGraph, lock };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -119,10 +120,11 @@ suite("Barracks (integration)", () => {
     await m.buildings.loadBuildingsContent();
     await m.buildings.loadPopsContent();
     await m.barracks.loadBarracksContent();
+    await m.mapGraph.loadMapGraph();
   });
 
   beforeEach(async () => {
-    await db.execute(sql`TRUNCATE TABLE player_units, player_levy, band_offers, effect_log, resources, player_buildings, player_pops, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
+    await db.execute(sql`TRUNCATE TABLE player_units, player_holdings, player_levy, band_offers, effect_log, resources, player_buildings, player_pops, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
     await db.insert(m.dbPkg.houses).values({ slug: "test-house", name: "House Test", initial: "T", alignment: "c", stance: "s", motto: "m", patron: "p", crest: "c" }).onConflictDoNothing();
     const world = (await db.insert(m.dbPkg.worlds).values({ name: "Barracks Test", seed: "btest", startedAt: new Date(T0), endsAt: new Date(T0 + 182 * DAY), status: "active" }).returning())[0]!;
     worldId = world.id;
@@ -179,7 +181,7 @@ suite("Barracks (integration)", () => {
       expect(await stock(ctx, "tin")).toBe(10);
       expect((await levy(ctx))!.men).toBe(115);
       const row = (await rows(ctx))[0]!;
-      expect(row).toMatchObject({ source: "trained", unitId: "hoplite", count: 5, startCount: 5, recruitedSeason: 9, readyAt: at(11), contractEndAt: null, readyAtSeason: null });
+      expect(row).toMatchObject({ source: "trained", unitId: "hoplite", count: 5, startCount: 5, recruitedSeason: 9, readyAt: at(11), contractEndAt: null, readyAtSeason: null, basedAt: "R060", movingTo: null, arrivesAt: null });
       expect((await logs(characterId, "barracks_recruit")).map((e) => e.detail)).toEqual([{ unitId: "hoplite", count: 5, readyAt: at(11).toISOString(), source: "barracks" }]);
     });
 
@@ -255,7 +257,7 @@ suite("Barracks (integration)", () => {
       expect(await m.barracks.hireBand(ctx, offers[1]!.bandId, at(9))).toMatchObject({ ok: true });
       expect(await m.barracks.hireBand(ctx, offers[2]!.bandId, at(9))).toMatchObject({ ok: false, code: 409 });
       expect((await rows(ctx)).filter((r) => r.source === "band")).toHaveLength(2);
-      expect((await rows(ctx))[0]).toMatchObject({ source: "band", count: def.men, startCount: def.men, recruitedSeason: 9, readyAt: null, contractEndAt: at(11), contractEndSeason: null });
+      expect((await rows(ctx))[0]).toMatchObject({ source: "band", count: def.men, startCount: def.men, recruitedSeason: 9, readyAt: null, contractEndAt: at(11), contractEndSeason: null, basedAt: "R060" });
       expect(await logs(characterId, "barracks_hire")).toHaveLength(2);
       // Bands never touch the levy.
       expect((await levy(ctx))!.men).toBe(120);
@@ -339,6 +341,21 @@ suite("Barracks (integration)", () => {
       const s2 = await settle(ctx, 13);
       expect(s2.days).toBe(1);
       expect(s2.drawn).toEqual({ grain: 20, oliveoil: 10, wine: 4, chicken: 4, herbal: 2 });
+    });
+
+    it("a relocation whose arrives_at has passed lands the row at moving_to; one still in flight is untouched", async () => {
+      const { ctx, characterId } = await makePlayer({ drachmae: 1000 });
+      await giveAll(ctx, { grain: 100, oliveoil: 100 });
+      const landed = await insertRow(ctx, { source: "trained", unitId: "hoplite", count: 5, recruitedSeason: 7, readyAt: 9, createdSeason: 9 });
+      const flying = await insertRow(ctx, { source: "trained", unitId: "peltast", count: 5, recruitedSeason: 7, readyAt: 9, createdSeason: 9 });
+      await db.update(m.dbPkg.playerUnits).set({ movingTo: "R046", arrivesAt: at(9.5) }).where(eq(m.dbPkg.playerUnits.id, landed.id));
+      await db.update(m.dbPkg.playerUnits).set({ movingTo: "R047", arrivesAt: at(10.5) }).where(eq(m.dbPkg.playerUnits.id, flying.id));
+      const s = await settle(ctx, 10);
+      expect(s.arrived.map((a) => a.rowId)).toEqual([landed.id]);
+      const after = await rows(ctx);
+      expect(after.find((r) => r.id === landed.id)).toMatchObject({ basedAt: "R046", movingTo: null, arrivesAt: null });
+      expect(after.find((r) => r.id === flying.id)).toMatchObject({ basedAt: "R060", movingTo: "R047", arrivesAt: at(10.5) });
+      expect((await logs(characterId, "barracks_arrive")).map((e) => e.detail)).toEqual([{ unitId: "hoplite", count: 5, from: "R060", to: "R046", source: "barracks" }]);
     });
 
     it("with no rows and no marker nothing happens and no marker is written", async () => {

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { bandDef, parseBandsContent, parseUnitsContent, seededRoll, sha256Words, unitDef, UNIT_ROLES } from "./barracks.js";
+import { bandDef, parseBandsContent, parseShipsContent, parseUnitsContent, seededRoll, sha256Words, unitDef, UNIT_ROLES } from "./barracks.js";
 import { parseBuildingsContent } from "./buildings.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -134,5 +134,22 @@ describe("seededRoll", () => {
     expect(r).not.toBe(seededRoll(["world", "player", "3", "1"]));
     expect(r).not.toBe(seededRoll(["player", "world", "3", "0"]));
     expect(seededRoll(["abc"])).toBe(0xba7816bf / 2 ** 32);
+  });
+});
+
+describe("ships content", () => {
+  const raw = read("content/military/ships.json");
+  it("parses the real file: trade-ship is the pentekonter role, galley the trireme", () => {
+    const ships = parseShipsContent(raw, goods);
+    expect(Object.keys(ships.ships).sort()).toEqual(["galley", "trade-ship"]);
+    expect(ships.ships["trade-ship"]).toEqual({ label: "Pentekonter", role: "transport", range: 7, troopSpace: 20, naval: 1 });
+    expect(ships.ships.galley).toEqual({ label: "Trireme", role: "warship", range: 4, troopSpace: 4, naval: 5 });
+  });
+  it("rejects a ship id that is not a vendor good, a bad role, a non-integer range, and an unknown key", () => {
+    expect(() => parseShipsContent({ ...raw, ships: { ...raw.ships, bireme: raw.ships.galley } }, goods)).toThrow(/not a vendor good/);
+    expect(() => parseShipsContent({ ...raw, ships: { galley: { ...raw.ships.galley, role: "raider" } } }, goods)).toThrow();
+    expect(() => parseShipsContent({ ...raw, ships: { galley: { ...raw.ships.galley, range: 4.5 } } }, goods)).toThrow();
+    expect(() => parseShipsContent({ ...raw, ships: { galley: { ...raw.ships.galley, basedAt: "R060" } } }, goods)).toThrow();
+    expect(() => parseShipsContent({ ...raw, ships: {} }, goods)).toThrow(/at least one ship/);
   });
 });

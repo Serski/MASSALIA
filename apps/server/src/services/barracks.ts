@@ -7,6 +7,7 @@ import {
   bandDef,
   goodCategoryFor,
   parseBandsContent,
+  parseShipsContent,
   parseUnitsContent,
   seasonAt,
   seasonIndexAt,
@@ -15,11 +16,13 @@ import {
   vendorUnitPrice,
   wholeDaysBetween,
   type BandsContent,
+  type ShipsContent,
   type UnitsContent,
 } from "@massalia/shared";
 import { getBuildingsContent, settleAll, type ActingContext } from "./buildings.js";
 import { applyComposureDelta } from "./composure.js";
 import { lockPlayer } from "./lock.js";
+import { getTopology } from "./mapGraph.js";
 
 // ---------------------------------------------------------------------------
 // Barracks — the player's army: trained UNITS raised from the levy and hired
@@ -46,6 +49,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../../..");
 const unitsFile = path.join(repoRoot, "content/military/units.json");
 const bandsFile = path.join(repoRoot, "content/military/bands.json");
+const shipsFile = path.join(repoRoot, "content/military/ships.json");
 
 const MS_PER_DAY = 86_400_000;
 // The whole-day upkeep marker (a `resources` row carrying only lastUpdatedAt),
@@ -57,17 +61,19 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 let units: UnitsContent | null = null;
 let bands: BandsContent | null = null;
+let ships: ShipsContent | null = null;
 
 // --- Content -----------------------------------------------------------------
 
-// Validate both catalogues at boot (fail fast on a malformed file); memoized.
-// Gear and upkeep good ids are checked against the buildings.json vendor list,
-// so loadBuildingsContent() must have run first.
-export async function loadBarracksContent(): Promise<{ units: UnitsContent; bands: BandsContent }> {
+// Validate the three catalogues at boot (fail fast on a malformed file);
+// memoized. Gear, upkeep and ship ids are checked against the buildings.json
+// vendor list, so loadBuildingsContent() must have run first.
+export async function loadBarracksContent(): Promise<{ units: UnitsContent; bands: BandsContent; ships: ShipsContent }> {
   const goods = Object.keys(getBuildingsContent().vendor);
   units = parseUnitsContent(JSON.parse(await fs.readFile(unitsFile, "utf8")), goods);
   bands = parseBandsContent(JSON.parse(await fs.readFile(bandsFile, "utf8")), goods);
-  return { units, bands };
+  ships = parseShipsContent(JSON.parse(await fs.readFile(shipsFile, "utf8")), goods);
+  return { units, bands, ships };
 }
 
 export function getUnitsContent(): UnitsContent {
@@ -78,6 +84,16 @@ export function getUnitsContent(): UnitsContent {
 export function getBandsContent(): BandsContent {
   if (!bands) throw new Error("Bands content not loaded. Call loadBarracksContent() at boot.");
   return bands;
+}
+
+export function getShipsContent(): ShipsContent {
+  if (!ships) throw new Error("Ships content not loaded. Call loadBarracksContent() at boot.");
+  return ships;
+}
+
+// Where recruits and hires stand: the Massalia region, from the topology.
+function massaliaRegionId(): string {
+  return getTopology().massaliaRegion;
 }
 
 // --- Helpers (3a) ------------------------------------------------------------
@@ -283,9 +299,10 @@ export type BarracksSettle = {
   insolvent: BarracksDisband[]; // rows removed for insolvency, in removal order
   renewed: string[]; // band row ids whose contract extended
   departed: BarracksDisband[]; // band rows whose contract ended without renewal
+  arrived: BarracksDisband[]; // rows whose relocation completed (now based at moving_to)
 };
 
-const emptySettle = (): BarracksSettle => ({ days: 0, drachmaeDirect: 0, purchases: 0, cost: 0, owed: 0, drawn: {}, bought: {}, insolvent: [], renewed: [], departed: [] });
+const emptySettle = (): BarracksSettle => ({ days: 0, drachmaeDirect: 0, purchases: 0, cost: 0, owed: 0, drawn: {}, bought: {}, insolvent: [], renewed: [], departed: [], arrived: [] });
 
 type UpkeepPlan = { drachmaeDirect: number; purchases: number; cost: number; draws: Record<string, number>; buys: Record<string, number> };
 
@@ -472,6 +489,16 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
     }
   }
 
+  // 6b. Arrivals. A row mid-relocation whose arrives_at has passed now stands at
+  // its destination. Nothing starts a move yet; the resolution is here so the
+  // relocation prompt only adds the start.
+  for (const r of rows) {
+    if (r.movingTo === null || r.arrivesAt === null || r.arrivesAt.getTime() > now.getTime()) continue;
+    await exec.update(playerUnits).set({ basedAt: r.movingTo, movingTo: null, arrivesAt: null }).where(eq(playerUnits.id, r.id));
+    await logEffect(exec, characterId, "barracks_arrive", { unitId: r.unitId, count: r.count, from: r.basedAt, to: r.movingTo, source: "barracks" });
+    out.arrived.push({ rowId: r.id, unitId: r.unitId, source: r.source, count: r.count });
+  }
+
   // 7. Advance the marker by the whole days consumed (or create it at the anchor
   // advanced the same way) so the partial-day remainder carries.
   const advancedMs = lastMs + days * MS_PER_DAY;
@@ -532,7 +559,7 @@ export async function recruitUnits(ctx: ActingContext, unitId: string, count: nu
     const inserted = (
       await tx
         .insert(playerUnits)
-        .values({ worldId: ctx.worldId, ownerPlayerId: ctx.playerId, source: "trained", unitId, count, startCount: count, recruitedSeason: season, readyAt, contractEndAt: null, createdAt: now })
+        .values({ worldId: ctx.worldId, ownerPlayerId: ctx.playerId, source: "trained", unitId, count, startCount: count, recruitedSeason: season, readyAt, contractEndAt: null, basedAt: massaliaRegionId(), createdAt: now })
         .returning()
     )[0]!;
     if (!(await levyDraw(tx, ctx, count))) throw new Error("barracks: levy draw failed under lock");
@@ -570,7 +597,7 @@ export async function hireBand(ctx: ActingContext, bandId: string, now: Date): P
     const inserted = (
       await tx
         .insert(playerUnits)
-        .values({ worldId: ctx.worldId, ownerPlayerId: ctx.playerId, source: "band", unitId: bandId, count: def.men, startCount: def.men, recruitedSeason: season, readyAt: null, contractEndAt, createdAt: now })
+        .values({ worldId: ctx.worldId, ownerPlayerId: ctx.playerId, source: "band", unitId: bandId, count: def.men, startCount: def.men, recruitedSeason: season, readyAt: null, contractEndAt, basedAt: massaliaRegionId(), createdAt: now })
         .returning()
     )[0]!;
     await logEffect(tx, await characterIdFor(tx, ctx.playerId), "barracks_hire", { bandId, men: def.men, contractEndAt: contractEndAt.toISOString(), source: "barracks" });
@@ -631,6 +658,9 @@ export type RosterView = {
   recruitedSeason: number;
   readyAt: string | null; // ISO; trained only
   contractEndAt: string | null; // ISO; band only
+  basedAt: string; // region id the row stands in
+  movingTo: string | null; // region id of a relocation in flight
+  arrivesAt: string | null; // ISO; when that relocation completes
   active: boolean;
   canDisband: boolean;
 };
@@ -670,6 +700,9 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
         recruitedSeason: r.recruitedSeason,
         readyAt: r.readyAt?.toISOString() ?? null,
         contractEndAt: r.contractEndAt?.toISOString() ?? null,
+        basedAt: r.basedAt,
+        movingTo: r.movingTo,
+        arrivesAt: r.arrivesAt?.toISOString() ?? null,
         active: isActive(r, now),
         canDisband: gate.met && now.getTime() >= releaseAtMs(r, unitsC, bandsC),
       };

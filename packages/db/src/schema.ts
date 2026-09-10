@@ -855,11 +855,36 @@ export const playerUnits = pgTable("player_units", {
   // Duration timers (0054): the instant training completes / the contract ends.
   readyAt: timestamp("ready_at", { withTimezone: true }), // trained only; NULL for bands
   contractEndAt: timestamp("contract_end_at", { withTimezone: true }), // band only; NULL for trained
+  // Basing (0055): the region the row stands in (the Massalia region by default,
+  // else a holding the same player owns — enforced in code), and a relocation in
+  // flight, resolved by the barracks settle once arrives_at passes.
+  basedAt: text("based_at").notNull().default("R060"),
+  movingTo: text("moving_to"),
+  arrivesAt: timestamp("arrives_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   sourceCheck: check("player_units_source_check", sql`${table.source} IN ('trained', 'band')`),
   countCheck: check("player_units_count_check", sql`${table.count} >= 0`),
   ownerIdx: index("player_units_owner_idx").on(table.worldId, table.ownerPlayerId),
+}));
+
+export const HOLDING_KINDS = ["colony", "conquest"] as const;
+export type HoldingKind = (typeof HOLDING_KINDS)[number];
+
+// A World 2 region a player holds (0055). A player's bases are the Massalia
+// region plus every row here they own. Nothing creates rows yet.
+export const playerHoldings = pgTable("player_holdings", {
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  regionId: text("region_id").notNull(),
+  ownerPlayerId: uuid("owner_player_id").references(() => players.id).notNull(),
+  kind: text("kind").$type<HoldingKind>().notNull(),
+  previousOwner: text("previous_owner"), // polity id from content, or NULL
+  since: timestamp("since", { withTimezone: true }).notNull().defaultNow(),
+  lastGarrisonedAt: timestamp("last_garrisoned_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.worldId, table.regionId] }),
+  kindCheck: check("player_holdings_kind_check", sql`${table.kind} IN ('colony', 'conquest')`),
+  ownerIdx: index("player_holdings_owner_idx").on(table.worldId, table.ownerPlayerId),
 }));
 
 // The player's manpower pool; growth is applied closed-form on settle from

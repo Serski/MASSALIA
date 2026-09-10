@@ -27,7 +27,8 @@ async function loadModules() {
   const { errorHandler } = await import("../errorHandler.js");
   const buildings = await import("../services/buildings.js");
   const barracks = await import("../services/barracks.js");
-  return { dbPkg, barracksRoutes, errorHandler, buildings, barracks };
+  const mapGraph = await import("../services/mapGraph.js");
+  return { dbPkg, barracksRoutes, errorHandler, buildings, barracks, mapGraph };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -38,7 +39,7 @@ type View = {
   levy: { men: number };
   config: { minServiceSeasons: number; maxActiveBands: number; termSeasons: number };
   units: { id: string; gear: Record<string, number>; stats: Record<string, number> }[];
-  roster: { id: string; source: string; unitId: string; count: number; readyAt: string | null; contractEndAt: string | null; active: boolean; canDisband: boolean }[];
+  roster: { id: string; source: string; unitId: string; count: number; readyAt: string | null; contractEndAt: string | null; basedAt: string; movingTo: string | null; arrivesAt: string | null; active: boolean; canDisband: boolean }[];
   offers: { id: string; men: number; hired: boolean; upkeepPerDay: Record<string, number> }[];
   activeBands: number;
 };
@@ -57,6 +58,7 @@ suite("/api/barracks (integration)", () => {
     await m.buildings.loadBuildingsContent();
     await m.buildings.loadPopsContent();
     await m.barracks.loadBarracksContent();
+    await m.mapGraph.loadMapGraph();
     app = Fastify();
     app.setErrorHandler(m.errorHandler);
     await app.register(cookie, { secret: "test-session-secret-at-least-32-chars-long" });
@@ -135,7 +137,7 @@ suite("/api/barracks (integration)", () => {
     expect(ok.statusCode).toBe(200);
     const v = ok.json<View>();
     expect(v.roster).toHaveLength(1);
-    expect(v.roster[0]).toMatchObject({ source: "trained", unitId: "peltast", count: 5, active: false, canDisband: false, contractEndAt: null });
+    expect(v.roster[0]).toMatchObject({ source: "trained", unitId: "peltast", count: 5, active: false, canDisband: false, contractEndAt: null, basedAt: "R060", movingTo: null, arrivesAt: null });
     // A peltast trains for one season = one day from the recruit instant.
     expect(Math.abs(Date.parse(v.roster[0]!.readyAt!) - (Date.parse(v.now) + DAY))).toBeLessThan(1_000);
     expect(v.levy.men).toBe(115);

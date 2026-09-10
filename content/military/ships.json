@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "source": "server-side military content; never copy into apps/web/public",
+  "ships": {
+    "trade-ship": { "label": "Pentekonter", "role": "transport", "range": 7, "troopSpace": 20, "naval": 1 },
+    "galley":     { "label": "Trireme",     "role": "warship",   "range": 4, "troopSpace": 4,  "naval": 5 }
+  }
+}
