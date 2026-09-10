@@ -282,16 +282,17 @@ suite("Map actions (integration)", () => {
     await recordChronicle(characterId);
   });
 
-  it("the campaign line merges rows of the same unit into one figure", async () => {
+  it("the campaign line merges rows of the same unit into one figure and uses the unit plurals", async () => {
     const { ctx } = await makePlayer();
     await setWarband("R046", 20, at(9));
     const a = await insertRow(ctx, { unitId: "peltast", count: 7 });
     const b = await insertRow(ctx, { unitId: "peltast", count: 7 });
-    const c = await insertRow(ctx, { unitId: "hoplite", count: 5 });
-    const r = await act(ctx, "scout", "R046", [a.id, b.id, c.id]);
+    const c = await insertRow(ctx, { unitId: "ekdromos", count: 1 });
+    const d = await insertRow(ctx, { unitId: "hippeis", count: 2 });
+    const r = await act(ctx, "scout", "R046", [a.id, b.id, c.id, d.id]);
     expect(r).toMatchObject({ ok: true });
     if (!r.ok) return;
-    expect(r.report.line).toBe("Scouted Salyes with 14 peltasts and 5 hoplites: 20 tribesmen under arms.");
+    expect(r.report.line).toBe("Scouted Salyes with 14 peltasts, 1 ekdromos and 2 hippeis: 20 tribesmen under arms.");
   });
 
   it("winter closes campaigns: every action is refused in a Winter season, before any other check", async () => {

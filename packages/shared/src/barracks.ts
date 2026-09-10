@@ -52,6 +52,7 @@ export type UnitStats = { atk: number; def: number; msl: number; mor: number; sp
 
 export type UnitDef = {
   label: string;
+  plural: string; // "Peltasts", "Ekdromoi" — running text uses it when the count is not 1
   icon: string; // filename under apps/web/public/assets/, resolved by the tab
   role: UnitRole;
   trainSeasons: number;
@@ -124,6 +125,7 @@ function unitsContentSchema(goods: ReadonlySet<string>) {
   const unitSchema = z
     .object({
       label: z.string().min(1),
+      plural: z.string().min(1),
       icon: z.string().min(1),
       role: z.enum(UNIT_ROLES),
       trainSeasons: z.number().int().nonnegative(),

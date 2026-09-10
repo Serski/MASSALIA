@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { REAL_MS_PER_SEASON } from "./calendar.js";
-import { buildChronicle, type ChronicleInput } from "./chronicle.js";
+import { buildChronicle, type ChronicleInput, renderCampaignLine, renderForce } from "./chronicle.js";
 
 // One real day = one in-game season; tests anchor the world start at ms 0 so a
 // timestamp of N seasons is simply N * REAL_MS_PER_SEASON.
@@ -342,5 +342,22 @@ describe("buildChronicle — deaths", () => {
     const byCause = (c: string) => entries.find((e) => e.type === "death" && e.payload.cause === c)!;
     expect(byCause("poison").generation).toBe(1);
     expect(byCause("mercenary").generation).toBe(2);
+  });
+});
+
+describe("campaign lines", () => {
+  it("renders trained parts with the unit plural past one man and bands by their label; old prose passes through", () => {
+    expect(renderForce([{ count: 1, label: "Ekdromos", plural: "Ekdromoi", source: "trained" }])).toBe("1 ekdromos");
+    expect(renderForce([{ count: 2, label: "Ekdromos", plural: "Ekdromoi", source: "trained" }, { count: 20, label: "Cretan archers", source: "band" }])).toBe("2 ekdromoi and 20 Cretan archers");
+    expect(renderForce([{ count: 14, label: "Peltast", plural: "Peltasts", source: "trained" }, { count: 1, label: "Hoplite", plural: "Hoplites", source: "trained" }, { count: 3, label: "Hippeis", plural: "Hippeis", source: "trained" }])).toBe("14 peltasts, 1 hoplite and 3 hippeis");
+    expect(renderForce("7 peltasts, 7 peltasts and 7 peltasts")).toBe("7 peltasts, 7 peltasts and 7 peltasts");
+  });
+  it("wording: none of ours lost, one tribesman, and the force parts inside the sentence", () => {
+    const force = [{ count: 40, label: "Peltast", plural: "Peltasts", source: "trained" as const }];
+    expect(renderCampaignLine("map_action", { action: "raid", regionId: "R046", regionName: "Salyes", force, winner: "attacker", killed: 1, lost: 0, plunder: { drachmae: 20, grain: 5 } })).toBe(
+      "Raided Salyes with 40 peltasts: 1 tribesman slain, none of ours lost, 20 drachmae and 5 grain of plunder.",
+    );
+    expect(renderCampaignLine("map_action", { action: "scout", regionId: "R046", regionName: "Salyes", force: [{ count: 1, label: "Hippeis", plural: "Hippeis", source: "trained" }], warband: 1 })).toBe("Scouted Salyes with 1 hippeis: 1 tribesman under arms.");
+    expect(renderCampaignLine("holding_reverted", { regionId: "R046", regionName: "Salyes" })).toBe("Salyes slipped from our hands: no garrison held it.");
   });
 });

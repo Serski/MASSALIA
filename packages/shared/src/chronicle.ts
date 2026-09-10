@@ -165,7 +165,10 @@ export type CampaignPayload = {
   regionId: string;
   regionName?: string;
   men?: number;
-  force?: string; // e.g. "20 peltasts" / "10 hoplites and 20 Cretan archers"
+  // The force, as parts so the wording (unit plurals) can change under old
+  // rows: a trained part carries label + plural, a band part its label (already
+  // plural). Older rows carry the prose string and render as stored.
+  force?: string | CampaignForcePart[];
   winner?: "attacker" | "defender" | "stand";
   killed?: number;
   lost?: number;
@@ -175,6 +178,21 @@ export type CampaignPayload = {
   previousOwner?: string | null; // reversion
 };
 
+export type CampaignForcePart = { count: number; label: string; plural?: string; source?: "trained" | "band" };
+
+// "20 peltasts", "1 ekdromos", "10 hoplites and 20 Cretan archers": trained
+// units in lowercase running text with the plural past one man, bands by their
+// (already plural) label.
+export function renderForce(force: string | CampaignForcePart[] | undefined): string {
+  if (!force) return "";
+  if (typeof force === "string") return force;
+  const parts = force.map((p) => {
+    if (p.source === "band" || !p.plural) return `${p.count} ${p.label}`;
+    return `${p.count} ${(p.count === 1 ? p.label : p.plural).toLowerCase()}`;
+  });
+  return parts.length <= 1 ? (parts[0] ?? "") : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
 // The one sentence for a campaign entry, shared by the web register and the
 // server's report so the wording never drifts.
 const tribesmen = (n: number) => `${n} ${n === 1 ? "tribesman" : "tribesmen"}`;
@@ -182,7 +200,8 @@ const tribesmen = (n: number) => `${n} ${n === 1 ? "tribesman" : "tribesmen"}`;
 export function renderCampaignLine(type: "map_action" | "holding_reverted", p: CampaignPayload): string {
   const place = p.regionName ?? p.regionId;
   if (type === "holding_reverted") return `${place} slipped from our hands: no garrison held it.`;
-  const force = p.force ? ` with ${p.force}` : "";
+  const forceText = renderForce(p.force);
+  const force = forceText ? ` with ${forceText}` : "";
   if (p.action === "scout") return `Scouted ${place}${force}: ${tribesmen(p.warband ?? 0)} under arms.`;
   const killed = `${tribesmen(p.killed ?? 0)} slain`;
   const lost = (p.lost ?? 0) === 0 ? "none of ours lost" : `${p.lost} of ours lost`;

@@ -1319,7 +1319,7 @@ function RecoveringRow({ row }: { row: BarracksRosterRow }) {
   return (
     <li className="w2map-pick-row dim">
       <span className="w2map-pick-label">{row.label} · {row.count}</span>
-      <span className="w2map-pick-note">{row.active ? `recovering · ${formatDuration(left)}` : "training"}</span>
+      <span className="w2map-pick-note">recovering · {formatDuration(left)}</span>
     </li>
   );
 }
@@ -1353,7 +1353,8 @@ function ForcePicker({
   const eligible = rows.filter((r) => r.active && r.movingTo === null);
   const byBase = new Map<string, BarracksRosterRow[]>();
   for (const r of eligible) byBase.set(r.basedAt, [...(byBase.get(r.basedAt) ?? []), r]);
-  const others = rows.filter((r) => !r.active || r.movingTo !== null);
+  // Rows still training are not listed at all; rows recovering stay, greyed.
+  const others = rows.filter((r) => r.active && r.movingTo !== null);
   const selected = eligible.filter((r) => picked.has(r.id));
   const base = selected[0]?.basedAt ?? null;
 

@@ -13,6 +13,7 @@ import {
   unitDef,
   type BattleResult,
   type BattleRow,
+  type CampaignForcePart,
   type CampaignPayload,
   type ReachEntry,
   type ReachShip,
@@ -70,23 +71,27 @@ export type MapActReport = {
 type Failure = { ok: false; code: number; error: string };
 export type MapActResult = Failure | { ok: true; report: MapActReport; reach: ReachView; campaign: ReachView["campaign"]; force: ReachView["force"]; fleet: ReachView["fleet"]; roster: BarracksView["roster"] };
 
-// "20 peltasts", "10 hoplites and 20 Cretan archers". Rows of the same unit
-// merge into one figure ("21 peltasts", not "7 peltasts, 7 peltasts and 7
-// peltasts"), in first-seen order.
-function describeForce(rows: UnitRow[]): string {
-  const merged = new Map<string, { source: UnitRow["source"]; unitId: string; count: number }>();
+// The force as chronicle parts: rows of the same unit merge into one figure
+// ("21 peltasts", not "7 peltasts, 7 peltasts and 7 peltasts"), in first-seen
+// order; a trained part carries label and plural, a band its label. The
+// sentence itself comes from renderForce, shared with the web register.
+function describeForce(rows: UnitRow[]): CampaignForcePart[] {
+  const merged = new Map<string, CampaignForcePart>();
   for (const r of rows) {
     const key = `${r.source}:${r.unitId}`;
     const m = merged.get(key);
-    if (m) m.count += r.count;
-    else merged.set(key, { source: r.source, unitId: r.unitId, count: r.count });
+    if (m) {
+      m.count += r.count;
+      continue;
+    }
+    if (r.source === "trained") {
+      const def = unitDef(getUnitsContent(), r.unitId);
+      merged.set(key, { count: r.count, label: def?.label ?? r.unitId, plural: def?.plural ?? `${def?.label ?? r.unitId}s`, source: "trained" });
+    } else {
+      merged.set(key, { count: r.count, label: bandDef(getBandsContent(), r.unitId)?.label ?? r.unitId, source: "band" });
+    }
   }
-  const parts = [...merged.values()].map((r) => {
-    const def = r.source === "trained" ? unitDef(getUnitsContent(), r.unitId) : bandDef(getBandsContent(), r.unitId);
-    const label = def?.label ?? r.unitId;
-    return r.source === "trained" ? `${r.count} ${label.toLowerCase()}${r.count === 1 ? "" : "s"}` : `${r.count} ${label}`;
-  });
-  return parts.length <= 1 ? (parts[0] ?? "") : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+  return [...merged.values()];
 }
 
 async function characterOf(exec: DbTx, playerId: string): Promise<{ id: string; dynastyId: string | null }> {

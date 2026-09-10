@@ -7,6 +7,7 @@
   "units": {
     "peltast": {
       "label": "Peltast",
+      "plural": "Peltasts",
       "icon": "PELTAST.webp",
       "role": "skirmish",
       "trainSeasons": 1,
@@ -16,6 +17,7 @@
     },
     "ekdromos": {
       "label": "Ekdromos",
+      "plural": "Ekdromoi",
       "icon": "EKDROMOS.webp",
       "role": "line",
       "trainSeasons": 1,
@@ -25,6 +27,7 @@
     },
     "hoplite": {
       "label": "Hoplite",
+      "plural": "Hoplites",
       "icon": "HOPLITE.webp",
       "role": "line",
       "trainSeasons": 2,
@@ -34,6 +37,7 @@
     },
     "hippeis": {
       "label": "Hippeis",
+      "plural": "Hippeis",
       "icon": "HIPPEIS.webp",
       "role": "mounted",
       "trainSeasons": 2,
