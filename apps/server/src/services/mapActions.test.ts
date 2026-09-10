@@ -279,6 +279,18 @@ suite("Map actions (integration)", () => {
     await recordChronicle(characterId);
   });
 
+  it("the campaign line merges rows of the same unit into one figure", async () => {
+    const { ctx } = await makePlayer();
+    await setWarband("R046", 20, at(9));
+    const a = await insertRow(ctx, { unitId: "peltast", count: 7 });
+    const b = await insertRow(ctx, { unitId: "peltast", count: 7 });
+    const c = await insertRow(ctx, { unitId: "hoplite", count: 5 });
+    const r = await act(ctx, "scout", "R046", [a.id, b.id, c.id]);
+    expect(r).toMatchObject({ ok: true });
+    if (!r.ok) return;
+    expect(r.report.line).toBe("Scouted Salyes with 14 peltasts and 5 hoplites: 20 tribesmen under arms.");
+  });
+
   it("a town target is refused with the towns message; home ground and fog too", async () => {
     const { ctx } = await makePlayer();
     const peltasts = await insertRow(ctx, { unitId: "peltast", count: 10 });
