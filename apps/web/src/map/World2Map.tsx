@@ -352,6 +352,12 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   // The campaign calendar and the server clock offset it is read against.
   const [campaign, setCampaign] = useState<MapReachView["campaign"] | null>(null);
   const [clockOffset, setClockOffset] = useState(0);
+  // The winter countdown, on the server clock (the reopening instant shifted by
+  // the payload's clock offset). Declared with the other hooks, above the
+  // early return below, so the hook order never changes between renders.
+  const winterClosed = campaign !== null && !campaign.open;
+  const opensOnDevice = winterClosed && campaign.opensAt ? new Date(Date.parse(campaign.opensAt) - clockOffset).toISOString() : null;
+  const winterLeft = useCountdownSeconds(opensOnDevice);
   const [reachFleet, setReachFleet] = useState<MapReachView["fleet"]>({ ships: {}, range: 0, space: 0 });
   // The force picker (Attack / Raid / Scout on a townless region), the roster it
   // lists, and the battle report after an action. Whole rows only.
@@ -975,11 +981,9 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   // Reach for the open target: a town resolves to its region through world2.json.
   const regionReach = selectedProvince ? reach?.[selectedProvince.id] : undefined;
   const townReach = selectedTown ? reach?.[townRegionById.get(selectedTown) ?? ""] : undefined;
-  // Winter: Attack, Raid and Scout wait for spring, counted down on the server
-  // clock (the reopening instant shifted by the payload's clock offset).
-  const winterClosed = campaign !== null && !campaign.open;
-  const opensOnDevice = winterClosed && campaign.opensAt ? new Date(Date.parse(campaign.opensAt) - clockOffset).toISOString() : null;
-  const winterLeft = useCountdownSeconds(opensOnDevice);
+  // Winter: Attack, Raid and Scout wait for spring. The countdown hook itself
+  // runs above the "Charting the known world" early return (every hook must run
+  // on every render); only the line is built here.
   const winterLine = winterClosed ? `The passes are closed until spring. Opens in ${formatDuration(winterLeft)}` : null;
   const withWinter = (actions: { buttons: MapActionButton[]; caption: string | null }) => {
     if (!winterLine) return actions;
@@ -1333,7 +1337,7 @@ function RecoveringRow({ row }: { row: BarracksRosterRow }) {
   );
 }
 
-function ForcePicker({
+export function ForcePicker({
   type,
   regionId,
   regionName,
