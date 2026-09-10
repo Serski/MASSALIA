@@ -2,7 +2,10 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { forceStats, HOME_POLITY_ID, routeFor, verdictsFor, type MapActionType } from "@massalia/shared";
 import { api, apiBaseUrl, ApiError, type BarracksRosterRow, type MapActReport, type MapActType, type MapReachView, type ReachEntry } from "../api.js";
 import { CULTURE_WEBP, formatDuration, POLITY_CREST, titleCase, useCountdownSeconds } from "../dashboard/shared.js";
-import { mapActionButtons, withReach } from "./mapActions.js";
+import { mapActionButtons, withReach, type MapActionButton } from "./mapActions.js";
+
+// Attack, Raid and Scout are the actions that resolve (Colonise waits for 3c).
+const actionable = (type: MapActionType): type is MapActType => type === "attack" || type === "raid" || type === "scout";
 import "./World2Map.css";
 
 /**
@@ -346,6 +349,9 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   // Attack / Raid / Colonise buttons beyond the legality matrix.
   const [reach, setReach] = useState<Record<string, ReachEntry> | null>(null);
   const [reachBases, setReachBases] = useState<MapReachView["bases"]>([]);
+  // The campaign calendar and the server clock offset it is read against.
+  const [campaign, setCampaign] = useState<MapReachView["campaign"] | null>(null);
+  const [clockOffset, setClockOffset] = useState(0);
   const [reachFleet, setReachFleet] = useState<MapReachView["fleet"]>({ ships: {}, range: 0, space: 0 });
   // The force picker (Attack / Raid / Scout on a townless region), the roster it
   // lists, and the battle report after an action. Whole rows only.
@@ -396,6 +402,8 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
         setReach(view.reach ?? {});
         setReachBases(view.bases ?? []);
         setReachFleet(view.fleet ?? { ships: {}, range: 0, space: 0 });
+        setCampaign(view.campaign ?? null);
+        setClockOffset(view.now ? Date.parse(view.now) - Date.now() : 0);
       })
       .catch(() => {});
     return () => {
@@ -967,8 +975,19 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   // Reach for the open target: a town resolves to its region through world2.json.
   const regionReach = selectedProvince ? reach?.[selectedProvince.id] : undefined;
   const townReach = selectedTown ? reach?.[townRegionById.get(selectedTown) ?? ""] : undefined;
+  // Winter: Attack, Raid and Scout wait for spring, counted down on the server
+  // clock (the reopening instant shifted by the payload's clock offset).
+  const winterClosed = campaign !== null && !campaign.open;
+  const opensOnDevice = winterClosed && campaign.opensAt ? new Date(Date.parse(campaign.opensAt) - clockOffset).toISOString() : null;
+  const winterLeft = useCountdownSeconds(opensOnDevice);
+  const winterLine = winterClosed ? `The passes are closed until spring. Opens in ${formatDuration(winterLeft)}` : null;
+  const withWinter = (actions: { buttons: MapActionButton[]; caption: string | null }) => {
+    if (!winterLine) return actions;
+    const buttons = actions.buttons.map((b) => (b.enabled && actionable(b.type) ? { ...b, enabled: false, title: winterLine } : b));
+    return { buttons, caption: buttons.some((b) => b.title === winterLine) ? winterLine : actions.caption };
+  };
   const regionActions = selectedProvince
-    ? withReach(mapActionButtons({ kind: "region", hasTown: selectedProvince.towns.length > 0, ownerId: selectedOwnerId }), regionReach)
+    ? withWinter(withReach(mapActionButtons({ kind: "region", hasTown: selectedProvince.towns.length > 0, ownerId: selectedOwnerId }), regionReach))
     : null;
 
   // Attack / Raid / Scout on a townless region open the force picker; the
@@ -985,6 +1004,8 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
     setReach(res.reach.reach ?? {});
     setReachBases(res.reach.bases ?? []);
     setReachFleet(res.reach.fleet ?? { ships: {}, range: 0, space: 0 });
+    setCampaign(res.reach.campaign ?? null);
+    setClockOffset(res.reach.now ? Date.parse(res.reach.now) - Date.now() : 0);
     setRoster(res.roster);
     if (res.report.intel) {
       setMilitary((m) => ({ ...m, regions: { ...m.regions, [regionId]: { warband: res.report.intel!.warband, source: "intel", scoutedGameDate: res.report.intel!.scoutedGameDate } } }));
@@ -993,8 +1014,8 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
     setReport(res.report);
     onRefresh?.();
   };
-  const actionable = (type: MapActionType): type is MapActType => type === "attack" || type === "raid" || type === "scout";
-  const townActions = selectedTown ? withReach(mapActionButtons({ kind: "town", hasTown: true, ownerId: selectedOwnerId }), townReach) : null;
+
+  const townActions = selectedTown ? withWinter(withReach(mapActionButtons({ kind: "town", hasTown: true, ownerId: selectedOwnerId }), townReach)) : null;
 
   const regionBody = selectedProvince ? (
     <>

@@ -294,6 +294,18 @@ suite("Map actions (integration)", () => {
     expect(r.report.line).toBe("Scouted Salyes with 14 peltasts and 5 hoplites: 20 tribesmen under arms.");
   });
 
+  it("winter closes campaigns: every action is refused in a Winter season, before any other check", async () => {
+    const { ctx } = await makePlayer();
+    const peltasts = await insertRow(ctx, { unitId: "peltast", count: 10 });
+    // Season 8 is a Winter (8 % 4 = 0); the closed message outranks even a town target.
+    for (const type of ["scout", "raid", "attack"] as const) {
+      expect(await act(ctx, type, "R046", [peltasts.id], at(8))).toMatchObject({ ok: false, code: 409, error: "The passes are closed until spring." });
+    }
+    expect(await act(ctx, "raid", "R047", [peltasts.id], at(8.5))).toMatchObject({ ok: false, code: 409, error: "The passes are closed until spring." });
+    // Spring, the next instant: the same scout goes through.
+    expect(await act(ctx, "scout", "R046", [peltasts.id], at(9))).toMatchObject({ ok: true });
+  });
+
   it("a town target is refused with the towns message; home ground and fog too", async () => {
     const { ctx } = await makePlayer();
     const peltasts = await insertRow(ctx, { unitId: "peltast", count: 10 });

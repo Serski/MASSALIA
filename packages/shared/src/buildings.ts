@@ -224,6 +224,15 @@ export function seasonAt(nowMs: number, worldStartedMs: number): SeasonName {
   return SEASON_NAMES[seasonIndexAt(nowMs, worldStartedMs) % SEASON_NAMES.length]!;
 }
 
+// The campaign calendar: the passes are closed in Winter. `opensAtMs` is the
+// instant the next season starts (null while open).
+export type CampaignSeason = { season: SeasonName; open: boolean; opensAtMs: number | null };
+export function campaignSeason(nowMs: number, worldStartedMs: number): CampaignSeason {
+  const season = seasonAt(nowMs, worldStartedMs);
+  const open = season !== "Winter";
+  return { season, open, opensAtMs: open ? null : worldStartedMs + (seasonIndexAt(nowMs, worldStartedMs) + 1) * MS_PER_DAY };
+}
+
 export function coeffFor(seasonal: SeasonalConfig, category: BuildingCategory, season: SeasonName): SeasonalCoeff {
   return seasonal.coefficients[category][season];
 }

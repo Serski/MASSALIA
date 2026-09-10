@@ -253,7 +253,7 @@ export async function mapRoutes(app: FastifyInstance) {
       reply.code(result.code);
       return { error: result.error };
     }
-    return { report: result.report, reach: result.reach, force: result.force, fleet: result.fleet, roster: result.roster };
+    return { report: result.report, reach: result.reach, campaign: result.campaign, force: result.force, fleet: result.fleet, roster: result.roster };
   });
 
   app.get("/state", async (request) => {

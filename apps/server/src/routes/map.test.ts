@@ -27,6 +27,8 @@ async function loadModules() {
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
 type ReachView = {
+  now: string;
+  campaign: { season: string; open: boolean; opensAt: string | null };
   bases: { regionId: string; kind: string }[];
   force: { men: number; space: number; fast: boolean };
   fleet: { ships: Record<string, number>; range: number; space: number };
@@ -94,6 +96,9 @@ suite("/api/map/reach (integration)", () => {
     expect(res.statusCode).toBe(200);
     const v = res.json<ReachView>();
     expect(v.bases).toEqual([{ regionId: "R060", kind: "massalia" }]);
+    // Season 9 is a Spring: the campaign is open and no reopening instant is given.
+    expect(v.campaign).toEqual({ season: "Spring", open: true, opensAt: null });
+    expect(Math.abs(Date.parse(v.now) - Date.now())).toBeLessThan(10_000);
     expect(v.force).toEqual({ men: 5, space: 5, fast: false });
     expect(v.fleet).toEqual({ ships: { "trade-ship": 0, galley: 0 }, range: 0, space: 0 });
     expect(v.reach.R060).toBeUndefined();

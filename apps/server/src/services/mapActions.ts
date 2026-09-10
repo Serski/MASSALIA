@@ -3,6 +3,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { createDb, effectLog, playerCharacters, playerUnits, regionIntel, resources } from "@massalia/db";
 import {
   bandDef,
+  campaignSeason,
   fleetStats,
   formatGameDate,
   gameDate,
@@ -67,7 +68,7 @@ export type MapActReport = {
 };
 
 type Failure = { ok: false; code: number; error: string };
-export type MapActResult = Failure | { ok: true; report: MapActReport; reach: ReachView; force: ReachView["force"]; fleet: ReachView["fleet"]; roster: BarracksView["roster"] };
+export type MapActResult = Failure | { ok: true; report: MapActReport; reach: ReachView; campaign: ReachView["campaign"]; force: ReachView["force"]; fleet: ReachView["fleet"]; roster: BarracksView["roster"] };
 
 // "20 peltasts", "10 hoplites and 20 Cretan archers". Rows of the same unit
 // merge into one figure ("21 peltasts", not "7 peltasts, 7 peltasts and 7
@@ -140,6 +141,9 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
     await lockPlayer(tx, ctx.playerId);
     const settled = await settleAll(tx, ctx, now);
     const fail = (code: number, error: string) => ({ composureDays: settled.composureDays, result: { ok: false as const, code, error } });
+
+    // 0. Winter closes campaigns, before any other check.
+    if (!campaignSeason(now.getTime(), ctx.worldStartedMs).open) return fail(409, "The passes are closed until spring.");
 
     // 1. Target: a townless land region that is neither fog, Massalia's, nor ours.
     // Massalia's own ground answers as such before the towns rule (R060 holds a town).
@@ -335,5 +339,5 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
     return reachView(tx, ctx, now);
   });
   const barracks = await barracksView(ctx, now);
-  return { ok: true, report: outcome.result.report, reach, force: reach.force, fleet: reach.fleet, roster: barracks.roster };
+  return { ok: true, report: outcome.result.report, reach, campaign: reach.campaign, force: reach.force, fleet: reach.fleet, roster: barracks.roster };
 }

@@ -16,6 +16,7 @@ import {
   parseBuildingsContent,
   productionMultiplier,
   seasonAt,
+  campaignSeason,
   vendorUnitPrice,
   craftRawCost,
   materialCostForTier,
@@ -335,5 +336,21 @@ describe("Economy v2.1 — materials, staffing, craft & pops", () => {
     expect(t1.food).toBe(2); // 2 slaves × 1 food
     expect(t4.food).toBe(4); // 4 slaves × 1 food at T4
     expect(t4.food).toBeGreaterThan(t1.food);
+  });
+});
+
+describe("campaignSeason", () => {
+  const DAY = 86_400_000;
+  const t0 = Date.UTC(2000, 0, 1);
+  it("is closed in the opening Winter and opens at the first Spring instant", () => {
+    expect(campaignSeason(t0, t0)).toEqual({ season: "Winter", open: false, opensAtMs: t0 + DAY });
+    expect(campaignSeason(t0 + DAY - 1, t0)).toEqual({ season: "Winter", open: false, opensAtMs: t0 + DAY });
+    expect(campaignSeason(t0 + DAY, t0)).toEqual({ season: "Spring", open: true, opensAtMs: null });
+  });
+  it("the boundary into the second Winter: open a millisecond before, closed on the instant, open again a season later", () => {
+    expect(campaignSeason(t0 + 4 * DAY - 1, t0)).toEqual({ season: "Autumn", open: true, opensAtMs: null });
+    expect(campaignSeason(t0 + 4 * DAY, t0)).toEqual({ season: "Winter", open: false, opensAtMs: t0 + 5 * DAY });
+    expect(campaignSeason(t0 + 5 * DAY - 1, t0)).toEqual({ season: "Winter", open: false, opensAtMs: t0 + 5 * DAY });
+    expect(campaignSeason(t0 + 5 * DAY, t0)).toEqual({ season: "Spring", open: true, opensAtMs: null });
   });
 });

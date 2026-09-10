@@ -1479,6 +1479,8 @@ export type ReachEntry = {
 };
 
 export type MapReachView = {
+  now: string; // server time (ISO); countdowns anchor to this, not the device clock
+  campaign: { season: string; open: boolean; opensAt: string | null }; // closed in Winter
   bases: { regionId: string; kind: "massalia" | "colony" | "conquest" }[];
   force: { men: number; space: number; fast: boolean };
   fleet: { ships: Record<string, number>; range: number; space: number };

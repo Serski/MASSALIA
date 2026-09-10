@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { createDb, playerUnits, resources } from "@massalia/db";
-import { bandDef, computeReach, fleetStats, forceStats, HOME_POLITY_ID, unitDef, type ReachEntry, type ReachForceRow, type ReachShip, type Topology } from "@massalia/shared";
+import { bandDef, campaignSeason, computeReach, fleetStats, forceStats, HOME_POLITY_ID, unitDef, type ReachEntry, type ReachForceRow, type ReachShip, type Topology } from "@massalia/shared";
 import { getBandsContent, getShipsContent, getUnitsContent, isActive, type UnitRow } from "./barracks.js";
 import type { ActingContext } from "./buildings.js";
 import { listHoldings } from "./holdings.js";
@@ -19,7 +19,12 @@ type DbTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 export type Exec = DbTx | Db;
 
 export type BaseView = { regionId: string; kind: "massalia" | "colony" | "conquest" };
+export type CampaignView = { season: string; open: boolean; opensAt: string | null };
 export type ReachView = {
+  /** server time (ISO) — countdowns anchor to this, not the device clock */
+  now: string;
+  /** the campaign calendar: closed in Winter, with the instant the passes reopen */
+  campaign: CampaignView;
   bases: BaseView[];
   force: { men: number; space: number; fast: boolean };
   fleet: { ships: Record<string, number>; range: number; space: number };
@@ -88,5 +93,7 @@ export async function reachView(exec: Exec, ctx: ActingContext, now: Date, opts:
   const { counts, fleet } = await fleetInStock(exec, ctx);
   const home = await homeRegions(topology);
   const reach = computeReach({ topology, bases: opts.bases ?? [...baseIds], force, fleet, homeRegions: home });
-  return { bases, force: forceStats(force), fleet: { ships: counts, ...fleetStats(fleet) }, reach };
+  const cs = campaignSeason(now.getTime(), ctx.worldStartedMs);
+  const campaign: CampaignView = { season: cs.season, open: cs.open, opensAt: cs.opensAtMs === null ? null : new Date(cs.opensAtMs).toISOString() };
+  return { now: now.toISOString(), campaign, bases, force: forceStats(force), fleet: { ships: counts, ...fleetStats(fleet) }, reach };
 }
