@@ -524,6 +524,9 @@ export const api = {
     apiFetch<BarracksView>("/api/barracks/recruit", { method: "POST", body: { unitId, count } }),
   barracksHire: (bandId: string) => apiFetch<BarracksView>("/api/barracks/hire", { method: "POST", body: { bandId } }),
   barracksDisband: (rowId: string) => apiFetch<BarracksView>("/api/barracks/disband", { method: "POST", body: { rowId } }),
+  // Map reach (military prompt 3a): which land provinces the player's force can
+  // Attack, Raid or Colonise from its bases, with a one-line reason when not.
+  mapReach: () => apiFetch<MapReachView>("/api/map/reach"),
   craftGood: (good: string) => apiFetch<CraftResult>("/api/buildings/craft", { method: "POST", body: { good } }),
   // The hoplite's home army (Hoplite Step 1): rank ladder + daily salary.
   service: () => apiFetch<ServiceView>("/api/service"),
@@ -1447,4 +1450,24 @@ export type BarracksView = {
   roster: BarracksRosterRow[];
   offers: BarracksOffer[];
   activeBands: number;
+};
+
+// --- Map reach (GET /api/map/reach; mirrors packages/shared/src/reach.ts) ---
+
+export type ReachVerdict = { ok: boolean; reason?: string };
+
+export type ReachEntry = {
+  landSteps: number | null; // shortest land distance from any base, null if > 2
+  seaSteps: number | null; // fewest seas from any base's coast, null if none
+  attack: ReachVerdict;
+  raid: ReachVerdict;
+  colonise: ReachVerdict;
+};
+
+export type MapReachView = {
+  bases: { regionId: string; kind: "massalia" | "colony" | "conquest" }[];
+  force: { men: number; space: number; fast: boolean };
+  fleet: { ships: Record<string, number>; range: number; space: number };
+  // Keyed by region id; a region absent here keeps the legality matrix's own verdict.
+  reach: Record<string, ReachEntry>;
 };

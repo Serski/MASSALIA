@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { apiBaseUrl } from "../api.js";
+import { api, apiBaseUrl, type ReachEntry } from "../api.js";
 import { CULTURE_WEBP, POLITY_CREST, titleCase } from "../dashboard/shared.js";
-import { mapActionButtons } from "./mapActions.js";
+import { mapActionButtons, withReach } from "./mapActions.js";
 import "./World2Map.css";
 
 /**
@@ -325,7 +325,10 @@ function wallPips(level: number): string {
   return "■".repeat(n) + "□".repeat(5 - n);
 }
 
-export function World2Map({ fill = false }: { fill?: boolean } = {}) {
+// `refreshToken`: any value whose identity changes when the player's state was
+// refreshed (the dashboard passes its player object), so reach is refetched
+// after the barracks changes without polling.
+export function World2Map({ fill = false, refreshToken }: { fill?: boolean; refreshToken?: unknown } = {}) {
   const [world, setWorld] = useState<World | null>(null);
   const [politics, setPolitics] = useState<Politics | null>(null);
   const [status, setStatus] = useState("");
@@ -336,6 +339,9 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
   const [names, setNames] = useState<Record<string, string>>({});
   const [townStats, setTownStats] = useState<Record<string, TownStats>>({});
   const [military, setMilitary] = useState<MilitaryPayload>({ towns: {}, regions: {} });
+  // Reach per land region (null until fetched, or when not signed in): gates the
+  // Attack / Raid / Colonise buttons beyond the legality matrix.
+  const [reach, setReach] = useState<Record<string, ReachEntry> | null>(null);
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" && "matchMedia" in window ? window.matchMedia(MOBILE_QUERY).matches : false,
   );
@@ -368,6 +374,21 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
       })
       .catch(() => {});
   }, []);
+
+  // Reach: fetched when the map opens and again whenever the dashboard refreshes
+  // the player (a barracks change). Not signed in leaves the matrix's verdicts.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .mapReach()
+      .then((view) => {
+        if (!cancelled) setReach(view.reach ?? {});
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshToken]);
 
   const worldRect = useMemo<Rect | null>(
     () => (world ? { x: 0, y: 0, w: world.width, h: world.height } : null),
@@ -918,6 +939,13 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
     setSelectedTown(null);
   };
   const regionMil = selectedProvince ? military.regions[selectedProvince.id] : undefined;
+  // Reach for the open target: a town resolves to its region through world2.json.
+  const regionReach = selectedProvince ? reach?.[selectedProvince.id] : undefined;
+  const townReach = selectedTown ? reach?.[townRegionById.get(selectedTown) ?? ""] : undefined;
+  const regionActions = selectedProvince
+    ? withReach(mapActionButtons({ kind: "region", hasTown: selectedProvince.towns.length > 0, ownerId: selectedOwnerId }), regionReach)
+    : null;
+  const townActions = selectedTown ? withReach(mapActionButtons({ kind: "town", hasTown: true, ownerId: selectedOwnerId }), townReach) : null;
 
   const regionBody = selectedProvince ? (
     <>
@@ -964,12 +992,13 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
           <>
             <div className="w2map-info-label">Actions</div>
             <div className="w2map-actions">
-              {mapActionButtons({ kind: "region", hasTown: selectedProvince.towns.length > 0, ownerId: selectedOwnerId }).map((b) => (
+              {regionActions!.buttons.map((b) => (
                 <button key={b.type} type="button" className="w2map-action" disabled={!b.enabled} aria-disabled={!b.enabled} title={b.title}>
                   {b.label}
                 </button>
               ))}
             </div>
+            {isMobile && regionActions!.caption ? <p className="w2map-action-why">{regionActions!.caption}</p> : null}
           </>
         ) : null}
       </div>
@@ -1035,12 +1064,13 @@ export function World2Map({ fill = false }: { fill?: boolean } = {}) {
         {townMil?.source === "intel" ? <p className="w2map-stat-asof">as of {townMil.scoutedGameDate}</p> : null}
         <div className="w2map-info-label">Actions</div>
         <div className="w2map-actions">
-          {mapActionButtons({ kind: "town", hasTown: true, ownerId: selectedOwnerId }).map((b) => (
+          {townActions!.buttons.map((b) => (
             <button key={b.type} type="button" className="w2map-action" disabled={!b.enabled} aria-disabled={!b.enabled} title={b.title}>
               {b.label}
             </button>
           ))}
         </div>
+        {isMobile && townActions!.caption ? <p className="w2map-action-why">{townActions!.caption}</p> : null}
       </div>
     </>
   ) : null;

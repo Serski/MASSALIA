@@ -356,6 +356,13 @@ p.w2map-stat-asof {
   cursor: pointer;
 }
 
+/* Why a reach-gated action is greyed out, on touch (no hover titles). */
+.w2map-action-why {
+  margin: 6px 0 0;
+  color: var(--dash-stone-dim, #9b8f7d);
+  font-size: 11px;
+}
+
 .w2map-action:disabled {
   cursor: not-allowed;
   opacity: 0.72;

@@ -1,0 +1,114 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import crypto from "node:crypto";
+import { sql } from "drizzle-orm";
+import Fastify, { type FastifyInstance } from "fastify";
+import cookie from "@fastify/cookie";
+
+// ---------------------------------------------------------------------------
+// GET /api/map/reach through a minimal Fastify app (app.inject + a minted
+// session cookie): a session is required; the Massalia region never appears;
+// a player with one ready unit and no ships can Attack a land neighbour.
+// ---------------------------------------------------------------------------
+
+const dbUrl = process.env.DATABASE_URL ?? "";
+const suite = describe.runIf(dbUrl.includes("_test"));
+
+const DAY = 86_400_000;
+
+async function loadModules() {
+  const dbPkg = await import("@massalia/db");
+  const { mapRoutes } = await import("./map.js");
+  const { errorHandler } = await import("../errorHandler.js");
+  const buildings = await import("../services/buildings.js");
+  const barracks = await import("../services/barracks.js");
+  const mapGraph = await import("../services/mapGraph.js");
+  return { dbPkg, mapRoutes, errorHandler, buildings, barracks, mapGraph };
+}
+type Mods = Awaited<ReturnType<typeof loadModules>>;
+
+type ReachView = {
+  bases: { regionId: string; kind: string }[];
+  force: { men: number; space: number; fast: boolean };
+  fleet: { ships: Record<string, number>; range: number; space: number };
+  reach: Record<string, { landSteps: number | null; seaSteps: number | null; attack: { ok: boolean; reason?: string }; raid: { ok: boolean }; colonise: { ok: boolean } }>;
+};
+
+suite("/api/map/reach (integration)", () => {
+  let m: Mods;
+  let db: ReturnType<Mods["dbPkg"]["createDb"]>;
+  let app: FastifyInstance;
+  let worldId: string;
+  const now = new Date();
+  const startedAt = new Date(now.getTime() - 9.5 * DAY);
+
+  beforeAll(async () => {
+    m = await loadModules();
+    db = m.dbPkg.createDb();
+    await m.buildings.loadBuildingsContent();
+    await m.buildings.loadPopsContent();
+    await m.barracks.loadBarracksContent();
+    await m.mapGraph.loadMapGraph();
+    app = Fastify();
+    app.setErrorHandler(m.errorHandler);
+    await app.register(cookie, { secret: "test-session-secret-at-least-32-chars-long" });
+    await app.register(m.mapRoutes, { prefix: "/api/map" });
+    await app.ready();
+  });
+
+  afterAll(async () => {
+    await app.close();
+    await db.$client.end();
+  });
+
+  beforeEach(async () => {
+    await db.execute(sql`TRUNCATE TABLE player_units, player_holdings, player_levy, band_offers, effect_log, resources, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
+    await db.insert(m.dbPkg.houses).values({ slug: "test-house", name: "House Test", initial: "T", alignment: "c", stance: "s", motto: "m", patron: "p", crest: "c" }).onConflictDoNothing();
+    const world = (await db.insert(m.dbPkg.worlds).values({ name: "Reach Route Test", seed: "rrt", startedAt, endsAt: new Date(now.getTime() + 182 * DAY), status: "active" }).returning())[0]!;
+    worldId = world.id;
+  });
+
+  async function freshPlayer() {
+    const { users, players, playerCharacters, dynasties, sessions } = m.dbPkg;
+    const user = (await db.insert(users).values({ email: `u-${Math.random().toString(36).slice(2)}@t`, passwordHash: "x" }).returning())[0]!;
+    const player = (await db.insert(players).values({ worldId, userId: user.id, name: `Kleon-${Math.random().toString(36).slice(2, 8)}`, color: "#123456", houseSlug: "test-house" }).returning())[0]!;
+    const dynasty = (await db.insert(dynasties).values({ worldId, name: "House Test", prestige: 0, houseSlug: "test-house", foundingPlayerId: player.id, generation: 1 }).returning())[0]!;
+    await db.insert(playerCharacters).values({ playerId: player.id, worldId, houseSlug: "test-house", classId: "hoplite", dynastyId: dynasty.id, militia: 20, drachmae: 1000, startAge: 30, deathAge: 90 });
+    const token = crypto.randomBytes(16).toString("base64url");
+    await db.insert(sessions).values({ userId: user.id, tokenHash: crypto.createHash("sha256").update(token).digest("hex"), expiresAt: new Date(now.getTime() + DAY) });
+    return { token, playerId: player.id };
+  }
+  const get = (token?: string) => app.inject({ method: "GET", url: "/api/map/reach", headers: token ? { cookie: `massalia_session=${app.signCookie(token)}` } : {} });
+
+  it("requires a session", async () => {
+    expect((await get()).statusCode).toBe(401);
+  });
+
+  it("R060 is absent; with one ready unit and no ships a land neighbour is Attack ok and a sea-only target is not", async () => {
+    const p = await freshPlayer();
+    const recruitedAt = new Date(now.getTime() - 2 * DAY);
+    await db.insert(m.dbPkg.playerUnits).values({ worldId, ownerPlayerId: p.playerId, source: "trained", unitId: "hoplite", count: 5, startCount: 5, recruitedSeason: 7, readyAt: new Date(recruitedAt.getTime() + DAY), createdAt: recruitedAt });
+    // Upkeep for the settle the route runs first.
+    await db.insert(m.dbPkg.resources).values({ scope: "player", scopeId: p.playerId, type: "grain", amount: "1000", ratePerSecond: "0", lastUpdatedAt: startedAt });
+    await db.insert(m.dbPkg.resources).values({ scope: "player", scopeId: p.playerId, type: "oliveoil", amount: "1000", ratePerSecond: "0", lastUpdatedAt: startedAt });
+    const res = await get(p.token);
+    expect(res.statusCode).toBe(200);
+    const v = res.json<ReachView>();
+    expect(v.bases).toEqual([{ regionId: "R060", kind: "massalia" }]);
+    expect(v.force).toEqual({ men: 5, space: 5, fast: false });
+    expect(v.fleet).toEqual({ ships: { "trade-ship": 0, galley: 0 }, range: 0, space: 0 });
+    expect(v.reach.R060).toBeUndefined();
+    expect(v.reach.R174).toBeUndefined();
+    expect(v.reach.R046).toMatchObject({ landSteps: 1, attack: { ok: true }, raid: { ok: true }, colonise: { ok: true } });
+    const seaOnly = Object.values(v.reach).find((e) => e.landSteps === null && e.seaSteps !== null)!;
+    expect(seaOnly.attack.ok).toBe(false);
+    expect(seaOnly.attack.reason).toMatch(/fleet's range/);
+  });
+
+  it("a row still training does not count toward the force, so Attack fails for want of men", async () => {
+    const p = await freshPlayer();
+    await db.insert(m.dbPkg.playerUnits).values({ worldId, ownerPlayerId: p.playerId, source: "trained", unitId: "peltast", count: 5, startCount: 5, recruitedSeason: 9, readyAt: new Date(now.getTime() + DAY), createdAt: now });
+    const v = (await get(p.token)).json<ReachView>();
+    expect(v.force.men).toBe(0);
+    expect(v.reach.R046!.attack).toEqual({ ok: false, reason: "No men under arms." });
+  });
+});
