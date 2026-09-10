@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import crypto from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import Fastify, { type FastifyInstance, type LightMyRequestResponse } from "fastify";
 import cookie from "@fastify/cookie";
 
@@ -162,6 +162,28 @@ suite("/api/barracks (integration)", () => {
     expect(Math.abs(Date.parse(v.roster[0]!.contractEndAt!) - (Date.parse(v.now) + 2 * DAY))).toBeLessThan(1_000);
     expect(v.offers.find((o) => o.id === offers[0]!.id)!.hired).toBe(true);
     expect((await post(p.token, "hire", {})).statusCode).toBe(400);
+  });
+
+  it("POST /cancel: a batch in training is stood down with its men and gear returned; a trained row is 409; a bad body is 400", async () => {
+    const p = await freshPlayer({ goods: { timber: 20, leather: 20 } });
+    const recruited = await post(p.token, "recruit", { unitId: "peltast", count: 5 }); // 2 timber + 1 leather per man
+    expect(recruited.statusCode).toBe(200);
+    const row = recruited.json<View>().roster[0]!;
+    const cancelled = await post(p.token, "cancel", { rowId: row.id });
+    expect(cancelled.statusCode).toBe(200);
+    const v = cancelled.json<View>();
+    expect(v.roster).toEqual([]);
+    expect(v.levy.men).toBe(120);
+    const timber = (await db.select().from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scopeId, p.playerId), eq(m.dbPkg.resources.type, "timber"))))[0]!;
+    expect(Number(timber.amount)).toBe(20);
+    expect((await post(p.token, "cancel", { rowId: row.id })).statusCode).toBe(404);
+    expect((await post(p.token, "cancel", {})).statusCode).toBe(400);
+    // A row that finished training cannot be stood down.
+    const recruitedAt = new Date(now.getTime() - 2 * DAY);
+    const ready = (await db.insert(m.dbPkg.playerUnits).values({ worldId, ownerPlayerId: p.playerId, source: "trained", unitId: "peltast", count: 3, startCount: 3, recruitedSeason: 7, readyAt: new Date(recruitedAt.getTime() + DAY), createdAt: recruitedAt }).returning())[0]!;
+    const refused = await post(p.token, "cancel", { rowId: ready.id });
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json<{ error: string }>().error).toBe("Those men are already trained.");
   });
 
   it("POST /disband: a served row is released and men return; a fresh row is 409; an unknown row is 404", async () => {

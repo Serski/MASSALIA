@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0d0a08;color:#e6dccb;font-family:'EB Garamond',Georgia,serif;-webkit-font-smoothing:antialiased}
+a{color:#c9a45c;text-decoration:none}a:hover{color:#e4c684}
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+</style>
+</helmet>
+<div style="min-height:100vh;background:radial-gradient(1200px 500px at 30% -10%,#2a1d12 0%,#0d0a08 70%)">
+  <div style="display:flex;align-items:center;gap:22px;padding:18px 40px;border-bottom:1px solid #2b2119">
+    <div style="width:34px;height:34px;border-radius:50%;border:1px solid #8a6d3a;background:radial-gradient(circle at 40% 35%,#6b5432,#2a1d12)"></div>
+    <div style="font-family:'Cormorant Garamond',serif;font-weight:700;font-size:30px;letter-spacing:.22em;color:#d9b66a">MASSALIA</div>
+    <div style="display:flex;align-items:center;gap:10px;font-size:14px;letter-spacing:.12em;font-weight:500;color:#e6dccb">
+      <span style="width:7px;height:7px;border-radius:50%;background:#7fb069;display:inline-block"></span>
+      <span>SPRING, 277 BC</span><span style="color:#7fb069">· ENDS IN 89 DAYS</span>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:12px">
+      <div style="border:1px solid #3a2e22;border-radius:8px;padding:8px 18px;font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:#e6dccb">5,135 <span style="font-size:11px;letter-spacing:.14em;color:#a08b6a;font-family:'EB Garamond',serif;font-weight:500">DRACHMAE</span></div>
+      <div style="border:1px solid #c9a45c;border-radius:8px;padding:8px 18px;font-size:13px;letter-spacing:.14em;font-weight:600;color:#e4c684">INVENTORY<div style="font-size:9px;letter-spacing:.12em;color:#a08b6a;font-weight:400">RES · ITEMS · UNITS</div></div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:240px minmax(0,1fr)">
+    <nav style="border-right:1px solid #2b2119;padding:28px 16px;display:flex;flex-direction:column;gap:4px;font-size:14px;letter-spacing:.14em;font-weight:600;color:#e6dccb">
+      <div style="padding:12px 20px">COURT</div><div style="padding:12px 20px">LEDGER</div><div style="padding:12px 20px">MARKET</div><div style="padding:12px 20px">FAMILY</div>
+      <div style="padding:12px 20px;background:linear-gradient(90deg,#2f2418,#1b140e);border-left:2px solid #c9a45c;border-radius:0 6px 6px 0;color:#e4c684">BARRACKS</div>
+      <div style="padding:12px 20px">POLITICS</div><div style="padding:12px 20px">ATLAS</div><div style="padding:12px 20px">STANDINGS</div>
+      <div style="height:1px;background:#2b2119;margin:10px 0"></div><div style="padding:12px 20px">GUIDE</div>
+    </nav>
+    <main style="padding:36px 40px 60px;max-width:1500px;display:flex;flex-direction:column;gap:28px">
+      <div style="font-size:13px;letter-spacing:.2em;font-weight:700;color:#c9a45c">BARRACKS · SEASON 93</div>
+
+      <div style="display:flex;gap:36px;flex-wrap:wrap;padding:18px 24px;border:1px solid #2b2119;border-radius:8px;background:#14100c">
+        <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:11px;letter-spacing:.18em;color:#a08b6a">LEVY</span><span style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:600;color:#e6dccb">121 <span style="font-size:15px;color:#a08b6a;font-family:'EB Garamond',serif;white-space:nowrap">of 323 under arms</span></span></div>
+        <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:11px;letter-spacing:.18em;color:#a08b6a">COME OF AGE</span><span style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:600;color:#e6dccb">+10 <span style="font-size:15px;color:#a08b6a;font-family:'EB Garamond',serif">each year</span></span></div>
+        <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:11px;letter-spacing:.18em;color:#a08b6a">DAILY UPKEEP</span><span style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:600;color:#e6dccb">200 grain · 114 oil · 7 wine · 7 chicken · 4 herbs · 130 dr</span></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:28px">
+        <section style="display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:center;gap:16px;font-size:12px;letter-spacing:.2em;color:#c9a45c">AT HOME<div style="flex:1;height:1px;background:#3a2e22"></div><span style="color:#a08b6a;letter-spacing:.06em;font-size:13px">199 men</span></div>
+          <div style="border:1px solid #33281d;border-radius:8px;background:#14100c;overflow:hidden">
+            <div style="padding:10px 16px;font-size:11px;letter-spacing:.18em;color:#a08b6a;background:#1b140e;border-bottom:1px solid #2b2119">LEVY · 144 men</div>
+            <sc-for list="{{ levy }}" as="r" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:32px minmax(0,1fr) auto;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid #221a13">
+                <div style="width:32px;height:32px;border-radius:50%;border:1px solid #8a6d3a;background:radial-gradient(circle at 40% 35%,#7a3a22,#2a1d12)"></div>
+                <div style="min-width:0"><div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:#f0e6d4">{{ r.name }} <span style="color:#c9a45c">· {{ r.count }}</span></div><div style="font-size:12px;color:#a08b6a">{{ r.upkeep }}</div><div style="font-size:12px;color:#7d6b52;font-style:italic">{{ r.service }}</div></div>
+                <button style="height:28px;padding:0 12px;border:1px solid #3a2e22;background:transparent;color:#a08b6a;border-radius:4px;font-size:10px;letter-spacing:.14em;cursor:pointer" style-hover="border-color:#c9a45c;color:#e4c684">DISBAND</button>
+              </div>
+            </sc-for>
+            <div style="padding:10px 16px;font-size:11px;letter-spacing:.18em;color:#a08b6a;background:#1b140e;border-bottom:1px solid #2b2119">MERCENARIES · 55 men</div>
+            <sc-for list="{{ hiredBands }}" as="r" hint-placeholder-count="2">
+              <div style="display:grid;grid-template-columns:32px minmax(0,1fr) auto;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid #221a13">
+                <div style="width:32px;height:32px;border-radius:50%;border:1px solid #8a6d3a;background:radial-gradient(circle at 40% 35%,#5a4a2c,#2a1d12)"></div>
+                <div style="min-width:0"><div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:#f0e6d4">{{ r.name }} <span style="color:#c9a45c">· {{ r.count }}</span></div><div style="font-size:12px;color:#a08b6a">{{ r.upkeep }}</div><div style="font-size:12px;color:#7d6b52;font-style:italic">{{ r.service }}</div></div>
+                <button style="height:28px;padding:0 12px;border:1px solid #3a2e22;background:transparent;color:#a08b6a;border-radius:4px;font-size:10px;letter-spacing:.14em;cursor:pointer" style-hover="border-color:#c9a45c;color:#e4c684">DISBAND</button>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+
+        <div style="display:flex;flex-direction:column;gap:28px">
+          <section style="display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;align-items:center;gap:16px;font-size:12px;letter-spacing:.2em;color:#c9a45c">AWAY · RETURNING<div style="flex:1;height:1px;background:#3a2e22"></div><span style="color:#a08b6a;letter-spacing:.06em;font-size:13px">76 men</span></div>
+            <div style="border:1px solid #4a3a28;border-radius:8px;background:#110d0a;padding:6px 0">
+              <sc-for list="{{ away }}" as="t" hint-placeholder-count="3">
+                <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center;padding:10px 16px;border-bottom:1px solid #221a13">
+                  <div style="min-width:0">
+                    <div style="display:flex;justify-content:space-between;gap:10px;font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:700;color:#e6dccb"><span style="white-space:nowrap">{{ t.name }} <span style="color:#c9a45c">· {{ t.count }}</span></span><span style="flex:none;font-family:'EB Garamond',serif;font-size:13px;font-weight:400;color:#a08b6a;font-variant-numeric:tabular-nums">{{ t.left }}</span></div>
+                    <div style="font-size:12px;color:#a08b6a;margin-top:2px">{{ t.mission }}</div>
+                    <div style="height:3px;background:#221a13;border-radius:2px;margin-top:6px;overflow:hidden"><div style="height:100%;background:linear-gradient(90deg,#5a7a4a,#7fb069);width:{{ t.pct }}"></div></div>
+                  </div>
+                  <span style="font-size:10px;letter-spacing:.16em;color:#7fb069;font-weight:600;white-space:nowrap">{{ t.kind }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+
+          <section style="display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;align-items:center;gap:16px;font-size:12px;letter-spacing:.2em;color:#c9a45c">IN TRAINING<div style="flex:1;height:1px;background:#3a2e22"></div><span style="color:#a08b6a;letter-spacing:.06em;font-size:13px">7 men</span></div>
+            <div style="border:1px dashed #4a3a28;border-radius:8px;background:#110d0a;padding:6px 0">
+              <sc-for list="{{ training }}" as="t" hint-placeholder-count="4">
+                <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center;padding:10px 16px;border-bottom:1px solid #221a13">
+                  <div style="min-width:0">
+                    <div style="display:flex;justify-content:space-between;gap:10px;font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:700;color:#e6dccb"><span style="white-space:nowrap">{{ t.name }} <span style="color:#c9a45c">· {{ t.count }}</span></span><span style="flex:none;font-family:'EB Garamond',serif;font-size:13px;font-weight:400;color:#a08b6a;font-variant-numeric:tabular-nums">{{ t.left }}</span></div>
+                    <div style="height:3px;background:#221a13;border-radius:2px;margin-top:6px;overflow:hidden"><div style="height:100%;background:linear-gradient(90deg,#a9863f,#d9b66a);width:{{ t.pct }}"></div></div>
+                  </div>
+                  <button style="height:26px;padding:0 10px;border:1px solid #3a2e22;background:transparent;color:#7d6b52;border-radius:4px;font-size:10px;letter-spacing:.14em;cursor:pointer" style-hover="border-color:#c9a45c;color:#e4c684">CANCEL</button>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <section style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:center;gap:16px;font-size:12px;letter-spacing:.2em;color:#c9a45c">TRAINING GROUND<div style="flex:1;height:1px;background:#3a2e22"></div></div>
+        <div style="border:1px solid #33281d;border-radius:8px;background:#14100c;overflow:hidden">
+          <sc-for list="{{ trainable }}" as="u" hint-placeholder-count="4">
+            <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px 20px;padding:12px 16px;border-bottom:1px solid #221a13">
+              <div style="display:flex;align-items:center;gap:12px;width:180px;flex:none">
+                <div style="width:36px;height:36px;border-radius:50%;border:1px solid #8a6d3a;background:radial-gradient(circle at 40% 35%,#7a3a22,#2a1d12);flex:none"></div>
+                <div style="min-width:0"><div style="font-family:'Cormorant Garamond',serif;font-size:19px;font-weight:700;line-height:1.1;color:#f0e6d4">{{ u.name }}</div><div style="font-size:11px;letter-spacing:.14em;color:#a08b6a">{{ u.role }}</div></div>
+              </div>
+              <div style="flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:4px">
+                <div style="display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:#bfae93;font-variant-numeric:tabular-nums;white-space:nowrap">
+                <sc-for list="{{ u.stats }}" as="s" hint-placeholder-count="6">
+                  <span><span style="font-size:9px;letter-spacing:.12em;color:#7d6b52">{{ s.k }}</span> <span style="color:#e6dccb;font-weight:500">{{ s.v }}</span></span>
+                </sc-for>
+              </div>
+                <div style="font-size:12px;color:#bfae93;line-height:1.4"><span style="color:#7d6b52;font-size:10px;letter-spacing:.12em">GEAR</span> {{ u.gear }}<span style="color:#4a3a28;margin:0 8px">|</span><span style="color:#7d6b52;font-size:10px;letter-spacing:.12em">UPKEEP</span> {{ u.upkeep }}<span style="color:#4a3a28;margin:0 8px">|</span><span style="color:#7d6b52;font-size:10px;letter-spacing:.12em">TRAINS</span> {{ u.trains }}</div>
+              </div>
+              <div style="display:flex;gap:6px;flex:none;margin-left:auto">
+                <button onClick="{{ u.dec }}" style="width:30px;height:30px;border:1px solid #3a2e22;background:#0f0b08;color:#a08b6a;border-radius:4px;cursor:pointer;font-size:16px">−</button>
+                <input type="number" value="{{ u.qty }}" onChange="{{ u.set }}" style="width:44px;height:30px;box-sizing:border-box;border:1px solid #3a2e22;background:#0f0b08;color:#e6dccb;text-align:center;border-radius:4px;font-family:'EB Garamond',serif;font-size:15px">
+                <button onClick="{{ u.inc }}" style="width:30px;height:30px;border:1px solid #3a2e22;background:#0f0b08;color:#a08b6a;border-radius:4px;cursor:pointer;font-size:16px">+</button>
+                <button style="height:30px;padding:0 18px;border:none;border-radius:4px;background:linear-gradient(180deg,#d9b66a,#a9863f);color:#1b140e;font-size:11px;letter-spacing:.14em;font-weight:700;cursor:pointer;white-space:nowrap" style-hover="background:linear-gradient(180deg,#e4c684,#b8934a)">RECRUIT {{ u.qty }}</button>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+
+      <section style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:center;gap:16px;font-size:12px;letter-spacing:.2em;color:#c9a45c">MERCENARY MARKET<div style="flex:1;height:1px;background:#3a2e22"></div><span style="color:#a08b6a;letter-spacing:.06em;font-size:13px">Three bands in the city · 2 of 2 under contract</span></div>
+        <div style="border:1px solid #33281d;border-radius:8px;background:#14100c;overflow:hidden">
+          <sc-for list="{{ mercs }}" as="m" hint-placeholder-count="3">
+            <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px 20px;padding:12px 16px;border-bottom:1px solid #221a13">
+              <div style="display:flex;align-items:center;gap:12px;width:220px;flex:none">
+                <div style="width:36px;height:36px;border-radius:50%;border:1px solid #8a6d3a;background:radial-gradient(circle at 40% 35%,#5a4a2c,#2a1d12);flex:none"></div>
+                <div style="min-width:0"><div style="font-family:'Cormorant Garamond',serif;font-size:19px;font-weight:700;line-height:1.1;color:#f0e6d4">{{ m.name }}</div><div style="font-size:11px;letter-spacing:.14em;color:#a08b6a">{{ m.size }}</div></div>
+              </div>
+              <div style="flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:4px">
+                <div style="display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:#bfae93;font-variant-numeric:tabular-nums;white-space:nowrap">
+                <sc-for list="{{ m.stats }}" as="s" hint-placeholder-count="6">
+                  <span><span style="font-size:9px;letter-spacing:.12em;color:#7d6b52">{{ s.k }}</span> <span style="color:#e6dccb;font-weight:500">{{ s.v }}</span></span>
+                </sc-for>
+              </div>
+                <div style="font-size:12px;color:#bfae93;line-height:1.4"><span style="color:#7d6b52;font-size:10px;letter-spacing:.12em">UPKEEP</span> {{ m.upkeep }}<span style="color:#4a3a28;margin:0 8px">|</span><span style="color:#7d6b52;font-size:10px;letter-spacing:.12em">CONTRACT</span> {{ m.contract }}</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;flex:none;margin-left:auto">
+                <sc-if value="{{ m.hired }}" hint-placeholder-val="{{ true }}">
+                  <span style="font-size:11px;letter-spacing:.16em;color:#7fb069;font-weight:600">● HIRED</span>
+                </sc-if>
+                <sc-if value="{{ m.open }}" hint-placeholder-val="{{ false }}">
+                  <span style="font-size:12px;color:#a08b6a;font-style:italic">Two bands is all the city will feed.</span>
+                  <button style="height:30px;padding:0 16px;border:1px solid #3a2e22;background:transparent;color:#6a5a45;border-radius:4px;font-size:11px;letter-spacing:.14em;cursor:not-allowed">HIRE</button>
+                </sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { qty: { Peltast: 1, Ekdromos: 1, Hoplite: 1, Hippeis: 1 } };
+  st(a,d,m,mo,s,sp){return [{k:'ATK',v:a},{k:'DEF',v:d},{k:'MSL',v:m},{k:'MOR',v:mo},{k:'SPD',v:s},{k:'SPC',v:sp}];}
+  renderVals() {
+    const q = this.state.qty;
+    const setQ = (n, v) => this.setState(s => ({ qty: { ...s.qty, [n]: Math.max(1, v) } }));
+    const base = [
+      {name:'Peltast',role:'SKIRMISH',gear:'2 timber · 1 leather',upkeep:'1 grain, 1 oil a day',trains:'24h',stats:this.st(3,2,5,4,8,1)},
+      {name:'Ekdromos',role:'LINE',gear:'1 timber · 1 leather · 1 iron',upkeep:'1 grain, 1 oil a day',trains:'24h',stats:this.st(5,4,2,5,6,1)},
+      {name:'Hoplite',role:'LINE',gear:'1 timber · 1 iron · 2 tin',upkeep:'2 grain, 1 oil a day',trains:'48h',stats:this.st(7,8,0,7,3,1)},
+      {name:'Hippeis',role:'MOUNTED',gear:'2 leather · 1 iron · 2 wool · 1 horse',upkeep:'3 grain, 1 oil a day',trains:'48h',stats:this.st(6,4,2,6,10,3)},
+    ];
+    const trainable = base.map(u => ({...u, qty:q[u.name], inc:()=>setQ(u.name,q[u.name]+1), dec:()=>setQ(u.name,q[u.name]-1), set:e=>setQ(u.name,parseInt(e.target.value)||1)}));
+    const mercs = [
+      {name:'Etruscan hoplites',size:'20 MEN · LINE',upkeep:'90 dr, 3 wine, 3 chicken, 2 herbs a day',contract:'48h',stats:this.st(6,7,0,6,3,1),hired:true,open:false},
+      {name:'Syracusan hoplites',size:'20 MEN · LINE',upkeep:'110 dr, 3 wine, 3 chicken, 2 herbs a day',contract:'48h',stats:this.st(7,8,0,7,3,1),hired:false,open:true},
+      {name:'Volcae irregulars',size:'40 MEN · LINE',upkeep:'40 dr, 4 wine, 4 chicken, 2 herbs a day',contract:'48h',stats:this.st(4,2,1,3,6,1),hired:true,open:false},
+    ];
+    const levy = [
+      {name:'Hoplite',count:'26 of 30',upkeep:'2 grain · 1 oil a day per man · 52 grain · 26 oil for the row',service:"Two seasons' service first."},
+      {name:'Ekdromos',count:'28 of 30',upkeep:'1 grain · 1 oil a day per man · 28 grain · 28 oil for the row',service:"Two seasons' service first. 21h 29m to go."},
+      {name:'Hippeis',count:'30',upkeep:'3 grain · 1 oil a day per man · 90 grain · 30 oil for the row',service:"Two seasons' service first."},
+      {name:'Peltast',count:'30',upkeep:'1 grain · 1 oil a day per man · 30 grain · 30 oil for the row',service:"Two seasons' service first. 21h 29m to go."},
+    ];
+    const hiredBands = [
+      {name:'Volcae irregulars',count:'35 of 40',upkeep:'4 wine · 4 chicken · 2 herbs · 40 drachmae a day · contract 1d 21h',service:"Two seasons' service first. 1d 21h to go."},
+      {name:'Etruscan hoplites',count:'20',upkeep:'3 wine · 3 chicken · 2 herbs · 90 drachmae a day · contract 1d 23h',service:"Two seasons' service first. 1d 23h to go."},
+    ];
+    const training = [
+      {name:'Peltast',count:1,left:'17:43:29',pct:'26%'},
+      {name:'Ekdromos',count:1,left:'18:25:57',pct:'23%'},
+      {name:'Ekdromos',count:1,left:'18:26:17',pct:'23%'},
+      {name:'Ekdromos',count:4,left:'18:31:23',pct:'22%'},
+    ];
+    const away = [
+      {name:'Hippeis',count:30,kind:'RAID',mission:'Raiding the Ligurian coast',left:'06:12:40',pct:'70%'},
+      {name:'Peltast',count:26,kind:'SCOUT',mission:'Scouting the Rhône valley',left:'02:48:05',pct:'88%'},
+      {name:'Etruscan hoplites',count:20,kind:'ATTACK',mission:'Marching on Olbia',left:'1d 04:30:12',pct:'35%'},
+    ];
+    return { trainable, mercs, levy, hiredBands, training, away };
+  }
+}
+</script>
+</body>
+</html>

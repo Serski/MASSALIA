@@ -389,7 +389,7 @@ suite("Barracks (integration)", () => {
       await db.update(m.dbPkg.playerUnits).set({ movingTo: "R060", arrivesAt: at(9.5) }).where(eq(m.dbPkg.playerUnits.id, back.id));
       // A peltast row coming home with no peltasts at the base lands alone.
       const lone = await insertRow(ctx, { source: "trained", unitId: "peltast", count: 5, recruitedSeason: 6, readyAt: 7, createdSeason: 6 });
-      await db.update(m.dbPkg.playerUnits).set({ movingTo: "R060", arrivesAt: at(9.5) }).where(eq(m.dbPkg.playerUnits.id, lone.id));
+      await db.update(m.dbPkg.playerUnits).set({ movingTo: "R060", arrivesAt: at(9.5), mission: { kind: "raid", regionId: "R046", departedAt: at(9).toISOString() } }).where(eq(m.dbPkg.playerUnits.id, lone.id));
       // Two bands of the same company never fold together.
       await insertRow(ctx, { source: "band", unitId: "volcae-irregulars", count: 40, recruitedSeason: 5, contractEndAt: 30, createdSeason: 5 });
       const bandBack = await insertRow(ctx, { source: "band", unitId: "volcae-irregulars", count: 40, recruitedSeason: 6, contractEndAt: 30, createdSeason: 6 });
@@ -399,7 +399,7 @@ suite("Barracks (integration)", () => {
       const after = await rows(ctx);
       expect(after.find((r) => r.id === back.id)).toBeUndefined();
       expect(after.find((r) => r.id === home.id)).toMatchObject({ count: 30, startCount: 30, createdAt: at(6), basedAt: "R060", movingTo: null, arrivesAt: null });
-      expect(after.find((r) => r.id === lone.id)).toMatchObject({ count: 5, basedAt: "R060", movingTo: null, arrivesAt: null });
+      expect(after.find((r) => r.id === lone.id)).toMatchObject({ count: 5, basedAt: "R060", movingTo: null, arrivesAt: null, mission: null });
       expect(after.filter((r) => r.unitId === "volcae-irregulars")).toHaveLength(2);
       const arrivals = (await logs(characterId, "barracks_arrive")).map((e) => e.detail as { unitId: string; mergedInto?: string });
       expect(arrivals.find((a) => a.unitId === "hoplite")?.mergedInto).toBe(home.id);
@@ -491,6 +491,32 @@ suite("Barracks (integration)", () => {
       // Deterministic: the same seed rolled again would give the same answer.
       const seed = String(at(11).getTime());
       expect(m.shared.seededRoll([renewId, seed])).toBe(m.shared.seededRoll([renewId, seed]));
+    });
+  });
+
+  describe("cancel training", () => {
+    it("returns the men to the levy and the gear to stock exactly, deletes the row and logs it; a trained row is refused", async () => {
+      const { ctx, characterId } = await makePlayer({ drachmae: 100_000 });
+      await giveAll(ctx, { timber: 20, iron: 20, tin: 20, grain: 1000, oliveoil: 1000 });
+      const r = await m.barracks.recruitUnits(ctx, "hoplite", 5, at(9)); // gear per man: timber 1, iron 1, tin 2
+      expect(r).toMatchObject({ ok: true, levy: 115 });
+      const rowId = (r as { rowId: string }).rowId;
+      expect(await stock(ctx, "tin")).toBe(10);
+      const c = await m.barracks.cancelTraining(ctx, rowId, at(9.5));
+      expect(c).toMatchObject({ ok: true, unitId: "hoplite", count: 5, returnedToLevy: 5, gearReturned: { timber: 5, iron: 5, tin: 10 } });
+      expect(await stock(ctx, "timber")).toBe(20);
+      expect(await stock(ctx, "iron")).toBe(20);
+      expect(await stock(ctx, "tin")).toBe(20);
+      expect((await levy(ctx))!.men).toBe(120);
+      expect(await rows(ctx)).toHaveLength(0);
+      expect((await logs(characterId, "barracks_cancel")).map((e) => e.detail)).toEqual([{ unitId: "hoplite", count: 5, gearReturned: { timber: 5, iron: 5, tin: 10 }, source: "player" }]);
+      // Once trained, the batch cannot be stood down; a band never can.
+      const r2 = await m.barracks.recruitUnits(ctx, "hoplite", 5, at(9.5));
+      const trainedId = (r2 as { rowId: string }).rowId;
+      expect(await m.barracks.cancelTraining(ctx, trainedId, at(11.5))).toMatchObject({ ok: false, code: 409, error: "Those men are already trained." });
+      const band = await insertRow(ctx, { source: "band", unitId: "volcae-irregulars", count: 40, recruitedSeason: 9, contractEndAt: 20 });
+      expect(await m.barracks.cancelTraining(ctx, band.id, at(12))).toMatchObject({ ok: false, code: 409, error: "Only men in training can be stood down." });
+      expect(await m.barracks.cancelTraining(ctx, "not-a-uuid", at(12))).toMatchObject({ ok: false, code: 404 });
     });
   });
 

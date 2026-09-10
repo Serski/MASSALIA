@@ -171,6 +171,12 @@ async function getOrCreateResource(exec: Exec, playerId: string, type: string, n
   return inserted[0]!;
 }
 
+// Relative stock credit on one resources row (gear coming back on a cancel).
+async function creditResource(exec: Exec, rowId: string, qty: number): Promise<void> {
+  if (qty <= 0) return;
+  await exec.update(resources).set({ amount: sql`${resources.amount} + ${String(qty)}::numeric` }).where(eq(resources.id, rowId));
+}
+
 // Guarded relative stock debit; false when the stock is short (nothing written).
 async function debitResource(exec: Exec, rowId: string, qty: number): Promise<boolean> {
   const rows = await exec
@@ -533,7 +539,7 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
       await exec.delete(playerUnits).where(eq(playerUnits.id, r.id));
       await logEffect(exec, characterId, "barracks_arrive", { unitId: r.unitId, count: r.count, from: r.basedAt, to: r.movingTo, mergedInto: target.id, source: "barracks" });
     } else {
-      await exec.update(playerUnits).set({ basedAt: r.movingTo, movingTo: null, arrivesAt: null }).where(eq(playerUnits.id, r.id));
+      await exec.update(playerUnits).set({ basedAt: r.movingTo, movingTo: null, arrivesAt: null, mission: null }).where(eq(playerUnits.id, r.id));
       await logEffect(exec, characterId, "barracks_arrive", { unitId: r.unitId, count: r.count, from: r.basedAt, to: r.movingTo, source: "barracks" });
     }
     out.arrived.push({ rowId: r.id, unitId: r.unitId, source: r.source, count: r.count });
@@ -655,6 +661,34 @@ export async function hireBand(ctx: ActingContext, bandId: string, now: Date): P
 function releaseAtMs(row: Pick<UnitRow, "source" | "createdAt">, unitsC: UnitsContent, bandsC: BandsContent): number {
   const seasons = row.source === "trained" ? unitsC.minServiceSeasons : bandsC.contract.termSeasons;
   return row.createdAt.getTime() + seasons * MS_PER_DAY;
+}
+
+export type CancelResult = Failure | { ok: true; rowId: string; unitId: string; count: number; returnedToLevy: number; gearReturned: Record<string, number> };
+
+// Stand down a batch still in training: the men go back to the levy and the
+// gear that raised them comes back, good for good (gear × count on the same
+// stock rows recruitUnits debits). A batch already trained is refused.
+export async function cancelTraining(ctx: ActingContext, rowId: string, now: Date): Promise<CancelResult> {
+  if (!UUID_RE.test(rowId)) return { ok: false, code: 404, error: "No such unit." };
+  const unitsC = getUnitsContent();
+  return mutate<CancelResult>(ctx, now, async (tx, composureDays) => {
+    const fail = (code: number, error: string): Outcome<CancelResult> => ({ composureDays, result: { ok: false, code, error } });
+    const row = (await ownedUnitRows(tx, ctx)).find((r) => r.id === rowId);
+    if (!row) return fail(404, "No such unit.");
+    if (row.source !== "trained") return fail(409, "Only men in training can be stood down.");
+    if (row.readyAt === null || row.readyAt.getTime() <= now.getTime()) return fail(409, "Those men are already trained.");
+    const def = unitDef(unitsC, row.unitId);
+    const gearReturned: Record<string, number> = {};
+    for (const [good, qty] of Object.entries(def?.gear ?? {})) {
+      const stock = await getOrCreateResource(tx, ctx.playerId, good, now);
+      await creditResource(tx, stock.id, qty * row.count);
+      gearReturned[good] = qty * row.count;
+    }
+    await levyReturn(tx, ctx, row.count);
+    await tx.delete(playerUnits).where(eq(playerUnits.id, row.id));
+    await logEffect(tx, await characterIdFor(tx, ctx.playerId), "barracks_cancel", { unitId: row.unitId, count: row.count, gearReturned, source: "player" });
+    return { composureDays, result: { ok: true, rowId: row.id, unitId: row.unitId, count: row.count, returnedToLevy: row.count, gearReturned } };
+  });
 }
 
 export type DisbandResult = Failure | { ok: true; rowId: string; unitId: string; source: "trained" | "band"; count: number; returnedToLevy: number };

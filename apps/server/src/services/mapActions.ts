@@ -372,7 +372,8 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
     }
 
     // 8. Recovery for every surviving participant.
-    for (const r of rows) await tx.update(playerUnits).set({ movingTo: destination, arrivesAt }).where(eq(playerUnits.id, r.id));
+    const mission = { kind: input.type, regionId, departedAt: now.toISOString() };
+    for (const r of rows) await tx.update(playerUnits).set({ movingTo: destination, arrivesAt, mission }).where(eq(playerUnits.id, r.id));
 
     // 9. The report on the character, with the Chronicle payload alongside.
     await tx.insert(effectLog).values({ characterId: character.id, kind: "map_action", detail: { ...report, chronicle, source: "map" }, createdAt: now });

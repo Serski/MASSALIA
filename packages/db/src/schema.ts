@@ -861,12 +861,19 @@ export const playerUnits = pgTable("player_units", {
   basedAt: text("based_at").notNull().default("R060"),
   movingTo: text("moving_to"),
   arrivesAt: timestamp("arrives_at", { withTimezone: true }),
+  // What a row on the march is doing (0056): set by the map action that sent it,
+  // cleared by the settle when it arrives. NULL at home.
+  mission: jsonb("mission").$type<UnitMission | null>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   sourceCheck: check("player_units_source_check", sql`${table.source} IN ('trained', 'band')`),
   countCheck: check("player_units_count_check", sql`${table.count} >= 0`),
   ownerIdx: index("player_units_owner_idx").on(table.worldId, table.ownerPlayerId),
 }));
+
+export const UNIT_MISSION_KINDS = ["scout", "raid", "attack", "move"] as const;
+export type UnitMissionKind = (typeof UNIT_MISSION_KINDS)[number];
+export type UnitMission = { kind: UnitMissionKind; regionId: string; departedAt: string };
 
 export const HOLDING_KINDS = ["colony", "conquest"] as const;
 export type HoldingKind = (typeof HOLDING_KINDS)[number];

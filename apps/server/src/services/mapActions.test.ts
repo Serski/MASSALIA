@@ -147,7 +147,7 @@ suite("Map actions (integration)", () => {
     const intel = (await db.select().from(m.dbPkg.regionIntel).where(and(eq(m.dbPkg.regionIntel.dynastyId, dynastyId), eq(m.dbPkg.regionIntel.regionId, "R046"))))[0]!;
     expect(intel).toMatchObject({ warband: 100 });
     expect(typeof intel.scoutedGameDate).toBe("string");
-    expect((await rows(ctx)).find((x) => x.id === peltasts.id)).toMatchObject({ movingTo: "R060", arrivesAt: recovered(at(9), 1), count: 10 });
+    expect((await rows(ctx)).find((x) => x.id === peltasts.id)).toMatchObject({ movingTo: "R060", arrivesAt: recovered(at(9), 1), count: 10, mission: { kind: "scout", regionId: "R046", departedAt: at(9).toISOString() } });
     // The moving party is out of the roster's force.
     expect(r.force.men).toBe(10); // the hoplites still stand
     expect(await logs(characterId, "map_action")).toHaveLength(1);
@@ -170,7 +170,7 @@ suite("Map actions (integration)", () => {
     expect(await stock(ctx, "grain")).toBe(5000 - 3 * 40 + killed * 5); // 3 whole days after ready_at (at 6) × 40 peltasts × 1 grain, then the plunder
     expect(await warband("R046")).toBe(20 - killed);
     const row = (await rows(ctx)).find((x) => x.id === peltasts.id)!;
-    expect(row).toMatchObject({ movingTo: "R060", arrivesAt: recovered(at(9), 1), count: 40 - r.report.attacker.losses });
+    expect(row).toMatchObject({ movingTo: "R060", arrivesAt: recovered(at(9), 1), count: 40 - r.report.attacker.losses, mission: { kind: "raid", regionId: "R046", departedAt: at(9).toISOString() } });
     expect((await logs(characterId, "battle_loss")).length).toBe(r.report.attacker.losses > 0 ? 1 : 0);
     expect(await holdingsOf(ctx)).toHaveLength(0);
     expect(r.report.line).toMatch(/^Raided Salyes with 40 peltasts: \d+ tribesm[ae]n slain, (none|\d+) of ours lost, \d+ drachmae and \d+ grain of plunder\.$/);
