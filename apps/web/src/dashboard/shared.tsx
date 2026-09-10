@@ -3,7 +3,7 @@ import { webAssetUrl, type PlayerState, type FestivalLive, type OlympiadStatus }
 import { assetPath, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 
-export type DashboardSection = "court" | "ledger" | "market" | "family" | "politics" | "atlas" | "standings";
+export type DashboardSection = "court" | "ledger" | "market" | "family" | "barracks" | "politics" | "atlas" | "standings";
 
 export type IconName = "court" | "ledger" | "market" | "family" | "barracks" | "politics" | "atlas" | "standings" | "guide";
 

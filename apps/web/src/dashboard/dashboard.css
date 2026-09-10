@@ -3889,3 +3889,26 @@
   font-style: italic;
   line-height: 1.5;
 }
+
+/* Barracks */
+.dashboard-shell .barracks-lock{
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 15px;
+  padding: 12px 14px;
+  background: rgba(187, 106, 82, 0.12);
+  border: 1px solid rgba(187, 106, 82, 0.5);
+  border-left-width: 3px;
+  border-radius: 10px;
+}
+.dashboard-shell .barracks-lock-ic{ font-size: 18px; line-height: 1.2; }
+.dashboard-shell .barracks-lock p{ margin: 0; color: var(--dash-stone); font-size: 12px; }
+.dashboard-shell .barracks-copy{ margin: 0 0 10px; color: var(--dash-stone); font-size: 12px; }
+.dashboard-shell .barracks-glyph{ width: 30px; height: 30px; object-fit: contain; }
+.dashboard-shell .barracks-unit .pr-s{ line-height: 1.5; }
+.dashboard-shell .barracks-gear{ display: inline-flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.dashboard-shell .barracks-gear-item{ display: inline-flex; gap: 3px; align-items: center; }
+.dashboard-shell .barracks-actions{ display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.dashboard-shell .barracks-why{ color: var(--dash-stone-dim); font-size: 11px; }
+.dashboard-shell .barracks-row-error{ margin: -4px 0 9px; padding: 0 15px; color: #e0a49a; font-size: 11px; }

@@ -9,6 +9,7 @@ const CourtPanel = lazy(() => import("./panels/CourtPanel.js"));
 const LedgerPanel = lazy(() => import("./panels/LedgerPanel.js"));
 const MarketPanel = lazy(() => import("./panels/MarketPanel.js"));
 const FamilyPanel = lazy(() => import("./panels/FamilyPanel.js"));
+const BarracksPanel = lazy(() => import("./panels/BarracksPanel.js"));
 const PoliticsPanel = lazy(() => import("./panels/PoliticsPanel.js"));
 const AtlasPanel = lazy(() => import("./panels/AtlasPanel.js"));
 const StandingsPanel = lazy(() => import("./panels/StandingsPanel.js"));
@@ -30,6 +31,7 @@ const dashboardNav: DashboardNavItem[] = [
   { id: "ledger", label: "Ledger", icon: "ledger" },
   { id: "market", label: "Market", icon: "market" },
   { id: "family", label: "Family", icon: "family" }, // badge is player.familyPending (dynamic)
+  { id: "barracks", label: "Barracks", icon: "barracks" },
   { id: "politics", label: "Politics", icon: "politics" },
   { id: "atlas", label: "Atlas", icon: "atlas" },
   { id: "standings", label: "Standings", icon: "standings" },
@@ -40,7 +42,7 @@ const mobilePrimaryNav: DashboardNavItem[] = dashboardNav.filter((item) =>
 );
 
 const mobileMoreNav: DashboardNavItem[] = dashboardNav.filter((item) =>
-  ["politics", "atlas", "standings"].includes(item.id),
+  ["barracks", "politics", "atlas", "standings"].includes(item.id),
 );
 
 // TODO: Replace with authenticated player profile/session state once auth is connected.
@@ -111,6 +113,7 @@ const panelComponents: Record<DashboardSection, LazyExoticComponent<ComponentTyp
   ledger: LedgerPanel,
   market: MarketPanel,
   family: FamilyPanel,
+  barracks: BarracksPanel,
   politics: PoliticsPanel,
   atlas: AtlasPanel,
   standings: StandingsPanel,
