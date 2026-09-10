@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import crypto from "node:crypto";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import Fastify, { type FastifyInstance } from "fastify";
 import cookie from "@fastify/cookie";
 
@@ -61,7 +61,7 @@ suite("/api/map/reach (integration)", () => {
   });
 
   beforeEach(async () => {
-    await db.execute(sql`TRUNCATE TABLE player_units, player_holdings, player_levy, band_offers, effect_log, resources, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
+    await db.execute(sql`TRUNCATE TABLE player_units, player_holdings, player_levy, band_offers, region_intel, region_military, effect_log, resources, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
     await db.insert(m.dbPkg.houses).values({ slug: "test-house", name: "House Test", initial: "T", alignment: "c", stance: "s", motto: "m", patron: "p", crest: "c" }).onConflictDoNothing();
     const world = (await db.insert(m.dbPkg.worlds).values({ name: "Reach Route Test", seed: "rrt", startedAt, endsAt: new Date(now.getTime() + 182 * DAY), status: "active" }).returning())[0]!;
     worldId = world.id;
@@ -102,6 +102,30 @@ suite("/api/map/reach (integration)", () => {
     const seaOnly = Object.values(v.reach).find((e) => e.landSteps === null && e.seaSteps !== null)!;
     expect(seaOnly.attack.ok).toBe(false);
     expect(seaOnly.attack.reason).toMatch(/fleet's range/);
+  });
+
+  it("POST /act: a raid happy path returns the report, fresh reach and the roster; a town target is 409", async () => {
+    const p = await freshPlayer();
+    const { writeRegionWarband } = await import("../services/mapPools.js");
+    await writeRegionWarband(db, worldId, "R046", 20, now);
+    const recruitedAt = new Date(now.getTime() - 2 * DAY);
+    await db.insert(m.dbPkg.playerUnits).values({ worldId, ownerPlayerId: p.playerId, source: "trained", unitId: "peltast", count: 40, startCount: 40, recruitedSeason: 7, readyAt: new Date(recruitedAt.getTime() + DAY), createdAt: recruitedAt });
+    const rowId = (await db.select({ id: m.dbPkg.playerUnits.id }).from(m.dbPkg.playerUnits).where(eq(m.dbPkg.playerUnits.ownerPlayerId, p.playerId)))[0]!.id;
+    const post = (payload: unknown) => app.inject({ method: "POST", url: "/api/map/act", headers: { cookie: `massalia_session=${app.signCookie(p.token)}` }, payload: payload as Record<string, unknown> });
+    const town = await post({ type: "raid", regionId: "R047", rowIds: [rowId] });
+    expect(town.statusCode).toBe(409);
+    expect(town.json<{ error: string }>().error).toBe("Towns are for a later season.");
+    expect((await post({ type: "pillage", regionId: "R046", rowIds: [rowId] })).statusCode).toBe(400);
+    const res = await post({ type: "raid", regionId: "R046", rowIds: [rowId] });
+    expect(res.statusCode).toBe(200);
+    const v = res.json<{ report: { type: string; winner: string; regionName: string; plunder: { drachmae: number } | null; line: string }; reach: { reach: Record<string, unknown> }; force: { men: number }; roster: { id: string; movingTo: string | null }[] }>();
+    expect(v.report).toMatchObject({ type: "raid", winner: "attacker", regionName: "Salyes" });
+    expect(v.report.plunder!.drachmae).toBeGreaterThan(0);
+    expect(v.report.line).toMatch(/^Raided Salyes/);
+    expect(v.force.men).toBe(0); // the party is recovering
+    expect(v.roster.find((r) => r.id === rowId)!.movingTo).toBe("R060");
+    expect(v.reach.reach.R046).toBeDefined();
+    expect((await app.inject({ method: "POST", url: "/api/map/act", payload: { type: "raid", regionId: "R046", rowIds: [rowId] } })).statusCode).toBe(401);
   });
 
   it("a row still training does not count toward the force, so Attack fails for want of men", async () => {
