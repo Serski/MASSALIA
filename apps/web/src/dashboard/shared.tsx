@@ -471,14 +471,6 @@ export function marchLine(row: { basedAt: string; movingTo: string | null }, nam
   return `${verb} ${names[row.movingTo] ?? row.movingTo} · ${formatClock(secondsLeft)}`;
 }
 
-// Unit plurals for client-side prose ("20 peltasts"): the roster payload
-// carries labels only, so the four units are tabled here; anything else takes
-// an "s". Bands' labels are already plural.
-export const UNIT_PLURAL: Record<string, string> = { Peltast: "Peltasts", Ekdromos: "Ekdromoi", Hoplite: "Hoplites", Hippeis: "Hippeis" };
-export function unitPlural(label: string): string {
-  return UNIT_PLURAL[label] ?? `${label}s`;
-}
-
 // The public names file the map shows (region id → display name).
 export const REGION_NAMES_SRC = "/map2/names2.json";
 

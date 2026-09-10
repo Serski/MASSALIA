@@ -731,6 +731,7 @@ export type RosterView = {
   source: "trained" | "band";
   unitId: string;
   label: string;
+  plural: string; // the unit's plural from content; a band's label (already plural)
   icon: string;
   count: number;
   startCount: number;
@@ -740,10 +741,15 @@ export type RosterView = {
   basedAt: string; // region id the row stands in
   movingTo: string | null; // region id of a relocation in flight
   arrivesAt: string | null; // ISO; when that relocation completes
+  mission: { kind: "scout" | "raid" | "attack" | "move"; regionId: string; departedAt: string } | null; // what a moving row is doing
+  createdAt: string; // ISO; for training progress ((now − createdAt) / (readyAt − createdAt))
   stats: Record<string, number>; // the unit's or band's stat block (for the force picker)
   active: boolean;
   canDisband: boolean;
 };
+// The summary strip: men under arms (trained rows in every state) against the
+// levy left at home, and the levy's growth.
+export type SummaryView = { underArms: number; levyMen: number; growthPerYear: number; seasonsPerYear: number };
 export type OfferView = { id: string; label: string; icon: string; role: string; men: number; upkeepPerDay: Record<string, number>; stats: Record<string, number>; hired: boolean };
 // The army's upkeep per day from the same per-row arithmetic the settle charges:
 // totals across the active roster (zero-valued goods omitted) and each active
@@ -761,6 +767,7 @@ export type BarracksView = {
   offers: OfferView[];
   activeBands: number;
   upkeep: UpkeepView;
+  summary: SummaryView;
 };
 
 export async function barracksView(ctx: ActingContext, now: Date): Promise<BarracksView> {
@@ -780,6 +787,7 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
         source: r.source,
         unitId: r.unitId,
         label: def?.label ?? r.unitId,
+        plural: r.source === "trained" ? (unitDef(unitsC, r.unitId)?.plural ?? `${def?.label ?? r.unitId}s`) : (def?.label ?? r.unitId),
         icon: def?.icon ?? "",
         count: r.count,
         startCount: r.startCount,
@@ -789,6 +797,8 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
         basedAt: r.basedAt,
         movingTo: r.movingTo,
         arrivesAt: r.arrivesAt?.toISOString() ?? null,
+        mission: r.mission ?? null,
+        createdAt: r.createdAt.toISOString(),
         stats: def?.stats ?? {},
         active: isActive(r, now),
         canDisband: gate.met && now.getTime() >= releaseAtMs(r, unitsC, bandsC),
@@ -817,6 +827,12 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
       }),
       activeBands: rows.filter((r) => r.source === "band").length,
       upkeep,
+      summary: {
+        underArms: rows.filter((r) => r.source === "trained").reduce((n, r) => n + r.count, 0),
+        levyMen: levy.men,
+        growthPerYear: unitsC.levy.growthPerYear,
+        seasonsPerYear: unitsC.levy.seasonsPerYear,
+      },
     };
     return { composureDays, result };
   });

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { forceStats, HOME_POLITY_ID, renderForce, routeFor, verdictsFor, type CampaignForcePart, type MapActionType } from "@massalia/shared";
 import { api, apiBaseUrl, ApiError, type BarracksRosterRow, type MapActReport, type MapActType, type MapReachView, type ReachEntry } from "../api.js";
-import { AssetIcon, CULTURE_WEBP, formatClock, formatDuration, marchLine, POLITY_CREST, titleCase, unitPlural, useCountdownSeconds } from "../dashboard/shared.js";
+import { AssetIcon, CULTURE_WEBP, formatClock, formatDuration, marchLine, POLITY_CREST, titleCase, useCountdownSeconds } from "../dashboard/shared.js";
 import { mapActionButtons, withReach, type MapActionButton } from "./mapActions.js";
 
 // Attack, Raid and Scout are the actions that resolve (Colonise waits for 3c).
@@ -1028,7 +1028,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
       const key = `${r.source}:${r.unitId}`;
       const m = merged.get(key);
       if (m) m.count += r.count;
-      else merged.set(key, r.source === "trained" ? { count: r.count, label: r.label, plural: unitPlural(r.label), source: "trained" } : { count: r.count, label: r.label, source: "band" });
+      else merged.set(key, r.source === "trained" ? { count: r.count, label: r.label, plural: r.plural, source: "trained" } : { count: r.count, label: r.label, source: "band" });
     }
     return [...merged.values()];
   };

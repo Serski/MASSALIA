@@ -526,6 +526,7 @@ export const api = {
     apiFetch<BarracksView>("/api/barracks/recruit", { method: "POST", body: { unitId, count } }),
   barracksHire: (bandId: string) => apiFetch<BarracksView>("/api/barracks/hire", { method: "POST", body: { bandId } }),
   barracksDisband: (rowId: string) => apiFetch<BarracksView>("/api/barracks/disband", { method: "POST", body: { rowId } }),
+  barracksCancel: (rowId: string) => apiFetch<BarracksView>("/api/barracks/cancel", { method: "POST", body: { rowId } }),
   // Map reach (military prompt 3a): which land provinces the player's force can
   // Attack, Raid or Colonise from its bases, with a one-line reason when not.
   mapReach: () => apiFetch<MapReachView>("/api/map/reach"),
@@ -1426,6 +1427,7 @@ export type BarracksRosterRow = {
   source: "trained" | "band";
   unitId: string;
   label: string;
+  plural: string; // the unit's plural from content; a band's label (already plural)
   icon: string;
   count: number;
   startCount: number;
@@ -1435,6 +1437,8 @@ export type BarracksRosterRow = {
   basedAt: string; // region id the row stands in
   movingTo: string | null; // region id of a relocation or recovery in flight
   arrivesAt: string | null; // ISO; when that movement completes
+  mission: { kind: "scout" | "raid" | "attack" | "move"; regionId: string; departedAt: string } | null; // what a moving row is doing
+  createdAt: string; // ISO; training progress runs from here to readyAt
   stats: Record<string, number>; // the unit's or band's stat block (for the force picker)
   active: boolean;
   canDisband: boolean;
@@ -1464,6 +1468,8 @@ export type BarracksView = {
   // The army's upkeep per day (zero-valued goods omitted) and each active row's
   // own line; a row still training has no entry.
   upkeep: { perDay: Record<string, number>; rows: Record<string, Record<string, number>>; note: string };
+  // The summary strip: men under arms (trained rows in every state) against the levy at home.
+  summary: { underArms: number; levyMen: number; growthPerYear: number; seasonsPerYear: number };
 };
 
 // --- Map reach (GET /api/map/reach; mirrors packages/shared/src/reach.ts) ---
