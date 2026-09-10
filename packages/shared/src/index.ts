@@ -28,5 +28,6 @@ export * from "./military.js";
 export * from "./barracks.js";
 export * from "./mapActions.js";
 export * from "./mapGraph.js";
+export * from "./reach.js";
 export * from "./names.js";
 export * from "./news.js";
