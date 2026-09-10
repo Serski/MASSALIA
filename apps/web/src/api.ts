@@ -270,7 +270,9 @@ export type ChronicleType =
   | "poison_illness"
   | "venom_purged"
   | "assassination_survived"
-  | "death";
+  | "death"
+  | "map_action"
+  | "holding_reverted";
 
 export type ChronicleEntry = {
   seasonIndex: number;

@@ -161,6 +161,12 @@ describe("reach", () => {
     for (const n of topology.land.get("R114")!) if (eligible(n)) expect(reach({ bases: ["R060", "R114"], force: [stats("hoplite", 1)] })[n]!.landSteps).toBe(1);
   });
 
+  it("a held region is a base, not a target: it drops out of the record while its neighbours come within a step", () => {
+    const r = reach({ bases: ["R060", "R114"], force: [stats("hoplite", 1)] });
+    expect(r.R114).toBeUndefined();
+    for (const n of topology.land.get("R114")!) if (eligible(n)) expect(r[n]!.landSteps).toBe(1);
+  });
+
   it("R060, fog and home-owned regions never appear; every other land province does", () => {
     const r = reach({ force: [stats("hoplite", 1)] });
     expect(r.R060).toBeUndefined();

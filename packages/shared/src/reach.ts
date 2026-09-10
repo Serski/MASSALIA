@@ -15,7 +15,8 @@ import type { Topology } from "./mapGraph.js";
 //   Colonise uses Attack's reach (a colony party has to get there); legality by
 //   target kind and owner stays with allowedMapActions.
 // Entries exist only for land provinces that are not fog, not the Massalia
-// region and not owned by Massalia (`homeRegions`).
+// region, not owned by Massalia (`homeRegions`) and not one of the player's own
+// bases (a holding is ground to march from, never a target).
 // ---------------------------------------------------------------------------
 
 export type ReachForceRow = { spd: number; space: number; count: number };
@@ -130,7 +131,7 @@ export function computeReach(input: ReachInput): Record<string, ReachEntry> {
 
   const out: Record<string, ReachEntry> = {};
   for (const id of t.land.keys()) {
-    if (id === t.massaliaRegion || input.homeRegions.has(id)) continue;
+    if (id === t.massaliaRegion || input.homeRegions.has(id) || bases.has(id)) continue;
 
     const land = landSteps.get(id) ?? null;
     let sea: number | null = null;

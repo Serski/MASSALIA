@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { renderCampaignLine, type CampaignPayload } from "@massalia/shared";
 import { api, ApiError, webAssetUrl, type ChronicleEntry, type FamilyState, type FamilyCandidate, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type DivorceNotice, type TragedyNotice } from "../../api.js";
 import { assetPath } from "../../data/league.js";
 import { DashboardCard, type FourStats, PanelBanner, type PanelProps, PersonFace, PersonRow, StatPips, festivalName, titleCase } from "../shared.js";
@@ -799,6 +800,9 @@ const chronicleRenderers: Record<ChronicleEntry["type"], (payload: Record<string
         return `Died${at}.`;
     }
   },
+  // Barracks prompt 3b: campaign lines share their wording with the server report.
+  map_action: (p) => renderCampaignLine("map_action", p as unknown as CampaignPayload),
+  holding_reverted: (p) => renderCampaignLine("holding_reverted", p as unknown as CampaignPayload),
 };
 
 function renderChronicleEntry(entry: ChronicleEntry): string {

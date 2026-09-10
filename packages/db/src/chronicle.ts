@@ -3,6 +3,7 @@ import {
   buildChronicle,
   OLYMPIAD_GAMES_FESTIVAL_ID,
   type ChronicleAfflictionRow,
+  type ChronicleCampaignRow,
   type ChronicleDeathRow,
   type ChronicleEntry,
   type ChronicleInput,
@@ -12,6 +13,7 @@ import { createDb } from "./client.js";
 import { alias } from "drizzle-orm/pg-core";
 import {
   children,
+  effectLog,
   familyCandidates,
   festivalChoregos,
   festivalDonations,
@@ -238,6 +240,19 @@ export async function gatherChronicleForCharacter(characterId: string): Promise<
     }
   }
 
+  // Barracks prompt 3b: map actions this slot led and holdings it lost, from
+  // effect_log. The detail's `chronicle` block is the structured payload.
+  const campaignRows = await db
+    .select({ id: effectLog.id, createdAt: effectLog.createdAt, kind: effectLog.kind, detail: effectLog.detail })
+    .from(effectLog)
+    .where(and(eq(effectLog.characterId, slot.id), inArray(effectLog.kind, ["map_action", "holding_reverted"])));
+  const campaigns: ChronicleCampaignRow[] = [];
+  for (const row of campaignRows) {
+    const chronicle = (row.detail as { chronicle?: ChronicleCampaignRow["payload"] }).chronicle;
+    if (!chronicle) continue;
+    campaigns.push({ id: row.id, at: row.createdAt.getTime(), kind: row.kind as ChronicleCampaignRow["kind"], payload: chronicle });
+  }
+
   return buildChronicle({
     startedMs,
     successionBoundariesMs,
@@ -250,5 +265,6 @@ export async function gatherChronicleForCharacter(characterId: string): Promise<
     gifts,
     afflictions,
     deaths,
+    campaigns,
   });
 }

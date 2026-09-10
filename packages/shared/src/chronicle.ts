@@ -52,7 +52,13 @@ export type ChronicleType =
   // The end of a generation: this character died. One per death handoff (successions
   // blood/adopted/fresh), dated at the succession instant, carrying the age at death
   // and the cause (murder reads plainly; a null/natural cause reads as a plain death).
-  | "death";
+  | "death"
+  // Barracks prompt 3b: a map action the character led (scout / raid / attack on a
+  // townless region) and a holding that reverted for want of a garrison. Sourced
+  // from effect_log; the payload is structured and renderCampaignLine turns it
+  // into the one sentence both the register and the server report use.
+  | "map_action"
+  | "holding_reverted";
 
 export type ChronicleEntry = {
   // Sort key, from gameDate(timestamp, startedMs).seasonIndex.
@@ -138,7 +144,58 @@ export type ChronicleInput = {
   // One row per death handoff in the dynasty (successions blood/adopted/fresh).
   // Optional — pre-existing fixtures need not supply it.
   deaths?: ChronicleDeathRow[];
+  // Barracks prompt 3b: map actions and holding reversions from effect_log.
+  // Optional — pre-existing fixtures need not supply it.
+  campaigns?: ChronicleCampaignRow[];
 };
+
+// A map action or a holding reversion, dated at the effect_log instant. The
+// payload is the structured summary the action wrote (see CampaignPayload).
+export type ChronicleCampaignRow = {
+  id: string;
+  at: number;
+  kind: "map_action" | "holding_reverted";
+  payload: CampaignPayload;
+};
+
+// Structured summary of a map action (all fields optional so a reversion row can
+// share the shape). Rendered by renderCampaignLine.
+export type CampaignPayload = {
+  action?: "scout" | "raid" | "attack";
+  regionId: string;
+  regionName?: string;
+  men?: number;
+  force?: string; // e.g. "20 peltasts" / "10 hoplites and 20 Cretan archers"
+  winner?: "attacker" | "defender" | "stand";
+  killed?: number;
+  lost?: number;
+  plunder?: { drachmae: number; grain: number } | null;
+  conquest?: boolean;
+  warband?: number; // scout: the strength seen
+  previousOwner?: string | null; // reversion
+};
+
+// The one sentence for a campaign entry, shared by the web register and the
+// server's report so the wording never drifts.
+export function renderCampaignLine(type: "map_action" | "holding_reverted", p: CampaignPayload): string {
+  const place = p.regionName ?? p.regionId;
+  if (type === "holding_reverted") return `${place} slipped from our hands: no garrison held it.`;
+  const force = p.force ? ` with ${p.force}` : "";
+  if (p.action === "scout") return `Scouted ${place}${force}: ${p.warband ?? 0} tribesmen under arms.`;
+  const killed = `${p.killed ?? 0} tribesmen slain`;
+  const lost = `${p.lost ?? 0} of ours lost`;
+  if (p.action === "raid") {
+    if (p.winner === "attacker") {
+      const dr = p.plunder?.drachmae ?? 0;
+      const grain = p.plunder?.grain ?? 0;
+      return `Raided ${place}${force}: ${killed}, ${lost}, ${dr} drachmae and ${grain} grain of plunder.`;
+    }
+    return `Raided ${place}${force} and were driven off: ${killed}, ${lost}.`;
+  }
+  if (p.winner === "attacker") return `Took ${place}${force}: ${killed}, ${lost}. The land is ours.`;
+  if (p.winner === "stand") return `Attacked ${place}${force} and withdrew: ${killed}, ${lost}.`;
+  return `Attacked ${place}${force} and were broken: ${killed}, ${lost}.`;
+}
 
 export type ChronicleAdoptionRow = {
   id: string;
@@ -190,6 +247,8 @@ const TYPE_ORDER: Record<ChronicleType, number> = {
   assassination_survived: 13,
   // A death ends the generation, so it sorts last when several events share a season.
   death: 14,
+  map_action: 15,
+  holding_reverted: 16,
 };
 
 // generation = 1 + (boundaries that occurred at or before the event). An event at
@@ -269,6 +328,9 @@ export function buildChronicle(input: ChronicleInput): ChronicleEntry[] {
   }
   for (const a of input.afflictions ?? []) {
     staged.push(stage(a.id, a.at, a.kind, {}, input));
+  }
+  for (const c of input.campaigns ?? []) {
+    staged.push(stage(c.id, c.at, c.kind, { ...c.payload }, input));
   }
   for (const d of input.deaths ?? []) {
     // The succession instant is a generation boundary, so a death dated exactly on it

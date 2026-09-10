@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { sql } from "drizzle-orm";
-import { gameDate, type ReachForceRow, type ReachShip } from "@massalia/shared";
+import { gameDate } from "@massalia/shared";
 import { publishMapChange, subscribeMap } from "../services/mapRealtime.js";
 import { canActAs, canConquer } from "../services/mapWar.js";
 
@@ -179,17 +179,13 @@ export async function mapRoutes(app: FastifyInstance) {
   // under the lock first (rows may have finished training or arrived), then
   // reads the roster, holdings and ship stock and runs the pure library.
   app.get("/reach", async (request, reply) => {
-    const { createDb, playerHoldings, playerUnits, resources } = await import("@massalia/db");
+    const { createDb } = await import("@massalia/db");
     const { requireAuth } = await import("../services/auth.js");
     const { ensureCharacterRow, getActivePlayer, getActiveWorldId } = await import("../services/character.js");
-    const { loadMilitaryOwners } = await import("../services/mapMilitary.js");
     const { buildingContext, settleAll } = await import("../services/buildings.js");
     const { applyComposureDelta } = await import("../services/composure.js");
     const { lockPlayer } = await import("../services/lock.js");
-    const { getTopology } = await import("../services/mapGraph.js");
-    const { getBandsContent, getShipsContent, getUnitsContent, isActive } = await import("../services/barracks.js");
-    const { bandDef, computeReach, fleetStats, forceStats, unitDef } = await import("@massalia/shared");
-    const { and, eq, inArray } = await import("drizzle-orm");
+    const { reachView } = await import("../services/mapReach.js");
     const db = (_db ??= createDb());
     const user = await requireAuth(request);
     const worldId = await getActiveWorldId();
@@ -208,52 +204,56 @@ export async function mapRoutes(app: FastifyInstance) {
       reply.code(503);
       return { error: "No active world exists." };
     }
-    const topology = getTopology();
-    const shipsC = getShipsContent();
-    const shipIds = Object.keys(shipsC.ships);
     const now = new Date();
-
-    const { composureDays, rows, holdings, stock } = await db.transaction(async (tx) => {
+    const { composureDays, view } = await db.transaction(async (tx) => {
       await lockPlayer(tx, player.id);
       const settled = await settleAll(tx, ctx, now);
-      const rows = await tx.select().from(playerUnits).where(and(eq(playerUnits.worldId, worldId), eq(playerUnits.ownerPlayerId, player.id)));
-      const holdings = await tx.select().from(playerHoldings).where(and(eq(playerHoldings.worldId, worldId), eq(playerHoldings.ownerPlayerId, player.id)));
-      const stock = await tx
-        .select({ type: resources.type, amount: resources.amount })
-        .from(resources)
-        .where(and(eq(resources.scope, "player"), eq(resources.scopeId, player.id), inArray(resources.type, shipIds)));
-      return { composureDays: settled.composureDays, rows, holdings, stock };
+      return { composureDays: settled.composureDays, view: await reachView(tx, ctx, now) };
     });
     if (composureDays > 0) await applyComposureDelta(character.id, composureDays, "building:shrine", now);
+    return view;
+  });
 
-    // Bases: the Massalia region plus every holding. Force: active rows standing
-    // at a base (training or mid-move excluded). Fleet: the ship goods in stock.
-    const bases = [{ regionId: topology.massaliaRegion, kind: "massalia" as const }, ...holdings.map((h) => ({ regionId: h.regionId, kind: h.kind }))];
-    const baseIds = new Set(bases.map((b) => b.regionId));
-    const unitsC = getUnitsContent();
-    const bandsC = getBandsContent();
-    const force: ReachForceRow[] = [];
-    for (const r of rows) {
-      if (!isActive(r, now) || r.movingTo !== null || !baseIds.has(r.basedAt)) continue;
-      const def = r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId);
-      if (!def) continue;
-      force.push({ spd: def.stats.spd, space: def.stats.space, count: r.count });
+  // Map actions (barracks prompt 3b): Scout, Raid or Attack a townless region
+  // with a set of whole roster rows. Resolves in the request; the rhythm is the
+  // recovery afterwards. Auth and player resolution as /reach; not behind
+  // MAP_MUTATIONS_ENABLED (same footing as the barracks).
+  app.post("/act", async (request, reply) => {
+    const { requireAuth } = await import("../services/auth.js");
+    const { ensureCharacterRow, getActivePlayer, getActiveWorldId } = await import("../services/character.js");
+    const { buildingContext } = await import("../services/buildings.js");
+    const { act } = await import("../services/mapActions.js");
+    const user = await requireAuth(request);
+    const worldId = await getActiveWorldId();
+    if (!worldId) {
+      reply.code(503);
+      return { error: "No active world exists." };
     }
-    const counts: Record<string, number> = Object.fromEntries(shipIds.map((id) => [id, 0]));
-    for (const s of stock) counts[s.type] = Math.max(0, Math.floor(Number(s.amount)));
-    const fleet: ReachShip[] = shipIds.map((id) => ({ shipId: id, count: counts[id]!, range: shipsC.ships[id]!.range, troopSpace: shipsC.ships[id]!.troopSpace }));
-
-    const owners = await loadMilitaryOwners();
-    const homeRegions = new Set<string>();
-    for (const [id, o] of Object.entries(owners.regions)) if (o === HOME_POLITY) homeRegions.add(id);
-    for (const [town, o] of Object.entries(owners.towns)) {
-      if (o !== HOME_POLITY) continue;
-      const region = topology.townRegion.get(town);
-      if (region) homeRegions.add(region);
+    const player = await getActivePlayer(user.id, worldId);
+    if (!player) {
+      reply.code(404);
+      return { error: "No active character found." };
     }
-
-    const reach = computeReach({ topology, bases: [...baseIds], force, fleet, homeRegions });
-    return { bases, force: forceStats(force), fleet: { ships: counts, ...fleetStats(fleet) }, reach };
+    await ensureCharacterRow(player, worldId);
+    const ctx = await buildingContext(player.id, worldId);
+    if (!ctx) {
+      reply.code(503);
+      return { error: "No active world exists." };
+    }
+    const body = request.body as { type?: unknown; regionId?: unknown; rowIds?: unknown } | undefined;
+    const type = body?.type;
+    const regionId = body?.regionId;
+    const rowIds = body?.rowIds;
+    if ((type !== "scout" && type !== "raid" && type !== "attack") || typeof regionId !== "string" || !Array.isArray(rowIds) || !rowIds.every((id) => typeof id === "string")) {
+      reply.code(400);
+      return { error: "type, regionId and rowIds are required." };
+    }
+    const result = await act(ctx, { type, regionId, rowIds: rowIds as string[] }, new Date());
+    if (!result.ok) {
+      reply.code(result.code);
+      return { error: result.error };
+    }
+    return { report: result.report, reach: result.reach, force: result.force, fleet: result.fleet, roster: result.roster };
   });
 
   app.get("/state", async (request) => {
