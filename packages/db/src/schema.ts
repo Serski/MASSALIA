@@ -848,8 +848,13 @@ export const playerUnits = pgTable("player_units", {
   count: integer("count").notNull(),
   startCount: integer("start_count").notNull(),
   recruitedSeason: integer("recruited_season").notNull(),
-  readyAtSeason: integer("ready_at_season"), // trained only; NULL for bands
-  contractEndSeason: integer("contract_end_season"), // band only; NULL for trained
+  // Legacy season-boundary timers (0053): kept for append-only migrations, no
+  // longer written or read since 0054.
+  readyAtSeason: integer("ready_at_season"),
+  contractEndSeason: integer("contract_end_season"),
+  // Duration timers (0054): the instant training completes / the contract ends.
+  readyAt: timestamp("ready_at", { withTimezone: true }), // trained only; NULL for bands
+  contractEndAt: timestamp("contract_end_at", { withTimezone: true }), // band only; NULL for trained
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   sourceCheck: check("player_units_source_check", sql`${table.source} IN ('trained', 'band')`),
