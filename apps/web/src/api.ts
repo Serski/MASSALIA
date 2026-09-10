@@ -1420,8 +1420,8 @@ export type BarracksRosterRow = {
   count: number;
   startCount: number;
   recruitedSeason: number;
-  readyAtSeason: number | null;
-  contractEndSeason: number | null;
+  readyAt: string | null; // ISO; trained only — the instant training completes
+  contractEndAt: string | null; // ISO; band only — the instant the contract ends
   active: boolean;
   canDisband: boolean;
 };
@@ -1440,6 +1440,7 @@ export type BarracksOffer = {
 export type BarracksView = {
   gate: BarracksGate;
   season: number;
+  now: string; // server time (ISO); countdowns anchor to this, not the device clock
   levy: { men: number };
   config: { minServiceSeasons: number; maxActiveBands: number; termSeasons: number };
   units: BarracksUnit[];

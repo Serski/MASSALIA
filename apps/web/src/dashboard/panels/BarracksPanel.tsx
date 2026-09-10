@@ -1,12 +1,18 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, type BarracksOffer, type BarracksRosterRow, type BarracksUnit, type BarracksView } from "../../api.js";
-import { AssetIcon, DashboardCard, GoodGlyph, type PanelProps, PanelRow, QtyStepper } from "../shared.js";
+import { AssetIcon, DashboardCard, formatDuration, GoodGlyph, type PanelProps, PanelRow, QtyStepper, useCountdownSeconds } from "../shared.js";
 
 // The Barracks tab (military prompt 2). Renders the GET /api/barracks view and
 // sends recruit / hire / disband intents. The server is authoritative: every
 // successful POST returns the next view, which replaces local state outright —
 // no optimistic updates, no polling, no browser storage. Unit and band data
 // reach this panel only through the API payload.
+//
+// Timers: training and contracts are durations (readyAt / contractEndAt, ISO)
+// and every countdown is anchored to the server's `now` — the payload's clock
+// offset is applied once per payload so a wrong device clock cannot skew them.
+// When a countdown reaches zero the view is refetched ONCE per row per crossing
+// (the settle on GET flips the row ready or resolves the contract).
 
 const LOCK_REASON = (required: number, current: number) => `The barracks admit men of militia ${required}. You stand at ${current}.`;
 const BAND_CAP_REASON = "Two bands is all the city will feed.";
@@ -21,14 +27,36 @@ function statsLine(stats: Record<string, number>): string {
   return `Atk ${n("atk")} · Def ${n("def")} · Msl ${n("msl")} · Mor ${n("mor")} · Spd ${n("spd")} · Space ${n("space")}`;
 }
 
-function plural(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? "" : "s"}`;
+const MS_PER_DAY = 86_400_000;
+
+// hh:mm:ss, with a days prefix past 24h: "22:14:07", "1d 03:12:44".
+function clock(totalSeconds: number): string {
+  const s = Math.max(0, totalSeconds);
+  const d = Math.floor(s / 86400);
+  const rest = s % 86400;
+  const hh = String(Math.floor(rest / 3600)).padStart(2, "0");
+  const mm = String(Math.floor((rest % 3600) / 60)).padStart(2, "0");
+  const ss = String(rest % 60).padStart(2, "0");
+  return d > 0 ? `${d}d ${hh}:${mm}:${ss}` : `${hh}:${mm}:${ss}`;
 }
 
-// "· in 2 seasons" for a future season index; nothing once it has arrived.
-function inSeasons(target: number, season: number): string {
-  const n = target - season;
-  return n > 0 ? ` · in ${plural(n, "season")}` : "";
+// Shift a server-clock instant onto the device clock. useCountdownSeconds reads
+// Date.now(), so counting down to (target − offset) on the device is exactly
+// counting down to `target` on the server clock (Date.now() + offset).
+function onDeviceClock(targetIso: string | null, offset: number): string | null {
+  return targetIso ? new Date(Date.parse(targetIso) - offset).toISOString() : null;
+}
+
+// The instant a row may be released, derived from the payload: a trained row's
+// ready_at less its training time plus the service minimum; a band's first-term
+// end (its contract_end_at while canDisband is still false — renewals only move
+// it once the first term is served). The server's canDisband stays authoritative.
+function releaseAtIso(row: BarracksRosterRow, view: BarracksView): string | null {
+  if (row.source === "band") return row.contractEndAt;
+  if (!row.readyAt) return null;
+  const unit = view.units.find((u) => u.id === row.unitId);
+  if (!unit) return null;
+  return new Date(Date.parse(row.readyAt) + (view.config.minServiceSeasons - unit.trainSeasons) * MS_PER_DAY).toISOString();
 }
 
 // Unit upkeep: "Upkeep 1 grain, 1 oil a day".
@@ -103,7 +131,7 @@ function UnitRow({
             <br />
             {statsLine(unit.stats)}
             <br />
-            Trains in {plural(unit.trainSeasons, "season")}
+            Trains in {unit.trainSeasons * 24}h
           </>
         }
         action={
@@ -156,7 +184,7 @@ function OfferRow({
       <br />
       {statsLine(offer.stats)}
       <br />
-      Contract {plural(termSeasons, "season")}
+      Contract {termSeasons * 24}h
     </>
   );
   return (
@@ -189,19 +217,10 @@ function OfferRow({
   );
 }
 
-function rosterStatus(row: BarracksRosterRow, season: number): string {
-  if (row.source === "band") {
-    const end = row.contractEndSeason ?? season;
-    return `Contract ends season ${end}${inSeasons(end, season)}`;
-  }
-  if (row.active) return "Ready";
-  const ready = row.readyAtSeason ?? season;
-  return `Training, ready season ${ready}${inSeasons(ready, season)}`;
-}
-
 function RosterRow({
   row,
-  season,
+  offset,
+  releaseAt,
   locked,
   lockReason,
   busy,
@@ -210,9 +229,11 @@ function RosterRow({
   error,
   onConfirmChange,
   onDisband,
+  onZero,
 }: {
   row: BarracksRosterRow;
-  season: number;
+  offset: number;
+  releaseAt: string | null;
   locked: boolean;
   lockReason: string;
   busy: boolean;
@@ -221,8 +242,24 @@ function RosterRow({
   error: string | null;
   onConfirmChange: (open: boolean) => void;
   onDisband: () => void;
+  onZero: (key: string) => void;
 }) {
-  const disabledReason = locked ? lockReason : row.canDisband ? null : SERVICE_REASON;
+  // The status countdown: a band to its contract end, a trained row to ready_at
+  // (none once ready). The service countdown runs only while canDisband is false.
+  const timerTarget = row.source === "band" ? row.contractEndAt : row.active ? null : row.readyAt;
+  const timerLeft = useCountdownSeconds(onDeviceClock(timerTarget, offset));
+  const serviceTarget = row.canDisband ? null : releaseAt;
+  const serviceLeft = useCountdownSeconds(onDeviceClock(serviceTarget, offset));
+  useEffect(() => {
+    if (timerTarget && timerLeft <= 0) onZero(`${row.id}:${timerTarget}`);
+  }, [row.id, timerTarget, timerLeft, onZero]);
+  useEffect(() => {
+    if (serviceTarget && serviceLeft <= 0) onZero(`${row.id}:release:${serviceTarget}`);
+  }, [row.id, serviceTarget, serviceLeft, onZero]);
+
+  const status = row.source === "band" ? `Contract · ${clock(timerLeft)}` : row.active ? "Ready" : `Training · ${clock(timerLeft)}`;
+  const serviceReason = serviceTarget && serviceLeft > 0 ? `${SERVICE_REASON} ${formatDuration(serviceLeft)} to go.` : SERVICE_REASON;
+  const disabledReason = locked ? lockReason : row.canDisband ? null : serviceReason;
   const count = row.count === row.startCount ? String(row.count) : `${row.count} of ${row.startCount}`;
   let action: ReactNode;
   if (confirming) {
@@ -255,7 +292,7 @@ function RosterRow({
       <PanelRow
         icon={<UnitGlyph file={row.icon} fallback={row.source === "band" ? "⚔️" : "🛡️"} />}
         title={`${row.label} · ${count}`}
-        sub={rosterStatus(row, season)}
+        sub={status}
         action={action}
       />
       <RowError message={error} />
@@ -272,6 +309,9 @@ export default function BarracksPanel({ onRefresh }: PanelProps) {
   // One inline error at a time, under the row whose action failed.
   const [rowError, setRowError] = useState<{ key: string; message: string } | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  // Countdown crossings already answered with a refetch (row id + target instant),
+  // so a timer sitting at zero never refetches twice.
+  const refetched = useRef(new Set<string>());
 
   const load = useCallback(async () => {
     setLoadError("");
@@ -309,6 +349,19 @@ export default function BarracksPanel({ onRefresh }: PanelProps) {
   };
 
   const errorFor = (key: string) => (rowError?.key === key ? rowError.message : null);
+
+  const onZero = useCallback(
+    (key: string) => {
+      if (refetched.current.has(key)) return;
+      refetched.current.add(key);
+      void load();
+    },
+    [load],
+  );
+
+  // Clock offset, once per payload: server now − device now. Every countdown
+  // derives from Date.now() + offset.
+  const offset = useMemo(() => (view ? Date.parse(view.now) - Date.now() : 0), [view]);
 
   if (!view) {
     return (
@@ -404,7 +457,8 @@ export default function BarracksPanel({ onRefresh }: PanelProps) {
             <RosterRow
               key={row.id}
               row={row}
-              season={view.season}
+              offset={offset}
+              releaseAt={releaseAtIso(row, view)}
               locked={locked}
               lockReason={lockReason}
               busy={busy}
@@ -413,6 +467,7 @@ export default function BarracksPanel({ onRefresh }: PanelProps) {
               error={errorFor(`disband:${row.id}`)}
               onConfirmChange={(open) => setConfirmId(open ? row.id : null)}
               onDisband={() => act(`disband:${row.id}`, () => api.barracksDisband(row.id), `Disbanded the ${row.label}.`)}
+              onZero={onZero}
             />
           ))
         )}
