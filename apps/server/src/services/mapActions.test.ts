@@ -294,14 +294,17 @@ suite("Map actions (integration)", () => {
     const b = await insertRow(ctx, { unitId: "peltast", count: 7 });
     const c = await insertRow(ctx, { unitId: "ekdromos", count: 1 });
     const d = await insertRow(ctx, { unitId: "hippeis", count: 2 });
-    // The two peltast rows stand ready at one base, so the settle merges them
-    // into `a`; `b` is gone before any force is named.
+    // The two peltast rows stand ready at one base, so the settle folds them
+    // into one before any force is named (they share a created_at, so which
+    // id survives is not fixed).
     await settle(ctx, at(9));
     const after = await rows(ctx);
-    expect(after.find((x) => x.id === b.id)).toBeUndefined();
-    expect(after.find((x) => x.id === a.id)).toMatchObject({ count: 14, startCount: 14 });
-    expect(after.map((x) => x.id).sort()).toEqual([a.id, c.id, d.id].sort());
-    const r = await act(ctx, "scout", "R046", [a.id, c.id, d.id]);
+    const peltasts = after.filter((x) => x.unitId === "peltast");
+    expect(peltasts).toHaveLength(1);
+    expect(peltasts[0]).toMatchObject({ count: 14, startCount: 14 });
+    expect([a.id, b.id]).toContain(peltasts[0]!.id);
+    expect(after).toHaveLength(3);
+    const r = await act(ctx, "scout", "R046", [peltasts[0]!.id, c.id, d.id]);
     expect(r).toMatchObject({ ok: true });
     if (!r.ok) return;
     expect(r.report.line).toBe("Scouted Salyes with 14 peltasts, 1 ekdromos and 2 hippeis: 20 tribesmen under arms.");
