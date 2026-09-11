@@ -305,6 +305,7 @@ export async function offersFor(exec: Exec, ctx: ActingContext, season: number):
 // roll for renewal.
 
 export type BarracksDisband = { rowId: string; unitId: string; source: "trained" | "band"; count: number };
+export type BarracksMerge = { rowId: string; unitId: string; basedAt: string; from: string[]; count: number }; // rowId survives, `from` were deleted
 export type BarracksSettle = {
   days: number;
   drachmaeDirect: number; // band pay over the gap
@@ -317,10 +318,11 @@ export type BarracksSettle = {
   renewed: string[]; // band row ids whose contract extended
   departed: BarracksDisband[]; // band rows whose contract ended without renewal
   arrived: BarracksDisband[]; // rows whose relocation completed (now based at moving_to)
+  merged: BarracksMerge[]; // same-unit trained rows folded into one at a base
   holdings: HoldingsSettle; // holdings that reverted for want of a garrison
 };
 
-const emptySettle = (): BarracksSettle => ({ days: 0, drachmaeDirect: 0, purchases: 0, cost: 0, owed: 0, drawn: {}, bought: {}, insolvent: [], renewed: [], departed: [], arrived: [], holdings: { reverted: [] } });
+const emptySettle = (): BarracksSettle => ({ days: 0, drachmaeDirect: 0, purchases: 0, cost: 0, owed: 0, drawn: {}, bought: {}, insolvent: [], renewed: [], departed: [], arrived: [], merged: [], holdings: { reverted: [] } });
 
 type UpkeepPlan = { drachmaeDirect: number; purchases: number; cost: number; draws: Record<string, number>; buys: Record<string, number> };
 
@@ -516,33 +518,38 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
   }
 
   // 6b. Arrivals. A row mid-relocation (or recovering from an action) whose
-  // arrives_at has passed now stands at its destination. A trained row arriving
-  // at a base folds into a ready, unmoving trained row of the same unit already
-  // there: counts add, start counts add, the later created_at is kept (so the
-  // disband gate stays conservative) and the arriving row is deleted. Bands
-  // never merge. With nothing to fold into the row just lands.
+  // arrives_at has passed now stands at its destination; the merge pass below
+  // folds it into whatever already stands there.
   for (const r of rows) {
     if (r.movingTo === null || r.arrivesAt === null || r.arrivesAt.getTime() > now.getTime()) continue;
-    const target =
-      r.source === "trained"
-        ? (
-            await exec
-              .select()
-              .from(playerUnits)
-              .where(and(eq(playerUnits.worldId, ctx.worldId), eq(playerUnits.ownerPlayerId, ctx.playerId), eq(playerUnits.source, "trained"), eq(playerUnits.unitId, r.unitId), eq(playerUnits.basedAt, r.movingTo)))
-              .orderBy(asc(playerUnits.createdAt), asc(playerUnits.id))
-          ).find((t) => t.id !== r.id && t.movingTo === null && isActive(t, now))
-        : undefined;
-    if (target) {
-      const createdAt = target.createdAt.getTime() >= r.createdAt.getTime() ? target.createdAt : r.createdAt;
-      await exec.update(playerUnits).set({ count: target.count + r.count, startCount: target.startCount + r.startCount, createdAt }).where(eq(playerUnits.id, target.id));
-      await exec.delete(playerUnits).where(eq(playerUnits.id, r.id));
-      await logEffect(exec, characterId, "barracks_arrive", { unitId: r.unitId, count: r.count, from: r.basedAt, to: r.movingTo, mergedInto: target.id, source: "barracks" });
-    } else {
-      await exec.update(playerUnits).set({ basedAt: r.movingTo, movingTo: null, arrivesAt: null, mission: null }).where(eq(playerUnits.id, r.id));
-      await logEffect(exec, characterId, "barracks_arrive", { unitId: r.unitId, count: r.count, from: r.basedAt, to: r.movingTo, source: "barracks" });
-    }
+    await exec.update(playerUnits).set({ basedAt: r.movingTo, movingTo: null, arrivesAt: null, mission: null }).where(eq(playerUnits.id, r.id));
+    await logEffect(exec, characterId, "barracks_arrive", { unitId: r.unitId, count: r.count, from: r.basedAt, to: r.movingTo, source: "barracks" });
     out.arrived.push({ rowId: r.id, unitId: r.unitId, source: r.source, count: r.count });
+  }
+
+  // 6b'. Merge. At each base every trained row of one unit that is ready and
+  // not moving folds into a single row: counts add, start counts add, the
+  // latest created_at is kept (so the disband gate stays conservative) and the
+  // other rows are deleted. Runs on every settle, so a batch that finishes
+  // training joins the row already standing there, as does a party just home.
+  // Bands never merge. Re-read: insolvency and arrivals changed the roster.
+  rows = await ownedUnitRows(exec, ctx);
+  const groups = new Map<string, UnitRow[]>();
+  for (const r of rows) {
+    if (r.source !== "trained" || r.movingTo !== null || !isActive(r, now)) continue;
+    const key = `${r.basedAt}\u0000${r.unitId}`;
+    groups.set(key, [...(groups.get(key) ?? []), r]);
+  }
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    const [target, ...others] = group as [UnitRow, ...UnitRow[]];
+    const count = group.reduce((n, r) => n + r.count, 0);
+    const startCount = group.reduce((n, r) => n + r.startCount, 0);
+    const createdAt = group.reduce((latest, r) => (r.createdAt.getTime() > latest.getTime() ? r.createdAt : latest), target.createdAt);
+    await exec.update(playerUnits).set({ count, startCount, createdAt }).where(eq(playerUnits.id, target.id));
+    for (const r of others) await exec.delete(playerUnits).where(eq(playerUnits.id, r.id));
+    await logEffect(exec, characterId, "barracks_merge", { unitId: target.unitId, basedAt: target.basedAt, into: target.id, from: others.map((r) => r.id), count, source: "barracks" });
+    out.merged.push({ rowId: target.id, unitId: target.unitId, basedAt: target.basedAt, from: others.map((r) => r.id), count });
   }
 
   // 6c. Holdings: a garrisoned holding keeps its last_garrisoned_at current; one

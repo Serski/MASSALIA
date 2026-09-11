@@ -380,13 +380,15 @@ suite("Barracks (integration)", () => {
       expect(s.drachmaeDirect).toBe(drachmae);
     });
 
-    it("arrival merges a trained row into the ready same-unit row at its base, keeping the later created_at; a lone row just lands; bands never merge", async () => {
+    it("a returning party merges into the same-unit rows at its base even when two already stand there, keeping the latest created_at; a lone row just lands; bands never merge", async () => {
       const { ctx, characterId } = await makePlayer({ drachmae: 10_000 });
       await giveAll(ctx, { grain: 10_000, oliveoil: 10_000, wine: 1000, chicken: 1000, herbal: 1000 });
-      // 10 hoplites at home since 5, ready; 20 hoplites created at 6, back from a raid at 9.5.
+      // 10 hoplites at home since 5 and 10 more since 7, both ready; 20 hoplites
+      // created at 6, back from a raid at 9.5. All three fold into the first.
       const home = await insertRow(ctx, { source: "trained", unitId: "hoplite", count: 10, recruitedSeason: 5, readyAt: 6, createdSeason: 5 });
       const back = await insertRow(ctx, { source: "trained", unitId: "hoplite", count: 20, recruitedSeason: 6, readyAt: 7, createdSeason: 6 });
-      await db.update(m.dbPkg.playerUnits).set({ movingTo: "R060", arrivesAt: at(9.5) }).where(eq(m.dbPkg.playerUnits.id, back.id));
+      const later = await insertRow(ctx, { source: "trained", unitId: "hoplite", count: 10, recruitedSeason: 7, readyAt: 8, createdSeason: 7 });
+      await db.update(m.dbPkg.playerUnits).set({ movingTo: "R060", arrivesAt: at(9.5), mission: { kind: "raid", regionId: "R046", departedAt: at(9).toISOString() } }).where(eq(m.dbPkg.playerUnits.id, back.id));
       // A peltast row coming home with no peltasts at the base lands alone.
       const lone = await insertRow(ctx, { source: "trained", unitId: "peltast", count: 5, recruitedSeason: 6, readyAt: 7, createdSeason: 6 });
       await db.update(m.dbPkg.playerUnits).set({ movingTo: "R060", arrivesAt: at(9.5), mission: { kind: "raid", regionId: "R046", departedAt: at(9).toISOString() } }).where(eq(m.dbPkg.playerUnits.id, lone.id));
@@ -396,14 +398,38 @@ suite("Barracks (integration)", () => {
       await db.update(m.dbPkg.playerUnits).set({ movingTo: "R060", arrivesAt: at(9.5) }).where(eq(m.dbPkg.playerUnits.id, bandBack.id));
       const s = await settle(ctx, 10);
       expect(s.arrived.map((a) => a.rowId).sort()).toEqual([back.id, lone.id, bandBack.id].sort());
+      expect(s.merged).toEqual([{ rowId: home.id, unitId: "hoplite", basedAt: "R060", from: [back.id, later.id], count: 40 }]);
       const after = await rows(ctx);
       expect(after.find((r) => r.id === back.id)).toBeUndefined();
-      expect(after.find((r) => r.id === home.id)).toMatchObject({ count: 30, startCount: 30, createdAt: at(6), basedAt: "R060", movingTo: null, arrivesAt: null });
+      expect(after.find((r) => r.id === later.id)).toBeUndefined();
+      expect(after.find((r) => r.id === home.id)).toMatchObject({ count: 40, startCount: 40, createdAt: at(7), basedAt: "R060", movingTo: null, arrivesAt: null, mission: null });
+      expect(after.filter((r) => r.unitId === "hoplite")).toHaveLength(1);
       expect(after.find((r) => r.id === lone.id)).toMatchObject({ count: 5, basedAt: "R060", movingTo: null, arrivesAt: null, mission: null });
       expect(after.filter((r) => r.unitId === "volcae-irregulars")).toHaveLength(2);
-      const arrivals = (await logs(characterId, "barracks_arrive")).map((e) => e.detail as { unitId: string; mergedInto?: string });
-      expect(arrivals.find((a) => a.unitId === "hoplite")?.mergedInto).toBe(home.id);
-      expect(arrivals.find((a) => a.unitId === "peltast")?.mergedInto).toBeUndefined();
+      expect((await logs(characterId, "barracks_arrive")).map((e) => (e.detail as { unitId: string }).unitId).sort()).toEqual(["hoplite", "peltast", "volcae-irregulars"]);
+      expect((await logs(characterId, "barracks_merge")).map((e) => e.detail)).toEqual([{ unitId: "hoplite", basedAt: "R060", into: home.id, from: [back.id, later.id], count: 40, source: "barracks" }]);
+    });
+
+    it("a batch that finishes training folds into the ready same-unit row at its base; one still training is untouched", async () => {
+      const { ctx, characterId } = await makePlayer({ drachmae: 10_000 });
+      await giveAll(ctx, { grain: 10_000, oliveoil: 10_000 });
+      // Three ekdromos rows at R060: 10 ready since 6, 20 whose training ended
+      // at 9.5, and 5 whose training runs to 11.
+      const ready = await insertRow(ctx, { source: "trained", unitId: "ekdromos", count: 10, recruitedSeason: 5, readyAt: 6, createdSeason: 5 });
+      const done = await insertRow(ctx, { source: "trained", unitId: "ekdromos", count: 20, recruitedSeason: 8, readyAt: 9.5, createdSeason: 8.5 });
+      const training = await insertRow(ctx, { source: "trained", unitId: "ekdromos", count: 5, recruitedSeason: 10, readyAt: 11, createdSeason: 10 });
+      const s = await settle(ctx, 10);
+      expect(s.arrived).toEqual([]);
+      expect(s.merged).toEqual([{ rowId: ready.id, unitId: "ekdromos", basedAt: "R060", from: [done.id], count: 30 }]);
+      const after = await rows(ctx);
+      expect(after).toHaveLength(2);
+      expect(after.find((r) => r.id === done.id)).toBeUndefined();
+      expect(after.find((r) => r.id === ready.id)).toMatchObject({ count: 30, startCount: 30, createdAt: at(8.5), readyAt: at(6), basedAt: "R060", movingTo: null });
+      expect(after.find((r) => r.id === training.id)).toMatchObject({ count: 5, startCount: 5, createdAt: at(10), readyAt: at(11), basedAt: "R060" });
+      expect((await logs(characterId, "barracks_merge")).map((e) => e.detail)).toEqual([{ unitId: "ekdromos", basedAt: "R060", into: ready.id, from: [done.id], count: 30, source: "barracks" }]);
+      // A second settle finds nothing more to fold.
+      expect((await settle(ctx, 10.5)).merged).toEqual([]);
+      expect(await rows(ctx)).toHaveLength(2);
     });
 
     it("with no rows and no marker nothing happens and no marker is written", async () => {

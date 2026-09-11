@@ -287,14 +287,21 @@ suite("Map actions (integration)", () => {
     await recordChronicle(characterId);
   });
 
-  it("the campaign line merges rows of the same unit into one figure and uses the unit plurals", async () => {
+  it("the campaign line counts each unit as one figure and uses the unit plurals; the settle has already folded same-unit rows", async () => {
     const { ctx } = await makePlayer();
     await setWarband("R046", 20, at(9));
     const a = await insertRow(ctx, { unitId: "peltast", count: 7 });
     const b = await insertRow(ctx, { unitId: "peltast", count: 7 });
     const c = await insertRow(ctx, { unitId: "ekdromos", count: 1 });
     const d = await insertRow(ctx, { unitId: "hippeis", count: 2 });
-    const r = await act(ctx, "scout", "R046", [a.id, b.id, c.id, d.id]);
+    // The two peltast rows stand ready at one base, so the settle merges them
+    // into `a`; `b` is gone before any force is named.
+    await settle(ctx, at(9));
+    const after = await rows(ctx);
+    expect(after.find((x) => x.id === b.id)).toBeUndefined();
+    expect(after.find((x) => x.id === a.id)).toMatchObject({ count: 14, startCount: 14 });
+    expect(after.map((x) => x.id).sort()).toEqual([a.id, c.id, d.id].sort());
+    const r = await act(ctx, "scout", "R046", [a.id, c.id, d.id]);
     expect(r).toMatchObject({ ok: true });
     if (!r.ok) return;
     expect(r.report.line).toBe("Scouted Salyes with 14 peltasts, 1 ekdromos and 2 hippeis: 20 tribesmen under arms.");
