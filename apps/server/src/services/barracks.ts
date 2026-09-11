@@ -777,6 +777,31 @@ export type BarracksView = {
   summary: SummaryView;
 };
 
+// The army's upkeep per day for the Ledger's Economy view and the Barracks
+// strip alike: every active row (moving rows still eat) summed per good, and
+// each row's own line. Zero-valued goods are omitted; a row still training
+// contributes nothing and has no entry. Pure over the rows given.
+export function armyUpkeep(rows: UnitRow[], now: Date): { perDay: Record<string, number>; rows: Record<string, Record<string, number>> } {
+  const unitsC = getUnitsContent();
+  const bandsC = getBandsContent();
+  const perDay: Record<string, number> = {};
+  const byRow: Record<string, Record<string, number>> = {};
+  for (const r of rows) {
+    if (!isActive(r, now)) continue;
+    const line = rowUpkeepPerDay(r, unitsC, bandsC);
+    if (!line) continue;
+    byRow[r.id] = line;
+    for (const [g, q] of Object.entries(line)) if (q > 0) perDay[g] = (perDay[g] ?? 0) + q;
+  }
+  return { perDay, rows: byRow };
+}
+
+// The same totals read straight from the player's rows (no lock, no settle):
+// what the Economy view lists under Expenses.
+export async function armyUpkeepPerDay(exec: Exec, ctx: ActingContext, now: Date): Promise<Record<string, number>> {
+  return armyUpkeep(await ownedUnitRows(exec, ctx), now).perDay;
+}
+
 export async function barracksView(ctx: ActingContext, now: Date): Promise<BarracksView> {
   const unitsC = getUnitsContent();
   const bandsC = getBandsContent();
@@ -812,14 +837,7 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
       };
     });
     // Upkeep: every active row (moving rows still eat), summed and per row.
-    const upkeep: UpkeepView = { perDay: {}, rows: {}, note: UPKEEP_NOTE };
-    for (const r of rows) {
-      if (!isActive(r, now)) continue;
-      const line = rowUpkeepPerDay(r, unitsC, bandsC);
-      if (!line) continue;
-      upkeep.rows[r.id] = line;
-      for (const [g, q] of Object.entries(line)) if (q > 0) upkeep.perDay[g] = (upkeep.perDay[g] ?? 0) + q;
-    }
+    const upkeep: UpkeepView = { ...armyUpkeep(rows, now), note: UPKEEP_NOTE };
     const result: BarracksView = {
       gate,
       season,

@@ -40,6 +40,8 @@ export type ReachEntry = {
   landSteps: number | null;
   /** fewest sea provinces from any base's coast to a sea touching this region, null if none */
   seaSteps: number | null;
+  /** the same two distances from each base on its own, so a client can judge a force that marches from one base */
+  byBase: Record<string, ReachSteps>;
   attack: ReachVerdict;
   raid: ReachVerdict;
   colonise: ReachVerdict;
@@ -126,68 +128,82 @@ export function routeFor(type: "attack" | "raid", steps: ReachSteps, force: Forc
   return steps.seaSteps === null ? null : { route: "sea", steps: steps.seaSteps };
 }
 
-export function computeReach(input: ReachInput): Record<string, ReachEntry> {
-  const t = input.topology;
-  const bases = new Set(input.bases.filter((b) => t.land.has(b)));
-
-  // Land distance: multi-source BFS over land from every base, depth ≤ 2.
-  const landSteps = new Map<string, number>();
-  let frontier: string[] = [];
-  for (const b of bases) {
-    landSteps.set(b, 0);
-    frontier.push(b);
-  }
+// Land distance from one base: BFS over land, depth ≤ MAX_LAND_STEPS.
+function landStepsFrom(t: Topology, base: string): Map<string, number> {
+  const steps = new Map<string, number>([[base, 0]]);
+  let frontier = [base];
   for (let depth = 1; depth <= MAX_LAND_STEPS && frontier.length; depth++) {
     const next: string[] = [];
     for (const cur of frontier) {
       for (const n of t.land.get(cur) ?? []) {
-        if (landSteps.has(n)) continue;
-        landSteps.set(n, depth);
+        if (steps.has(n)) continue;
+        steps.set(n, depth);
         next.push(n);
       }
     }
     frontier = next;
   }
+  return steps;
+}
 
-  // Sea distance: every coastal base's linked seas are distance 1; BFS through
-  // sea. A base that is not coastal contributes nothing.
-  const seaSteps = new Map<string, number>();
-  frontier = [];
-  for (const b of bases) {
-    if (!t.coastal.has(b)) continue;
-    for (const s of t.coast.get(b) ?? []) {
-      if (seaSteps.has(s)) continue;
-      seaSteps.set(s, 1);
-      frontier.push(s);
-    }
+// Sea distance from one base: its linked seas are distance 1, then BFS through
+// sea. A base that is not coastal reaches no sea at all.
+function seaStepsFrom(t: Topology, base: string): Map<string, number> {
+  const steps = new Map<string, number>();
+  if (!t.coastal.has(base)) return steps;
+  let frontier: string[] = [];
+  for (const s of t.coast.get(base) ?? []) {
+    if (steps.has(s)) continue;
+    steps.set(s, 1);
+    frontier.push(s);
   }
   while (frontier.length) {
     const next: string[] = [];
     for (const cur of frontier) {
-      const d = seaSteps.get(cur)!;
+      const d = steps.get(cur)!;
       for (const n of t.sea.get(cur) ?? []) {
-        if (seaSteps.has(n)) continue;
-        seaSteps.set(n, d + 1);
+        if (steps.has(n)) continue;
+        steps.set(n, d + 1);
         next.push(n);
       }
     }
     frontier = next;
   }
+  return steps;
+}
+
+export function computeReach(input: ReachInput): Record<string, ReachEntry> {
+  const t = input.topology;
+  const bases = [...new Set(input.bases.filter((b) => t.land.has(b)))];
+
+  // Distances per base; the record's own steps are the minimum over bases (the
+  // same as a multi-source search), kept per base so a force from one base can
+  // be judged on its own.
+  const perBase = bases.map((b) => ({ base: b, land: landStepsFrom(t, b), sea: seaStepsFrom(t, b) }));
+  const baseSet = new Set(bases);
 
   const fleet = fleetStats(input.fleet);
   const force = forceStats(input.force);
 
   const out: Record<string, ReachEntry> = {};
   for (const id of t.land.keys()) {
-    if (id === t.massaliaRegion || input.homeRegions.has(id) || bases.has(id)) continue;
+    if (id === t.massaliaRegion || input.homeRegions.has(id) || baseSet.has(id)) continue;
 
-    const land = landSteps.get(id) ?? null;
+    const byBase: Record<string, ReachSteps> = {};
+    let land: number | null = null;
     let sea: number | null = null;
-    for (const s of t.coast.get(id) ?? []) {
-      const d = seaSteps.get(s);
-      if (d !== undefined && (sea === null || d < sea)) sea = d;
+    for (const pb of perBase) {
+      const l = pb.land.get(id) ?? null;
+      let s: number | null = null;
+      for (const c of t.coast.get(id) ?? []) {
+        const d = pb.sea.get(c);
+        if (d !== undefined && (s === null || d < s)) s = d;
+      }
+      byBase[pb.base] = { landSteps: l, seaSteps: s };
+      if (l !== null && (land === null || l < land)) land = l;
+      if (s !== null && (sea === null || s < sea)) sea = s;
     }
-    out[id] = { landSteps: land, seaSteps: sea, ...verdictsFor({ landSteps: land, seaSteps: sea }, force, fleet) };
+    out[id] = { landSteps: land, seaSteps: sea, byBase, ...verdictsFor({ landSteps: land, seaSteps: sea }, force, fleet) };
   }
   return out;
 }

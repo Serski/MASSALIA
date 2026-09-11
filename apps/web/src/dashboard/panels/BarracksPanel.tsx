@@ -37,6 +37,13 @@ function upkeepParts(map: Record<string, number>, drachmaeAs = "drachmae"): stri
 function upkeepLine(map: Record<string, number>, drachmaeAs = "drachmae"): string {
   return upkeepParts(map, drachmaeAs).join(" · ");
 }
+// The goods of an upkeep map in the same fixed order, drachmae last, for a line
+// that shows each good's icon before its number (the inventory's way).
+function upkeepGoods(map: Record<string, number>): [string, number][] {
+  const keys = [...UPKEEP_ORDER.filter((g) => g !== "drachmae" && (map[g] ?? 0) > 0), ...Object.keys(map).filter((g) => g !== "drachmae" && !UPKEEP_ORDER.includes(g) && (map[g] ?? 0) > 0)];
+  if ((map.drachmae ?? 0) > 0) keys.push("drachmae");
+  return keys.map((g) => [g, map[g]!]);
+}
 
 // Unit upkeep for the catalogue: "1 grain, 1 oil a day".
 function unitUpkeep(upkeep: Record<string, number>): string {
@@ -550,7 +557,7 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
   const homeLevy = home.filter((r) => r.source === "trained");
   const homeBands = home.filter((r) => r.source === "band");
   const upkeepFor = (row: BarracksRosterRow) => ({ row: view.upkeep.rows[row.id] ?? null, perMan: row.source === "trained" ? (view.units.find((u) => u.id === row.unitId)?.upkeepPerDay ?? null) : null });
-  const strip = upkeepLine(view.upkeep.perDay, "dr");
+  const strip = upkeepGoods(view.upkeep.perDay);
   const bandsInCity = view.offers.length === 3 ? "Three" : String(view.offers.length);
 
   return (
@@ -578,7 +585,15 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
         </div>
         <div className="barracks-cell">
           <span className="barracks-k">Daily upkeep</span>
-          <span className="barracks-big barracks-big-text">{strip || "nothing yet"}</span>
+          <span className="barracks-big barracks-big-text" data-testid="upkeep-strip">
+            {strip.length === 0
+              ? "nothing yet"
+              : strip.map(([good, qty]) => (
+                  <span key={good} className="barracks-upkeep-item" title={good === "drachmae" ? `${qty} drachmae` : `${qty} ${UPKEEP_NAME[good] ?? goodName(good)}`}>
+                    <GoodGlyph good={good} fallback={good === "drachmae" ? "🪙" : "📦"} /> {qty}{good === "drachmae" ? <small> dr</small> : null}
+                  </span>
+                ))}
+          </span>
         </div>
       </div>
 

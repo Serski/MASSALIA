@@ -543,9 +543,14 @@ export function InventoryEconomy({ data, goodLabels }: { data: { mine: Buildings
   const foodBought = Math.max(0, foodUnits - wheatProduced);
   const foodCost = foodBought * foodCeiling;
   const upkeepTotal = active.reduce((s, b) => s + b.upkeepPerDay, 0); // building upkeep (idle still owes)
+  // The army (the Barracks strip's figures, carried on the mine payload): one
+  // line per good drawn a day, and band pay in drachmae.
+  const armyPerDay = mine.army?.perDay ?? {};
+  const armyGoods = Object.entries(armyPerDay).filter(([good, q]) => good !== "drachmae" && q > 0);
+  const armyPay = armyPerDay.drachmae ?? 0;
 
   // Net is DRACHMAE income − drachmae expenses. Goods-at-floor are NOT folded in.
-  const net = incomeTotal - wagesTotal - foodCost - upkeepTotal;
+  const net = incomeTotal - wagesTotal - foodCost - upkeepTotal - armyPay;
   const idledRows = active.filter((b) => b.idle).map((b) => ({ id: b.id, name: b.name, staffing: (tierDef(b)?.staffing ?? {}) as Record<string, number> }));
   const owed = Math.round(mine.upkeepOwed);
   const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
@@ -591,7 +596,7 @@ export function InventoryEconomy({ data, goodLabels }: { data: { mine: Buildings
       ) : null}
 
       <SheetLabel>Expenses</SheetLabel>
-      {wages.length === 0 && foodUnits === 0 && upkeepTotal === 0 ? <p className="sheet-todo">No wages, food, or upkeep yet.</p> : null}
+      {wages.length === 0 && foodUnits === 0 && upkeepTotal === 0 && armyGoods.length === 0 && armyPay === 0 ? <p className="sheet-todo">No wages, food, or upkeep yet.</p> : null}
       {wages.map((w) => (
         <ResRow key={`wage-${w.type}`} icon={<PopGlyph type={w.type} />} name={`${cap(w.type)} wages × ${w.count}`} amount={dr(-w.drCost)} />
       ))}
@@ -604,6 +609,10 @@ export function InventoryEconomy({ data, goodLabels }: { data: { mine: Buildings
         />
       ) : null}
       {upkeepTotal > 0 ? <ResRow icon="🏛️" name="Building upkeep" amount={dr(-upkeepTotal)} /> : null}
+      {armyGoods.map(([good, q]) => (
+        <ResRow key={`army-${good}`} icon={<GoodGlyph good={good} fallback={goodIcon(good)} />} name={`Army · ${label(good).toLowerCase()}`} amount={`−${formatPerDay(q)}/day`} />
+      ))}
+      {armyPay > 0 ? <ResRow icon="🪙" name="Army pay" amount={dr(-armyPay)} /> : null}
 
       <div className={`econ-net ${net >= 0 ? "pos" : "neg"}`}>
         <span>Net / day</span>

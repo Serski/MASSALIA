@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ const mixedRoster = (): Row[] => [
   band("band-1"),
 ];
 
-const entry = { landSteps: 1, seaSteps: null, attack: { ok: true }, raid: { ok: true }, colonise: { ok: true } };
+const entry = { landSteps: 1, seaSteps: null, byBase: { R060: { landSteps: 1, seaSteps: null } }, attack: { ok: true }, raid: { ok: true }, colonise: { ok: true } };
 const fleet = { ships: { "trade-ship": 0, galley: 0 }, range: 0, space: 0 };
 
 // A two-province world so the map has something to lay out.
@@ -173,5 +173,48 @@ describe("ForcePicker", () => {
     expect(view.container.textContent).toContain("Mustering");
     view.rerender(<ForcePicker {...props} roster={mixedRoster()} />);
     expect(view.container.querySelectorAll(".w2map-pick-row")).toHaveLength(3);
+  });
+
+  it("groups rows by base, greys a base that cannot reach the target with the reason, and keeps the selection within one base", async () => {
+    const { ForcePicker } = await import("../src/map/World2Map.js");
+    // Three bases: Massalia and Salyes are a step from the target, Lixus is not.
+    const roster = [trained("home-1", 20), trained("salyes-1", 10, { basedAt: "R046" }), band("band-1"), trained("lixus-1", 8, { basedAt: "R114" })];
+    const threeBases = {
+      landSteps: 1,
+      seaSteps: null,
+      byBase: { R060: { landSteps: 1, seaSteps: null }, R046: { landSteps: 1, seaSteps: null }, R114: { landSteps: null, seaSteps: null } },
+      attack: { ok: true },
+      raid: { ok: true },
+      colonise: { ok: true },
+    };
+    const view = render(
+      <ForcePicker type="attack" regionId="R047" regionName="Vocontii" names={{ R060: "Massalia", R046: "Salyes", R114: "Lixus" }} entry={threeBases} fleet={fleet} roster={roster} onClose={() => {}} onActed={() => {}} />,
+    );
+    const groups = [...view.container.querySelectorAll(".w2map-pick-group")];
+    expect(groups.map((g) => g.getAttribute("data-base"))).toEqual(["R060", "R046", "R114"]);
+    expect(groups.map((g) => g.querySelector(".w2map-pick-base")!.textContent)).toEqual(["From Massalia", "From Salyes", "From Lixus"]);
+    // Lixus cannot reach: greyed, its reason under the heading, its rows disabled.
+    const lixus = groups[2]!;
+    expect(lixus.classList.contains("unreachable")).toBe(true);
+    expect(lixus.querySelector(".w2map-pick-why")!.textContent).toBe("No base within reach.");
+    expect([...lixus.querySelectorAll("input[type=checkbox]")].every((el) => (el as HTMLInputElement).disabled)).toBe(true);
+    expect(view.container.querySelectorAll(".w2map-pick-row.dim")).toHaveLength(1);
+    expect(groups[0]!.querySelector(".w2map-pick-why")).toBeNull();
+
+    // Tick Massalia's row: the other reachable base dims, the verdict reads the base's own steps.
+    const boxOf = (group: Element, i = 0) => group.querySelectorAll("input[type=checkbox]")[i] as HTMLInputElement;
+    fireEvent.click(boxOf(groups[0]!));
+    expect(boxOf(groups[0]!).checked).toBe(true);
+    expect(groups[1]!.querySelector(".w2map-pick-row")!.classList.contains("dim")).toBe(true);
+    expect(view.container.querySelector(".w2map-verdict")!.textContent).toContain("Within reach.");
+    expect(view.container.textContent).not.toContain("A force marches from one base.");
+
+    // Tick Salyes' row: Massalia's tick clears and the one-line note appears.
+    fireEvent.click(boxOf(groups[1]!));
+    expect(boxOf(groups[1]!).checked).toBe(true);
+    expect(boxOf(groups[0]!).checked).toBe(false);
+    expect(boxOf(groups[0]!, 1).checked).toBe(false);
+    expect(view.container.querySelector(".w2map-pick-scroll")!.textContent).toContain("A force marches from one base.");
+    expect(view.container.querySelector(".w2map-verdict")!.textContent).toContain("10 men");
   });
 });

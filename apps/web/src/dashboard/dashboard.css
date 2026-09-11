@@ -3935,7 +3935,10 @@
 }
 .dashboard-shell .barracks-big{ color: var(--dash-parchment); font-family: var(--font-display); font-size: 24px; font-weight: 600; line-height: 1.15; }
 .dashboard-shell .barracks-big small{ color: var(--dash-stone-dim); font-family: inherit; font-size: 13px; font-weight: 500; white-space: nowrap; }
-.dashboard-shell .barracks-big-text{ font-size: 18px; }
+.dashboard-shell .barracks-big-text{ font-size: 18px; display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }
+.dashboard-shell .barracks-upkeep-item{ display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.dashboard-shell .barracks-upkeep-item .good-glyph{ width: 20px; height: 20px; }
+.dashboard-shell .barracks-upkeep-item small{ font-size: 12px; color: var(--dash-stone-dim); }
 
 .dashboard-shell .barracks-columns{ display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 22px; }
 .dashboard-shell .barracks-stack{ display: flex; flex-direction: column; gap: 22px; }

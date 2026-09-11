@@ -161,6 +161,29 @@ describe("reach", () => {
     for (const n of topology.land.get("R114")!) if (eligible(n)) expect(reach({ bases: ["R060", "R114"], force: [stats("hoplite", 1)] })[n]!.landSteps).toBe(1);
   });
 
+  it("byBase carries each base's own steps and the record's steps are their minimum", () => {
+    const far = [...topology.seaToCoast.get("R162")!].find((id) => id !== "R114" && eligible(id) && (landFrom060.get(id) ?? 99) > 1)!;
+    const r = reach({ bases: ["R060", "R114"], force: [stats("peltast", 20)], fleet: [ship("trade-ship", 2)] });
+    // The far target: one sea from Lixus, unreachable (or farther) from Massalia.
+    const entry = r[far]!;
+    expect(Object.keys(entry.byBase).sort()).toEqual(["R060", "R114"]);
+    expect(entry.byBase.R114).toEqual({ landSteps: expect.any(Number) as number | null, seaSteps: 1 });
+    expect(entry.byBase.R060!.seaSteps === null || entry.byBase.R060!.seaSteps > 1).toBe(true);
+    expect(entry.seaSteps).toBe(1);
+    // Salyes: one land step from Massalia, out of reach from Lixus.
+    expect(r.R046!.byBase.R060).toEqual({ landSteps: 1, seaSteps: r.R046!.byBase.R060!.seaSteps });
+    expect(r.R046!.byBase.R114!.landSteps).toBeNull();
+    expect(r.R046!.landSteps).toBe(1);
+    // Every entry lists every base, with steps no better than the record's own.
+    for (const e of Object.values(r)) {
+      expect(Object.keys(e.byBase).sort()).toEqual(["R060", "R114"]);
+      for (const b of Object.values(e.byBase)) {
+        if (b.landSteps !== null) expect(b.landSteps).toBeGreaterThanOrEqual(e.landSteps!);
+        if (b.seaSteps !== null) expect(b.seaSteps).toBeGreaterThanOrEqual(e.seaSteps!);
+      }
+    }
+  });
+
   it("a held region is a base, not a target: it drops out of the record while its neighbours come within a step", () => {
     const r = reach({ bases: ["R060", "R114"], force: [stats("hoplite", 1)] });
     expect(r.R114).toBeUndefined();

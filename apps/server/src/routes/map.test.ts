@@ -32,7 +32,7 @@ type ReachView = {
   bases: { regionId: string; kind: string }[];
   force: { men: number; space: number; fast: boolean };
   fleet: { ships: Record<string, number>; range: number; space: number };
-  reach: Record<string, { landSteps: number | null; seaSteps: number | null; attack: { ok: boolean; reason?: string }; raid: { ok: boolean }; colonise: { ok: boolean } }>;
+  reach: Record<string, { landSteps: number | null; seaSteps: number | null; byBase: Record<string, { landSteps: number | null; seaSteps: number | null }>; attack: { ok: boolean; reason?: string }; raid: { ok: boolean }; colonise: { ok: boolean } }>;
 };
 
 suite("/api/map/reach (integration)", () => {
@@ -103,7 +103,7 @@ suite("/api/map/reach (integration)", () => {
     expect(v.fleet).toEqual({ ships: { "trade-ship": 0, galley: 0 }, range: 0, space: 0 });
     expect(v.reach.R060).toBeUndefined();
     expect(v.reach.R174).toBeUndefined();
-    expect(v.reach.R046).toMatchObject({ landSteps: 1, attack: { ok: true }, raid: { ok: true }, colonise: { ok: true } });
+    expect(v.reach.R046).toMatchObject({ landSteps: 1, byBase: { R060: { landSteps: 1 } }, attack: { ok: true }, raid: { ok: true }, colonise: { ok: true } });
     const seaOnly = Object.values(v.reach).find((e) => e.landSteps === null && e.seaSteps !== null)!;
     expect(seaOnly.attack.ok).toBe(false);
     expect(seaOnly.attack.reason).toMatch(/fleet's range/);

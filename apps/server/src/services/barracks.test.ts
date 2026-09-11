@@ -380,6 +380,18 @@ suite("Barracks (integration)", () => {
       expect(s.drachmaeDirect).toBe(drachmae);
     });
 
+    it("the Ledger's mine() carries the army's daily draw under army.perDay, equal to the Barracks strip", async () => {
+      const { ctx } = await makePlayer({ drachmae: 100_000 });
+      await giveAll(ctx, { grain: 10_000, oliveoil: 10_000, wine: 1000, chicken: 1000, herbal: 1000 });
+      await insertRow(ctx, { source: "trained", unitId: "hoplite", count: 30, recruitedSeason: 7, readyAt: 9, createdSeason: 9 });
+      await insertRow(ctx, { source: "band", unitId: "salluvii-warband", count: 30, recruitedSeason: 9, contractEndAt: 20 });
+      await insertRow(ctx, { source: "trained", unitId: "peltast", count: 10, recruitedSeason: 9, readyAt: 12, createdSeason: 9 });
+      const view = await m.barracks.barracksView(ctx, at(9));
+      const mine = await m.buildings.mine("hoplite", ctx, at(9));
+      expect(mine.army.perDay).toEqual(view.upkeep.perDay);
+      expect(mine.army.perDay).toEqual({ grain: 60, oliveoil: 30, drachmae: 75, wine: 4, chicken: 4, herbal: 2 });
+    });
+
     it("a returning party merges into the same-unit rows at its base even when two already stand there, keeping the latest created_at; a lone row just lands; bands never merge", async () => {
       const { ctx, characterId } = await makePlayer({ drachmae: 10_000 });
       await giveAll(ctx, { grain: 10_000, oliveoil: 10_000, wine: 1000, chicken: 1000, herbal: 1000 });

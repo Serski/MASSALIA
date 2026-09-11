@@ -29,17 +29,19 @@ export function mapActionButtons(input: { kind: MapTargetKind; hasTown: boolean;
 
 // Reach on top of legality: a button the matrix enables is still disabled when
 // the server's ReachEntry for the target says not ok, with the reason as its
-// title. Scout is never gated by reach. A missing entry (region not in the reach
-// record) keeps the matrix's verdict. `caption` is the first reach reason, for a
-// one-line note under the row on touch, where titles are unreachable.
-const REACH_GATED: ReadonlySet<MapActionType> = new Set(["attack", "raid", "colonise"]);
+// title. Scouts move like raiders, so Scout reads the Raid verdict. A missing
+// entry (region not in the reach record) keeps the matrix's verdict. `caption`
+// is the first reach reason, for a one-line note under the row on touch, where
+// titles are unreachable.
+const REACH_VERDICT: Partial<Record<MapActionType, "attack" | "raid" | "colonise">> = { attack: "attack", raid: "raid", scout: "raid", colonise: "colonise" };
 
 export function withReach(buttons: MapActionButton[], entry: ReachEntry | undefined): { buttons: MapActionButton[]; caption: string | null } {
   if (!entry) return { buttons, caption: null };
   let caption: string | null = null;
   const out = buttons.map((b) => {
-    if (!b.enabled || !REACH_GATED.has(b.type)) return b;
-    const verdict = entry[b.type as "attack" | "raid" | "colonise"];
+    const key = REACH_VERDICT[b.type];
+    if (!b.enabled || !key) return b;
+    const verdict = entry[key];
     if (verdict.ok) return b;
     const reason = verdict.reason ?? "Out of reach";
     caption ??= reason;

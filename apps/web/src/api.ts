@@ -1246,6 +1246,9 @@ export type BuildingsMine = {
   storageCap: number;
   classSection: ClassSection;
   pops: Record<string, number>;
+  // The army's daily draw by good, `drachmae` for band pay — the Barracks strip's
+  // figures, carried here so the Economy view lists them without a second fetch.
+  army: { perDay: Record<string, number> };
 };
 
 // The retained spymaster's posture + remaining switch cooldown (Prompt 4). Additive
@@ -1480,6 +1483,7 @@ export type ReachVerdict = { ok: boolean; reason?: string };
 export type ReachEntry = {
   landSteps: number | null; // shortest land distance from any base, null if > 2
   seaSteps: number | null; // fewest seas from any base's coast, null if none
+  byBase: Record<string, { landSteps: number | null; seaSteps: number | null }>; // the same from each base alone
   attack: ReachVerdict;
   raid: ReachVerdict;
   colonise: ReachVerdict;

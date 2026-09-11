@@ -34,7 +34,7 @@ import {
   type SeasonName,
   type VendorAction,
 } from "@massalia/shared";
-import { settleBarracks, type BarracksSettle } from "./barracks.js";
+import { armyUpkeepPerDay, settleBarracks, type BarracksSettle } from "./barracks.js";
 import { applyComposureDelta } from "./composure.js";
 import { lockPlayer } from "./lock.js";
 
@@ -851,6 +851,10 @@ export type MineView = {
   storageCap: number;
   classSection: ClassSection;
   pops: Record<string, number>; // pops the player owns (the shared staffing pool)
+  // The army's daily draw, by good, with `drachmae` for band pay — the same
+  // arithmetic the Barracks strip shows, so the Economy view lists it under
+  // Expenses without a second fetch.
+  army: { perDay: Record<string, number> };
 };
 
 const BASE_STORAGE_CAP = 100;
@@ -955,6 +959,7 @@ export async function mine(classId: string, ctx: ActingContext, now: Date): Prom
     storageCap,
     classSection: { label: classSectionLabel(classId), comingSoon: classSectionLabel(classId) !== null, flavor: c.classBuildings[classId]?.flavor, entries: [] },
     pops: ownedPops,
+    army: { perDay: await armyUpkeepPerDay(db, ctx, now) },
   };
 }
 

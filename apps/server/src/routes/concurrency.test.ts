@@ -64,6 +64,7 @@ suite("per-player serialization (integration)", () => {
     db = m.dbPkg.createDb();
     await m.buildings.loadBuildingsContent();
     await m.buildings.loadPopsContent();
+    await (await import("../services/barracks.js")).loadBarracksContent(); // mine() reads the army's upkeep
     await m.age.loadAgeConfig();
     await m.traits.loadTraitDefs();
     await m.composure.loadComposureConfig();

@@ -91,7 +91,11 @@ describe("BarracksPanel", () => {
     const strip = container.querySelector('[data-testid="summary"]')!.textContent!;
     expect(strip).toContain("121 of 323 under arms");
     expect(strip).toContain("+10 each year");
-    expect(strip).toContain("200 grain · 114 oil · 7 wine · 7 chicken · 4 herbs · 130 dr");
+    // Daily upkeep: one item per good with its icon before the number, drachmae last with the coin.
+    const items = [...container.querySelectorAll('[data-testid="upkeep-strip"] .barracks-upkeep-item')];
+    expect(items.map((el) => el.getAttribute("title"))).toEqual(["200 grain", "114 oil", "7 wine", "7 chicken", "4 herbs", "130 drachmae"]);
+    expect(items.map((el) => el.textContent?.trim())).toEqual(["200", "114", "7", "7", "4", "🪙 130 dr"]);
+    expect(items.slice(0, 5).every((el) => el.querySelector("img, [aria-hidden]") !== null)).toBe(true);
     expect(container.textContent).not.toContain("Your men eat");
 
     // At home: the levy row and the band, with their counts and lines.

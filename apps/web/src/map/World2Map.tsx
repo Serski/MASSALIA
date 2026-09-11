@@ -1413,6 +1413,9 @@ export function ForcePicker({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  // Shown once a tick in a second base has cleared the first.
+  const [switched, setSwitched] = useState(false);
+
   const rows = roster ?? [];
   const eligible = rows.filter((r) => r.active && r.movingTo === null);
   const byBase = new Map<string, BarracksRosterRow[]>();
@@ -1422,19 +1425,39 @@ export function ForcePicker({
   const selected = eligible.filter((r) => picked.has(r.id));
   const base = selected[0]?.basedAt ?? null;
   const sentOf = (r: BarracksRosterRow) => (r.source === "band" ? r.count : Math.min(r.count, Math.max(1, counts[r.id] ?? r.count)));
+  const fleetStats = { range: fleet.range, space: fleet.space };
+  const verdictOf = (v: ReturnType<typeof verdictsFor>) => (type === "attack" ? v.attack : v.raid);
+
+  // The steps from one base alone (an older payload without byBase falls back
+  // to the record's own steps), and whether any force at all could reach the
+  // target from there: one fast man in one hull's space, so a base greys only
+  // for reasons no selection could mend (no base within reach, the fleet's
+  // range, no hulls at all).
+  const stepsFrom = (baseId: string) => entry?.byBase?.[baseId] ?? entry;
+  const baseVerdict = (baseId: string) => {
+    const steps = stepsFrom(baseId);
+    if (!steps) return { ok: false, reason: "That land cannot be reached." };
+    return verdictOf(verdictsFor(steps, forceStats([{ spd: FAST_SPD, space: 1, count: 1 }]), fleetStats));
+  };
 
   const force = forceStats(selected.map((r) => ({ spd: r.stats.spd ?? 0, space: r.stats.space ?? 1, count: sentOf(r) })));
-  const verdicts = entry ? verdictsFor(entry, force, { range: fleet.range, space: fleet.space }) : null;
-  let verdict = verdicts ? (type === "attack" ? verdicts.attack : verdicts.raid) : { ok: false, reason: "That land cannot be reached." };
+  const steps = base === null ? entry : stepsFrom(base);
+  let verdict = steps ? verdictOf(verdictsFor(steps, force, fleetStats)) : { ok: false, reason: "That land cannot be reached." };
   if (verdict.ok && type === "scout" && !selected.some((r) => (r.stats.spd ?? 0) >= FAST_SPD)) verdict = { ok: false, reason: `A scouting party needs a man at Spd ${FAST_SPD} or more.` };
-  const route = entry && selected.length > 0 ? routeFor(type === "attack" ? "attack" : "raid", entry, force) : null;
+  const route = steps && selected.length > 0 ? routeFor(type === "attack" ? "attack" : "raid", steps, force) : null;
 
-  const toggle = (id: string) =>
+  // A force marches from one base: ticking a row in a second base clears the first.
+  const toggle = (r: BarracksRosterRow) =>
     setPicked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+      if (prev.has(r.id)) {
+        const next = new Set(prev);
+        next.delete(r.id);
+        return next;
+      }
+      const rowsOfBase = new Set(eligible.filter((x) => x.basedAt === r.basedAt).map((x) => x.id));
+      const sameBase = [...prev].every((id) => rowsOfBase.has(id));
+      if (!sameBase) setSwitched(true);
+      return new Set([...(sameBase ? prev : []), r.id]);
     });
 
   const go = async () => {
@@ -1463,42 +1486,48 @@ export function ForcePicker({
           ) : eligible.length === 0 ? (
             <p className="w2map-info-empty">No men under arms.</p>
           ) : (
-            [...byBase.entries()].map(([baseId, list]) => (
-              <div key={baseId}>
-                <p className="w2map-pick-base">From {names[baseId] ?? baseId}</p>
-                <ul className="w2map-pick-list">
-                  {list.map((r) => {
-                    const otherBase = base !== null && base !== baseId;
-                    return (
-                      <li key={r.id} className={`w2map-pick-row${otherBase ? " dim" : ""}`} title={otherBase ? "A force marches from one base." : undefined}>
-                        <span className="w2map-pick-check">
-                          <input type="checkbox" checked={picked.has(r.id)} disabled={otherBase || busy} onChange={() => toggle(r.id)} aria-label={`${r.label}, ${r.count}`} />
-                          <RowIcon file={r.icon} source={r.source} />
-                          <span className="w2map-pick-label">{r.label} · {r.count}</span>
-                          {r.source === "trained" ? (
-                            <input
-                              type="number"
-                              className="w2map-pick-count"
-                              min={1}
-                              max={r.count}
-                              value={sentOf(r)}
-                              disabled={otherBase || busy || !picked.has(r.id)}
+            [...byBase.entries()].map(([baseId, list]) => {
+              const cannot = baseVerdict(baseId);
+              const unreachable = !cannot.ok;
+              return (
+                <div key={baseId} className={`w2map-pick-group${unreachable ? " unreachable" : ""}`} data-base={baseId}>
+                  <p className="w2map-pick-base">From {names[baseId] ?? baseId}</p>
+                  {unreachable ? <p className="w2map-pick-why">{cannot.reason}</p> : null}
+                  <ul className="w2map-pick-list">
+                    {list.map((r) => {
+                      const otherBase = base !== null && base !== baseId;
+                      return (
+                        <li key={r.id} className={`w2map-pick-row${unreachable || otherBase ? " dim" : ""}`} title={unreachable ? cannot.reason : otherBase ? "A force marches from one base." : undefined}>
+                          <span className="w2map-pick-check">
+                            <input type="checkbox" checked={picked.has(r.id)} disabled={unreachable || busy} onChange={() => toggle(r)} aria-label={`${r.label}, ${r.count}`} />
+                            <RowIcon file={r.icon} source={r.source} />
+                            <span className="w2map-pick-label">{r.label} · {r.count}</span>
+                            {r.source === "trained" ? (
+                              <input
+                                type="number"
+                                className="w2map-pick-count"
+                                min={1}
+                                max={r.count}
+                                value={sentOf(r)}
+                                disabled={unreachable || busy || !picked.has(r.id)}
                               onChange={(e) => setCounts((prev) => ({ ...prev, [r.id]: Math.min(r.count, Math.max(1, parseInt(e.target.value, 10) || 1)) }))}
-                              aria-label={`men from ${r.label}`}
-                            />
-                          ) : null}
-                        </span>
-                        <span className="w2map-pick-note">
-                          Atk {r.stats.atk ?? 0} · Def {r.stats.def ?? 0} · Msl {r.stats.msl ?? 0} · Mor {r.stats.mor ?? 0} · Spd {r.stats.spd ?? 0} · Space {r.stats.space ?? 1}
-                          {r.source === "band" ? " · A band marches as one." : ""}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))
+                                aria-label={`men from ${r.label}`}
+                              />
+                            ) : null}
+                          </span>
+                          <span className="w2map-pick-note">
+                            Atk {r.stats.atk ?? 0} · Def {r.stats.def ?? 0} · Msl {r.stats.msl ?? 0} · Mor {r.stats.mor ?? 0} · Spd {r.stats.spd ?? 0} · Space {r.stats.space ?? 1}
+                            {r.source === "band" ? " · A band marches as one." : ""}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              );
+            })
           )}
+          {switched ? <p className="w2map-pick-why">A force marches from one base.</p> : null}
           {others.length > 0 ? (
             <ul className="w2map-pick-list">
               {others.map((r) => (
