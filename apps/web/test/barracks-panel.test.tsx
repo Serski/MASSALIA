@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, type BarracksRosterRow, type BarracksView } from "../src/api.js";
-import BarracksPanel from "../src/dashboard/panels/BarracksPanel.js";
+import BarracksPanel, { countText } from "../src/dashboard/panels/BarracksPanel.js";
 
 // ---------------------------------------------------------------------------
 // The Barracks panel (ui-2) mounted against a mocked API: locked; unlocked with
@@ -101,7 +101,8 @@ describe("BarracksPanel", () => {
     expect(home.textContent).toContain("66 men"); // 26 + 40
     expect(home.textContent).toContain("Levy · 26 men");
     expect(home.textContent).toContain("Mercenaries · 40 men");
-    expect(home.textContent).toContain("Hoplite · 26 of 30");
+    expect(home.textContent).toContain("Hoplite · 26"); // a levy row shows the plain count, never "of"
+    expect(home.textContent).not.toContain("26 of 30");
     expect(home.textContent).toContain("2 grain · 1 oil a day per man · 52 grain · 26 oil for the row");
     expect(home.textContent).toContain("May be released.");
     expect(home.textContent).toMatch(/4 wine · 4 chicken · 2 herbs · 40 drachmae a day · contract 1d 1[56]h/);
@@ -189,6 +190,13 @@ describe("BarracksPanel", () => {
     // The levy is down to 1, so the stepper snaps to its new bound.
     expect((within(card).getByLabelText("men to recruit as Peltast") as HTMLInputElement).value).toBe("1");
     expect(hookWarnings).toEqual([]);
+  });
+
+  it("countText: levy rows show the plain count, bands show their strength against the company once reduced", () => {
+    expect(countText({ source: "trained", count: 33, startCount: 33 })).toBe("33");
+    expect(countText({ source: "trained", count: 26, startCount: 30 })).toBe("26");
+    expect(countText({ source: "band", count: 40, startCount: 40 })).toBe("40");
+    expect(countText({ source: "band", count: 35, startCount: 40 })).toBe("35 of 40");
   });
 
   it("an action's server error lands under the row that asked", async () => {

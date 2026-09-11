@@ -106,7 +106,10 @@ export function missionLine(row: BarracksRosterRow, names: Record<string, string
 }
 
 // "26 of 30" when the row has lost men, else the count.
-const countText = (row: BarracksRosterRow) => (row.count === row.startCount ? String(row.count) : `${row.count} of ${row.startCount}`);
+// A levy row's men as a plain count ("33"); a band's against its full strength
+// once it has taken losses ("35 of 40"), since a band is hired as a company.
+export const countText = (row: Pick<BarracksRosterRow, "source" | "count" | "startCount">) =>
+  row.source === "band" && row.count !== row.startCount ? `${row.count} of ${row.startCount}` : String(row.count);
 const men = (rows: BarracksRosterRow[]) => rows.reduce((n, r) => n + r.count, 0);
 const menText = (n: number) => `${n} ${n === 1 ? "man" : "men"}`;
 
