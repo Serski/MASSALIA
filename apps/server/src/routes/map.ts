@@ -223,7 +223,7 @@ export async function mapRoutes(app: FastifyInstance) {
     const { requireAuth } = await import("../services/auth.js");
     const { ensureCharacterRow, getActivePlayer, getActiveWorldId } = await import("../services/character.js");
     const { buildingContext } = await import("../services/buildings.js");
-    const { act } = await import("../services/mapActions.js");
+    const { act, move } = await import("../services/mapActions.js");
     const user = await requireAuth(request);
     const worldId = await getActiveWorldId();
     if (!worldId) {
@@ -241,15 +241,30 @@ export async function mapRoutes(app: FastifyInstance) {
       reply.code(503);
       return { error: "No active world exists." };
     }
-    const body = request.body as { type?: unknown; regionId?: unknown; townId?: unknown; rows?: unknown } | undefined;
+    const body = request.body as { type?: unknown; regionId?: unknown; townId?: unknown; baseId?: unknown; rows?: unknown } | undefined;
     const type = body?.type;
     const regionId = body?.regionId;
     const townId = body?.townId;
+    const baseId = body?.baseId;
     const rows = body?.rows;
     const rowOk = (r: unknown): r is { rowId: string; count: number } =>
       typeof r === "object" && r !== null && typeof (r as { rowId?: unknown }).rowId === "string" && Number.isInteger((r as { count?: unknown }).count) && ((r as { count: number }).count) >= 1;
+    const rowsOk = Array.isArray(rows) && rows.every(rowOk);
+    // A move (3c): rows to one of the player's places, by base id.
+    if (type === "move") {
+      if (typeof baseId !== "string" || !rowsOk) {
+        reply.code(400);
+        return { error: "type, baseId and rows [{ rowId, count }] are required." };
+      }
+      const moved = await move(ctx, { baseId, rows: rows as { rowId: string; count: number }[] }, new Date());
+      if (!moved.ok) {
+        reply.code(moved.code);
+        return { error: moved.error };
+      }
+      return { report: moved.report, reach: moved.reach, campaign: moved.campaign, force: moved.force, fleet: moved.fleet, roster: moved.roster };
+    }
     const targetOk = (typeof regionId === "string") !== (typeof townId === "string");
-    if ((type !== "scout" && type !== "raid" && type !== "attack") || !targetOk || !Array.isArray(rows) || !rows.every(rowOk)) {
+    if ((type !== "scout" && type !== "raid" && type !== "attack") || !targetOk || !rowsOk) {
       reply.code(400);
       return { error: "type, regionId or townId, and rows [{ rowId, count }] are required." };
     }

@@ -8,6 +8,7 @@ import {
   formatGameDate,
   gameDate,
   HOME_POLITY_ID,
+  moveVerdict,
   REACH_REASON,
   renderCampaignLine,
   resolveBattle,
@@ -146,6 +147,77 @@ function verdictFor(entry: ReachEntry, type: MapActionType) {
   return type === "attack" ? entry.attack : entry.raid;
 }
 
+// The rows an action sends: ours, active, not moving, one base of ours, at
+// least one. Each sent count is a whole number within the row; a band goes
+// whole. Returns the rows as they would march (count = sent) beside the whole
+// rows; the split itself waits until every check has passed, so a refusal
+// never leaves a row divided.
+type Selection = { owned: UnitRow[]; rows: UnitRow[]; base: string };
+async function selectForce(tx: DbTx, ctx: ActingContext, sentRows: { rowId: string; count: number }[], now: Date): Promise<Failure | ({ ok: true } & Selection)> {
+  const unitsC = getUnitsContent();
+  const bandsC = getBandsContent();
+  const fail = (code: number, error: string): Failure => ({ ok: false, code, error });
+  const sent = new Map<string, number>();
+  for (const r of sentRows) sent.set(r.rowId, (sent.get(r.rowId) ?? 0) + r.count);
+  const ids = [...sent.keys()];
+  if (ids.length === 0) return fail(400, "Choose at least one row.");
+  const owned = await tx
+    .select()
+    .from(playerUnits)
+    .where(and(eq(playerUnits.worldId, ctx.worldId), eq(playerUnits.ownerPlayerId, ctx.playerId), inArray(playerUnits.id, ids)));
+  if (owned.length !== ids.length) return fail(404, "No such unit.");
+  const labelOf = (r: UnitRow) => (r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId))?.label ?? r.unitId;
+  for (const r of owned) {
+    if (!isActive(r, now)) return fail(409, `${labelOf(r)} are still training.`);
+    if (r.movingTo !== null) return fail(409, `${labelOf(r)} are still on the march.`);
+    const n = sent.get(r.id)!;
+    if (!Number.isInteger(n) || n < 1 || n > r.count) return fail(400, `Send a whole number of men, up to the ${r.count} in the row.`);
+    if (r.source === "band" && n !== r.count) return fail(409, "A band marches as one.");
+  }
+  const rows: UnitRow[] = owned.map((r) => ({ ...r, count: sent.get(r.id)! }));
+  const base = rows[0]!.basedAt;
+  if (rows.some((r) => r.basedAt !== base)) return fail(409, "A force marches from one base.");
+  const baseIds = new Set((await basesOf(tx, ctx, now, owned)).map((b) => b.id));
+  if (!baseIds.has(base)) return fail(409, "That base is not yours.");
+  return { ok: true, owned, rows, base };
+}
+
+// Split, under the lock, once nothing can refuse: a trained row sent short of
+// its count becomes two rows — the sent men as a new row (the one that marches),
+// the rest staying home in the original, both reduced by the men that left.
+// `rows` is updated in place to the rows that march.
+async function splitRows(tx: DbTx, characterId: string, sel: Selection, now: Date): Promise<void> {
+  const { owned, rows } = sel;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i]!;
+    const whole = owned.find((o) => o.id === r.id)!;
+    if (r.count === whole.count) continue;
+    const inserted = (
+      await tx
+        .insert(playerUnits)
+        .values({
+          worldId: whole.worldId,
+          ownerPlayerId: whole.ownerPlayerId,
+          source: whole.source,
+          unitId: whole.unitId,
+          count: r.count,
+          startCount: r.count,
+          recruitedSeason: whole.recruitedSeason,
+          readyAt: whole.readyAt,
+          contractEndAt: null,
+          basedAt: whole.basedAt,
+          movingTo: null,
+          arrivesAt: null,
+          createdAt: whole.createdAt,
+        })
+        .returning()
+    )[0]!;
+    await tx.update(playerUnits).set({ count: whole.count - r.count, startCount: Math.max(whole.count - r.count, whole.startCount - r.count) }).where(eq(playerUnits.id, whole.id));
+    await tx.insert(effectLog).values({ characterId, kind: "barracks_split", detail: { fromRowId: whole.id, rowId: inserted.id, unitId: whole.unitId, sent: r.count, left: whole.count - r.count, source: "map" }, createdAt: now });
+    rows[i] = inserted;
+  }
+}
+
 export async function act(ctx: ActingContext, input: MapActInput, now: Date): Promise<MapActResult> {
   const topology = getTopology();
   const unitsC = getUnitsContent();
@@ -181,34 +253,12 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
       if (holdings.some((h) => h.regionId === regionId && h.townId === "")) return fail(409, "You hold this land.");
     }
 
-    // 2. Rows: ours, active, not moving, one base, at least one; a scout needs
-    // speed. Each sent count is a whole number within the row; a band goes whole.
-    const sent = new Map<string, number>();
-    for (const r of input.rows) sent.set(r.rowId, (sent.get(r.rowId) ?? 0) + r.count);
-    const ids = [...sent.keys()];
-    if (ids.length === 0) return fail(400, "Choose at least one row.");
-    const owned = await tx
-      .select()
-      .from(playerUnits)
-      .where(and(eq(playerUnits.worldId, ctx.worldId), eq(playerUnits.ownerPlayerId, ctx.playerId), inArray(playerUnits.id, ids)));
-    if (owned.length !== ids.length) return fail(404, "No such unit.");
+    // 2. Rows: ours, active, not moving, one base, at least one; a scout needs speed.
+    const selected = await selectForce(tx, ctx, input.rows, now);
+    if (!selected.ok) return fail(selected.code, selected.error);
+    const { rows, base } = selected;
     const labelOf = (r: UnitRow) => (r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId))?.label ?? r.unitId;
     const iconOf = (r: UnitRow) => (r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId))?.icon ?? "";
-    for (const r of owned) {
-      if (!isActive(r, now)) return fail(409, `${labelOf(r)} are still training.`);
-      if (r.movingTo !== null) return fail(409, `${labelOf(r)} are still on the march.`);
-      const n = sent.get(r.id)!;
-      if (!Number.isInteger(n) || n < 1 || n > r.count) return fail(400, `Send a whole number of men, up to the ${r.count} in the row.`);
-      if (r.source === "band" && n !== r.count) return fail(409, "A band marches as one.");
-    }
-    // The checks below run on the rows as they would march (count = sent); the
-    // split itself is made only once every check has passed, so a refusal never
-    // leaves a row divided.
-    const rows: UnitRow[] = owned.map((r) => ({ ...r, count: sent.get(r.id)! }));
-    const base = rows[0]!.basedAt;
-    if (rows.some((r) => r.basedAt !== base)) return fail(409, "A force marches from one base.");
-    const baseIds = new Set((await basesOf(tx, ctx, now, owned)).map((b) => b.id));
-    if (!baseIds.has(base)) return fail(409, "That base is not yours.");
     const forceRows = rows.map((r) => forceRowOf(r)).filter((f): f is NonNullable<typeof f> => f !== null);
     if (input.type === "scout" && !forceRows.some((f) => f.spd >= FAST_SPD)) return fail(409, `A scouting party needs a man at Spd ${FAST_SPD} or more.`);
 
@@ -237,39 +287,8 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
       naval = Object.entries(ships).reduce((n, [id, count]) => n + count * (shipsC.ships[id]?.naval ?? 0), 0);
     }
 
-    // 4b. Split, under the lock, now that nothing can refuse: a trained row sent
-    // short of its count becomes two rows — the sent men as a new row (the one
-    // that fights and recovers), the rest staying home in the original, both
-    // reduced by the men that left.
-    const characterForSplit = await characterOf(tx, ctx.playerId);
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i]!;
-      const whole = owned.find((o) => o.id === r.id)!;
-      if (r.count === whole.count) continue;
-      const inserted = (
-        await tx
-          .insert(playerUnits)
-          .values({
-            worldId: whole.worldId,
-            ownerPlayerId: whole.ownerPlayerId,
-            source: whole.source,
-            unitId: whole.unitId,
-            count: r.count,
-            startCount: r.count,
-            recruitedSeason: whole.recruitedSeason,
-            readyAt: whole.readyAt,
-            contractEndAt: null,
-            basedAt: whole.basedAt,
-            movingTo: null,
-            arrivesAt: null,
-            createdAt: whole.createdAt,
-          })
-          .returning()
-      )[0]!;
-      await tx.update(playerUnits).set({ count: whole.count - r.count, startCount: Math.max(whole.count - r.count, whole.startCount - r.count) }).where(eq(playerUnits.id, whole.id));
-      await tx.insert(effectLog).values({ characterId: characterForSplit.id, kind: "barracks_split", detail: { fromRowId: whole.id, rowId: inserted.id, unitId: whole.unitId, sent: r.count, left: whole.count - r.count, source: "map" }, createdAt: now });
-      rows[i] = inserted;
-    }
+    // 4b. Split, under the lock, now that nothing can refuse.
+    await splitRows(tx, (await characterOf(tx, ctx.playerId)).id, selected, now);
 
     // 5. Defender: the region's warband, or the town's garrison behind its
     // walls, after regeneration. A town's fleet is read for the sea rule.
@@ -474,6 +493,139 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
   if (!outcome.result.ok) return outcome.result;
 
   // 10. Compose the response from fresh reads so the client re-renders from one payload.
+  const reach = await db.transaction(async (tx) => {
+    await lockPlayer(tx, ctx.playerId);
+    return reachView(tx, ctx, now);
+  });
+  const barracks = await barracksView(ctx, now);
+  return { ok: true, report: outcome.result.report, reach, campaign: reach.campaign, force: reach.force, fleet: reach.fleet, roster: barracks.roster };
+}
+
+// ---------------------------------------------------------------------------
+// Move (3c, rulings 10 and 11): men march to another of the player's places —
+// the Massalia region, any home region or home town of Massalia's polity, or a
+// holding — from one other base. No battle, no campaign recovery: travel is
+// move.minutesWithinRegion when origin and destination share a region (a town
+// and its region, two towns in one region), else steps × move.minutesPerStep by
+// land (one step) or by sea (within range, with hulls). Arrival rebases and
+// merges through the barracks settle, which already does that for returns.
+// ---------------------------------------------------------------------------
+
+export type MapMoveInput = { baseId: string; rows: { rowId: string; count: number }[] };
+
+export type MapMoveReport = {
+  type: "move";
+  from: string;
+  fromName: string;
+  baseId: string;
+  regionId: string;
+  regionName: string;
+  townId: string | null;
+  townName: string | null;
+  route: "within" | "land" | "sea";
+  steps: number;
+  minutes: number;
+  arrivesAt: string;
+  ships: Record<string, number>;
+  men: number;
+  rows: { id: string; unitId: string; label: string; icon: string; count: number }[];
+  line: string;
+};
+
+export type MapMoveResult = Failure | { ok: true; report: MapMoveReport; reach: ReachView; campaign: ReachView["campaign"]; force: ReachView["force"]; fleet: ReachView["fleet"]; roster: BarracksView["roster"] };
+
+export async function move(ctx: ActingContext, input: MapMoveInput, now: Date): Promise<MapMoveResult> {
+  const unitsC = getUnitsContent();
+  const bandsC = getBandsContent();
+  const battleC = getBattleContent();
+  const outcome = await db.transaction(async (tx): Promise<{ composureDays: number; result: Failure | { ok: true; report: MapMoveReport } }> => {
+    await lockPlayer(tx, ctx.playerId);
+    const settled = await settleAll(tx, ctx, now);
+    const fail = (code: number, error: string) => ({ composureDays: settled.composureDays, result: { ok: false as const, code, error } });
+
+    // 1. Rows from one base of ours.
+    const selected = await selectForce(tx, ctx, input.rows, now);
+    if (!selected.ok) return fail(selected.code, selected.error);
+    const { rows, base } = selected;
+    if (base === input.baseId) return fail(409, "The men already stand there.");
+
+    // 2. The destination: a place the player may station men, with its steps from the base.
+    const view = await reachView(tx, ctx, now, { rows, bases: [base] });
+    const target = view.moveTargets.find((t) => t.id === input.baseId);
+    if (!target) return fail(409, "Men may only be sent to Massalia's own ground or a holding of yours.");
+    const steps = target.byBase[base];
+    if (!steps) return fail(409, "That base is not yours.");
+    const verdict = moveVerdict(steps, view.force, { range: view.fleet.range, space: view.fleet.space });
+    if (!verdict.ok) return fail(409, verdict.reason ?? "Out of reach.");
+
+    // 3. The route and the travel time; ships for a sea crossing.
+    let route: MapMoveReport["route"];
+    let stepCount: number;
+    let minutes: number;
+    let ships: Record<string, number> = {};
+    if (steps.landSteps === 0) {
+      route = "within";
+      stepCount = 0;
+      minutes = battleC.move.minutesWithinRegion;
+    } else if (steps.landSteps === 1) {
+      route = "land";
+      stepCount = 1;
+      minutes = battleC.move.minutesPerStep;
+    } else {
+      route = "sea";
+      stepCount = steps.seaSteps!;
+      minutes = stepCount * battleC.move.minutesPerStep;
+      const { counts } = await fleetInStock(tx, ctx);
+      const assembled = assembleFleet(view.force.space, counts);
+      const stats = fleetStats(assembled.fleet);
+      if (stats.space < view.force.space) return fail(409, REACH_REASON.hulls(view.force.space, stats.space));
+      if (stats.range < stepCount) return fail(409, REACH_REASON.range(stepCount, stats.range));
+      ships = assembled.ships;
+    }
+    const arrivesAt = new Date(now.getTime() + minutes * 60_000);
+
+    // 4. Split, then set the march.
+    const character = await characterOf(tx, ctx.playerId);
+    await splitRows(tx, character.id, selected, now);
+    const mission = { kind: "move" as const, regionId: target.regionId, ...(target.townId ? { townId: target.townId } : {}), departedAt: now.toISOString() };
+    for (const r of rows) await tx.update(playerUnits).set({ movingTo: target.id, arrivesAt, mission }).where(eq(playerUnits.id, r.id));
+
+    // 5. The report and its Chronicle line.
+    const fromBase = view.bases.find((b) => b.id === base);
+    const fromName = fromBase?.townId ? await townDisplayName(fromBase.townId) : await regionDisplayName(base);
+    const regionName = await regionDisplayName(target.regionId);
+    const townName = target.townId ? await townDisplayName(target.townId) : null;
+    const labelOf = (r: UnitRow) => (r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId))?.label ?? r.unitId;
+    const iconOf = (r: UnitRow) => (r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId))?.icon ?? "";
+    const men = rows.reduce((n, r) => n + r.count, 0);
+    const chronicle: CampaignPayload = { action: "move", regionId: target.regionId, regionName, ...(target.townId ? { townId: target.townId, townName: townName! } : {}), men, force: describeForce(rows), from: fromName, minutes };
+    const report: MapMoveReport = {
+      type: "move",
+      from: base,
+      fromName,
+      baseId: target.id,
+      regionId: target.regionId,
+      regionName,
+      townId: target.townId,
+      townName,
+      route,
+      steps: stepCount,
+      minutes,
+      arrivesAt: arrivesAt.toISOString(),
+      ships,
+      men,
+      rows: rows.map((r) => ({ id: r.id, unitId: r.unitId, label: labelOf(r), icon: iconOf(r), count: r.count })),
+      line: renderCampaignLine("map_action", chronicle),
+    };
+    await tx.insert(effectLog).values({ characterId: character.id, kind: "map_action", detail: { ...report, chronicle, source: "map" }, createdAt: now });
+    return { composureDays: settled.composureDays, result: { ok: true, report } };
+  });
+
+  if (outcome.composureDays > 0) {
+    const ch = (await db.select({ id: playerCharacters.id }).from(playerCharacters).where(eq(playerCharacters.playerId, ctx.playerId)).limit(1))[0];
+    if (ch) await applyComposureDelta(ch.id, outcome.composureDays, "building:shrine", now);
+  }
+  if (!outcome.result.ok) return outcome.result;
   const reach = await db.transaction(async (tx) => {
     await lockPlayer(tx, ctx.playerId);
     return reachView(tx, ctx, now);
