@@ -213,6 +213,31 @@
   border-color: var(--dash-gold-bright, #d1ae63);
 }
 
+/* Town entries on a region card that has towns: full-width rows that open the
+   town card, with the note beneath that the land answers to its towns. */
+.w2map-town-entries { flex-direction: column; gap: 4px; }
+.w2map-town-entries li { width: 100%; }
+.w2map-town-entry {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--dash-parchment, #ece0cc);
+  background: rgba(181, 138, 69, 0.1);
+  border: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28));
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+}
+.w2map-town-entry:hover { border-color: var(--dash-gold, #b58a45); background: rgba(181, 138, 69, 0.2); }
+.w2map-town-entry:focus-visible { outline: none; border-color: var(--dash-gold-bright, #d1ae63); }
+.w2map-town-entry-go { color: var(--dash-gold, #b58a45); font-size: 16px; line-height: 1; }
+.w2map-info-note { margin: 6px 0 0; color: var(--dash-stone-dim, #9a8c72); font-size: 12px; font-style: italic; }
+.w2map-btn:disabled { opacity: 0.4; cursor: default; }
+
 /* --- State-led header: crest + state name, region name beneath ------------ */
 .w2map-state {
   display: flex;

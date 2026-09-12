@@ -577,6 +577,12 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   const lastTownOpacityRef = useRef<number | null>(null);
   const cameraRef = useRef<Rect | null>(null);
   const [camera, setCamera] = useState<Rect | null>(null);
+  // While a card, the picker or a report sheet is open the map neither pans nor
+  // zooms, and a tap on it outside the card closes the card. Read by the
+  // gesture handlers through a ref so they need not re-bind on every open.
+  const overlayOpen = selected !== null || picker !== null || report !== null;
+  const overlayRef = useRef(false);
+  overlayRef.current = overlayOpen;
   const [box, setBox] = useState<Box>({ w: 0, h: 0 });
   const boxRef = useRef<Box>({ w: 0, h: 0 });
   const aspectRef = useRef<number>(1);
@@ -757,6 +763,15 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
     try { svgRef.current?.setPointerCapture(event.pointerId); } catch { /* capture is best-effort */ }
     pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     const points = [...pointersRef.current.values()];
+    if (overlayRef.current) {
+      // A card is open: the pointer is tracked only so its release can read
+      // as a tap (which closes the card); no pan, pinch or double-tap zoom.
+      movedRef.current = points.length > 1;
+      downPointRef.current = { x: event.clientX, y: event.clientY };
+      draggingRef.current = false;
+      gestureRef.current = null;
+      return;
+    }
     if (points.length === 1) {
       movedRef.current = false;
       downPointRef.current = { x: event.clientX, y: event.clientY };
@@ -778,7 +793,14 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   }, [stepZoom, worldRect]);
 
   const onPointerMove = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
-    if (!worldRect || !gestureRef.current || !pointersRef.current.has(event.pointerId)) return;
+    if (!worldRect || !pointersRef.current.has(event.pointerId)) return;
+    if (!gestureRef.current) {
+      // No gesture (a card is open): only note whether the pointer travelled,
+      // so releasing after a drag does not count as the closing tap.
+      const down = downPointRef.current;
+      if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) > TAP_SLOP_PX) movedRef.current = true;
+      return;
+    }
     event.stopPropagation();
     pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     const points = [...pointersRef.current.values()];
@@ -822,7 +844,12 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
       commitCamera();
       // A tap (no meaningful pan movement) selects the region under the pointer;
       // an empty tap clears the selection. elementFromPoint is capture-proof.
-      if (!movedRef.current) {
+      if (!movedRef.current && overlayRef.current) {
+        // A tap on the map while a card is open closes the card. The picker and
+        // the report sheet cover the map and keep their own Close and Cancel.
+        setSelected(null);
+        setSelectedTown(null);
+      } else if (!movedRef.current) {
         const el = document.elementFromPoint(event.clientX, event.clientY) as Element | null;
         const hit = el?.closest("[data-town], [data-rid]") ?? null;
         const townId = hit?.getAttribute("data-town") ?? null;
@@ -848,7 +875,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   wheelLogicRef.current = (event) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!worldRect || !cameraRef.current) return;
+    if (!worldRect || !cameraRef.current || overlayRef.current) return;
     const factor = event.deltaY < 0 ? 1.15 : 1 / 1.15;
     const focal = clientToViewBox(event.clientX, event.clientY, cameraRef.current);
     cameraRef.current = zoomAt(cameraRef.current, worldRect, factor, focal.x, focal.y, currentAspect());
@@ -869,6 +896,8 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
 
   const onKeyDown = useCallback((event: React.KeyboardEvent<SVGSVGElement>) => {
     if (!worldRect || !cameraRef.current) return;
+    // With a card open only Escape (below) does anything: no keyboard pan or zoom.
+    if (overlayRef.current && event.key !== "Escape") return;
     const cam = cameraRef.current;
     const aspect = currentAspect();
     const panStep = cam.w * 0.15;
@@ -1166,15 +1195,21 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
         ) : null}
         <div className="w2map-info-label">Towns</div>
         {selectedProvince.towns.length ? (
-          <ul className="w2map-info-towns">
-            {selectedProvince.towns.map((townId) => (
-              <li key={townId}>
-                <button type="button" className="w2map-town-chip" onClick={() => setSelectedTown(townId)}>
-                  {townsById.get(townId)?.name ?? "Unnamed town"}
-                </button>
-              </li>
-            ))}
-          </ul>
+          <>
+            {/* A region with towns is acted on through them: each town is an
+                entry that opens the town card, and the region shows no action row. */}
+            <ul className="w2map-info-towns w2map-town-entries" data-testid="town-entries">
+              {selectedProvince.towns.map((townId) => (
+                <li key={townId}>
+                  <button type="button" className="w2map-town-entry" onClick={() => setSelectedTown(townId)}>
+                    <span>{townsById.get(townId)?.name ?? "Unnamed town"}</span>
+                    <span className="w2map-town-entry-go" aria-hidden="true">›</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <p className="w2map-info-note">This land answers to its towns.</p>
+          </>
         ) : (
           <p className="w2map-info-empty">No towns in this region.</p>
         )}
@@ -1182,8 +1217,8 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
           <>
             {yourMenHere ? <p className="w2map-your-men">{yourMenHere}</p> : null}
             {selectedHeld ? <p className="w2map-held">{heldLine(heldRegions.get(selectedProvince.id) ?? null) ?? "Held by your house — a base for your forces."}</p> : null}
-            <div className="w2map-info-label">Actions</div>
-            {sendMenHere ?? (
+            {sendMenHere || selectedProvince.towns.length === 0 ? <div className="w2map-info-label">Actions</div> : null}
+            {sendMenHere ?? (selectedProvince.towns.length > 0 ? null : (
               <div className="w2map-actions">
                 {regionActions!.buttons.map((b) => (
                   <button
@@ -1193,14 +1228,14 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
                     disabled={!b.enabled}
                     aria-disabled={!b.enabled}
                     title={b.title}
-                    onClick={b.enabled && actionable(b.type) && selectedProvince.towns.length === 0 ? () => openPicker(b.type as MapActType, { kind: "region", id: selectedProvince.id, regionId: selectedProvince.id, name: regionName }) : undefined}
+                    onClick={b.enabled && actionable(b.type) ? () => openPicker(b.type as MapActType, { kind: "region", id: selectedProvince.id, regionId: selectedProvince.id, name: regionName }) : undefined}
                   >
                     {b.label}
                   </button>
                 ))}
               </div>
-            )}
-            {!sendMenHere && isMobile && regionActions!.caption ? <p className="w2map-action-why">{regionActions!.caption}</p> : null}
+            ))}
+            {!sendMenHere && selectedProvince.towns.length === 0 && isMobile && regionActions!.caption ? <p className="w2map-action-why">{regionActions!.caption}</p> : null}
           </>
         ) : null}
       </div>
@@ -1370,10 +1405,10 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
         {report ? <BattleReport report={report} onClose={() => setReport(null)} /> : null}
 
         <div className="w2map-controls">
-          <button type="button" className="w2map-btn" aria-label="Zoom in" title="Zoom in" onClick={() => stepZoom(1.3)}>+</button>
-          <button type="button" className="w2map-btn" aria-label="Zoom out" title="Zoom out" onClick={() => stepZoom(1 / 1.3)}>−</button>
-          <button type="button" className="w2map-btn" aria-label="Home" title="Home (Massalia)" onClick={goHome}>⌂</button>
-          <button type="button" className="w2map-btn" aria-label="Fit world" title="Fit the whole world" onClick={goFit}>▣</button>
+          <button type="button" className="w2map-btn" aria-label="Zoom in" title="Zoom in" disabled={overlayOpen} onClick={() => stepZoom(1.3)}>+</button>
+          <button type="button" className="w2map-btn" aria-label="Zoom out" title="Zoom out" disabled={overlayOpen} onClick={() => stepZoom(1 / 1.3)}>−</button>
+          <button type="button" className="w2map-btn" aria-label="Home" title="Home (Massalia)" disabled={overlayOpen} onClick={goHome}>⌂</button>
+          <button type="button" className="w2map-btn" aria-label="Fit world" title="Fit the whole world" disabled={overlayOpen} onClick={goFit}>▣</button>
         </div>
       </div>
     </div>
