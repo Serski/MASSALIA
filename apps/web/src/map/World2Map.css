@@ -486,6 +486,10 @@ p.w2map-stat-asof {
   background: rgba(10, 7, 5, 0.55);
 }
 
+/* Mounted outside the map stage (the Barracks' MOVE), the picker and its
+   report float over the whole viewport rather than the panel's flow. */
+.w2map-modal-host .w2map-modal { position: fixed; z-index: 60; }
+
 /* The card is bound to the viewport (85vh, or the stage when smaller); the row
    list is the only scrolling region and the footer with the verdict and the
    buttons stays pinned at the bottom. */

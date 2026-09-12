@@ -192,6 +192,9 @@ describe("move picker", () => {
     // The selector: every place with its travel time from Massalia, the base
     // itself and the sea crossing short of hulls greyed with the reason.
     const select = getByLabelText("Destination") as HTMLSelectElement;
+    // The default destination is the first place that is not the row's own base.
+    expect(select.value).toBe("nikaia");
+    expect(dialog.querySelector(".w2map-info-label")!.textContent).toBe("Send men to · Nikaia");
     const options = [...select.options].map((o) => ({ text: o.text, disabled: o.disabled }));
     expect(options).toEqual([
       { text: "Massalia · The men already stand there.", disabled: true },

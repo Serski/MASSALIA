@@ -748,26 +748,35 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
 
       {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
 
-      {mover && moverRow ? (
-        <ForcePicker
-          type="move"
-          target={moverTarget ? { kind: moverTarget.townId ? "town" : "region", id: moverTarget.id, regionId: moverTarget.regionId, name: moverTarget.name } : { kind: "region", id: moverRow.basedAt, regionId: moverRow.basedAt, name: placeNames[moverRow.basedAt] ?? moverRow.basedAt }}
-          names={{ ...placeNames, ...Object.fromEntries((mover.reach?.moveTargets ?? []).map((t) => [t.id, t.name])) }}
-          moveTargets={mover.reach?.moveTargets ?? []}
-          destinations
-          preselect={[moverRow.id]}
-          fleet={mover.reach?.fleet ?? { ships: {}, range: 0, space: 0, tiers: [] }}
-          roster={mover.reach ? view.roster : null}
-          onClose={() => setMover(null)}
-          onActed={(res) => {
-            setMover(null);
-            setMoveReport(res.report);
-            onRefresh();
-            void load();
-          }}
-        />
+      {mover && moverRow && mover.reach && moverTarget ? (
+        // Mounted only once the reach payload is in: the picker takes its
+        // default destination at mount, so it must not open on the row's own
+        // base. The host floats it over the viewport, outside the map stage.
+        <div className="w2map-modal-host">
+          <ForcePicker
+            type="move"
+            target={{ kind: moverTarget.townId ? "town" : "region", id: moverTarget.id, regionId: moverTarget.regionId, name: moverTarget.name }}
+            names={{ ...placeNames, ...Object.fromEntries(mover.reach.moveTargets.map((t) => [t.id, t.name])) }}
+            moveTargets={mover.reach.moveTargets}
+            destinations
+            preselect={[moverRow.id]}
+            fleet={mover.reach.fleet}
+            roster={view.roster}
+            onClose={() => setMover(null)}
+            onActed={(res) => {
+              setMover(null);
+              setMoveReport(res.report);
+              onRefresh();
+              void load();
+            }}
+          />
+        </div>
       ) : null}
-      {moveReport ? <BattleReport report={moveReport} onClose={() => setMoveReport(null)} /> : null}
+      {moveReport ? (
+        <div className="w2map-modal-host">
+          <BattleReport report={moveReport} onClose={() => setMoveReport(null)} />
+        </div>
+      ) : null}
     </section>
   );
 }
