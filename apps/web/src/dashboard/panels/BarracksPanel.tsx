@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api, ApiError, type BarracksOffer, type BarracksRosterRow, type BarracksUnit, type BarracksView } from "../../api.js";
+import { api, ApiError, type BarracksOffer, type BarracksRosterRow, type BarracksUnit, type BarracksView, type MapReachView } from "../../api.js";
+import { BattleReport, ForcePicker, type PickerReport } from "../../map/World2Map.js";
 import { AssetIcon, formatClock, formatDuration, GoodGlyph, type PanelProps, REGION_NAMES_SRC, useCountdownSeconds } from "../shared.js";
 
 // The Barracks tab (military prompt ui-2). Renders the GET /api/barracks view to
@@ -98,8 +99,9 @@ const MISSION_TAG: Record<NonNullable<BarracksRosterRow["mission"]>["kind"], str
 export function missionLine(row: BarracksRosterRow, names: Record<string, string>): string {
   const m = row.mission;
   if (!m) return "Returning";
-  const place = names[m.regionId] ?? m.regionId;
-  if (row.movingTo !== m.regionId) return `Returning from ${place}`;
+  const placeId = m.townId ?? m.regionId;
+  const place = names[placeId] ?? placeId;
+  if (row.movingTo !== placeId) return `Returning from ${place}`;
   switch (m.kind) {
     case "raid":
       return `Raiding ${place}`;
@@ -185,6 +187,7 @@ export function HomeRow({
   error,
   onConfirmChange,
   onDisband,
+  onMove,
   onZero,
 }: {
   row: BarracksRosterRow;
@@ -199,6 +202,7 @@ export function HomeRow({
   error: string | null;
   onConfirmChange: (open: boolean) => void;
   onDisband: () => void;
+  onMove: () => void;
   onZero: (key: string) => void;
 }) {
   // A band counts down to its contract end; the service countdown runs only
@@ -236,9 +240,14 @@ export function HomeRow({
     );
   } else {
     action = (
-      <button type="button" className="panel-btn ghost barracks-small" disabled={busy || disabledReason !== null} title={disabledReason ?? undefined} onClick={() => onConfirmChange(true)}>
-        Disband
-      </button>
+      <span className="barracks-actions">
+        <button type="button" className="panel-btn ghost barracks-small" disabled={busy || locked} title={locked ? lockReason : undefined} onClick={onMove}>
+          Move
+        </button>
+        <button type="button" className="panel-btn ghost barracks-small" disabled={busy || disabledReason !== null} title={disabledReason ?? undefined} onClick={() => onConfirmChange(true)}>
+          Disband
+        </button>
+      </span>
     );
   }
   return (
@@ -465,7 +474,13 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
   // One inline error at a time, under the row whose action failed.
   const [rowError, setRowError] = useState<{ key: string; message: string } | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
-  // Region display names for the mission lines (the map's public names file).
+  // The move picker opened from a row (the map's picker, mounted here with the
+  // row pre-ticked and a destination selector), the reach payload it reads,
+  // and the one-line report after a march.
+  const [mover, setMover] = useState<{ rowId: string; reach: MapReachView | null } | null>(null);
+  const [moveReport, setMoveReport] = useState<PickerReport | null>(null);
+  // Region display names for the mission lines (the map's public names file),
+  // with the view's own place names (towns included) on top.
   const [names, setNames] = useState<Record<string, string>>({});
   useEffect(() => {
     fetch(REGION_NAMES_SRC)
@@ -512,6 +527,13 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
     }
   };
   const errorFor = (key: string) => (rowError?.key === key ? rowError.message : null);
+  const openMove = (rowId: string) => {
+    setMover({ rowId, reach: null });
+    api
+      .mapReach()
+      .then((reach) => setMover((m) => (m && m.rowId === rowId ? { rowId, reach } : m)))
+      .catch(() => setMover((m) => (m && m.rowId === rowId ? { rowId, reach: { now: new Date().toISOString(), campaign: { season: "", open: true, opensAt: null }, bases: [], force: { men: 0, space: 0, fast: false }, fleet: { ships: {}, range: 0, space: 0, tiers: [] }, reach: {}, moveTargets: [] } } : m)));
+  };
 
   const onZero = useCallback(
     (key: string) => {
@@ -558,6 +580,10 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
   const homeBands = home.filter((r) => r.source === "band");
   const upkeepFor = (row: BarracksRosterRow) => ({ row: view.upkeep.rows[row.id] ?? null, perMan: row.source === "trained" ? (view.units.find((u) => u.id === row.unitId)?.upkeepPerDay ?? null) : null });
   const strip = upkeepGoods(view.upkeep.perDay);
+  const placeNames = { ...names, ...view.places };
+  const moverRow = mover ? view.roster.find((r) => r.id === mover.rowId) ?? null : null;
+  // The picker's default destination: the first place that is not the row's own base.
+  const moverTarget = mover?.reach?.moveTargets.find((t) => moverRow && t.id !== moverRow.basedAt) ?? mover?.reach?.moveTargets[0] ?? null;
   const bandsInCity = view.offers.length === 3 ? "Three" : String(view.offers.length);
 
   return (
@@ -618,6 +644,7 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
                 error={errorFor(`disband:${row.id}`)}
                 onConfirmChange={(open) => setConfirmId(open ? row.id : null)}
                 onDisband={() => act(`disband:${row.id}`, () => api.barracksDisband(row.id), `Disbanded the ${row.plural}.`)}
+                onMove={() => openMove(row.id)}
                 onZero={onZero}
               />
             ))}
@@ -638,6 +665,7 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
                 error={errorFor(`disband:${row.id}`)}
                 onConfirmChange={(open) => setConfirmId(open ? row.id : null)}
                 onDisband={() => act(`disband:${row.id}`, () => api.barracksDisband(row.id), `Disbanded the ${row.label}.`)}
+                onMove={() => openMove(row.id)}
                 onZero={onZero}
               />
             ))}
@@ -650,7 +678,7 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
             <div className="barracks-list away">
               {away.length === 0 ? <p className="barracks-empty">No one on the march.</p> : null}
               {away.map((row) => (
-                <AwayRow key={row.id} row={row} names={names} offset={offset} serverNowMs={serverNowMs} onZero={onZero} />
+                <AwayRow key={row.id} row={row} names={placeNames} offset={offset} serverNowMs={serverNowMs} onZero={onZero} />
               ))}
             </div>
           </section>
@@ -719,6 +747,27 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
       </section>
 
       {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
+
+      {mover && moverRow ? (
+        <ForcePicker
+          type="move"
+          target={moverTarget ? { kind: moverTarget.townId ? "town" : "region", id: moverTarget.id, regionId: moverTarget.regionId, name: moverTarget.name } : { kind: "region", id: moverRow.basedAt, regionId: moverRow.basedAt, name: placeNames[moverRow.basedAt] ?? moverRow.basedAt }}
+          names={{ ...placeNames, ...Object.fromEntries((mover.reach?.moveTargets ?? []).map((t) => [t.id, t.name])) }}
+          moveTargets={mover.reach?.moveTargets ?? []}
+          destinations
+          preselect={[moverRow.id]}
+          fleet={mover.reach?.fleet ?? { ships: {}, range: 0, space: 0, tiers: [] }}
+          roster={mover.reach ? view.roster : null}
+          onClose={() => setMover(null)}
+          onActed={(res) => {
+            setMover(null);
+            setMoveReport(res.report);
+            onRefresh();
+            void load();
+          }}
+        />
+      ) : null}
+      {moveReport ? <BattleReport report={moveReport} onClose={() => setMoveReport(null)} /> : null}
     </section>
   );
 }

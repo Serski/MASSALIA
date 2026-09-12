@@ -491,7 +491,9 @@ suite("Map actions (integration)", () => {
     // Once home, the town is a base: its region is no target, and the next town over is a step away.
     await settle(ctx, at(10));
     const view = await reach(ctx, at(10));
-    expect(view.bases).toContainEqual({ id: "reii", regionId: "R047", townId: "reii", kind: "conquest" });
+    // The garrison is what survived (the seed carries the player id, so the losses vary by run).
+    const survivors = r.report.attacker.rows[0]!.end;
+    expect(view.bases).toContainEqual({ id: "reii", regionId: "R047", townId: "reii", kind: "conquest", name: "Reii", holding: { garrison: survivors, minGarrison: 15, perDay: { drachmae: 60, grain: 0, timber: 0 }, levyPerYear: 0 } });
     // The region of a held town keeps its entry (for other towns there), at 0 steps from the town; the next region over is a step.
     expect(view.reach.R047!.byBase.reii).toEqual({ landSteps: 0, seaSteps: null });
     expect(view.reach.R049!.byBase.reii).toEqual({ landSteps: 1, seaSteps: null }); // R047 is inland
@@ -632,7 +634,7 @@ suite("Map actions (integration)", () => {
     // Standing there: Arelate is a home base, R045 is one step and Attack ok; R052 itself stays no target.
     await settle(ctx, at(9.6));
     const standing = await reach(ctx, at(9.6));
-    expect(standing.bases).toContainEqual({ id: "arelate", regionId: "R052", townId: "arelate", kind: "home" });
+    expect(standing.bases).toContainEqual({ id: "arelate", regionId: "R052", townId: "arelate", kind: "home", name: "Arelate", holding: null });
     expect(standing.reach.R045!.byBase.arelate).toEqual({ landSteps: 1, seaSteps: null });
     expect(standing.reach.R045!.attack).toEqual({ ok: true });
     expect(standing.reach.R052).toBeUndefined();

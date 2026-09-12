@@ -534,8 +534,12 @@ export const api = {
   // Map actions (military prompt 3b): Scout, Raid or Attack a townless region
   // with whole roster rows; resolves in the request and returns the report with
   // fresh reach and roster payloads.
-  mapAct: (type: MapActType, regionId: string, rows: { rowId: string; count: number }[]) =>
-    apiFetch<MapActResponse>("/api/map/act", { method: "POST", body: { type, regionId, rows } }),
+  mapAct: (type: MapActType, target: MapActTarget, rows: { rowId: string; count: number }[]) =>
+    apiFetch<MapActResponse>("/api/map/act", { method: "POST", body: { type, ...target, rows } }),
+  // Move (military prompt 3c): rows from one base to another place of the player's
+  // (Massalia's region, home ground, or a holding). Same response shape as an action.
+  mapMove: (baseId: string, rows: { rowId: string; count: number }[]) =>
+    apiFetch<MapActResponse<MapMoveReport>>("/api/map/act", { method: "POST", body: { type: "move", baseId, rows } }),
   craftGood: (good: string) => apiFetch<CraftResult>("/api/buildings/craft", { method: "POST", body: { good } }),
   // The hoplite's home army (Hoplite Step 1): rank ladder + daily salary.
   service: () => apiFetch<ServiceView>("/api/service"),
@@ -1442,7 +1446,7 @@ export type BarracksRosterRow = {
   basedAt: string; // region id the row stands in
   movingTo: string | null; // region id of a relocation or recovery in flight
   arrivesAt: string | null; // ISO; when that movement completes
-  mission: { kind: "scout" | "raid" | "attack" | "move"; regionId: string; departedAt: string } | null; // what a moving row is doing
+  mission: { kind: "scout" | "raid" | "attack" | "move"; regionId: string; townId?: string; departedAt: string } | null; // what a moving row is doing (townId when the target or destination is a town)
   createdAt: string; // ISO; training progress runs from here to readyAt
   stats: Record<string, number>; // the unit's or band's stat block (for the force picker)
   active: boolean;
@@ -1462,6 +1466,8 @@ export type BarracksOffer = {
 
 export type BarracksView = {
   gate: BarracksGate;
+  // Display names for every place the roster mentions (bases, destinations, mission targets): region ids and town slugs alike.
+  places: Record<string, string>;
   season: number;
   now: string; // server time (ISO); countdowns anchor to this, not the device clock
   levy: { men: number };
@@ -1491,14 +1497,26 @@ export type ReachEntry = {
   colonise: ReachVerdict;
 };
 
+// A base: `id` is what rows are based at (a region id, or a town slug for a held
+// town or a home town), `regionId` the region it stands in. A holding carries what
+// it pays: the men standing there against the minimum its tribute needs, the
+// tribute a day, and the levy it adds a year (regions only).
+export type BaseKind = "massalia" | "colony" | "conquest" | "home";
+export type HoldingView = { garrison: number; minGarrison: number; perDay: { drachmae: number; grain: number; timber: number }; levyPerYear: number };
+export type BaseView = { id: string; regionId: string; townId: string | null; kind: BaseKind; name: string; holding: HoldingView | null };
+// A place the player may move men to, with the steps from each base (by base id).
+export type MoveTargetView = { id: string; regionId: string; townId: string | null; kind: BaseKind; name: string; byBase: Record<string, { landSteps: number | null; seaSteps: number | null }> };
+export type FleetView = { ships: Record<string, number>; range: number; space: number; tiers?: { range: number; space: number }[] };
+
 export type MapReachView = {
   now: string; // server time (ISO); countdowns anchor to this, not the device clock
   campaign: { season: string; open: boolean; opensAt: string | null }; // closed in Winter
-  bases: { regionId: string; kind: "massalia" | "colony" | "conquest" }[];
+  bases: BaseView[];
   force: { men: number; space: number; fast: boolean };
-  fleet: { ships: Record<string, number>; range: number; space: number };
+  fleet: FleetView;
   // Keyed by region id; a region absent here keeps the legality matrix's own verdict.
   reach: Record<string, ReachEntry>;
+  moveTargets: MoveTargetView[];
 };
 
 // --- Map actions (POST /api/map/act; mirrors apps/server/src/services/mapActions.ts) ---
@@ -1509,6 +1527,12 @@ export type MapActReport = {
   type: MapActType;
   regionId: string;
   regionName: string;
+  // Set when the target is a town: the town, its survey and the effective def its garrison fought at.
+  townId: string | null;
+  townName: string | null;
+  town: { walls: number; population: number; garrisonDef: number } | null;
+  // Set for a sea assault on a town: the fleet that sailed, both sides' naval power and whether the landing held.
+  fleet: { ships: Record<string, number>; naval: number; defender: { pentekonters: number; triremes: number; naval: number }; held: boolean } | null;
   base: string;
   route: "land" | "sea";
   steps: number;
@@ -1516,20 +1540,42 @@ export type MapActReport = {
   arrivesAt: string;
   destination: string;
   ships: Record<string, number>;
-  winner: "attacker" | "defender" | "stand" | null;
+  winner: "attacker" | "defender" | "stand" | "repulsed" | null;
   rounds: number;
   attacker: { rows: { id: string; unitId: string; label: string; icon: string; start: number; end: number; broke: boolean }[]; losses: number };
   defender: { label: string; start: number; end: number; losses: number } | null;
   plunder: { drachmae: number; grain: number } | null;
-  conquest: { regionId: string; previousOwner: string | null } | null;
-  intel: { warband: number; scoutedGameDate: string } | null;
+  conquest: { regionId: string; townId: string | null; previousOwner: string | null } | null;
+  intel: { warband: number; pentekonters?: number; triremes?: number; scoutedGameDate: string } | null;
   line: string;
 };
 
-export type MapActResponse = {
-  report: MapActReport;
+// A move's report (mirrors MapMoveReport in mapActions.ts): one line, the march.
+export type MapMoveReport = {
+  type: "move";
+  from: string;
+  fromName: string;
+  baseId: string;
+  regionId: string;
+  regionName: string;
+  townId: string | null;
+  townName: string | null;
+  route: "within" | "land" | "sea";
+  steps: number;
+  minutes: number;
+  arrivesAt: string;
+  ships: Record<string, number>;
+  men: number;
+  rows: { id: string; unitId: string; label: string; icon: string; count: number }[];
+  line: string;
+};
+
+export type MapActResponse<R = MapActReport> = {
+  report: R;
   reach: MapReachView;
   force: MapReachView["force"];
   fleet: MapReachView["fleet"];
   roster: BarracksRosterRow[];
 };
+// A target for an action: a townless region or a town.
+export type MapActTarget = { regionId: string } | { townId: string };

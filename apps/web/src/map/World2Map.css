@@ -538,6 +538,25 @@ p.w2map-stat-asof {
 }
 
 .w2map-pick-why { margin: 0 0 6px; color: var(--dash-stone-dim, #9a8c72); font-size: 11px; font-style: italic; }
+
+/* The survey line of the town panel: "Walls 2 · Population 4,000". */
+.w2map-survey-line { margin: 0 0 8px; color: var(--dash-parchment, #ece0cc); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+/* SEND MEN HERE stands in for the action row on a place of the player's. */
+.w2map-action-move { background: var(--dash-gold-bright, #d1ae63); }
+
+/* The move picker's destination selector (the Barracks' way in). */
+.w2map-pick-dest { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; font-size: 12px; color: var(--dash-stone, #c9bb9f); }
+.w2map-pick-dest select {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  color: var(--dash-parchment, #ece0cc);
+  background: rgba(20, 13, 10, 0.98);
+  border: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28));
+  border-radius: 6px;
+  font: inherit;
+}
 .w2map-pick-group.unreachable .w2map-pick-base { opacity: 0.6; }
 
 .w2map-pick-list { list-style: none; margin: 0 0 8px; padding: 0; }

@@ -29,7 +29,7 @@ type Mods = Awaited<ReturnType<typeof loadModules>>;
 type ReachView = {
   now: string;
   campaign: { season: string; open: boolean; opensAt: string | null };
-  bases: { id: string; regionId: string; townId: string | null; kind: string }[];
+  bases: { id: string; regionId: string; townId: string | null; kind: string; name: string; holding: unknown }[];
   moveTargets: { id: string; regionId: string; townId: string | null; kind: string; byBase: Record<string, { landSteps: number | null; seaSteps: number | null }> }[];
   force: { men: number; space: number; fast: boolean };
   fleet: { ships: Record<string, number>; range: number; space: number; tiers: { range: number; space: number }[] };
@@ -96,10 +96,10 @@ suite("/api/map/reach (integration)", () => {
     const res = await get(p.token);
     expect(res.statusCode).toBe(200);
     const v = res.json<ReachView>();
-    expect(v.bases).toEqual([{ id: "R060", regionId: "R060", townId: null, kind: "massalia" }]);
+    expect(v.bases).toEqual([{ id: "R060", regionId: "R060", townId: null, kind: "massalia", name: "Massalia", holding: null }]);
     // Every place the player may move men to, each with its steps from Massalia.
     expect(v.moveTargets.map((t) => t.id)).toEqual(expect.arrayContaining(["R060", "arelate", "nikaia", "antipolis"]));
-    expect(v.moveTargets.find((t) => t.id === "arelate")).toMatchObject({ regionId: "R052", townId: "arelate", kind: "home", byBase: { R060: { landSteps: 1 } } });
+    expect(v.moveTargets.find((t) => t.id === "arelate")).toMatchObject({ regionId: "R052", townId: "arelate", kind: "home", name: "Arelate", byBase: { R060: { landSteps: 1 } } });
     // Season 9 is a Spring: the campaign is open and no reopening instant is given.
     expect(v.campaign).toEqual({ season: "Spring", open: true, opensAt: null });
     expect(Math.abs(Date.parse(v.now) - Date.now())).toBeLessThan(10_000);

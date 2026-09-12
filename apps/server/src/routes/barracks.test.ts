@@ -39,6 +39,7 @@ type View = {
   levy: { men: number };
   config: { minServiceSeasons: number; maxActiveBands: number; termSeasons: number };
   summary: { underArms: number; levyMen: number; growthPerYear: number; baseGrowthPerYear: number; heldRegions: number; seasonsPerYear: number };
+  places: Record<string, string>;
   units: { id: string; gear: Record<string, number>; stats: Record<string, number> }[];
   roster: { id: string; source: string; unitId: string; label: string; plural: string; count: number; readyAt: string | null; contractEndAt: string | null; basedAt: string; movingTo: string | null; arrivesAt: string | null; mission: unknown; createdAt: string; active: boolean; canDisband: boolean }[];
   offers: { id: string; men: number; hired: boolean; upkeepPerDay: Record<string, number> }[];
@@ -144,6 +145,8 @@ suite("/api/barracks (integration)", () => {
     expect(Math.abs(Date.parse(v.roster[0]!.createdAt) - Date.parse(v.now))).toBeLessThan(1_000);
     // Under arms counts trained rows in every state against the levy left at home.
     expect(v.summary).toEqual({ underArms: 5, levyMen: 115, growthPerYear: 10, baseGrowthPerYear: 10, heldRegions: 0, seasonsPerYear: 4 });
+    // Every place the roster mentions has its display name.
+    expect(v.places).toEqual({ R060: "Massalia" });
     // A peltast trains for one season = one day from the recruit instant.
     expect(Math.abs(Date.parse(v.roster[0]!.readyAt!) - (Date.parse(v.now) + DAY))).toBeLessThan(1_000);
     expect(v.levy.men).toBe(115);

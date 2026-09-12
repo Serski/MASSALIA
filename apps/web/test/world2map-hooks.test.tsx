@@ -67,10 +67,11 @@ const WORLD = {
 const REACH = {
   now: new Date().toISOString(),
   campaign: { season: "Winter", open: false, opensAt: future(5) },
-  bases: [{ regionId: "R060", kind: "massalia" }],
+  bases: [{ id: "R060", regionId: "R060", townId: null, kind: "massalia", name: "Massalia", holding: null }],
   force: { men: 0, space: 0, fast: false },
   fleet,
   reach: { R046: entry },
+  moveTargets: [],
 };
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -142,8 +143,7 @@ describe("ForcePicker", () => {
     const { ForcePicker } = await import("../src/map/World2Map.js");
     const props = {
       type: "raid" as const,
-      regionId: "R046",
-      regionName: "Salyes",
+      target: { kind: "region" as const, id: "R046", regionId: "R046", name: "Salyes" },
       names: { R060: "Massalia", R046: "Salyes" },
       entry,
       fleet,
@@ -188,7 +188,7 @@ describe("ForcePicker", () => {
       colonise: { ok: true },
     };
     const view = render(
-      <ForcePicker type="attack" regionId="R047" regionName="Vocontii" names={{ R060: "Massalia", R046: "Salyes", R114: "Lixus" }} entry={threeBases} fleet={fleet} roster={roster} onClose={() => {}} onActed={() => {}} />,
+      <ForcePicker type="attack" target={{ kind: "region", id: "R047", regionId: "R047", name: "Vocontii" }} names={{ R060: "Massalia", R046: "Salyes", R114: "Lixus" }} entry={threeBases} fleet={fleet} roster={roster} onClose={() => {}} onActed={() => {}} />,
     );
     const groups = [...view.container.querySelectorAll(".w2map-pick-group")];
     expect(groups.map((g) => g.getAttribute("data-base"))).toEqual(["R060", "R046", "R114"]);

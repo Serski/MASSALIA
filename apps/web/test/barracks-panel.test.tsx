@@ -110,7 +110,8 @@ describe("BarracksPanel", () => {
     expect(home.textContent).toContain("2 grain · 1 oil a day per man · 52 grain · 26 oil for the row");
     expect(home.textContent).toContain("May be released.");
     expect(home.textContent).toMatch(/4 wine · 4 chicken · 2 herbs · 40 drachmae a day · contract 1d 1[56]h/);
-    expect(home.querySelectorAll("button").length).toBe(2); // one Disband each
+    expect(home.querySelectorAll("button").length).toBe(4); // Move and Disband on each row
+    expect([...home.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Move", "Disband", "Move", "Disband"]);
 
     // Away: a raid with its mission line, tag and bar; a plain return without a tag or bar.
     const away = container.querySelector('[data-section="away"]')!;

@@ -16,11 +16,12 @@ import {
   type ReachSteps,
   type Topology,
 } from "@massalia/shared";
-import { getBandsContent, getShipsContent, getUnitsContent, isActive, type UnitRow } from "./barracks.js";
+import { getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, type UnitRow } from "./barracks.js";
 import type { ActingContext } from "./buildings.js";
-import { holdingBaseId, listHoldings } from "./holdings.js";
+import { garrisonCount, holdingBaseId, listHoldings, tributeRateOf } from "./holdings.js";
 import { getTopology } from "./mapGraph.js";
 import { loadMilitaryOwners } from "./mapMilitary.js";
+import { regionDisplayName, townDisplayName } from "./mapNames.js";
 
 // Reach assembly shared by GET /api/map/reach and the map actions: the player's
 // bases (the Massalia region, every holding — a region or a town — and any home
@@ -35,12 +36,16 @@ type DbTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 export type Exec = DbTx | Db;
 
 // A base: `id` is what rows are based at (a region id, or a town slug for a
-// town holding or a home town); `regionId` is the region it stands in.
+// town holding or a home town); `regionId` is the region it stands in; `name`
+// the display name the client shows. A holding carries what it pays: the men
+// standing there against the minimum its tribute needs, the tribute a day,
+// and the levy it adds a year (regions only).
 export type BaseKind = "massalia" | "colony" | "conquest" | "home";
-export type BaseView = { id: string; regionId: string; townId: string | null; kind: BaseKind };
+export type HoldingView = { garrison: number; minGarrison: number; perDay: { drachmae: number; grain: number; timber: number }; levyPerYear: number };
+export type BaseView = { id: string; regionId: string; townId: string | null; kind: BaseKind; name: string; holding: HoldingView | null };
 export type CampaignView = { season: string; open: boolean; opensAt: string | null };
 // A place the player may move men to, with the steps from each base.
-export type MoveTargetView = { id: string; regionId: string; townId: string | null; kind: BaseKind; byBase: Record<string, ReachSteps> };
+export type MoveTargetView = { id: string; regionId: string; townId: string | null; kind: BaseKind; name: string; byBase: Record<string, ReachSteps> };
 export type ReachView = {
   /** server time (ISO) — countdowns anchor to this, not the device clock */
   now: string;
@@ -113,13 +118,21 @@ async function ownedRows(exec: Exec, ctx: ActingContext): Promise<UnitRow[]> {
 
 // The player's bases (ruling 11): the Massalia region always, every holding,
 // and every home place where at least one active, non-moving row stands.
+const placeName = (id: string, townId: string | null) => (townId ? townDisplayName(townId) : regionDisplayName(id));
+
 export async function basesOf(exec: Exec, ctx: ActingContext, now: Date, rows?: UnitRow[]): Promise<BaseView[]> {
   const topology = getTopology();
   const holdings = await listHoldings(exec, ctx);
-  const out: BaseView[] = [{ id: topology.massaliaRegion, regionId: topology.massaliaRegion, townId: null, kind: "massalia" }];
-  for (const h of holdings) out.push({ id: holdingBaseId(h), regionId: h.regionId, townId: h.townId || null, kind: h.kind });
+  const out: BaseView[] = [{ id: topology.massaliaRegion, regionId: topology.massaliaRegion, townId: null, kind: "massalia", name: await regionDisplayName(topology.massaliaRegion), holding: null }];
+  const levyPerYear = getBattleContent().regionTribute.levyPerYear;
+  for (const h of holdings) {
+    const id = holdingBaseId(h);
+    const rate = await tributeRateOf(h);
+    const holding: HoldingView = { garrison: await garrisonCount(exec, ctx, id, now), minGarrison: rate.minGarrison, perDay: { drachmae: rate.drachmae, grain: rate.grain, timber: rate.timber }, levyPerYear: h.townId ? 0 : levyPerYear };
+    out.push({ id, regionId: h.regionId, townId: h.townId || null, kind: h.kind, name: await placeName(id, h.townId || null), holding });
+  }
   const standing = new Set((rows ?? (await ownedRows(exec, ctx))).filter((r) => isActive(r, now) && r.movingTo === null).map((r) => r.basedAt));
-  for (const p of await homePlaces(topology)) if (standing.has(p.id)) out.push({ ...p, kind: "home" });
+  for (const p of await homePlaces(topology)) if (standing.has(p.id)) out.push({ ...p, kind: "home", name: await placeName(p.id, p.townId), holding: null });
   return out;
 }
 
@@ -145,7 +158,9 @@ export async function moveTargetsOf(topology: Topology, bases: BaseView[], ctx: 
   const places: { id: string; regionId: string; townId: string | null; kind: BaseKind }[] = [{ id: topology.massaliaRegion, regionId: topology.massaliaRegion, townId: null, kind: "massalia" }];
   for (const p of await homePlaces(topology)) places.push({ ...p, kind: "home" });
   for (const h of await listHoldings(exec, ctx)) places.push({ id: holdingBaseId(h), regionId: h.regionId, townId: h.townId || null, kind: h.kind });
-  return places.map((p) => ({ ...p, byBase: stepsByBase(topology, bases, p.regionId) }));
+  const out: MoveTargetView[] = [];
+  for (const p of places) out.push({ ...p, name: await placeName(p.id, p.townId), byBase: stepsByBase(topology, bases, p.regionId) });
+  return out;
 }
 
 // The reach payload. With `rows` given, the force is exactly those rows and the

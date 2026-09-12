@@ -26,6 +26,7 @@ import { applyComposureDelta } from "./composure.js";
 import { lockPlayer } from "./lock.js";
 import { getTopology } from "./mapGraph.js";
 import { heldGarrisonedRegions, settleHoldings, settleTribute, type HoldingsSettle, type TributeSettle } from "./holdings.js";
+import { regionDisplayName, townDisplayName } from "./mapNames.js";
 
 // ---------------------------------------------------------------------------
 // Barracks — the player's army: trained UNITS raised from the levy and hired
@@ -775,6 +776,9 @@ export type UpkeepView = { perDay: Record<string, number>; rows: Record<string, 
 export const UPKEEP_NOTE = "Shortfalls are bought at the market's seasonal price.";
 export type BarracksView = {
   gate: GateView;
+  // Display names for every place the roster mentions (bases, destinations,
+  // mission targets): region ids and town slugs alike.
+  places: Record<string, string>;
   season: number;
   now: string; // server time (ISO) — countdowns anchor to this, not the device clock
   levy: { men: number };
@@ -849,8 +853,15 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
     });
     // Upkeep: every active row (moving rows still eat), summed and per row.
     const upkeep: UpkeepView = { ...armyUpkeep(rows, now), note: UPKEEP_NOTE };
+    const places: Record<string, string> = {};
+    const topology = getTopology();
+    const nameOf = async (id: string) => (topology.townRegion.has(id) ? townDisplayName(id) : regionDisplayName(id));
+    for (const r of rows) {
+      for (const id of [r.basedAt, r.movingTo, r.mission?.regionId, r.mission?.townId]) if (id && !(id in places)) places[id] = await nameOf(id);
+    }
     const result: BarracksView = {
       gate,
+      places,
       season,
       now: now.toISOString(),
       levy: { men: levy.men },

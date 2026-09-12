@@ -1,12 +1,32 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { forceStats, HOME_POLITY_ID, renderForce, routeFor, verdictsFor, type CampaignForcePart, type MapActionType } from "@massalia/shared";
-import { api, apiBaseUrl, ApiError, type BarracksRosterRow, type MapActReport, type MapActType, type MapReachView, type ReachEntry } from "../api.js";
+import { forceStats, HOME_POLITY_ID, moveVerdict, renderForce, routeFor, verdictsFor, type CampaignForcePart, type MapActionType } from "@massalia/shared";
+import { api, apiBaseUrl, ApiError, type BarracksRosterRow, type BaseView, type MapActReport, type MapActType, type MapMoveReport, type MapReachView, type MoveTargetView, type ReachEntry } from "../api.js";
 import { AssetIcon, CULTURE_WEBP, formatClock, formatDuration, marchLine, POLITY_CREST, titleCase, useCountdownSeconds } from "../dashboard/shared.js";
 import { mapActionButtons, withReach, type MapActionButton } from "./mapActions.js";
 
-// Attack, Raid and Scout are the actions that resolve (Colonise waits for 3c).
+// Attack, Raid and Scout are the actions that resolve (Colonise waits for 3d).
 const actionable = (type: MapActionType): type is MapActType => type === "attack" || type === "raid" || type === "scout";
 import "./World2Map.css";
+
+const EMPTY_FLEET: MapReachView["fleet"] = { ships: {}, range: 0, space: 0, tiers: [] };
+
+// What the picker acts on: a townless region, a town, or (for a move) one of
+// the player's places by base id.
+export type PickTarget = { kind: "region" | "town"; id: string; regionId: string; name: string };
+
+// "Held by your house · tribute 120 dr a day", "· garrison too small for
+// tribute (30 men needed)", or for a region "· 15 grain, 8 timber a day · +5
+// levy a year".
+export function holdingLine(b: BaseView): string {
+  const h = b.holding;
+  if (!h) return "Held by your house — a base for your forces.";
+  if (b.townId) {
+    if (h.garrison < h.minGarrison) return `Held by your house · garrison too small for tribute (${h.minGarrison} men needed)`;
+    return `Held by your house · tribute ${h.perDay.drachmae} dr a day`;
+  }
+  const goods = [h.perDay.grain ? `${h.perDay.grain} grain` : null, h.perDay.timber ? `${h.perDay.timber} timber` : null].filter(Boolean).join(", ");
+  return `Held by your house · ${goods} a day · +${h.levyPerYear} levy a year`;
+}
 
 /**
  * Standalone hand-drawn world map (the game's Atlas map and the /map route).
@@ -358,34 +378,39 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   const winterClosed = campaign !== null && !campaign.open;
   const opensOnDevice = winterClosed && campaign.opensAt ? new Date(Date.parse(campaign.opensAt) - clockOffset).toISOString() : null;
   const winterLeft = useCountdownSeconds(opensOnDevice);
-  const [reachFleet, setReachFleet] = useState<MapReachView["fleet"]>({ ships: {}, range: 0, space: 0 });
-  // The force picker (Attack / Raid / Scout on a townless region), the roster it
-  // lists, and the battle report after an action. Whole rows only.
-  const [picker, setPicker] = useState<{ type: MapActType; regionId: string } | null>(null);
+  const [reachFleet, setReachFleet] = useState<MapReachView["fleet"]>(EMPTY_FLEET);
+  // Every place the player may move men to, with its steps from each base.
+  const [moveTargets, setMoveTargets] = useState<MoveTargetView[]>([]);
+  // The force picker (Attack / Raid / Scout on a region or a town, or a move to
+  // one of the player's places), the roster it lists, and the report after an
+  // action. Whole rows or part of a trained row.
+  const [picker, setPicker] = useState<{ type: MapActType | "move"; target: PickTarget } | null>(null);
   const [roster, setRoster] = useState<BarracksRosterRow[] | null>(null);
-  const [report, setReport] = useState<MapActReport | null>(null);
-  // The player's men in the selected region: the garrison standing there and
-  // any party heading there, with a countdown to the earliest arrival (server
-  // clock). At zero the roster is refetched once so the settle can land them.
+  const [report, setReport] = useState<MapActReport | MapMoveReport | null>(null);
+  // The player's men in the selected place (a town when one is open, else the
+  // region): those standing there and any party heading there, with a countdown
+  // to the earliest arrival (server clock). At zero the roster is refetched once
+  // so the settle can land them.
+  const placeId = selectedTown ?? selected;
   const menHere = useMemo(() => {
     const rows = roster ?? [];
-    const garrison = selected ? rows.filter((r) => r.basedAt === selected && r.movingTo === null && r.active) : [];
-    const heading = selected ? rows.filter((r) => r.movingTo === selected) : [];
+    const garrison = placeId ? rows.filter((r) => r.basedAt === placeId && r.movingTo === null && r.active) : [];
+    const heading = placeId ? rows.filter((r) => r.movingTo === placeId) : [];
     const arrivals = heading.map((r) => r.arrivesAt).filter((a): a is string => a !== null).sort();
     return { garrison, heading, earliest: arrivals[0] ?? null };
-  }, [roster, selected]);
+  }, [roster, placeId]);
   const menLeft = useCountdownSeconds(menHere.earliest ? new Date(Date.parse(menHere.earliest) - clockOffset).toISOString() : null);
   const rosterRefetched = useRef(new Set<string>());
   useEffect(() => {
     if (!menHere.earliest || menLeft > 0) return;
-    const key = `${selected}:${menHere.earliest}`;
+    const key = `${placeId}:${menHere.earliest}`;
     if (rosterRefetched.current.has(key)) return;
     rosterRefetched.current.add(key);
     api
       .barracks()
       .then((view) => setRoster(view.roster))
       .catch(() => {});
-  }, [menHere.earliest, menLeft, selected]);
+  }, [menHere.earliest, menLeft, placeId]);
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" && "matchMedia" in window ? window.matchMedia(MOBILE_QUERY).matches : false,
   );
@@ -435,7 +460,8 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
         if (cancelled) return;
         setReach(view.reach ?? {});
         setReachBases(view.bases ?? []);
-        setReachFleet(view.fleet ?? { ships: {}, range: 0, space: 0 });
+        setReachFleet(view.fleet ?? EMPTY_FLEET);
+        setMoveTargets(view.moveTargets ?? []);
         setCampaign(view.campaign ?? null);
         setClockOffset(view.now ? Date.parse(view.now) - Date.now() : 0);
       })
@@ -447,14 +473,30 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
 
   // Regions the player holds render as Massalia's own (colour, crest, and the
   // legality matrix's home rule), with a note in the panel. Nothing else on the
-  // map knows the player, so the holding rides on the polity layer.
-  const held = useMemo(() => new Set(reachBases.filter((b) => b.kind !== "massalia").map((b) => b.regionId)), [reachBases]);
+  // map knows the player, so the holding rides on the polity layer. A held town
+  // is the player's too, but its region is not: only the town panel changes.
+  const isHolding = (b: BaseView) => b.kind === "colony" || b.kind === "conquest";
+  const heldRegions = useMemo(() => new Map(reachBases.filter((b) => isHolding(b) && b.townId === null).map((b) => [b.regionId, b])), [reachBases]);
+  const heldTowns = useMemo(() => new Map(reachBases.filter((b) => isHolding(b) && b.townId !== null).map((b) => [b.townId!, b])), [reachBases]);
+  const held = useMemo(() => new Set(heldRegions.keys()), [heldRegions]);
+  const moveTargetById = useMemo(() => new Map(moveTargets.map((t) => [t.id, t])), [moveTargets]);
   const politicsView = useMemo<Politics | null>(() => {
     if (!politics || held.size === 0) return politics;
     const owners = { ...politics.owners };
     for (const id of held) owners[id] = HOME_POLITY_ID;
     return { ...politics, owners };
   }, [politics, held]);
+
+  // Display names for every place a picker or a mission line may mention:
+  // regions from the names file, towns from the world file, and whatever the
+  // reach payload named.
+  const placeNames = useMemo(() => {
+    const out: Record<string, string> = { ...names };
+    for (const t of world?.towns ?? []) out[t.id] = t.name;
+    for (const b of reachBases) out[b.id] = b.name;
+    for (const t of moveTargets) out[t.id] = t.name;
+    return out;
+  }, [names, world, reachBases, moveTargets]);
 
   const worldRect = useMemo<Rect | null>(
     () => (world ? { x: 0, y: 0, w: world.width, h: world.height } : null),
@@ -1042,32 +1084,58 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
     return parts.length ? parts.join(" · ") : null;
   })();
 
-  // Attack / Raid / Scout on a townless region open the force picker; the
-  // roster is fetched fresh each time (the Barracks may have changed).
-  const openPicker = (type: MapActType, regionId: string) => {
-    setPicker({ type, regionId });
+  // Attack / Raid / Scout on a region or a town, or a move to one of the
+  // player's places, open the force picker; the roster is fetched fresh each
+  // time (the Barracks may have changed).
+  const openPicker = (type: MapActType | "move", target: PickTarget) => {
+    setPicker({ type, target });
     setRoster(null);
     api
       .barracks()
       .then((view) => setRoster(view.roster))
       .catch(() => setRoster([]));
   };
-  const onActed = (regionId: string, res: { report: MapActReport; reach: MapReachView; roster: BarracksRosterRow[] }) => {
+  const onActed = (res: { report: MapActReport | MapMoveReport; reach: MapReachView; roster: BarracksRosterRow[] }) => {
     setReach(res.reach.reach ?? {});
     setReachBases(res.reach.bases ?? []);
-    setReachFleet(res.reach.fleet ?? { ships: {}, range: 0, space: 0 });
+    setReachFleet(res.reach.fleet ?? EMPTY_FLEET);
+    setMoveTargets(res.reach.moveTargets ?? []);
     setCampaign(res.reach.campaign ?? null);
     setClockOffset(res.reach.now ? Date.parse(res.reach.now) - Date.now() : 0);
     setRoster(res.roster);
-    if (res.report.intel) {
-      setMilitary((m) => ({ ...m, regions: { ...m.regions, [regionId]: { warband: res.report.intel!.warband, source: "intel", scoutedGameDate: res.report.intel!.scoutedGameDate } } }));
+    if (res.report.type !== "move" && res.report.intel) {
+      const intel = res.report.intel;
+      if (res.report.townId) {
+        const townId = res.report.townId;
+        setMilitary((m) => ({ ...m, towns: { ...m.towns, [townId]: { garrison: intel.warband, pentekonters: intel.pentekonters ?? 0, triremes: intel.triremes ?? 0, source: "intel", scoutedGameDate: intel.scoutedGameDate } } }));
+      } else {
+        const regionId = res.report.regionId;
+        setMilitary((m) => ({ ...m, regions: { ...m.regions, [regionId]: { warband: intel.warband, source: "intel", scoutedGameDate: intel.scoutedGameDate } } }));
+      }
     }
     setPicker(null);
     setReport(res.report);
     onRefresh?.();
   };
 
-  const townActions = selectedTown ? withWinter(withReach(mapActionButtons({ kind: "town", hasTown: true, ownerId: selectedOwnerId }), townReach)) : null;
+  // A held town answers as Massalia's own in its panel (crest, name and the
+  // legality matrix), while its region keeps its owner.
+  const selectedTownHeld = selectedTown ? heldTowns.get(selectedTown) ?? null : null;
+  const townOwnerId = selectedTownHeld ? HOME_POLITY_ID : selectedOwnerId;
+  const townActions = selectedTown ? withWinter(withReach(mapActionButtons({ kind: "town", hasTown: true, ownerId: townOwnerId }), townReach)) : null;
+  // "Your men here: 20 hoplites" on a place of ours, "Your garrison" on a held region.
+  const menLabel = selectedTown || !selectedHeld ? "Your men here" : "Your garrison";
+  const yourMenHere = yourMenLine?.replace("Your garrison", menLabel) ?? null;
+  // SEND MEN HERE replaces the attack row on any place the player may move men to.
+  const moveTargetHere = placeId ? moveTargetById.get(placeId) ?? null : null;
+  const sendMenHere = moveTargetHere ? (
+    <div className="w2map-actions">
+      <button type="button" className="w2map-action w2map-action-move" onClick={() => openPicker("move", { kind: moveTargetHere.townId ? "town" : "region", id: moveTargetHere.id, regionId: moveTargetHere.regionId, name: moveTargetHere.name })}>
+        Send men here
+      </button>
+    </div>
+  ) : null;
+  const heldLine = (b: BaseView | null) => (b?.holding ? holdingLine(b) : null);
 
   const regionBody = selectedProvince ? (
     <>
@@ -1112,99 +1180,54 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
         )}
         {selectedProvince.type === "land" ? (
           <>
-            {yourMenLine ? <p className="w2map-your-men">{yourMenLine}</p> : null}
-            {selectedHeld ? <p className="w2map-held">Held by your house — a base for your forces.</p> : null}
+            {yourMenHere ? <p className="w2map-your-men">{yourMenHere}</p> : null}
+            {selectedHeld ? <p className="w2map-held">{heldLine(heldRegions.get(selectedProvince.id) ?? null) ?? "Held by your house — a base for your forces."}</p> : null}
             <div className="w2map-info-label">Actions</div>
-            <div className="w2map-actions">
-              {regionActions!.buttons.map((b) => (
-                <button
-                  key={b.type}
-                  type="button"
-                  className="w2map-action"
-                  disabled={!b.enabled}
-                  aria-disabled={!b.enabled}
-                  title={b.title}
-                  onClick={b.enabled && actionable(b.type) && selectedProvince.towns.length === 0 ? () => openPicker(b.type as MapActType, selectedProvince.id) : undefined}
-                >
-                  {b.label}
-                </button>
-              ))}
-            </div>
-            {isMobile && regionActions!.caption ? <p className="w2map-action-why">{regionActions!.caption}</p> : null}
+            {sendMenHere ?? (
+              <div className="w2map-actions">
+                {regionActions!.buttons.map((b) => (
+                  <button
+                    key={b.type}
+                    type="button"
+                    className="w2map-action"
+                    disabled={!b.enabled}
+                    aria-disabled={!b.enabled}
+                    title={b.title}
+                    onClick={b.enabled && actionable(b.type) && selectedProvince.towns.length === 0 ? () => openPicker(b.type as MapActType, { kind: "region", id: selectedProvince.id, regionId: selectedProvince.id, name: regionName }) : undefined}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {!sendMenHere && isMobile && regionActions!.caption ? <p className="w2map-action-why">{regionActions!.caption}</p> : null}
           </>
         ) : null}
       </div>
     </>
   ) : null;
 
-  // The town panel: population and walls from the public survey (every town),
-  // garrison and fleet only when the player is entitled to them (home or intel),
-  // "No survey yet" otherwise, and the four action buttons — rendered in the
-  // game's button style but inert until a later pass wires them up. Legality per
-  // button comes from the shared matrix (owner from politics2 via the town's region).
-  const stats = selectedTownObj ? townStats[selectedTownObj.id] : undefined;
-  const townMil = selectedTownObj ? military.towns[selectedTownObj.id] : undefined;
+  // The town panel: the public survey, the intel block, the player's men and
+  // holding, and the actions (or SEND MEN HERE on a place of the player's).
   const townBody = selectedTownObj ? (
-    <>
-      <button type="button" className="w2map-info-close" onClick={closeInfo} aria-label="Close">Close</button>
-      <div className="w2map-info-body">
-        <button type="button" className="w2map-back" onClick={() => setSelectedTown(null)}>
-          ‹ {regionName}
-        </button>
-        <div className="w2map-state w2map-state-town">
-          <StateCrest polityId={selectedOwnerId} color={stateColor} />
-          <div className="w2map-state-text">
-            <h2 className="w2map-state-name">{selectedTownObj.name}</h2>
-            <p className="w2map-region-name">{stateName} · {regionName}</p>
-          </div>
-        </div>
-        <div className="w2map-info-label">Survey</div>
-        <dl className="w2map-stats">
-          <div className="w2map-stat">
-            <dt>Population</dt>
-            <dd>{stats ? stats.population.toLocaleString() : "—"}</dd>
-          </div>
-          <div className="w2map-stat">
-            <dt>Walls</dt>
-            <dd>
-              {stats ? (
-                <>
-                  <span className="w2map-stat-pips" aria-hidden="true">{wallPips(stats.walls)}</span> Level {stats.walls}
-                </>
-              ) : (
-                "—"
-              )}
-            </dd>
-          </div>
-          <div className="w2map-stat">
-            <dt>Garrison</dt>
-            <dd>{townMil ? townMil.garrison.toLocaleString() : <span className="w2map-stat-none">No survey yet</span>}</dd>
-          </div>
-          <div className="w2map-stat">
-            <dt>Fleet</dt>
-            <dd>
-              {townMil ? (
-                <>
-                  {townMil.pentekonters.toLocaleString()} pentekonters · {townMil.triremes.toLocaleString()} triremes
-                </>
-              ) : (
-                <span className="w2map-stat-none">No survey yet</span>
-              )}
-            </dd>
-          </div>
-        </dl>
-        {townMil?.source === "intel" ? <p className="w2map-stat-asof">as of {townMil.scoutedGameDate}</p> : null}
-        <div className="w2map-info-label">Actions</div>
-        <div className="w2map-actions">
-          {townActions!.buttons.map((b) => (
-            <button key={b.type} type="button" className="w2map-action" disabled={!b.enabled} aria-disabled={!b.enabled} title={b.title}>
-              {b.label}
-            </button>
-          ))}
-        </div>
-        {isMobile && townActions!.caption ? <p className="w2map-action-why">{townActions!.caption}</p> : null}
-      </div>
-    </>
+    <TownPanel
+      town={selectedTownObj}
+      regionName={regionName}
+      stateName={selectedTownHeld ? (politicsView?.polities[HOME_POLITY_ID]?.name ?? "Massalia") : stateName}
+      ownerId={townOwnerId}
+      color={selectedTownHeld ? politicsView?.polities[HOME_POLITY_ID]?.color ?? stateColor : stateColor}
+      stats={townStats[selectedTownObj.id]}
+      mil={military.towns[selectedTownObj.id]}
+      held={selectedTownHeld}
+      yourMen={yourMenHere}
+      actions={townActions!}
+      canSendMen={sendMenHere !== null}
+      isMobile={isMobile}
+      onClose={closeInfo}
+      onBack={() => setSelectedTown(null)}
+      onAction={(type) => openPicker(type, { kind: "town", id: selectedTownObj.id, regionId: townRegionById.get(selectedTownObj.id) ?? "", name: selectedTownObj.name })}
+      onSendMen={() => moveTargetHere && openPicker("move", { kind: "town", id: moveTargetHere.id, regionId: moveTargetHere.regionId, name: moveTargetHere.name })}
+    />
   ) : null;
 
   return (
@@ -1334,14 +1357,14 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
         {picker && world ? (
           <ForcePicker
             type={picker.type}
-            regionId={picker.regionId}
-            regionName={names[picker.regionId] ?? picker.regionId}
-            names={names}
-            entry={reach?.[picker.regionId]}
+            target={picker.target}
+            names={placeNames}
+            entry={reach?.[picker.target.regionId]}
+            moveTargets={moveTargets}
             fleet={reachFleet}
             roster={roster}
             onClose={() => setPicker(null)}
-            onActed={(res) => onActed(picker.regionId, res)}
+            onActed={onActed}
           />
         ) : null}
         {report ? <BattleReport report={report} onClose={() => setReport(null)} /> : null}
@@ -1358,14 +1381,141 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
 }
 
 // ---------------------------------------------------------------------------
-// Force picker: the player's roster rows grouped by base, whole rows only, with
-// a live verdict for this action on this target — the shared reach rule run
-// against the steps the server reported and the fleet in stock. The server
-// stays authoritative: its 409 lands in the sheet as is.
+// The town panel: "Walls 2 · Population 4,000" from the public survey (every
+// town), garrison and fleet only when the player is entitled to them (home or
+// intel) with "No survey yet" otherwise, the player's men standing there, the
+// holding line for a held town, and the actions — Attack, Raid and Scout open
+// the picker; on a place of the player's, SEND MEN HERE replaces the row.
 // ---------------------------------------------------------------------------
 
-const ACTION_LABEL: Record<MapActType, string> = { attack: "Attack", raid: "Raid", scout: "Scout" };
+export function TownPanel({
+  town,
+  regionName,
+  stateName,
+  ownerId,
+  color,
+  stats,
+  mil,
+  held,
+  yourMen,
+  actions,
+  canSendMen,
+  isMobile,
+  onClose,
+  onBack,
+  onAction,
+  onSendMen,
+}: {
+  town: { id: string; name: string };
+  regionName: string;
+  stateName: string;
+  ownerId: string | null;
+  color: string;
+  stats: TownStats | undefined;
+  mil: TownMilitaryView | undefined;
+  held: BaseView | null;
+  yourMen: string | null;
+  actions: { buttons: MapActionButton[]; caption: string | null };
+  canSendMen: boolean;
+  isMobile: boolean;
+  onClose: () => void;
+  onBack: () => void;
+  onAction: (type: MapActType) => void;
+  onSendMen: () => void;
+}) {
+  return (
+    <>
+      <button type="button" className="w2map-info-close" onClick={onClose} aria-label="Close">Close</button>
+      <div className="w2map-info-body">
+        <button type="button" className="w2map-back" onClick={onBack}>
+          ‹ {regionName}
+        </button>
+        <div className="w2map-state w2map-state-town">
+          <StateCrest polityId={ownerId} color={color} />
+          <div className="w2map-state-text">
+            <h2 className="w2map-state-name">{town.name}</h2>
+            <p className="w2map-region-name">{stateName} · {regionName}</p>
+          </div>
+        </div>
+        <div className="w2map-info-label">Survey</div>
+        <p className="w2map-survey-line" data-testid="town-survey">
+          {stats ? (
+            <>
+              <span className="w2map-stat-pips" aria-hidden="true">{wallPips(stats.walls)}</span> Walls {stats.walls} · Population {stats.population.toLocaleString()}
+            </>
+          ) : (
+            "No survey of the walls or the people."
+          )}
+        </p>
+        <dl className="w2map-stats" data-testid="town-intel">
+          <div className="w2map-stat">
+            <dt>Garrison</dt>
+            <dd>{mil ? mil.garrison.toLocaleString() : <span className="w2map-stat-none">No survey yet</span>}</dd>
+          </div>
+          <div className="w2map-stat">
+            <dt>Fleet</dt>
+            <dd>
+              {mil ? (
+                <>
+                  {mil.pentekonters.toLocaleString()} pentekonters · {mil.triremes.toLocaleString()} triremes
+                </>
+              ) : (
+                <span className="w2map-stat-none">No survey yet</span>
+              )}
+            </dd>
+          </div>
+        </dl>
+        {mil?.source === "intel" ? <p className="w2map-stat-asof">as of {mil.scoutedGameDate}</p> : null}
+        {yourMen ? <p className="w2map-your-men">{yourMen}</p> : null}
+        {held ? <p className="w2map-held">{holdingLine(held)}</p> : null}
+        <div className="w2map-info-label">Actions</div>
+        {canSendMen ? (
+          <div className="w2map-actions">
+            <button type="button" className="w2map-action w2map-action-move" onClick={onSendMen}>Send men here</button>
+          </div>
+        ) : (
+          <div className="w2map-actions">
+            {actions.buttons.map((b) => (
+              <button
+                key={b.type}
+                type="button"
+                className="w2map-action"
+                disabled={!b.enabled}
+                aria-disabled={!b.enabled}
+                title={b.title}
+                onClick={b.enabled && actionable(b.type) ? () => onAction(b.type as MapActType) : undefined}
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {!canSendMen && isMobile && actions.caption ? <p className="w2map-action-why">{actions.caption}</p> : null}
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Force picker: the player's roster rows grouped by base, whole rows or part of
+// a trained row, with a live verdict for this action on this target — the
+// shared reach rule run against the steps the server reported and the fleet in
+// stock. For a move the target is one of the player's places (moveTargets), the
+// verdict is the move rule, and a destination selector may be shown (the
+// Barracks opens it that way, with one row pre-ticked). One component, mounted
+// from the map and from the Barracks. The server stays authoritative: its 409
+// lands in the sheet as is.
+// ---------------------------------------------------------------------------
+
+const ACTION_LABEL: Record<MapActType | "move", string> = { attack: "Attack", raid: "Raid", scout: "Scout", move: "Send men to" };
 const FAST_SPD = 6;
+// Travel for a move, mirroring battle.json's move block (the server decides;
+// these only label the picker).
+const MOVE_MINUTES_PER_STEP = 30;
+const MOVE_MINUTES_WITHIN = 10;
+
+export type PickerReport = MapActReport | MapMoveReport;
+export type PickerResult = { report: PickerReport; reach: MapReachView; roster: BarracksRosterRow[] };
 
 // A roster icon the way the Barracks roster shows it: the unit's or band's
 // artwork, an emoji when the file is missing.
@@ -1386,35 +1536,59 @@ function RecoveringRow({ row, names }: { row: BarracksRosterRow; names: Record<s
   );
 }
 
+// The travel a move takes from one base, from its steps: within one region,
+// one land step, or the seas crossed.
+function moveTravel(steps: { landSteps: number | null; seaSteps: number | null } | undefined): { route: "within" | "land" | "sea"; steps: number; minutes: number } | null {
+  if (!steps) return null;
+  if (steps.landSteps === 0) return { route: "within", steps: 0, minutes: MOVE_MINUTES_WITHIN };
+  if (steps.landSteps === 1) return { route: "land", steps: 1, minutes: MOVE_MINUTES_PER_STEP };
+  if (steps.seaSteps !== null) return { route: "sea", steps: steps.seaSteps, minutes: steps.seaSteps * MOVE_MINUTES_PER_STEP };
+  return null;
+}
+const travelClock = (minutes: number) => formatClock(minutes * 60);
+
 export function ForcePicker({
   type,
-  regionId,
-  regionName,
+  target,
   names,
   entry,
+  moveTargets = [],
+  destinations = false,
+  preselect = [],
   fleet,
   roster,
   onClose,
   onActed,
 }: {
-  type: MapActType;
-  regionId: string;
-  regionName: string;
+  type: MapActType | "move";
+  /** the region or town acted on; for a move, the destination (by base id) */
+  target: PickTarget;
   names: Record<string, string>;
-  entry: ReachEntry | undefined;
+  /** the reach entry for the target's region (actions only) */
+  entry?: ReachEntry | undefined;
+  /** every place the player may move men to (moves only) */
+  moveTargets?: MoveTargetView[];
+  /** show a destination selector over moveTargets (the Barracks' way in) */
+  destinations?: boolean;
+  /** row ids ticked at their full count when the picker opens */
+  preselect?: string[];
   fleet: MapReachView["fleet"];
   roster: BarracksRosterRow[] | null;
   onClose: () => void;
-  onActed: (res: { report: MapActReport; reach: MapReachView; roster: BarracksRosterRow[] }) => void;
+  onActed: (res: PickerResult) => void;
 }) {
-  const [picked, setPicked] = useState<Set<string>>(() => new Set());
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(preselect));
   // How many men of a trained row march (default the whole row); bands go whole.
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-
   // Shown once a tick in a second base has cleared the first.
   const [switched, setSwitched] = useState(false);
+  // The destination of a move, when a selector is shown.
+  const [destId, setDestId] = useState(target.id);
+  const isMove = type === "move";
+  const dest = isMove ? (moveTargets.find((t) => t.id === destId) ?? null) : null;
+  const targetName = isMove ? (dest?.name ?? names[destId] ?? destId) : target.name;
 
   const rows = roster ?? [];
   const eligible = rows.filter((r) => r.active && r.movingTo === null);
@@ -1425,26 +1599,33 @@ export function ForcePicker({
   const selected = eligible.filter((r) => picked.has(r.id));
   const base = selected[0]?.basedAt ?? null;
   const sentOf = (r: BarracksRosterRow) => (r.source === "band" ? r.count : Math.min(r.count, Math.max(1, counts[r.id] ?? r.count)));
-  const fleetStats = { range: fleet.range, space: fleet.space };
-  const verdictOf = (v: ReturnType<typeof verdictsFor>) => (type === "attack" ? v.attack : v.raid);
+  const fleetStats = { range: fleet.range, space: fleet.space, tiers: fleet.tiers };
+  const verdictOf = (steps: { landSteps: number | null; seaSteps: number | null }, force: ReturnType<typeof forceStats>) => {
+    if (isMove) return moveVerdict(steps, force, fleetStats);
+    const v = verdictsFor(steps, force, fleetStats);
+    return type === "attack" ? v.attack : v.raid;
+  };
 
-  // The steps from one base alone (an older payload without byBase falls back
-  // to the record's own steps), and whether any force at all could reach the
+  // The steps from one base alone: for an action the reach entry's byBase (an
+  // older payload without it falls back to the record's own steps); for a move
+  // the destination's byBase. And whether any force at all could reach the
   // target from there: one fast man in one hull's space, so a base greys only
   // for reasons no selection could mend (no base within reach, the fleet's
-  // range, no hulls at all).
-  const stepsFrom = (baseId: string) => entry?.byBase?.[baseId] ?? entry;
-  const baseVerdict = (baseId: string) => {
+  // range, no hulls at all). For a move the destination itself is no origin.
+  const stepsFrom = (baseId: string) => (isMove ? dest?.byBase?.[baseId] : (entry?.byBase?.[baseId] ?? entry));
+  const baseVerdict = (baseId: string): { ok: boolean; reason?: string } => {
+    if (isMove && baseId === destId) return { ok: false, reason: "The men already stand there." };
     const steps = stepsFrom(baseId);
-    if (!steps) return { ok: false, reason: "That land cannot be reached." };
-    return verdictOf(verdictsFor(steps, forceStats([{ spd: FAST_SPD, space: 1, count: 1 }]), fleetStats));
+    if (!steps) return { ok: false, reason: isMove ? "Men may only be sent to Massalia's own ground or a holding of yours." : "That land cannot be reached." };
+    return verdictOf(steps, forceStats([{ spd: FAST_SPD, space: 1, count: 1 }]));
   };
 
   const force = forceStats(selected.map((r) => ({ spd: r.stats.spd ?? 0, space: r.stats.space ?? 1, count: sentOf(r) })));
-  const steps = base === null ? entry : stepsFrom(base);
-  let verdict = steps ? verdictOf(verdictsFor(steps, force, fleetStats)) : { ok: false, reason: "That land cannot be reached." };
+  const steps = base === null ? (isMove ? undefined : entry) : stepsFrom(base);
+  let verdict = steps ? verdictOf(steps, force) : { ok: false, reason: isMove ? "Choose the rows that march." : "That land cannot be reached." };
+  if (base !== null && isMove && base === destId) verdict = { ok: false, reason: "The men already stand there." };
   if (verdict.ok && type === "scout" && !selected.some((r) => (r.stats.spd ?? 0) >= FAST_SPD)) verdict = { ok: false, reason: `A scouting party needs a man at Spd ${FAST_SPD} or more.` };
-  const route = steps && selected.length > 0 ? routeFor(type === "attack" ? "attack" : "raid", steps, force) : null;
+  const route = steps && selected.length > 0 ? (isMove ? moveTravel(steps) : routeFor(type === "attack" ? "attack" : "raid", steps, force)) : null;
 
   // A force marches from one base: ticking a row in a second base clears the first.
   const toggle = (r: BarracksRosterRow) =>
@@ -1464,7 +1645,8 @@ export function ForcePicker({
     setBusy(true);
     setError("");
     try {
-      const res = await api.mapAct(type, regionId, selected.map((r) => ({ rowId: r.id, count: sentOf(r) })));
+      const sent = selected.map((r) => ({ rowId: r.id, count: sentOf(r) }));
+      const res = isMove ? await api.mapMove(destId, sent) : await api.mapAct(type, target.kind === "town" ? { townId: target.id } : { regionId: target.id }, sent);
       onActed(res);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "That could not be done.");
@@ -1473,12 +1655,38 @@ export function ForcePicker({
     }
   };
 
+  // The destination selector: every place the player may move men to, with the
+  // travel from the ticked base (or the nearest base when none is ticked);
+  // unreachable ones greyed with the reason.
+  const destinationOptions = destinations
+    ? moveTargets.map((t) => {
+        const from = base ?? Object.keys(t.byBase).find((b) => b !== t.id) ?? null;
+        const s = from ? t.byBase[from] : undefined;
+        const travel = from === t.id ? null : moveTravel(s);
+        const v = from ? (from === t.id ? { ok: false, reason: "The men already stand there." } : (s ? moveVerdict(s, force.men > 0 ? force : forceStats([{ spd: FAST_SPD, space: 1, count: 1 }]), fleetStats) : { ok: false, reason: "No base within reach." })) : { ok: true };
+        const note = v.ok && travel ? travelClock(travel.minutes) : (v.reason ?? "Out of reach");
+        return { id: t.id, name: t.name, ok: v.ok && travel !== null, note };
+      })
+    : [];
+
   return (
-    <div className="w2map-modal" role="dialog" aria-label={`${ACTION_LABEL[type]} ${regionName}`} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+    <div className="w2map-modal" role="dialog" aria-label={`${ACTION_LABEL[type]} ${targetName}`} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
       <div className="w2map-modal-card">
         <button type="button" className="w2map-info-close" onClick={onClose} aria-label="Close">Close</button>
         <div className="w2map-modal-head">
-          <div className="w2map-info-label">{ACTION_LABEL[type]} · {regionName}</div>
+          <div className="w2map-info-label">{ACTION_LABEL[type]} · {targetName}</div>
+          {destinations ? (
+            <label className="w2map-pick-dest">
+              <span>Destination</span>
+              <select value={destId} disabled={busy} onChange={(e) => setDestId(e.target.value)} aria-label="Destination">
+                {destinationOptions.map((o) => (
+                  <option key={o.id} value={o.id} disabled={!o.ok}>
+                    {o.name} · {o.note}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
         </div>
         <div className="w2map-pick-scroll">
           {roster === null ? (
@@ -1510,7 +1718,7 @@ export function ForcePicker({
                                 max={r.count}
                                 value={sentOf(r)}
                                 disabled={unreachable || busy || !picked.has(r.id)}
-                              onChange={(e) => setCounts((prev) => ({ ...prev, [r.id]: Math.min(r.count, Math.max(1, parseInt(e.target.value, 10) || 1)) }))}
+                                onChange={(e) => setCounts((prev) => ({ ...prev, [r.id]: Math.min(r.count, Math.max(1, parseInt(e.target.value, 10) || 1)) }))}
                                 aria-label={`men from ${r.label}`}
                               />
                             ) : null}
@@ -1543,8 +1751,17 @@ export function ForcePicker({
             ) : (
               <>
                 <span>{force.men} men · space {force.space}{force.fast ? " · fast" : ""}</span>
-                {route ? <span>{route.route === "land" ? `by land · ${route.steps} step${route.steps === 1 ? "" : "s"}` : `by sea · ${route.steps} sea${route.steps === 1 ? "" : "s"} · space ${force.space} of ${fleet.space} aboard`}</span> : null}
-                <span>{verdict.ok ? "Within reach." : verdict.reason}</span>
+                {route ? (
+                  <span>
+                    {route.route === "within"
+                      ? "within the region"
+                      : route.route === "land"
+                        ? `by land · ${route.steps} step${route.steps === 1 ? "" : "s"}`
+                        : `by sea · ${route.steps} sea${route.steps === 1 ? "" : "s"} · space ${force.space} of ${fleet.space} aboard`}
+                    {isMove && "minutes" in route ? ` · arrives in ${travelClock(route.minutes)}` : ""}
+                  </span>
+                ) : null}
+                <span>{verdict.ok ? (isMove ? "Ready to march." : "Within reach.") : verdict.reason}</span>
               </>
             )}
           </div>
@@ -1561,21 +1778,58 @@ export function ForcePicker({
   );
 }
 
-// The report after an action: the outcome line, both sides row by row, plunder
-// or conquest, and the recovery time. Scout shows the intel line.
-function BattleReport({ report, onClose }: { report: MapActReport; onClose: () => void }) {
-  const hours = report.recoveryHours;
-  const sailed = Object.entries(report.ships)
+// The report after an action: the outcome line, for a town the walls line and
+// (by sea) the fleet line, both sides row by row, plunder or conquest, and the
+// recovery time. Scout shows the intel line. A move is one line.
+const shipsText = (ships: Record<string, number>) =>
+  Object.entries(ships)
+    .filter(([, n]) => n > 0)
     .map(([id, n]) => `${n} ${id === "trade-ship" ? "pentekonter" : "trireme"}${n === 1 ? "" : "s"}`)
-    .join(", ");
+    .join(" and ");
+const townFleetText = (f: { pentekonters: number; triremes: number }) => {
+  const parts: string[] = [];
+  if (f.pentekonters > 0) parts.push(`${f.pentekonters} pentekonter${f.pentekonters === 1 ? "" : "s"}`);
+  if (f.triremes > 0) parts.push(`${f.triremes} trireme${f.triremes === 1 ? "" : "s"}`);
+  return parts.length ? parts.join(" and ") : "no ships";
+};
+
+export function BattleReport({ report, onClose }: { report: PickerReport; onClose: () => void }) {
+  if (report.type === "move") {
+    return (
+      <div className="w2map-modal" role="dialog" aria-label={`March to ${report.townName ?? report.regionName}`} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+        <div className="w2map-modal-card">
+          <button type="button" className="w2map-info-close" onClick={onClose} aria-label="Close">Close</button>
+          <div className="w2map-info-body">
+            <div className="w2map-info-label">March · {report.townName ?? report.regionName}</div>
+            <p className="w2map-report-line">{report.line}</p>
+            <div className="w2map-actions">
+              <button type="button" className="w2map-action" onClick={onClose}>Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  const hours = report.recoveryHours;
+  const sailed = shipsText(report.ships);
+  const place = report.townName ?? report.regionName;
+  const fleet = report.fleet;
   return (
-    <div className="w2map-modal" role="dialog" aria-label={`${ACTION_LABEL[report.type]} ${report.regionName}`} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+    <div className="w2map-modal" role="dialog" aria-label={`${ACTION_LABEL[report.type]} ${place}`} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
       <div className="w2map-modal-card">
         <button type="button" className="w2map-info-close" onClick={onClose} aria-label="Close">Close</button>
         <div className="w2map-info-body">
-          <div className="w2map-info-label">{ACTION_LABEL[report.type]} · {report.regionName}</div>
+          <div className="w2map-info-label">{ACTION_LABEL[report.type]} · {place}</div>
           <p className="w2map-report-line">{report.line}</p>
-          {report.type !== "scout" ? (
+          {report.town && report.type !== "scout" ? (
+            <p className="w2map-report-note" data-testid="walls-line">Walls {report.town.walls}, garrison defends at {report.town.garrisonDef}</p>
+          ) : null}
+          {fleet ? (
+            <p className="w2map-report-note" data-testid="fleet-line">
+              Your {shipsText(fleet.ships) || "ships"} against {townFleetText(fleet.defender)}: the landing {fleet.held ? "held" : "was driven off"}
+            </p>
+          ) : null}
+          {report.type !== "scout" && report.winner !== "repulsed" ? (
             <table className="w2map-report-table">
               <thead>
                 <tr><th>Rows</th><th>Start</th><th>End</th></tr>
@@ -1598,9 +1852,9 @@ function BattleReport({ report, onClose }: { report: MapActReport; onClose: () =
             </table>
           ) : null}
           {report.plunder ? <p className="w2map-report-note">Plunder: {report.plunder.drachmae} drachmae, {report.plunder.grain} grain.</p> : null}
-          {report.conquest ? <p className="w2map-report-note">{report.regionName} is yours. The survivors hold it.</p> : null}
+          {report.conquest ? <p className="w2map-report-note">{place} is yours. The survivors hold it.</p> : null}
           {report.rounds > 0 ? <p className="w2map-report-note">{report.rounds} round{report.rounds === 1 ? "" : "s"} fought{sailed ? ` · sailed with ${sailed}` : ""}.</p> : null}
-          <p className="w2map-report-note">The party {report.destination === report.regionId ? "settles in" : "returns"} in {hours}h.</p>
+          <p className="w2map-report-note">The party {report.destination === (report.townId ?? report.regionId) ? "settles in" : "returns"} in {hours}h.</p>
           <div className="w2map-actions">
             <button type="button" className="w2map-action" onClick={onClose}>Close</button>
           </div>
