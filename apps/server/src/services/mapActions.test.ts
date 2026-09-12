@@ -121,7 +121,7 @@ suite("Map actions (integration)", () => {
   });
 
   beforeEach(async () => {
-    await db.execute(sql`TRUNCATE TABLE player_units, player_holdings, player_levy, band_offers, region_intel, region_military, effect_log, resources, player_buildings, player_pops, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
+    await db.execute(sql`TRUNCATE TABLE player_units, player_holdings, player_levy, band_offers, region_intel, region_military, town_intel, town_military, effect_log, resources, player_buildings, player_pops, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
     await db.insert(m.dbPkg.houses).values({ slug: "test-house", name: "House Test", initial: "T", alignment: "c", stance: "s", motto: "m", patron: "p", crest: "c" }).onConflictDoNothing();
     const world = (await db.insert(m.dbPkg.worlds).values({ name: "Actions Test", seed: "atest", startedAt: new Date(T0), endsAt: new Date(T0 + 182 * DAY), status: "active" }).returning())[0]!;
     worldId = world.id;
@@ -185,7 +185,7 @@ suite("Map actions (integration)", () => {
     expect(r).toMatchObject({ ok: true });
     if (!r.ok) return;
     expect(r.report.winner).toBe("attacker");
-    expect(r.report.conquest).toEqual({ regionId: "R046", previousOwner: "unclaimed" });
+    expect(r.report.conquest).toEqual({ regionId: "R046", townId: null, previousOwner: "unclaimed" });
     expect(r.report.destination).toBe("R046");
     const h = await holdingsOf(ctx);
     expect(h).toHaveLength(1);
@@ -357,10 +357,10 @@ suite("Map actions (integration)", () => {
     expect(await actRows(ctx, "raid", "R046", [{ rowId: band.id, count: 40 }])).toMatchObject({ ok: true });
   });
 
-  it("a town target is refused with the towns message; home ground and fog too", async () => {
+  it("a region with towns is not a target itself; home ground and fog are refused too", async () => {
     const { ctx } = await makePlayer();
     const peltasts = await insertRow(ctx, { unitId: "peltast", count: 10 });
-    expect(await act(ctx, "raid", "R047", [peltasts.id])).toMatchObject({ ok: false, code: 409, error: "Towns are for a later season." });
+    expect(await act(ctx, "raid", "R047", [peltasts.id])).toMatchObject({ ok: false, code: 409, error: "This land answers to its towns: choose one." });
     // Home ground answers as such even where it holds a town (R052: arelate).
     expect(await act(ctx, "raid", "R052", [peltasts.id])).toMatchObject({ ok: false, code: 409, error: "Massalia does not act against her own." });
     expect(await act(ctx, "raid", "R174", [peltasts.id])).toMatchObject({ ok: false, code: 404 });

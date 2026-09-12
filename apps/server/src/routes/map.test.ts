@@ -29,7 +29,8 @@ type Mods = Awaited<ReturnType<typeof loadModules>>;
 type ReachView = {
   now: string;
   campaign: { season: string; open: boolean; opensAt: string | null };
-  bases: { regionId: string; kind: string }[];
+  bases: { id: string; regionId: string; townId: string | null; kind: string }[];
+  moveTargets: { id: string; regionId: string; townId: string | null; kind: string; byBase: Record<string, { landSteps: number | null; seaSteps: number | null }> }[];
   force: { men: number; space: number; fast: boolean };
   fleet: { ships: Record<string, number>; range: number; space: number };
   reach: Record<string, { landSteps: number | null; seaSteps: number | null; byBase: Record<string, { landSteps: number | null; seaSteps: number | null }>; attack: { ok: boolean; reason?: string }; raid: { ok: boolean }; colonise: { ok: boolean } }>;
@@ -63,7 +64,7 @@ suite("/api/map/reach (integration)", () => {
   });
 
   beforeEach(async () => {
-    await db.execute(sql`TRUNCATE TABLE player_units, player_holdings, player_levy, band_offers, region_intel, region_military, effect_log, resources, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
+    await db.execute(sql`TRUNCATE TABLE player_units, player_holdings, player_levy, band_offers, region_intel, region_military, town_intel, town_military, effect_log, resources, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
     await db.insert(m.dbPkg.houses).values({ slug: "test-house", name: "House Test", initial: "T", alignment: "c", stance: "s", motto: "m", patron: "p", crest: "c" }).onConflictDoNothing();
     const world = (await db.insert(m.dbPkg.worlds).values({ name: "Reach Route Test", seed: "rrt", startedAt, endsAt: new Date(now.getTime() + 182 * DAY), status: "active" }).returning())[0]!;
     worldId = world.id;
@@ -95,7 +96,10 @@ suite("/api/map/reach (integration)", () => {
     const res = await get(p.token);
     expect(res.statusCode).toBe(200);
     const v = res.json<ReachView>();
-    expect(v.bases).toEqual([{ regionId: "R060", kind: "massalia" }]);
+    expect(v.bases).toEqual([{ id: "R060", regionId: "R060", townId: null, kind: "massalia" }]);
+    // Every place the player may move men to, each with its steps from Massalia.
+    expect(v.moveTargets.map((t) => t.id)).toEqual(expect.arrayContaining(["R060", "arelate", "nikaia", "antipolis"]));
+    expect(v.moveTargets.find((t) => t.id === "arelate")).toMatchObject({ regionId: "R052", townId: "arelate", kind: "home", byBase: { R060: { landSteps: 1 } } });
     // Season 9 is a Spring: the campaign is open and no reopening instant is given.
     expect(v.campaign).toEqual({ season: "Spring", open: true, opensAt: null });
     expect(Math.abs(Date.parse(v.now) - Date.now())).toBeLessThan(10_000);
@@ -109,7 +113,7 @@ suite("/api/map/reach (integration)", () => {
     expect(seaOnly.attack.reason).toMatch(/fleet's range/);
   });
 
-  it("POST /act: a raid happy path returns the report, fresh reach and the roster; a town target is 409", async () => {
+  it("POST /act: a raid happy path returns the report, fresh reach and the roster; a region with towns is 409", async () => {
     const p = await freshPlayer();
     const { writeRegionWarband } = await import("../services/mapPools.js");
     await writeRegionWarband(db, worldId, "R046", 20, now);
@@ -119,7 +123,7 @@ suite("/api/map/reach (integration)", () => {
     const post = (payload: unknown) => app.inject({ method: "POST", url: "/api/map/act", headers: { cookie: `massalia_session=${app.signCookie(p.token)}` }, payload: payload as Record<string, unknown> });
     const town = await post({ type: "raid", regionId: "R047", rows: [{ rowId, count: 40 }] });
     expect(town.statusCode).toBe(409);
-    expect(town.json<{ error: string }>().error).toBe("Towns are for a later season.");
+    expect(town.json<{ error: string }>().error).toBe("This land answers to its towns: choose one.");
     expect((await post({ type: "pillage", regionId: "R046", rows: [{ rowId, count: 40 }] })).statusCode).toBe(400);
     expect((await post({ type: "raid", regionId: "R046", rowIds: [rowId] })).statusCode).toBe(400); // the old body shape
     expect((await post({ type: "raid", regionId: "R046", rows: [{ rowId, count: 1.5 }] })).statusCode).toBe(400);

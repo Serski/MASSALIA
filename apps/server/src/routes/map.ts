@@ -214,10 +214,11 @@ export async function mapRoutes(app: FastifyInstance) {
     return view;
   });
 
-  // Map actions (barracks prompt 3b): Scout, Raid or Attack a townless region
-  // with a set of whole roster rows. Resolves in the request; the rhythm is the
-  // recovery afterwards. Auth and player resolution as /reach; not behind
-  // MAP_MUTATIONS_ENABLED (same footing as the barracks).
+  // Map actions (barracks prompts 3b, 3c): Scout, Raid or Attack a townless
+  // region (regionId) or a town (townId) with a set of roster rows. Resolves in
+  // the request; the rhythm is the recovery afterwards. Auth and player
+  // resolution as /reach; not behind MAP_MUTATIONS_ENABLED (same footing as
+  // the barracks).
   app.post("/act", async (request, reply) => {
     const { requireAuth } = await import("../services/auth.js");
     const { ensureCharacterRow, getActivePlayer, getActiveWorldId } = await import("../services/character.js");
@@ -240,17 +241,20 @@ export async function mapRoutes(app: FastifyInstance) {
       reply.code(503);
       return { error: "No active world exists." };
     }
-    const body = request.body as { type?: unknown; regionId?: unknown; rows?: unknown } | undefined;
+    const body = request.body as { type?: unknown; regionId?: unknown; townId?: unknown; rows?: unknown } | undefined;
     const type = body?.type;
     const regionId = body?.regionId;
+    const townId = body?.townId;
     const rows = body?.rows;
     const rowOk = (r: unknown): r is { rowId: string; count: number } =>
       typeof r === "object" && r !== null && typeof (r as { rowId?: unknown }).rowId === "string" && Number.isInteger((r as { count?: unknown }).count) && ((r as { count: number }).count) >= 1;
-    if ((type !== "scout" && type !== "raid" && type !== "attack") || typeof regionId !== "string" || !Array.isArray(rows) || !rows.every(rowOk)) {
+    const targetOk = (typeof regionId === "string") !== (typeof townId === "string");
+    if ((type !== "scout" && type !== "raid" && type !== "attack") || !targetOk || !Array.isArray(rows) || !rows.every(rowOk)) {
       reply.code(400);
-      return { error: "type, regionId and rows [{ rowId, count }] are required." };
+      return { error: "type, regionId or townId, and rows [{ rowId, count }] are required." };
     }
-    const result = await act(ctx, { type, regionId, rows: rows as { rowId: string; count: number }[] }, new Date());
+    const target = typeof townId === "string" ? { townId } : { regionId: regionId as string };
+    const result = await act(ctx, { type, ...target, rows: rows as { rowId: string; count: number }[] }, new Date());
     if (!result.ok) {
       reply.code(result.code);
       return { error: result.error };

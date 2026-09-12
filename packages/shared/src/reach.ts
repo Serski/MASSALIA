@@ -24,13 +24,21 @@ export type ReachShip = { shipId: string; count: number; range: number; troopSpa
 
 export type ReachInput = {
   topology: Topology;
-  /** region ids: massaliaRegion + held regions */
+  /** region ids: massaliaRegion + the regions of every base (held regions, held towns, home ground with men) */
   bases: string[];
   /** active rows only */
   force: ReachForceRow[];
   fleet: ReachShip[];
   /** land regions owned by HOME_POLITY_ID (never targets) */
   homeRegions: Set<string>;
+  /**
+   * Regions that get no entry besides the Massalia region and home ground:
+   * by default every base region (a region holding is ground to march from,
+   * never a target). A caller whose bases include the region of a held town
+   * passes only its region holdings here, so the region's other towns stay
+   * targets (at 0 land steps from that base).
+   */
+  excluded?: Set<string>;
 };
 
 export type ReachVerdict = { ok: boolean; reason?: string };
@@ -94,17 +102,20 @@ export function verdictsFor(steps: ReachSteps, force: ForceStats, fleet: FleetSt
   const seaOk = sea !== null && sea <= fleet.range && force.space <= fleet.space;
   const seaReason = sea === null ? null : sea > fleet.range ? REACH_REASON.range(sea, fleet.range) : force.space > fleet.space ? REACH_REASON.hulls(force.space, fleet.space) : null;
 
+  // Adjacent by land: one step, or none (a town in the same region as a base).
+  const adjacent = land !== null && land <= 1;
+
   // Attack: 1 land step, or by sea.
   let attack: ReachVerdict;
   if (force.men === 0) attack = { ok: false, reason: REACH_REASON.noMen };
-  else if (land === 1 || seaOk) attack = { ok: true };
+  else if (adjacent || seaOk) attack = { ok: true };
   else if (sea === null) attack = { ok: false, reason: REACH_REASON.noBase };
   else attack = { ok: false, reason: seaReason! };
 
   // Raid: 1 land step, 2 with a fast force, or by sea.
   let raid: ReachVerdict;
   if (force.men === 0) raid = { ok: false, reason: REACH_REASON.noMen };
-  else if (land === 1 || (land === 2 && force.fast) || seaOk) raid = { ok: true };
+  else if (adjacent || (land === 2 && force.fast) || seaOk) raid = { ok: true };
   else if (land === null && sea === null) raid = { ok: false, reason: REACH_REASON.noBase };
   else if (land === 2 && !force.fast) raid = { ok: false, reason: REACH_REASON.tooFar };
   else if (sea === null) raid = { ok: false, reason: REACH_REASON.noBase };
@@ -113,23 +124,33 @@ export function verdictsFor(steps: ReachSteps, force: ForceStats, fleet: FleetSt
   // Colonise: Attack's reach, without the men rule (legality by target kind
   // and owner stays with allowedMapActions).
   let colonise: ReachVerdict;
-  if (land === 1 || seaOk) colonise = { ok: true };
+  if (adjacent || seaOk) colonise = { ok: true };
   else if (sea === null) colonise = { ok: false, reason: REACH_REASON.noBase };
   else colonise = { ok: false, reason: seaReason! };
 
   return { attack, raid, colonise };
 }
 
+// Move (3c): men march to another of the player's places — within one region,
+// one land step, or by sea within range with hulls. Attack's rule with the
+// same reasons; no men means nothing marches.
+export function moveVerdict(steps: ReachSteps, force: ForceStats, fleet: FleetStats): ReachVerdict {
+  return verdictsFor(steps, force, fleet).attack;
+}
+
 // The route an action would take for a target: land when its land steps satisfy
-// the action (1, or 2 for a fast raiding party), else sea.
-export function routeFor(type: "attack" | "raid", steps: ReachSteps, force: ForceStats): { route: "land" | "sea"; steps: number } | null {
-  const byLand = type === "attack" ? steps.landSteps === 1 : steps.landSteps === 1 || (steps.landSteps === 2 && force.fast);
-  if (byLand) return { route: "land", steps: steps.landSteps! };
+// the action (0 or 1, or 2 for a fast raiding party), else sea. A move takes
+// Attack's route.
+export function routeFor(type: "attack" | "raid" | "move", steps: ReachSteps, force: ForceStats): { route: "land" | "sea"; steps: number } | null {
+  const land = steps.landSteps;
+  const adjacent = land !== null && land <= 1;
+  const byLand = type === "raid" ? adjacent || (land === 2 && force.fast) : adjacent;
+  if (byLand) return { route: "land", steps: land! };
   return steps.seaSteps === null ? null : { route: "sea", steps: steps.seaSteps };
 }
 
 // Land distance from one base: BFS over land, depth ≤ MAX_LAND_STEPS.
-function landStepsFrom(t: Topology, base: string): Map<string, number> {
+export function landStepsFrom(t: Topology, base: string): Map<string, number> {
   const steps = new Map<string, number>([[base, 0]]);
   let frontier = [base];
   for (let depth = 1; depth <= MAX_LAND_STEPS && frontier.length; depth++) {
@@ -148,7 +169,7 @@ function landStepsFrom(t: Topology, base: string): Map<string, number> {
 
 // Sea distance from one base: its linked seas are distance 1, then BFS through
 // sea. A base that is not coastal reaches no sea at all.
-function seaStepsFrom(t: Topology, base: string): Map<string, number> {
+export function seaStepsFrom(t: Topology, base: string): Map<string, number> {
   const steps = new Map<string, number>();
   if (!t.coastal.has(base)) return steps;
   let frontier: string[] = [];
@@ -172,6 +193,24 @@ function seaStepsFrom(t: Topology, base: string): Map<string, number> {
   return steps;
 }
 
+// The distances from one base, for reading many targets.
+export type BaseDistances = { base: string; land: Map<string, number>; sea: Map<string, number> };
+export function distancesFrom(t: Topology, base: string): BaseDistances {
+  return { base, land: landStepsFrom(t, base), sea: seaStepsFrom(t, base) };
+}
+
+// The steps from one base to a land region: land distance, and the fewest seas
+// from the base's coast to a sea the region touches.
+export function stepsTo(t: Topology, from: BaseDistances, regionId: string): ReachSteps {
+  const land = from.land.get(regionId) ?? null;
+  let sea: number | null = null;
+  for (const c of t.coast.get(regionId) ?? []) {
+    const d = from.sea.get(c);
+    if (d !== undefined && (sea === null || d < sea)) sea = d;
+  }
+  return { landSteps: land, seaSteps: sea };
+}
+
 export function computeReach(input: ReachInput): Record<string, ReachEntry> {
   const t = input.topology;
   const bases = [...new Set(input.bases.filter((b) => t.land.has(b)))];
@@ -179,29 +218,24 @@ export function computeReach(input: ReachInput): Record<string, ReachEntry> {
   // Distances per base; the record's own steps are the minimum over bases (the
   // same as a multi-source search), kept per base so a force from one base can
   // be judged on its own.
-  const perBase = bases.map((b) => ({ base: b, land: landStepsFrom(t, b), sea: seaStepsFrom(t, b) }));
-  const baseSet = new Set(bases);
+  const perBase = bases.map((b) => distancesFrom(t, b));
+  const excluded = input.excluded ?? new Set(bases);
 
   const fleet = fleetStats(input.fleet);
   const force = forceStats(input.force);
 
   const out: Record<string, ReachEntry> = {};
   for (const id of t.land.keys()) {
-    if (id === t.massaliaRegion || input.homeRegions.has(id) || baseSet.has(id)) continue;
+    if (id === t.massaliaRegion || input.homeRegions.has(id) || excluded.has(id)) continue;
 
     const byBase: Record<string, ReachSteps> = {};
     let land: number | null = null;
     let sea: number | null = null;
     for (const pb of perBase) {
-      const l = pb.land.get(id) ?? null;
-      let s: number | null = null;
-      for (const c of t.coast.get(id) ?? []) {
-        const d = pb.sea.get(c);
-        if (d !== undefined && (s === null || d < s)) s = d;
-      }
-      byBase[pb.base] = { landSteps: l, seaSteps: s };
-      if (l !== null && (land === null || l < land)) land = l;
-      if (s !== null && (sea === null || s < sea)) sea = s;
+      const steps = stepsTo(t, pb, id);
+      byBase[pb.base] = steps;
+      if (steps.landSteps !== null && (land === null || steps.landSteps < land)) land = steps.landSteps;
+      if (steps.seaSteps !== null && (sea === null || steps.seaSteps < sea)) sea = steps.seaSteps;
     }
     out[id] = { landSteps: land, seaSteps: sea, byBase, ...verdictsFor({ landSteps: land, seaSteps: sea }, force, fleet) };
   }

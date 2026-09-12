@@ -1,25 +1,46 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { createDb, playerUnits, resources } from "@massalia/db";
-import { bandDef, campaignSeason, computeReach, fleetStats, forceStats, HOME_POLITY_ID, unitDef, type ReachEntry, type ReachForceRow, type ReachShip, type Topology } from "@massalia/shared";
+import {
+  bandDef,
+  campaignSeason,
+  computeReach,
+  distancesFrom,
+  fleetStats,
+  forceStats,
+  HOME_POLITY_ID,
+  stepsTo,
+  unitDef,
+  type ReachEntry,
+  type ReachForceRow,
+  type ReachShip,
+  type ReachSteps,
+  type Topology,
+} from "@massalia/shared";
 import { getBandsContent, getShipsContent, getUnitsContent, isActive, type UnitRow } from "./barracks.js";
 import type { ActingContext } from "./buildings.js";
-import { listHoldings } from "./holdings.js";
+import { holdingBaseId, listHoldings } from "./holdings.js";
 import { getTopology } from "./mapGraph.js";
 import { loadMilitaryOwners } from "./mapMilitary.js";
 
 // Reach assembly shared by GET /api/map/reach and the map actions: the player's
-// bases (the Massalia region plus holdings), the force from active rows standing
-// at a base (training or mid-move excluded — or exactly the rows a caller
-// selects), the fleet from the ship goods in stock, the home set from the
-// military content, and the pure computeReach over them. Callers run it under
-// the player lock after settleAll.
+// bases (the Massalia region, every holding — a region or a town — and any home
+// region or home town where the player has men standing), the force from
+// active rows standing at a base (training or mid-move excluded — or exactly
+// the rows a caller selects), the fleet from the ship goods in stock, the home
+// set from the military content, and the pure computeReach over them. Callers
+// run it under the player lock after settleAll.
 
 type Db = ReturnType<typeof createDb>;
 type DbTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 export type Exec = DbTx | Db;
 
-export type BaseView = { regionId: string; kind: "massalia" | "colony" | "conquest" };
+// A base: `id` is what rows are based at (a region id, or a town slug for a
+// town holding or a home town); `regionId` is the region it stands in.
+export type BaseKind = "massalia" | "colony" | "conquest" | "home";
+export type BaseView = { id: string; regionId: string; townId: string | null; kind: BaseKind };
 export type CampaignView = { season: string; open: boolean; opensAt: string | null };
+// A place the player may move men to, with the steps from each base.
+export type MoveTargetView = { id: string; regionId: string; townId: string | null; kind: BaseKind; byBase: Record<string, ReachSteps> };
 export type ReachView = {
   /** server time (ISO) — countdowns anchor to this, not the device clock */
   now: string;
@@ -29,6 +50,7 @@ export type ReachView = {
   force: { men: number; space: number; fast: boolean };
   fleet: { ships: Record<string, number>; range: number; space: number };
   reach: Record<string, ReachEntry>;
+  moveTargets: MoveTargetView[];
 };
 
 // Regions Massalia owns per the military content: townless regions by owner and
@@ -45,6 +67,24 @@ export async function homeRegions(topology: Topology): Promise<Set<string>> {
     if (region) out.add(region);
   }
   homeCache = out;
+  return out;
+}
+
+// Massalia's own places (ruling 10): every home townless region and home town,
+// the Massalia town itself excluded (its region is the base). Cached.
+let homePlacesCache: { id: string; regionId: string; townId: string | null }[] | null = null;
+export async function homePlaces(topology: Topology): Promise<{ id: string; regionId: string; townId: string | null }[]> {
+  if (homePlacesCache) return homePlacesCache;
+  const owners = await loadMilitaryOwners();
+  const out: { id: string; regionId: string; townId: string | null }[] = [];
+  for (const [id, o] of Object.entries(owners.regions)) if (o === HOME_POLITY_ID && topology.land.has(id) && id !== topology.massaliaRegion) out.push({ id, regionId: id, townId: null });
+  for (const [town, o] of Object.entries(owners.towns)) {
+    if (o !== HOME_POLITY_ID) continue;
+    const region = topology.townRegion.get(town);
+    if (!region || region === topology.massaliaRegion) continue;
+    out.push({ id: town, regionId: region, townId: town });
+  }
+  homePlacesCache = out;
   return out;
 }
 
@@ -67,24 +107,57 @@ export async function fleetInStock(exec: Exec, ctx: ActingContext): Promise<{ co
   return { counts, fleet };
 }
 
-export async function basesOf(exec: Exec, ctx: ActingContext): Promise<BaseView[]> {
+async function ownedRows(exec: Exec, ctx: ActingContext): Promise<UnitRow[]> {
+  return exec.select().from(playerUnits).where(and(eq(playerUnits.worldId, ctx.worldId), eq(playerUnits.ownerPlayerId, ctx.playerId)));
+}
+
+// The player's bases (ruling 11): the Massalia region always, every holding,
+// and every home place where at least one active, non-moving row stands.
+export async function basesOf(exec: Exec, ctx: ActingContext, now: Date, rows?: UnitRow[]): Promise<BaseView[]> {
   const topology = getTopology();
   const holdings = await listHoldings(exec, ctx);
-  return [{ regionId: topology.massaliaRegion, kind: "massalia" }, ...holdings.map((h) => ({ regionId: h.regionId, kind: h.kind }))];
+  const out: BaseView[] = [{ id: topology.massaliaRegion, regionId: topology.massaliaRegion, townId: null, kind: "massalia" }];
+  for (const h of holdings) out.push({ id: holdingBaseId(h), regionId: h.regionId, townId: h.townId || null, kind: h.kind });
+  const standing = new Set((rows ?? (await ownedRows(exec, ctx))).filter((r) => isActive(r, now) && r.movingTo === null).map((r) => r.basedAt));
+  for (const p of await homePlaces(topology)) if (standing.has(p.id)) out.push({ ...p, kind: "home" });
+  return out;
+}
+
+// The steps from every base to a place, keyed by base id (bases in one region
+// share the region's distances).
+function stepsByBase(topology: Topology, bases: BaseView[], regionId: string): Record<string, ReachSteps> {
+  const byRegion = new Map<string, ReturnType<typeof distancesFrom>>();
+  const out: Record<string, ReachSteps> = {};
+  for (const b of bases) {
+    let d = byRegion.get(b.regionId);
+    if (!d) {
+      d = distancesFrom(topology, b.regionId);
+      byRegion.set(b.regionId, d);
+    }
+    out[b.id] = stepsTo(topology, d, regionId);
+  }
+  return out;
+}
+
+// Every place the player may move men to (ruling 10): the Massalia region,
+// every home place, and every holding — each with its steps from every base.
+export async function moveTargetsOf(topology: Topology, bases: BaseView[], ctx: ActingContext, exec: Exec): Promise<MoveTargetView[]> {
+  const places: { id: string; regionId: string; townId: string | null; kind: BaseKind }[] = [{ id: topology.massaliaRegion, regionId: topology.massaliaRegion, townId: null, kind: "massalia" }];
+  for (const p of await homePlaces(topology)) places.push({ ...p, kind: "home" });
+  for (const h of await listHoldings(exec, ctx)) places.push({ id: holdingBaseId(h), regionId: h.regionId, townId: h.townId || null, kind: h.kind });
+  return places.map((p) => ({ ...p, byBase: stepsByBase(topology, bases, p.regionId) }));
 }
 
 // The reach payload. With `rows` given, the force is exactly those rows and the
-// bases exactly `bases` (an action's route check); otherwise the force is every
-// active, non-moving row standing at one of the player's bases.
+// bases exactly `bases` (an action's route check, by base id); otherwise the
+// force is every active, non-moving row standing at one of the player's bases.
 export async function reachView(exec: Exec, ctx: ActingContext, now: Date, opts: { rows?: UnitRow[]; bases?: string[] } = {}): Promise<ReachView> {
   const topology = getTopology();
-  const bases = await basesOf(exec, ctx);
-  const baseIds = new Set(bases.map((b) => b.regionId));
-  let rows = opts.rows;
-  if (!rows) {
-    const all = await exec.select().from(playerUnits).where(and(eq(playerUnits.worldId, ctx.worldId), eq(playerUnits.ownerPlayerId, ctx.playerId)));
-    rows = all.filter((r) => isActive(r, now) && r.movingTo === null && baseIds.has(r.basedAt));
-  }
+  const all = await ownedRows(exec, ctx);
+  const allBases = await basesOf(exec, ctx, now, all);
+  const bases = opts.bases ? allBases.filter((b) => opts.bases!.includes(b.id)) : allBases;
+  const baseIds = new Set(bases.map((b) => b.id));
+  const rows = opts.rows ?? all.filter((r) => isActive(r, now) && r.movingTo === null && baseIds.has(r.basedAt));
   const force: ReachForceRow[] = [];
   for (const r of rows) {
     const f = forceRowOf(r);
@@ -92,8 +165,19 @@ export async function reachView(exec: Exec, ctx: ActingContext, now: Date, opts:
   }
   const { counts, fleet } = await fleetInStock(exec, ctx);
   const home = await homeRegions(topology);
-  const reach = computeReach({ topology, bases: opts.bases ?? [...baseIds], force, fleet, homeRegions: home });
+  // Region holdings are never targets; the region of a held town or of home
+  // ground with men stays a target for its other towns (home ground is already
+  // excluded by the home set).
+  const excluded = new Set(bases.filter((b) => b.townId === null && b.kind !== "home").map((b) => b.regionId));
+  const reach = computeReach({ topology, bases: [...new Set(bases.map((b) => b.regionId))], force, fleet, homeRegions: home, excluded });
+  // byBase by base id: a town base reads its region's distances.
+  for (const entry of Object.values(reach)) {
+    const byBase: Record<string, ReachSteps> = {};
+    for (const b of bases) byBase[b.id] = entry.byBase[b.regionId]!;
+    entry.byBase = byBase;
+  }
   const cs = campaignSeason(now.getTime(), ctx.worldStartedMs);
   const campaign: CampaignView = { season: cs.season, open: cs.open, opensAt: cs.opensAtMs === null ? null : new Date(cs.opensAtMs).toISOString() };
-  return { now: now.toISOString(), campaign, bases, force: forceStats(force), fleet: { ships: counts, ...fleetStats(fleet) }, reach };
+  const moveTargets = await moveTargetsOf(topology, allBases, ctx, exec);
+  return { now: now.toISOString(), campaign, bases, force: forceStats(force), fleet: { ships: counts, ...fleetStats(fleet) }, reach, moveTargets };
 }
