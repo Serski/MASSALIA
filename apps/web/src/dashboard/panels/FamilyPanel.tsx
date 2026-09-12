@@ -803,9 +803,10 @@ const chronicleRenderers: Record<ChronicleEntry["type"], (payload: Record<string
   // Barracks prompt 3b: campaign lines share their wording with the server report.
   map_action: (p) => renderCampaignLine("map_action", p as unknown as CampaignPayload),
   holding_reverted: (p) => renderCampaignLine("holding_reverted", p as unknown as CampaignPayload),
+  holding_tribute: (p) => renderCampaignLine("holding_tribute", p as unknown as CampaignPayload),
 };
 
-function renderChronicleEntry(entry: ChronicleEntry): string {
+export function renderChronicleEntry(entry: ChronicleEntry): string {
   const render = chronicleRenderers[entry.type];
   return render ? render(entry.payload) : "";
 }

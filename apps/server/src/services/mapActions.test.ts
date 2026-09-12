@@ -280,7 +280,7 @@ suite("Map actions (integration)", () => {
     await db.update(m.dbPkg.playerUnits).set({ basedAt: "R060" }).where(eq(m.dbPkg.playerUnits.id, garrison.id));
     expect((await settle(ctx, at(11.9))).holdings.reverted).toEqual([]);
     const gone = await settle(ctx, at(12));
-    expect(gone.holdings.reverted).toEqual([{ regionId: "R046", kind: "conquest", previousOwner: "unclaimed" }]);
+    expect(gone.holdings.reverted).toEqual([{ regionId: "R046", townId: "", kind: "conquest", previousOwner: "unclaimed" }]);
     expect(await holdingsOf(ctx)).toHaveLength(0);
     expect(await warband("R046")).toBe(100);
     expect(await logs(characterId, "holding_reverted")).toHaveLength(1);

@@ -25,7 +25,7 @@ import { getBuildingsContent, settleAll, type ActingContext } from "./buildings.
 import { applyComposureDelta } from "./composure.js";
 import { lockPlayer } from "./lock.js";
 import { getTopology } from "./mapGraph.js";
-import { settleHoldings, type HoldingsSettle } from "./holdings.js";
+import { heldGarrisonedRegions, settleHoldings, settleTribute, type HoldingsSettle, type TributeSettle } from "./holdings.js";
 
 // ---------------------------------------------------------------------------
 // Barracks — the player's army: trained UNITS raised from the levy and hired
@@ -205,8 +205,10 @@ export async function gateFor(exec: Exec, ctx: ActingContext): Promise<GateView>
 // The player's own manpower pool. Growth accrues from world start whether or not
 // the tab was ever opened, applied closed-form: +growthPerYear every
 // seasonsPerYear seasons, anchored on last_growth_season (always a year boundary).
+// `bonusPerYear` (3c) is what held, garrisoned regions add at each boundary
+// crossed by this settle: regionTribute.levyPerYear × regions garrisoned now.
 
-export async function ensureLevy(exec: Exec, ctx: ActingContext, season: number): Promise<LevyRow> {
+export async function ensureLevy(exec: Exec, ctx: ActingContext, season: number, bonusPerYear = 0): Promise<LevyRow> {
   const { levy } = getUnitsContent();
   const where = and(eq(playerLevy.worldId, ctx.worldId), eq(playerLevy.ownerPlayerId, ctx.playerId));
   const existing = (await exec.select().from(playerLevy).where(where).limit(1))[0];
@@ -225,7 +227,7 @@ export async function ensureLevy(exec: Exec, ctx: ActingContext, season: number)
   const grown = await exec
     .update(playerLevy)
     .set({
-      men: sql`${playerLevy.men} + ${years * levy.growthPerYear}`,
+      men: sql`${playerLevy.men} + ${years * (levy.growthPerYear + bonusPerYear)}`,
       lastGrowthSeason: sql`${playerLevy.lastGrowthSeason} + ${years * levy.seasonsPerYear}`,
     })
     .where(where)
@@ -319,10 +321,11 @@ export type BarracksSettle = {
   departed: BarracksDisband[]; // band rows whose contract ended without renewal
   arrived: BarracksDisband[]; // rows whose relocation completed (now based at moving_to)
   merged: BarracksMerge[]; // same-unit trained rows folded into one at a base
+  tribute: TributeSettle; // what held towns and regions paid this settle
   holdings: HoldingsSettle; // holdings that reverted for want of a garrison
 };
 
-const emptySettle = (): BarracksSettle => ({ days: 0, drachmaeDirect: 0, purchases: 0, cost: 0, owed: 0, drawn: {}, bought: {}, insolvent: [], renewed: [], departed: [], arrived: [], merged: [], holdings: { reverted: [] } });
+const emptySettle = (): BarracksSettle => ({ days: 0, drachmaeDirect: 0, purchases: 0, cost: 0, owed: 0, drawn: {}, bought: {}, insolvent: [], renewed: [], departed: [], arrived: [], merged: [], holdings: { reverted: [] }, tribute: { paid: [] } });
 
 type UpkeepPlan = { drachmaeDirect: number; purchases: number; cost: number; draws: Record<string, number>; buys: Record<string, number> };
 
@@ -368,8 +371,10 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
   const season = seasonFor(ctx, now);
   const out = emptySettle();
 
-  // 1. Levy growth owed since the last year boundary.
-  await ensureLevy(exec, ctx, season);
+  // 1. Levy growth owed since the last year boundary, plus what held and
+  // garrisoned regions add (counted as they stand at this settle).
+  const heldRegions = await heldGarrisonedRegions(exec, ctx, now);
+  await ensureLevy(exec, ctx, season, heldRegions * getBattleContent().regionTribute.levyPerYear);
 
   let rows = await ownedUnitRows(exec, ctx);
   const marker = (
@@ -556,6 +561,9 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
   // left empty for a full day reverts. After the arrivals so a returning
   // garrison is counted first.
   out.holdings = await settleHoldings(exec, ctx, now);
+  // 6d. Tribute from what is still held, for the whole days since each
+  // holding's marker, while its garrison meets the minimum.
+  out.tribute = await settleTribute(exec, ctx, now);
 
   // 7. Advance the marker by the whole days consumed (or create it at the anchor
   // advanced the same way) so the partial-day remainder carries.
@@ -756,7 +764,9 @@ export type RosterView = {
 };
 // The summary strip: men under arms (trained rows in every state) against the
 // levy left at home, and the levy's growth.
-export type SummaryView = { underArms: number; levyMen: number; growthPerYear: number; seasonsPerYear: number };
+// growthPerYear is the total the levy gains at the next year boundary as things
+// stand: the content growth plus levyPerYear for each held, garrisoned region.
+export type SummaryView = { underArms: number; levyMen: number; growthPerYear: number; baseGrowthPerYear: number; heldRegions: number; seasonsPerYear: number };
 export type OfferView = { id: string; label: string; icon: string; role: string; men: number; upkeepPerDay: Record<string, number>; stats: Record<string, number>; hired: boolean };
 // The army's upkeep per day from the same per-row arithmetic the settle charges:
 // totals across the active roster (zero-valued goods omitted) and each active
@@ -812,6 +822,7 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
     const levy = await ensureLevy(tx, ctx, season);
     const rows = await ownedUnitRows(tx, ctx);
     const offers = await offersFor(tx, ctx, season);
+    const heldRegions = await heldGarrisonedRegions(tx, ctx, now);
     const roster: RosterView[] = rows.map((r) => {
       const def = r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId);
       return {
@@ -855,7 +866,9 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
       summary: {
         underArms: rows.filter((r) => r.source === "trained").reduce((n, r) => n + r.count, 0),
         levyMen: levy.men,
-        growthPerYear: unitsC.levy.growthPerYear,
+        growthPerYear: unitsC.levy.growthPerYear + heldRegions * getBattleContent().regionTribute.levyPerYear,
+        baseGrowthPerYear: unitsC.levy.growthPerYear,
+        heldRegions,
         seasonsPerYear: unitsC.levy.seasonsPerYear,
       },
     };

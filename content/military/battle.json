@@ -6,9 +6,13 @@
   "defenseFloor": 4,
   "moraleStep": 0.05,
   "pursuitLoss": 0.10,
-  "raid": { "rounds": 1, "plunderPerKill": 20, "grainPerKill": 5 },
+  "raid": { "rounds": 1, "plunderPerKill": 20, "grainPerKill": 5, "townPlunderMultiplier": 2 },
   "recovery": { "hoursPerStep": 3 },
-  "regen": { "warbandPerDay": 5 },
+  "regen": { "warbandPerDay": 5, "garrisonPerDay": 5 },
+  "town": { "wallsDefCap": 3 },
+  "tribute": { "perPopulation": 0.04, "minGarrisonPerPopulation": 0.01 },
+  "regionTribute": { "grainPerWarband": 0.05, "timberPerWarband": 0.025, "minGrain": 15, "minTimber": 8, "levyPerYear": 5 },
+  "move": { "minutesPerStep": 30, "minutesWithinRegion": 10 },
   "npc": {
     "warband":  { "label": "Tribal warband", "stats": { "atk": 5, "def": 3, "msl": 1, "mor": 4, "spd": 6, "space": 1 } },
     "garrison": { "label": "Town garrison",  "stats": { "atk": 6, "def": 7, "msl": 1, "mor": 6, "spd": 3, "space": 1 } }

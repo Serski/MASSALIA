@@ -245,7 +245,7 @@ export async function gatherChronicleForCharacter(characterId: string): Promise<
   const campaignRows = await db
     .select({ id: effectLog.id, createdAt: effectLog.createdAt, kind: effectLog.kind, detail: effectLog.detail })
     .from(effectLog)
-    .where(and(eq(effectLog.characterId, slot.id), inArray(effectLog.kind, ["map_action", "holding_reverted"])));
+    .where(and(eq(effectLog.characterId, slot.id), inArray(effectLog.kind, ["map_action", "holding_reverted", "holding_tribute"])));
   const campaigns: ChronicleCampaignRow[] = [];
   for (const row of campaignRows) {
     const chronicle = (row.detail as { chronicle?: ChronicleCampaignRow["payload"] }).chronicle;

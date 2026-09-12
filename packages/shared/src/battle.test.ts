@@ -23,8 +23,15 @@ describe("battle content", () => {
   it("parses the real file and rejects an unknown key", () => {
     expect(battle.rounds).toBe(3);
     expect(battle.npc.warband.stats.spd).toBe(6);
-    expect(battle.raid).toEqual({ rounds: 1, plunderPerKill: 20, grainPerKill: 5 });
+    expect(battle.raid).toEqual({ rounds: 1, plunderPerKill: 20, grainPerKill: 5, townPlunderMultiplier: 2 });
     expect(battle.recovery).toEqual({ hoursPerStep: 3 });
+    // 3c: towns, tribute, region tribute and moves.
+    expect(battle.regen).toEqual({ warbandPerDay: 5, garrisonPerDay: 5 });
+    expect(battle.town).toEqual({ wallsDefCap: 3 });
+    expect(battle.tribute).toEqual({ perPopulation: 0.04, minGarrisonPerPopulation: 0.01 });
+    expect(battle.regionTribute).toEqual({ grainPerWarband: 0.05, timberPerWarband: 0.025, minGrain: 15, minTimber: 8, levyPerYear: 5 });
+    expect(battle.move).toEqual({ minutesPerStep: 30, minutesWithinRegion: 10 });
+    expect(() => parseBattleContent({ ...read("content/military/battle.json"), move: { minutesPerStep: 0, minutesWithinRegion: 10 } })).toThrow();
     expect(() => parseBattleContent({ ...read("content/military/battle.json"), recovery: { hoursPerStep: 0 } })).toThrow();
     expect(() => parseBattleContent({ ...read("content/military/battle.json"), extra: 1 })).toThrow();
     expect(() => parseBattleContent({ ...read("content/military/battle.json"), pursuitLoss: 2 })).toThrow();

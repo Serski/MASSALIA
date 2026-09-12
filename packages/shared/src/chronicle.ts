@@ -58,7 +58,8 @@ export type ChronicleType =
   // from effect_log; the payload is structured and renderCampaignLine turns it
   // into the one sentence both the register and the server report use.
   | "map_action"
-  | "holding_reverted";
+  | "holding_reverted"
+  | "holding_tribute";
 
 export type ChronicleEntry = {
   // Sort key, from gameDate(timestamp, startedMs).seasonIndex.
@@ -151,31 +152,42 @@ export type ChronicleInput = {
 
 // A map action or a holding reversion, dated at the effect_log instant. The
 // payload is the structured summary the action wrote (see CampaignPayload).
+export type ChronicleCampaignKind = "map_action" | "holding_reverted" | "holding_tribute";
 export type ChronicleCampaignRow = {
   id: string;
   at: number;
-  kind: "map_action" | "holding_reverted";
+  kind: ChronicleCampaignKind;
   payload: CampaignPayload;
 };
 
 // Structured summary of a map action (all fields optional so a reversion row can
 // share the shape). Rendered by renderCampaignLine.
 export type CampaignPayload = {
-  action?: "scout" | "raid" | "attack";
+  action?: "scout" | "raid" | "attack" | "move";
   regionId: string;
   regionName?: string;
+  // Set when the target (or the destination of a move) is a town: the line
+  // names the town rather than its region.
+  townId?: string;
+  townName?: string;
   men?: number;
   // The force, as parts so the wording (unit plurals) can change under old
   // rows: a trained part carries label + plural, a band part its label (already
   // plural). Older rows carry the prose string and render as stored.
   force?: string | CampaignForcePart[];
-  winner?: "attacker" | "defender" | "stand";
+  winner?: "attacker" | "defender" | "stand" | "repulsed";
   killed?: number;
   lost?: number;
   plunder?: { drachmae: number; grain: number } | null;
   conquest?: boolean;
-  warband?: number; // scout: the strength seen
+  warband?: number; // scout: the strength seen (a town: its garrison)
+  fleet?: { pentekonters: number; triremes: number }; // scout on a town: the fleet seen
   previousOwner?: string | null; // reversion
+  // A move: where the men set out from, and the travel time in minutes.
+  from?: string;
+  minutes?: number;
+  // Tribute: what each holding paid this settle.
+  tribute?: { name: string; days: number; drachmae?: number; grain?: number; timber?: number }[];
 };
 
 export type CampaignForcePart = { count: number; label: string; plural?: string; source?: "trained" | "band" };
@@ -196,14 +208,43 @@ export function renderForce(force: string | CampaignForcePart[] | undefined): st
 // The one sentence for a campaign entry, shared by the web register and the
 // server's report so the wording never drifts.
 const tribesmen = (n: number) => `${n} ${n === 1 ? "tribesman" : "tribesmen"}`;
+const soldiers = (n: number) => `${n} ${n === 1 ? "soldier" : "soldiers"}`;
+const shipsText = (f: { pentekonters: number; triremes: number }) => {
+  const parts: string[] = [];
+  if (f.pentekonters > 0) parts.push(`${f.pentekonters} ${f.pentekonters === 1 ? "pentekonter" : "pentekonters"}`);
+  if (f.triremes > 0) parts.push(`${f.triremes} ${f.triremes === 1 ? "trireme" : "triremes"}`);
+  return parts.length ? parts.join(" and ") : "no ships";
+};
+const clock = (minutes: number) => {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
+};
 
-export function renderCampaignLine(type: "map_action" | "holding_reverted", p: CampaignPayload): string {
-  const place = p.regionName ?? p.regionId;
+function renderTributeLine(p: CampaignPayload): string {
+  const parts = (p.tribute ?? []).map((t) => {
+    const goods: string[] = [];
+    if (t.drachmae) goods.push(`${t.drachmae} drachmae`);
+    if (t.grain) goods.push(`${t.grain} grain`);
+    if (t.timber) goods.push(`${t.timber} timber`);
+    const over = t.days === 1 ? "" : ` over ${t.days} days`;
+    return `${t.name} sent ${goods.join(" and ") || "nothing"}${over}`;
+  });
+  return parts.length ? `Tribute: ${parts.join("; ")}.` : "Tribute: nothing was paid.";
+}
+
+export function renderCampaignLine(type: ChronicleCampaignKind, p: CampaignPayload): string {
+  const place = p.townName ?? p.regionName ?? p.regionId;
+  if (type === "holding_tribute") return renderTributeLine(p);
   if (type === "holding_reverted") return `${place} slipped from our hands: no garrison held it.`;
   const forceText = renderForce(p.force);
   const force = forceText ? ` with ${forceText}` : "";
-  if (p.action === "scout") return `Scouted ${place}${force}: ${tribesmen(p.warband ?? 0)} under arms.`;
-  const killed = `${tribesmen(p.killed ?? 0)} slain`;
+  const isTown = p.townId !== undefined;
+  const defenders = isTown ? soldiers : tribesmen;
+  if (p.action === "move") return `${forceText || "Our men"} march from ${p.from ?? "home"} to ${place}, arriving in ${clock(p.minutes ?? 0)}.`;
+  if (p.action === "scout") return `Scouted ${place}${force}: ${defenders(p.warband ?? 0)} under arms${isTown && p.fleet ? `, ${shipsText(p.fleet)} in the harbour` : ""}.`;
+  if (p.winner === "repulsed") return `Sailed against ${place}${force} and were driven off by its fleet before landing.`;
+  const killed = `${defenders(p.killed ?? 0)} slain`;
   const lost = (p.lost ?? 0) === 0 ? "none of ours lost" : `${p.lost} of ours lost`;
   if (p.action === "raid") {
     if (p.winner === "attacker") {
@@ -213,7 +254,7 @@ export function renderCampaignLine(type: "map_action" | "holding_reverted", p: C
     }
     return `Raided ${place}${force} and were driven off: ${killed}, ${lost}.`;
   }
-  if (p.winner === "attacker") return `Took ${place}${force}: ${killed}, ${lost}. The land is ours.`;
+  if (p.winner === "attacker") return `Took ${place}${force}: ${killed}, ${lost}. ${isTown ? "The town" : "The land"} is ours.`;
   if (p.winner === "stand") return `Attacked ${place}${force} and withdrew: ${killed}, ${lost}.`;
   return `Attacked ${place}${force} and were broken: ${killed}, ${lost}.`;
 }
@@ -270,6 +311,7 @@ const TYPE_ORDER: Record<ChronicleType, number> = {
   death: 14,
   map_action: 15,
   holding_reverted: 16,
+  holding_tribute: 17,
 };
 
 // generation = 1 + (boundaries that occurred at or before the event). An event at

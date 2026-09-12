@@ -359,5 +359,20 @@ describe("campaign lines", () => {
     );
     expect(renderCampaignLine("map_action", { action: "scout", regionId: "R046", regionName: "Salyes", force: [{ count: 1, label: "Hippeis", plural: "Hippeis", source: "trained" }], warband: 1 })).toBe("Scouted Salyes with 1 hippeis: 1 tribesman under arms.");
     expect(renderCampaignLine("holding_reverted", { regionId: "R046", regionName: "Salyes" })).toBe("Salyes slipped from our hands: no garrison held it.");
+    // 3c: towns name the town, count soldiers, and a sea assault can be driven off before landing.
+    expect(renderCampaignLine("map_action", { action: "attack", regionId: "R047", regionName: "Vocontii", townId: "reii", townName: "Reii", force, winner: "attacker", killed: 3, lost: 1, conquest: true })).toBe(
+      "Took Reii with 40 peltasts: 3 soldiers slain, 1 of ours lost. The town is ours.",
+    );
+    expect(renderCampaignLine("map_action", { action: "scout", regionId: "R032", townId: "vienna", townName: "Vienna", force, warband: 120, fleet: { pentekonters: 2, triremes: 1 } })).toBe(
+      "Scouted Vienna with 40 peltasts: 120 soldiers under arms, 2 pentekonters and 1 trireme in the harbour.",
+    );
+    expect(renderCampaignLine("map_action", { action: "attack", regionId: "R049", townId: "genoa", townName: "Genoa", force, winner: "repulsed", killed: 0, lost: 0 })).toBe(
+      "Sailed against Genoa with 40 peltasts and were driven off by its fleet before landing.",
+    );
+    expect(renderCampaignLine("holding_reverted", { regionId: "R047", regionName: "Vocontii", townId: "reii", townName: "Reii" })).toBe("Reii slipped from our hands: no garrison held it.");
+    expect(renderCampaignLine("map_action", { action: "move", regionId: "R059", townId: "nikaia", townName: "Nikaia", force, from: "Massalia", minutes: 30 })).toBe("40 peltasts march from Massalia to Nikaia, arriving in 00:30:00.");
+    expect(renderCampaignLine("holding_tribute", { regionId: "R032", tribute: [{ name: "Vienna", days: 2, drachmae: 240 }, { name: "Salyes", days: 1, grain: 15, timber: 8 }] })).toBe(
+      "Tribute: Vienna sent 240 drachmae over 2 days; Salyes sent 15 grain and 8 timber.",
+    );
   });
 });

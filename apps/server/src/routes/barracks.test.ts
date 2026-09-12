@@ -38,7 +38,7 @@ type View = {
   now: string;
   levy: { men: number };
   config: { minServiceSeasons: number; maxActiveBands: number; termSeasons: number };
-  summary: { underArms: number; levyMen: number; growthPerYear: number; seasonsPerYear: number };
+  summary: { underArms: number; levyMen: number; growthPerYear: number; baseGrowthPerYear: number; heldRegions: number; seasonsPerYear: number };
   units: { id: string; gear: Record<string, number>; stats: Record<string, number> }[];
   roster: { id: string; source: string; unitId: string; label: string; plural: string; count: number; readyAt: string | null; contractEndAt: string | null; basedAt: string; movingTo: string | null; arrivesAt: string | null; mission: unknown; createdAt: string; active: boolean; canDisband: boolean }[];
   offers: { id: string; men: number; hired: boolean; upkeepPerDay: Record<string, number> }[];
@@ -113,7 +113,7 @@ suite("/api/barracks (integration)", () => {
     expect(Math.abs(Date.parse(v.now) - Date.now())).toBeLessThan(10_000);
     expect(v.levy).toEqual({ men: 120 });
     expect(v.config).toEqual({ minServiceSeasons: 2, maxActiveBands: 2, termSeasons: 2 });
-    expect(v.summary).toEqual({ underArms: 0, levyMen: 120, growthPerYear: 10, seasonsPerYear: 4 });
+    expect(v.summary).toEqual({ underArms: 0, levyMen: 120, growthPerYear: 10, baseGrowthPerYear: 10, heldRegions: 0, seasonsPerYear: 4 });
     expect(v.units.map((u) => u.id)).toEqual(["peltast", "ekdromos", "hoplite", "hippeis"]);
     expect(v.units.map((u) => (u as { plural?: string }).plural)).toEqual(["Peltasts", "Ekdromoi", "Hoplites", "Hippeis"]);
     expect(v.units.find((u) => u.id === "hoplite")!.gear).toEqual({ timber: 1, iron: 1, tin: 2 });
@@ -143,7 +143,7 @@ suite("/api/barracks (integration)", () => {
     expect(v.roster[0]).toMatchObject({ source: "trained", unitId: "peltast", label: "Peltast", plural: "Peltasts", count: 5, active: false, canDisband: false, contractEndAt: null, basedAt: "R060", movingTo: null, arrivesAt: null, mission: null });
     expect(Math.abs(Date.parse(v.roster[0]!.createdAt) - Date.parse(v.now))).toBeLessThan(1_000);
     // Under arms counts trained rows in every state against the levy left at home.
-    expect(v.summary).toEqual({ underArms: 5, levyMen: 115, growthPerYear: 10, seasonsPerYear: 4 });
+    expect(v.summary).toEqual({ underArms: 5, levyMen: 115, growthPerYear: 10, baseGrowthPerYear: 10, heldRegions: 0, seasonsPerYear: 4 });
     // A peltast trains for one season = one day from the recruit instant.
     expect(Math.abs(Date.parse(v.roster[0]!.readyAt!) - (Date.parse(v.now) + DAY))).toBeLessThan(1_000);
     expect(v.levy.men).toBe(115);

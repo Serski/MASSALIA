@@ -873,23 +873,28 @@ export const playerUnits = pgTable("player_units", {
 
 export const UNIT_MISSION_KINDS = ["scout", "raid", "attack", "move"] as const;
 export type UnitMissionKind = (typeof UNIT_MISSION_KINDS)[number];
-export type UnitMission = { kind: UnitMissionKind; regionId: string; departedAt: string };
+// regionId is always the region; townId is set when the target or destination is a town.
+export type UnitMission = { kind: UnitMissionKind; regionId: string; townId?: string; departedAt: string };
 
 export const HOLDING_KINDS = ["colony", "conquest"] as const;
 export type HoldingKind = (typeof HOLDING_KINDS)[number];
 
-// A World 2 region a player holds (0055). A player's bases are the Massalia
-// region plus every row here they own. Nothing creates rows yet.
+// A World 2 region or town a player holds (0055, towns in 0057). A player's
+// bases are the Massalia region plus every row here they own. town_id is the
+// town slug for a town holding and '' for a region holding; last_tribute_at is
+// the marker tribute settles from.
 export const playerHoldings = pgTable("player_holdings", {
   worldId: uuid("world_id").references(() => worlds.id).notNull(),
   regionId: text("region_id").notNull(),
+  townId: text("town_id").notNull().default(""),
   ownerPlayerId: uuid("owner_player_id").references(() => players.id).notNull(),
   kind: text("kind").$type<HoldingKind>().notNull(),
   previousOwner: text("previous_owner"), // polity id from content, or NULL
   since: timestamp("since", { withTimezone: true }).notNull().defaultNow(),
   lastGarrisonedAt: timestamp("last_garrisoned_at", { withTimezone: true }).notNull().defaultNow(),
+  lastTributeAt: timestamp("last_tribute_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
-  pk: primaryKey({ columns: [table.worldId, table.regionId] }),
+  pk: primaryKey({ columns: [table.worldId, table.regionId, table.townId] }),
   kindCheck: check("player_holdings_kind_check", sql`${table.kind} IN ('colony', 'conquest')`),
   ownerIdx: index("player_holdings_owner_idx").on(table.worldId, table.ownerPlayerId),
 }));

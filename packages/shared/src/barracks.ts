@@ -42,9 +42,19 @@ export type BattleContent = {
   defenseFloor: number;
   moraleStep: number;
   pursuitLoss: number;
-  raid: { rounds: number; plunderPerKill: number; grainPerKill: number };
+  raid: { rounds: number; plunderPerKill: number; grainPerKill: number; townPlunderMultiplier: number };
   recovery: { hoursPerStep: number }; // recovery after an action: max(1, steps) × hoursPerStep hours
-  regen: { warbandPerDay: number };
+  regen: { warbandPerDay: number; garrisonPerDay: number };
+  // Towns (3c): walls add min(walls, wallsDefCap) to every defending row's def.
+  town: { wallsDefCap: number };
+  // A held town pays perPopulation × population drachmae a day while garrisoned
+  // by at least minGarrisonPerPopulation × population men.
+  tribute: { perPopulation: number; minGarrisonPerPopulation: number };
+  // A held townless region pays goods a day from its content warband, and adds
+  // levyPerYear men to the levy's growth at each year boundary while garrisoned.
+  regionTribute: { grainPerWarband: number; timberPerWarband: number; minGrain: number; minTimber: number; levyPerYear: number };
+  // Moving men between bases: minutes per land or sea step, or within one region.
+  move: { minutesPerStep: number; minutesWithinRegion: number };
   npc: Record<NpcKind, NpcDef>;
 };
 
@@ -227,10 +237,22 @@ const battleContentSchema = z
     moraleStep: z.number().positive(),
     pursuitLoss: z.number().min(0).max(1),
     raid: z
-      .object({ rounds: z.number().int().positive(), plunderPerKill: z.number().nonnegative(), grainPerKill: z.number().nonnegative() })
+      .object({ rounds: z.number().int().positive(), plunderPerKill: z.number().nonnegative(), grainPerKill: z.number().nonnegative(), townPlunderMultiplier: z.number().positive() })
       .strict(),
     recovery: z.object({ hoursPerStep: z.number().positive() }).strict(),
-    regen: z.object({ warbandPerDay: z.number().int().nonnegative() }).strict(),
+    regen: z.object({ warbandPerDay: z.number().int().nonnegative(), garrisonPerDay: z.number().int().nonnegative() }).strict(),
+    town: z.object({ wallsDefCap: z.number().int().nonnegative() }).strict(),
+    tribute: z.object({ perPopulation: z.number().nonnegative(), minGarrisonPerPopulation: z.number().nonnegative() }).strict(),
+    regionTribute: z
+      .object({
+        grainPerWarband: z.number().nonnegative(),
+        timberPerWarband: z.number().nonnegative(),
+        minGrain: z.number().nonnegative(),
+        minTimber: z.number().nonnegative(),
+        levyPerYear: z.number().int().nonnegative(),
+      })
+      .strict(),
+    move: z.object({ minutesPerStep: z.number().positive(), minutesWithinRegion: z.number().positive() }).strict(),
     npc: z
       .object({
         warband: z.object({ label: z.string().min(1), stats: statsSchema }).strict(),

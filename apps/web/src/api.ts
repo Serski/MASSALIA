@@ -272,7 +272,8 @@ export type ChronicleType =
   | "assassination_survived"
   | "death"
   | "map_action"
-  | "holding_reverted";
+  | "holding_reverted"
+  | "holding_tribute";
 
 export type ChronicleEntry = {
   seasonIndex: number;
@@ -1473,7 +1474,8 @@ export type BarracksView = {
   // own line; a row still training has no entry.
   upkeep: { perDay: Record<string, number>; rows: Record<string, Record<string, number>>; note: string };
   // The summary strip: men under arms (trained rows in every state) against the levy at home.
-  summary: { underArms: number; levyMen: number; growthPerYear: number; seasonsPerYear: number };
+  // growthPerYear is the total at the next year boundary: the content growth plus what held, garrisoned regions add.
+  summary: { underArms: number; levyMen: number; growthPerYear: number; baseGrowthPerYear?: number; heldRegions?: number; seasonsPerYear: number };
 };
 
 // --- Map reach (GET /api/map/reach; mirrors packages/shared/src/reach.ts) ---
