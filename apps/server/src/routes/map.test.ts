@@ -32,7 +32,7 @@ type ReachView = {
   bases: { id: string; regionId: string; townId: string | null; kind: string; name: string; holding: unknown }[];
   moveTargets: { id: string; regionId: string; townId: string | null; kind: string; byBase: Record<string, { landSteps: number | null; seaSteps: number | null }> }[];
   force: { men: number; space: number; fast: boolean };
-  fleet: { ships: Record<string, number>; range: number; space: number; tiers: { range: number; space: number }[] };
+  fleet: { ships: Record<string, number>; labels: Record<string, string>; range: number; space: number; tiers: { range: number; space: number }[] };
   reach: Record<string, { landSteps: number | null; seaSteps: number | null; byBase: Record<string, { landSteps: number | null; seaSteps: number | null }>; attack: { ok: boolean; reason?: string }; raid: { ok: boolean }; colonise: { ok: boolean } }>;
 };
 
@@ -104,7 +104,7 @@ suite("/api/map/reach (integration)", () => {
     expect(v.campaign).toEqual({ season: "Spring", open: true, opensAt: null });
     expect(Math.abs(Date.parse(v.now) - Date.now())).toBeLessThan(10_000);
     expect(v.force).toEqual({ men: 5, space: 5, fast: false });
-    expect(v.fleet).toEqual({ ships: { "trade-ship": 0, galley: 0 }, range: 0, space: 0, tiers: [] });
+    expect(v.fleet).toEqual({ ships: { "trade-ship": 0, galley: 0 }, labels: { "trade-ship": "Pentekonter", galley: "Trireme" }, range: 0, space: 0, tiers: [] });
     expect(v.reach.R060).toBeUndefined();
     expect(v.reach.R174).toBeUndefined();
     expect(v.reach.R046).toMatchObject({ landSteps: 1, byBase: { R060: { landSteps: 1 } }, attack: { ok: true }, raid: { ok: true }, colonise: { ok: true } });

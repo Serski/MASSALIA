@@ -84,6 +84,7 @@ export type MapActReport = {
   arrivesAt: string;
   destination: string;
   ships: Record<string, number>;
+  shipLabels: Record<string, string>;
   winner: "attacker" | "defender" | "stand" | "repulsed" | null;
   rounds: number;
   attacker: { rows: { id: string; unitId: string; label: string; icon: string; start: number; end: number; broke: boolean }[]; losses: number };
@@ -324,6 +325,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
     const men = rows.reduce((n, r) => n + r.count, 0);
     const forceText = describeForce(rows);
     const place = isTown ? { townId, townName: townName! } : {};
+    const shipLabels = Object.fromEntries(Object.entries(shipsC.ships).map(([id, d]) => [id, d.label]));
     const attackerRows = () => rows.map((r) => ({ id: r.id, unitId: r.unitId, label: labelOf(r), icon: iconOf(r), start: r.count, end: r.count, broke: false }));
 
     let report: MapActReport;
@@ -371,6 +373,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
         arrivesAt: arrivesAt.toISOString(),
         destination,
         ships,
+        shipLabels,
         winner: null,
         rounds: 0,
         attacker: { rows: attackerRows(), losses: 0 },
@@ -398,6 +401,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
         arrivesAt: arrivesAt.toISOString(),
         destination,
         ships,
+        shipLabels,
         winner: "repulsed",
         rounds: 0,
         attacker: { rows: attackerRows(), losses: 0 },
@@ -474,6 +478,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
         arrivesAt: arrivesAt.toISOString(),
         destination,
         ships,
+        shipLabels,
         winner: result.winner,
         rounds: result.rounds.length,
         attacker: {
@@ -542,6 +547,7 @@ export type MapMoveReport = {
   minutes: number;
   arrivesAt: string;
   ships: Record<string, number>;
+  shipLabels: Record<string, string>;
   men: number;
   rows: { id: string; unitId: string; label: string; icon: string; count: number }[];
   line: string;
@@ -628,6 +634,7 @@ export async function move(ctx: ActingContext, input: MapMoveInput, now: Date): 
       minutes,
       arrivesAt: arrivesAt.toISOString(),
       ships,
+      shipLabels: Object.fromEntries(Object.entries(getShipsContent().ships).map(([id, d]) => [id, d.label])),
       men,
       rows: rows.map((r) => ({ id: r.id, unitId: r.unitId, label: labelOf(r), icon: iconOf(r), count: r.count })),
       line: renderCampaignLine("map_action", chronicle),

@@ -1482,6 +1482,8 @@ export type BarracksView = {
   // The summary strip: men under arms (trained rows in every state) against the levy at home.
   // growthPerYear is the total at the next year boundary: the content growth plus what held, garrisoned regions add.
   summary: { underArms: number; levyMen: number; growthPerYear: number; baseGrowthPerYear?: number; heldRegions?: number; seasonsPerYear: number };
+  // The ships in stock for the strip's FLEET cell: labels from ships.json, troop space summed, range the farthest hull.
+  fleet: { ships: { id: string; label: string; count: number }[]; space: number; range: number };
 };
 
 // --- Map reach (GET /api/map/reach; mirrors packages/shared/src/reach.ts) ---
@@ -1506,7 +1508,7 @@ export type HoldingView = { garrison: number; minGarrison: number; perDay: { dra
 export type BaseView = { id: string; regionId: string; townId: string | null; kind: BaseKind; name: string; holding: HoldingView | null };
 // A place the player may move men to, with the steps from each base (by base id).
 export type MoveTargetView = { id: string; regionId: string; townId: string | null; kind: BaseKind; name: string; byBase: Record<string, { landSteps: number | null; seaSteps: number | null }> };
-export type FleetView = { ships: Record<string, number>; range: number; space: number; tiers?: { range: number; space: number }[] };
+export type FleetView = { ships: Record<string, number>; labels?: Record<string, string>; range: number; space: number; tiers?: { range: number; space: number }[] };
 
 export type MapReachView = {
   now: string; // server time (ISO); countdowns anchor to this, not the device clock
@@ -1540,6 +1542,7 @@ export type MapActReport = {
   arrivesAt: string;
   destination: string;
   ships: Record<string, number>;
+  shipLabels?: Record<string, string>; // display names from ships.json by ship id
   winner: "attacker" | "defender" | "stand" | "repulsed" | null;
   rounds: number;
   attacker: { rows: { id: string; unitId: string; label: string; icon: string; start: number; end: number; broke: boolean }[]; losses: number };
@@ -1565,6 +1568,7 @@ export type MapMoveReport = {
   minutes: number;
   arrivesAt: string;
   ships: Record<string, number>;
+  shipLabels?: Record<string, string>;
   men: number;
   rows: { id: string; unitId: string; label: string; icon: string; count: number }[];
   line: string;

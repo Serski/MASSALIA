@@ -45,6 +45,7 @@ function payload(over: Partial<BarracksView> = {}): BarracksView {
     activeBands: 2,
     upkeep: { perDay: { grain: 200, oliveoil: 114, wine: 7, chicken: 7, herbal: 4, drachmae: 130 }, rows: { "home-hoplites": { grain: 52, oliveoil: 26 }, "home-band": { drachmae: 40, wine: 4, chicken: 4, herbal: 2 } }, note: "Shortfalls are bought at the market's seasonal price." },
     summary: { underArms: 121, levyMen: 202, growthPerYear: 10, seasonsPerYear: 4 },
+    fleet: { ships: [{ id: "trade-ship", label: "Pentekonter", count: 1 }, { id: "galley", label: "Trireme", count: 2 }], space: 28, range: 7 },
     ...over,
   };
 }
@@ -91,6 +92,8 @@ describe("BarracksPanel", () => {
     const strip = container.querySelector('[data-testid="summary"]')!.textContent!;
     expect(strip).toContain("121 of 323 under arms");
     expect(strip).toContain("+10 each year");
+    // FLEET: the ships in stock by their names, the troop space aboard and the farthest range.
+    expect(container.querySelector('[data-testid="fleet-strip"]')!.textContent).toBe("1 pentekonter · 2 triremes · 28 aboard · range 7");
     // Daily upkeep: one item per good with its icon before the number, drachmae last with the coin.
     const items = [...container.querySelectorAll('[data-testid="upkeep-strip"] .barracks-upkeep-item')];
     expect(items.map((el) => el.getAttribute("title"))).toEqual(["200 grain", "114 oil", "7 wine", "7 chicken", "4 herbs", "130 drachmae"]);
@@ -171,7 +174,7 @@ describe("BarracksPanel", () => {
     expect(count(container, "training")).toBe(1);
 
     // Cancel the training row: confirm, then the server answers without it.
-    const cancelled = payload({ roster: [homeLevy, homeBand, awayRaid, awayNoMission], summary: { underArms: 117, levyMen: 206, growthPerYear: 10, seasonsPerYear: 4 } });
+    const cancelled = payload({ roster: [homeLevy, homeBand, awayRaid, awayNoMission], summary: { underArms: 117, levyMen: 206, growthPerYear: 10, seasonsPerYear: 4 }, fleet: { ships: [], space: 0, range: 0 } });
     vi.spyOn(api, "barracksCancel").mockResolvedValue(cancelled);
     const training = container.querySelector('[data-section="training"]') as HTMLElement;
     fireEvent.click(within(training).getByText("Cancel"));
@@ -180,6 +183,7 @@ describe("BarracksPanel", () => {
     expect(api.barracksCancel).toHaveBeenCalledWith("training-ekdromoi");
     expect(count(container, "training")).toBe(0);
     expect(container.querySelector('[data-testid="summary"]')!.textContent).toContain("117 of 323 under arms");
+    expect(container.querySelector('[data-testid="fleet-strip"]')!.textContent).toBe("No ships");
     expect(container.textContent).toContain("Stood down 4 ekdromoi.");
 
     // Recruit 2 peltasts: the server answers with a new training row.

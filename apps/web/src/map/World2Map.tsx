@@ -1509,6 +1509,13 @@ export function TownPanel({
 
 const ACTION_LABEL: Record<MapActType | "move", string> = { attack: "Attack", raid: "Raid", scout: "Scout", move: "Send men to" };
 const FAST_SPD = 6;
+// "1 pentekonter and 2 triremes" from ship counts by id and the display names
+// ships.json gives them (the id when a name is missing).
+export const shipsText = (ships: Record<string, number>, labels: Record<string, string> | undefined, sep = " and ") =>
+  Object.entries(ships)
+    .filter(([, n]) => n > 0)
+    .map(([id, n]) => `${n} ${(labels?.[id] ?? id).toLowerCase()}${n === 1 ? "" : "s"}`)
+    .join(sep);
 // Travel for a move, mirroring battle.json's move block (the server decides;
 // these only label the picker).
 const MOVE_MINUTES_PER_STEP = 30;
@@ -1757,7 +1764,7 @@ export function ForcePicker({
                       ? "within the region"
                       : route.route === "land"
                         ? `by land · ${route.steps} step${route.steps === 1 ? "" : "s"}`
-                        : `by sea · ${route.steps} sea${route.steps === 1 ? "" : "s"} · space ${force.space} of ${fleet.space} aboard`}
+                        : `by sea · ${route.steps} sea${route.steps === 1 ? "" : "s"} · space ${force.space} of ${fleet.space} aboard${shipsText(fleet.ships, fleet.labels, " · ") ? ` · ${shipsText(fleet.ships, fleet.labels, " · ")}` : ""}`}
                     {isMove && "minutes" in route ? ` · arrives in ${travelClock(route.minutes)}` : ""}
                   </span>
                 ) : null}
@@ -1781,11 +1788,6 @@ export function ForcePicker({
 // The report after an action: the outcome line, for a town the walls line and
 // (by sea) the fleet line, both sides row by row, plunder or conquest, and the
 // recovery time. Scout shows the intel line. A move is one line.
-const shipsText = (ships: Record<string, number>) =>
-  Object.entries(ships)
-    .filter(([, n]) => n > 0)
-    .map(([id, n]) => `${n} ${id === "trade-ship" ? "pentekonter" : "trireme"}${n === 1 ? "" : "s"}`)
-    .join(" and ");
 const townFleetText = (f: { pentekonters: number; triremes: number }) => {
   const parts: string[] = [];
   if (f.pentekonters > 0) parts.push(`${f.pentekonters} pentekonter${f.pentekonters === 1 ? "" : "s"}`);
@@ -1811,7 +1813,7 @@ export function BattleReport({ report, onClose }: { report: PickerReport; onClos
     );
   }
   const hours = report.recoveryHours;
-  const sailed = shipsText(report.ships);
+  const sailed = shipsText(report.ships, report.shipLabels);
   const place = report.townName ?? report.regionName;
   const fleet = report.fleet;
   return (
@@ -1826,7 +1828,7 @@ export function BattleReport({ report, onClose }: { report: PickerReport; onClos
           ) : null}
           {fleet ? (
             <p className="w2map-report-note" data-testid="fleet-line">
-              Your {shipsText(fleet.ships) || "ships"} against {townFleetText(fleet.defender)}: the landing {fleet.held ? "held" : "was driven off"}
+              Your {shipsText(fleet.ships, report.shipLabels) || "ships"} against {townFleetText(fleet.defender)}: the landing {fleet.held ? "held" : "was driven off"}
             </p>
           ) : null}
           {report.type !== "scout" && report.winner !== "repulsed" ? (

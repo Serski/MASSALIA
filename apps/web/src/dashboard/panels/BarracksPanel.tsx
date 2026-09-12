@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, type BarracksOffer, type BarracksRosterRow, type BarracksUnit, type BarracksView, type MapReachView } from "../../api.js";
-import { BattleReport, ForcePicker, type PickerReport } from "../../map/World2Map.js";
+import { BattleReport, ForcePicker, shipsText, type PickerReport } from "../../map/World2Map.js";
 import { AssetIcon, formatClock, formatDuration, GoodGlyph, type PanelProps, REGION_NAMES_SRC, useCountdownSeconds } from "../shared.js";
 
 // The Barracks tab (military prompt ui-2). Renders the GET /api/barracks view to
@@ -580,6 +580,11 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
   const homeBands = home.filter((r) => r.source === "band");
   const upkeepFor = (row: BarracksRosterRow) => ({ row: view.upkeep.rows[row.id] ?? null, perMan: row.source === "trained" ? (view.units.find((u) => u.id === row.unitId)?.upkeepPerDay ?? null) : null });
   const strip = upkeepGoods(view.upkeep.perDay);
+  // "1 pentekonter · 2 triremes · 28 aboard · range 7", or "No ships".
+  const fleetShips = view.fleet?.ships ?? [];
+  const fleetLine = fleetShips.length
+    ? `${shipsText(Object.fromEntries(fleetShips.map((s) => [s.id, s.count])), Object.fromEntries(fleetShips.map((s) => [s.id, s.label])), " · ")} · ${view.fleet.space} aboard · range ${view.fleet.range}`
+    : null;
   const placeNames = { ...names, ...view.places };
   const moverRow = mover ? view.roster.find((r) => r.id === mover.rowId) ?? null : null;
   // The picker's default destination: the first place that is not the row's own base.
@@ -608,6 +613,12 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
         <div className="barracks-cell">
           <span className="barracks-k">Come of age</span>
           <span className="barracks-big">+{view.summary.growthPerYear} <small>each year</small></span>
+        </div>
+        <div className="barracks-cell">
+          <span className="barracks-k">Fleet</span>
+          <span className="barracks-big barracks-big-text" data-testid="fleet-strip">
+            {fleetLine ?? "No ships"}
+          </span>
         </div>
         <div className="barracks-cell">
           <span className="barracks-k">Daily upkeep</span>

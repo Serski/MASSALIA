@@ -1,5 +1,5 @@
-import { and, eq, inArray } from "drizzle-orm";
-import { createDb, playerUnits, resources } from "@massalia/db";
+import { and, eq } from "drizzle-orm";
+import { createDb, playerUnits } from "@massalia/db";
 import {
   bandDef,
   campaignSeason,
@@ -12,11 +12,11 @@ import {
   unitDef,
   type ReachEntry,
   type ReachForceRow,
-  type ReachShip,
   type ReachSteps,
   type Topology,
 } from "@massalia/shared";
-import { getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, type UnitRow } from "./barracks.js";
+import { fleetInStock, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, type UnitRow } from "./barracks.js";
+export { fleetInStock };
 import type { ActingContext } from "./buildings.js";
 import { garrisonCount, holdingBaseId, listHoldings, tributeRateOf } from "./holdings.js";
 import { getTopology } from "./mapGraph.js";
@@ -53,7 +53,8 @@ export type ReachView = {
   campaign: CampaignView;
   bases: BaseView[];
   force: { men: number; space: number; fast: boolean };
-  fleet: { ships: Record<string, number>; range: number; space: number };
+  /** ship counts by id with their display names (ships.json), the farthest range and the troop space aboard */
+  fleet: { ships: Record<string, number>; labels: Record<string, string>; range: number; space: number; tiers?: { range: number; space: number }[] };
   reach: Record<string, ReachEntry>;
   moveTargets: MoveTargetView[];
 };
@@ -96,20 +97,6 @@ export async function homePlaces(topology: Topology): Promise<{ id: string; regi
 export function forceRowOf(row: Pick<UnitRow, "source" | "unitId" | "count">): ReachForceRow | null {
   const def = row.source === "trained" ? unitDef(getUnitsContent(), row.unitId) : bandDef(getBandsContent(), row.unitId);
   return def ? { spd: def.stats.spd, space: def.stats.space, count: row.count } : null;
-}
-
-// The player's ship goods in stock as reach ships (whole hulls only).
-export async function fleetInStock(exec: Exec, ctx: ActingContext): Promise<{ counts: Record<string, number>; fleet: ReachShip[] }> {
-  const shipsC = getShipsContent();
-  const shipIds = Object.keys(shipsC.ships);
-  const stock = await exec
-    .select({ type: resources.type, amount: resources.amount })
-    .from(resources)
-    .where(and(eq(resources.scope, "player"), eq(resources.scopeId, ctx.playerId), inArray(resources.type, shipIds)));
-  const counts: Record<string, number> = Object.fromEntries(shipIds.map((id) => [id, 0]));
-  for (const s of stock) counts[s.type] = Math.max(0, Math.floor(Number(s.amount)));
-  const fleet = shipIds.map((id) => ({ shipId: id, count: counts[id]!, range: shipsC.ships[id]!.range, troopSpace: shipsC.ships[id]!.troopSpace }));
-  return { counts, fleet };
 }
 
 async function ownedRows(exec: Exec, ctx: ActingContext): Promise<UnitRow[]> {
@@ -194,5 +181,6 @@ export async function reachView(exec: Exec, ctx: ActingContext, now: Date, opts:
   const cs = campaignSeason(now.getTime(), ctx.worldStartedMs);
   const campaign: CampaignView = { season: cs.season, open: cs.open, opensAt: cs.opensAtMs === null ? null : new Date(cs.opensAtMs).toISOString() };
   const moveTargets = await moveTargetsOf(topology, allBases, ctx, exec);
-  return { now: now.toISOString(), campaign, bases, force: forceStats(force), fleet: { ships: counts, ...fleetStats(fleet) }, reach, moveTargets };
+  const labels = Object.fromEntries(Object.entries(getShipsContent().ships).map(([id, d]) => [id, d.label]));
+  return { now: now.toISOString(), campaign, bases, force: forceStats(force), fleet: { ships: counts, labels, ...fleetStats(fleet) }, reach, moveTargets };
 }

@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { and, asc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, sql, inArray } from "drizzle-orm";
 import { bandOffers, createDb, effectLog, playerCharacters, playerLevy, playerUnits, resources } from "@massalia/db";
 import {
   bandDef,
@@ -20,7 +20,7 @@ import {
   type BattleContent,
   type ShipsContent,
   type UnitsContent,
-} from "@massalia/shared";
+ type ReachShip } from "@massalia/shared";
 import { getBuildingsContent, settleAll, type ActingContext } from "./buildings.js";
 import { applyComposureDelta } from "./composure.js";
 import { lockPlayer } from "./lock.js";
@@ -774,6 +774,29 @@ export type OfferView = { id: string; label: string; icon: string; role: string;
 // row's own line. A row still training contributes nothing and has no entry.
 export type UpkeepView = { perDay: Record<string, number>; rows: Record<string, Record<string, number>>; note: string };
 export const UPKEEP_NOTE = "Shortfalls are bought at the market's seasonal price.";
+// The player's ships in stock (whole hulls), for the reach rule and the
+// Barracks strip: counts by ship id, the reach ships, and the strip's summary
+// (labels from ships.json, troop space summed, range the farthest hull).
+export type FleetStripView = { ships: { id: string; label: string; count: number }[]; space: number; range: number };
+export async function fleetInStock(exec: Exec, ctx: ActingContext): Promise<{ counts: Record<string, number>; fleet: ReachShip[]; strip: FleetStripView }> {
+  const shipsC = getShipsContent();
+  const shipIds = Object.keys(shipsC.ships);
+  const stock = await exec
+    .select({ type: resources.type, amount: resources.amount })
+    .from(resources)
+    .where(and(eq(resources.scope, "player"), eq(resources.scopeId, ctx.playerId), inArray(resources.type, shipIds)));
+  const counts: Record<string, number> = Object.fromEntries(shipIds.map((id) => [id, 0]));
+  for (const s of stock) counts[s.type] = Math.max(0, Math.floor(Number(s.amount)));
+  const fleet: ReachShip[] = shipIds.map((id) => ({ shipId: id, count: counts[id]!, range: shipsC.ships[id]!.range, troopSpace: shipsC.ships[id]!.troopSpace }));
+  const present = fleet.filter((s) => s.count > 0);
+  const strip: FleetStripView = {
+    ships: present.map((s) => ({ id: s.shipId, label: shipsC.ships[s.shipId]!.label, count: s.count })),
+    space: present.reduce((n, s) => n + s.count * s.troopSpace, 0),
+    range: present.length ? Math.max(...present.map((s) => s.range)) : 0,
+  };
+  return { counts, fleet, strip };
+}
+
 export type BarracksView = {
   gate: GateView;
   // Display names for every place the roster mentions (bases, destinations,
@@ -789,6 +812,7 @@ export type BarracksView = {
   activeBands: number;
   upkeep: UpkeepView;
   summary: SummaryView;
+  fleet: FleetStripView;
 };
 
 // The army's upkeep per day for the Ledger's Economy view and the Barracks
@@ -859,9 +883,11 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
     for (const r of rows) {
       for (const id of [r.basedAt, r.movingTo, r.mission?.regionId, r.mission?.townId]) if (id && !(id in places)) places[id] = await nameOf(id);
     }
+    const { strip: fleet } = await fleetInStock(tx, ctx);
     const result: BarracksView = {
       gate,
       places,
+      fleet,
       season,
       now: now.toISOString(),
       levy: { men: levy.men },
