@@ -44,9 +44,12 @@ import { townStats } from "./townStats.js";
 // A town (ruling 1–4): the defender is its garrison with the garrison stat
 // block, every row's def raised by min(walls, wallsDefCap); the region's
 // warband stays out of it. A sea assault lands only if the attacker's naval
-// power (Σ ships × naval) is at least the town's (pentekonters × 1 + triremes
-// × 5); otherwise the landing is repulsed with no battle and no losses. Taking
-// a town makes a town holding: garrison 0, survivors based at the town.
+// power is at least the town's (pentekonters × 1 + triremes × 5): the
+// transports taken for the crossing plus every warship in stock whose range
+// covers it, each × its naval weight. Warships that cannot reach neither sail
+// nor limit the fleet's range. Otherwise the landing is repulsed with no
+// battle and no losses. Taking a town makes a town holding: garrison 0,
+// survivors based at the town.
 // ---------------------------------------------------------------------------
 
 const db = createDb();
@@ -70,7 +73,8 @@ export type MapActReport = {
   townId: string | null;
   townName: string | null;
   town: { walls: number; population: number; garrisonDef: number } | null;
-  // Set for a sea assault on a town: both fleets' naval power and whether the
+  // Set for a sea assault on a town: the fleet that sailed (transports plus
+  // the escort of in-range warships), both sides' naval power and whether the
   // landing held. When it did not, no battle was fought.
   fleet: { ships: Record<string, number>; naval: number; defender: { pentekonters: number; triremes: number; naval: number }; held: boolean } | null;
   base: string;
@@ -122,15 +126,16 @@ async function characterOf(exec: DbTx, playerId: string): Promise<{ id: string; 
   return rows[0];
 }
 
-// Ships for a sea route: enough trade-ships for the force's space, then galleys
-// if space is still short; stock is counted, never debited.
-function assembleFleet(forceSpace: number, counts: Record<string, number>): { ships: Record<string, number>; fleet: ReachShip[] } {
+// Ships for a sea route of `steps` seas: enough trade-ships for the force's
+// space, then galleys if space is still short, taking only hulls whose range
+// covers the crossing; stock is counted, never debited.
+function assembleFleet(forceSpace: number, counts: Record<string, number>, steps: number): { ships: Record<string, number>; fleet: ReachShip[] } {
   const shipsC = getShipsContent();
   const taken: Record<string, number> = {};
   let space = 0;
   for (const id of ["trade-ship", "galley"]) {
     const def = shipsC.ships[id];
-    if (!def || space >= forceSpace) continue;
+    if (!def || def.range < steps || space >= forceSpace) continue;
     const need = def.troopSpace > 0 ? Math.ceil((forceSpace - space) / def.troopSpace) : 0;
     const n = Math.min(need, counts[id] ?? 0);
     if (n > 0) {
@@ -276,15 +281,25 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
 
     // 4. Ships for a sea route: trade-ships first, galleys for what is still short.
     let ships: Record<string, number> = {};
+    // The fleet that sails against a town: the transports taken plus every
+    // warship in stock whose range covers the crossing (an escort), and its
+    // naval power (ruling 3 as amended).
+    let sailing: Record<string, number> = {};
     let naval = 0;
     if (route === "sea") {
       const { counts } = await fleetInStock(tx, ctx);
-      const assembled = assembleFleet(view.force.space, counts);
+      const assembled = assembleFleet(view.force.space, counts, steps);
       const stats = fleetStats(assembled.fleet);
       if (stats.space < view.force.space) return fail(409, REACH_REASON.hulls(view.force.space, stats.space));
       if (stats.range < steps) return fail(409, REACH_REASON.range(steps, stats.range));
       ships = assembled.ships;
-      naval = Object.entries(ships).reduce((n, [id, count]) => n + count * (shipsC.ships[id]?.naval ?? 0), 0);
+      sailing = { ...ships };
+      for (const [id, def] of Object.entries(shipsC.ships)) {
+        if (def.role !== "warship" || def.range < steps) continue;
+        const spare = (counts[id] ?? 0) - (ships[id] ?? 0);
+        if (spare > 0) sailing[id] = (sailing[id] ?? 0) + spare;
+      }
+      naval = Object.entries(sailing).reduce((n, [id, count]) => n + count * (shipsC.ships[id]?.naval ?? 0), 0);
     }
 
     // 4b. Split, under the lock, now that nothing can refuse.
@@ -321,7 +336,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
     let fleetLine: MapActReport["fleet"] = null;
     if (isTown && route === "sea" && townFleet && townFleet.pentekonters + townFleet.triremes > 0 && input.type !== "scout") {
       const defenderNaval = townFleet.pentekonters * 1 + townFleet.triremes * 5;
-      fleetLine = { ships, naval, defender: { ...townFleet, naval: defenderNaval }, held: naval >= defenderNaval };
+      fleetLine = { ships: sailing, naval, defender: { ...townFleet, naval: defenderNaval }, held: naval >= defenderNaval };
     }
 
     if (input.type === "scout") {
@@ -576,7 +591,7 @@ export async function move(ctx: ActingContext, input: MapMoveInput, now: Date): 
       stepCount = steps.seaSteps!;
       minutes = stepCount * battleC.move.minutesPerStep;
       const { counts } = await fleetInStock(tx, ctx);
-      const assembled = assembleFleet(view.force.space, counts);
+      const assembled = assembleFleet(view.force.space, counts, stepCount);
       const stats = fleetStats(assembled.fleet);
       if (stats.space < view.force.space) return fail(409, REACH_REASON.hulls(view.force.space, stats.space));
       if (stats.range < stepCount) return fail(409, REACH_REASON.range(stepCount, stats.range));

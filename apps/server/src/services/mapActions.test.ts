@@ -444,17 +444,31 @@ suite("Map actions (integration)", () => {
     expect(await holdingsOf(ctx)).toHaveLength(0);
     expect((await rows(ctx)).find((x) => x.id === peltasts.id)).toMatchObject({ count: 40, movingTo: "R060", arrivesAt: recovered(at(9), 2) });
     expect(r.report.line).toBe("Sailed against Aleria with 40 peltasts and were driven off by its fleet before landing.");
-    // The town's fleet is unchanged; with an escort of triremes the landing holds.
+    // The town's fleet is unchanged. Triremes in stock whose range covers the
+    // crossing sail as an escort even though the pentekonters carry everyone:
+    // naval 2 + 25 against 24, and the landing holds. The crossing itself is
+    // still the two transports.
     expect(await m.mapPools.readTownFleet(db, worldId, "aleria", at(10))).toEqual({ pentekonters: 4, triremes: 4 });
     await settle(ctx, at(10));
-    await db.update(m.dbPkg.resources).set({ amount: "1" }).where(and(eq(m.dbPkg.resources.scopeId, ctx.playerId), eq(m.dbPkg.resources.type, "trade-ship")));
-    await give(ctx, "galley", 5); // 1 pentekonter + 5 triremes: naval 26, space 40, range 4
+    await give(ctx, "galley", 5); // range 4 ≥ 2 seas
     const again = await actTown(ctx, "attack", "aleria", [peltasts.id], at(10));
     expect(again).toMatchObject({ ok: true });
     if (!again.ok) return;
-    expect(again.report.fleet).toMatchObject({ ships: { "trade-ship": 1, galley: 5 }, naval: 26, held: true });
+    expect(again.report.fleet).toEqual({ ships: { "trade-ship": 2, galley: 5 }, naval: 27, defender: { pentekonters: 4, triremes: 4, naval: 24 }, held: true });
+    expect(again.report.ships).toEqual({ "trade-ship": 2 });
     expect(again.report.winner).toBe("attacker");
     expect(again.report.conquest).toEqual({ regionId: "R073", townId: "aleria", previousOwner: "etruscans" });
+    // Out of range, the escort stays home and does not cap the fleet's range:
+    // from Massalia, Thapsus (five seas, naval 8) is reached on the
+    // pentekonters' range 7 with naval 2 alone, and the landing is repulsed.
+    await settle(ctx, at(11));
+    await setGarrison("thapsus", 10, at(11));
+    const fresh = await insertRow(ctx, { unitId: "peltast", count: 40, season: 6 });
+    const far = await actTown(ctx, "attack", "thapsus", [fresh.id], at(11));
+    expect(far).toMatchObject({ ok: true });
+    if (!far.ok) return;
+    expect(far.report).toMatchObject({ base: "R060", route: "sea", steps: 5, winner: "repulsed", fleet: { ships: { "trade-ship": 2 }, naval: 2, defender: { naval: 8 }, held: false } });
+    expect(far.report.fleet!.ships.galley).toBeUndefined();
     await recordChronicle(characterId);
   });
 

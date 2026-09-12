@@ -66,17 +66,30 @@ export const REACH_REASON = {
   hulls: (forceSpace: number, fleetSpace: number) => `Not enough hulls: ${forceSpace} space needed, ${fleetSpace} aboard.`,
 } as const;
 
-export type FleetStats = { range: number; space: number };
+// A fleet's reach: `range` is the farthest any hull sails, `space` every hull's
+// troop space, and `tiers` the space each ship type adds with its own range, so
+// a crossing counts only the hulls that can make it (ruling 3 as amended: a
+// short-ranged warship neither sails nor limits the fleet). `tiers` may be
+// absent on an older payload, in which case every hull is assumed in range.
+export type FleetStats = { range: number; space: number; tiers?: { range: number; space: number }[] };
 export type ForceStats = { men: number; space: number; fast: boolean };
 
-// fleetRange = min(range) over ship types with count > 0 (0 with no ships);
-// fleetSpace = Σ count × troopSpace.
+// fleetRange = max(range) over ship types with count > 0 (0 with no ships);
+// fleetSpace = Σ count × troopSpace; tiers per present type.
 export function fleetStats(fleet: ReachShip[]): FleetStats {
   const present = fleet.filter((s) => s.count > 0);
   return {
-    range: present.length ? Math.min(...present.map((s) => s.range)) : 0,
+    range: present.length ? Math.max(...present.map((s) => s.range)) : 0,
     space: present.reduce((n, s) => n + s.count * s.troopSpace, 0),
+    tiers: present.map((s) => ({ range: s.range, space: s.count * s.troopSpace })),
   };
+}
+
+// The troop space that can make a crossing of `seaSteps` seas: the hulls whose
+// range covers it.
+export function fleetSpaceAt(fleet: FleetStats, seaSteps: number): number {
+  if (!fleet.tiers) return seaSteps <= fleet.range ? fleet.space : 0;
+  return fleet.tiers.filter((t) => t.range >= seaSteps).reduce((n, t) => n + t.space, 0);
 }
 
 // forceSpace = Σ count × space; fast = every row has spd >= 6 (an empty force is not fast).
@@ -98,9 +111,11 @@ export function verdictsFor(steps: ReachSteps, force: ForceStats, fleet: FleetSt
   const land = steps.landSteps;
   const sea = steps.seaSteps;
 
-  // The sea route, and why it fails when it does (range before hulls).
-  const seaOk = sea !== null && sea <= fleet.range && force.space <= fleet.space;
-  const seaReason = sea === null ? null : sea > fleet.range ? REACH_REASON.range(sea, fleet.range) : force.space > fleet.space ? REACH_REASON.hulls(force.space, fleet.space) : null;
+  // The sea route, and why it fails when it does (range before hulls). Only
+  // hulls whose range covers the crossing carry men.
+  const spaceAt = sea === null ? 0 : fleetSpaceAt(fleet, sea);
+  const seaOk = sea !== null && sea <= fleet.range && force.space <= spaceAt;
+  const seaReason = sea === null ? null : sea > fleet.range ? REACH_REASON.range(sea, fleet.range) : force.space > spaceAt ? REACH_REASON.hulls(force.space, spaceAt) : null;
 
   // Adjacent by land: one step, or none (a town in the same region as a base).
   const adjacent = land !== null && land <= 1;

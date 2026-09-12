@@ -100,7 +100,7 @@ describe("reach", () => {
       expect(r[id]!.raid, id).toEqual({ ok: true });
       expect(r[id]!.colonise, id).toEqual({ ok: true });
     }
-    expect(fleetStats([])).toEqual({ range: 0, space: 0 });
+    expect(fleetStats([])).toEqual({ range: 0, space: 0, tiers: [] });
     expect(forceStats([stats("hoplite", 1)])).toEqual({ men: 1, space: 1, fast: false });
   });
 
@@ -125,7 +125,7 @@ describe("reach", () => {
     expect(r.R046!.colonise).toEqual({ ok: true });
   });
 
-  it("sea: 40 peltasts on one trade-ship fail on hulls; two clear it and a coastal region five seas out is Attack ok; a galley drops the range to 4", () => {
+  it("sea: 40 peltasts on one trade-ship fail on hulls; two clear it and a coastal region five seas out is Attack ok; a galley's shorter range only keeps its own hulls home", () => {
     expect(fiveSeasOut).toBeDefined();
     const peltasts = [stats("peltast", 40)]; // space 40
     const one = reach({ force: peltasts, fleet: [ship("trade-ship", 1)] })[fiveSeasOut]!;
@@ -140,10 +140,12 @@ describe("reach", () => {
     expect(two.colonise).toEqual({ ok: true });
 
     const fleet = [ship("trade-ship", 2), ship("galley", 1)];
-    expect(fleetStats(fleet)).toEqual({ range: 4, space: 44 });
-    const withGalley = reach({ force: peltasts, fleet })[fiveSeasOut]!;
-    expect(withGalley.attack).toEqual({ ok: false, reason: REACH_REASON.range(5, 4) });
-    // Range is reported before hulls when both fail.
+    expect(fleetStats(fleet)).toEqual({ range: 7, space: 44, tiers: [{ range: 7, space: 40 }, { range: 4, space: 4 }] });
+    // The galley cannot make five seas: it stays home and the two trade-ships still carry everyone.
+    expect(reach({ force: peltasts, fleet })[fiveSeasOut]!.attack).toEqual({ ok: true });
+    // One trade-ship and a galley: the galley's four space does not count at five seas.
+    expect(reach({ force: peltasts, fleet: [ship("trade-ship", 1), ship("galley", 5)] })[fiveSeasOut]!.attack).toEqual({ ok: false, reason: REACH_REASON.hulls(40, 20) });
+    // Galleys alone: range is reported before hulls when both fail.
     expect(reach({ force: [stats("peltast", 40), stats("hoplite", 40)], fleet: [ship("galley", 1)] })[fiveSeasOut]!.attack).toEqual({ ok: false, reason: REACH_REASON.range(5, 4) });
   });
 
