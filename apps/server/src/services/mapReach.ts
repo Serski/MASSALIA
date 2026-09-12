@@ -52,7 +52,7 @@ export type ReachView = {
   /** the campaign calendar: closed in Winter, with the instant the passes reopen */
   campaign: CampaignView;
   bases: BaseView[];
-  force: { men: number; space: number; fast: boolean };
+  force: { men: number; space: number };
   /** ship counts by id with their display names (ships.json), the farthest range and the troop space aboard */
   fleet: { ships: Record<string, number>; labels: Record<string, string>; range: number; space: number; tiers?: { range: number; space: number }[] };
   reach: Record<string, ReachEntry>;

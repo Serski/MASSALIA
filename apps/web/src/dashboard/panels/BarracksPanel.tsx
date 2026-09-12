@@ -532,7 +532,7 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
     api
       .mapReach()
       .then((reach) => setMover((m) => (m && m.rowId === rowId ? { rowId, reach } : m)))
-      .catch(() => setMover((m) => (m && m.rowId === rowId ? { rowId, reach: { now: new Date().toISOString(), campaign: { season: "", open: true, opensAt: null }, bases: [], force: { men: 0, space: 0, fast: false }, fleet: { ships: {}, range: 0, space: 0, tiers: [] }, reach: {}, moveTargets: [] } } : m)));
+      .catch(() => setMover((m) => (m && m.rowId === rowId ? { rowId, reach: { now: new Date().toISOString(), campaign: { season: "", open: true, opensAt: null }, bases: [], force: { men: 0, space: 0 }, fleet: { ships: {}, range: 0, space: 0, tiers: [] }, reach: {}, moveTargets: [] } } : m)));
   };
 
   const onZero = useCallback(

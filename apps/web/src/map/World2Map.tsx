@@ -1632,7 +1632,7 @@ export function ForcePicker({
   let verdict = steps ? verdictOf(steps, force) : { ok: false, reason: isMove ? "Choose the rows that march." : "That land cannot be reached." };
   if (base !== null && isMove && base === destId) verdict = { ok: false, reason: "The men already stand there." };
   if (verdict.ok && type === "scout" && !selected.some((r) => (r.stats.spd ?? 0) >= FAST_SPD)) verdict = { ok: false, reason: `A scouting party needs a man at Spd ${FAST_SPD} or more.` };
-  const route = steps && selected.length > 0 ? (isMove ? moveTravel(steps) : routeFor(type === "attack" ? "attack" : "raid", steps, force)) : null;
+  const route = steps && selected.length > 0 ? (isMove ? moveTravel(steps) : routeFor(type === "attack" ? "attack" : "raid", steps)) : null;
 
   // A force marches from one base: ticking a row in a second base clears the first.
   const toggle = (r: BarracksRosterRow) =>
@@ -1757,7 +1757,7 @@ export function ForcePicker({
               <span>Choose the rows that march.</span>
             ) : (
               <>
-                <span>{force.men} men · space {force.space}{force.fast ? " · fast" : ""}</span>
+                <span>{force.men} men · space {force.space}</span>
                 {route ? (
                   <span>
                     {route.route === "within"

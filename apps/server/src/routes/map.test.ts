@@ -31,7 +31,7 @@ type ReachView = {
   campaign: { season: string; open: boolean; opensAt: string | null };
   bases: { id: string; regionId: string; townId: string | null; kind: string; name: string; holding: unknown }[];
   moveTargets: { id: string; regionId: string; townId: string | null; kind: string; byBase: Record<string, { landSteps: number | null; seaSteps: number | null }> }[];
-  force: { men: number; space: number; fast: boolean };
+  force: { men: number; space: number };
   fleet: { ships: Record<string, number>; labels: Record<string, string>; range: number; space: number; tiers: { range: number; space: number }[] };
   reach: Record<string, { landSteps: number | null; seaSteps: number | null; byBase: Record<string, { landSteps: number | null; seaSteps: number | null }>; attack: { ok: boolean; reason?: string }; raid: { ok: boolean }; colonise: { ok: boolean } }>;
 };
@@ -103,7 +103,7 @@ suite("/api/map/reach (integration)", () => {
     // Season 9 is a Spring: the campaign is open and no reopening instant is given.
     expect(v.campaign).toEqual({ season: "Spring", open: true, opensAt: null });
     expect(Math.abs(Date.parse(v.now) - Date.now())).toBeLessThan(10_000);
-    expect(v.force).toEqual({ men: 5, space: 5, fast: false });
+    expect(v.force).toEqual({ men: 5, space: 5 });
     expect(v.fleet).toEqual({ ships: { "trade-ship": 0, galley: 0 }, labels: { "trade-ship": "Pentekonter", galley: "Trireme" }, range: 0, space: 0, tiers: [] });
     expect(v.reach.R060).toBeUndefined();
     expect(v.reach.R174).toBeUndefined();

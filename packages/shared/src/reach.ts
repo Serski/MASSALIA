@@ -7,11 +7,11 @@ import type { Topology } from "./mapGraph.js";
 // Massalia itself owns; nothing here touches a database or the clock.
 //
 // Rules (barracks spec §8/§9 as ruled in prompt 3a):
-//   land   Attack 1 step from a base; Raid 2 steps if every row is Spd 6+.
+//   land   Attack, Raid and Scout: 1 step from a base (0 for a town in a base's region).
 //   sea    a target's sea distance is the fewest sea provinces from any coastal
 //          base's coast to a sea the target touches; it is in reach when that
-//          distance is within the fleet's range (the lowest range of any ship
-//          type present) and the force's space fits aboard.
+//          distance is within the fleet's range (the farthest any hull sails)
+//          and the space of the hulls that can make it fits the force.
 //   Colonise uses Attack's reach (a colony party has to get there); legality by
 //   target kind and owner stays with allowedMapActions.
 // Entries exist only for land provinces that are not fog, not the Massalia
@@ -44,7 +44,7 @@ export type ReachInput = {
 export type ReachVerdict = { ok: boolean; reason?: string };
 
 export type ReachEntry = {
-  /** shortest land distance from any base, null if > 2 */
+  /** shortest land distance from any base, null if > MAX_LAND_STEPS */
   landSteps: number | null;
   /** fewest sea provinces from any base's coast to a sea touching this region, null if none */
   seaSteps: number | null;
@@ -55,13 +55,11 @@ export type ReachEntry = {
   colonise: ReachVerdict;
 };
 
-export const MAX_LAND_STEPS = 2;
-export const RAID_FAST_SPD = 6;
+export const MAX_LAND_STEPS = 1;
 
 export const REACH_REASON = {
   noMen: "No men under arms.",
   noBase: "No base within reach.",
-  tooFar: `Too far by land; a raiding party needs every man at Spd ${RAID_FAST_SPD} or more.`,
   range: (seaSteps: number, fleetRange: number) => `Beyond the fleet's range (${seaSteps} seas, fleet reaches ${fleetRange}).`,
   hulls: (forceSpace: number, fleetSpace: number) => `Not enough hulls: ${forceSpace} space needed, ${fleetSpace} aboard.`,
 } as const;
@@ -72,7 +70,7 @@ export const REACH_REASON = {
 // short-ranged warship neither sails nor limits the fleet). `tiers` may be
 // absent on an older payload, in which case every hull is assumed in range.
 export type FleetStats = { range: number; space: number; tiers?: { range: number; space: number }[] };
-export type ForceStats = { men: number; space: number; fast: boolean };
+export type ForceStats = { men: number; space: number };
 
 // fleetRange = max(range) over ship types with count > 0 (0 with no ships);
 // fleetSpace = Σ count × troopSpace; tiers per present type.
@@ -92,12 +90,11 @@ export function fleetSpaceAt(fleet: FleetStats, seaSteps: number): number {
   return fleet.tiers.filter((t) => t.range >= seaSteps).reduce((n, t) => n + t.space, 0);
 }
 
-// forceSpace = Σ count × space; fast = every row has spd >= 6 (an empty force is not fast).
+// forceSpace = Σ count × space.
 export function forceStats(force: ReachForceRow[]): ForceStats {
   return {
     men: force.reduce((n, r) => n + r.count, 0),
     space: force.reduce((n, r) => n + r.count * r.space, 0),
-    fast: force.length > 0 && force.every((r) => r.spd >= RAID_FAST_SPD),
   };
 }
 
@@ -127,14 +124,8 @@ export function verdictsFor(steps: ReachSteps, force: ForceStats, fleet: FleetSt
   else if (sea === null) attack = { ok: false, reason: REACH_REASON.noBase };
   else attack = { ok: false, reason: seaReason! };
 
-  // Raid: 1 land step, 2 with a fast force, or by sea.
-  let raid: ReachVerdict;
-  if (force.men === 0) raid = { ok: false, reason: REACH_REASON.noMen };
-  else if (adjacent || (land === 2 && force.fast) || seaOk) raid = { ok: true };
-  else if (land === null && sea === null) raid = { ok: false, reason: REACH_REASON.noBase };
-  else if (land === 2 && !force.fast) raid = { ok: false, reason: REACH_REASON.tooFar };
-  else if (sea === null) raid = { ok: false, reason: REACH_REASON.noBase };
-  else raid = { ok: false, reason: seaReason! };
+  // Raid: Attack's reach — 1 land step, or by sea.
+  const raid: ReachVerdict = attack;
 
   // Colonise: Attack's reach, without the men rule (legality by target kind
   // and owner stays with allowedMapActions).
@@ -153,14 +144,11 @@ export function moveVerdict(steps: ReachSteps, force: ForceStats, fleet: FleetSt
   return verdictsFor(steps, force, fleet).attack;
 }
 
-// The route an action would take for a target: land when its land steps satisfy
-// the action (0 or 1, or 2 for a fast raiding party), else sea. A move takes
-// Attack's route.
-export function routeFor(type: "attack" | "raid" | "move", steps: ReachSteps, force: ForceStats): { route: "land" | "sea"; steps: number } | null {
+// The route an action would take for a target: land when adjacent (0 or 1
+// land steps), else sea. The same for Attack, Raid, Scout and a move.
+export function routeFor(_type: "attack" | "raid" | "move", steps: ReachSteps): { route: "land" | "sea"; steps: number } | null {
   const land = steps.landSteps;
-  const adjacent = land !== null && land <= 1;
-  const byLand = type === "raid" ? adjacent || (land === 2 && force.fast) : adjacent;
-  if (byLand) return { route: "land", steps: land! };
+  if (land !== null && land <= 1) return { route: "land", steps: land };
   return steps.seaSteps === null ? null : { route: "sea", steps: steps.seaSteps };
 }
 

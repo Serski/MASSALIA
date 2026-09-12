@@ -149,7 +149,7 @@ function assembleFleet(forceSpace: number, counts: Record<string, number>, steps
 }
 
 function verdictFor(entry: ReachEntry, type: MapActionType) {
-  // Scouts move like raiders: one step, two when every man is fast, or by sea.
+  // Scouts move like raiders: one land step, or by sea.
   return type === "attack" ? entry.attack : entry.raid;
 }
 
@@ -274,9 +274,8 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
     if (!entry) return fail(409, "That land cannot be reached.");
     const verdict = verdictFor(entry, input.type);
     if (!verdict.ok) return fail(409, verdict.reason ?? "Out of reach.");
-    const fast = view.force.fast;
     const adjacent = entry.landSteps !== null && entry.landSteps <= 1;
-    const byLand = input.type === "attack" ? adjacent : adjacent || (entry.landSteps === 2 && fast);
+    const byLand = adjacent;
     const route: "land" | "sea" = byLand ? "land" : "sea";
     const steps = byLand ? entry.landSteps! : entry.seaSteps!;
 

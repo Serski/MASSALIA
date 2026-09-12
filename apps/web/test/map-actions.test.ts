@@ -29,11 +29,11 @@ describe("mapActionButtons", () => {
 
   it("withReach gates Scout on the Raid verdict, with the reason as title and caption", () => {
     const buttons = mapActionButtons({ kind: "region", hasTown: false, ownerId: "boii" });
-    const entry = { landSteps: 2, seaSteps: null, byBase: {}, attack: { ok: false, reason: "No base within reach." }, raid: { ok: false, reason: "Too far by land; a raiding party needs every man at Spd 6 or more." }, colonise: { ok: false, reason: "No base within reach." } };
+    const entry = { landSteps: null, seaSteps: 3, byBase: {}, attack: { ok: false, reason: "Beyond the fleet's range (3 seas, fleet reaches 0)." }, raid: { ok: false, reason: "Beyond the fleet's range (3 seas, fleet reaches 0)." }, colonise: { ok: false, reason: "Beyond the fleet's range (3 seas, fleet reaches 0)." } };
     const { buttons: out, caption } = withReach(buttons, entry);
     expect(out.map((b) => b.enabled)).toEqual([false, false, false, false]);
     expect(out.find((b) => b.type === "scout")!.title).toBe(entry.raid.reason);
-    expect(caption).toBe("No base within reach.");
+    expect(caption).toBe("Beyond the fleet's range (3 seas, fleet reaches 0).");
     // Raid ok lights Scout too.
     const lit = withReach(buttons, { ...entry, raid: { ok: true } }).buttons;
     expect(lit.filter((b) => b.enabled).map((b) => b.type)).toEqual(["raid", "scout"]);

@@ -1514,7 +1514,7 @@ export type MapReachView = {
   now: string; // server time (ISO); countdowns anchor to this, not the device clock
   campaign: { season: string; open: boolean; opensAt: string | null }; // closed in Winter
   bases: BaseView[];
-  force: { men: number; space: number; fast: boolean };
+  force: { men: number; space: number };
   fleet: FleetView;
   // Keyed by region id; a region absent here keeps the legality matrix's own verdict.
   reach: Record<string, ReachEntry>;

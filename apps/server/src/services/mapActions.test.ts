@@ -627,7 +627,7 @@ suite("Map actions (integration)", () => {
     expect(r.report).toMatchObject({ baseId: "arelate", regionId: "R052", townId: "arelate", townName: "Arelate", route: "land", minutes: 30 });
     expect(r.report.line).toBe("20 hoplites march from Massalia to Arelate, arriving in 00:30:00.");
     expect((await rows(ctx))[0]!.mission).toEqual({ kind: "move", regionId: "R052", townId: "arelate", departedAt: at(9).toISOString() });
-    // Not there yet: no base at Arelate, and Nemausus (R045) is two steps from Massalia.
+    // Not there yet: no base at Arelate, and Nemausus (R045) is two steps from Massalia — out of land reach.
     const before = await reach(ctx, at(9.25));
     expect(before.bases.map((b) => b.id)).toEqual(["R060"]);
     expect(before.reach.R045!.attack.ok).toBe(false);
@@ -648,7 +648,7 @@ suite("Map actions (integration)", () => {
     expect(back.report).toMatchObject({ from: "arelate", fromName: "Arelate", baseId: "R060", route: "land", minutes: 30 });
     const left = await reach(ctx, at(12.1));
     expect(left.bases.map((b) => b.id)).toEqual(["R060"]);
-    expect(left.reach.R045!.byBase).toEqual({ R060: { landSteps: 2, seaSteps: null } });
+    expect(left.reach.R045!.byBase).toEqual({ R060: { landSteps: null, seaSteps: null } });
     expect(left.reach.R045!.attack.ok).toBe(false);
     await recordChronicle(characterId);
   });

@@ -68,7 +68,7 @@ const REACH = {
   now: new Date().toISOString(),
   campaign: { season: "Winter", open: false, opensAt: future(5) },
   bases: [{ id: "R060", regionId: "R060", townId: null, kind: "massalia", name: "Massalia", holding: null }],
-  force: { men: 0, space: 0, fast: false },
+  force: { men: 0, space: 0 },
   fleet,
   reach: { R046: entry },
   moveTargets: [],

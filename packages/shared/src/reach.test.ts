@@ -101,21 +101,21 @@ describe("reach", () => {
       expect(r[id]!.colonise, id).toEqual({ ok: true });
     }
     expect(fleetStats([])).toEqual({ range: 0, space: 0, tiers: [] });
-    expect(forceStats([stats("hoplite", 1)])).toEqual({ men: 1, space: 1, fast: false });
+    expect(forceStats([stats("hoplite", 1)])).toEqual({ men: 1, space: 1 });
   });
 
-  it("a two-step region is Raid-not-ok with the Spd reason for hoplites, and ok for an all-peltast force", () => {
+  it("a two-step inland region is out of land reach for Attack and Raid alike, whatever the force's speed", () => {
     expect(twoStepsOut).toBeDefined();
     const slow = reach({ force: [stats("hoplite", 10)] })[twoStepsOut]!;
-    expect(slow.landSteps).toBe(2);
+    expect(slow.landSteps).toBeNull();
     expect(slow.seaSteps).toBeNull();
-    expect(slow.raid).toEqual({ ok: false, reason: REACH_REASON.tooFar });
+    expect(slow.raid).toEqual({ ok: false, reason: REACH_REASON.noBase });
     expect(slow.attack).toEqual({ ok: false, reason: REACH_REASON.noBase });
-    const fast = reach({ force: [stats("peltast", 10)] })[twoStepsOut]!;
-    expect(fast.raid).toEqual({ ok: true });
-    expect(fast.attack).toEqual({ ok: false, reason: REACH_REASON.noBase });
-    // Mixed: one slow row spoils the raid.
-    expect(reach({ force: [stats("peltast", 10), stats("hoplite", 1)] })[twoStepsOut]!.raid).toEqual({ ok: false, reason: REACH_REASON.tooFar });
+    // An all-peltast party gets no farther: the two-step rule is gone.
+    const light = reach({ force: [stats("peltast", 10)] })[twoStepsOut]!;
+    expect(light.raid).toEqual({ ok: false, reason: REACH_REASON.noBase });
+    expect(light.attack).toEqual({ ok: false, reason: REACH_REASON.noBase });
+    expect(light.byBase.R060).toEqual({ landSteps: null, seaSteps: null });
   });
 
   it("an empty force cannot Attack or Raid, but Colonise still reads reach", () => {

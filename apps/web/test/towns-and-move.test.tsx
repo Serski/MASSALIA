@@ -100,7 +100,7 @@ describe("BattleReport · towns and moves", () => {
 
 const moveTargets = [
   { id: "R060", regionId: "R060", townId: null, kind: "massalia" as const, name: "Massalia", byBase: { R060: { landSteps: 0, seaSteps: 1 }, R046: { landSteps: 1, seaSteps: null } } },
-  { id: "nikaia", regionId: "R059", townId: "nikaia", kind: "home" as const, name: "Nikaia", byBase: { R060: { landSteps: 1, seaSteps: 1 }, R046: { landSteps: 2, seaSteps: null } } },
+  { id: "nikaia", regionId: "R059", townId: "nikaia", kind: "home" as const, name: "Nikaia", byBase: { R060: { landSteps: 1, seaSteps: 1 }, R046: { landSteps: null, seaSteps: null } } },
   { id: "R046", regionId: "R046", townId: null, kind: "conquest" as const, name: "Salyes", byBase: { R060: { landSteps: 1, seaSteps: null }, R046: { landSteps: 0, seaSteps: null } } },
   { id: "emporion", regionId: "R065", townId: "emporion", kind: "home" as const, name: "Emporion", byBase: { R060: { landSteps: null, seaSteps: 1 }, R046: { landSteps: null, seaSteps: null } } },
 ];
@@ -109,7 +109,7 @@ const names = { R060: "Massalia", R046: "Salyes", nikaia: "Nikaia", emporion: "E
 describe("move picker", () => {
   it("from the map: rows grouped by base with the move verdict, the destination's own rows greyed, the march line, and Go sends the move", async () => {
     const roster = [row({ id: "home-1", count: 20 }), row({ id: "salyes-1", count: 5, basedAt: "R046" })];
-    const mapMove = vi.spyOn(api, "mapMove").mockResolvedValue({ report: { type: "move", line: "" } as never, reach: {} as never, force: { men: 0, space: 0, fast: false }, fleet, roster });
+    const mapMove = vi.spyOn(api, "mapMove").mockResolvedValue({ report: { type: "move", line: "" } as never, reach: {} as never, force: { men: 0, space: 0 }, fleet, roster });
     const onActed = vi.fn();
     const { container, getByText } = render(
       <ForcePicker type="move" target={{ kind: "town", id: "nikaia", regionId: "R059", name: "Nikaia" }} names={names} moveTargets={moveTargets} fleet={fleet} roster={roster} onClose={noop} onActed={onActed} />,
@@ -117,7 +117,7 @@ describe("move picker", () => {
     expect(container.querySelector(".w2map-info-label")!.textContent).toBe("Send men to · Nikaia");
     const groups = [...container.querySelectorAll(".w2map-pick-group")];
     expect(groups.map((g) => g.getAttribute("data-base"))).toEqual(["R060", "R046"]);
-    // Salyes is two land steps from Nikaia and has no coast: no route.
+    // Salyes is not adjacent to Nikaia and has no coast: no route.
     expect(groups[1]!.classList.contains("unreachable")).toBe(true);
     expect(groups[1]!.querySelector(".w2map-pick-why")!.textContent).toBe("No base within reach.");
     fireEvent.click(groups[0]!.querySelector("input[type=checkbox]")!);
@@ -164,14 +164,14 @@ describe("move picker", () => {
       summary: { underArms: 26, levyMen: 3, growthPerYear: 15, baseGrowthPerYear: 10, heldRegions: 1, seasonsPerYear: 4 },
       fleet: { ships: [{ id: "trade-ship", label: "Pentekonter", count: 1 }], space: 20, range: 7 },
     };
-    const reach: MapReachView = { now: iso(NOW), campaign: { season: "Spring", open: true, opensAt: null }, bases: [], force: { men: 26, space: 26, fast: false }, fleet, reach: {}, moveTargets };
+    const reach: MapReachView = { now: iso(NOW), campaign: { season: "Spring", open: true, opensAt: null }, bases: [], force: { men: 26, space: 26 }, fleet, reach: {}, moveTargets };
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ version: 1, names: { R060: "Massalia", R046: "Salyes" } }), { status: 200, headers: { "content-type": "application/json" } }));
     const barracks = vi.spyOn(api, "barracks").mockResolvedValue(view);
     vi.spyOn(api, "mapReach").mockResolvedValue(reach);
     const mapMove = vi.spyOn(api, "mapMove").mockResolvedValue({
       report: { type: "move", from: "R060", fromName: "Massalia", baseId: "R046", regionId: "R046", regionName: "Salyes", townId: null, townName: null, route: "land", steps: 1, minutes: 30, arrivesAt: iso(NOW + H / 2), ships: {}, men: 26, rows: [], line: "26 hoplites march from Massalia to Salyes, arriving in 00:30:00." },
       reach,
-      force: { men: 0, space: 0, fast: false },
+      force: { men: 0, space: 0 },
       fleet,
       roster: [{ ...hoplites, movingTo: "R046", arrivesAt: iso(NOW + H / 2), mission: { kind: "move", regionId: "R046", departedAt: iso(NOW) } }],
     });

@@ -118,8 +118,7 @@ Role coverage: 8 line, 5 skirmish, 3 missile, 4 cavalry. Bands bring their own g
 Every roster row and every ship has a `basedAt`: the Massalia region by default, or a colony the player has founded. All reach is computed from the base.
 
 Land:
-- Attack and Raid by land may target only regions adjacent to the base region (1 land step). No ships involved.
-- Raid may reach 2 land steps if every row in the force has Spd ≥ 6 (an all-light or all-mounted party). This is the map use of Spd. Attack never exceeds 1 step.
+- Attack, Raid and Scout by land may target only regions adjacent to the base region (1 land step; a town in a base's own region counts as adjacent). No ships involved. There is no longer a two-step rule for fast parties: Spd is used by the battle resolver and by the scout requirement (a scouting party needs a man at Spd ≥ 6), not by reach.
 - Inland regions are reachable only by land from a base. Reaching the Gaulish interior means founding a coastal colony first.
 
 Sea:
