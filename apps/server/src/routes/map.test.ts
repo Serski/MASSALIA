@@ -139,6 +139,33 @@ suite("/api/map/reach (integration)", () => {
     expect((await app.inject({ method: "POST", url: "/api/map/act", payload: { type: "raid", regionId: "R046", rows: [{ rowId, count: 40 }] } })).statusCode).toBe(401);
   });
 
+  it("POST /act: a town scout by townId, a move by baseId, and the body rules for both", async () => {
+    const p = await freshPlayer();
+    const recruitedAt = new Date(now.getTime() - 2 * DAY);
+    await db.insert(m.dbPkg.playerUnits).values({ worldId, ownerPlayerId: p.playerId, source: "trained", unitId: "peltast", count: 20, startCount: 20, recruitedSeason: 7, readyAt: new Date(recruitedAt.getTime() + DAY), createdAt: recruitedAt });
+    await db.insert(m.dbPkg.resources).values({ scope: "player", scopeId: p.playerId, type: "grain", amount: "1000", ratePerSecond: "0", lastUpdatedAt: startedAt });
+    const rowId = (await db.select({ id: m.dbPkg.playerUnits.id }).from(m.dbPkg.playerUnits).where(eq(m.dbPkg.playerUnits.ownerPlayerId, p.playerId)))[0]!.id;
+    const post = (payload: unknown) => app.inject({ method: "POST", url: "/api/map/act", headers: { cookie: `massalia_session=${app.signCookie(p.token)}` }, payload: payload as Record<string, unknown> });
+    // Exactly one of regionId and townId.
+    expect((await post({ type: "scout", regionId: "R047", townId: "reii", rows: [{ rowId, count: 10 }] })).statusCode).toBe(400);
+    expect((await post({ type: "scout", rows: [{ rowId, count: 10 }] })).statusCode).toBe(400);
+    expect((await post({ type: "move", rows: [{ rowId, count: 10 }] })).statusCode).toBe(400);
+    // Scout Reii with half the row: the town's intel, the report names the town.
+    const scout = await post({ type: "scout", townId: "reii", rows: [{ rowId, count: 10 }] });
+    expect(scout.statusCode).toBe(200);
+    const sv = scout.json<{ report: { type: string; townId: string; townName: string; intel: { warband: number; pentekonters: number; triremes: number }; town: { walls: number; population: number } } }>();
+    expect(sv.report).toMatchObject({ type: "scout", townId: "reii", townName: "Reii", intel: { warband: 160, pentekonters: 0, triremes: 0 }, town: { walls: 1, population: 1500 } });
+    // Move the other half to Arelate: one line, the row on the march, moveTargets still lists it.
+    const move = await post({ type: "move", baseId: "arelate", rows: [{ rowId, count: 10 }] });
+    expect(move.statusCode).toBe(200);
+    const mv = move.json<{ report: { type: string; line: string; minutes: number; baseId: string }; reach: { moveTargets: { id: string }[] }; roster: { id: string; movingTo: string | null; mission: { kind: string } | null }[] }>();
+    expect(mv.report).toMatchObject({ type: "move", baseId: "arelate", minutes: 30 });
+    expect(mv.report.line).toBe("10 peltasts march from Massalia to Arelate, arriving in 00:30:00.");
+    expect(mv.roster.find((r) => r.id === rowId)).toMatchObject({ movingTo: "arelate", mission: { kind: "move" } });
+    expect(mv.reach.moveTargets.some((t) => t.id === "arelate")).toBe(true);
+    expect((await post({ type: "move", baseId: "R047", rows: [{ rowId, count: 10 }] })).statusCode).toBe(409);
+  });
+
   it("a row still training does not count toward the force, so Attack fails for want of men", async () => {
     const p = await freshPlayer();
     await db.insert(m.dbPkg.playerUnits).values({ worldId, ownerPlayerId: p.playerId, source: "trained", unitId: "peltast", count: 5, startCount: 5, recruitedSeason: 9, readyAt: new Date(now.getTime() + DAY), createdAt: now });

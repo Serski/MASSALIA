@@ -31,7 +31,8 @@ async function loadModules() {
   const holdings = await import("./holdings.js");
   const actions = await import("./mapActions.js");
   const lock = await import("./lock.js");
-  return { dbPkg, shared, buildings, barracks, mapGraph, mapPools, holdings, actions, lock };
+  const mapReach = await import("./mapReach.js");
+  return { dbPkg, shared, buildings, barracks, mapGraph, mapPools, holdings, actions, lock, mapReach };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -63,6 +64,9 @@ suite("Map actions (integration)", () => {
   }
   const give = (ctx: Ctx, type: string, amount: number) =>
     db.insert(m.dbPkg.resources).values({ scope: "player", scopeId: ctx.playerId, type, amount: String(amount), ratePerSecond: "0", lastUpdatedAt: at(0) });
+  const giveAll = async (ctx: Ctx, goods: Record<string, number>) => {
+    for (const [type, amount] of Object.entries(goods)) await give(ctx, type, amount);
+  };
   const stock = async (ctx: Ctx, type: string) =>
     Number((await db.select().from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scopeId, ctx.playerId), eq(m.dbPkg.resources.type, type))))[0]?.amount ?? 0);
   const wallet = async (ctx: Ctx) => (await db.select().from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.playerId, ctx.playerId)))[0]!.drachmae;
@@ -72,6 +76,9 @@ suite("Map actions (integration)", () => {
     db.select().from(m.dbPkg.effectLog).where(and(eq(m.dbPkg.effectLog.characterId, characterId), eq(m.dbPkg.effectLog.kind, kind))).orderBy(asc(m.dbPkg.effectLog.createdAt));
   const warband = async (regionId: string) => (await db.select().from(m.dbPkg.regionMilitary).where(and(eq(m.dbPkg.regionMilitary.worldId, worldId), eq(m.dbPkg.regionMilitary.regionId, regionId))))[0]?.warband;
   const setWarband = (regionId: string, value: number, when: Date) => m.mapPools.writeRegionWarband(db, worldId, regionId, value, when);
+  const garrison = async (townId: string) => (await db.select().from(m.dbPkg.townMilitary).where(and(eq(m.dbPkg.townMilitary.worldId, worldId), eq(m.dbPkg.townMilitary.townId, townId))))[0]?.garrison;
+  const setGarrison = (townId: string, value: number, when: Date) => m.mapPools.writeTownGarrison(db, worldId, townId, value, when);
+  const levy = async (ctx: Ctx) => (await db.select().from(m.dbPkg.playerLevy).where(eq(m.dbPkg.playerLevy.ownerPlayerId, ctx.playerId)))[0];
   // A ready row standing at a base (created and ready well before the action).
   type RowOpts = { source?: "trained" | "band"; unitId: string; count: number; basedAt?: string; ready?: boolean; movingTo?: string | null; season?: number };
   const insertRow = async (ctx: Ctx, o: RowOpts) =>
@@ -106,9 +113,22 @@ suite("Map actions (integration)", () => {
     return m.actions.act(ctx, { type, regionId, rows: rowIds.map((id) => ({ rowId: id, count: all.find((r) => r.id === id)?.count ?? 1 })) }, when);
   };
   const actRows = (ctx: Ctx, type: "scout" | "raid" | "attack", regionId: string, sent: { rowId: string; count: number }[], when = at(9)) => m.actions.act(ctx, { type, regionId, rows: sent }, when);
+  const actTown = async (ctx: Ctx, type: "scout" | "raid" | "attack", townId: string, rowIds: string[], when = at(9)) => {
+    const all = await rows(ctx);
+    return m.actions.act(ctx, { type, townId, rows: rowIds.map((id) => ({ rowId: id, count: all.find((r) => r.id === id)?.count ?? 1 })) }, when);
+  };
+  const moveTo = async (ctx: Ctx, baseId: string, rowIds: string[], when = at(9)) => {
+    const all = await rows(ctx);
+    return m.actions.move(ctx, { baseId, rows: rowIds.map((id) => ({ rowId: id, count: all.find((r) => r.id === id)?.count ?? 1 })) }, when);
+  };
+  const reach = (ctx: Ctx, when: Date) =>
+    db.transaction(async (tx) => {
+      await m.lock.lockPlayer(tx, ctx.playerId);
+      return m.mapReach.reachView(tx, ctx, when);
+    });
   const recordChronicle = async (characterId: string) => {
     const entries = await m.dbPkg.gatherChronicleForCharacter(characterId);
-    for (const e of entries) if (e.type === "map_action" || e.type === "holding_reverted") chronicleLines.push(`${e.label} — ${m.shared.renderCampaignLine(e.type, e.payload as never)}`);
+    for (const e of entries) if (e.type === "map_action" || e.type === "holding_reverted" || e.type === "holding_tribute") chronicleLines.push(`${e.label} — ${m.shared.renderCampaignLine(e.type, e.payload as never)}`);
   };
 
   beforeAll(async () => {
@@ -355,6 +375,301 @@ suite("Map actions (integration)", () => {
     expect(await actRows(ctx, "raid", "R046", [{ rowId: band.id, count: 20 }])).toMatchObject({ ok: false, code: 409, error: "A band marches as one." });
     expect(await rows(ctx)).toHaveLength(1);
     expect(await actRows(ctx, "raid", "R046", [{ rowId: band.id, count: 40 }])).toMatchObject({ ok: true });
+  });
+
+  // --- Towns (3c) --------------------------------------------------------------
+
+  it("town scout: writes the dynasty's town intel with garrison and fleet; the report carries walls, population and the garrison's effective def", async () => {
+    const { ctx, characterId, dynastyId } = await makePlayer();
+    const peltasts = await insertRow(ctx, { unitId: "peltast", count: 10 });
+    // Reii (R047): one land step from Massalia, walls 1, garrison 160, no fleet.
+    const r = await actTown(ctx, "scout", "reii", [peltasts.id]);
+    expect(r).toMatchObject({ ok: true });
+    if (!r.ok) return;
+    expect(r.report).toMatchObject({ type: "scout", regionId: "R047", townId: "reii", townName: "Reii", route: "land", steps: 1, destination: "R060", town: { walls: 1, population: 1500, garrisonDef: 8 }, intel: { warband: 160, pentekonters: 0, triremes: 0 }, winner: null });
+    const intel = (await db.select().from(m.dbPkg.townIntel).where(and(eq(m.dbPkg.townIntel.dynastyId, dynastyId), eq(m.dbPkg.townIntel.townId, "reii"))))[0]!;
+    expect(intel).toMatchObject({ garrison: 160, pentekonters: 0, triremes: 0 });
+    expect((await rows(ctx)).find((x) => x.id === peltasts.id)!.mission).toEqual({ kind: "scout", regionId: "R047", townId: "reii", departedAt: at(9).toISOString() });
+    expect(r.report.line).toBe("Scouted Reii with 10 peltasts: 160 soldiers under arms, no ships in the harbour.");
+    // Walls above the cap: Rome (walls 4) defends at 7 + 3, scouted by sea (scouts are not stopped by a fleet).
+    await give(ctx, "trade-ship", 1);
+    const settledBack = await settle(ctx, at(10));
+    expect(settledBack.arrived).toHaveLength(1);
+    const rome = await actTown(ctx, "scout", "rome", [peltasts.id], at(10));
+    expect(rome).toMatchObject({ ok: true });
+    if (!rome.ok) return;
+    expect(rome.report).toMatchObject({ route: "sea", town: { walls: 4, garrisonDef: 10 }, fleet: null, intel: { warband: 30000, pentekonters: 4, triremes: 6 } });
+    await recordChronicle(characterId);
+  });
+
+  it("town raid: the garrison is the defender behind its walls, plunder pays double the region rate, the garrison is reduced", async () => {
+    const { ctx, characterId } = await makePlayer({ drachmae: 100 });
+    await setGarrison("reii", 10, at(9)); // a thin garrison so 40 peltasts win on the exchange
+    const peltasts = await insertRow(ctx, { unitId: "peltast", count: 40 });
+    const r = await actTown(ctx, "raid", "reii", [peltasts.id]);
+    expect(r).toMatchObject({ ok: true });
+    if (!r.ok) return;
+    expect(r.report).toMatchObject({ type: "raid", townId: "reii", winner: "attacker", defender: { label: "Town garrison", start: 10 }, conquest: null });
+    const killed = r.report.defender!.losses;
+    expect(killed).toBeGreaterThan(0);
+    expect(r.report.plunder).toEqual({ drachmae: killed * 20 * 2, grain: killed * 5 * 2 });
+    expect(await wallet(ctx)).toBe(100 + killed * 40);
+    expect(await garrison("reii")).toBe(10 - killed);
+    expect(r.report.line).toMatch(/^Raided Reii with 40 peltasts: \d+ soldiers? slain/);
+    await recordChronicle(characterId);
+  });
+
+  it("sea assault: a fleet weaker than the town's is repulsed with no battle, no losses and no garrison change; a stronger one lands", async () => {
+    const { ctx, characterId } = await makePlayer();
+    // Aleria (R073): two seas out, no land route, fleet 4 pentekonters and 4 triremes (naval 24).
+    await setGarrison("aleria", 10, at(9));
+    await give(ctx, "trade-ship", 2); // naval 1 each: 2 against 24
+    const peltasts = await insertRow(ctx, { unitId: "peltast", count: 40 });
+    const r = await actTown(ctx, "attack", "aleria", [peltasts.id]);
+    expect(r).toMatchObject({ ok: true });
+    if (!r.ok) return;
+    expect(r.report).toMatchObject({
+      route: "sea",
+      steps: 2,
+      winner: "repulsed",
+      rounds: 0,
+      fleet: { ships: { "trade-ship": 2 }, naval: 2, defender: { pentekonters: 4, triremes: 4, naval: 24 }, held: false },
+      attacker: { losses: 0 },
+      defender: { start: 10, end: 10, losses: 0 },
+      conquest: null,
+      destination: "R060",
+    });
+    expect(r.report.attacker.rows[0]).toMatchObject({ start: 40, end: 40 });
+    expect(await garrison("aleria")).toBe(10);
+    expect(await holdingsOf(ctx)).toHaveLength(0);
+    expect((await rows(ctx)).find((x) => x.id === peltasts.id)).toMatchObject({ count: 40, movingTo: "R060", arrivesAt: recovered(at(9), 2) });
+    expect(r.report.line).toBe("Sailed against Aleria with 40 peltasts and were driven off by its fleet before landing.");
+    // The town's fleet is unchanged; with an escort of triremes the landing holds.
+    expect(await m.mapPools.readTownFleet(db, worldId, "aleria", at(10))).toEqual({ pentekonters: 4, triremes: 4 });
+    await settle(ctx, at(10));
+    await db.update(m.dbPkg.resources).set({ amount: "1" }).where(and(eq(m.dbPkg.resources.scopeId, ctx.playerId), eq(m.dbPkg.resources.type, "trade-ship")));
+    await give(ctx, "galley", 5); // 1 pentekonter + 5 triremes: naval 26, space 40, range 4
+    const again = await actTown(ctx, "attack", "aleria", [peltasts.id], at(10));
+    expect(again).toMatchObject({ ok: true });
+    if (!again.ok) return;
+    expect(again.report.fleet).toMatchObject({ ships: { "trade-ship": 1, galley: 5 }, naval: 26, held: true });
+    expect(again.report.winner).toBe("attacker");
+    expect(again.report.conquest).toEqual({ regionId: "R073", townId: "aleria", previousOwner: "etruscans" });
+    await recordChronicle(characterId);
+  });
+
+  it("taking a town: a town holding, the garrison at 0, survivors based at the town and recovering, the region untouched", async () => {
+    const { ctx, characterId } = await makePlayer();
+    await setGarrison("reii", 10, at(9));
+    const hoplites = await insertRow(ctx, { unitId: "hoplite", count: 60 });
+    const r = await actTown(ctx, "attack", "reii", [hoplites.id]);
+    expect(r).toMatchObject({ ok: true });
+    if (!r.ok) return;
+    expect(r.report).toMatchObject({ winner: "attacker", conquest: { regionId: "R047", townId: "reii", previousOwner: "saluvii" }, destination: "reii", town: { walls: 1, garrisonDef: 8 } });
+    expect(await garrison("reii")).toBe(0);
+    const held = await holdingsOf(ctx);
+    expect(held).toHaveLength(1);
+    expect(held[0]).toMatchObject({ regionId: "R047", townId: "reii", kind: "conquest", previousOwner: "saluvii", lastGarrisonedAt: recovered(at(9), 1), lastTributeAt: recovered(at(9), 1) });
+    expect((await rows(ctx)).find((x) => x.id === hoplites.id)).toMatchObject({ basedAt: "reii", movingTo: "reii", mission: { kind: "attack", regionId: "R047", townId: "reii" } });
+    // The region has no warband of its own to touch, and no row was created for it.
+    expect(await warband("R047")).toBeUndefined();
+    expect(r.report.line).toMatch(/^Took Reii with 60 hoplites: \d+ soldiers? slain, .* The town is ours\.$/);
+    // Once home, the town is a base: its region is no target, and the next town over is a step away.
+    await settle(ctx, at(10));
+    const view = await reach(ctx, at(10));
+    expect(view.bases).toContainEqual({ id: "reii", regionId: "R047", townId: "reii", kind: "conquest" });
+    // The region of a held town keeps its entry (for other towns there), at 0 steps from the town; the next region over is a step.
+    expect(view.reach.R047!.byBase.reii).toEqual({ landSteps: 0, seaSteps: null });
+    expect(view.reach.R049!.byBase.reii).toEqual({ landSteps: 1, seaSteps: null }); // R047 is inland
+    // The held town is not a target and the region rule still refuses R047 as a region.
+    expect(await actTown(ctx, "raid", "reii", [hoplites.id], at(10))).toMatchObject({ ok: false, code: 409, error: "You hold this town." });
+    await recordChronicle(characterId);
+  });
+
+  it("home towns are never targets; a town in a region the player holds a town in is at 0 steps and attackable", async () => {
+    const { ctx } = await makePlayer();
+    const peltasts = await insertRow(ctx, { unitId: "peltast", count: 10 });
+    expect(await actTown(ctx, "raid", "arelate", [peltasts.id])).toMatchObject({ ok: false, code: 409, error: "Massalia does not act against her own." });
+    expect(await actTown(ctx, "raid", "massalia", [peltasts.id])).toMatchObject({ ok: false, code: 409, error: "Massalia does not act against her own." });
+    expect(await actTown(ctx, "raid", "nowhere", [peltasts.id])).toMatchObject({ ok: false, code: 404 });
+    // Holding Genoa (R049, three towns): Album is in the same region, 0 steps, a land route.
+    await m.holdings.insertTownConquest(db, ctx, "R049", "genoa", "genoa", at(8));
+    const garrisonRow = await insertRow(ctx, { unitId: "peltast", count: 10, basedAt: "genoa" });
+    const view = await reach(ctx, at(9));
+    expect(view.reach.R049!.byBase.genoa).toEqual({ landSteps: 0, seaSteps: expect.any(Number) as number | null });
+    expect(view.reach.R049!.raid).toEqual({ ok: true });
+    const r = await actTown(ctx, "scout", "album", [garrisonRow.id]);
+    expect(r).toMatchObject({ ok: true });
+    if (!r.ok) return;
+    expect(r.report).toMatchObject({ townId: "album", base: "genoa", route: "land", steps: 0, recoveryHours: 3, destination: "genoa" });
+  });
+
+  it("town tribute: whole days only, only while the garrison meets the population minimum, and never after reversion", async () => {
+    const { ctx, characterId } = await makePlayer({ drachmae: 1000 });
+    await giveAll(ctx, { wine: 1000, chicken: 1000, herbal: 1000 });
+    // Vienna (R032, population 3,000): 120 dr a day, 30 men needed.
+    await m.holdings.insertTownConquest(db, ctx, "R032", "vienna", "cavares", at(9));
+    const men = await insertRow(ctx, { unitId: "hoplite", count: 30, basedAt: "vienna", season: 8 });
+    const before = await wallet(ctx);
+    // Half a day: nothing yet.
+    expect((await settle(ctx, at(9.5))).tribute.paid).toEqual([]);
+    expect(await wallet(ctx)).toBe(before);
+    // Two whole days: 240 dr, the marker at day 11 exactly.
+    const two = await settle(ctx, at(11.25));
+    expect(two.tribute.paid).toEqual([{ regionId: "R032", townId: "vienna", name: "Vienna", days: 2, drachmae: 240, grain: 0, timber: 0 }]);
+    expect(await wallet(ctx)).toBe(before + 240);
+    expect((await holdingsOf(ctx))[0]!.lastTributeAt).toEqual(at(11));
+    expect(await logs(characterId, "holding_tribute")).toHaveLength(1);
+    // Under the minimum: the day passes unpaid, the marker still advances.
+    await db.update(m.dbPkg.playerUnits).set({ count: 29 }).where(eq(m.dbPkg.playerUnits.id, men.id));
+    expect((await settle(ctx, at(12.5))).tribute.paid).toEqual([]);
+    expect((await holdingsOf(ctx))[0]!.lastTributeAt).toEqual(at(12));
+    expect(await wallet(ctx)).toBe(before + 240);
+    // Back at 30: the next whole day pays 120.
+    await db.update(m.dbPkg.playerUnits).set({ count: 30 }).where(eq(m.dbPkg.playerUnits.id, men.id));
+    expect((await settle(ctx, at(13.5))).tribute.paid).toMatchObject([{ name: "Vienna", days: 1, drachmae: 120 }]);
+    expect(await wallet(ctx)).toBe(before + 360);
+    // The garrison marches away: a day later the town reverts and pays nothing more.
+    await db.update(m.dbPkg.playerUnits).set({ basedAt: "R060" }).where(eq(m.dbPkg.playerUnits.id, men.id));
+    const gone = await settle(ctx, at(15));
+    expect(gone.holdings.reverted).toEqual([{ regionId: "R032", townId: "vienna", kind: "conquest", previousOwner: "cavares" }]);
+    expect(gone.tribute.paid).toEqual([]);
+    expect(await garrison("vienna")).toBe(120); // the content garrison is back
+    expect(await wallet(ctx)).toBe(before + 360);
+    await recordChronicle(characterId);
+  });
+
+  it("region tribute: a held, garrisoned region pays grain and timber a day and adds to the levy at the year boundary; empty, it pays nothing", async () => {
+    const { ctx, characterId } = await makePlayer();
+    await m.holdings.insertConquest(db, ctx, "R046", "unclaimed", at(9));
+    const men = await insertRow(ctx, { unitId: "hoplite", count: 5, basedAt: "R046", season: 8 });
+    const grain0 = await stock(ctx, "grain");
+    // Season 9: the levy stands at 120 (100 + two years of 10), anchored on season 8.
+    await settle(ctx, at(9));
+    expect(await levy(ctx)).toMatchObject({ men: 120, lastGrowthSeason: 8 });
+    // One whole day: max(15, 0.05 × 100) grain and max(8, 0.025 × 100) timber; upkeep drew the hoplites' grain too.
+    const one = await settle(ctx, at(10));
+    expect(one.tribute.paid).toEqual([{ regionId: "R046", townId: "", name: "Salyes", days: 1, drachmae: 0, grain: 15, timber: 8 }]);
+    expect(await stock(ctx, "grain")).toBe(grain0 + 15 - one.drawn.grain!);
+    expect(await stock(ctx, "timber")).toBe(8);
+    // The year boundary at season 12 with the region garrisoned: +10 +5.
+    await settle(ctx, at(12));
+    expect(await levy(ctx)).toMatchObject({ men: 135, lastGrowthSeason: 12 });
+    const view = await m.barracks.barracksView(ctx, at(12));
+    expect(view.summary).toMatchObject({ growthPerYear: 15, baseGrowthPerYear: 10, heldRegions: 1 });
+    // The men leave a day before the next boundary: at the boundary the region is
+    // empty, so no bonus and no goods, and the land reverts in the same settle.
+    await settle(ctx, at(15));
+    await db.update(m.dbPkg.playerUnits).set({ basedAt: "R060" }).where(eq(m.dbPkg.playerUnits.id, men.id));
+    expect((await settle(ctx, at(15.5))).holdings.reverted).toEqual([]);
+    const sixteen = await settle(ctx, at(16));
+    expect(sixteen.holdings.reverted).toHaveLength(1);
+    expect(sixteen.tribute.paid).toEqual([]);
+    expect(await levy(ctx)).toMatchObject({ men: 145, lastGrowthSeason: 16 });
+    await recordChronicle(characterId);
+  });
+
+  it("garrison regeneration: a reduced garrison comes back 5 a day up to its content value", async () => {
+    await setGarrison("reii", 140, at(9));
+    expect(await m.mapPools.readTownGarrison(db, worldId, "reii", at(9.5))).toBe(140);
+    expect(await m.mapPools.readTownGarrison(db, worldId, "reii", at(11))).toBe(150);
+    expect(await m.mapPools.readTownGarrison(db, worldId, "reii", at(12.5))).toBe(155);
+    expect(await m.mapPools.readTownGarrison(db, worldId, "reii", at(30))).toBe(160);
+    expect(await m.mapPools.readTownGarrison(db, worldId, "reii", at(40))).toBe(160);
+  });
+
+  // --- Move (3c) ---------------------------------------------------------------
+
+  it("move by land to an adjacent holding: 30 minutes, mission move, arrival rebases and merges with the men already there", async () => {
+    const { ctx, characterId } = await makePlayer();
+    await m.holdings.insertConquest(db, ctx, "R046", "unclaimed", at(8));
+    const there = await insertRow(ctx, { unitId: "hoplite", count: 5, basedAt: "R046", season: 6 });
+    const home = await insertRow(ctx, { unitId: "hoplite", count: 20, season: 7 });
+    const r = await moveTo(ctx, "R046", [home.id]);
+    expect(r).toMatchObject({ ok: true });
+    if (!r.ok) return;
+    const arrives = new Date(at(9).getTime() + 30 * 60_000);
+    expect(r.report).toMatchObject({ type: "move", from: "R060", fromName: "Massalia", baseId: "R046", regionId: "R046", regionName: "Salyes", townId: null, route: "land", steps: 1, minutes: 30, arrivesAt: arrives.toISOString(), men: 20 });
+    expect(r.report.line).toBe("20 hoplites march from Massalia to Salyes, arriving in 00:30:00.");
+    expect((await rows(ctx)).find((x) => x.id === home.id)).toMatchObject({ basedAt: "R060", movingTo: "R046", arrivesAt: arrives, mission: { kind: "move", regionId: "R046", departedAt: at(9).toISOString() } });
+    expect(r.force.men).toBe(5); // only the garrison stands
+    expect(await logs(characterId, "map_action")).toHaveLength(1);
+    // Arrival: rebased at Salyes and folded into the row already there.
+    const settled = await settle(ctx, at(9.1));
+    expect(settled.arrived).toHaveLength(1);
+    expect(settled.merged).toMatchObject([{ rowId: there.id, basedAt: "R046", count: 25 }]);
+    expect(await rows(ctx)).toHaveLength(1);
+    await recordChronicle(characterId);
+  });
+
+  it("move to home ground: Arelate becomes a base while men stand there, lighting Nemausus's region, and goes dark once they leave", async () => {
+    const { ctx, characterId } = await makePlayer();
+    const home = await insertRow(ctx, { unitId: "hoplite", count: 20 });
+    const r = await moveTo(ctx, "arelate", [home.id]);
+    expect(r).toMatchObject({ ok: true });
+    if (!r.ok) return;
+    expect(r.report).toMatchObject({ baseId: "arelate", regionId: "R052", townId: "arelate", townName: "Arelate", route: "land", minutes: 30 });
+    expect(r.report.line).toBe("20 hoplites march from Massalia to Arelate, arriving in 00:30:00.");
+    expect((await rows(ctx))[0]!.mission).toEqual({ kind: "move", regionId: "R052", townId: "arelate", departedAt: at(9).toISOString() });
+    // Not there yet: no base at Arelate, and Nemausus (R045) is two steps from Massalia.
+    const before = await reach(ctx, at(9.25));
+    expect(before.bases.map((b) => b.id)).toEqual(["R060"]);
+    expect(before.reach.R045!.attack.ok).toBe(false);
+    // Standing there: Arelate is a home base, R045 is one step and Attack ok; R052 itself stays no target.
+    await settle(ctx, at(9.6));
+    const standing = await reach(ctx, at(9.6));
+    expect(standing.bases).toContainEqual({ id: "arelate", regionId: "R052", townId: "arelate", kind: "home" });
+    expect(standing.reach.R045!.byBase.arelate).toEqual({ landSteps: 1, seaSteps: null });
+    expect(standing.reach.R045!.attack).toEqual({ ok: true });
+    expect(standing.reach.R052).toBeUndefined();
+    // Home ground is never a holding: nothing to revert, no tribute.
+    expect((await settle(ctx, at(12))).holdings.reverted).toEqual([]);
+    expect(await holdingsOf(ctx)).toHaveLength(0);
+    // Back to Massalia: once they leave, Arelate is no base and R045 is dark again.
+    const back = await moveTo(ctx, "R060", [(await rows(ctx))[0]!.id], at(12));
+    expect(back).toMatchObject({ ok: true });
+    if (!back.ok) return;
+    expect(back.report).toMatchObject({ from: "arelate", fromName: "Arelate", baseId: "R060", route: "land", minutes: 30 });
+    const left = await reach(ctx, at(12.1));
+    expect(left.bases.map((b) => b.id)).toEqual(["R060"]);
+    expect(left.reach.R045!.byBase).toEqual({ R060: { landSteps: 2, seaSteps: null } });
+    expect(left.reach.R045!.attack.ok).toBe(false);
+    await recordChronicle(characterId);
+  });
+
+  it("move refusals: a foreign region, the men's own base, a second base in the selection, and a sea crossing short of hulls", async () => {
+    const { ctx } = await makePlayer();
+    const peltasts = await insertRow(ctx, { unitId: "peltast", count: 40 });
+    expect(await moveTo(ctx, "R047", [peltasts.id])).toMatchObject({ ok: false, code: 409, error: "Men may only be sent to Massalia's own ground or a holding of yours." });
+    expect(await moveTo(ctx, "reii", [peltasts.id])).toMatchObject({ ok: false, code: 409, error: "Men may only be sent to Massalia's own ground or a holding of yours." });
+    expect(await moveTo(ctx, "R060", [peltasts.id])).toMatchObject({ ok: false, code: 409, error: "The men already stand there." });
+    // Emporion (R065): four land steps, one sea; 40 space on one trade-ship's 20.
+    await give(ctx, "trade-ship", 1);
+    expect(await moveTo(ctx, "emporion", [peltasts.id])).toMatchObject({ ok: false, code: 409, error: "Not enough hulls: 40 space needed, 20 aboard." });
+    // Two ships carry them: one sea, 30 minutes.
+    await db.update(m.dbPkg.resources).set({ amount: "2" }).where(and(eq(m.dbPkg.resources.scopeId, ctx.playerId), eq(m.dbPkg.resources.type, "trade-ship")));
+    const sailed = await moveTo(ctx, "emporion", [peltasts.id]);
+    expect(sailed).toMatchObject({ ok: true });
+    if (!sailed.ok) return;
+    expect(sailed.report).toMatchObject({ route: "sea", steps: 1, minutes: 30, ships: { "trade-ship": 2 }, townId: "emporion" });
+    expect(await stock(ctx, "trade-ship")).toBe(2);
+    // The movers cannot be sent again while on the march.
+    expect(await moveTo(ctx, "R060", [peltasts.id], at(9.01))).toMatchObject({ ok: false, code: 409, error: "Peltast are still on the march." });
+  });
+
+  it("move within one region: from a held town to its region's other town of ours takes 10 minutes", async () => {
+    const { ctx } = await makePlayer();
+    await m.holdings.insertTownConquest(db, ctx, "R049", "genoa", "genoa", at(8));
+    // Album stands empty; dated garrisoned at 9 so it has not yet reverted when the men set out.
+    await m.holdings.insertTownConquest(db, ctx, "R049", "album", "album", at(8), at(9));
+    const men = await insertRow(ctx, { unitId: "hoplite", count: 10, basedAt: "genoa" });
+    const r = await moveTo(ctx, "album", [men.id]);
+    expect(r).toMatchObject({ ok: true });
+    if (!r.ok) return;
+    expect(r.report).toMatchObject({ from: "genoa", fromName: "Genoa", baseId: "album", townName: "Album", route: "within", steps: 0, minutes: 10 });
+    expect(r.report.line).toBe("10 hoplites march from Genoa to Album, arriving in 00:10:00.");
+    expect((await settle(ctx, at(9.01))).arrived).toHaveLength(1);
+    expect((await rows(ctx))[0]).toMatchObject({ basedAt: "album", movingTo: null, mission: null });
   });
 
   it("a region with towns is not a target itself; home ground and fog are refused too", async () => {
