@@ -106,6 +106,28 @@ const moveTargets = [
 ];
 const names = { R060: "Massalia", R046: "Salyes", nikaia: "Nikaia", emporion: "Emporion" };
 
+describe("action picker · sea route", () => {
+  it("a coastal base that reaches a sea target: the rows are tickable and the footer shows the sea route with the hulls", () => {
+    // Balari (R090): no land route, two seas from Massalia's coast; one pentekonter and two triremes in stock.
+    const seaEntry = { landSteps: null, seaSteps: 2, byBase: { R060: { landSteps: null, seaSteps: 2 } }, attack: { ok: true }, raid: { ok: true }, colonise: { ok: true } };
+    const stock = { ships: { "trade-ship": 1, galley: 2 }, labels: { "trade-ship": "Pentekonter", galley: "Trireme" }, range: 7, space: 28, tiers: [{ range: 7, space: 20 }, { range: 4, space: 8 }] };
+    const roster = [row({ id: "home-1", unitId: "peltast", label: "Peltast", plural: "Peltasts", count: 20, stats })];
+    const { container } = render(<ForcePicker type="raid" target={{ kind: "region", id: "R090", regionId: "R090", name: "Balari" }} names={{ R060: "Massalia" }} entry={seaEntry} fleet={stock} roster={roster} onClose={noop} onActed={noop} />);
+    const group = container.querySelector(".w2map-pick-group")!;
+    expect(group.classList.contains("unreachable")).toBe(false);
+    expect(group.querySelector(".w2map-pick-why")).toBeNull();
+    const box = group.querySelector("input[type=checkbox]") as HTMLInputElement;
+    expect(box.disabled).toBe(false);
+    fireEvent.click(box);
+    fireEvent.change(group.querySelector(".w2map-pick-count")!, { target: { value: "1" } });
+    const verdict = container.querySelector(".w2map-verdict")!.textContent!;
+    expect(verdict).toContain("1 men · space 1");
+    expect(verdict).toContain("by sea · 2 seas · space 1 of 28 aboard · 1 pentekonter · 2 triremes");
+    expect(verdict).toContain("Within reach.");
+    expect((container.querySelector(".w2map-action") as HTMLButtonElement).disabled).toBe(false);
+  });
+});
+
 describe("move picker", () => {
   it("from the map: rows grouped by base with the move verdict, the destination's own rows greyed, the march line, and Go sends the move", async () => {
     const roster = [row({ id: "home-1", count: 20 }), row({ id: "salyes-1", count: 5, basedAt: "R046" })];

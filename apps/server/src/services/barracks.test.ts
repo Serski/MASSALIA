@@ -358,6 +358,21 @@ suite("Barracks (integration)", () => {
       expect((await logs(characterId, "barracks_arrive")).map((e) => e.detail)).toEqual([{ unitId: "hoplite", count: 5, from: "R060", to: "R046", source: "barracks" }]);
     });
 
+    it("a short stock with more precision than a double drains to exactly zero instead of failing the settle (the production 500)", async () => {
+      const { ctx } = await makePlayer({ drachmae: 100_000 });
+      await giveAll(ctx, { wine: 1000, herbal: 1000 });
+      // 1.99839120370370366 reads as 1.9983912037037037 in JS, a hair above the
+      // numeric: a guard of amount >= that string fails. The band eats 4 a day.
+      await db.insert(m.dbPkg.resources).values({ scope: "player", scopeId: ctx.playerId, type: "chicken", amount: "1.99839120370370366", ratePerSecond: "0", lastUpdatedAt: at(0) });
+      await insertRow(ctx, { source: "band", unitId: "volcae-irregulars", count: 40, recruitedSeason: 9, contractEndAt: 20 });
+      const s = await settle(ctx, 10);
+      expect(s.days).toBe(1);
+      expect(s.drawn.chicken).toBeCloseTo(1.9983912037037037, 12);
+      expect(s.bought.chicken).toBeCloseTo(4 - 1.9983912037037037, 12);
+      const chicken = (await db.select().from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scopeId, ctx.playerId), eq(m.dbPkg.resources.type, "chicken"))))[0]!;
+      expect(Number(chicken.amount)).toBe(0);
+    });
+
     it("the view's upkeep.perDay for 30 hoplites and one band equals what one full-stock day of settle charges", async () => {
       const { ctx } = await makePlayer({ drachmae: 100_000 });
       await giveAll(ctx, { grain: 10_000, oliveoil: 10_000, wine: 1000, chicken: 1000, herbal: 1000 });

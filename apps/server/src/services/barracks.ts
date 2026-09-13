@@ -179,6 +179,22 @@ async function creditResource(exec: Exec, rowId: string, qty: number): Promise<v
 }
 
 // Guarded relative stock debit; false when the stock is short (nothing written).
+// Draw up to `qty` from a stock row in one write: LEAST(amount, qty) on the
+// database's own numeric, so a stock that is short of the demand is drained to
+// exactly zero and the write never fails a guard. The JS-side plan reads the
+// numeric through a double, which can land a hair above the true value; a
+// `amount >= qty` guard on that double then fails on a stock that should simply
+// be emptied (seen in production as "stock draw of 1.998… chicken failed under
+// lock", which 500ed every settling route for that player).
+async function drainResource(exec: Exec, rowId: string, qty: number): Promise<boolean> {
+  const rows = await exec
+    .update(resources)
+    .set({ amount: sql`GREATEST(0, ${resources.amount} - LEAST(${resources.amount}, ${String(qty)}::numeric))` })
+    .where(eq(resources.id, rowId))
+    .returning({ id: resources.id });
+  return rows.length > 0;
+}
+
 async function debitResource(exec: Exec, rowId: string, qty: number): Promise<boolean> {
   const rows = await exec
     .update(resources)
@@ -474,10 +490,12 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
     }
     rows = live;
 
-    // Apply the surviving plan: guarded stock draws, then the wallet — relative and
-    // clamped at 0 as settleStaffing does; `owed` reports the forgiven remainder.
+    // Apply the surviving plan: each good's draw is LEAST(stock, demand) taken
+    // on the database's numeric (a short stock drains to zero, never a failed
+    // guard), then the wallet — relative and clamped at 0 as settleStaffing
+    // does; `owed` reports the forgiven remainder.
     for (const [g, drawn] of Object.entries(p.draws)) {
-      if (!(await debitResource(exec, stock.get(g)!.rowId, drawn))) throw new Error(`barracks: stock draw of ${drawn} ${g} failed under lock`);
+      if (!(await drainResource(exec, stock.get(g)!.rowId, drawn))) throw new Error(`barracks: stock draw of ${drawn} ${g} found no row under lock`);
     }
     const cost = Math.round(p.cost);
     if (cost > 0) {

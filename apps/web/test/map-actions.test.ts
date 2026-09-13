@@ -40,4 +40,23 @@ describe("mapActionButtons", () => {
     // No entry: the matrix's verdict stands.
     expect(withReach(buttons, undefined).buttons.every((b) => b.enabled)).toBe(true);
   });
+
+  it("with the fleet given, a hull shortage for the whole roster does not grey the buttons: a one-man party could sail", () => {
+    const buttons = mapActionButtons({ kind: "region", hasTown: false, ownerId: "carthage" });
+    // Balari: two seas out, the whole roster of 60 short of the 28 space aboard.
+    const hulls = "Not enough hulls: 60 space needed, 28 aboard.";
+    const entry = { landSteps: null, seaSteps: 2, byBase: { R060: { landSteps: null, seaSteps: 2 } }, attack: { ok: false, reason: hulls }, raid: { ok: false, reason: hulls }, colonise: { ok: false, reason: hulls } };
+    const fleet = { ships: { "trade-ship": 1, galley: 2 }, range: 7, space: 28, tiers: [{ range: 7, space: 20 }, { range: 4, space: 8 }] };
+    const lit = withReach(buttons, entry, fleet);
+    expect(lit.buttons.filter((b) => b.enabled).map((b) => b.type)).toEqual(["attack", "raid", "scout", "colonise"]);
+    expect(lit.caption).toBeNull();
+    // Without the fleet the server's verdict stands, as before.
+    expect(withReach(buttons, entry).buttons.every((b) => !b.enabled)).toBe(true);
+    // Reasons no selection could mend still grey: the fleet's range, and no men at all.
+    const far = withReach(buttons, { ...entry, seaSteps: 9, byBase: { R060: { landSteps: null, seaSteps: 9 } } }, fleet);
+    expect(far.buttons.every((b) => !b.enabled)).toBe(true);
+    expect(far.caption).toBe("Beyond the fleet's range (9 seas, fleet reaches 7).");
+    const noMen = { ...entry, attack: { ok: false, reason: "No men under arms." }, raid: { ok: false, reason: "No men under arms." } };
+    expect(withReach(buttons, noMen, fleet).buttons.find((b) => b.type === "raid")!.title).toBe("No men under arms.");
+  });
 });

@@ -1090,7 +1090,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
     return { buttons, caption: buttons.some((b) => b.title === winterLine) ? winterLine : actions.caption };
   };
   const regionActions = selectedProvince
-    ? withWinter(withReach(mapActionButtons({ kind: "region", hasTown: selectedProvince.towns.length > 0, ownerId: selectedOwnerId }), regionReach))
+    ? withWinter(withReach(mapActionButtons({ kind: "region", hasTown: selectedProvince.towns.length > 0, ownerId: selectedOwnerId }), regionReach, reachFleet))
     : null;
   // "Your garrison: 30 hoplites · Your men: 20 peltasts returning in 02:14:07".
   const forceParts = (rows: BarracksRosterRow[]): CampaignForcePart[] => {
@@ -1151,7 +1151,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   // legality matrix), while its region keeps its owner.
   const selectedTownHeld = selectedTown ? heldTowns.get(selectedTown) ?? null : null;
   const townOwnerId = selectedTownHeld ? HOME_POLITY_ID : selectedOwnerId;
-  const townActions = selectedTown ? withWinter(withReach(mapActionButtons({ kind: "town", hasTown: true, ownerId: townOwnerId }), townReach)) : null;
+  const townActions = selectedTown ? withWinter(withReach(mapActionButtons({ kind: "town", hasTown: true, ownerId: townOwnerId }), townReach, reachFleet)) : null;
   // "Your men here: 20 hoplites" on a place of ours, "Your garrison" on a held region.
   const menLabel = selectedTown || !selectedHeld ? "Your men here" : "Your garrison";
   const yourMenHere = yourMenLine?.replace("Your garrison", menLabel) ?? null;
