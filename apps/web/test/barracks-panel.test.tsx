@@ -101,7 +101,8 @@ describe("BarracksPanel", () => {
     expect(strip).toContain("121 of 323 under arms");
     expect(strip).toContain("+10 each year");
     // FLEET: the ships in stock by their names, the troop space aboard and the farthest range.
-    expect(container.querySelector('[data-testid="fleet-strip"]')!.textContent).toBe("1 pentekonter · 2 triremes · carries 28");
+    expect(container.querySelector('[data-testid="fleet-strip"]')).toBeNull(); // the fleet lives under Massalia only
+    expect([...container.querySelectorAll('[data-testid="summary"] .barracks-k')].map((k) => k.textContent)).toEqual(["Levy", "Come of age", "Daily upkeep"]);
     // Daily upkeep: one item per good with its icon before the number, drachmae last with the coin.
     const items = [...container.querySelectorAll('[data-testid="upkeep-strip"] .barracks-upkeep-item')];
     expect(items.map((el) => el.getAttribute("title"))).toEqual(["200 grain", "114 oil", "7 wine", "7 chicken", "4 herbs", "130 drachmae"]);
@@ -191,7 +192,7 @@ describe("BarracksPanel", () => {
     expect(api.barracksCancel).toHaveBeenCalledWith("training-ekdromoi");
     expect(count(container, "training")).toBe(0);
     expect(container.querySelector('[data-testid="summary"]')!.textContent).toContain("117 of 323 under arms");
-    expect(container.querySelector('[data-testid="fleet-strip"]')!.textContent).toBe("No ships");
+    expect(container.querySelector('[data-testid="fleet-strip"]')).toBeNull();
     expect(container.textContent).toContain("Stood down 4 ekdromoi.");
 
     // Recruit 2 peltasts: the server answers with a new training row.
@@ -242,19 +243,31 @@ describe("BarracksPanel", () => {
     // Each place keeps the split.
     const heads = (p: Element) => [...p.querySelectorAll(".barracks-list-head")].map((h) => h.textContent);
     expect(heads(places[0]!)).toEqual(["Massalia · 66 men", "Levy · 26 men", "Mercenaries · 40 men", "Fleet · 3 hulls"]);
-    expect(heads(places[1]!)).toEqual(["Salyes · 84 men", "Levy · 84 men", "Mercenaries · 0 men"]);
-    expect(places[1]!.textContent).toContain("No bands under contract.");
-    expect(heads(places[2]!)).toEqual(["Nikaia · 20 men", "Levy · 20 men", "Mercenaries · 0 men"]);
+    // An empty sub-section is hidden rather than shown empty.
+    expect(heads(places[1]!)).toEqual(["Salyes · 84 men", "Levy · 84 men"]);
+    expect(places[1]!.textContent).not.toContain("No bands under contract.");
+    expect(heads(places[2]!)).toEqual(["Nikaia · 20 men", "Levy · 20 men"]);
     // The fleet: one row per hull type, no upkeep or service line, under Massalia only.
     const ships = [...places[0]!.querySelectorAll(".barracks-ship")];
     expect(ships.map((s) => `${s.querySelector(".barracks-row-name")!.textContent} · ${s.querySelector(".barracks-row-sub")!.textContent}`)).toEqual(["Pentekonter · 1 · carries 20 · range 7", "Trireme · 2 · escort · range 4"]);
     expect(ships.every((s) => s.querySelector(".barracks-row-service") === null)).toBe(true);
     expect(container.querySelectorAll('[data-section="home"] .barracks-ship')).toHaveLength(2);
-    // No ships: the section and the strip say so.
+    // No ships: the Fleet sub-section is hidden; men alone keep the place.
     cleanup();
     const empty = await mount(payload({ fleet: { ships: [], space: 0, range: 0 } }));
-    expect(empty.container.querySelector('[data-section="home"] .barracks-place[data-place="R060"]')!.textContent).toContain("No ships");
-    expect(empty.container.querySelector('[data-testid="fleet-strip"]')!.textContent).toBe("No ships");
+    const massalia = empty.container.querySelector('[data-section="home"] .barracks-place[data-place="R060"]')!;
+    expect(heads(massalia)).toEqual(["Massalia · 66 men", "Levy · 26 men", "Mercenaries · 40 men"]);
+    expect(massalia.textContent).not.toContain("No ships");
+    // Ships alone keep Massalia with just the Fleet; a place with nothing at all is not shown.
+    cleanup();
+    const shipsOnly = await mount(payload({ roster: [awayRaid], places: { R060: "Massalia" } }));
+    const only = [...shipsOnly.container.querySelectorAll('[data-section="home"] .barracks-place')];
+    expect(only.map((p) => p.getAttribute("data-place"))).toEqual(["R060"]);
+    expect(heads(only[0]!)).toEqual(["Massalia · 0 men", "Fleet · 3 hulls"]);
+    cleanup();
+    const nothing = await mount(payload({ roster: [awayRaid], fleet: { ships: [], space: 0, range: 0 } }));
+    expect(nothing.container.querySelectorAll('[data-section="home"] .barracks-place')).toHaveLength(0);
+    expect(nothing.container.querySelector('[data-section="home"]')!.textContent).toContain("No men under arms.");
     expect(hookWarnings).toEqual([]);
   });
 });

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, type BarracksOffer, type BarracksRosterRow, type BarracksUnit, type BarracksView, type BaseView, type MapReachView } from "../../api.js";
-import { BattleReport, ForcePicker, shipsText, type PickerReport } from "../../map/World2Map.js";
+import { BattleReport, ForcePicker, type PickerReport } from "../../map/World2Map.js";
 import { AssetIcon, formatClock, formatDuration, GoodGlyph, type PanelProps, REGION_NAMES_SRC, useCountdownSeconds } from "../shared.js";
 
 // The Barracks tab (military prompt ui-2). Renders the GET /api/barracks view to
@@ -586,11 +586,8 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
   const home = view.roster.filter((r) => r.movingTo === null && r.active);
   const upkeepFor = (row: BarracksRosterRow) => ({ row: view.upkeep.rows[row.id] ?? null, perMan: row.source === "trained" ? (view.units.find((u) => u.id === row.unitId)?.upkeepPerDay ?? null) : null });
   const strip = upkeepGoods(view.upkeep.perDay);
-  // "1 pentekonter · 2 triremes · carries 28", or "No ships".
+  // The ships in port, listed under Massalia (their only place on the panel).
   const fleetShips = view.fleet?.ships ?? [];
-  const fleetLine = fleetShips.length
-    ? `${shipsText(Object.fromEntries(fleetShips.map((s) => [s.id, s.count])), Object.fromEntries(fleetShips.map((s) => [s.id, s.label])), " · ")} · carries ${view.fleet.space}`
-    : null;
   // At Home by place: Massalia first, then holdings, then home ground, then
   // anything the reach payload did not name; only places with men (Massalia
   // also with ships alone, since the fleet lies there).
@@ -654,12 +651,6 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
           <span className="barracks-big">+{view.summary.growthPerYear} <small>each year</small></span>
         </div>
         <div className="barracks-cell">
-          <span className="barracks-k">Fleet</span>
-          <span className="barracks-big barracks-big-text" data-testid="fleet-strip">
-            {fleetLine ?? "No ships"}
-          </span>
-        </div>
-        <div className="barracks-cell">
           <span className="barracks-k">Daily upkeep</span>
           <span className="barracks-big barracks-big-text" data-testid="upkeep-strip">
             {strip.length === 0
@@ -688,16 +679,13 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
             return (
               <div key={placeId} className="barracks-list barracks-place" data-place={placeId}>
                 <div className="barracks-list-head barracks-place-head">{placeName(placeId)} · {menText(men(here))}</div>
-                <div className="barracks-list-head">Levy · {menText(men(levyHere))}</div>
-                {levyHere.length === 0 ? <p className="barracks-empty">No men under arms.</p> : null}
+                {levyHere.length > 0 ? <div className="barracks-list-head">Levy · {menText(men(levyHere))}</div> : null}
                 {levyHere.map((row) => homeRow(row, `Disbanded the ${row.plural}.`))}
-                <div className="barracks-list-head">Mercenaries · {menText(men(bandsHere))}</div>
-                {bandsHere.length === 0 ? <p className="barracks-empty">No bands under contract.</p> : null}
+                {bandsHere.length > 0 ? <div className="barracks-list-head">Mercenaries · {menText(men(bandsHere))}</div> : null}
                 {bandsHere.map((row) => homeRow(row, `Disbanded the ${row.label}.`))}
-                {placeId === massaliaId ? (
+                {placeId === massaliaId && fleetShips.length > 0 ? (
                   <>
                     <div className="barracks-list-head">Fleet · {fleetShips.reduce((n, s) => n + s.count, 0)} hulls</div>
-                    {fleetShips.length === 0 ? <p className="barracks-empty">No ships</p> : null}
                     {fleetShips.map((s) => (
                       <div key={s.id} className="barracks-row barracks-ship" data-ship={s.id}>
                         <div className="barracks-row-grid two">
