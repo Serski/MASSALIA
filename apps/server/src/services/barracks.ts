@@ -795,7 +795,7 @@ export const UPKEEP_NOTE = "Shortfalls are bought at the market's seasonal price
 // The player's ships in stock (whole hulls), for the reach rule and the
 // Barracks strip: counts by ship id, the reach ships, and the strip's summary
 // (labels from ships.json, troop space summed, range the farthest hull).
-export type FleetStripView = { ships: { id: string; label: string; count: number }[]; space: number; range: number };
+export type FleetStripView = { ships: { id: string; label: string; role: string; count: number; troopSpace: number; range: number; naval: number }[]; space: number; range: number };
 export async function fleetInStock(exec: Exec, ctx: ActingContext): Promise<{ counts: Record<string, number>; fleet: ReachShip[]; strip: FleetStripView }> {
   const shipsC = getShipsContent();
   const shipIds = Object.keys(shipsC.ships);
@@ -808,7 +808,10 @@ export async function fleetInStock(exec: Exec, ctx: ActingContext): Promise<{ co
   const fleet: ReachShip[] = shipIds.map((id) => ({ shipId: id, count: counts[id]!, range: shipsC.ships[id]!.range, troopSpace: shipsC.ships[id]!.troopSpace }));
   const present = fleet.filter((s) => s.count > 0);
   const strip: FleetStripView = {
-    ships: present.map((s) => ({ id: s.shipId, label: shipsC.ships[s.shipId]!.label, count: s.count })),
+    ships: present.map((s) => {
+      const d = shipsC.ships[s.shipId]!;
+      return { id: s.shipId, label: d.label, role: d.role, count: s.count, troopSpace: d.troopSpace, range: d.range, naval: d.naval };
+    }),
     space: present.reduce((n, s) => n + s.count * s.troopSpace, 0),
     range: present.length ? Math.max(...present.map((s) => s.range)) : 0,
   };

@@ -40,7 +40,7 @@ type View = {
   config: { minServiceSeasons: number; maxActiveBands: number; termSeasons: number };
   summary: { underArms: number; levyMen: number; growthPerYear: number; baseGrowthPerYear: number; heldRegions: number; seasonsPerYear: number };
   places: Record<string, string>;
-  fleet: { ships: { id: string; label: string; count: number }[]; space: number; range: number };
+  fleet: { ships: { id: string; label: string; role: string; count: number; troopSpace: number; range: number; naval: number }[]; space: number; range: number };
   units: { id: string; gear: Record<string, number>; stats: Record<string, number> }[];
   roster: { id: string; source: string; unitId: string; label: string; plural: string; count: number; readyAt: string | null; contractEndAt: string | null; basedAt: string; movingTo: string | null; arrivesAt: string | null; mission: unknown; createdAt: string; active: boolean; canDisband: boolean }[];
   offers: { id: string; men: number; hired: boolean; upkeepPerDay: Record<string, number> }[];

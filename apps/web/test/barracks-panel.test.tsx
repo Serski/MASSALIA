@@ -45,7 +45,7 @@ function payload(over: Partial<BarracksView> = {}): BarracksView {
     activeBands: 2,
     upkeep: { perDay: { grain: 200, oliveoil: 114, wine: 7, chicken: 7, herbal: 4, drachmae: 130 }, rows: { "home-hoplites": { grain: 52, oliveoil: 26 }, "home-band": { drachmae: 40, wine: 4, chicken: 4, herbal: 2 } }, note: "Shortfalls are bought at the market's seasonal price." },
     summary: { underArms: 121, levyMen: 202, growthPerYear: 10, seasonsPerYear: 4 },
-    fleet: { ships: [{ id: "trade-ship", label: "Pentekonter", count: 1 }, { id: "galley", label: "Trireme", count: 2 }], space: 28, range: 7 },
+    fleet: { ships: [{ id: "trade-ship", label: "Pentekonter", role: "transport", count: 1, troopSpace: 20, range: 7, naval: 1 }, { id: "galley", label: "Trireme", role: "warship", count: 2, troopSpace: 4, range: 4, naval: 5 }], space: 28, range: 7 },
     ...over,
   };
 }
@@ -70,6 +70,14 @@ async function mount(view: BarracksView) {
     if (/order of Hooks|Rendered more hooks|Rendered fewer hooks/.test(text)) hookWarnings.push(text);
   });
   vi.spyOn(api, "barracks").mockResolvedValue(view);
+  vi.spyOn(api, "mapReach").mockResolvedValue({
+    now: iso(NOW), campaign: { season: "Spring", open: true, opensAt: null }, force: { men: 0, space: 0 }, fleet: { ships: {}, range: 0, space: 0 }, reach: {}, moveTargets: [],
+    bases: [
+      { id: "R060", regionId: "R060", townId: null, kind: "massalia", name: "Massalia", holding: null },
+      { id: "nikaia", regionId: "R059", townId: "nikaia", kind: "home", name: "Nikaia", holding: null },
+      { id: "R046", regionId: "R046", townId: null, kind: "conquest", name: "Salyes", holding: null },
+    ],
+  });
   const utils = render(<BarracksPanel player={player} onRefresh={() => {}} />);
   await flush();
   return utils;
@@ -93,7 +101,7 @@ describe("BarracksPanel", () => {
     expect(strip).toContain("121 of 323 under arms");
     expect(strip).toContain("+10 each year");
     // FLEET: the ships in stock by their names, the troop space aboard and the farthest range.
-    expect(container.querySelector('[data-testid="fleet-strip"]')!.textContent).toBe("1 pentekonter · 2 triremes · 28 aboard · range 7");
+    expect(container.querySelector('[data-testid="fleet-strip"]')!.textContent).toBe("1 pentekonter · 2 triremes · carries 28");
     // Daily upkeep: one item per good with its icon before the number, drachmae last with the coin.
     const items = [...container.querySelectorAll('[data-testid="upkeep-strip"] .barracks-upkeep-item')];
     expect(items.map((el) => el.getAttribute("title"))).toEqual(["200 grain", "114 oil", "7 wine", "7 chicken", "4 herbs", "130 drachmae"]);
@@ -103,7 +111,7 @@ describe("BarracksPanel", () => {
 
     // At home: the levy row and the band, with their counts and lines.
     const home = container.querySelector('[data-section="home"]')!;
-    expect(home.querySelectorAll(".barracks-row")).toHaveLength(2);
+    expect(home.querySelectorAll(".barracks-row:not(.barracks-ship)")).toHaveLength(2); // the men; the fleet's rows are counted below
     expect(home.textContent).toContain("At home");
     expect(home.textContent).toContain("66 men"); // 26 + 40
     expect(home.textContent).toContain("Levy · 26 men");
@@ -216,6 +224,37 @@ describe("BarracksPanel", () => {
     fireEvent.click(within(card).getByText("Recruit 1"));
     await flush();
     expect(card.textContent).toContain("Short of 2 timber.");
+    expect(hookWarnings).toEqual([]);
+  });
+  it("At Home groups rows by place — Massalia first, then holdings, then home ground — with the Levy and Mercenaries split and the Fleet under Massalia", async () => {
+    const roster = [
+      homeLevy,
+      homeBand,
+      row({ id: "salyes-hoplites", unitId: "hoplite", label: "Hoplite", plural: "Hoplites", count: 84, startCount: 84, basedAt: "R046" }),
+      row({ id: "nikaia-peltasts", count: 20, basedAt: "nikaia" }),
+      awayRaid,
+    ];
+    // The Nikaia row comes first in the roster; the place order still puts it last.
+    const { container } = await mount(payload({ roster: [roster[3]!, ...roster.slice(0, 3), roster[4]!], places: { R060: "Massalia", R046: "Salyes", nikaia: "Nikaia" } }));
+    const places = [...container.querySelectorAll('[data-section="home"] .barracks-place')];
+    expect(places.map((p) => p.getAttribute("data-place"))).toEqual(["R060", "R046", "nikaia"]);
+    expect(places.map((p) => p.querySelector(".barracks-place-head")!.textContent)).toEqual(["Massalia · 66 men", "Salyes · 84 men", "Nikaia · 20 men"]);
+    // Each place keeps the split.
+    const heads = (p: Element) => [...p.querySelectorAll(".barracks-list-head")].map((h) => h.textContent);
+    expect(heads(places[0]!)).toEqual(["Massalia · 66 men", "Levy · 26 men", "Mercenaries · 40 men", "Fleet · 3 hulls"]);
+    expect(heads(places[1]!)).toEqual(["Salyes · 84 men", "Levy · 84 men", "Mercenaries · 0 men"]);
+    expect(places[1]!.textContent).toContain("No bands under contract.");
+    expect(heads(places[2]!)).toEqual(["Nikaia · 20 men", "Levy · 20 men", "Mercenaries · 0 men"]);
+    // The fleet: one row per hull type, no upkeep or service line, under Massalia only.
+    const ships = [...places[0]!.querySelectorAll(".barracks-ship")];
+    expect(ships.map((s) => `${s.querySelector(".barracks-row-name")!.textContent} · ${s.querySelector(".barracks-row-sub")!.textContent}`)).toEqual(["Pentekonter · 1 · carries 20 · range 7", "Trireme · 2 · escort · range 4"]);
+    expect(ships.every((s) => s.querySelector(".barracks-row-service") === null)).toBe(true);
+    expect(container.querySelectorAll('[data-section="home"] .barracks-ship')).toHaveLength(2);
+    // No ships: the section and the strip say so.
+    cleanup();
+    const empty = await mount(payload({ fleet: { ships: [], space: 0, range: 0 } }));
+    expect(empty.container.querySelector('[data-section="home"] .barracks-place[data-place="R060"]')!.textContent).toContain("No ships");
+    expect(empty.container.querySelector('[data-testid="fleet-strip"]')!.textContent).toBe("No ships");
     expect(hookWarnings).toEqual([]);
   });
 });

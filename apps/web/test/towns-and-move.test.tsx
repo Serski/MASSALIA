@@ -184,7 +184,7 @@ describe("move picker", () => {
       activeBands: 0,
       upkeep: { perDay: {}, rows: {}, note: "" },
       summary: { underArms: 26, levyMen: 3, growthPerYear: 15, baseGrowthPerYear: 10, heldRegions: 1, seasonsPerYear: 4 },
-      fleet: { ships: [{ id: "trade-ship", label: "Pentekonter", count: 1 }], space: 20, range: 7 },
+      fleet: { ships: [{ id: "trade-ship", label: "Pentekonter", role: "transport", count: 1, troopSpace: 20, range: 7, naval: 1 }], space: 20, range: 7 },
     };
     const reach: MapReachView = { now: iso(NOW), campaign: { season: "Spring", open: true, opensAt: null }, bases: [], force: { men: 26, space: 26 }, fleet, reach: {}, moveTargets };
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ version: 1, names: { R060: "Massalia", R046: "Salyes" } }), { status: 200, headers: { "content-type": "application/json" } }));

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api, ApiError, type BarracksOffer, type BarracksRosterRow, type BarracksUnit, type BarracksView, type MapReachView } from "../../api.js";
+import { api, ApiError, type BarracksOffer, type BarracksRosterRow, type BarracksUnit, type BarracksView, type BaseView, type MapReachView } from "../../api.js";
 import { BattleReport, ForcePicker, shipsText, type PickerReport } from "../../map/World2Map.js";
 import { AssetIcon, formatClock, formatDuration, GoodGlyph, type PanelProps, REGION_NAMES_SRC, useCountdownSeconds } from "../shared.js";
 
@@ -478,6 +478,10 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
   // row pre-ticked and a destination selector), the reach payload it reads,
   // and the one-line report after a march.
   const [mover, setMover] = useState<{ rowId: string; reach: MapReachView | null } | null>(null);
+  // The player's bases from the reach payload, for the order of the At Home
+  // places (Massalia, then holdings, then home ground). Absent, the roster's
+  // own order stands.
+  const [bases, setBases] = useState<BaseView[]>([]);
   const [moveReport, setMoveReport] = useState<PickerReport | null>(null);
   // Region display names for the mission lines (the map's public names file),
   // with the view's own place names (towns included) on top.
@@ -499,6 +503,10 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
     } catch (err) {
       setLoadError(err instanceof ApiError ? err.message : "The barracks could not be reached.");
     }
+    api
+      .mapReach()
+      .then((reach) => setBases(reach.bases ?? []))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -576,15 +584,46 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
   const away = view.roster.filter((r) => r.movingTo !== null);
   const training = view.roster.filter((r) => r.source === "trained" && !r.active && r.movingTo === null);
   const home = view.roster.filter((r) => r.movingTo === null && r.active);
-  const homeLevy = home.filter((r) => r.source === "trained");
-  const homeBands = home.filter((r) => r.source === "band");
   const upkeepFor = (row: BarracksRosterRow) => ({ row: view.upkeep.rows[row.id] ?? null, perMan: row.source === "trained" ? (view.units.find((u) => u.id === row.unitId)?.upkeepPerDay ?? null) : null });
   const strip = upkeepGoods(view.upkeep.perDay);
-  // "1 pentekonter · 2 triremes · 28 aboard · range 7", or "No ships".
+  // "1 pentekonter · 2 triremes · carries 28", or "No ships".
   const fleetShips = view.fleet?.ships ?? [];
   const fleetLine = fleetShips.length
-    ? `${shipsText(Object.fromEntries(fleetShips.map((s) => [s.id, s.count])), Object.fromEntries(fleetShips.map((s) => [s.id, s.label])), " · ")} · ${view.fleet.space} aboard · range ${view.fleet.range}`
+    ? `${shipsText(Object.fromEntries(fleetShips.map((s) => [s.id, s.count])), Object.fromEntries(fleetShips.map((s) => [s.id, s.label])), " · ")} · carries ${view.fleet.space}`
     : null;
+  // At Home by place: Massalia first, then holdings, then home ground, then
+  // anything the reach payload did not name; only places with men (Massalia
+  // also with ships alone, since the fleet lies there).
+  const rank = (id: string) => {
+    const b = bases.find((x) => x.id === id);
+    if (b?.kind === "massalia") return 0;
+    if (b?.kind === "colony" || b?.kind === "conquest") return 1;
+    if (b?.kind === "home") return 2;
+    return 3;
+  };
+  const massaliaId = bases.find((b) => b.kind === "massalia")?.id ?? home[0]?.basedAt ?? "R060";
+  const placeIds = [...new Set([massaliaId, ...home.map((r) => r.basedAt)])].filter((id) => id === massaliaId ? home.some((r) => r.basedAt === id) || fleetShips.length > 0 : true);
+  placeIds.sort((a, b) => rank(a) - rank(b) || (a === massaliaId ? -1 : b === massaliaId ? 1 : 0));
+  const placeName = (id: string) => placeNames[id] ?? id;
+  const homeRow = (row: BarracksRosterRow, done: string) => (
+    <HomeRow
+      key={row.id}
+      row={row}
+      offset={offset}
+      releaseAt={releaseAtIso(row, view)}
+      upkeep={upkeepFor(row)}
+      locked={locked}
+      lockReason={lockReason}
+      busy={busy}
+      busyKey={busyKey}
+      confirming={confirmId === row.id}
+      error={errorFor(`disband:${row.id}`)}
+      onConfirmChange={(open) => setConfirmId(open ? row.id : null)}
+      onDisband={() => act(`disband:${row.id}`, () => api.barracksDisband(row.id), done)}
+      onMove={() => openMove(row.id)}
+      onZero={onZero}
+    />
+  );
   const placeNames = { ...names, ...view.places };
   const moverRow = mover ? view.roster.find((r) => r.id === mover.rowId) ?? null : null;
   // The picker's default destination: the first place that is not the row's own base.
@@ -637,50 +676,45 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
       <div className="barracks-columns">
         <section className="barracks-section" data-section="home" aria-label="At home">
           <SectionHead title="At home" note={menText(men(home))} />
-          <div className="barracks-list">
-            <div className="barracks-list-head">Levy · {menText(men(homeLevy))}</div>
-            {homeLevy.length === 0 ? <p className="barracks-empty">No men under arms.</p> : null}
-            {homeLevy.map((row) => (
-              <HomeRow
-                key={row.id}
-                row={row}
-                offset={offset}
-                releaseAt={releaseAtIso(row, view)}
-                upkeep={upkeepFor(row)}
-                locked={locked}
-                lockReason={lockReason}
-                busy={busy}
-                busyKey={busyKey}
-                confirming={confirmId === row.id}
-                error={errorFor(`disband:${row.id}`)}
-                onConfirmChange={(open) => setConfirmId(open ? row.id : null)}
-                onDisband={() => act(`disband:${row.id}`, () => api.barracksDisband(row.id), `Disbanded the ${row.plural}.`)}
-                onMove={() => openMove(row.id)}
-                onZero={onZero}
-              />
-            ))}
-            <div className="barracks-list-head">Mercenaries · {menText(men(homeBands))}</div>
-            {homeBands.length === 0 ? <p className="barracks-empty">No bands under contract.</p> : null}
-            {homeBands.map((row) => (
-              <HomeRow
-                key={row.id}
-                row={row}
-                offset={offset}
-                releaseAt={releaseAtIso(row, view)}
-                upkeep={upkeepFor(row)}
-                locked={locked}
-                lockReason={lockReason}
-                busy={busy}
-                busyKey={busyKey}
-                confirming={confirmId === row.id}
-                error={errorFor(`disband:${row.id}`)}
-                onConfirmChange={(open) => setConfirmId(open ? row.id : null)}
-                onDisband={() => act(`disband:${row.id}`, () => api.barracksDisband(row.id), `Disbanded the ${row.label}.`)}
-                onMove={() => openMove(row.id)}
-                onZero={onZero}
-              />
-            ))}
-          </div>
+          {placeIds.length === 0 ? (
+            <div className="barracks-list">
+              <p className="barracks-empty">No men under arms.</p>
+            </div>
+          ) : null}
+          {placeIds.map((placeId) => {
+            const here = home.filter((r) => r.basedAt === placeId);
+            const levyHere = here.filter((r) => r.source === "trained");
+            const bandsHere = here.filter((r) => r.source === "band");
+            return (
+              <div key={placeId} className="barracks-list barracks-place" data-place={placeId}>
+                <div className="barracks-list-head barracks-place-head">{placeName(placeId)} · {menText(men(here))}</div>
+                <div className="barracks-list-head">Levy · {menText(men(levyHere))}</div>
+                {levyHere.length === 0 ? <p className="barracks-empty">No men under arms.</p> : null}
+                {levyHere.map((row) => homeRow(row, `Disbanded the ${row.plural}.`))}
+                <div className="barracks-list-head">Mercenaries · {menText(men(bandsHere))}</div>
+                {bandsHere.length === 0 ? <p className="barracks-empty">No bands under contract.</p> : null}
+                {bandsHere.map((row) => homeRow(row, `Disbanded the ${row.label}.`))}
+                {placeId === massaliaId ? (
+                  <>
+                    <div className="barracks-list-head">Fleet · {fleetShips.reduce((n, s) => n + s.count, 0)} hulls</div>
+                    {fleetShips.length === 0 ? <p className="barracks-empty">No ships</p> : null}
+                    {fleetShips.map((s) => (
+                      <div key={s.id} className="barracks-row barracks-ship" data-ship={s.id}>
+                        <div className="barracks-row-grid two">
+                          <div className="barracks-row-body">
+                            <div className="barracks-row-name">
+                              {s.label} <span className="barracks-row-count">· {s.count}</span>
+                            </div>
+                            <div className="barracks-row-sub">{s.role === "warship" ? "escort" : `carries ${s.troopSpace}`} · range {s.range}</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                ) : null}
+              </div>
+            );
+          })}
         </section>
 
         <div className="barracks-stack">

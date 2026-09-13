@@ -1483,7 +1483,7 @@ export type BarracksView = {
   // growthPerYear is the total at the next year boundary: the content growth plus what held, garrisoned regions add.
   summary: { underArms: number; levyMen: number; growthPerYear: number; baseGrowthPerYear?: number; heldRegions?: number; seasonsPerYear: number };
   // The ships in stock for the strip's FLEET cell: labels from ships.json, troop space summed, range the farthest hull.
-  fleet: { ships: { id: string; label: string; count: number }[]; space: number; range: number };
+  fleet: { ships: { id: string; label: string; role: "transport" | "warship"; count: number; troopSpace: number; range: number; naval: number }[]; space: number; range: number };
 };
 
 // --- Map reach (GET /api/map/reach; mirrors packages/shared/src/reach.ts) ---
