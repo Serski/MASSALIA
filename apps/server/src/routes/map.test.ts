@@ -32,7 +32,7 @@ type ReachView = {
   bases: { id: string; regionId: string; townId: string | null; kind: string; name: string; holding: unknown }[];
   moveTargets: { id: string; regionId: string; townId: string | null; kind: string; byBase: Record<string, { landSteps: number | null; seaSteps: number | null }> }[];
   force: { men: number; space: number };
-  fleet: { ships: Record<string, number>; labels: Record<string, string>; range: number; space: number; tiers: { range: number; space: number }[] };
+  fleet: { ships: Record<string, number>; labels: Record<string, string>; range: number; space: number; tiers: { range: number; space: number }[]; hulls: unknown[] };
   reach: Record<string, { landSteps: number | null; seaSteps: number | null; byBase: Record<string, { landSteps: number | null; seaSteps: number | null }>; attack: { ok: boolean; reason?: string }; raid: { ok: boolean }; colonise: { ok: boolean } }>;
 };
 
@@ -104,7 +104,7 @@ suite("/api/map/reach (integration)", () => {
     expect(v.campaign).toEqual({ season: "Spring", open: true, opensAt: null });
     expect(Math.abs(Date.parse(v.now) - Date.now())).toBeLessThan(10_000);
     expect(v.force).toEqual({ men: 5, space: 5 });
-    expect(v.fleet).toEqual({ ships: { "trade-ship": 0, galley: 0 }, labels: { "trade-ship": "Pentekonter", galley: "Trireme" }, range: 0, space: 0, tiers: [] });
+    expect(v.fleet).toEqual({ ships: { "trade-ship": 0, galley: 0 }, labels: { "trade-ship": "Pentekonter", galley: "Trireme" }, range: 0, space: 0, tiers: [], hulls: [] });
     expect(v.reach.R060).toBeUndefined();
     expect(v.reach.R174).toBeUndefined();
     expect(v.reach.R046).toMatchObject({ landSteps: 1, byBase: { R060: { landSteps: 1 } }, attack: { ok: true }, raid: { ok: true }, colonise: { ok: true } });
@@ -127,6 +127,9 @@ suite("/api/map/reach (integration)", () => {
     expect((await post({ type: "pillage", regionId: "R046", rows: [{ rowId, count: 40 }] })).statusCode).toBe(400);
     expect((await post({ type: "raid", regionId: "R046", rowIds: [rowId] })).statusCode).toBe(400); // the old body shape
     expect((await post({ type: "raid", regionId: "R046", rows: [{ rowId, count: 1.5 }] })).statusCode).toBe(400);
+    // A ships map must map ship ids to whole numbers.
+    expect((await post({ type: "raid", regionId: "R046", rows: [{ rowId, count: 40 }], ships: { "trade-ship": 1.5 } })).statusCode).toBe(400);
+    expect((await post({ type: "raid", regionId: "R046", rows: [{ rowId, count: 40 }], ships: [1] })).statusCode).toBe(400);
     const res = await post({ type: "raid", regionId: "R046", rows: [{ rowId, count: 40 }] });
     expect(res.statusCode).toBe(200);
     const v = res.json<{ report: { type: string; winner: string; regionName: string; plunder: { drachmae: number } | null; line: string }; reach: { reach: Record<string, unknown> }; force: { men: number }; roster: { id: string; movingTo: string | null }[] }>();

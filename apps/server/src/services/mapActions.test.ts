@@ -113,6 +113,10 @@ suite("Map actions (integration)", () => {
     return m.actions.act(ctx, { type, regionId, rows: rowIds.map((id) => ({ rowId: id, count: all.find((r) => r.id === id)?.count ?? 1 })) }, when);
   };
   const actRows = (ctx: Ctx, type: "scout" | "raid" | "attack", regionId: string, sent: { rowId: string; count: number }[], when = at(9)) => m.actions.act(ctx, { type, regionId, rows: sent }, when);
+  const actShips = async (ctx: Ctx, type: "scout" | "raid" | "attack", target: { regionId: string } | { townId: string }, rowIds: string[], ships: Record<string, number>, when = at(9)) => {
+    const all = await rows(ctx);
+    return m.actions.act(ctx, { type, ...target, rows: rowIds.map((id) => ({ rowId: id, count: all.find((r) => r.id === id)?.count ?? 1 })), ships }, when);
+  };
   const actTown = async (ctx: Ctx, type: "scout" | "raid" | "attack", townId: string, rowIds: string[], when = at(9)) => {
     const all = await rows(ctx);
     return m.actions.act(ctx, { type, townId, rows: rowIds.map((id) => ({ rowId: id, count: all.find((r) => r.id === id)?.count ?? 1 })) }, when);
@@ -271,6 +275,36 @@ suite("Map actions (integration)", () => {
     // Ships are counted, never debited.
     expect(await stock(ctx, "trade-ship")).toBe(1);
     expect(await stock(ctx, "galley")).toBe(5);
+  });
+
+  it("a chosen fleet: used as given when it fits, refused beyond stock, short of space, out of range, or unknown", async () => {
+    const { ctx } = await makePlayer();
+    await give(ctx, "trade-ship", 2);
+    await give(ctx, "galley", 2);
+    await setWarband("R078", 10, at(9));
+    const peltasts = await insertRow(ctx, { unitId: "peltast", count: 40 }); // 40 space; R078 is two seas out
+    // Beyond stock, short of space, a hull that cannot make the crossing, a ship that is not one.
+    expect(await actShips(ctx, "raid", { regionId: "R078" }, [peltasts.id], { "trade-ship": 3 })).toMatchObject({ ok: false, code: 409, error: "Only 2 pentekonters in port." });
+    expect(await actShips(ctx, "raid", { regionId: "R078" }, [peltasts.id], { "trade-ship": 1 })).toMatchObject({ ok: false, code: 409, error: "Not enough hulls: 40 space needed, 20 aboard." });
+    expect(await actShips(ctx, "raid", { regionId: "R078" }, [peltasts.id], { "trade-ship": 2, quinquereme: 1 })).toMatchObject({ ok: false, code: 400, error: "No such ship." });
+    expect(await actShips(ctx, "raid", { regionId: "R078" }, [peltasts.id], { "trade-ship": -1 })).toMatchObject({ ok: false, code: 400 });
+    // As given: two pentekonters and one trireme sail, the second trireme stays home (no automatic escort).
+    const r = await actShips(ctx, "raid", { regionId: "R078" }, [peltasts.id], { "trade-ship": 2, galley: 1 });
+    expect(r).toMatchObject({ ok: true });
+    if (!r.ok) return;
+    expect(r.report).toMatchObject({ route: "sea", steps: 2, ships: { "trade-ship": 2, galley: 1 } });
+    expect(await stock(ctx, "galley")).toBe(2);
+    // A trireme chosen for a five-sea crossing is refused with the range reason
+    // (the automatic assembly would have left it home).
+    await settle(ctx, at(10));
+    await setGarrison("thapsus", 10, at(10));
+    // Hoplites, so the settle does not fold this row into the peltasts back from the raid.
+    const fresh = await insertRow(ctx, { unitId: "hoplite", count: 40, season: 6 });
+    expect(await actShips(ctx, "attack", { townId: "thapsus" }, [fresh.id], { "trade-ship": 2, galley: 1 }, at(10))).toMatchObject({ ok: false, code: 409, error: "Beyond the fleet's range (5 seas, fleet reaches 4)." });
+    const far = await actShips(ctx, "attack", { townId: "thapsus" }, [fresh.id], { "trade-ship": 2 }, at(10));
+    expect(far).toMatchObject({ ok: true });
+    if (!far.ok) return;
+    expect(far.report.fleet).toMatchObject({ ships: { "trade-ship": 2 }, naval: 2 });
   });
 
   it("regeneration: a reduced warband comes back 5 a day up to its content value", async () => {

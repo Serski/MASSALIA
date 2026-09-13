@@ -534,8 +534,9 @@ export const api = {
   // Map actions (military prompt 3b): Scout, Raid or Attack a townless region
   // with whole roster rows; resolves in the request and returns the report with
   // fresh reach and roster payloads.
-  mapAct: (type: MapActType, target: MapActTarget, rows: { rowId: string; count: number }[]) =>
-    apiFetch<MapActResponse>("/api/map/act", { method: "POST", body: { type, ...target, rows } }),
+  // `ships` (optional): the hulls to sail with, by ship id; absent, the server assembles the crossing.
+  mapAct: (type: MapActType, target: MapActTarget, rows: { rowId: string; count: number }[], ships?: Record<string, number>) =>
+    apiFetch<MapActResponse>("/api/map/act", { method: "POST", body: { type, ...target, rows, ...(ships ? { ships } : {}) } }),
   // Move (military prompt 3c): rows from one base to another place of the player's
   // (Massalia's region, home ground, or a holding). Same response shape as an action.
   mapMove: (baseId: string, rows: { rowId: string; count: number }[]) =>
@@ -1508,7 +1509,8 @@ export type HoldingView = { garrison: number; minGarrison: number; perDay: { dra
 export type BaseView = { id: string; regionId: string; townId: string | null; kind: BaseKind; name: string; holding: HoldingView | null };
 // A place the player may move men to, with the steps from each base (by base id).
 export type MoveTargetView = { id: string; regionId: string; townId: string | null; kind: BaseKind; name: string; byBase: Record<string, { landSteps: number | null; seaSteps: number | null }> };
-export type FleetView = { ships: Record<string, number>; labels?: Record<string, string>; range: number; space: number; tiers?: { range: number; space: number }[] };
+export type FleetHull = { id: string; label: string; role: "transport" | "warship"; count: number; troopSpace: number; range: number; naval: number };
+export type FleetView = { ships: Record<string, number>; labels?: Record<string, string>; range: number; space: number; tiers?: { range: number; space: number }[]; hulls?: FleetHull[] };
 
 export type MapReachView = {
   now: string; // server time (ISO); countdowns anchor to this, not the device clock

@@ -62,7 +62,11 @@ export type MapActionType = "scout" | "raid" | "attack";
 // Whole rows or, for a trained row, part of it: `count` men march (1..row.count).
 // A band marches whole under its contract. The target is a region (`regionId`)
 // or a town (`townId`, whose region is resolved through the graph).
-export type MapActInput = { type: MapActionType; regionId?: string; townId?: string; rows: { rowId: string; count: number }[] };
+// `ships` (optional): the hulls to sail with, by ship id. Absent, the crossing
+// is assembled automatically (transports first, warships for what is short,
+// in-range warships as escort); present, it is validated against stock, the
+// crossing's range and the force's space and used as given.
+export type MapActInput = { type: MapActionType; regionId?: string; townId?: string; rows: { rowId: string; count: number }[]; ships?: Record<string, number> };
 
 export type MapActReport = {
   type: MapActionType;
@@ -288,16 +292,38 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
     let naval = 0;
     if (route === "sea") {
       const { counts } = await fleetInStock(tx, ctx);
-      const assembled = assembleFleet(view.force.space, counts, steps);
-      const stats = fleetStats(assembled.fleet);
-      if (stats.space < view.force.space) return fail(409, REACH_REASON.hulls(view.force.space, stats.space));
-      if (stats.range < steps) return fail(409, REACH_REASON.range(steps, stats.range));
-      ships = assembled.ships;
-      sailing = { ...ships };
-      for (const [id, def] of Object.entries(shipsC.ships)) {
-        if (def.role !== "warship" || def.range < steps) continue;
-        const spare = (counts[id] ?? 0) - (ships[id] ?? 0);
-        if (spare > 0) sailing[id] = (sailing[id] ?? 0) + spare;
+      if (input.ships) {
+        // The player's own choice of hulls: whole numbers within stock, every
+        // chosen hull able to make the crossing, and room for the force. The
+        // chosen warships are the escort; nothing else joins.
+        const chosen: Record<string, number> = {};
+        for (const [id, n] of Object.entries(input.ships)) {
+          const def = shipsC.ships[id];
+          if (!def) return fail(400, "No such ship.");
+          if (!Number.isInteger(n) || n < 0) return fail(400, "Send a whole number of ships.");
+          const have = counts[id] ?? 0;
+          if (n > have) return fail(409, `Only ${have} ${def.label.toLowerCase()}${have === 1 ? "" : "s"} in port.`);
+          if (n > 0) chosen[id] = n;
+        }
+        const fleet: ReachShip[] = Object.entries(chosen).map(([id, count]) => ({ shipId: id, count, range: shipsC.ships[id]!.range, troopSpace: shipsC.ships[id]!.troopSpace }));
+        const slowest = fleet.length ? Math.min(...fleet.map((s) => s.range)) : 0;
+        if (slowest < steps) return fail(409, REACH_REASON.range(steps, slowest));
+        const space = fleet.reduce((n, s) => n + s.count * s.troopSpace, 0);
+        if (space < view.force.space) return fail(409, REACH_REASON.hulls(view.force.space, space));
+        ships = chosen;
+        sailing = { ...chosen };
+      } else {
+        const assembled = assembleFleet(view.force.space, counts, steps);
+        const stats = fleetStats(assembled.fleet);
+        if (stats.space < view.force.space) return fail(409, REACH_REASON.hulls(view.force.space, stats.space));
+        if (stats.range < steps) return fail(409, REACH_REASON.range(steps, stats.range));
+        ships = assembled.ships;
+        sailing = { ...ships };
+        for (const [id, def] of Object.entries(shipsC.ships)) {
+          if (def.role !== "warship" || def.range < steps) continue;
+          const spare = (counts[id] ?? 0) - (ships[id] ?? 0);
+          if (spare > 0) sailing[id] = (sailing[id] ?? 0) + spare;
+        }
       }
       naval = Object.entries(sailing).reduce((n, [id, count]) => n + count * (shipsC.ships[id]?.naval ?? 0), 0);
     }

@@ -15,7 +15,7 @@ import {
   type ReachSteps,
   type Topology,
 } from "@massalia/shared";
-import { fleetInStock, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, type UnitRow } from "./barracks.js";
+import { fleetInStock, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, type FleetStripView, type UnitRow } from "./barracks.js";
 export { fleetInStock };
 import type { ActingContext } from "./buildings.js";
 import { garrisonCount, holdingBaseId, listHoldings, tributeRateOf } from "./holdings.js";
@@ -53,8 +53,8 @@ export type ReachView = {
   campaign: CampaignView;
   bases: BaseView[];
   force: { men: number; space: number };
-  /** ship counts by id with their display names (ships.json), the farthest range and the troop space aboard */
-  fleet: { ships: Record<string, number>; labels: Record<string, string>; range: number; space: number; tiers?: { range: number; space: number }[] };
+  /** ship counts by id with their display names (ships.json), the farthest range and the troop space aboard, and each hull type in stock with its facts */
+  fleet: { ships: Record<string, number>; labels: Record<string, string>; range: number; space: number; tiers?: { range: number; space: number }[]; hulls: FleetStripView["ships"] };
   reach: Record<string, ReachEntry>;
   moveTargets: MoveTargetView[];
 };
@@ -165,7 +165,7 @@ export async function reachView(exec: Exec, ctx: ActingContext, now: Date, opts:
     const f = forceRowOf(r);
     if (f) force.push(f);
   }
-  const { counts, fleet } = await fleetInStock(exec, ctx);
+  const { counts, fleet, strip } = await fleetInStock(exec, ctx);
   const home = await homeRegions(topology);
   // Region holdings are never targets; the region of a held town or of home
   // ground with men stays a target for its other towns (home ground is already
@@ -182,5 +182,5 @@ export async function reachView(exec: Exec, ctx: ActingContext, now: Date, opts:
   const campaign: CampaignView = { season: cs.season, open: cs.open, opensAt: cs.opensAtMs === null ? null : new Date(cs.opensAtMs).toISOString() };
   const moveTargets = await moveTargetsOf(topology, allBases, ctx, exec);
   const labels = Object.fromEntries(Object.entries(getShipsContent().ships).map(([id, d]) => [id, d.label]));
-  return { now: now.toISOString(), campaign, bases, force: forceStats(force), fleet: { ships: counts, labels, ...fleetStats(fleet) }, reach, moveTargets };
+  return { now: now.toISOString(), campaign, bases, force: forceStats(force), fleet: { ships: counts, labels, ...fleetStats(fleet), hulls: strip.ships }, reach, moveTargets };
 }

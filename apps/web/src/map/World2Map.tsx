@@ -1628,6 +1628,9 @@ export function ForcePicker({
   const [switched, setSwitched] = useState(false);
   // The destination of a move, when a selector is shown.
   const [destId, setDestId] = useState(target.id);
+  // The hulls chosen for a sea crossing (by ship id); null until the player
+  // edits the automatic assembly.
+  const [shipPick, setShipPick] = useState<Record<string, number> | null>(null);
   const isMove = type === "move";
   const dest = isMove ? (moveTargets.find((t) => t.id === destId) ?? null) : null;
   const targetName = isMove ? (dest?.name ?? names[destId] ?? destId) : target.name;
@@ -1669,6 +1672,45 @@ export function ForcePicker({
   if (verdict.ok && type === "scout" && !selected.some((r) => (r.stats.spd ?? 0) >= FAST_SPD)) verdict = { ok: false, reason: `A scouting party needs a man at Spd ${FAST_SPD} or more.` };
   const route = steps && selected.length > 0 ? (isMove ? moveTravel(steps) : routeFor(type === "attack" ? "attack" : "raid", steps)) : null;
 
+  // A sea crossing on an action: the hulls in stock, the automatic assembly
+  // (transports that can make the crossing first, warships for what is still
+  // short), the player's own choice over it, and what that fleet carries.
+  const hulls = fleet.hulls ?? [];
+  // Only with the hulls in the payload; an older payload keeps the plain sea footer.
+  const seaSteps = !isMove && fleet.hulls && route?.route === "sea" ? route.steps : null;
+  const automatic = (): Record<string, number> => {
+    const pick: Record<string, number> = {};
+    let space = 0;
+    for (const role of ["transport", "warship"] as const) {
+      for (const h of hulls) {
+        if (h.role !== role || seaSteps === null || h.range < seaSteps || space >= force.space) continue;
+        const n = Math.min(h.count, h.troopSpace > 0 ? Math.ceil((force.space - space) / h.troopSpace) : 0);
+        if (n > 0) {
+          pick[h.id] = n;
+          space += n * h.troopSpace;
+        }
+      }
+    }
+    return pick;
+  };
+  const chosenShips = seaSteps !== null ? (shipPick ?? automatic()) : null;
+  const chosenHulls = chosenShips ? hulls.filter((h) => (chosenShips[h.id] ?? 0) > 0).map((h) => ({ ...h, count: chosenShips[h.id]! })) : [];
+  const carries = chosenHulls.filter((h) => h.role === "transport").reduce((n, h) => n + h.count * h.troopSpace, 0);
+  const escort = chosenHulls.filter((h) => h.role === "warship");
+  const fleetRange = chosenHulls.length ? Math.max(...chosenHulls.map((h) => h.range)) : 0;
+  const slowest = chosenHulls.length ? Math.min(...chosenHulls.map((h) => h.range)) : 0;
+  // With a chosen fleet the verdict is its own: every hull must make the
+  // crossing and the transports must carry the force.
+  if (chosenShips && seaSteps !== null && verdict.ok) {
+    if (slowest < seaSteps) verdict = { ok: false, reason: `Beyond the fleet's range (${seaSteps} seas, fleet reaches ${slowest}).` };
+    else if (carries < force.space) verdict = { ok: false, reason: `Not enough hulls: ${force.space} space needed, ${carries} aboard.` };
+  }
+  const setShip = (id: string, value: number) => {
+    const h = hulls.find((x) => x.id === id);
+    if (!h) return;
+    setShipPick({ ...(chosenShips ?? {}), [id]: Math.min(h.count, Math.max(0, Math.floor(value) || 0)) });
+  };
+
   // A force marches from one base: ticking a row in a second base clears the first.
   const toggle = (r: BarracksRosterRow) =>
     setPicked((prev) => {
@@ -1688,7 +1730,7 @@ export function ForcePicker({
     setError("");
     try {
       const sent = selected.map((r) => ({ rowId: r.id, count: sentOf(r) }));
-      const res = isMove ? await api.mapMove(destId, sent) : await api.mapAct(type, target.kind === "town" ? { townId: target.id } : { regionId: target.id }, sent);
+      const res = isMove ? await api.mapMove(destId, sent) : await api.mapAct(type, target.kind === "town" ? { townId: target.id } : { regionId: target.id }, sent, chosenShips ?? undefined);
       onActed(res);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "That could not be done.");
@@ -1778,6 +1820,32 @@ export function ForcePicker({
             })
           )}
           {switched ? <p className="w2map-pick-why">A force marches from one base.</p> : null}
+          {chosenShips && seaSteps !== null ? (
+            <div className="w2map-pick-ships" data-testid="ships-section">
+              <p className="w2map-pick-base">Ships</p>
+              {hulls.length === 0 ? <p className="w2map-info-empty">No ships in port.</p> : null}
+              <ul className="w2map-pick-list">
+                {hulls.map((h) => (
+                  <li key={h.id} className="w2map-pick-row">
+                    <span className="w2map-pick-check">
+                      <span className="w2map-pick-label">{h.label} · {h.count} in port</span>
+                      <input
+                        type="number"
+                        className="w2map-pick-count"
+                        min={0}
+                        max={h.count}
+                        value={chosenShips[h.id] ?? 0}
+                        disabled={busy}
+                        onChange={(e) => setShip(h.id, parseInt(e.target.value, 10))}
+                        aria-label={`${h.label}s to sail`}
+                      />
+                    </span>
+                    <span className="w2map-pick-note">{h.role === "warship" ? "escort" : `carries ${h.troopSpace}`} · range {h.range}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {others.length > 0 ? (
             <ul className="w2map-pick-list">
               {others.map((r) => (
@@ -1799,7 +1867,9 @@ export function ForcePicker({
                       ? "within the region"
                       : route.route === "land"
                         ? `by land · ${route.steps} step${route.steps === 1 ? "" : "s"}`
-                        : `by sea · ${route.steps} sea${route.steps === 1 ? "" : "s"} · space ${force.space} of ${fleet.space} aboard${shipsText(fleet.ships, fleet.labels, " · ") ? ` · ${shipsText(fleet.ships, fleet.labels, " · ")}` : ""}`}
+                        : chosenShips
+                          ? `by sea · ${route.steps} sea${route.steps === 1 ? "" : "s"} · carries ${carries} of ${force.space} men${escort.length ? ` · ${escort.map((h) => `${h.count} ${h.label.toLowerCase()}${h.count === 1 ? "" : "s"}`).join(", ")} escort` : ""} · range ${fleetRange}`
+                          : `by sea · ${route.steps} sea${route.steps === 1 ? "" : "s"} · space ${force.space} of ${fleet.space} aboard${shipsText(fleet.ships, fleet.labels, " · ") ? ` · ${shipsText(fleet.ships, fleet.labels, " · ")}` : ""}`}
                     {isMove && "minutes" in route ? ` · arrives in ${travelClock(route.minutes)}` : ""}
                   </span>
                 ) : null}

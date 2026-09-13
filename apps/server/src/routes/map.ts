@@ -241,7 +241,7 @@ export async function mapRoutes(app: FastifyInstance) {
       reply.code(503);
       return { error: "No active world exists." };
     }
-    const body = request.body as { type?: unknown; regionId?: unknown; townId?: unknown; baseId?: unknown; rows?: unknown } | undefined;
+    const body = request.body as { type?: unknown; regionId?: unknown; townId?: unknown; baseId?: unknown; rows?: unknown; ships?: unknown } | undefined;
     const type = body?.type;
     const regionId = body?.regionId;
     const townId = body?.townId;
@@ -269,7 +269,18 @@ export async function mapRoutes(app: FastifyInstance) {
       return { error: "type, regionId or townId, and rows [{ rowId, count }] are required." };
     }
     const target = typeof townId === "string" ? { townId } : { regionId: regionId as string };
-    const result = await act(ctx, { type, ...target, rows: rows as { rowId: string; count: number }[] }, new Date());
+    // An optional ships map { "trade-ship": n, "galley": n }: whole numbers by ship id.
+    const shipsIn = body?.ships;
+    let ships: Record<string, number> | undefined;
+    if (shipsIn !== undefined) {
+      const ok = typeof shipsIn === "object" && shipsIn !== null && !Array.isArray(shipsIn) && Object.values(shipsIn as Record<string, unknown>).every((n) => Number.isInteger(n) && (n as number) >= 0);
+      if (!ok) {
+        reply.code(400);
+        return { error: "ships must map ship ids to whole numbers." };
+      }
+      ships = shipsIn as Record<string, number>;
+    }
+    const result = await act(ctx, { type, ...target, rows: rows as { rowId: string; count: number }[], ...(ships ? { ships } : {}) }, new Date());
     if (!result.ok) {
       reply.code(result.code);
       return { error: result.error };
