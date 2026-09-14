@@ -31,14 +31,27 @@ suite("livingSpousePersonalityTraits (integration)", () => {
   let worldId: string;
   const now = new Date();
 
-  async function createCharacter(name: string, classId = "landowner") {
+  async function createCharacter(name: string, classId = "landowner", inWorld = worldId) {
     const { users, players, playerCharacters } = m.dbPkg;
     const user = (await db.insert(users).values({ email: `${name}-${Math.random().toString(36).slice(2)}@test`, passwordHash: "x" }).returning())[0]!;
     // Player names are unique per world (0050); the suite reuses names across tests.
-    const player = (await db.insert(players).values({ worldId, userId: user.id, name: `${name}-${Math.random().toString(36).slice(2, 8)}`, color: "#123456" }).returning())[0]!;
+    const player = (await db.insert(players).values({ worldId: inWorld, userId: user.id, name: `${name}-${Math.random().toString(36).slice(2, 8)}`, color: "#123456" }).returning())[0]!;
     return (
-      await db.insert(playerCharacters).values({ playerId: player.id, worldId, houseSlug: "test-house", classId, startAge: 30, deathAge: 90 }).returning()
+      await db.insert(playerCharacters).values({ playerId: player.id, worldId: inWorld, houseSlug: "test-house", classId, startAge: 30, deathAge: 90 }).returning()
     )[0]!;
+  }
+
+  // A world of its own. A succession renames the slot's player to the heir's name,
+  // and heir names come from the shared name pool ("Kleon", "Sostratos", …); in one
+  // shared world an earlier test's seated heir makes a later "Kleon" come out as
+  // "Kleon II". Tests that seat heirs each take a fresh world so names never collide.
+  async function createWorld() {
+    return (
+      await db.insert(m.dbPkg.worlds).values({
+        name: "Spouse Test World", seed: `spouse-test-${Math.random().toString(36).slice(2, 8)}`, startedAt: now,
+        endsAt: new Date(now.getTime() + 182 * 86_400_000), status: "active",
+      }).returning()
+    )[0]!.id;
   }
 
   // Marry a character to a generated wife with the given personality + mechanical
@@ -79,13 +92,7 @@ suite("livingSpousePersonalityTraits (integration)", () => {
       slug: "test-house", name: "Test House", initial: "T", alignment: "centrist",
       stance: "test", motto: "test", patron: "test", crest: "test",
     }).onConflictDoNothing();
-    const world = (
-      await db.insert(m.dbPkg.worlds).values({
-        name: "Spouse Test World", seed: "spouse-test", startedAt: now,
-        endsAt: new Date(now.getTime() + 182 * 86_400_000), status: "active",
-      }).returning()
-    )[0]!;
-    worldId = world.id;
+    worldId = await createWorld();
   });
 
   it("unmarried -> [] (and takes the no-DB-read gate)", async () => {
@@ -1051,11 +1058,12 @@ suite("livingSpousePersonalityTraits (integration)", () => {
       await m.dbPkg.drawFamilyCandidates(id, { familyCfg: m.family.getFamilyConfig(), ageCfg: m.age.getAgeConfig(), now });
       return (await db.select().from(fc()).where(and(eq(fc().forCharacterId, id), eq(fc().purpose, "adoption"), isNull(fc().consumedAt))))[0]!;
     };
-    const insertSon = (id: string, name: string, agoYears: number) =>
-      db.insert(m.dbPkg.children).values({ parentCharacterId: id, worldId, name, sex: "male", bornAt: new Date(now.getTime() - agoYears * y()) });
-    // A childless citizen aged `age` (createdAt=now → age===startAge) with funds + a drawn ward.
+    const insertSon = async (id: string, name: string, agoYears: number) =>
+      db.insert(m.dbPkg.children).values({ parentCharacterId: id, worldId: (await freshChar(id)).worldId, name, sex: "male", bornAt: new Date(now.getTime() - agoYears * y()) });
+    // A childless citizen aged `age` (createdAt=now → age===startAge) with funds + a drawn ward,
+    // alone in a fresh world so a seated heir's name never collides with another test's.
     async function setup(name: string, opts: { age?: number; drachmae?: number; classId?: string } = {}) {
-      const c = await createCharacter(name, opts.classId ?? "landowner");
+      const c = await createCharacter(name, opts.classId ?? "landowner", await createWorld());
       await db.update(pcs()).set({ startAge: opts.age ?? 35, createdAt: now, drachmae: opts.drachmae ?? 100 }).where(eq(pcs().id, c.id));
       const cand = await drawAdoption(c.id);
       return { id: c.id, candId: cand.id, cand };
