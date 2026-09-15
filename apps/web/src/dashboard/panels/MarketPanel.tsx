@@ -3,7 +3,7 @@ import { MARKET_PRICE_MAX, MARKET_QTY_MAX } from "@massalia/shared";
 import { api, ApiError, type BuildingsCatalog, type BuildingsMine, type MarketListing, type MarketView, type VendorPrice, type PeopleView } from "../../api.js";
 import { assetPath } from "../../data/league.js";
 import { LobbyPortrait } from "../../lobby/LobbyPortrait.js";
-import { formatDuration, GoodGlyph, HouseCrest, PanelBanner, type PanelProps, PanelRow, PopGlyph, QtyStepper } from "../shared.js";
+import { ChoicePicker, formatDuration, GoodGlyph, HouseCrest, PanelBanner, type PanelProps, PanelRow, PopGlyph, QtyStepper } from "../shared.js";
 import { SheetTabs } from "../sheets.js";
 
 // Display-only grouping for the agora. The goods LIST is derived from the vendor
@@ -160,13 +160,13 @@ function PlayerMarketSellForm({
       <PanelRow
         icon={current ? <GoodGlyph good={current.good} fallback="📦" /> : "📦"}
         title={
-          <select aria-label="good to list" value={current?.good ?? ""} onChange={(e) => setChoice(e.target.value)} disabled={!current}>
-            {held.map((h) => (
-              <option key={h.good} value={h.good}>
-                {label(h.good)} · own {h.owned}
-              </option>
-            ))}
-          </select>
+          <ChoicePicker
+            ariaLabel="good to list"
+            value={current?.good ?? ""}
+            options={held.map((h) => ({ id: h.good, label: label(h.good), glyph: <GoodGlyph good={h.good} fallback="📦" />, note: `own ${h.owned}` }))}
+            onSelect={setChoice}
+            disabled={!current}
+          />
         }
         sub={band ? `The agora pays ${band.sell}dr · charges ${band.buy}dr` : undefined}
         action={

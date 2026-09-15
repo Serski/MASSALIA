@@ -78,11 +78,21 @@ describe("MarketPanel · Player market", () => {
     const sell = container.querySelector('[data-testid="market-sell"]') as HTMLElement;
     expect(within(sell).getByTestId("market-stalls").textContent).toBe("Your stalls: 1 of 10");
 
-    const select = within(sell).getByLabelText("good to list") as HTMLSelectElement;
+    const picker = within(sell).getByRole("button", { name: "good to list" });
+    expect(picker.getAttribute("aria-haspopup")).toBe("listbox");
+    expect(picker.getAttribute("aria-expanded")).toBe("false");
+    expect(picker.querySelector(".choice-picker-text")!.textContent).toBe("Wheat · own 3"); // the first held good
+    fireEvent.click(picker);
+    expect(picker.getAttribute("aria-expanded")).toBe("true");
     // Wine 7.8 → 7, Wheat 3; iron (0.5) and the trireme (none) are not offered.
-    expect([...select.options].map((o) => o.textContent)).toEqual(["Wheat · own 3", "Wine · own 7"]);
+    const options = within(within(sell).getByRole("listbox")).getAllByRole("option");
+    expect(options.map((o) => o.querySelector(".choice-picker-text")!.textContent)).toEqual(["Wheat · own 3", "Wine · own 7"]);
+    expect(options.map((o) => o.getAttribute("aria-selected"))).toEqual(["true", "false"]);
 
-    fireEvent.change(select, { target: { value: "wine" } });
+    fireEvent.click(options[1]!);
+    expect(within(sell).queryByRole("listbox")).toBeNull();
+    expect(picker.getAttribute("aria-expanded")).toBe("false");
+    expect(picker.querySelector(".choice-picker-text")!.textContent).toBe("Wine · own 7");
     expect(sell.textContent).toContain("The agora pays 8dr · charges 14dr");
     const plus = within(sell).getByLabelText("increase quantity");
     for (let i = 0; i < 10; i++) fireEvent.click(plus);
@@ -92,8 +102,48 @@ describe("MarketPanel · Player market", () => {
     expect(list.textContent).toBe("List 7 · 9dr each");
     expect(list.disabled).toBe(false);
 
-    fireEvent.change(select, { target: { value: "grain" } });
+    fireEvent.click(picker);
+    fireEvent.click(within(within(sell).getByRole("listbox")).getAllByRole("option")[0]!);
+    expect(within(sell).queryByRole("listbox")).toBeNull();
     expect(buttons(sell).find((b) => b.textContent?.startsWith("List"))!.textContent).toBe("List 3 · 9dr each");
+    expect(hookWarnings).toEqual([]);
+  });
+
+  it("the good picker by keyboard: ArrowDown opens, arrows move the highlight, Enter selects; Escape, Tab and a click outside close", async () => {
+    const { container } = await mount(view());
+    const sell = container.querySelector('[data-testid="market-sell"]') as HTMLElement;
+    const picker = within(sell).getByRole("button", { name: "good to list" });
+    const highlighted = () => sell.querySelector(".choice-picker-option.highlighted")?.querySelector(".choice-picker-text")?.textContent;
+
+    fireEvent.keyDown(picker, { key: "ArrowDown" });
+    expect(picker.getAttribute("aria-expanded")).toBe("true");
+    expect(highlighted()).toBe("Wheat · own 3"); // opens on the current choice
+    fireEvent.keyDown(picker, { key: "ArrowDown" });
+    expect(highlighted()).toBe("Wine · own 7");
+    fireEvent.keyDown(picker, { key: "ArrowDown" }); // stays on the last
+    expect(highlighted()).toBe("Wine · own 7");
+    expect(picker.getAttribute("aria-activedescendant")).toBe(sell.querySelector(".choice-picker-option.highlighted")!.id);
+    fireEvent.keyDown(picker, { key: "Enter" });
+    expect(within(sell).queryByRole("listbox")).toBeNull();
+    expect(picker.querySelector(".choice-picker-text")!.textContent).toBe("Wine · own 7");
+    expect(sell.textContent).toContain("The agora pays 8dr · charges 14dr");
+
+    fireEvent.keyDown(picker, { key: " " });
+    fireEvent.keyDown(picker, { key: "ArrowUp" });
+    expect(highlighted()).toBe("Wheat · own 3");
+    fireEvent.keyDown(picker, { key: "Escape" });
+    expect(within(sell).queryByRole("listbox")).toBeNull();
+    expect(picker.querySelector(".choice-picker-text")!.textContent).toBe("Wine · own 7"); // Escape selects nothing
+
+    fireEvent.keyDown(picker, { key: "Enter" });
+    expect(within(sell).queryByRole("listbox")).not.toBeNull();
+    fireEvent.keyDown(picker, { key: "Tab" });
+    expect(within(sell).queryByRole("listbox")).toBeNull();
+
+    fireEvent.click(picker);
+    expect(within(sell).queryByRole("listbox")).not.toBeNull();
+    fireEvent.mouseDown(container.querySelector('[data-testid="market-stalls-list"]')!);
+    expect(within(sell).queryByRole("listbox")).toBeNull();
     expect(hookWarnings).toEqual([]);
   });
 

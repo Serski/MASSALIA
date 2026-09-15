@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { webAssetUrl, type PlayerState, type FestivalLive, type OlympiadStatus } from "../api.js";
 import { assetPath, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
@@ -335,6 +335,147 @@ export function QtyStepper({ value, setValue, min = 1, max }: { value: number; s
       />
       <button type="button" className="panel-btn ghost" disabled={max !== undefined && value >= max} onClick={() => setValue(clamp(value + 1))} aria-label="increase quantity">+</button>
     </span>
+  );
+}
+
+// An in-game choice picker in place of a native <select>, whose open list the OS
+// draws. The closed control is a button styled like the qty input (glyph, label,
+// note, chevron); click, Enter, Space or ArrowDown opens an app-rendered listbox
+// directly under it. ArrowUp/ArrowDown move the highlight over the enabled
+// options, Enter selects, Escape, Tab and a click outside close it. Focus stays
+// on the button (aria-activedescendant names the highlighted option). No portal:
+// the list sits in flow, raised over the row below.
+export type ChoiceOption = { id: string; label: string; glyph?: ReactNode; note?: string; disabled?: boolean };
+
+function ChoiceText({ option }: { option: ChoiceOption }) {
+  return (
+    <>
+      {option.glyph ? <span className="choice-picker-glyph" aria-hidden="true">{option.glyph}</span> : null}
+      <span className="choice-picker-text">
+        <span className="choice-picker-label">{option.label}</span>
+        {option.note ? <span className="choice-picker-note"> · {option.note}</span> : null}
+      </span>
+    </>
+  );
+}
+
+export function ChoicePicker({
+  value,
+  options,
+  onSelect,
+  ariaLabel,
+  disabled = false,
+}: {
+  value: string;
+  options: ChoiceOption[];
+  onSelect: (id: string) => void;
+  ariaLabel: string;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [highlight, setHighlight] = useState(-1);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const listId = useId();
+  const current = options.find((o) => o.id === value) ?? null;
+  const enabled = options.flatMap((o, i) => (o.disabled ? [] : [i]));
+
+  // A click anywhere outside closes the list. Capture phase, so a surface that
+  // stops propagation (the map modal) cannot swallow it.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown, true);
+    return () => document.removeEventListener("mousedown", onDown, true);
+  }, [open]);
+  // Disabled while open (e.g. a trade in flight): close.
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
+
+  const openList = () => {
+    if (disabled || options.length === 0) return;
+    const at = options.findIndex((o) => o.id === value && !o.disabled);
+    setHighlight(at >= 0 ? at : (enabled[0] ?? -1));
+    setOpen(true);
+  };
+  const moveHighlight = (step: 1 | -1) => {
+    if (enabled.length === 0) return;
+    const pos = enabled.indexOf(highlight);
+    const next = pos < 0 ? (step > 0 ? 0 : enabled.length - 1) : Math.max(0, Math.min(enabled.length - 1, pos + step));
+    setHighlight(enabled[next]!);
+  };
+  const choose = (index: number) => {
+    const option = options[index];
+    if (!option || option.disabled) return;
+    onSelect(option.id);
+    setOpen(false);
+    buttonRef.current?.focus();
+  };
+  const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
+    if (!open) {
+      if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
+        e.preventDefault();
+        openList();
+      }
+      return;
+    }
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      moveHighlight(e.key === "ArrowDown" ? 1 : -1);
+    } else if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      choose(highlight);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation(); // close the list, not the dialog around it
+      setOpen(false);
+    } else if (e.key === "Tab") {
+      setOpen(false);
+    }
+  };
+  const optionId = (index: number) => `${listId}-opt-${index}`;
+
+  return (
+    <div className={`choice-picker${open ? " open" : ""}`} ref={rootRef}>
+      <button
+        ref={buttonRef}
+        type="button"
+        className="choice-picker-button"
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={open ? listId : undefined}
+        aria-activedescendant={open && highlight >= 0 ? optionId(highlight) : undefined}
+        disabled={disabled}
+        onClick={() => (open ? setOpen(false) : openList())}
+        onKeyDown={onKeyDown}
+      >
+        {current ? <ChoiceText option={current} /> : <span className="choice-picker-text" />}
+        <span className="choice-picker-chevron" aria-hidden="true">▾</span>
+      </button>
+      {open ? (
+        <ul className="choice-picker-list" role="listbox" id={listId} aria-label={ariaLabel}>
+          {options.map((option, index) => (
+            <li
+              key={option.id}
+              id={optionId(index)}
+              role="option"
+              aria-selected={option.id === value}
+              aria-disabled={option.disabled || undefined}
+              className={`choice-picker-option${index === highlight ? " highlighted" : ""}${option.disabled ? " disabled" : ""}`}
+              onMouseDown={(e) => e.preventDefault()} // keep focus on the button
+              onMouseEnter={() => !option.disabled && setHighlight(index)}
+              onClick={() => choose(index)}
+            >
+              <ChoiceText option={option} />
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 

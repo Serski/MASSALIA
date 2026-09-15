@@ -2643,6 +2643,100 @@
   padding: 6px 10px;
 }
 
+/* Choice picker: an in-game select. The closed control matches the qty input; the
+   open list takes the sheet tabs' panel ground and gold hairline, the highlighted
+   row the active tab's gold tint. In flow (no portal), raised over the row below. */
+.dashboard-shell .choice-picker{
+  position: relative;
+  display: inline-block;
+  min-width: 0;
+  max-width: 100%;
+}
+.dashboard-shell .choice-picker-button{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  color: var(--dash-parchment);
+  font-family: var(--font-display);
+  font-size: 11px;
+  text-align: left;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--dash-line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.dashboard-shell .choice-picker-button:disabled{
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.dashboard-shell .choice-picker-button:focus-visible{
+  outline: 1px solid var(--dash-gold);
+  outline-offset: 1px;
+}
+.dashboard-shell .choice-picker-glyph{
+  display: inline-flex;
+  flex: none;
+}
+.dashboard-shell .choice-picker-text{
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.dashboard-shell .choice-picker-note{
+  color: var(--dash-stone-dim);
+}
+.dashboard-shell .choice-picker-chevron{
+  flex: none;
+  color: var(--dash-gold);
+  transition: transform 0.15s;
+}
+.dashboard-shell .choice-picker.open .choice-picker-chevron{
+  transform: rotate(180deg);
+}
+.dashboard-shell .choice-picker-list{
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  z-index: 40;
+  min-width: 100%;
+  max-height: 260px;
+  margin: 0;
+  padding: 4px 0;
+  overflow-y: auto;
+  list-style: none;
+  background: var(--dash-panel);
+  border: 1px solid var(--dash-gold);
+  border-radius: 6px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+}
+.dashboard-shell .choice-picker-option{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  color: var(--dash-parchment);
+  font-family: var(--font-display);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.dashboard-shell .choice-picker-option[aria-selected="true"]{
+  color: var(--dash-gold-bright);
+}
+.dashboard-shell .choice-picker-option.highlighted{
+  background: rgba(181, 138, 69, 0.10);
+}
+.dashboard-shell .choice-picker-option.disabled{
+  color: var(--dash-stone-dim);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 /* class building tier ladder (Your Trade) */
 .dashboard-shell .tier-ladder{
   list-style: none;
