@@ -32,3 +32,4 @@ export * from "./reach.js";
 export * from "./battle.js";
 export * from "./names.js";
 export * from "./news.js";
+export * from "./market.js";
