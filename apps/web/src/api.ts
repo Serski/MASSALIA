@@ -393,6 +393,8 @@ export const api = {
   adminCluster: (userId: string) => apiFetch<AdminCluster>(`/admin/users/${userId}/cluster`),
   adminBan: (userId: string, reason: string) => apiFetch<{ ok: true }>(`/admin/users/${userId}/ban`, { method: "POST", body: { reason } }),
   adminUnban: (userId: string, reason: string) => apiFetch<{ ok: true }>(`/admin/users/${userId}/unban`, { method: "POST", body: { reason } }),
+  // Manual email verification, for a player whose verification link expired.
+  adminVerify: (userId: string, reason: string) => apiFetch<{ ok: true; emailVerifiedAt: string }>(`/admin/users/${userId}/verify`, { method: "POST", body: { reason } }),
   adminDeleteSessions: (userId: string) => apiFetch<{ ok: true; deleted: number }>(`/admin/users/${userId}/sessions/delete`, { method: "POST" }),
   adminAdjustDrachmae: (characterId: string, delta: number, reason: string) =>
     apiFetch<{ ok: true; drachmae: number }>(`/admin/characters/${characterId}/drachmae`, { method: "POST", body: { delta, reason } }),

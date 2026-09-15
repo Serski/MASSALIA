@@ -17,6 +17,7 @@ const fmt = (iso: string | null | undefined) => (iso ? new Date(iso).toISOString
 export function AdminPage() {
   const [allowed, setAllowed] = useState<"pending" | "yes" | "no">("pending");
   const [query, setQuery] = useState("");
+  const [verified, setVerified] = useState<"any" | "yes" | "no">("any");
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [cluster, setCluster] = useState<AdminCluster | null>(null);
   const [log, setLog] = useState<{ title: string; rows: AdminLogRow[] } | null>(null);
@@ -32,7 +33,7 @@ export function AdminPage() {
     event?.preventDefault();
     setStatus("Searching…");
     try {
-      const result = await api.adminUsers(query.trim());
+      const result = await api.adminUsers(query.trim(), verified === "any" ? {} : { verified: verified === "yes" });
       setUsers(result.users);
       setStatus(`${result.users.length} user(s)`);
     } catch (error) {
@@ -60,6 +61,11 @@ export function AdminPage() {
   const unban = (user: AdminUser) => {
     const reason = window.prompt(`Unban ${user.email}. Note (optional):`) ?? "";
     void act(`Unban ${user.email}?`, () => api.adminUnban(user.id, reason.trim()), `Unbanned ${user.email}.`);
+  };
+  // The stuck World 1 players: registered, never verified, so /characters 403s.
+  const verifyEmail = (user: AdminUser) => {
+    const reason = window.prompt(`Verify ${user.email}. Note (optional):`) ?? "";
+    void act(`Mark ${user.email} as email-verified? They will be able to create a character.`, () => api.adminVerify(user.id, reason.trim()), `Verified ${user.email}.`);
   };
   const dropSessions = (user: AdminUser) =>
     void act(`Delete every session of ${user.email}? They will have to log in again.`, () => api.adminDeleteSessions(user.id), `Sessions deleted for ${user.email}.`);
@@ -110,6 +116,14 @@ export function AdminPage() {
           Email or character name{" "}
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="search" />
         </label>{" "}
+        <label>
+          Verified{" "}
+          <select value={verified} onChange={(event) => setVerified(event.target.value as "any" | "yes" | "no")}>
+            <option value="any">any</option>
+            <option value="yes">yes</option>
+            <option value="no">no</option>
+          </select>
+        </label>{" "}
         <button type="submit">Search</button>{" "}
         <button type="button" onClick={() => { setQuery(""); void search(); }}>All recent</button>
       </form>
@@ -146,6 +160,7 @@ export function AdminPage() {
               </td>
               <td>
                 {user.bannedAt ? <button type="button" onClick={() => unban(user)}>Unban</button> : <button type="button" onClick={() => ban(user)}>Ban</button>}{" "}
+                {user.emailVerifiedAt ? null : <><button type="button" onClick={() => verifyEmail(user)}>Verify</button>{" "}</>}
                 <button type="button" onClick={() => dropSessions(user)}>Delete sessions</button>{" "}
                 <button type="button" onClick={() => void showCluster(user)}>Same-IP cluster</button>
               </td>
