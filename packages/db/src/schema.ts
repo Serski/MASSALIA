@@ -32,6 +32,10 @@ export const users = pgTable("users", {
   isAdmin: boolean("is_admin").notNull().default(false),
   bannedAt: timestamp("banned_at", { withTimezone: true }),
   banReason: text("ban_reason"),
+  // World 2 launch (migration 0059): stamped once by world:launch on every user
+  // who created a character in World 1; a stamped user's characters are granted
+  // the Beta trait at creation in every later world.
+  betaAt: timestamp("beta_at", { withTimezone: true }),
 });
 
 export const sessions = pgTable("sessions", {
