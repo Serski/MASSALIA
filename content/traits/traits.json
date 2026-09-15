@@ -885,6 +885,15 @@
     }
   },
   {
+    "id": "beta",
+    "name": "Beta",
+    "category": "reputation",
+    "description": "Stood in the agora before the walls were finished.",
+    "statMod": {
+      "prestige": 1
+    }
+  },
+  {
     "id": "artemis-hound",
     "name": "Hound of Artemis",
     "category": "reputation",

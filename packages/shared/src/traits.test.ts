@@ -85,6 +85,15 @@ describe("starting-trait eligibility — stat floor", () => {
     expect(sympathizer.statMod).toEqual({ prestige: -2 });
   });
 
+  // World 2 launch (prompt 1): the permanent Beta trait, +1 prestige, applied
+  // through the same effectiveStats path as every other held trait.
+  it("the catalog carries the Beta trait and its +1 prestige applies through effectiveStats", () => {
+    const beta = catalog.find((trait) => trait.id === "beta")!;
+    expect(beta).toMatchObject({ name: "Beta", category: "reputation", statMod: { prestige: 1 } });
+    const base = { prestige: 4, devotion: 2, militia: 1, intelligence: 3 };
+    expect(effectiveStats(base, [beta])).toEqual({ prestige: 5, devotion: 2, militia: 1, intelligence: 3 });
+  });
+
   it("a trader from a house with no prestige bonus (prestige 0) is never dealt it", () => {
     const stats = startingCharacter("leonidas", "trader");
     expect(stats.prestige).toBe(0);
