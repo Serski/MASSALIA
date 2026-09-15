@@ -13,7 +13,8 @@
     "db:migrate": "tsx src/migrate.ts",
     "db:seed": "tsx src/seed.ts",
     "db:seed:map": "tsx src/seedMap.ts",
-    "map:graph": "tsx scripts/derive-map-graph.ts"
+    "map:graph": "tsx scripts/derive-map-graph.ts",
+    "world:launch": "tsx scripts/world-launch.ts"
   },
   "dependencies": {
     "@massalia/shared": "workspace:*",
