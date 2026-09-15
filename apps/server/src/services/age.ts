@@ -9,6 +9,7 @@ import {
   currentAge,
   decayBandFor,
   parseAgeConfig,
+  portraitFor,
   type AgeConfig,
 } from "@massalia/shared";
 
@@ -38,6 +39,16 @@ export function portraitUrl(relativePath: string | null): string | null {
   if (!relativePath) return null;
   const file = relativePath.split("/").pop();
   return file ? `/portraits/${file}` : null;
+}
+
+// The portrait the player sees in game, resolved exactly as /me/state does it:
+// the avatar's stage for the character's current age. null without a character
+// row (or an avatar the config no longer knows).
+export function agedPortraitFor(character: { avatarId: string | null; startAge: number; createdAt: Date } | null, now: number): string | null {
+  if (!character) return null;
+  const ageCfg = getAgeConfig();
+  const age = currentAge(character.startAge, character.createdAt.getTime(), now, ageCfg);
+  return portraitUrl(portraitFor(character.avatarId ?? "", age, ageCfg));
 }
 
 // Lazy old-age decay (mirrors composure's lazy recovery): accrue decay since

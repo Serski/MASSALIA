@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { and, asc, count, countDistinct, desc, eq, inArray } from "drizzle-orm";
 import { createDb, dynasties, houses, officeHistory, players, playerCharacters, professions, users, worlds } from "@massalia/db";
-import { currentAge, formatGameDate, gameDate, portraitFor } from "@massalia/shared";
-import { getAgeConfig, portraitUrl } from "../services/age.js";
+import { formatGameDate, gameDate } from "@massalia/shared";
+import { agedPortraitFor } from "../services/age.js";
 import { requireAuth } from "../services/auth.js";
 import { findCharacterRow, getActivePlayer, getActiveWorld, type PlayerRow } from "../services/character.js";
 import { loadStandingsRoster } from "../services/standings.js";
@@ -65,16 +65,6 @@ export type LobbyResponse = {
     offices: Array<{ worldName: string; office: string; side: string | null; startedYear: number; endedYear: number | null; acquiredVia: string }>;
   };
 };
-
-// The portrait the player sees in game, resolved exactly as /me/state does it:
-// the avatar's stage for the character's current age. null without a character
-// row (or an avatar the config no longer knows).
-function agedPortrait(character: { avatarId: string | null; startAge: number; createdAt: Date } | null, now: number): string | null {
-  if (!character) return null;
-  const ageCfg = getAgeConfig();
-  const age = currentAge(character.startAge, character.createdAt.getTime(), now, ageCfg);
-  return portraitUrl(portraitFor(character.avatarId ?? "", age, ageCfg));
-}
 
 async function activeWorldSection(userId: string, now: number): Promise<LobbyResponse["worlds"]["active"]> {
   const active = await getActiveWorld();
@@ -154,7 +144,7 @@ async function citizensSection(top: StandingRow[], worldId: string, now: number)
         professionSlug: p.professionSlug,
         professionName: p.professionName ?? null,
         faceId: p.faceId,
-        portrait: agedPortrait(character, now),
+        portrait: agedPortraitFor(character, now),
       },
     ];
   });
@@ -178,7 +168,7 @@ async function youSection(player: PlayerRow, worldId: string, prestigeBoard: Sta
     houseName: house?.name ?? player.houseSlug ?? "—",
     professionSlug: player.professionSlug,
     professionName: profession?.name ?? null,
-    portrait: agedPortrait(character, now),
+    portrait: agedPortraitFor(character, now),
     faceId: player.faceId,
     dynastyName: dynasty?.name ?? null,
     generation: dynasty?.generation ?? null,
