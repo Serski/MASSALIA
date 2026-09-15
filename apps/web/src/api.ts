@@ -273,7 +273,9 @@ export type ChronicleType =
   | "death"
   | "map_action"
   | "holding_reverted"
-  | "holding_tribute";
+  | "holding_tribute"
+  | "market_sale"
+  | "market_purchase";
 
 export type ChronicleEntry = {
   seasonIndex: number;
@@ -519,6 +521,12 @@ export const api = {
     apiFetch<HireResult>("/api/buildings/hire", { method: "POST", body: { popType, count } }),
   dismissPeople: (popType: string, count: number) =>
     apiFetch<DismissResult>("/api/buildings/dismiss", { method: "POST", body: { popType, count } }),
+  // The player market (market prompt 1): sell-only stalls between citizens.
+  market: () => apiFetch<MarketView>("/api/market"),
+  marketList: (good: string, qty: number, price: number) =>
+    apiFetch<MarketListResult>("/api/market/list", { method: "POST", body: { good, qty, price } }),
+  marketBuy: (listingId: string, qty: number) => apiFetch<MarketBuyResult>("/api/market/buy", { method: "POST", body: { listingId, qty } }),
+  marketCancel: (listingId: string) => apiFetch<MarketCancelResult>("/api/market/cancel", { method: "POST", body: { listingId } }),
   // The Barracks (military prompt 2). GET settles and returns the view; every POST
   // returns the same BarracksView so the tab re-renders from one payload. Errors
   // are the server's one-line message via ApiError.
@@ -1192,6 +1200,22 @@ export type CatalogEntry = {
 };
 
 export type VendorPrice = { good: string; buy: number; sell: number };
+
+// GET /api/market — mirrors services/market.ts (MarketView) by hand. Listings come
+// sorted by good, then price, then age; `mine` marks the viewer's own stalls.
+export type MarketListing = {
+  id: string;
+  good: string;
+  remaining: number;
+  price: number;
+  createdAt: string;
+  mine: boolean;
+  seller: { playerId: string; name: string; houseSlug: string; houseName: string; professionSlug: string | null; faceId: string | null; portrait: string | null };
+};
+export type MarketView = { listings: MarketListing[]; open: number; cap: number; taxExempt: boolean };
+export type MarketListResult = { ok: true; listing: { id: string; good: string; remaining: number; price: number; createdAt: string }; balance: number };
+export type MarketBuyResult = { ok: true; qty: number; total: number; tax: number; wallet: number; balance: number; remaining: number };
+export type MarketCancelResult = { ok: true; returned: number; balance: number };
 
 export type BuildingsCatalog = {
   season: string;

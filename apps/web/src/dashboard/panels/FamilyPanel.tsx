@@ -804,6 +804,10 @@ const chronicleRenderers: Record<ChronicleEntry["type"], (payload: Record<string
   map_action: (p) => renderCampaignLine("map_action", p as unknown as CampaignPayload),
   holding_reverted: (p) => renderCampaignLine("holding_reverted", p as unknown as CampaignPayload),
   holding_tribute: (p) => renderCampaignLine("holding_tribute", p as unknown as CampaignPayload),
+  // Market prompt 1: one line on each side of a player-market sale.
+  market_sale: (p) =>
+    `Sold ${p.qty} ${String(p.goodLabel).toLowerCase()} to ${p.buyerName} of House ${p.buyerHouseName} for ${p.net} drachmae.${Number(p.tax) > 0 ? ` The city took ${p.tax}.` : ""}`,
+  market_purchase: (p) => `Bought ${p.qty} ${String(p.goodLabel).toLowerCase()} from ${p.sellerName} of House ${p.sellerHouseName} for ${p.total} drachmae.`,
 };
 
 export function renderChronicleEntry(entry: ChronicleEntry): string {

@@ -17,3 +17,12 @@ describe("renderChronicleEntry · campaigns", () => {
     expect(renderChronicleEntry(entry("nothing_of_the_kind" as ChronicleEntry["type"], {}))).toBe("");
   });
 });
+
+describe("renderChronicleEntry · player market", () => {
+  const sale = { listingId: "l1", good: "oliveoil", goodLabel: "Olive Oil", qty: 5, price: 9, total: 45, tax: 4, net: 41, sellerName: "Kallias", sellerHouseName: "Xanthippos", buyerName: "Deon", buyerHouseName: "Timon", source: "market" };
+  it("renders a taxed sale, a Trader's sale and a purchase", () => {
+    expect(renderChronicleEntry(entry("market_sale", sale))).toBe("Sold 5 olive oil to Deon of House Timon for 41 drachmae. The city took 4.");
+    expect(renderChronicleEntry(entry("market_sale", { ...sale, tax: 0, net: 45 }))).toBe("Sold 5 olive oil to Deon of House Timon for 45 drachmae.");
+    expect(renderChronicleEntry(entry("market_purchase", sale))).toBe("Bought 5 olive oil from Kallias of House Xanthippos for 45 drachmae.");
+  });
+});
