@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { forceStats, HOME_POLITY_ID, moveVerdict, renderForce, routeFor, verdictsFor, type CampaignForcePart, type MapActionType } from "@massalia/shared";
 import { api, apiBaseUrl, ApiError, type BarracksRosterRow, type BaseView, type MapActReport, type MapActType, type MapMoveReport, type MapReachView, type MoveTargetView, type ReachEntry } from "../api.js";
-import { AssetIcon, CULTURE_WEBP, formatClock, formatDuration, marchLine, POLITY_CREST, titleCase, useCountdownSeconds } from "../dashboard/shared.js";
+import { AssetIcon, ChoicePicker, CULTURE_WEBP, formatClock, formatDuration, marchLine, POLITY_CREST, titleCase, useCountdownSeconds } from "../dashboard/shared.js";
 import { mapActionButtons, withReach, type MapActionButton } from "./mapActions.js";
 
 // Attack, Raid and Scout are the actions that resolve (Colonise waits for 3d).
@@ -1760,16 +1760,16 @@ export function ForcePicker({
         <div className="w2map-modal-head">
           <div className="w2map-info-label">{ACTION_LABEL[type]} · {targetName}</div>
           {destinations ? (
-            <label className="w2map-pick-dest">
+            <div className="w2map-pick-dest">
               <span>Destination</span>
-              <select value={destId} disabled={busy} onChange={(e) => setDestId(e.target.value)} aria-label="Destination">
-                {destinationOptions.map((o) => (
-                  <option key={o.id} value={o.id} disabled={!o.ok}>
-                    {o.name} · {o.note}
-                  </option>
-                ))}
-              </select>
-            </label>
+              <ChoicePicker
+                ariaLabel="Destination"
+                value={destId}
+                options={destinationOptions.map((o) => ({ id: o.id, label: o.name, note: o.note, disabled: !o.ok }))}
+                onSelect={setDestId}
+                disabled={busy}
+              />
+            </div>
           ) : null}
         </div>
         <div className="w2map-pick-scroll">

@@ -257,7 +257,7 @@ describe("move picker", () => {
       roster: [{ ...hoplites, movingTo: "R046", arrivesAt: iso(NOW + H / 2), mission: { kind: "move", regionId: "R046", departedAt: iso(NOW) } }],
     });
     const player = { gameDateLabel: "Spring, 277 BC" } as unknown as Parameters<typeof BarracksPanel>[0]["player"];
-    const { container, getByLabelText, getByText } = render(<BarracksPanel player={player} onRefresh={noop} />);
+    const { container, getByText } = render(<BarracksPanel player={player} onRefresh={noop} />);
     await act(async () => {
       await new Promise((r) => setTimeout(r, 30));
     });
@@ -274,18 +274,41 @@ describe("move picker", () => {
     expect((dialog.querySelector(".w2map-pick-count") as HTMLInputElement).value).toBe("26");
     // The selector: every place with its travel time from Massalia, the base
     // itself and the sea crossing short of hulls greyed with the reason.
-    const select = getByLabelText("Destination") as HTMLSelectElement;
+    const picker = within(dialog as HTMLElement).getByRole("button", { name: "Destination" });
+    expect(picker.getAttribute("aria-haspopup")).toBe("listbox");
     // The default destination is the first place that is not the row's own base.
-    expect(select.value).toBe("nikaia");
+    expect(picker.querySelector(".choice-picker-text")!.textContent).toBe("Nikaia · 00:30:00");
     expect(dialog.querySelector(".w2map-info-label")!.textContent).toBe("Send men to · Nikaia");
-    const options = [...select.options].map((o) => ({ text: o.text, disabled: o.disabled }));
+    fireEvent.click(picker);
+    expect(picker.getAttribute("aria-expanded")).toBe("true");
+    const optionEls = within(within(dialog as HTMLElement).getByRole("listbox")).getAllByRole("option");
+    const options = optionEls.map((o) => ({
+      label: o.querySelector(".choice-picker-label")!.textContent,
+      text: o.querySelector(".choice-picker-text")!.textContent,
+      disabled: o.getAttribute("aria-disabled") === "true",
+      selected: o.getAttribute("aria-selected") === "true",
+    }));
     expect(options).toEqual([
-      { text: "Massalia · The men already stand there.", disabled: true },
-      { text: "Nikaia · 00:30:00", disabled: false },
-      { text: "Salyes · 00:30:00", disabled: false },
-      { text: "Emporion · Not enough hulls: 26 space needed, 20 aboard.", disabled: true },
+      { label: "Massalia", text: "Massalia · The men already stand there.", disabled: true, selected: false },
+      { label: "Nikaia", text: "Nikaia · 00:30:00", disabled: false, selected: true },
+      { label: "Salyes", text: "Salyes · 00:30:00", disabled: false, selected: false },
+      { label: "Emporion", text: "Emporion · Not enough hulls: 26 space needed, 20 aboard.", disabled: true, selected: false },
     ]);
-    fireEvent.change(select, { target: { value: "R046" } });
+    // A disabled place cannot be chosen: the list stays open and the choice stands.
+    fireEvent.click(optionEls[3]!);
+    expect(within(dialog as HTMLElement).queryByRole("listbox")).not.toBeNull();
+    expect(dialog.querySelector(".w2map-info-label")!.textContent).toBe("Send men to · Nikaia");
+    // The keyboard skips the disabled places; Escape closes the list and leaves the dialog open.
+    fireEvent.keyDown(picker, { key: "ArrowDown" });
+    fireEvent.keyDown(picker, { key: "ArrowDown" });
+    expect(dialog.querySelector(".choice-picker-option.highlighted .choice-picker-label")!.textContent).toBe("Salyes");
+    fireEvent.keyDown(picker, { key: "Escape" });
+    expect(within(dialog as HTMLElement).queryByRole("listbox")).toBeNull();
+    expect(container.querySelector(".w2map-modal")).not.toBeNull();
+    fireEvent.click(picker);
+    fireEvent.click(within(within(dialog as HTMLElement).getByRole("listbox")).getAllByRole("option")[2]!);
+    expect(within(dialog as HTMLElement).queryByRole("listbox")).toBeNull();
+    expect(picker.querySelector(".choice-picker-text")!.textContent).toBe("Salyes · 00:30:00");
     expect(dialog.querySelector(".w2map-info-label")!.textContent).toBe("Send men to · Salyes");
     expect(dialog.querySelector(".w2map-verdict")!.textContent).toContain("Ready to march.");
     await act(async () => {
