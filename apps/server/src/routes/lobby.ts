@@ -28,7 +28,8 @@ export type LobbyCitizen = {
 };
 
 export type LobbyResponse = {
-  user: { email: string; emailVerified: boolean; newsletterOptIn: boolean; isAdmin: boolean; memberSince: string };
+  // beta: the user created a character in World 1 (users.beta_at is set).
+  user: { email: string; emailVerified: boolean; newsletterOptIn: boolean; isAdmin: boolean; memberSince: string; beta: boolean };
   worlds: {
     active: null | {
       id: string;
@@ -184,7 +185,7 @@ export async function lobbyRoutes(app: FastifyInstance) {
 
     const userRow = (
       await db
-        .select({ email: users.email, emailVerifiedAt: users.emailVerifiedAt, newsletterOptIn: users.newsletterOptIn, isAdmin: users.isAdmin, createdAt: users.createdAt })
+        .select({ email: users.email, emailVerifiedAt: users.emailVerifiedAt, newsletterOptIn: users.newsletterOptIn, isAdmin: users.isAdmin, createdAt: users.createdAt, betaAt: users.betaAt })
         .from(users)
         .where(eq(users.id, auth.id))
         .limit(1)
@@ -237,6 +238,7 @@ export async function lobbyRoutes(app: FastifyInstance) {
         newsletterOptIn: userRow.newsletterOptIn,
         isAdmin: userRow.isAdmin,
         memberSince: userRow.createdAt.toISOString(),
+        beta: userRow.betaAt !== null,
       },
       worlds: {
         active,

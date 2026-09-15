@@ -216,7 +216,7 @@ function LeftColumn({ view, user, record, you }: { view: LobbyView; user: LobbyU
           </a>
         ))}
       </nav>
-      <RecordPanel record={record} you={you} />
+      <RecordPanel record={record} you={you} beta={user.beta} />
     </aside>
   );
 }
@@ -242,7 +242,8 @@ function CharacterCard({ user, you }: { user: LobbyUser; you: ActiveWorld["you"]
   );
 }
 
-function RecordPanel({ record, you }: { record: LobbyResponse["record"]; you: ActiveWorld["you"] }) {
+// Exported for the render test. `beta`: one extra line for a World 1 citizen.
+export function RecordPanel({ record, you, beta }: { record: LobbyResponse["record"]; you: ActiveWorld["you"]; beta: boolean }) {
   const latest = record.offices[0];
   const officesLabel = record.offices.length > 1 ? `Offices held (${record.offices.length})` : "Offices held";
   return (
@@ -261,6 +262,12 @@ function RecordPanel({ record, you }: { record: LobbyResponse["record"]; you: Ac
           <dt>{officesLabel}</dt>
           <dd>{latest ? `${OFFICE_LABEL[latest.office] ?? latest.office} · ${bcYear(latest.startedYear)}` : "None yet"}</dd>
         </div>
+        {beta ? (
+          <div>
+            <dt>Beta citizen</dt>
+            <dd>World 1</dd>
+          </div>
+        ) : null}
       </dl>
     </section>
   );

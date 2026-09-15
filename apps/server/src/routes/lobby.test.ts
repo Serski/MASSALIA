@@ -135,7 +135,7 @@ suite("GET /api/lobby (integration)", () => {
   it("a user with no character: the active world with you = null, an empty record", async () => {
     const { user, token } = await freshUser();
     const body = await lobby(token);
-    expect(body.user).toEqual({ email: user.email, emailVerified: false, newsletterOptIn: false, isAdmin: false, memberSince: user.createdAt.toISOString() });
+    expect(body.user).toEqual({ email: user.email, emailVerified: false, newsletterOptIn: false, isAdmin: false, memberSince: user.createdAt.toISOString(), beta: false });
     expect(body.worlds.active).not.toBeNull();
     expect(body.worlds.active!.id).toBe(worldId);
     expect(body.worlds.active!.name).toBe("Lobby Test");

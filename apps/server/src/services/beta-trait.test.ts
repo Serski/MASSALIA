@@ -53,7 +53,7 @@ suite("the Beta trait (integration)", () => {
     await app.register(m.characterRoutes, { prefix: "/characters" });
     await app.register(m.lobbyRoutes, { prefix: "/api/lobby" });
     await app.ready();
-  });
+  }, 60_000); // three route modules' cold import can pass the 10s hook default on a loaded machine
 
   afterAll(async () => {
     await app.close();
@@ -129,5 +129,12 @@ suite("the Beta trait (integration)", () => {
     const other = await app.inject({ method: "POST", url: "/characters", headers: plain.headers, payload: { name: "Deon", avatarId: "avatar-30-1", classSlug: "trader", houseSlug: HOUSE } });
     expect(other.statusCode).toBe(201);
     expect(await traitsOf((await characterOfPlayer(other.json().player.id as string)).id)).toEqual([]);
+  });
+
+  it("GET /api/lobby carries beta", async () => {
+    const stamped = await freshUser({ beta: true });
+    const plain = await freshUser({ beta: false });
+    expect((await app.inject({ method: "GET", url: "/api/lobby", headers: stamped.headers })).json().user.beta).toBe(true);
+    expect((await app.inject({ method: "GET", url: "/api/lobby", headers: plain.headers })).json().user.beta).toBe(false);
   });
 });

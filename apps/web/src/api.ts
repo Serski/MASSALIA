@@ -300,7 +300,8 @@ export type LobbyCitizen = {
 };
 
 export type LobbyResponse = {
-  user: { email: string; emailVerified: boolean; newsletterOptIn: boolean; isAdmin: boolean; memberSince: string };
+  // beta: the user created a character in World 1 (the Lobby record shows a line).
+  user: { email: string; emailVerified: boolean; newsletterOptIn: boolean; isAdmin: boolean; memberSince: string; beta: boolean };
   worlds: {
     active: null | {
       id: string;
