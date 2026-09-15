@@ -38,6 +38,7 @@ import { serviceRoutes } from "./routes/service.js";
 import { loadRanksContent } from "./services/service.js";
 import { mercRoutes } from "./routes/merc.js";
 import { barracksRoutes } from "./routes/barracks.js";
+import { marketRoutes } from "./routes/market.js";
 import { adminRoutes } from "./routes/admin.js";
 import { loadContractsContent } from "./services/merc.js";
 import { loadBarracksContent } from "./services/barracks.js";
@@ -146,6 +147,7 @@ await app.register(buildingRoutes, { prefix: "/api/buildings" });
 await app.register(serviceRoutes, { prefix: "/api/service" });
 await app.register(mercRoutes, { prefix: "/api/merc" });
 await app.register(barracksRoutes, { prefix: "/api/barracks" });
+await app.register(marketRoutes, { prefix: "/api/market" });
 await app.register(adminRoutes, { prefix: "/admin" });
 
 const port = Number(process.env.PORT ?? 3000);

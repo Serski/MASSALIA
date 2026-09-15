@@ -162,7 +162,7 @@ export async function buildingContext(playerId: string, worldId: string): Promis
 
 type BuildingRow = typeof playerBuildings.$inferSelect;
 
-async function ownedRows(exec: Exec, playerId: string): Promise<BuildingRow[]> {
+export async function ownedRows(exec: Exec, playerId: string): Promise<BuildingRow[]> {
   return exec.select().from(playerBuildings).where(eq(playerBuildings.ownerPlayerId, playerId));
 }
 
@@ -175,7 +175,7 @@ export async function ownedBuildingIds(playerId: string): Promise<Set<string>> {
 // to active (and its resource rates are set when goods are first banked). Pure
 // status flip — accrual is gated by completesAt regardless, so this is cosmetic
 // but keeps the client's status honest.
-async function flipActivations(exec: Exec, rows: BuildingRow[], now: Date): Promise<BuildingRow[]> {
+export async function flipActivations(exec: Exec, rows: BuildingRow[], now: Date): Promise<BuildingRow[]> {
   const flipped: BuildingRow[] = [];
   for (const row of rows) {
     if (row.status === "constructing" && row.completesAt.getTime() <= now.getTime()) {
@@ -203,7 +203,7 @@ async function resourceRows(exec: Exec, playerId: string): Promise<ResourceRow[]
   return exec.select().from(resources).where(and(eq(resources.scope, "player"), eq(resources.scopeId, playerId)));
 }
 
-async function getOrCreateResource(exec: Exec, playerId: string, type: string, now: Date): Promise<ResourceRow> {
+export async function getOrCreateResource(exec: Exec, playerId: string, type: string, now: Date): Promise<ResourceRow> {
   const existing = await exec
     .select()
     .from(resources)
@@ -240,10 +240,17 @@ export class SpendRejected extends Error {
 
 // One locked transaction for a player: takes the advisory lock FIRST, runs `fn`,
 // and maps a SpendRejected throw (rolled back) to its SpendError result.
-async function spendTransaction<T>(playerId: string, fn: (tx: DbTx) => Promise<T>): Promise<T | SpendError> {
+export async function spendTransaction<T>(playerId: string, fn: (tx: DbTx) => Promise<T>): Promise<T | SpendError> {
+  return spendTransactionFor([playerId], fn);
+}
+
+// The same for a transaction that moves several players (a market buy touches the
+// buyer and the seller): every lock is taken first, in ascending id order, so two
+// crossing transactions over the same pair can never deadlock.
+export async function spendTransactionFor<T>(playerIds: string[], fn: (tx: DbTx) => Promise<T>): Promise<T | SpendError> {
   try {
     return await db.transaction(async (tx) => {
-      await lockPlayer(tx, playerId);
+      for (const id of [...new Set(playerIds)].sort()) await lockPlayer(tx, id);
       return fn(tx);
     });
   } catch (error) {
@@ -268,7 +275,7 @@ export async function debitDrachmae(exec: Exec, playerId: string, amount: number
   return paid[0]?.drachmae ?? null;
 }
 
-async function creditDrachmae(exec: Exec, playerId: string, amount: number): Promise<number> {
+export async function creditDrachmae(exec: Exec, playerId: string, amount: number): Promise<number> {
   const rows = await exec
     .update(playerCharacters)
     .set({ drachmae: sql`${playerCharacters.drachmae} + ${amount}` })
@@ -279,7 +286,7 @@ async function creditDrachmae(exec: Exec, playerId: string, amount: number): Pro
 
 // Guarded relative stock debit on one resources row. Returns the new amount, or
 // null when the stock is short (nothing written).
-async function debitResource(exec: Exec, rowId: string, qty: number): Promise<number | null> {
+export async function debitResource(exec: Exec, rowId: string, qty: number): Promise<number | null> {
   const rows = await exec
     .update(resources)
     .set({ amount: sql`${resources.amount} - ${String(qty)}::numeric` })
@@ -288,7 +295,7 @@ async function debitResource(exec: Exec, rowId: string, qty: number): Promise<nu
   return rows[0] ? Number(rows[0].amount) : null;
 }
 
-async function creditResource(exec: Exec, rowId: string, qty: number): Promise<number> {
+export async function creditResource(exec: Exec, rowId: string, qty: number): Promise<number> {
   const rows = await exec
     .update(resources)
     .set({ amount: sql`${resources.amount} + ${String(qty)}::numeric` })
