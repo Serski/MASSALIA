@@ -197,6 +197,26 @@ export async function adminRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
+  // Manual email verification, for a player whose verification link expired
+  // before they could use it. Idempotent: COALESCE keeps the first timestamp,
+  // and a repeat call still writes its audit row.
+  app.post("/users/:userId/verify", { schema: uuidParam("userId") }, async (request) => {
+    const admin = await requireAdmin(request);
+    const { userId } = request.params as { userId: string };
+    const reason = reasonOf(request, false);
+    const target = await userById(userId);
+    const emailVerifiedAt = await db.transaction(async (tx) => {
+      const updated = await tx
+        .update(users)
+        .set({ emailVerifiedAt: sql`COALESCE(${users.emailVerifiedAt}, now())` })
+        .where(eq(users.id, userId))
+        .returning({ emailVerifiedAt: users.emailVerifiedAt });
+      await audit(tx, admin.id, "users.verify", userId, { reason, previouslyVerifiedAt: target.emailVerifiedAt });
+      return updated[0]!.emailVerifiedAt;
+    });
+    return { ok: true, emailVerifiedAt };
+  });
+
   app.post("/users/:userId/sessions/delete", { schema: uuidParam("userId") }, async (request) => {
     const admin = await requireAdmin(request);
     const { userId } = request.params as { userId: string };

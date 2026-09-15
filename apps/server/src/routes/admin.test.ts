@@ -155,6 +155,35 @@ suite("admin tooling and account gates (integration)", () => {
     expect((await call("GET", "/admin/users", { cookie: a.cookie })).statusCode).toBe(401);
   });
 
+  // --- manual verification -------------------------------------------------------------
+  it("admin verify clears the character gate, is idempotent, and audits every call", async () => {
+    const a = await admin();
+    const stuck = await register("stuck@t", "203.0.113.60");
+    expect((await userRow(stuck.id)).emailVerifiedAt).toBeNull();
+    expect((await call("POST", "/characters", { cookie: stuck.cookie, payload: {} })).statusCode).toBe(403);
+
+    const before = (await auditRows()).length;
+    const verified = await call("POST", `/admin/users/${stuck.id}/verify`, { cookie: a.cookie, payload: { reason: "link expired" } });
+    expect(verified.statusCode).toBe(200);
+    expect(verified.json().ok).toBe(true);
+    const at = (await userRow(stuck.id)).emailVerifiedAt;
+    expect(at).not.toBeNull();
+
+    const rows = (await auditRows()).slice(before);
+    expect(rows.map((r) => r.action)).toEqual(["users.verify"]);
+    expect(rows[0]!.targetUserId).toBe(stuck.id);
+    expect(rows[0]!.detail).toMatchObject({ reason: "link expired", previouslyVerifiedAt: null });
+
+    // Past the gate: creation now fails on the empty payload.
+    expect((await call("POST", "/characters", { cookie: stuck.cookie, payload: {} })).statusCode).toBe(400);
+
+    // Idempotent — 200, the timestamp is untouched, and it still audits (reason optional).
+    const again = await call("POST", `/admin/users/${stuck.id}/verify`, { cookie: a.cookie, payload: {} });
+    expect(again.statusCode).toBe(200);
+    expect((await userRow(stuck.id)).emailVerifiedAt).toEqual(at);
+    expect((await auditRows()).slice(before).map((r) => r.action)).toEqual(["users.verify", "users.verify"]);
+  });
+
   // --- every admin action: its effect + one audit row ----------------------------------
   it("each admin call does its job and writes exactly one admin_audit row", async () => {
     const a = await admin();
