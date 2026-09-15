@@ -6,7 +6,7 @@ import type { CharacterStats } from "./character.js";
 // The Ledger / player economy — the universal building engine (Economy Build 1).
 //
 // Every number flows from ONE curve (constants below), never hand-typed rows:
-//   cost(t)      = COST_TABLE[t-1]                          → 50 / 125 / 300 / 750
+//   cost(t)      = COST_TABLE[t-1]                          → 25 / 60 / 150 / 375
 //   yield(base,t)= base × YIELD_GROWTH^(t-1)
 //   buildDays(t) = BUILD_DAYS[t-1]                          → 1/24 / 2 / 4 / 7
 //   upkeep(t)    = UPKEEP[t-1]                              → 0 / 1 / 3 / 6  (dr/day)
@@ -19,7 +19,7 @@ import type { CharacterStats } from "./character.js";
 // punished. The whole engine is pure: pass the clock + world start in, no Date.now().
 // ---------------------------------------------------------------------------
 
-export const COST_TABLE = [50, 125, 300, 750] as const;
+export const COST_TABLE = [25, 60, 150, 375] as const;
 export const YIELD_GROWTH = 1.8;
 // Real days (= in-game seasons) to build each tier; index 0 is tier 1. Tier 1 is a
 // single hour (1/24 day) so a fresh class building comes online almost at once;

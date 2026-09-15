@@ -264,7 +264,7 @@
       "name": "Poultry Yard",
       "icon": "🐔",
       "category": "yearround",
-      "cost": 60,
+      "cost": 30,
       "buildDays": 1,
       "yields": [
         {
@@ -288,7 +288,7 @@
       "name": "Vineyard",
       "icon": "🍇",
       "category": "agricultural",
-      "cost": 150,
+      "cost": 75,
       "buildDays": 1,
       "yields": [
         {
@@ -312,7 +312,7 @@
       "name": "Timber Lot",
       "icon": "🪵",
       "category": "agricultural",
-      "cost": 150,
+      "cost": 75,
       "buildDays": 1,
       "yields": [
         {
@@ -335,7 +335,7 @@
       "name": "Bull Farm",
       "icon": "🐂",
       "category": "agricultural",
-      "cost": 250,
+      "cost": 125,
       "buildDays": 2,
       "yields": [
         {
@@ -359,7 +359,7 @@
       "name": "Horse Farm",
       "icon": "🐎",
       "category": "agricultural",
-      "cost": 300,
+      "cost": 150,
       "buildDays": 2,
       "yields": [
         {
@@ -384,7 +384,7 @@
       "hidden": true,
       "icon": "⚓",
       "category": "yearround",
-      "cost": 300,
+      "cost": 150,
       "buildDays": 2,
       "yields": [],
       "storageBonus": 200,
@@ -405,7 +405,7 @@
       "name": "Household Shrine",
       "icon": "🕯️",
       "category": "yearround",
-      "cost": 80,
+      "cost": 40,
       "buildDays": 1,
       "yields": [],
       "composurePerDay": 1,

@@ -40,10 +40,11 @@ const vendor = content.vendor;
 const seasonal = content.seasonal;
 
 describe("the building curve (one curve, not hand rows)", () => {
-  it("cost(t) = COST_TABLE[t-1] → 50 / 125 / 300 / 750", () => {
+  it("cost(t) = COST_TABLE[t-1] → 25 / 60 / 150 / 375", () => {
     // A flat table is the source of truth (constants, not hand rows); the class
-    // tiers were halved from the old 100/250/625/1563 curve.
-    expect([1, 2, 3, 4].map(buildingCost)).toEqual([50, 125, 300, 750]);
+    // tiers were halved from 100/250/625/1563 to 50/125/300/750, then halved again
+    // (tier 2 rounds 62.5 down to keep integer prices).
+    expect([1, 2, 3, 4].map(buildingCost)).toEqual([25, 60, 150, 375]);
   });
 
   it("buildDays(t) = [1/24, 2, 4, 7] (tier 1 is one hour, higher tiers whole days)", () => {
@@ -118,9 +119,9 @@ describe("the new-player guard (winter joiners aren't punished)", () => {
 });
 
 describe("BALANCE GUARDRAIL — the day-1 landowner path", () => {
-  // Day-1 landowner: build Estate T1 (cost 50) → constructs in 1 day.
-  it("Estate T1 costs 50dr (the day-1 entry)", () => {
-    expect(buildingCost(1)).toBe(50);
+  // Day-1 landowner: build Estate T1 (cost 25) → constructs in 1 day.
+  it("Estate T1 costs 25dr (the day-1 entry)", () => {
+    expect(buildingCost(1)).toBe(25);
     expect(buildingBuildDays(1)).toBe(1 / 24);
   });
 
@@ -156,7 +157,7 @@ describe("BALANCE GUARDRAIL — class ROI beats commons for the owner", () => {
   });
 
   it("commons sit at ~28% of the class line by vendor-floor value (band 20–35%)", () => {
-    // Ruling (class costs halved to 50/125/300/750): the class line is decisively
+    // Ruling (class costs halved twice, now 25/60/150/375; commons halved alongside): the class line is decisively
     // the priority investment; commons are goods access and a secondary sink. Their
     // strategic value (bulls/horses/etc. in bulk) is NOT captured by this floor-value
     // ratio, so a low number here is by design — not commons being weak.
@@ -167,11 +168,11 @@ describe("BALANCE GUARDRAIL — class ROI beats commons for the owner", () => {
     }
   });
 
-  it("the full T1→T4 grind costs 1225dr (a multi-week, late-game push)", () => {
-    // The halved table sums to 1225 (50 + 125 + 300 + 750), late-game by intent.
+  it("the full T1→T4 grind costs 610dr (a multi-week, late-game push)", () => {
+    // The twice-halved table sums to 610 (25 + 60 + 150 + 375), late-game by intent.
     const total = [1, 2, 3, 4].reduce((sum, t) => sum + buildingCost(t), 0);
-    expect(total).toBe(1225);
-    expect(total).toBeGreaterThan(1000);
+    expect(total).toBe(610);
+    expect(total).toBeGreaterThan(500);
   });
 });
 
@@ -226,8 +227,8 @@ describe("the four remaining class lines (content-only, same generic frame)", ()
     for (const line of [trader, philosopher, hetaira, shipbuilder]) {
       expect(line.tiers.map((t) => t.tier)).toEqual([1, 2, 3, 4]);
       expect(line.tiers.every((t) => t.rank?.startsWith("@"))).toBe(true);
-      // Tier-1 cost is the universal 50dr entry; nothing hand-rolled.
-      expect(buildingCost(1)).toBe(50);
+      // Tier-1 cost is the universal 25dr entry; nothing hand-rolled.
+      expect(buildingCost(1)).toBe(25);
     }
   });
 
