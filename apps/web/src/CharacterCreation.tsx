@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { creationFacesForAge } from "@massalia/shared";
-import { api, apiErrorMessage, portraitUrl, type AgeConfig } from "./api.js";
+import { ApiError, api, apiErrorMessage, portraitUrl, type AgeConfig } from "./api.js";
 import { assetPath, nobleHouses, professions, type Alignment, type House, type Profession } from "./data/league.js";
 import "./characterCreation.css";
 
@@ -333,6 +333,34 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
   // credential fields and creates against the live session — never re-registers.
   // null = no session (collect email + password and register on save).
   const [authedEmail, setAuthedEmail] = useState<string | null>(null);
+  // An unverified session cannot save a citizen: POST /characters answers 403.
+  // null = unknown (no session yet, or /auth/me not back).
+  const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
+  // Set when the save itself came back 403, so the player who already pressed
+  // Save gets the resend button under the error instead of a dead end.
+  const [verifyBlocked, setVerifyBlocked] = useState(false);
+  const [resend, setResend] = useState<{ status: "idle" | "sending" | "sent" | "error"; message: string }>({ status: "idle", message: "" });
+
+  const resendVerification = async () => {
+    setResend({ status: "sending", message: "" });
+    try {
+      await api.resendVerification();
+      setResend({ status: "sent", message: "Sent. Check your inbox, then come back and save." });
+    } catch (error) {
+      setResend({ status: "error", message: apiErrorMessage(error, "auth") });
+    }
+  };
+
+  // One control, shared by the save-step notice and the 403 dead end below the
+  // error. Existing creation classes only — no new styling.
+  const resendControl = (
+    <p className="creation-saving-as">
+      <button className="creation-ghost-button" type="button" onClick={() => void resendVerification()} disabled={resend.status === "sending" || resend.status === "sent"}>
+        {resend.status === "sending" ? "Sending…" : "Resend verification email"}
+      </button>
+      {resend.status === "sent" || resend.status === "error" ? <span role="status"> {resend.message}</span> : null}
+    </p>
+  );
 
   const selectedClass = useMemo(() => professions.find((profession) => profession.slug === selectedClassSlug), [selectedClassSlug]);
   const selectedHouse = useMemo(() => nobleHouses.find((house) => house.slug === selectedHouseSlug), [selectedHouseSlug]);
@@ -358,7 +386,11 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
     let cancelled = false;
     api
       .me()
-      .then((result) => !cancelled && setAuthedEmail(result.user?.email ?? null))
+      .then((result) => {
+        if (cancelled) return;
+        setAuthedEmail(result.user?.email ?? null);
+        setEmailVerified(result.user ? result.emailVerified !== false : null);
+      })
       .catch(() => !cancelled && setAuthedEmail(null));
     return () => {
       cancelled = true;
@@ -425,6 +457,7 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
       await api.createCharacter(payload);
       onComplete(payload);
     } catch (error) {
+      if (error instanceof ApiError && error.status === 403) setVerifyBlocked(true);
       setMessage(apiErrorMessage(error, "creation"));
     } finally {
       setIsSubmitting(false);
@@ -560,6 +593,12 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
           {step === 4 ? (
             <form className="creation-account-form" id="creation-account-form" onSubmit={handleSubmit}>
               <p className="creation-note">Save your character.</p>
+              {authedEmail && emailVerified === false ? (
+                <>
+                  <p className="auth-message" role="status">Your email isn&rsquo;t verified yet. Verify it before you save your citizen.</p>
+                  {resendControl}
+                </>
+              ) : null}
               {authedEmail ? (
                 <p className="creation-saving-as">Saving as <strong>{authedEmail}</strong>.</p>
               ) : (
@@ -583,6 +622,7 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
                 <span>I agree to the <a href="?page=terms" target="_blank" rel="noopener noreferrer">Terms of Service</a> and <a href="?page=privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a></span>
               </label>
               {message ? <p className="auth-message" role="status">{message}</p> : null}
+              {verifyBlocked && emailVerified !== false ? resendControl : null}
             </form>
           ) : null}
 
