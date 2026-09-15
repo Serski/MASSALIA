@@ -544,7 +544,7 @@ export function AccountSection({
     setResend({ status: "sending", message: "" });
     try {
       await api.resendVerification();
-      setResend({ status: "sent", message: "Sent. Check your inbox, then come back and save." });
+      setResend({ status: "sent", message: "Sent. Check your inbox." });
     } catch (error) {
       setResend({ status: "error", message: error instanceof ApiError ? error.message : "Could not send the email. Try again." });
     }

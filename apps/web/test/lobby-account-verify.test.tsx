@@ -64,7 +64,7 @@ describe("Lobby account section", () => {
     await flush();
 
     expect(resendVerification).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/Sent\. Check your inbox/)).toBeTruthy();
+    expect(screen.getByText("Sent. Check your inbox.")).toBeTruthy();
     // Sent is terminal for the session, so a second click cannot fire.
     expect(screen.getByRole("button", { name: "Resend verification email" }).hasAttribute("disabled")).toBe(true);
   });
