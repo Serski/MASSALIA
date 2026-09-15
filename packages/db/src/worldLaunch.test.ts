@@ -25,7 +25,7 @@ suite("world:launch (integration)", () => {
 
   async function load() {
     const dbPkg = await import("./index.js");
-    const launch = await import("../scripts/world-launch.js");
+    const launch = await import("./worldLaunch.js");
     return { dbPkg, launch, db: dbPkg.createDb() };
   }
 
