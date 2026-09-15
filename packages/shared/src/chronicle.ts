@@ -59,7 +59,11 @@ export type ChronicleType =
   // into the one sentence both the register and the server report use.
   | "map_action"
   | "holding_reverted"
-  | "holding_tribute";
+  | "holding_tribute"
+  // Market prompt 1: one line on each side of a player-market sale, sourced from
+  // effect_log like the campaign lines (the detail's nested `chronicle` block).
+  | "market_sale"
+  | "market_purchase";
 
 export type ChronicleEntry = {
   // Sort key, from gameDate(timestamp, startedMs).seasonIndex.
@@ -148,11 +152,54 @@ export type ChronicleInput = {
   // Barracks prompt 3b: map actions and holding reversions from effect_log.
   // Optional — pre-existing fixtures need not supply it.
   campaigns?: ChronicleCampaignRow[];
+  // Market prompt 1: player-market sales and purchases from effect_log.
+  // Optional — pre-existing fixtures need not supply it.
+  market?: ChronicleMarketRow[];
 };
 
 // A map action or a holding reversion, dated at the effect_log instant. The
 // payload is the structured summary the action wrote (see CampaignPayload).
 export type ChronicleCampaignKind = "map_action" | "holding_reverted" | "holding_tribute";
+// A player-market sale (seller's side) or purchase (buyer's side).
+export type ChronicleMarketKind = "market_sale" | "market_purchase";
+// Every effect_log kind the chronicle reads (each through detail.chronicle).
+export type ChronicleEffectLogKind = ChronicleCampaignKind | ChronicleMarketKind;
+export const CHRONICLE_EFFECT_LOG_KINDS: readonly ChronicleEffectLogKind[] = [
+  "map_action",
+  "holding_reverted",
+  "holding_tribute",
+  "market_sale",
+  "market_purchase",
+];
+export function isChronicleMarketKind(kind: string): kind is ChronicleMarketKind {
+  return kind === "market_sale" || kind === "market_purchase";
+}
+
+// One side of a player-market sale, dated at the effect_log instant.
+export type ChronicleMarketRow = {
+  id: string;
+  at: number;
+  kind: ChronicleMarketKind;
+  payload: MarketChroniclePayload;
+};
+
+// The structured summary a market sale writes on both sides. `net` is what the
+// seller received (total − tax); the buyer paid `total`.
+export type MarketChroniclePayload = {
+  listingId: string;
+  good: string;
+  goodLabel: string;
+  qty: number;
+  price: number;
+  total: number;
+  tax: number;
+  net: number;
+  sellerName: string;
+  sellerHouseName: string;
+  buyerName: string;
+  buyerHouseName: string;
+  source: "market";
+};
 export type ChronicleCampaignRow = {
   id: string;
   at: number;
@@ -312,6 +359,8 @@ const TYPE_ORDER: Record<ChronicleType, number> = {
   map_action: 15,
   holding_reverted: 16,
   holding_tribute: 17,
+  market_sale: 18,
+  market_purchase: 19,
 };
 
 // generation = 1 + (boundaries that occurred at or before the event). An event at
@@ -394,6 +443,9 @@ export function buildChronicle(input: ChronicleInput): ChronicleEntry[] {
   }
   for (const c of input.campaigns ?? []) {
     staged.push(stage(c.id, c.at, c.kind, { ...c.payload }, input));
+  }
+  for (const mk of input.market ?? []) {
+    staged.push(stage(mk.id, mk.at, mk.kind, { ...mk.payload }, input));
   }
   for (const d of input.deaths ?? []) {
     // The succession instant is a generation boundary, so a death dated exactly on it

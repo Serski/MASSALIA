@@ -1,12 +1,15 @@
 import { and, eq, inArray, notInArray } from "drizzle-orm";
 import {
   buildChronicle,
+  CHRONICLE_EFFECT_LOG_KINDS,
+  isChronicleMarketKind,
   OLYMPIAD_GAMES_FESTIVAL_ID,
   type ChronicleAfflictionRow,
   type ChronicleCampaignRow,
   type ChronicleDeathRow,
   type ChronicleEntry,
   type ChronicleInput,
+  type ChronicleMarketRow,
   type DeathCause,
 } from "@massalia/shared";
 import { createDb } from "./client.js";
@@ -241,16 +244,23 @@ export async function gatherChronicleForCharacter(characterId: string): Promise<
   }
 
   // Barracks prompt 3b: map actions this slot led and holdings it lost, from
-  // effect_log. The detail's `chronicle` block is the structured payload.
-  const campaignRows = await db
+  // effect_log; market prompt 1: this slot's player-market sales and purchases.
+  // The detail's `chronicle` block is the structured payload for every kind.
+  const effectRows = await db
     .select({ id: effectLog.id, createdAt: effectLog.createdAt, kind: effectLog.kind, detail: effectLog.detail })
     .from(effectLog)
-    .where(and(eq(effectLog.characterId, slot.id), inArray(effectLog.kind, ["map_action", "holding_reverted", "holding_tribute"])));
+    .where(and(eq(effectLog.characterId, slot.id), inArray(effectLog.kind, [...CHRONICLE_EFFECT_LOG_KINDS])));
   const campaigns: ChronicleCampaignRow[] = [];
-  for (const row of campaignRows) {
-    const chronicle = (row.detail as { chronicle?: ChronicleCampaignRow["payload"] }).chronicle;
+  const market: ChronicleMarketRow[] = [];
+  for (const row of effectRows) {
+    const chronicle = (row.detail as { chronicle?: unknown }).chronicle;
     if (!chronicle) continue;
-    campaigns.push({ id: row.id, at: row.createdAt.getTime(), kind: row.kind as ChronicleCampaignRow["kind"], payload: chronicle });
+    const at = row.createdAt.getTime();
+    if (isChronicleMarketKind(row.kind)) {
+      market.push({ id: row.id, at, kind: row.kind, payload: chronicle as ChronicleMarketRow["payload"] });
+    } else {
+      campaigns.push({ id: row.id, at, kind: row.kind as ChronicleCampaignRow["kind"], payload: chronicle as ChronicleCampaignRow["payload"] });
+    }
   }
 
   return buildChronicle({
@@ -266,5 +276,6 @@ export async function gatherChronicleForCharacter(characterId: string): Promise<
     afflictions,
     deaths,
     campaigns,
+    market,
   });
 }

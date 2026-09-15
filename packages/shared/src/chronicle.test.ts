@@ -298,6 +298,48 @@ describe("buildChronicle — adoption (the rite)", () => {
   });
 });
 
+describe("buildChronicle — player market (market prompt 1)", () => {
+  const base = { startedMs: 0, successionBoundariesMs: [] as number[], marriages: [], births: [], choregos: [], festivals: [], olympics: [] };
+  const payload = {
+    listingId: "l1",
+    good: "wine",
+    goodLabel: "Wine",
+    qty: 5,
+    price: 9,
+    total: 45,
+    tax: 4,
+    net: 41,
+    sellerName: "Kallias",
+    sellerHouseName: "Xanthippos",
+    buyerName: "Deon",
+    buyerHouseName: "Protis",
+    source: "market" as const,
+  };
+
+  it("stages a sale and a purchase dated at the effect_log instant, carrying the payload", () => {
+    const entries = buildChronicle({
+      ...base,
+      market: [
+        { id: "e2", at: 12 * S, kind: "market_purchase", payload },
+        { id: "e1", at: 12 * S, kind: "market_sale", payload },
+      ],
+    });
+    expect(entries.map((e) => e.type)).toEqual(["market_sale", "market_purchase"]); // TYPE_ORDER 18 before 19
+    expect(entries.every((e) => e.seasonIndex === 12)).toBe(true);
+    expect(entries[0]!.payload).toEqual(payload);
+  });
+
+  it("sorts after the campaign kinds in the same season; no market rows → no market entries", () => {
+    const entries = buildChronicle({
+      ...base,
+      market: [{ id: "e1", at: 3 * S, kind: "market_sale", payload }],
+      campaigns: [{ id: "c1", at: 3 * S + 1, kind: "holding_tribute", payload: { regionId: "R001", tribute: [] } }],
+    });
+    expect(entries.map((e) => e.type)).toEqual(["holding_tribute", "market_sale"]);
+    expect(buildChronicle(base).some((e) => e.type === "market_sale" || e.type === "market_purchase")).toBe(false);
+  });
+});
+
 describe("buildChronicle — deaths", () => {
   // Boundaries are OFFSET from a season edge (the +100), matching production, where a
   // succession instant is an arbitrary `now`, never season-aligned.
