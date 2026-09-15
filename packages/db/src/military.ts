@@ -9,7 +9,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { DbHandle } from "./client.js";
+import type { DbExec } from "./client.js";
 import { regionMilitary, townMilitary } from "./schema.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -49,7 +49,7 @@ export async function loadRegionMilitaryContent(): Promise<RegionMilitaryContent
 
 // Insert the world's town pools from content; rows already present are left
 // untouched. Returns the number of towns in the content file (not rows inserted).
-export async function ensureTownMilitary(db: DbHandle, worldId: string): Promise<number> {
+export async function ensureTownMilitary(db: DbExec, worldId: string): Promise<number> {
   const content = await loadTownMilitaryContent();
   const values = Object.entries(content.towns).map(([townId, t]) => ({
     worldId,
@@ -63,7 +63,7 @@ export async function ensureTownMilitary(db: DbHandle, worldId: string): Promise
 }
 
 // Same for the townless regions' warbands.
-export async function ensureRegionMilitary(db: DbHandle, worldId: string): Promise<number> {
+export async function ensureRegionMilitary(db: DbExec, worldId: string): Promise<number> {
   const content = await loadRegionMilitaryContent();
   const values = Object.entries(content.regions).map(([regionId, r]) => ({ worldId, regionId, warband: r.warband }));
   if (values.length) await db.insert(regionMilitary).values(values).onConflictDoNothing();

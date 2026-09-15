@@ -15,7 +15,7 @@ import {
   type PoliticsConfig,
   type SwayTotals,
 } from "@massalia/shared";
-import { createDb } from "./client.js";
+import { createDb, type DbExec } from "./client.js";
 import { chamberBallots, chamberVotes, oligarchSeats, partyFavor, playerCharacters, worlds } from "./schema.js";
 
 const db = createDb();
@@ -39,7 +39,7 @@ async function activeWorld(): Promise<{ id: string; startedMs: number } | null> 
 // Seed a world's chamber from the config (idempotent — used for NEW worlds; the
 // 0021 migration seeded the worlds that existed before it). NPC blocs occupy
 // the low seat indexes in NPC_PARTIES order; the rest start empty.
-export async function ensureChamberSeats(worldId: string, chamber: ChamberConfig): Promise<void> {
+export async function ensureChamberSeats(worldId: string, chamber: ChamberConfig, exec: DbExec = db): Promise<void> {
   const values: (typeof oligarchSeats.$inferInsert)[] = [];
   let index = 0;
   for (const party of NPC_PARTIES) {
@@ -50,7 +50,7 @@ export async function ensureChamberSeats(worldId: string, chamber: ChamberConfig
   while (index < chamber.capacity) {
     values.push({ worldId, seatIndex: index++, holderType: "empty" });
   }
-  await db.insert(oligarchSeats).values(values).onConflictDoNothing();
+  await exec.insert(oligarchSeats).values(values).onConflictDoNothing();
 }
 
 // The open chamber vote of the active world, if any (regardless of closes_at —

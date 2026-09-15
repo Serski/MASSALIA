@@ -69,3 +69,10 @@ LAUNCH
 dry-run output from massalia_test
 Committed: <SHA> per commit, in order
 ```
+
+## STOP 0 rulings
+
+Recon found no contradiction in the facts. Ruling 5 puts `ensureChamberSeats`, `ensureTownMilitary` and `ensureRegionMilitary` inside the launch transaction, but `ensureChamberSeats` inserted through its module's own pool handle and the military ensures were typed `DbHandle` (a transaction is not one), and both files sat outside the fence. Rulings:
+
+1. **Option 1.** The fence widens to `packages/db/src/chamber.ts` and `packages/db/src/military.ts` for signature-only changes: `ensureChamberSeats(worldId, chamber, exec = db)` and `DbHandle → DbExec` on `ensureTownMilitary` and `ensureRegionMilitary`. No behaviour change; `seed.ts` and `ensureMilitaryPools` are untouched as callers. Its own commit, `db: ensures take an executor`, before the script. All three ensures then run inside the launch transaction with row-count checks, and AFTER shows the seat count and both pool counts for the new world.
+2. **Sweep leaks accepted for tonight**, to be taken in a separate prompt after the launch; nothing in the worker is touched here. World 1's characters stay `alive` and its players `isActive`, so after the flip: the festival sweep (`fireFestivalsForAll`) and the Olympic-nomination delivery (`deliverOlympicNominationToAll`) keep dealing cards to World 1 characters on World 2's calendar; the spouse-death and mercenary-contract sweeps keep settling World 1 characters; the per-character `family-candidate-draw`, `family-child-roll` and `censure-resolve` jobs keep re-arming for them.
