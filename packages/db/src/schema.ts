@@ -930,6 +930,25 @@ export const worldTreasury = pgTable("world_treasury", {
   balance: integer("balance").notNull().default(0),
 });
 
+// The player market (migration 0058): sell-only stalls. Listing escrows the
+// seller's stock; a buy decrements `remaining` under a guard, and `closedAt` is
+// set when the stall sells out or is cancelled. No expiry.
+export const marketListings = pgTable("market_listings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  sellerPlayerId: uuid("seller_player_id").references(() => players.id).notNull(),
+  good: text("good").notNull(),
+  remaining: integer("remaining").notNull(),
+  price: integer("price").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+}, (table) => ({
+  remainingCheck: check("market_listings_remaining_check", sql`${table.remaining} >= 0`),
+  priceCheck: check("market_listings_price_check", sql`${table.price} >= 1`),
+  openIdx: index("market_listings_open_idx").on(table.worldId, table.good).where(sql`closed_at IS NULL`),
+  sellerOpenIdx: index("market_listings_seller_open_idx").on(table.sellerPlayerId).where(sql`closed_at IS NULL`),
+}));
+
 export const resources = pgTable("resources", {
   id: uuid("id").primaryKey().defaultRandom(),
   scope: text("scope").notNull(),
