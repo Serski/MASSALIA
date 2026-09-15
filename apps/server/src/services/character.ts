@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { createDb, dynasties, players, playerCharacters, playerPops, resources, worlds } from "@massalia/db";
+import { characterTraits, createDb, dynasties, players, playerCharacters, playerPops, resources, users, worlds } from "@massalia/db";
 import {
   capStat,
   CLASS_START,
@@ -25,6 +25,9 @@ import { getAgeConfig, portraitUrl } from "./age.js";
 import { lockPlayer } from "./lock.js";
 
 const db = createDb();
+
+// The trait granted at creation to a user with users.beta_at (content/traits/traits.json).
+export const BETA_TRAIT_ID = "beta";
 type DbTx = Parameters<Parameters<ReturnType<typeof createDb>["transaction"]>[0]>[0];
 type Exec = DbTx | typeof db;
 
@@ -133,7 +136,22 @@ export async function createCharacterRow(
       sex: classId === "hetaira" ? "female" : "male",
     })
     .returning();
-  return inserted[0]!;
+  const row = inserted[0]!;
+
+  // World 2 launch: a user stamped beta_at (they created a character in World 1)
+  // gets the permanent Beta trait on every character row from then on — every
+  // world, every caller, on the same executor as the insert. Heirs reuse the row
+  // and inherit its traits, so the grant carries down the dynasty.
+  const stamped = await exec
+    .select({ betaAt: users.betaAt })
+    .from(players)
+    .innerJoin(users, eq(users.id, players.userId))
+    .where(eq(players.id, playerId))
+    .limit(1);
+  if (stamped[0]?.betaAt) {
+    await exec.insert(characterTraits).values({ characterId: row.id, traitId: BETA_TRAIT_ID }).onConflictDoNothing();
+  }
+  return row;
 }
 
 // Fetch the player's sheet, auto-provisioning from their house + profession if
