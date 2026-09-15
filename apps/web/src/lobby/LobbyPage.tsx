@@ -513,7 +513,7 @@ function HallOfFameSection({ ended }: { ended: LobbyResponse["worlds"]["ended"] 
 
 // --- Account ------------------------------------------------------------------
 
-function AccountSection({
+export function AccountSection({
   user,
   newsletter,
   savingNewsletter,
@@ -533,9 +533,22 @@ function AccountSection({
   // Delete-account (anonymize-and-detach): password-gated and irreversible, so it
   // stays behind the same inline confirm the Settings tab uses.
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // The Lobby is where a character-less player can actually reach a resend: the
+  // Dashboard banner sits behind a character they cannot create while unverified.
+  const [resend, setResend] = useState<{ status: "idle" | "sending" | "sent" | "error"; message: string }>({ status: "idle", message: "" });
   const [deletePassword, setDeletePassword] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const resendVerification = async () => {
+    setResend({ status: "sending", message: "" });
+    try {
+      await api.resendVerification();
+      setResend({ status: "sent", message: "Sent. Check your inbox, then come back and save." });
+    } catch (error) {
+      setResend({ status: "error", message: error instanceof ApiError ? error.message : "Could not send the email. Try again." });
+    }
+  };
 
   const cancelDelete = () => {
     setConfirmingDelete(false);
@@ -563,8 +576,21 @@ function AccountSection({
         <span className="lobby-setting-value">
           {maskEmail(user.email)}
           <span className={`lobby-pill${user.emailVerified ? " lobby-pill-ok" : ""}`}>{user.emailVerified ? "Verified" : "Not verified"}</span>
+          {user.emailVerified ? null : (
+            <button
+              className="lobby-btn lobby-btn-small"
+              type="button"
+              disabled={resend.status === "sending" || resend.status === "sent"}
+              onClick={() => void resendVerification()}
+            >
+              {resend.status === "sending" ? "Sending…" : "Resend verification email"}
+            </button>
+          )}
         </span>
       </div>
+      {user.emailVerified || resend.status === "idle" || resend.status === "sending" ? null : (
+        <p className={`lobby-note${resend.status === "error" ? " lobby-note-error" : ""}`} role="status">{resend.message}</p>
+      )}
       <div className="lobby-setting">
         <span className="lobby-setting-label">Season updates newsletter</span>
         <LobbyToggle on={newsletter} disabled={savingNewsletter} label="Season updates newsletter" onToggle={onToggleNewsletter} />

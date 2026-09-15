@@ -611,7 +611,7 @@ function VerifyEmailPage({
               <button className="primary-cta auth-submit" type="button" onClick={onDone}>Continue</button>
             ) : status === "error" ? (
               <>
-                <p className="auth-subtitle">Log in and resend a verification email from the banner.</p>
+                <p className="auth-subtitle">Log in, then resend a verification email from your account panel in the Lobby.</p>
                 <button className="primary-cta auth-submit" type="button" onClick={onLogin}>Log in</button>
               </>
             ) : null}
