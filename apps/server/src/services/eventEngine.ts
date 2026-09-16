@@ -6,6 +6,7 @@ import {
   applyCityStat,
   applyOpinion,
   applyStatGrowth,
+  assertOneDatedEventPerSeason,
   assertUniqueEventIds,
   capStat,
   clampIdeology,
@@ -77,6 +78,9 @@ export async function listEvents(): Promise<EventDefinition[]> {
   // Event ids must be unique across ALL content files (draw/findChoice resolve by
   // id alone) — fail loudly at load if two files collide.
   assertUniqueEventIds(events);
+  // One dated card per season across all content — a second one on the same
+  // season would be silently starved by the (character, day, arena) index.
+  assertOneDatedEventPerSeason(events);
   return events;
 }
 

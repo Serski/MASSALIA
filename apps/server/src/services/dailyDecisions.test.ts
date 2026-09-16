@@ -90,6 +90,20 @@ const RUIN_DEFAULT = {
   ],
 };
 
+// A dated card (content `date`): dealt into a councilor's set during Summer
+// 300 BC, once per character, never drawn. The take pays DATED_PAY.
+const DATED_PAY = 50;
+const DATED = {
+  id: "dated-test",
+  weight: 0,
+  trigger: "calendar",
+  date: { yearBC: 300, season: 3 },
+  requires: { office: "councilor" as const },
+  scene: "The convoy is in.",
+  defaultChoiceId: "take",
+  choices: [{ id: "take", label: "Take your share", effects: [{ type: "change_drachmae" as const, amount: DATED_PAY }], resultText: "Taken." }],
+};
+
 suite("daily decisions — lazy default for expired cards (integration)", () => {
   let m: Mods;
   let db: ReturnType<Mods["dbPkg"]["createDb"]>;
@@ -151,7 +165,7 @@ suite("daily decisions — lazy default for expired cards (integration)", () => 
     await m.age.loadAgeConfig(); // applyChoiceEffects' stat path reads it
     await m.traits.loadTraitDefs(); // held-trait tag reactions + coping grants
     await m.composure.loadComposureConfig();
-    pool = m.shared.parseEventFile([WITH_DEFAULT, NO_DEFAULT, TOLL_DEFAULT, FEAST_DEFAULT, RUIN_DEFAULT]);
+    pool = m.shared.parseEventFile([WITH_DEFAULT, NO_DEFAULT, TOLL_DEFAULT, FEAST_DEFAULT, RUIN_DEFAULT, DATED]);
 
     await db.execute(sql`
       TRUNCATE TABLE daily_decisions, event_history, effect_log, composure_log, character_traits,
@@ -350,5 +364,104 @@ suite("daily decisions — lazy default for expired cards (integration)", () => 
 
     expect(await card(stale.id)).toMatchObject({ resolved: true, resolvedChoiceId: "collapse", resolvedByDefault: true });
     expect((await historyRows(c.id, RUIN_DEFAULT.id)).length).toBe(1);
+  });
+
+  // --- Dated cards ---------------------------------------------------------
+  // The season is picked through startedMs: the world clock, not the fixture,
+  // decides whether DATED (Summer 300 BC, season index 2) is due.
+  const councilor = { ...ctx, isCouncilor: true };
+  const HOUR = 3_600_000;
+  const summer300 = now.getTime() - 2 * DAY - 10 * 60 * 1000;
+  const spring300 = now.getTime() - DAY - 10 * 60 * 1000;
+  const datedRows = <T extends { arena: string }>(rows: T[]) => rows.filter((row) => row.arena === "dated");
+
+  it("(h) a councilor's set in Summer 300 holds the dated card beside the arena cards; a non-councilor's and a Spring set do not", async () => {
+    expect(m.shared.gameDate(now.getTime(), summer300).seasonIndex).toBe(2);
+    expect(m.shared.gameDate(now.getTime(), spring300).seasonIndex).toBe(1);
+
+    const seated = await createCharacter("Bouleutes", 500);
+    const set = await m.daily.ensureDailySet(seated.id, councilor, now, summer300, pool);
+    expect(datedRows(set).map((row) => row.eventId)).toEqual([DATED.id]);
+    expect(datedRows(set)[0]).toMatchObject({ utcDay: today, resolved: false, resolvedByDefault: false });
+    // Beside, not instead of, the arena draws.
+    expect(set.some((row) => row.arena === "general")).toBe(true);
+    // Dealing pays nothing and writes no history: the card is paid at resolve.
+    expect(await drachmaeOf(seated.id)).toBe(500);
+    expect(await historyCount(seated.id)).toBe(0);
+
+    const unseated = await createCharacter("Idiotes", 500);
+    const plain = await m.daily.ensureDailySet(unseated.id, ctx, now, summer300, pool);
+    expect(datedRows(plain)).toEqual([]);
+    expect(plain.some((row) => row.arena === "general")).toBe(true);
+
+    const early = await createCharacter("Earinos", 500);
+    const spring = await m.daily.ensureDailySet(early.id, councilor, now, spring300, pool);
+    expect(datedRows(spring)).toEqual([]);
+  });
+
+  it("(i) a second load the same day deals nothing new; a set generated before the seat gains the card at the next load", async () => {
+    const seated = await createCharacter("Deuteros-bouleutes", 500);
+    const first = await m.daily.ensureDailySet(seated.id, councilor, now, summer300, pool);
+    const second = await m.daily.ensureDailySet(seated.id, councilor, now, summer300, pool);
+    expect(second.map((row) => row.id).sort()).toEqual(first.map((row) => row.id).sort());
+    expect(datedRows(second)).toHaveLength(1);
+    expect(await m.daily.dealDatedCards(seated.id, councilor, now, summer300, pool)).toBe(0);
+
+    // The noon seat / mid-day deploy: today's set already exists from a load
+    // that was not eligible; the next eligible load adds the dated card only.
+    const late = await createCharacter("Mesembrinos", 500);
+    const before = await m.daily.ensureDailySet(late.id, ctx, now, summer300, pool);
+    expect(datedRows(before)).toEqual([]);
+    const after = await m.daily.ensureDailySet(late.id, councilor, now, summer300, pool);
+    expect(datedRows(after).map((row) => row.eventId)).toEqual([DATED.id]);
+    expect(after.length).toBe(before.length + 1);
+    for (const row of before) expect(after.map((r) => r.id)).toContain(row.id);
+  });
+
+  it("(j) straddling season: a dated card dealt on the season's first UTC day is not dealt again on its second", async () => {
+    // Summer 300 began six hours ago — before midnight on an early-morning run,
+    // i.e. yesterday's UTC day; the once-ever guard must look past today.
+    const straddle = now.getTime() - 2 * DAY - 6 * HOUR;
+    expect(m.shared.gameDate(now.getTime(), straddle).seasonIndex).toBe(2);
+
+    const seated = await createCharacter("Amphiemeros", 500);
+    const dealtYesterday = await insertCard(seated.id, yesterday, DATED.id, "dated");
+    const set = await m.daily.ensureDailySet(seated.id, councilor, now, straddle, pool);
+    expect(datedRows(set)).toEqual([]);
+    expect(await m.daily.dealDatedCards(seated.id, councilor, now, straddle, pool)).toBe(0);
+    // Yesterday's card was settled to its default at today's first access, as
+    // any other lapsed card — paid once, and never re-dealt.
+    expect(await card(dealtYesterday.id)).toMatchObject({ resolved: true, resolvedChoiceId: "take", resolvedByDefault: true });
+    expect(await drachmaeOf(seated.id)).toBe(500 + DATED_PAY);
+    expect((await historyRows(seated.id, DATED.id)).length).toBe(1);
+
+    // Control: the same clock deals to a councilor without a prior row.
+    const fresh = await createCharacter("Neos-bouleutes", 500);
+    expect(datedRows(await m.daily.ensureDailySet(fresh.id, councilor, now, straddle, pool))).toHaveLength(1);
+  });
+
+  it("(k) resolving the dated card pays once, a second resolve loses the claim, and a lapsed one pays by default", async () => {
+    const choice = pool.find((e) => e.id === DATED.id)!.choices.find((ch) => ch.id === "take")!;
+
+    const seated = await createCharacter("Misthotos", 500);
+    const set = await m.daily.ensureDailySet(seated.id, councilor, now, summer300, pool);
+    const dated = datedRows(set)[0]!;
+    const first = await m.daily.resolveDailyCard(dated, choice);
+    expect(first).toEqual({ claimed: true, resultText: "Taken." });
+    expect(await drachmaeOf(seated.id)).toBe(500 + DATED_PAY);
+    expect(await card(dated.id)).toMatchObject({ resolved: true, resolvedChoiceId: "take", resolvedByDefault: false });
+
+    const second = await m.daily.resolveDailyCard(dated, choice);
+    expect(second).toEqual({ claimed: false });
+    expect(await drachmaeOf(seated.id)).toBe(500 + DATED_PAY);
+    expect((await historyRows(seated.id, DATED.id)).length).toBe(1);
+
+    // Left unresolved: the next day's first access settles it to "take".
+    const lapsed = await createCharacter("Ameles-bouleutes", 500);
+    const stale = await insertCard(lapsed.id, yesterday, DATED.id, "dated");
+    const applied = await m.daily.applyExpiredDefaults(lapsed.id, now, pool);
+    expect(applied).toEqual([{ cardId: stale.id, eventId: DATED.id, choiceId: "take", composureDelta: 0 }]);
+    expect(await drachmaeOf(lapsed.id)).toBe(500 + DATED_PAY);
+    expect(await card(stale.id)).toMatchObject({ resolved: true, resolvedChoiceId: "take", resolvedByDefault: true });
   });
 });

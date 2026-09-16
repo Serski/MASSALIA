@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import {
   describeChoiceCosts,
+  eventArena,
   gameDate,
   isCalendarEvent,
   isEventEligible,
@@ -92,8 +93,8 @@ export async function eventRoutes(app: FastifyInstance) {
     // then so non-winter draws pay zero extra queries.
     const winter = isWinterDay(now, acting.startedMs);
     const ctx = await contextFor(acting.row, traits.map((t) => t.id), now, winter);
-    const set = await ensureDailySet(acting.row.id, ctx, now, acting.startedMs);
     const events = await listEvents();
+    const set = await ensureDailySet(acting.row.id, ctx, now, acting.startedMs, events);
 
     const cards = set
       .map((card) => {
@@ -103,7 +104,9 @@ export async function eventRoutes(app: FastifyInstance) {
           ? event.choices.find((c) => c.id === card.resolvedChoiceId)
           : undefined;
         return {
-          arena: card.arena,
+          // A dated card is stored under the "dated" arena but shown under the
+          // event's own kicker (a councilor card reads "Oligarchy Council").
+          arena: card.arena === "dated" ? eventArena(event) : card.arena,
           resolved: card.resolved,
           resolvedChoiceId: card.resolvedChoiceId,
           resolvedResult: resolvedChoice?.resultText ?? null,

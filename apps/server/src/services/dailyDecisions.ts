@@ -3,6 +3,7 @@ import { createDb, dailyDecisions, playerCharacters } from "@massalia/db";
 import type { DbTx } from "./lock.js";
 import {
   dailyArenasFor,
+  datedSeasonIndex,
   defaultChoiceFor,
   drawEvent,
   eventArena,
@@ -95,6 +96,42 @@ export async function applyExpiredDefaults(characterId: string, now: Date, event
   return applied;
 }
 
+// Deal every dated card (content `date`) whose season is now into the
+// character's set, under the "dated" arena: at every load during the season,
+// to every character eligible at that load, at most once per character ever.
+// A seat bought at noon gets the card at the next load; a character who never
+// loads during the season never gets it. Returns the number of cards dealt.
+// A day with no dated card due costs no query.
+export async function dealDatedCards(
+  characterId: string,
+  ctx: EligibilityContext,
+  now: Date,
+  startedMs: number,
+  content: EventDefinition[],
+): Promise<number> {
+  const gd = gameDate(now.getTime(), startedMs);
+  const due = content.filter((event) => event.date && datedSeasonIndex(event.date) === gd.seasonIndex && isEventEligible(event, ctx));
+  let dealt = 0;
+  for (const event of due) {
+    // The once-ever guard looks at ANY day, not just today: a season straddles
+    // two UTC days when the world started mid-day, and the unique index is
+    // only per (character, day, arena).
+    const prior = await db
+      .select({ id: dailyDecisions.id })
+      .from(dailyDecisions)
+      .where(and(eq(dailyDecisions.characterId, characterId), eq(dailyDecisions.eventId, event.id)))
+      .limit(1);
+    if (prior.length > 0) continue;
+    const inserted = await db
+      .insert(dailyDecisions)
+      .values({ characterId, utcDay: utcDayString(now), arena: "dated", eventId: event.id })
+      .onConflictDoNothing()
+      .returning({ id: dailyDecisions.id });
+    dealt += inserted.length;
+  }
+  return dealt;
+}
+
 // Return today's curated set, generating it on first access: one weighted card
 // per arena the character qualifies for, excluding recently-seen events.
 // `events` is injectable for tests; production loads the content pool.
@@ -105,11 +142,16 @@ export async function ensureDailySet(
   startedMs: number,
   events?: EventDefinition[],
 ): Promise<DailyCardRow[]> {
+  const content = events ?? (await listEvents());
   const existing = await getDailySet(characterId, now);
-  if (existing.length > 0) return existing;
+  if (existing.length > 0) {
+    // A dated card is dealt at every load in its season, not only on the
+    // first: the set may predate a seat bought at noon or a mid-day deploy.
+    const dealt = await dealDatedCards(characterId, ctx, now, startedMs, content);
+    return dealt > 0 ? getDailySet(characterId, now) : existing;
+  }
 
   const day = utcDayString(now);
-  const content = events ?? (await listEvents());
   // First access of a new day: settle yesterday's leftovers to their defaults
   // BEFORE reading history, so a default resolution counts as recently seen.
   await applyExpiredDefaults(characterId, now, content);
@@ -133,6 +175,9 @@ export async function ensureDailySet(
     // same event out of two arenas on the same day.
     recent.push(drawn.id);
   }
+  // Dated cards ride beside the arena draws. Not pushed onto `recent`: a dated
+  // event is never in the draw pool, and history is written only at resolve.
+  await dealDatedCards(characterId, ctx, now, startedMs, content);
 
   return getDailySet(characterId, now);
 }
