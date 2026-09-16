@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LobbyResponse } from "../src/api.js";
 
@@ -37,7 +37,10 @@ const panel = (emailVerified: boolean) =>
     />,
   );
 
+// Cheap DOM lookups, as in the other new suites: this project's run has no
+// headroom over vitest's 5s default.
 const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+const resendButton = () => [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Resend verification email") ?? null;
 
 beforeEach(() => {
   resendVerification.mockReset();
@@ -46,26 +49,20 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Lobby account section", () => {
-  it("offers the resend only while the account is unverified", () => {
-    panel(false);
-    expect(screen.getByText("Not verified")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Resend verification email" })).toBeTruthy();
+  it("offers the resend only while unverified, sends once, and reports it", async () => {
+    panel(true);
+    expect(document.body.textContent).toContain("Verified");
+    expect(resendButton()).toBeNull();
     cleanup();
 
-    panel(true);
-    expect(screen.getByText("Verified")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Resend verification email" })).toBeNull();
-  });
-
-  it("sends once and reports it", async () => {
     panel(false);
-    const button = screen.getByRole("button", { name: "Resend verification email" });
-    fireEvent.click(button);
+    expect(document.body.textContent).toContain("Not verified");
+    fireEvent.click(resendButton()!);
     await flush();
 
     expect(resendVerification).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Sent. Check your inbox.")).toBeTruthy();
+    expect(document.body.textContent).toContain("Sent. Check your inbox.");
     // Sent is terminal for the session, so a second click cannot fire.
-    expect(screen.getByRole("button", { name: "Resend verification email" }).hasAttribute("disabled")).toBe(true);
+    expect(resendButton()!.hasAttribute("disabled")).toBe(true);
   });
 });

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The admin Verify action: the escape hatch for a player whose verification link
@@ -29,9 +29,13 @@ const row = (over: { id: string; email: string; emailVerifiedAt: string | null }
   ...over,
 });
 
+// Cheap DOM lookups: getByRole with a name recomputes accessible names across the
+// whole table, and this project's suite has no headroom over vitest's 5s default.
 const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+const buttonText = (el: ParentNode) => [...el.querySelectorAll("button")].map((b) => b.textContent);
+const clickButton = (el: ParentNode, text: string) => fireEvent.click([...el.querySelectorAll("button")].find((b) => b.textContent === text)!);
 const rowOf = (email: string) => [...document.querySelectorAll("tbody tr")].find((tr) => tr.textContent?.includes(email))!;
-const buttons = (el: Element) => [...el.querySelectorAll("button")];
+const search = () => clickButton(document, "Search");
 
 beforeEach(() => {
   adminUsers.mockReset();
@@ -47,32 +51,26 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("AdminPage verify action", () => {
-  it("offers Verify only on a row with no emailVerifiedAt, and calls the API", async () => {
+  it("offers Verify only on an unverified row, calls the API, and passes the Verified filter", async () => {
     render(<AdminPage />);
     await flush();
-    fireEvent.click(screen.getByRole("button", { name: "Search" }));
-    await flush();
-
-    expect(buttons(rowOf("stuck@t")).map((b) => b.textContent)).toContain("Verify");
-    expect(buttons(rowOf("fine@t")).map((b) => b.textContent)).not.toContain("Verify");
-
-    vi.spyOn(window, "prompt").mockReturnValue("link expired");
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-    fireEvent.click(buttons(rowOf("stuck@t")).find((b) => b.textContent === "Verify")!);
-    await flush();
-    expect(adminVerify).toHaveBeenCalledTimes(1);
-    expect(adminVerify).toHaveBeenCalledWith("u1", "link expired");
-  });
-
-  it("passes the Verified filter through to the user query", async () => {
-    render(<AdminPage />);
-    await flush();
-    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    search();
     await flush();
     expect(adminUsers).toHaveBeenLastCalledWith("", {});
 
-    fireEvent.change(screen.getByLabelText(/Verified/), { target: { value: "no" } });
-    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    expect(buttonText(rowOf("stuck@t"))).toContain("Verify");
+    expect(buttonText(rowOf("fine@t"))).not.toContain("Verify");
+
+    vi.spyOn(window, "prompt").mockReturnValue("link expired");
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    clickButton(rowOf("stuck@t"), "Verify");
+    await flush();
+    expect(adminVerify).toHaveBeenCalledTimes(1);
+    expect(adminVerify).toHaveBeenCalledWith("u1", "link expired");
+
+    // The Verified any/yes/no control feeds the `verified` param of adminUsers.
+    fireEvent.change(document.querySelector<HTMLSelectElement>("select")!, { target: { value: "no" } });
+    search();
     await flush();
     expect(adminUsers).toHaveBeenLastCalledWith("", { verified: false });
   });
