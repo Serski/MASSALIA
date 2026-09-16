@@ -4,13 +4,16 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   applyStatGrowth,
+  assertOneDatedEventPerSeason,
   assertUniqueEventIds,
   choiceComposureEffectDelta,
   dailyArenasFor,
+  datedSeasonIndex,
   defaultChoiceFor,
   describeChoiceCosts,
   drawEvent,
   eventArena,
+  isCalendarEvent,
   isEventEligible,
   parseEventFile,
   type EligibilityContext,
@@ -185,6 +188,53 @@ describe("drawEvent — weighted, excludes recent", () => {
   });
   it("returns null on an empty pool", () => {
     expect(drawEvent([], [], () => 0)).toBeNull();
+  });
+});
+
+describe("dated cards — content date on events", () => {
+  const dated = (id: string, date: { yearBC: number; season: number }, over: Partial<EventDefinition> = {}) =>
+    event({ id, weight: 0, trigger: "calendar", date, requires: { office: "councilor" }, defaultChoiceId: "c", ...over });
+
+  it("the schema keeps date (it is declared, not stripped)", () => {
+    const [out] = parseEventFile(dated("d", { yearBC: 300, season: 3 }));
+    expect(out!.date).toEqual({ yearBC: 300, season: 3 });
+    expect(out!.trigger).toBe("calendar");
+  });
+  it("rejects a season outside 1..4", () => {
+    expect(() => parseEventFile(dated("d", { yearBC: 300, season: 5 }))).toThrow();
+    expect(() => parseEventFile(dated("d", { yearBC: 300, season: 0 }))).toThrow();
+  });
+  it("rejects a dated event without trigger \"calendar\"", () => {
+    expect(() => parseEventFile(dated("d", { yearBC: 300, season: 3 }, { trigger: undefined }))).toThrow(/must carry trigger/);
+    expect(() => parseEventFile(dated("d", { yearBC: 300, season: 3 }, { trigger: "other" }))).toThrow(/must carry trigger/);
+  });
+  it("datedSeasonIndex: Summer 300 BC is 2, Spring 299 BC is 5", () => {
+    expect(datedSeasonIndex({ yearBC: 300, season: 3 })).toBe(2);
+    expect(datedSeasonIndex({ yearBC: 299, season: 2 })).toBe(5);
+    expect(datedSeasonIndex({ yearBC: 300, season: 1 })).toBe(0);
+  });
+  it("assertOneDatedEventPerSeason throws on a shared season and passes distinct ones", () => {
+    expect(() => assertOneDatedEventPerSeason([dated("a", { yearBC: 300, season: 3 }), event({ id: "plain" }), dated("b", { yearBC: 300, season: 3 })])).toThrow(
+      /Two dated events on the same season: a, b/,
+    );
+    expect(() => assertOneDatedEventPerSeason([dated("a", { yearBC: 300, season: 3 }), dated("b", { yearBC: 299, season: 2 })])).not.toThrow();
+  });
+  it("a dated event is a calendar event (kept out of the random draw)", () => {
+    expect(isCalendarEvent(dated("d", { yearBC: 300, season: 3 }))).toBe(true);
+    expect(eventArena(dated("d", { yearBC: 300, season: 3 }))).toBe("council");
+  });
+  it("content/events/events-dated.json: the Emporion Convoy and the Rhodanos Tolls", () => {
+    const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+    const out = parseEventFile(JSON.parse(readFileSync(resolve(root, "content/events/events-dated.json"), "utf8")));
+    expect(out.map((e) => e.id)).toEqual(["dated-emporion-convoy", "dated-rhodanos-tolls"]);
+    expect(out.map((e) => datedSeasonIndex(e.date!))).toEqual([2, 5]);
+    for (const e of out) {
+      expect(isCalendarEvent(e)).toBe(true);
+      expect(eventArena(e)).toBe("council");
+      expect(defaultChoiceFor(e)?.id).toBe("take");
+      expect(defaultChoiceFor(e)?.effects).toEqual([{ type: "change_drachmae", amount: 50 }]);
+    }
+    expect(() => assertOneDatedEventPerSeason(out)).not.toThrow();
   });
 });
 

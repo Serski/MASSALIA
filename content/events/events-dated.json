@@ -1,0 +1,36 @@
+[
+  {
+    "id": "dated-emporion-convoy",
+    "weight": 0,
+    "trigger": "calendar",
+    "date": { "yearBC": 300, "season": 3 },
+    "requires": { "office": "councilor" },
+    "scene": "Midsummer, and the convoy from Emporion has made the Lakydon: thirty hulls low in the water with Iberian silver, tin and salt fish. The Ephors have tallied the harbour dues, and by old custom the Council takes its tenth before the rest goes to the treasury.",
+    "choices": [
+      {
+        "id": "take",
+        "label": "Take your share of the dues",
+        "effects": [{ "type": "change_drachmae", "amount": 50 }],
+        "resultText": "Fifty drachmae of Emporion silver, counted out on the quay. The rest goes to the treasury, as custom holds."
+      }
+    ],
+    "defaultChoiceId": "take"
+  },
+  {
+    "id": "dated-rhodanos-tolls",
+    "weight": 0,
+    "trigger": "calendar",
+    "date": { "yearBC": 299, "season": 2 },
+    "requires": { "office": "councilor" },
+    "scene": "The snow is off the passes and the first rafts of the year have come down the Rhodanos to Arelate, stacked with northern tin and Gaulish hides. The Ephors have tallied the river tolls, and by old custom the Council takes its tenth before the rest goes to the treasury.",
+    "choices": [
+      {
+        "id": "take",
+        "label": "Take your share of the tolls",
+        "effects": [{ "type": "change_drachmae", "amount": 50 }],
+        "resultText": "Fifty drachmae in river tolls, weighed out at the Arelate customs house. The rest goes to the treasury, as custom holds."
+      }
+    ],
+    "defaultChoiceId": "take"
+  }
+]

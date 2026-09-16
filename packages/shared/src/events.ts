@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { CharacterStats } from "./character.js";
+import { SEASONS_PER_YEAR, START_YEAR_BC } from "./calendar.js";
 
 export type EventCondition =
   | { type: "province_owner"; provinceId: string; ownerPlayerId: string }
@@ -75,6 +76,10 @@ export interface EventDefinition {
   requires?: EventRequirements;
   // "calendar" events fire from the festival/calendar system, NOT the daily draw.
   trigger?: string;
+  // A dated card: dealt into the daily set of every eligible character during
+  // that in-game season (season 1 = Winter, as the calendar config), once per
+  // character, never drawn. Requires trigger "calendar".
+  date?: { yearBC: number; season: number };
   scene: string;
   choices: EventChoice[];
   // Applied lazily (at the player's next login) to a daily card that expired
@@ -152,11 +157,21 @@ export const eventDefinitionSchema = z
     conditions: z.array(conditionSchema).optional(),
     requires: requiresSchema.optional(),
     trigger: z.string().optional(),
+    date: z.object({ yearBC: z.number().int(), season: z.number().int().min(1).max(4) }).optional(),
     scene: z.string(),
     choices: z.array(eventChoiceSchema),
     defaultChoiceId: z.string().optional(),
   })
   .superRefine((event, ctx) => {
+    // A dated event stays out of the random draw only through isCalendarEvent;
+    // a date without the trigger would be drawn like any other card.
+    if (event.date !== undefined && event.trigger !== "calendar") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["date"],
+        message: `Event ${event.id}: a dated event must carry trigger "calendar"`,
+      });
+    }
     // A dangling default would silently expire the card instead of resolving
     // it; fail content at boot, like every other schema error.
     if (event.defaultChoiceId === undefined) return;
@@ -191,6 +206,25 @@ export function assertUniqueEventIds(events: EventDefinition[]): void {
   for (const event of events) {
     if (seen.has(event.id)) throw new Error(`Duplicate event id across content files: ${event.id}`);
     seen.add(event.id);
+  }
+}
+
+// The absolute season index (0 = Winter of START_YEAR_BC) a content date names.
+// Content uses the calendar config's convention: season 1..4, 1 = Winter.
+export function datedSeasonIndex(date: { yearBC: number; season: number }): number {
+  return (START_YEAR_BC - date.yearBC) * SEASONS_PER_YEAR + (date.season - 1);
+}
+
+// One dated card per season across all content: two events dated the same
+// season fail content loading at boot, like a duplicate id.
+export function assertOneDatedEventPerSeason(events: EventDefinition[]): void {
+  const bySeason = new Map<number, string>();
+  for (const event of events) {
+    if (!event.date) continue;
+    const season = datedSeasonIndex(event.date);
+    const other = bySeason.get(season);
+    if (other !== undefined) throw new Error(`Two dated events on the same season: ${other}, ${event.id}`);
+    bySeason.set(season, event.id);
   }
 }
 
