@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
@@ -12,5 +13,12 @@ export default tseslint.config(
       // discarded sibling is not an unused variable.
       "@typescript-eslint/no-unused-vars": ["error", { ignoreRestSiblings: true }]
     }
+  },
+  {
+    // A hook after an early return blacked out the map for every player on
+    // 10 Sept 2026 (React #310). This fails it at lint, on every component.
+    files: ["apps/web/**/*.{ts,tsx}"],
+    plugins: { "react-hooks": reactHooks },
+    rules: { "react-hooks/rules-of-hooks": "error" }
   }
 );
