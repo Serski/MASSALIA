@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, eq, exists, sql } from "drizzle-orm";
-import { createDb, festivalChoregos, festivalEvents, stories, storyProgress } from "@massalia/db";
+import { createDb, festivalChoregos, festivalEvents, playerCharacters, stories, storyProgress } from "@massalia/db";
 import { parseStoryTree, validateStoryGraph, type EventEffect, type NodeBody, type StoryNode, type StoryTree } from "@massalia/shared";
 import { applyEffectsInTx, getCityDefaults, getFactionDefaults } from "./eventEngine.js";
 import { applyChangeTrait, getTraitDef, TraitRuleError } from "./traits.js";
@@ -394,9 +394,11 @@ export async function availableStories(
             db
               .select({ id: festivalEvents.id })
               .from(festivalEvents)
+              .innerJoin(playerCharacters, eq(playerCharacters.id, festivalEvents.characterId))
               .innerJoin(
                 festivalChoregos,
                 and(
+                  eq(festivalChoregos.worldId, playerCharacters.worldId),
                   eq(festivalChoregos.festivalId, festivalEvents.festivalId),
                   eq(festivalChoregos.gameYear, festivalEvents.gameYear),
                 ),

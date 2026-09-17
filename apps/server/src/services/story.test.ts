@@ -346,6 +346,14 @@ suite("story play service (integration)", () => {
     expect(await m.story.availableStories(c.id, REG)).toEqual([]);
   });
 
+  it("12b. attended, and only another world's instance of the same festival and year is closed → []", async () => {
+    const c = await createCharacter("Shadowed");
+    await attend(c.id, "fest-test", 1);
+    const other = (await db.insert(m.dbPkg.worlds).values({ name: "Other", seed: "story-other", startedAt: now, endsAt: new Date(now.getTime() + 86_400_000), status: "ended" }).returning())[0]!;
+    await closeInstance("fest-test", 1, null, other.id);
+    expect(await m.story.availableStories(c.id, REG)).toEqual([]);
+  });
+
   it("13. auto-resolved attendance (resolved 'attend') still qualifies", async () => {
     const c = await createCharacter("Offline");
     await attend(c.id, "fest-test", 1, { resolved: true, resolvedChoiceId: "attend" });
