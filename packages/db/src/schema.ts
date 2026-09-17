@@ -474,14 +474,17 @@ export const festivalDonations = pgTable("festival_donations", {
 }));
 
 // Closed festival instances + the crowned patron (each instance awards once).
+// Per world: game_year restarts with every world, so the guard carries world_id
+// (migration 0060).
 export const festivalChoregos = pgTable("festival_choregos", {
   id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
   festivalId: text("festival_id").notNull(),
   gameYear: integer("game_year").notNull(),
   winnerCharacterId: uuid("winner_character_id").references(() => playerCharacters.id),
   closedAt: timestamp("closed_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
-  oneClosePerInstance: uniqueIndex("festival_choregos_instance_idx").on(table.festivalId, table.gameYear),
+  oneClosePerInstance: uniqueIndex("festival_choregos_world_instance_idx").on(table.worldId, table.festivalId, table.gameYear),
 }));
 
 // The Olympiad (Prompt 8): cycle state, advanced through its phases by the

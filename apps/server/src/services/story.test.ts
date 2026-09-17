@@ -133,8 +133,8 @@ suite("story play service (integration)", () => {
       resolvedChoiceId: opts.resolvedChoiceId ?? null,
     });
   // The once-per-instance close guard (winner may be null — a winnerless close).
-  const closeInstance = async (festivalId: string, gameYear: number, winner: string | null = null) =>
-    db.insert(m.dbPkg.festivalChoregos).values({ festivalId, gameYear, winnerCharacterId: winner });
+  const closeInstance = async (festivalId: string, gameYear: number, winner: string | null = null, inWorld: string = worldId) =>
+    db.insert(m.dbPkg.festivalChoregos).values({ worldId: inWorld, festivalId, gameYear, winnerCharacterId: winner });
 
   const expectedStat = (base: number, amount: number, growthMultiplier: string) =>
     m.shared.capStat(base + m.shared.applyStatGrowth(amount, Number(growthMultiplier)), m.age.getAgeConfig());
