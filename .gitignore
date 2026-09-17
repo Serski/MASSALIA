@@ -4,6 +4,7 @@ dist
 .env.*
 !.env.example
 .DS_Store
+.claude/
 coverage
 .turbo
 *.log
