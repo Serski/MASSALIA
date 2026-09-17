@@ -52,48 +52,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build shared package
-        run: pnpm --filter @massalia/shared build
-
-      - name: Build db package
-        run: pnpm --filter @massalia/db build
-
-      - name: Typecheck server
-        run: pnpm --filter @massalia/server exec tsc -p tsconfig.json --noEmit
-
-      - name: Typecheck web
-        run: pnpm --filter @massalia/web exec tsc -p tsconfig.json --noEmit
-
-      - name: Typecheck worker
-        run: pnpm --filter @massalia/worker exec tsc -p tsconfig.json --noEmit
-
-      - name: Lint
-        run: pnpm -r lint
-
-      - name: Test shared
-        run: pnpm --filter @massalia/shared test
-
-      # The server suites are gated on a *_test database and truncate it between tests.
+      # The DB suites are gated on a *_test database and truncate it between tests.
       - name: Create test database
         run: psql "postgres://postgres:postgres@localhost:5432/postgres" -c "CREATE DATABASE massalia_test"
 
-      - name: Migrate test database
-        run: pnpm db:migrate
-
-      - name: Test server
-        run: pnpm --filter @massalia/server test
-
-      # The remaining suites share the same massalia_test database, so they run one
-      # after another (never in parallel with the server suite, which truncates it).
-      - name: Test db
-        run: pnpm --filter @massalia/db test
-
-      - name: Test web
-        run: pnpm --filter @massalia/web test
-
-      # The worker's backup test runs the runner's pg_dump against the service container.
-      - name: Test worker
-        run: pnpm --filter @massalia/worker test
+      # The same command an agent runs before a push (scripts/gate.sh): build, lint,
+      # migrate the test database, then the suites one package at a time.
+      - name: Gate
+        run: pnpm gate
 
       - name: Audit
         run: pnpm audit --audit-level=high
