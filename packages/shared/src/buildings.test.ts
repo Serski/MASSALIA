@@ -8,9 +8,7 @@ import {
   buildingCost,
   buildingUpkeep,
   buildingYield,
-  classBuildingRoi,
   coeffFor,
-  commonBuildingRoi,
   goodPerDay,
   isGuarded,
   parseBuildingsContent,
@@ -24,7 +22,10 @@ import {
   staffDailyCost,
   parsePopsContent,
   type BuildingsContent,
+  type ClassBuildingDef,
+  type CommonBuildingDef,
   type PopsContent,
+  type PopType,
 } from "./buildings.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -143,28 +144,44 @@ describe("BALANCE GUARDRAIL — the day-1 landowner path", () => {
   });
 });
 
-describe("BALANCE GUARDRAIL — class ROI beats commons for the owner", () => {
+// The rule the common yields were chosen against (ruling, 18 Sept 2026), at tier 1:
+//   all-in  = drachmae price + the material bill at the vendor's asking price
+//             (vendor[good].sell) + the hire cost of the staff (pops[type].hireCost)
+//   net/day = income + Σ yield base × vendor[good].buy (a `fromTier` yield does not
+//             count at tier 1) − staff wages − staff food × the price of grain
+//             (vendor.grain.buy for a building that yields grain, since it feeds its
+//             men from its own stock; vendor.grain.sell for every other)
+//   payback = all-in ÷ net, in days
+// Class: slipway 143 ÷ 13.4 = 10.7, salon 115 ÷ 8.8 = 13.1, estate 141 ÷ 10 = 14.1,
+// sanctuary 187 ÷ 12.2 = 15.3, emporion 133 ÷ 7.6 = 17.5, school 159 ÷ 7.8 = 20.4.
+// Commons: timber lot 121 ÷ 5 = 24.2, poultry yard 80 ÷ 3 = 26.7, vineyard 137 ÷ 5 = 27.4,
+// horse farm 228 ÷ 4.5 = 50.7, bull farm 195 ÷ 3 = 65.0.
+describe("BALANCE GUARDRAIL — the class line repays first; no common is a trap", () => {
   const commons = content.commonBuildings.filter((b) => b.yields.length > 0);
-  const classT1 = classBuildingRoi(estate, 1, vendor);
+  const classes = Object.values(content.classBuildings);
 
-  it("the class line out-returns every common at the owner's tiers (1–3)", () => {
-    for (const tier of [1, 2, 3]) {
-      const classRoi = classBuildingRoi(estate, tier, vendor);
-      for (const common of commons) {
-        expect(classRoi).toBeGreaterThan(commonBuildingRoi(common, vendor));
-      }
-    }
+  function paybackDays(def: ClassBuildingDef | CommonBuildingDef, price: number, income: number): number {
+    const materials = Object.entries(def.buildCost?.materials ?? {}).reduce((sum, [good, qty]) => sum + materialCostForTier(qty, 1) * vendor[good]!.sell, 0);
+    const staff = (Object.entries(def.staffing ?? {}) as [PopType, number][]).map(([type, n]) => [type, staffCountForTier(n, 1)] as const);
+    const hire = staff.reduce((sum, [type, n]) => sum + n * pops.pops[type]!.hireCost, 0);
+    const grainPrice = def.yields.some((y) => y.good === "grain") ? vendor.grain!.buy : vendor.grain!.sell;
+    const yieldValue = def.yields.filter((y) => (y.fromTier ?? 1) <= 1).reduce((sum, y) => sum + y.base * vendor[y.good]!.buy, 0);
+    const staffCost = staff.reduce((sum, [type, n]) => sum + n * (pops.pops[type]!.upkeepPerDay + pops.pops[type]!.foodPerDay * grainPrice), 0);
+    return (price + materials + hire) / (income + yieldValue - staffCost);
+  }
+  const classPaybacks = classes.map((def) => paybackDays(def, buildingCost(1), def.income ?? 0));
+  const commonPaybacks = commons.map((def) => paybackDays(def, def.cost, 0));
+
+  it("at tier 1 every class building repays its all-in cost faster than every producing common", () => {
+    expect(classPaybacks).toHaveLength(6);
+    expect(commonPaybacks).toHaveLength(5);
+    expect(Math.max(...classPaybacks)).toBeLessThan(Math.min(...commonPaybacks));
   });
 
-  it("commons sit at ~28% of the class line by vendor-floor value (band 20–35%)", () => {
-    // Ruling (class costs halved twice, now 25/60/150/375; commons halved alongside): the class line is decisively
-    // the priority investment; commons are goods access and a secondary sink. Their
-    // strategic value (bulls/horses/etc. in bulk) is NOT captured by this floor-value
-    // ratio, so a low number here is by design — not commons being weak.
-    for (const common of commons) {
-      const ratio = commonBuildingRoi(common, vendor) / classT1;
-      expect(ratio).toBeGreaterThanOrEqual(0.2);
-      expect(ratio).toBeLessThanOrEqual(0.35);
+  it("no producing common takes 70 days or more to repay", () => {
+    for (const days of commonPaybacks) {
+      expect(days).toBeGreaterThan(0);
+      expect(days).toBeLessThan(70);
     }
   });
 

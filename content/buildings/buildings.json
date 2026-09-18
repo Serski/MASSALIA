@@ -269,7 +269,7 @@
       "yields": [
         {
           "good": "chicken",
-          "base": 2
+          "base": 6
         }
       ],
       "blurb": "A clutch of hens and a watchful cock. Eggs, birds, and the altar's small needs.",
@@ -293,7 +293,7 @@
       "yields": [
         {
           "good": "wine",
-          "base": 2
+          "base": 4
         }
       ],
       "blurb": "Terraced vines above the harbor. The press runs hardest after the autumn pick.",
@@ -317,7 +317,7 @@
       "yields": [
         {
           "good": "timber",
-          "base": 3
+          "base": 4
         }
       ],
       "blurb": "A managed stand of pine and oak — hulls, beams, and the shipwright's appetite.",
