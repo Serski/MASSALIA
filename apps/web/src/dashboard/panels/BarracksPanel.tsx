@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, type BarracksOffer, type BarracksRosterRow, type BarracksUnit, type BarracksView, type BaseView, type MapReachView } from "../../api.js";
 import { BattleReport, ForcePicker, type PickerReport } from "../../map/World2Map.js";
-import { AssetIcon, formatClock, formatDuration, GoodGlyph, type PanelProps, REGION_NAMES_SRC, useCountdownSeconds } from "../shared.js";
+import { AssetIcon, formatClock, formatDuration, GoodGlyph, onDeviceClock, type PanelProps, ProgressBar, REGION_NAMES_SRC, useCountdownSeconds } from "../shared.js";
 
 // The Barracks tab (military prompt ui-2). Renders the GET /api/barracks view to
 // the design in docs/barracks/design/Barracks_dc.html: a summary strip, At Home
@@ -61,13 +61,6 @@ function gearLine(gear: Record<string, number>): string {
   return Object.entries(gear)
     .map(([good, qty]) => `${qty} ${goodName(good)}`)
     .join(" · ");
-}
-
-// Shift a server-clock instant onto the device clock. useCountdownSeconds reads
-// Date.now(), so counting down to (target − offset) on the device is exactly
-// counting down to `target` on the server clock (Date.now() + offset).
-function onDeviceClock(targetIso: string | null, offset: number): string | null {
-  return targetIso ? new Date(Date.parse(targetIso) - offset).toISOString() : null;
 }
 
 // Progress of an interval on the server clock, 0..100.
@@ -158,14 +151,6 @@ function SectionHead({ title, note }: { title: string; note?: ReactNode }) {
       <span className="barracks-head-title">{title}</span>
       <span className="barracks-head-rule" aria-hidden="true" />
       {note !== undefined ? <span className="barracks-head-note">{note}</span> : null}
-    </div>
-  );
-}
-
-function ProgressBar({ pct, tone }: { pct: number; tone: "away" | "training" }) {
-  return (
-    <div className={`barracks-bar ${tone}`} role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-      <div className="barracks-bar-fill" style={{ width: `${pct}%` }} />
     </div>
   );
 }

@@ -615,6 +615,23 @@ export function marchLine(row: { basedAt: string; movingTo: string | null }, nam
 // The public names file the map shows (region id → display name).
 export const REGION_NAMES_SRC = "/map2/names2.json";
 
+// Shift a server-clock instant onto the device clock. useCountdownSeconds reads
+// Date.now(), so counting down to (target − offset) on the device is exactly
+// counting down to `target` on the server clock (Date.now() + offset).
+export function onDeviceClock(targetIso: string | null, offset: number): string | null {
+  return targetIso ? new Date(Date.parse(targetIso) - offset).toISOString() : null;
+}
+
+// The thin bar under a row that is waiting on a clock: a unit in training, a
+// party away, a building going up.
+export function ProgressBar({ pct, tone }: { pct: number; tone: "away" | "training" | "build" }) {
+  return (
+    <div className={`barracks-bar ${tone}`} role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+      <div className="barracks-bar-fill" style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
 export function useCountdownSeconds(untilIso: string | null) {
   const [remaining, setRemaining] = useState(() => remainingSeconds(untilIso));
   useEffect(() => {
