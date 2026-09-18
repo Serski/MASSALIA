@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, type BuildingsCatalog, type BuildingsMine, type CatalogEntry, type OwnedBuilding, type ClassSection, type ServiceView, type MercBoard, type RiskOutcome } from "../../api.js";
 import { assetPath } from "../../data/league.js";
-import { AssetIcon, BuildingGlyph, GoodGlyph, PanelBanner, type PanelProps, PanelRow, buildCountdown, buildingArtFile, formatPerDay, formatRate, idleReason, popName } from "../shared.js";
+import { AssetIcon, BuildProgress, BuildingGlyph, GoodGlyph, PanelBanner, type PanelProps, PanelRow, buildLabel, buildingArtFile, formatPerDay, formatRate, idleReason, popName } from "../shared.js";
 
 // What a building provides per day: drachmae income first (income-only lines like
 // trader/philosopher/hetaira would otherwise read blank), then each good. Income
@@ -42,6 +42,7 @@ function ClassBuildingLadder({
   goodLabels,
   pops,
   balances,
+  offset,
 }: {
   entry: CatalogEntry;
   owned?: OwnedBuilding;
@@ -51,6 +52,7 @@ function ClassBuildingLadder({
   goodLabels: Record<string, string>;
   pops: Record<string, number>; // owned (the shared staffing pool)
   balances: Record<string, number>; // material holdings
+  offset: number; // server clock less device clock, ms
 }) {
   const currentTier = owned ? owned.tier : 0; // 0 = not yet built
   const active = owned?.status === "active";
@@ -122,7 +124,7 @@ function ClassBuildingLadder({
               <div className="tier-provides">{provides}</div>
               <div className="tier-meta">
                 {state === "constructing"
-                  ? `under construction · ${buildCountdown(owned?.completesAt ?? null)}`
+                  ? <BuildProgress label={buildLabel(t.tier)} startedAt={owned?.startedAt ?? null} completesAt={owned?.completesAt ?? null} offset={offset} />
                   : `Cost ${t.cost} dr · ${formatBuildDuration(t.buildDays)}${t.upkeep > 0 ? ` · upkeep ${t.upkeep}dr/day` : ""}`}
               </div>
               {(state === "current" || state === "built") && staffReqLine(t.staffing) ? (
@@ -548,6 +550,28 @@ export default function LedgerPanel({ player, onRefresh }: PanelProps) {
     };
   }, [load]);
 
+  // Countdowns run on the server clock: the offset is taken once per payload.
+  const offset = useMemo(() => (mine ? Date.parse(mine.now) - Date.now() : 0), [mine]);
+
+  // A build completes by LAZY activation (seen only on the next mine() call), so a
+  // Ledger left open across a completion would keep its "constructing" payload.
+  // One refetch when the soonest constructing building lands (one-shot timer), at
+  // once if the payload is already stale. No polling.
+  useEffect(() => {
+    if (!mine) return;
+    const dueAt = mine.buildings
+      .filter((b) => b.status === "constructing" && b.completesAt)
+      .map((b) => Date.parse(b.completesAt as string) - offset);
+    if (dueAt.length === 0) return;
+    const delay = Math.min(...dueAt) - Date.now();
+    if (delay <= 0) {
+      load().catch(() => {});
+      return;
+    }
+    const t = setTimeout(() => load().catch(() => {}), delay + 500);
+    return () => clearTimeout(t);
+  }, [mine, offset, load]);
+
   // `id` scopes the loading state to the button that fired (default "action" for the
   // panel-wide singletons). On failure the REAL server message is surfaced verbatim.
   const act = async (fn: () => Promise<unknown>, ok?: string, id = "action") => {
@@ -630,7 +654,7 @@ export default function LedgerPanel({ player, onRefresh }: PanelProps) {
       title={`${b.name}${b.kind === "class" ? ` · Tier ${b.tier}` : ""}`}
       sub={
         b.status === "constructing"
-          ? `under construction · ${buildCountdown(b.completesAt)}`
+          ? <BuildProgress label={buildLabel(b.tier)} startedAt={b.startedAt} completesAt={b.completesAt} offset={offset} />
           : (
             <>
               {yieldSummary(b.yields, b.income, catalog.goodLabels) || (b.idle ? "earns nothing while idle" : "—")}
@@ -745,6 +769,7 @@ export default function LedgerPanel({ player, onRefresh }: PanelProps) {
           goodLabels={catalog.goodLabels}
           pops={mine.pops}
           balances={player.balances}
+          offset={offset}
         />
       ) : (
         <div className="panel-grid2">

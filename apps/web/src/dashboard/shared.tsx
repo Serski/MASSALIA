@@ -647,6 +647,38 @@ export function useCountdownSeconds(untilIso: string | null) {
   return remaining;
 }
 
+// The live hh:mm:ss to a building's completion, on the server clock. It holds its
+// own hook, so a caller that is a plain function (the Ledger's ownedRow) stays
+// hook-free.
+export function BuildClock({ completesAt, offset }: { completesAt: string | null; offset: number }) {
+  const left = useCountdownSeconds(onDeviceClock(completesAt, offset));
+  return <span className="build-clock">{formatClock(left)}</span>;
+}
+
+// The Barracks bar for a building under construction: the label and the clock on
+// one line, the bar under them. Unlike the Barracks bar it advances with the
+// clock: percent from the live seconds left over the construction window.
+export function BuildProgress({ label, startedAt, completesAt, offset }: { label: string; startedAt: string | null; completesAt: string | null; offset: number }) {
+  const left = useCountdownSeconds(onDeviceClock(completesAt, offset));
+  const total = startedAt && completesAt ? (Date.parse(completesAt) - Date.parse(startedAt)) / 1000 : 0;
+  const pct = total > 0 ? Math.max(0, Math.min(100, Math.round(100 * (1 - left / total)))) : 100;
+  return (
+    <div className="build-progress">
+      <div className="build-progress-head">
+        <span>{label}</span>
+        <BuildClock completesAt={completesAt} offset={offset} />
+      </div>
+      <ProgressBar pct={pct} tone="build" />
+    </div>
+  );
+}
+
+// Tier 1 is a fresh build; a constructing row at tier 2 or above is an upgrade,
+// and its `tier` is already the target.
+export function buildLabel(tier: number): string {
+  return tier >= 2 ? `Upgrading to Tier ${tier}` : "Under construction";
+}
+
 export function ideologyReadout(ideology: number) {
   const abs = Math.abs(ideology);
   if (abs === 0) return "Centrist (0%)";
@@ -665,15 +697,6 @@ export function timeUntil(iso: string | null): string {
   const h = Math.floor(ms / 3_600_000);
   const m = Math.floor((ms % 3_600_000) / 60_000);
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
-
-// A short, human countdown to an ISO instant (e.g. "ready in 5h", "ready in 2d").
-export function buildCountdown(iso: string | null): string {
-  if (!iso) return "";
-  const ms = new Date(iso).getTime() - Date.now();
-  if (ms <= 0) return "ready";
-  const hours = Math.ceil(ms / 3_600_000);
-  return hours < 24 ? `ready in ${hours}h` : `ready in ${Math.ceil(hours / 24)}d`;
 }
 
 export function formatPerDay(n: number): string {

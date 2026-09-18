@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, type CharacterSheet as CharacterSheetData, type BuildingsCatalog, type BuildingsMine, type OwnedBuilding, type PeopleView } from "../api.js";
-import { AssetIcon, type FourStats, GoodGlyph, type PlayerDashboardView, PopGlyph, QtyStepper, STAT_PIP_ICON, buildCountdown, formatPerDay, formatRate, ideologyReadout, idleReason } from "./shared.js";
+import { AssetIcon, type FourStats, GoodGlyph, type PlayerDashboardView, PopGlyph, QtyStepper, STAT_PIP_ICON, BuildClock, formatPerDay, formatRate, ideologyReadout, idleReason } from "./shared.js";
 
 // Everyone starts at Tier 1; real tier tracking lands with profession progression.
 export const BASE_TIER_LABEL = "Tier 1";
@@ -190,7 +190,7 @@ export function ResRow({
 }: {
   icon: ReactNode;
   name: string;
-  sub?: string;
+  sub?: ReactNode;
   amount: string;
   rate?: string; // omitted → no rate pill (no invented per-day number)
   rateTone?: "up" | "zero";
@@ -475,6 +475,7 @@ export function InventoryUnits({
 // follows the own-grain-first rule: wheat UNITS consumed, drachmae only for the
 // shortfall that must be bought.
 export function InventoryEconomy({ data, goodLabels }: { data: { mine: BuildingsMine; people: PeopleView; catalog: BuildingsCatalog } | null; goodLabels: Record<string, string> | null }) {
+  const offset = useMemo(() => (data ? Date.parse(data.mine.now) - Date.now() : 0), [data]);
   if (!data) return <div role="tabpanel"><p className="sheet-todo">Reckoning your day's books…</p></div>;
   const { mine, people, catalog } = data;
   const label = (g: string) => goodLabels?.[g] ?? g.charAt(0).toUpperCase() + g.slice(1);
@@ -574,9 +575,9 @@ export function InventoryEconomy({ data, goodLabels }: { data: { mine: Buildings
             name={r.name}
             sub={
               r.upgrading
-                ? `upgrading · ${buildCountdown(r.completesAt)} — earning ${r.income} dr/day now, ${r.nominal} when done`
+                ? <>upgrading · <BuildClock completesAt={r.completesAt} offset={offset} /> — earning {r.income} dr/day now, {r.nominal} when done</>
                 : r.constructing
-                  ? `under construction · ${buildCountdown(r.completesAt)} — will earn ${r.nominal} dr/day`
+                  ? <>under construction · <BuildClock completesAt={r.completesAt} offset={offset} /> — will earn {r.nominal} dr/day</>
                   : r.idle
                     ? `idle — ${idleReason(r.staffing, mine.pops)} · would earn ${r.nominal} dr/day`
                     : undefined

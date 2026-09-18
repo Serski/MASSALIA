@@ -4076,6 +4076,12 @@
 .dashboard-shell .barracks-bar{ height: 3px; margin-top: 6px; background: rgba(34, 26, 20, 0.9); border-radius: 2px; overflow: hidden; }
 .dashboard-shell .barracks-bar-fill{ height: 100%; background: linear-gradient(90deg, var(--dash-bronze), var(--dash-gold-bright)); }
 .dashboard-shell .barracks-bar.away .barracks-bar-fill{ background: linear-gradient(90deg, #5a7a4a, #7fb069); }
+.dashboard-shell .build-progress{ display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
+.dashboard-shell .build-progress-head{ display: flex; justify-content: space-between; gap: 12px; }
+.dashboard-shell .build-clock{ font-variant-numeric: tabular-nums; color: var(--dash-stone-dim); }
+/* A panel row holding the build bar gives its text column the row's width, so the clock sits at the right and the bar runs under the whole line. */
+.dashboard-shell .panel-row .pr-l:has(.build-progress),
+.dashboard-shell .panel-row .pr-l:has(.build-progress) > div{ flex: 1; min-width: 0; }
 
 .dashboard-shell .barracks-card{ display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; padding: 12px 14px; border-bottom: 1px solid var(--dash-line); }
 .dashboard-shell .barracks-card:last-child{ border-bottom: none; }
