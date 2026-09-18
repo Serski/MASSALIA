@@ -1239,6 +1239,7 @@ export type OwnedBuilding = {
   tier: number;
   status: "constructing" | "active";
   completesAt: string | null;
+  startedAt: string | null;
   category: BuildingCategory;
   yields: { good: string; perDay: number; pending: number }[];
   income: number;
@@ -1271,6 +1272,7 @@ export type ClassSection = {
 };
 
 export type BuildingsMine = {
+  now: string; // server time (ISO); countdowns anchor to this, not the device clock
   season: string;
   buildings: OwnedBuilding[];
   pendingIncomeTotal: number;

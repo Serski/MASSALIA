@@ -838,6 +838,8 @@ export type OwnedBuilding = {
   tier: number;
   status: "constructing" | "active";
   completesAt: string | null;
+  // The instant this tier's construction began: completesAt less the tier's build time. Null once active.
+  startedAt: string | null;
   category: BuildingCategory;
   // Current seasonally-adjusted output (per day) + uncollected pending.
   yields: { good: string; perDay: number; pending: number }[];
@@ -850,6 +852,7 @@ export type OwnedBuilding = {
 };
 
 export type MineView = {
+  now: string; // server time (ISO); the client anchors its countdowns to it
   season: SeasonName;
   buildings: OwnedBuilding[];
   pendingIncomeTotal: number;
@@ -914,6 +917,7 @@ export async function mine(classId: string, ctx: ActingContext, now: Date): Prom
       tier: row.tier,
       status: row.status as "constructing" | "active",
       completesAt: active ? null : row.completesAt.toISOString(),
+      startedAt: active ? null : new Date(row.completesAt.getTime() - def.buildDays(row.tier) * MS_PER_DAY).toISOString(),
       category: def.category,
       yields,
       income: live ? incomeAtTier(def, live.tier) * live.mult : 0,
@@ -958,6 +962,7 @@ export async function mine(classId: string, ctx: ActingContext, now: Date): Prom
   const storageCap = BASE_STORAGE_CAP + rows.filter((r) => isActive(r, now)).reduce((s, r) => s + (resolveDef(r.buildingId)?.storageBonus ?? 0), 0);
 
   return {
+    now: now.toISOString(),
     season,
     buildings,
     pendingIncomeTotal: incomePending,

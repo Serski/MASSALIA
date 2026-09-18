@@ -110,12 +110,15 @@ suite("Ledger / building engine (integration)", () => {
     // Still constructing before completesAt (tier 1 now completes in 1 hour = DAY/24).
     const midBuild = await m.buildings.mine("landowner", c, new Date(T0 + DAY / 48));
     expect(midBuild.buildings[0]!.status).toBe("constructing");
+    expect(midBuild.buildings[0]!.startedAt).toBe(new Date(T0).toISOString());
+    expect(midBuild.now).toBe(new Date(T0 + DAY / 48).toISOString());
 
     // OFFLINE: jump to one day after the 1-hour build completes, no intervening tick.
     // Lazy activation flips it active and ~one day of grain has accrued (guarded → full output).
     const collectAt = new Date(T0 + DAY + DAY / 24);
     const view = await m.buildings.mine("landowner", c, collectAt);
     expect(view.buildings[0]!.status).toBe("active");
+    expect(view.buildings[0]!.startedAt).toBeNull();
     expect(view.pendingGoods.grain).toBeGreaterThan(5.5);
     expect(view.pendingGoods.grain).toBeLessThan(6.5);
 
@@ -140,9 +143,11 @@ suite("Ledger / building engine (integration)", () => {
 
     const late = await m.buildings.mine("landowner", c, new Date(T0 + 23 * HOUR));
     expect(late.buildings.find((b) => b.id === "poultry-yard")!.status).toBe("constructing");
+    expect(late.buildings.find((b) => b.id === "poultry-yard")!.startedAt).toBe(new Date(T0).toISOString());
 
     const done = await m.buildings.mine("landowner", c, new Date(T0 + DAY + 60_000));
     expect(done.buildings.find((b) => b.id === "poultry-yard")!.status).toBe("active");
+    expect(done.buildings.find((b) => b.id === "poultry-yard")!.startedAt).toBeNull();
     expect(done.pendingGoods.chicken).toBeGreaterThan(0);
 
     const farm = await m.buildings.build("landowner", c, "bull-farm", new Date(T0));
@@ -640,6 +645,7 @@ suite("Ledger / building engine (integration)", () => {
     const view = await m.buildings.mine("trader", c, at);
     const emp = view.buildings.find((b) => b.id === "emporion")!;
     expect(emp.status).toBe("constructing");
+    expect(emp.startedAt).toBe(new Date(T0 + 2 * DAY).toISOString());
     expect(emp.income).toBeGreaterThan(0); // the fix: prior-tier income, not 0
 
     // Exactly T1 rate × 1 day × the season's yearround coefficient (prior tier, no guard).
