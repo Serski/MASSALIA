@@ -1038,7 +1038,8 @@ export async function build(classId: string, ctx: ActingContext, buildingId: str
     return { ok: false, code: 403, error: "That estate is not your class's to build." };
   }
   const cost = def.cost(1);
-  const completesAt = new Date(now.getTime() + buildMs(1));
+  // A class building takes the curve's tier-1 time; a common takes the days its content states.
+  const completesAt = new Date(now.getTime() + def.buildDays(1) * MS_PER_DAY);
 
   return spendTransaction(ctx.playerId, async (tx) => {
     const existing = await tx.select().from(playerBuildings).where(and(eq(playerBuildings.ownerPlayerId, ctx.playerId), eq(playerBuildings.buildingId, buildingId))).limit(1);

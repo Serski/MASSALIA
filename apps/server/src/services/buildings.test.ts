@@ -130,6 +130,26 @@ suite("Ledger / building engine (integration)", () => {
     expect(await wallet()).toBe(75 + collected.collected - collected.staffUpkeep - collected.foodCost);
   });
 
+  it("a common takes the build days its content states: the Poultry Yard one day, the Bull Farm two", async () => {
+    const HOUR = DAY / 24;
+    playerId = await freshPlayer(500);
+    const c = await ctx();
+    const yard = await m.buildings.build("landowner", c, "poultry-yard", new Date(T0));
+    expect(yard.ok).toBe(true);
+    if (yard.ok) expect(yard.completesAt).toBe(new Date(T0 + DAY).toISOString());
+
+    const late = await m.buildings.mine("landowner", c, new Date(T0 + 23 * HOUR));
+    expect(late.buildings.find((b) => b.id === "poultry-yard")!.status).toBe("constructing");
+
+    const done = await m.buildings.mine("landowner", c, new Date(T0 + DAY + 60_000));
+    expect(done.buildings.find((b) => b.id === "poultry-yard")!.status).toBe("active");
+    expect(done.pendingGoods.chicken).toBeGreaterThan(0);
+
+    const farm = await m.buildings.build("landowner", c, "bull-farm", new Date(T0));
+    expect(farm.ok).toBe(true);
+    if (farm.ok) expect(farm.completesAt).toBe(new Date(T0 + 2 * DAY).toISOString());
+  });
+
   it("vendor band trades are atomic (sell grain for floor, buy chicken at ceiling)", async () => {
     const c = await ctx();
     await m.buildings.build("landowner", c, "estate", new Date(T0));
