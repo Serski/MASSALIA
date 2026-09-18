@@ -660,7 +660,9 @@ export function InventorySheet({
   // panel left OPEN across a completion would keep showing the stale "constructing"
   // payload. If the loaded payload still has a constructing building, refetch when
   // it lands (one-shot timer) — or immediately if its completion already passed
-  // (a payload fetched while building, opened/seen after it finished).
+  // (a payload fetched while building, opened/seen after it finished). The delay
+  // is counted on the payload's own clock (mine.now), so a device running ahead of
+  // the server no longer refetches in a loop.
   useEffect(() => {
     if (!open || !data) return;
     const dueAt = data.mine.buildings
@@ -668,7 +670,7 @@ export function InventorySheet({
       .map((b) => new Date(b.completesAt as string).getTime());
     if (dueAt.length === 0) return;
     const soonest = Math.min(...dueAt);
-    const delay = soonest - Date.now();
+    const delay = soonest - Date.parse(data.mine.now);
     if (delay <= 0) {
       reload().catch(() => {}); // already done server-side → flip it to active
       return;

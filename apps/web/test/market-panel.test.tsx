@@ -28,7 +28,7 @@ const catalog = {
   goodLabels: { grain: "Wheat", galley: "Trireme" },
   craft: { galley: {} },
 } as unknown as BuildingsCatalog;
-const mine = { pops: {} } as unknown as BuildingsMine;
+const mine = { now: new Date().toISOString(), pops: {} } as unknown as BuildingsMine;
 const people = { pops: [], foodGood: "grain", spymaster: { posture: "guard", cooldownRemainingMs: 0 } } as unknown as PeopleView;
 const state = (drachmae: number) => ({ resources: { drachmae, balances: { wine: 7.8, grain: 3, iron: 0.5 } } }) as unknown as PlayerState;
 

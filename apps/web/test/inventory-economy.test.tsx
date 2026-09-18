@@ -15,7 +15,7 @@ afterEach(cleanup);
 const catalog = { season: "Spring", seasonMultiplier: { agricultural: 1, yearround: 1 }, classBuilding: null, commons: [], classSectionLabel: null, vendor: [], goodLabels: { grain: "Grain", oliveoil: "Olive oil" }, craft: {} } as unknown as BuildingsCatalog;
 const people: PeopleView = { foodGood: "grain", pops: [], spymaster: { posture: "guard", cooldownRemainingMs: 0 } };
 const mine = (army: Record<string, number>): BuildingsMine =>
-  ({ season: "Spring", buildings: [], pendingIncomeTotal: 0, upkeepOwed: 0, pendingGoods: {}, storageCap: 100, classSection: { label: null, comingSoon: false, entries: [] }, pops: {}, army: { perDay: army } }) as unknown as BuildingsMine;
+  ({ now: new Date().toISOString(), season: "Spring", buildings: [], pendingIncomeTotal: 0, upkeepOwed: 0, pendingGoods: {}, storageCap: 100, classSection: { label: null, comingSoon: false, entries: [] }, pops: {}, army: { perDay: army } }) as unknown as BuildingsMine;
 
 const rows = (container: HTMLElement) => [...container.querySelectorAll(".res-row, [class*=\"res-row\"]")].map((el) => el.textContent?.replace(/\s+/g, " ").trim());
 
