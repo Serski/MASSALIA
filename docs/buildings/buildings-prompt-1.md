@@ -121,3 +121,7 @@ STOP 0 ruling (Argiris, 18 Sept 2026): B. Commons take the build days their cont
 
 Proceed from Phase 1.
 END OF RULING
+
+## STOP 1 ruling (18 Sept 2026)
+
+STOP 1 ruling (Argiris, 18 Sept 2026): the five commits stand (4771f38, f3bc6b1, 83b7249, 916f076, b659f1a). Deviations 1 and 2 are accepted as rulings: a `:has()` row-width rule so the bar spans the row, and the Ledger test's clock regex admitting `01:00:00` since `remainingSeconds` rounds up. Deviation 3, the pre-existing Economy-sheet refetch loop on a device clock ahead of the server, was fixed before the push by a sixth commit anchoring the sheet's completion refetch to the payload's `now` (ce26944 `sheets: the completion refetch counts on the server clock`). All six pushed and live 18 Sept 2026, CI run 35346702571 green, no migration.
