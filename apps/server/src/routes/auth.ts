@@ -21,6 +21,10 @@ import { byIp, tooManyRequests } from "../rateLimit.js";
 
 const db = createDb();
 
+// bcrypt cost. Tests hash at 4 so a suite of logins stays inside its budget on a
+// loaded machine; anything else runs at 12. No env var can lower it outside tests.
+const BCRYPT_COST = process.env.NODE_ENV === "test" ? 4 : 12;
+
 // The auth routes' own, stricter limits, layered on the global limiter registered
 // in index.ts (rateLimit.ts). Per-route config replaces the global budget for that
 // route. Keyed by client IP (not session) and with the auth-specific message, so
@@ -105,7 +109,7 @@ export async function authRoutes(app: FastifyInstance) {
       return { error: "Email is already registered." };
     }
 
-    const passwordHash = await bcrypt.hash(password, 12);
+    const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
     const created = await db
       .insert(users)
       .values({ email, passwordHash, newsletterOptIn })
@@ -215,7 +219,7 @@ export async function authRoutes(app: FastifyInstance) {
       return { error: (error as Error).message };
     }
 
-    const passwordHash = await bcrypt.hash(password, 12);
+    const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
     const user = await db.transaction(async (tx) => {
       const consumed = await consumePasswordResetTx(tx, token);
       if (!consumed) return null;
