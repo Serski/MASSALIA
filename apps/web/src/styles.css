@@ -353,18 +353,16 @@ body {
   min-height: 68px;
   padding: 0 34px;
   overflow: hidden;
-  color: #160e0a;
+  color: var(--on-accent);
   font-family: var(--font-display);
   font-size: clamp(16px, 1.7vw, 21px);
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  background: linear-gradient(135deg, var(--gold-bright), var(--bronze));
-  border: 1px solid rgba(var(--accent-bright-rgb), 0.72);
+  background: var(--accent);
+  border: 1px solid var(--accent);
   border-radius: 6px;
-  box-shadow:
-    0 18px 42px rgba(0, 0, 0, 0.46),
-    0 0 0 1px rgba(var(--accent-bright-rgb), 0.16);
+  box-shadow: none;
   cursor: pointer;
   transition:
     transform 180ms ease,
@@ -372,22 +370,11 @@ body {
     filter 180ms ease;
 }
 
-.primary-cta::after {
-  position: absolute;
-  inset: -80% auto -80% -30%;
-  width: 34%;
-  content: "";
-  background: linear-gradient(90deg, transparent, rgba(255, 244, 199, 0.55), transparent);
-  transform: rotate(18deg);
-  animation: ctaShimmer 2.8s ease-in-out infinite;
-}
-
 .primary-cta:hover {
   transform: translateY(-4px);
   filter: saturate(1.08);
-  box-shadow:
-    0 24px 52px rgba(0, 0, 0, 0.52),
-    0 0 0 1px rgba(var(--accent-bright-rgb), 0.28);
+  background: var(--accent-bright);
+  border-color: var(--accent-bright);
 }
 
 .cta-note {
@@ -1488,11 +1475,9 @@ body {
 }
 
 .auth-tab-toggle button.active {
-  color: #1a100b;
-  background: linear-gradient(135deg, var(--gold-bright), var(--bronze));
-  box-shadow:
-    inset 0 0 0 2px #1c70d8,
-    0 10px 28px rgba(0, 0, 0, 0.34);
+  color: var(--on-accent);
+  background: var(--accent);
+  box-shadow: inset 0 0 0 2px #1c70d8;
 }
 
 .auth-card {
@@ -1958,17 +1943,6 @@ button.auth-forgot {
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes ctaShimmer {
-  0%,
-  55% {
-    transform: translateX(0) rotate(18deg);
-  }
-
-  100% {
-    transform: translateX(420%) rotate(18deg);
   }
 }
 

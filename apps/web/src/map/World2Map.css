@@ -375,7 +375,7 @@ p.w2map-stat-asof {
   font-size: 9.5px;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  background: linear-gradient(135deg, var(--dash-gold-bright, var(--accent-bright)), var(--dash-bronze, var(--accent)));
+  background: var(--dash-gold, var(--accent));
   border: none;
   border-radius: 6px;
   cursor: pointer;

@@ -18,7 +18,6 @@
   --lobby-radius-panel: 8px;
   --lobby-radius-control: 4px;
   --lobby-radius-pill: 3px;
-  --lobby-gold-gradient: linear-gradient(135deg, var(--accent-bright), var(--accent));
   --lobby-ease: 160ms ease;
 
   position: relative;
@@ -267,8 +266,8 @@
 .lobby-nav-item-active,
 .lobby-nav-item-active:hover {
   color: var(--lobby-on-gold);
-  background: var(--lobby-gold-gradient);
-  border-color: rgba(var(--accent-bright-rgb), 0.6);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 /* --- Your record ---------------------------------------------------------------- */
@@ -864,18 +863,17 @@
 .lobby-btn-primary {
   min-height: 50px;
   padding: 0 28px;
-  color: #160e0a;
+  color: var(--on-accent);
   font-size: 14px;
-  background: linear-gradient(135deg, var(--gold-bright), var(--bronze));
-  border-color: rgba(var(--accent-bright-rgb), 0.72);
-  box-shadow:
-    0 14px 32px rgba(0, 0, 0, 0.4),
-    0 0 0 1px rgba(var(--accent-bright-rgb), 0.16);
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: none;
 }
 
 .lobby-btn-primary:hover:not(:disabled) {
   color: var(--lobby-on-gold);
-  background: linear-gradient(135deg, var(--gold-bright), var(--bronze));
+  background: var(--accent-bright);
+  border-color: var(--accent-bright);
   filter: brightness(1.08);
 }
 
@@ -911,7 +909,7 @@
 .lobby-header-actions .lobby-nav-active:hover {
   color: var(--lobby-on-gold);
   text-decoration: none;
-  background: var(--lobby-gold-gradient);
+  background: var(--accent);
   border-radius: var(--lobby-radius-pill);
 }
 
@@ -929,7 +927,7 @@
 }
 
 .lobby-toggle.on {
-  background: var(--lobby-gold-gradient);
+  background: var(--accent);
 }
 
 .lobby-toggle:disabled {

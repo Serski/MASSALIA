@@ -350,10 +350,8 @@
 .dashboard-shell .dashboard-nav button.active,
 .dashboard-shell .dashboard-mobile-tabs button.active{
   color: var(--cream);
-  background:
-    linear-gradient(90deg, rgba(var(--accent-rgb), 0.2), rgba(var(--accent-rgb), 0.04)),
-    rgba(var(--accent-rgb), 0.08);
-  border-color: rgba(var(--accent-rgb), 0.42);
+  background: rgba(var(--accent-rgb), 0.16);
+  border-color: var(--accent);
 }
 
 .dashboard-shell .dashboard-nav button.active::before{
@@ -363,7 +361,7 @@
   left: -1px;
   width: 3px;
   content: "";
-  background: linear-gradient(180deg, var(--dash-gold-bright), var(--dash-bronze));
+  background: var(--accent);
   border-radius: 999px;
 }
 
@@ -645,26 +643,10 @@
 }
 
 .dashboard-shell .dashboard-primary-button{
-  color: #160e0a;
-  background: linear-gradient(135deg, var(--gold-bright), var(--bronze));
-  border: 1px solid rgba(var(--accent-bright-rgb), 0.58);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
-}
-
-.dashboard-shell .dashboard-primary-button::after{
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -55%;
-  width: 42%;
-  content: "";
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.26), transparent);
-  transform: skewX(-18deg);
-  transition: left 420ms ease;
-}
-
-.dashboard-shell .dashboard-primary-button:hover::after{
-  left: 115%;
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  box-shadow: none;
 }
 
 .dashboard-shell .dashboard-ghost-button{
@@ -1901,13 +1883,14 @@
 
 .dashboard-shell .sheet-btn{
   padding: 7px 13px;
-  color: #20160c;
+  color: var(--on-accent);
   font-family: var(--font-display);
   font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  background: linear-gradient(180deg, var(--dash-gold-bright), var(--dash-bronze));
+  background: var(--accent);
   border: none;
+  box-shadow: none;
   border-radius: 7px;
   cursor: pointer;
 }
@@ -2356,7 +2339,7 @@
 }
 
 .dashboard-shell .toggle.on{
-  background: linear-gradient(135deg, var(--dash-gold-bright), var(--dash-bronze));
+  background: var(--accent);
 }
 
 .dashboard-shell .toggle:disabled{
@@ -2574,13 +2557,14 @@
 .dashboard-shell .panel-btn{
   flex: none;
   padding: 8px 13px;
-  color: #1a1208;
+  color: var(--on-accent);
   font-family: var(--font-display);
   font-size: 9.5px;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  background: linear-gradient(135deg, var(--dash-gold-bright), var(--dash-bronze));
+  background: var(--accent);
   border: none;
+  box-shadow: none;
   border-radius: 6px;
   cursor: pointer;
 }
@@ -3619,7 +3603,7 @@
 .dashboard-shell .panel-btn{
   transition: filter 160ms ease, transform 120ms ease, box-shadow 160ms ease, border-color 160ms ease, background-color 160ms ease;
 }
-.dashboard-shell .panel-btn:not(:disabled):hover{ filter: brightness(1.07); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28); }
+.dashboard-shell .panel-btn:not(:disabled):hover{ filter: brightness(1.07); }
 .dashboard-shell .panel-btn:not(:disabled):active{ transform: translateY(1px); box-shadow: none; }
 .dashboard-shell .panel-btn.ghost:not(:disabled):hover{
   color: var(--dash-parchment);
@@ -3636,9 +3620,10 @@
    is-busy rules (0,4,0 / 0,5,0) out-specify the is-waiting rules, which never share a
    button with is-busy anyway (btnClass emits one class or the other). */
 .dashboard-shell .panel-btn.is-busy:disabled{
-  color: #1a1208;
-  background: linear-gradient(135deg, var(--dash-gold-bright), var(--dash-bronze));
+  color: var(--on-accent);
+  background: var(--accent);
   border: none;
+  box-shadow: none;
   transform: translateY(1px);
   filter: brightness(0.9);
   cursor: default;
@@ -3655,9 +3640,10 @@
    verbatim + opacity:1 + cursor:default) so the panel does not flicker during flight.
    These out-specify .panel-btn:disabled and, for silver, .panel-btn.silver:disabled. */
 .dashboard-shell .panel-btn.is-waiting:disabled{
-  color: #1a1208;
-  background: linear-gradient(135deg, var(--dash-gold-bright), var(--dash-bronze));
+  color: var(--on-accent);
+  background: var(--accent);
   border: none;
+  box-shadow: none;
   opacity: 1;
   cursor: default;
 }
@@ -3669,19 +3655,19 @@
   cursor: default;
 }
 .dashboard-shell .panel-btn.silver.is-waiting:disabled{
-  color: #141920;
-  background: linear-gradient(135deg, #e8ebef, #a9b2bc);
+  color: var(--on-accent);
+  background: var(--cream);
   border: none;
   opacity: 1;
   cursor: default;
 }
 
-/* Silver sell buttons (Phase 6): the gold gradient's construction in silver.
-   Hues provisional — Argiris judges live post-deploy. Its is-busy (pressed) and
+/* Secondary (Sell) buttons, class name still "silver": the secondary fill is cream,
+   flat like the accent button (theme prompt 1). Its is-busy (pressed) and
    is-waiting (frozen sibling) companions live with the Phase-5 in-flight rules above. */
 .dashboard-shell .panel-btn.silver{
-  color: #141920;
-  background: linear-gradient(135deg, #e8ebef, #a9b2bc);
+  color: var(--on-accent);
+  background: var(--cream);
   border: none;
 }
 .dashboard-shell .panel-btn.silver:not(:disabled):hover{
@@ -3700,8 +3686,8 @@
   opacity: 0.55;
 }
 .dashboard-shell .panel-btn.silver.is-busy:disabled{
-  color: #141920;
-  background: linear-gradient(135deg, #e8ebef, #a9b2bc);
+  color: var(--on-accent);
+  background: var(--cream);
   border: none;
   transform: translateY(1px);
   filter: brightness(0.9);
