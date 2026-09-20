@@ -979,15 +979,14 @@ export function App() {
           <div className="hero-copy">
             <p className="hero-eyebrow">
               <span className="live-pulse" aria-hidden="true" />
-              Free Browser Strategy Game
+              Free Browser Grand Strategy Game
             </p>
             <p className="hero-lead">4th Century BC · The League Of</p>
             <h1>Massalia</h1>
-            <p className="hero-subline">Founded by Phocaean Greeks. Ruled by whoever dares.</p>
             <p className="hero-logline">
               Rise in Massalia, the Greek jewel of the western sea. Choose your calling, join a Noble House, and take a
-              side between the old guard and the reformers — then trade, scheme, marry, and campaign your way to the head
-              of the city&apos;s oligarchy, building a dynasty that outlives you.
+              side between the old guard and the reformers. Then trade, scheme and marry your way up, raise men and
+              ships, and go to war on land and at sea, until the oligarchy is yours and your dynasty outlives you.
             </p>
             <div className="hero-actions">
               {/* TODO: If entry is via Discord, change this CTA to "Join the Discord" / "Enter the League" and point it to the invite link. The "Play free in your browser" microcopy may also need to change. */}
@@ -1008,8 +1007,8 @@ export function App() {
       <section className="landing-section atlas-section" id="atlas" aria-labelledby="atlas-title">
         <div className="atlas-copy">
           <p className="section-eyebrow">Atlas</p>
-          <h2 id="atlas-title">Massalia and the Phocaean world</h2>
-          <p>Massalia is the shared arena: a 300-seat oligarchy, the elected Archons and Ephors, and two rival parties — power worth fighting over politically, economically, and socially. Around her lie the Phocaean colonies and trading ports of the western sea.</p>
+          <h2 id="atlas-title">Massalia and the western sea</h2>
+          <p>Enter Massalia in the fourth century BC, while Carthage rules the sea and Rome rises in Italy. Climb the city&apos;s oligarchy, or raise men and ships and take what the chamber will not give: raid the coasts, march on your rivals, plant a colony and carve out a kingdom of your own. War is fought on land and at sea, with citizen hoplites and hired spears from Gaul to Numidia. Build a legacy and a family that outlast you.</p>
         </div>
         <div className="map-frame" role="img" aria-label="League of Massalia atlas map">
           <img src={assetPath("assets/MAP01.jpg")} alt="" />

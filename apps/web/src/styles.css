@@ -301,15 +301,6 @@ body {
   text-shadow: 0 18px 54px rgba(0, 0, 0, 0.56);
 }
 
-.hero-subline {
-  margin: 0;
-  max-width: 620px;
-  color: var(--cream);
-  font-size: clamp(20px, 2.3vw, 28px);
-  font-style: italic;
-  line-height: 1.2;
-}
-
 .hero-logline {
   margin: 18px 0 0;
   margin-left: auto;

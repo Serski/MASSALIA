@@ -14,7 +14,9 @@ describe("landing page", () => {
 
     expect(document.querySelector("h1")!.textContent).toBe("Massalia");
     expect(view.getAllByRole("button", { name: "Start The Game" }).length).toBeGreaterThan(0);
-    expect(view.getByRole("heading", { name: "Massalia and the Phocaean world" })).toBeTruthy();
+    expect(view.getByRole("heading", { name: "Massalia and the western sea" })).toBeTruthy();
+    expect(view.getByText("Free Browser Grand Strategy Game")).toBeTruthy();
+    expect(view.queryByText(/Founded by Phocaean Greeks/)).toBeNull();
 
     expect(view.queryByText("Three choices that shape your game")).toBeNull();
     expect(view.queryByText("Eight paths to power")).toBeNull();
