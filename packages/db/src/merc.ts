@@ -15,6 +15,7 @@ import {
 } from "@massalia/shared";
 import { createDb } from "./client.js";
 import { characterTraits, composureLog, dynasties, playerCharacters, players, worlds } from "./schema.js";
+import { activeWorld } from "./world.js";
 
 // ---------------------------------------------------------------------------
 // Mercenary contract settlement + the worker completion sweep (Hoplite Steps 2–4).
@@ -190,13 +191,15 @@ export { ageRiskScale };
 
 // The worker's belt-and-suspenders sweep (mirrors sweepSpouseDeaths): complete every
 // served-out contract — rolling the risk + awards — even for an offline player.
-// Idempotent: "complete" mode no-ops contracts not yet due.
+// Idempotent: "complete" mode no-ops contracts not yet due. Active world only.
 export async function sweepMercenaryContracts(cfgMap: MercContractCfgMap, ctx: MercSettleCtx): Promise<{ checked: number; completed: number; died: number; awarded: number }> {
   const now = ctx.now ?? new Date();
+  const world = await activeWorld();
+  if (!world) return { checked: 0, completed: 0, died: 0, awarded: 0 };
   const rows = await db
     .select({ id: playerCharacters.id })
     .from(playerCharacters)
-    .where(and(eq(playerCharacters.status, "alive"), isNotNull(playerCharacters.contractId)));
+    .where(and(eq(playerCharacters.worldId, world.id), eq(playerCharacters.status, "alive"), isNotNull(playerCharacters.contractId)));
 
   let completed = 0;
   let died = 0;

@@ -23,6 +23,7 @@ import {
 } from "@massalia/shared";
 import { createDb } from "./client.js";
 import { children, composureLog, effectLog, familyCandidates, houses, marriages, playerCharacters } from "./schema.js";
+import { activeWorld } from "./world.js";
 
 const db = createDb();
 
@@ -343,14 +344,17 @@ export async function checkSpouseDeath(characterId: string, args: SpouseArgs): P
 }
 
 // The global belt-and-suspenders sweep (the worker's scheduled path, mirroring
-// the festival sweep): end every active marriage whose wife has died of old age.
+// the festival sweep): end every active marriage of the active world whose wife
+// has died of old age.
 export async function sweepSpouseDeaths(args: SpouseArgs): Promise<SpouseDeath[]> {
   const now = args.now ?? new Date();
+  const world = await activeWorld();
+  if (!world) return [];
   const married = await db
     .select({ id: playerCharacters.id })
     .from(playerCharacters)
     .innerJoin(marriages, and(eq(marriages.characterId, playerCharacters.id), isNull(marriages.endedAt)))
-    .where(eq(playerCharacters.status, "alive"));
+    .where(and(eq(playerCharacters.worldId, world.id), eq(playerCharacters.status, "alive")));
 
   const deaths: SpouseDeath[] = [];
   for (const row of married) {
