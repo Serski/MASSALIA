@@ -139,3 +139,12 @@ STOP 0 ruling (Argiris, 20 Sept 2026). Save this ruling verbatim under a heading
 
 Proceed from Phase 1. The push prompt follows the STOP 1 report; the deploy must be live before 2026-09-22 00:25 UTC.
 END OF RULING
+
+## STOP 1 ruling (20 Sept 2026)
+
+STOP 1 ruling (Argiris, 20 Sept 2026). Save this ruling verbatim under a heading `## STOP 1 ruling (20 Sept 2026)` at the end of `docs/worker/worker-world-scope-prompt-1.md`, in the fifth commit.
+
+1. The red gate: allowed, under the AGENTS.md timeout rule. A fifth commit adds `hookTimeout: 30_000` beside `testTimeout` in `apps/server/vitest.config.ts`, with a comment in the voice of the existing one: the `beforeAll` hooks import the app and boot Fastify, which passes 10 s on a loaded machine. No source change. The commit carries that line and this ruling appended to the prompt copy, nothing else. Commit: `test: the server suite's hooks get the 30 s its tests already have`.
+2. Deviations 2, 3 and 4 are accepted as rulings.
+3. Then the gate at HEAD after the fifth commit, ending `GATE GREEN: HEAD <sha>, tree clean`. Report five `Committed:` lines and the gate's last line with the per-package counts. The rest of the STOP 1 report stands. No push.
+END OF RULING

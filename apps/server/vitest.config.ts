@@ -10,5 +10,8 @@ export default defineConfig({
     // round-trips per test; on a loaded machine a single case can exceed the 5s
     // default. Raise the ceiling so real work never trips a spurious timeout.
     testTimeout: 30_000,
+    // The beforeAll hooks import the app and boot Fastify, which passes the 10s
+    // default on a loaded machine. Give the hooks the same ceiling as the tests.
+    hookTimeout: 30_000,
   },
 });
