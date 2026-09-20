@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 
@@ -35,6 +36,12 @@ export default defineConfig(({ command, mode }) => {
         "/api": "http://localhost:3000",
         "/content": "http://localhost:3000",
       },
+    },
+    // Budgets that survive the gate's own load on a small machine: the render tests
+    // finish in about a second each, but a loaded run has taken past the 5 s default.
+    test: {
+      testTimeout: 15_000,
+      hookTimeout: 30_000,
     },
   };
 });

@@ -91,3 +91,13 @@ Captures: <path per surface, or the STOP>
 Ruling for Argiris: <each item from the browser check, each departure from the prompt, with the reason>
 Push: <remote HEAD, CI, Pages, Railway>
 ```
+
+## STOP ruling (21 Sept 2026)
+
+STOP ruling (Argiris, 21 Sept 2026). Save it verbatim at the end of docs/landing/landing-prompt-2.md in commit 4, then proceed.
+
+Commit 4, `test: db hooks and web tests get budgets that survive the gate's own load`. `packages/db/vitest.config.ts` gains `hookTimeout: 30_000` beside its `testTimeout`. The web package's vitest configuration (the `test` block of `apps/web/vite.config.ts`, or `vitest.config.ts` if one exists there) gains `testTimeout: 15_000` and `hookTimeout: 30_000`. No source change. That closes item 1 too: bcfb90b stands as it is, and every commit from here is gated on the exit code.
+
+Commit 5, `landing: atlas copy column widened for the new paragraph`. In `.atlas-section`, `grid-template-columns: minmax(250px, 0.44fr) minmax(420px, 1.1fr)` becomes `minmax(300px, 0.66fr) minmax(420px, 1fr)`. Nothing else in the rule or in the 820px override changes. Report the copy and map widths at 1280px and the heading's line count; the heading should sit on two lines and the paragraph should end above the map's bottom edge. If it does not, report it as a ruling item and do not tune further.
+
+Then the gate at HEAD once, ending GATE GREEN, with the same timings reported; the two atlas captures retaken at both widths; and the push as the prompt says, five commits db0b5ad to HEAD, with the full push and close-out report. If the gate goes red again, STOP with the log, no rerun.
