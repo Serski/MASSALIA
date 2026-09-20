@@ -1266,7 +1266,7 @@ body {
 
 .placeholder-note,
 .back-link {
-  color: rgba(var(--accent-rgb), 0.72);
+  color: var(--accent-bright);
   font-family: var(--font-display);
   font-size: 12px;
   font-weight: 700;

@@ -3676,9 +3676,9 @@
 }
 /* Statically-disabled silver (e.g. Sell with 0 owned): the silver base rule sits
    AFTER .panel-btn:disabled in source order, so without this a disabled silver button
-   would keep its gradient (equal specificity, later wins). This restores the plain
-   dim. A WAITING silver sibling instead carries is-waiting and stays gradient (rule
-   above); the is-busy pressed button wins over both with its extra class. */
+   would keep its cream fill (equal specificity, later wins). This restores the plain
+   dim. A WAITING silver sibling instead carries is-waiting and keeps the cream fill
+   (rule above); the is-busy pressed button wins over both with its extra class. */
 .dashboard-shell .panel-btn.silver:disabled{
   color: var(--dash-stone-dim);
   background: none;
@@ -4082,7 +4082,7 @@
 .dashboard-shell .barracks-chip-v{ color: var(--dash-parchment); font-weight: 600; }
 .dashboard-shell .barracks-card-line{ color: var(--dash-stone); font-size: 12px; line-height: 1.4; }
 .dashboard-shell .barracks-card-line .barracks-k{ font-size: 9px; }
-.dashboard-shell .barracks-sep{ margin: 0 8px; color: var(--dash-line); }
+.dashboard-shell .barracks-sep{ margin: 0 8px; color: var(--dash-stone-dim); }
 .dashboard-shell .barracks-card-gear{ display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: var(--dash-stone-dim); }
 .dashboard-shell .barracks-stepper{ display: flex; gap: 6px; align-items: center; flex: none; margin-left: auto; }
 .dashboard-shell .barracks-step{ width: 30px; height: 30px; padding: 0; font-size: 15px; }

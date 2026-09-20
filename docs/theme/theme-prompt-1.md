@@ -263,3 +263,17 @@ Accepted as they stand, no change: item 4, everything at 50% stays round, as Pha
 Then: the gate at HEAD after commit 6, ending GATE GREEN; the computed-style scan again on every surface, and it must report zero text in #b8612f and zero gradients on buttons, the Sign up button included; the captures retaken for landing, auth-sheet, lobby-worlds, court, ledger, barracks, atlas-force-picker and character-sheet-alignment at both widths.
 
 Push. Fast-forward only, plain `git push`, the six commits ca3df1c to the new HEAD. Report remote HEAD, the CI run and its Gate step, the Pages run, and the Railway server and worker deploys (they rebuild on any push; nothing in them changed, no migration). Then the close-out: dev servers and the throwaway Postgres stopped, tree clean at remote HEAD, and a short handoff with the six `Committed:` lines, the gate line and the two scan counts.
+
+## STOP 2 ruling (20 Sept 2026)
+
+STOP 2 ruling (Argiris, 20 Sept 2026). Save it verbatim at the end of docs/theme/theme-prompt-1.md in the commit below, then proceed.
+
+Commit 7, `theme: STOP 2 fixes`:
+1. `.barracks-sep` (dashboard.css:4098 at c6b2f9e) becomes `color: var(--dash-stone-dim)`. It is the only `color` declaration in the five stylesheets that reads a line token.
+2. `a.lobby-nav-item` (lobby.css:245) flattens to `background: var(--lobby-panel)`. The nav items are button-like, so the sheen goes with the other gradients.
+3. `.placeholder-note, .back-link` (styles.css:1269) becomes `color: var(--accent-bright)`. It is the only `color` declaration in the five stylesheets on the accent triple; verify that grep returns nothing after the change.
+4. The comment over `.panel-btn.silver:disabled` (the block above dashboard.css:3695) is rewritten too, so no comment in the file says a button keeps or stays a gradient. `grep -n gradient` over the five stylesheets should then match no comment about a button.
+
+Then: the gate at HEAD after commit 7, ending GATE GREEN; the scan again on Barracks, the Lobby (worlds and account) and one faction placeholder page, at both widths, and it must report zero text in #b8612f and zero gradients on buttons and nav links; retakes of barracks and lobby-worlds at both widths into theme-shots.
+
+Push, as ruled at STOP 1: fast-forward only, plain `git push`, the seven commits ca3df1c to the new HEAD. Report remote HEAD, the CI run and its Gate step, the Pages run, and the Railway server and worker deploys (nothing in them changed, no migration). Then the close-out: dev servers and the throwaway Postgres stopped, tree clean at remote HEAD, and a short handoff with the seven `Committed:` lines, the gate line and the two scan counts.

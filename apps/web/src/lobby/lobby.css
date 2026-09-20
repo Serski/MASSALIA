@@ -242,9 +242,7 @@
   letter-spacing: 0.12em;
   text-decoration: none;
   text-transform: uppercase;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent),
-    var(--lobby-panel);
+  background: var(--lobby-panel);
   border: 1px solid var(--lobby-line);
   border-radius: 0;
   transition: border-color var(--lobby-ease), color var(--lobby-ease);
