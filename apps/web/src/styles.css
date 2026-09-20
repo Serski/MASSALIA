@@ -229,6 +229,7 @@ body {
 
 .nav-actions {
   display: flex;
+  grid-column-end: -1;
   align-items: center;
   gap: 12px;
 }
@@ -272,16 +273,19 @@ body {
   position: relative;
   z-index: 2;
   display: grid;
-  grid-template-columns: minmax(0, 0.92fr) minmax(280px, 0.72fr);
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
   gap: clamp(28px, 5vw, 78px);
   align-items: center;
+  text-align: center;
   min-height: calc(100vh - 74px);
   min-height: calc(100dvh - 74px);
   padding: clamp(42px, 6vw, 86px) clamp(22px, 6vw, 96px) clamp(58px, 7vw, 110px);
 }
 
 .hero-copy {
-  max-width: 720px;
+  max-width: 760px;
+  margin: 0 auto;
   animation: heroFade 760ms ease both;
 }
 
@@ -299,6 +303,7 @@ body {
 .hero-eyebrow {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 9px;
 }
 
@@ -334,7 +339,9 @@ body {
 
 .hero-logline {
   margin: 18px 0 0;
-  max-width: 620px;
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 640px;
   color: rgba(236, 224, 204, 0.9);
   font-size: clamp(17px, 1.7vw, 22px);
   line-height: 1.42;
@@ -344,6 +351,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 18px 22px;
   margin-top: 34px;
 }
@@ -390,7 +398,7 @@ body {
   grid-template-columns: repeat(3, minmax(116px, 1fr));
   gap: 12px;
   max-width: 650px;
-  margin: 28px 0 0;
+  margin: 28px auto 0;
 }
 
 .stat-row div {

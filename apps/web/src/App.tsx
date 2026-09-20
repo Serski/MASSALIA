@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { ApiError, api, apiErrorMessage, hasSessionHint } from "./api.js";
 import { LegalPage, type LegalPageKind } from "./legal.js";
 import { CharacterCreation } from "./CharacterCreation.js";
@@ -19,7 +19,6 @@ const GuidesPage = lazy(() => import("./lobby/GuidesPage.js").then((module) => (
 // render only when VITE_SOCIAL_LOGIN=true at build time — unset in production.
 const SOCIAL_LOGIN_ENABLED = import.meta.env.VITE_SOCIAL_LOGIN === "true";
 
-type DetailKind = "profession" | "house" | "party" | "city";
 type AuthMode = "login" | "signup";
 
 type Party = {
@@ -108,13 +107,6 @@ const parties: Party[] = [
   },
 ];
 
-const offices = [
-  { title: "Archons x2", type: "Elected", pay: "150 dr./day", icon: "assets/offices/ARCHON.webp", description: "Heads of state and chief generals; one must be Palaioi, one Dynatoi." },
-  { title: "Ephors x2", type: "Appointed", pay: "60 dr./day", icon: "assets/offices/EPHOR.webp", description: "Checks on the Archons; finances, laws, and calling or dissolving council." },
-  { title: "Strategoi x2", type: "Appointed", pay: "100 dr./day", icon: "assets/offices/GENERAL.webp", description: "Command armies with or for the Archons." },
-  { title: "Council of Oligarchy", type: "Council", pay: "40 dr./day", icon: "assets/offices/OLIGARCH.webp", description: "Senior family members who approve laws, treaties, war, and budgets." },
-];
-
 const detailCollections = {
   professions,
   houses: nobleHouses,
@@ -122,38 +114,11 @@ const detailCollections = {
   cities: leagueCities,
 };
 
-const detailRoutes: Record<DetailKind, keyof typeof detailCollections> = {
-  profession: "professions",
-  house: "houses",
-  party: "parties",
-  city: "cities",
-};
-
-function getDetailPath(entry: DetailEntry) {
-  return `/${detailRoutes[entry.kind]}/${entry.slug}`;
-}
-
 function Crest({ initial, image, label, className = "" }: { initial: string; image?: string; label: string; className?: string }) {
   return (
     <span className={`crest-medallion${image ? " crest-medallion-image" : ""}${className ? ` ${className}` : ""}`} aria-label={label}>
       {image ? <img src={image} alt="" /> : <span>{initial}</span>}
     </span>
-  );
-}
-
-function DetailLink({ entry, children, className }: { entry: DetailEntry; children: ReactNode; className: string }) {
-  const href = getDetailPath(entry);
-  return (
-    <a
-      className={className}
-      href={href}
-      onClick={(event) => {
-        event.preventDefault();
-        navigateTo(href);
-      }}
-    >
-      {children}
-    </a>
   );
 }
 
@@ -637,11 +602,6 @@ function DetailPage({ entry, onOpenAuth }: { entry: DetailEntry; onOpenAuth: (mo
           </span>
           <span>MASSALIA</span>
         </button>
-        <div className="nav-primary-links" aria-label="Landing sections">
-          <a href="/#world">The World</a>
-          <a href="/#factions">Factions</a>
-          <a href="/#atlas">Atlas</a>
-        </div>
         <div className="nav-actions">
           {returning ? (
             <>
@@ -822,8 +782,6 @@ export function App() {
   );
   const detailEntry = getDetailEntry(pathname);
   const authRouteMode: AuthMode | undefined = pathname === "/login" ? "login" : pathname === "/signup" ? "signup" : undefined;
-  const palaioi = parties[0]!;
-  const dynatoi = parties[1]!;
 
   useEffect(() => {
     const handleRoute = () => setPathname(window.location.pathname);
@@ -1002,12 +960,6 @@ export function App() {
             </span>
             <span>MASSALIA</span>
           </button>
-          <div className="nav-primary-links" aria-label="Landing sections">
-            <a href="#world">The World</a>
-            <a href="#roles">Professions</a>
-            <a href="#atlas">Atlas</a>
-            <a href="#factions">Factions</a>
-          </div>
           <div className="nav-actions">
             {returning ? (
               <>
@@ -1050,53 +1002,7 @@ export function App() {
               <div><dt>{landingStats.seasonLabel}</dt><dd>{landingStats.seasonStatus}</dd></div>
             </dl>
           </div>
-          <div className="hero-art-focus" aria-hidden="true">
-            <img className="hero-lion" src={assetPath("assets/MASSALIA LION.png")} alt="" />
-          </div>
         </section>
-      </section>
-
-      <section className="landing-section pillars-section" id="world" aria-labelledby="pillars-title">
-        <p className="section-eyebrow">What You Do</p>
-        <h2 id="pillars-title">Three choices that shape your game</h2>
-        <div className="pillar-grid">
-          <article className="pillar-card">
-            <span className="pillar-kicker">I · Settle</span>
-            <h3>Become a Citizen of Massalia</h3>
-            <p>Create a citizen of the one great city of the western sea — your name, your face, and the dynasty you mean to found.</p>
-          </article>
-          <article className="pillar-card">
-            <span className="pillar-kicker">II · Master a Role</span>
-            <h3>Choose a Profession</h3>
-            <p>Become a trader, landowner, shipbuilder, priest, philosopher, hetaira, military leader, or attempt the hard path from nothing.</p>
-          </article>
-          <article className="pillar-card">
-            <span className="pillar-kicker">III · Scheme</span>
-            <h3>House &amp; Politics</h3>
-            <p>Pledge to a Noble House, side with Palaioi or Dynatoi, and win the Archonship.</p>
-          </article>
-        </div>
-      </section>
-
-      <section className="landing-section roles-section" id="roles" aria-labelledby="roles-title">
-        <p className="section-eyebrow">Professions</p>
-        <h2 id="roles-title">Eight paths to power</h2>
-        <div className="tile-grid">
-          {professions.map((profession) => (
-            <DetailLink className={`landing-tile${profession.hardMode ? " profession-hard-mode" : ""}`} entry={profession} key={profession.slug}>
-              {profession.hardMode ? <span className="hard-mode-badge">Hard Mode</span> : null}
-              <span className="profession-figure">
-                <img src={profession.image} alt={profession.name} width="260" height="380" loading="lazy" decoding="async" />
-              </span>
-              <span className="profession-copy">
-                <span className="tile-kicker">{profession.rank}</span>
-                <h3>{profession.name}</h3>
-                <span className="profession-stat">{profession.income}</span>
-                <span className="profession-prompt">View rank ladder →</span>
-              </span>
-            </DetailLink>
-          ))}
-        </div>
       </section>
 
       <section className="landing-section atlas-section" id="atlas" aria-labelledby="atlas-title">
@@ -1107,73 +1013,6 @@ export function App() {
         </div>
         <div className="map-frame" role="img" aria-label="League of Massalia atlas map">
           <img src={assetPath("assets/MAP01.jpg")} alt="" />
-        </div>
-      </section>
-
-      <section className="landing-section government-section" aria-labelledby="government-title">
-        <p className="section-eyebrow">Government</p>
-        <h2 id="government-title">The seats of government</h2>
-        <div className="office-grid">
-          {offices.map((office) => (
-            <article className="office-card" key={office.title}>
-              <span className="office-watermark" aria-hidden="true">
-                <img src={assetPath(office.icon)} alt="" loading="lazy" />
-              </span>
-              <span className="tile-kicker">{office.type}</span>
-              <h3>{office.title}</h3>
-              <p>{office.description}</p>
-              <strong>{office.pay}</strong>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="landing-section parties-section" aria-labelledby="parties-title">
-        <p className="section-eyebrow">Assembly</p>
-        <h2 id="parties-title">Tradition, or reform?</h2>
-        <div className="party-duel">
-          <DetailLink className="party-card palaioi-card" entry={palaioi}>
-            <Crest className="party-watermark" initial={palaioi.initial} image={palaioi.image} label="Palaioi emblem" />
-            <div className="party-copy">
-              <p className="party-script">{palaioi.script} · {palaioi.name}</p>
-              <h3>{palaioi.title}</h3>
-              <p className="party-motto">"{palaioi.motto}"</p>
-              <p>{palaioi.who}</p>
-              <p>{palaioi.wants}</p>
-            </div>
-          </DetailLink>
-          <DetailLink className="party-card dynatoi-card" entry={dynatoi}>
-            <Crest className="party-watermark" initial={dynatoi.initial} image={dynatoi.image} label="Dynatoi emblem" />
-            <div className="party-copy">
-              <p className="party-script">{dynatoi.script} · {dynatoi.name}</p>
-              <h3>{dynatoi.title}</h3>
-              <p className="party-motto">"{dynatoi.motto}"</p>
-              <p>{dynatoi.who}</p>
-              <p>{dynatoi.wants}</p>
-            </div>
-          </DetailLink>
-        </div>
-      </section>
-
-      <section className="houses-section" id="factions" aria-label="Ten Noble Houses">
-        <div className="houses-heading">
-          <span className="section-eyebrow">Factions</span>
-          <h2>Ten Noble Houses</h2>
-        </div>
-        <div className="alignment-legend" aria-label="Alignment legend">
-          <span><i className="alignment-dot conservative" /> Conservative</span>
-          <span><i className="alignment-dot centrist" /> Centrist</span>
-          <span><i className="alignment-dot reformist" /> Reformist</span>
-        </div>
-        <div className="house-tile-grid">
-          {nobleHouses.map((house) => (
-            <DetailLink className="house-tile" entry={house} key={house.name}>
-              <Crest initial={house.initial} image={house.image} label={`${house.name} emblem`} />
-              <span className={`house-align ${house.alignment}`}><i className={`alignment-dot ${house.alignment}`} /> {house.stance}</span>
-              <h3>{house.name}</h3>
-              <p>{house.motto}</p>
-            </DetailLink>
-          ))}
         </div>
       </section>
 
