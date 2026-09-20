@@ -796,7 +796,7 @@ export function StatPip({ stat, value }: { stat: keyof FourStats; value: number 
   const label = stat.charAt(0).toUpperCase() + stat.slice(1);
   const icon = STAT_PIP_ICON[stat];
   return (
-    <span title={label} style={{ display: "inline-flex", gap: 5, alignItems: "center", padding: "2px 8px", borderRadius: 6, background: "var(--dash-panel-soft)", fontSize: "0.78em" }}>
+    <span title={label} style={{ display: "inline-flex", gap: 5, alignItems: "center", padding: "2px 8px", borderRadius: 0, background: "var(--dash-panel-soft)", fontSize: "0.78em" }}>
       {icon ? <AssetIcon file={icon} alt={label} className="asset-icon stat-pip-icon" /> : <span style={{ color: "var(--dash-stone-dim)" }}>{label}</span>}
       <span style={{ color: "var(--dash-parchment)", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{value}</span>
     </span>

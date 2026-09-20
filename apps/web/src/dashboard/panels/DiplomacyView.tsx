@@ -51,7 +51,7 @@ function PipMeter({ opinion, color }: { opinion: number; color: string }) {
   const neg = opinion < 0;
   const pos = opinion > 0;
   const pip = (on: boolean, key: string) => (
-    <span key={key} style={{ width: 6, height: 11, borderRadius: 1, background: on ? color : "var(--dash-line)" }} />
+    <span key={key} style={{ width: 6, height: 11, borderRadius: 0, background: on ? color : "var(--dash-line)" }} />
   );
   return (
     <span aria-hidden="true" className="dl-pips" style={{ display: "flex", alignItems: "center", gap: 3, flex: "0 0 auto" }}>
@@ -84,7 +84,7 @@ function OpinionBar({ opinion, color, height = 8 }: { opinion: number; color: st
   const width = Math.abs(pct);
   return (
     <div
-      style={{ position: "relative", flex: 1, height, borderRadius: height / 2, background: "var(--dash-line)", overflow: "hidden" }}
+      style={{ position: "relative", flex: 1, height, borderRadius: 0, background: "var(--dash-line)", overflow: "hidden" }}
       aria-hidden="true"
     >
       <div style={{ position: "absolute", left: `${left}%`, width: `${width}%`, top: 0, bottom: 0, background: color }} />
@@ -303,7 +303,7 @@ export function DiplomacyView() {
                     ) : null}
                   </span>
                   <PipMeter opinion={f.opinion} color={color} />
-                  <span style={{ background: stanceTint(f.bandValue), color, fontWeight: 700, fontSize: "0.8em", textTransform: "uppercase", letterSpacing: "0.04em", padding: "5px 12px", borderRadius: 20, whiteSpace: "nowrap", flex: "0 0 auto" }}>
+                  <span style={{ background: stanceTint(f.bandValue), color, fontWeight: 700, fontSize: "0.8em", textTransform: "uppercase", letterSpacing: "0.04em", padding: "5px 12px", borderRadius: 0, whiteSpace: "nowrap", flex: "0 0 auto" }}>
                     {f.bandLabel}
                     <span style={{ marginLeft: 6, color: "var(--dash-stone-dim)", fontVariantNumeric: "tabular-nums" }}>{signedOpinion(f.opinion)}</span>
                   </span>

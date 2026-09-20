@@ -21,7 +21,7 @@
 .w2map-stage {
   position: relative;
   width: 100%;
-  border-radius: 6px;
+  border-radius: 0;
   overflow: hidden;
   background: #9db7cb;
   user-select: none;
@@ -91,7 +91,7 @@
   color: var(--dash-parchment, #ece0cc);
   background: rgba(20, 13, 10, 0.82);
   border: 1px solid rgba(var(--accent-rgb), 0.5);
-  border-radius: 8px;
+  border-radius: 0;
   cursor: pointer;
   backdrop-filter: blur(3px);
   transition: border-color 140ms ease, background 140ms ease;
@@ -133,7 +133,7 @@
   text-transform: uppercase;
   background: none;
   border: 1px solid var(--dash-line, rgba(var(--accent-rgb), 0.28));
-  border-radius: 6px;
+  border-radius: 0;
   cursor: pointer;
 }
 
@@ -198,7 +198,7 @@
   color: var(--dash-parchment, #ece0cc);
   background: rgba(var(--accent-rgb), 0.12);
   border: 1px solid var(--dash-line, rgba(var(--accent-rgb), 0.28));
-  border-radius: 999px;
+  border-radius: 0;
   cursor: pointer;
   transition: border-color 140ms ease, background 140ms ease;
 }
@@ -228,7 +228,7 @@
   color: var(--dash-parchment, #ece0cc);
   background: rgba(var(--accent-rgb), 0.1);
   border: 1px solid var(--dash-line, rgba(var(--accent-rgb), 0.28));
-  border-radius: 8px;
+  border-radius: 0;
   cursor: pointer;
   text-align: left;
 }
@@ -294,7 +294,7 @@
   text-transform: uppercase;
   background: none;
   border: 1px solid var(--dash-line, rgba(var(--accent-rgb), 0.28));
-  border-radius: 6px;
+  border-radius: 0;
   cursor: pointer;
 }
 
@@ -377,7 +377,7 @@ p.w2map-stat-asof {
   text-transform: uppercase;
   background: var(--dash-gold, var(--accent));
   border: none;
-  border-radius: 6px;
+  border-radius: 0;
   cursor: pointer;
 }
 
@@ -409,7 +409,7 @@ p.w2map-stat-asof {
   flex-direction: column;
   background: linear-gradient(180deg, #221a14, #15100c);
   border: 1px solid var(--dash-gold, var(--accent));
-  border-radius: 12px;
+  border-radius: 0;
   box-shadow: 0 16px 44px rgba(0, 0, 0, 0.6);
   overscroll-behavior: contain;
   animation: w2PopIn 0.16s ease both;
@@ -432,7 +432,7 @@ p.w2map-stat-asof {
   max-height: 70%;
   background: linear-gradient(180deg, #221a14, #15100c);
   border: 1px solid var(--dash-gold, var(--accent));
-  border-radius: 16px;
+  border-radius: 0;
   box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.6);
   overscroll-behavior: contain;
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -463,7 +463,7 @@ p.w2map-stat-asof {
     width: 44px;
     height: 44px;
     font-size: 20px;
-    border-radius: 10px;
+    border-radius: 0;
   }
 
   .w2map-info-body {
@@ -486,7 +486,7 @@ p.w2map-stat-asof {
   .w2map-modal-card {
     width: 100%;
     max-height: 100%;
-    border-radius: 16px;
+    border-radius: 0;
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
@@ -528,7 +528,7 @@ p.w2map-stat-asof {
   color: var(--dash-parchment, #ece0cc);
   background: rgba(20, 13, 10, 0.96);
   border: 1px solid rgba(var(--accent-rgb), 0.5);
-  border-radius: 12px;
+  border-radius: 0;
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
 }
 
@@ -553,7 +553,7 @@ p.w2map-stat-asof {
   padding: 8px 14px 14px;
   border-top: 1px solid var(--dash-line, rgba(var(--accent-rgb), 0.28));
   background: rgba(20, 13, 10, 0.98);
-  border-radius: 0 0 12px 12px;
+  border-radius: 0;
 }
 
 .w2map-modal-footer .w2map-verdict { margin: 0 0 8px; }
@@ -605,7 +605,7 @@ p.w2map-stat-asof {
   padding: 8px 10px;
   font-size: 12px;
   border: 1px solid rgba(187, 106, 82, 0.5);
-  border-radius: 8px;
+  border-radius: 0;
   background: rgba(187, 106, 82, 0.12);
 }
 
@@ -639,7 +639,7 @@ p.w2map-stat-asof {
   text-align: center;
   background: rgba(0, 0, 0, 0.25);
   border: 1px solid var(--dash-line, rgba(var(--accent-rgb), 0.28));
-  border-radius: 6px;
+  border-radius: 0;
 }
 .w2map-pick-count:disabled { opacity: 0.45; }
 

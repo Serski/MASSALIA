@@ -15,9 +15,9 @@
   --lobby-on-gold: var(--on-accent);
   --lobby-line: rgba(var(--accent-rgb), 0.26);
   --lobby-divider: 1px dashed rgba(var(--accent-rgb), 0.18);
-  --lobby-radius-panel: 8px;
-  --lobby-radius-control: 4px;
-  --lobby-radius-pill: 3px;
+  --lobby-radius-panel: 0;
+  --lobby-radius-control: 0;
+  --lobby-radius-pill: 0;
   --lobby-ease: 160ms ease;
 
   position: relative;
@@ -109,7 +109,7 @@
   color: var(--lobby-text);
   font-size: 11.5px;
   letter-spacing: 0.14em;
-  border-radius: var(--lobby-radius-pill);
+  border-radius: 0;
   transition: color var(--lobby-ease), background var(--lobby-ease);
 }
 
@@ -162,7 +162,7 @@
     linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent),
     var(--lobby-panel);
   border: 1px solid var(--lobby-line);
-  border-radius: var(--lobby-radius-panel);
+  border-radius: 0;
   box-shadow: 0 22px 54px rgba(0, 0, 0, 0.35);
 }
 
@@ -246,7 +246,7 @@
     linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent),
     var(--lobby-panel);
   border: 1px solid var(--lobby-line);
-  border-radius: var(--lobby-radius-control);
+  border-radius: 0;
   transition: border-color var(--lobby-ease), color var(--lobby-ease);
 }
 
@@ -367,7 +367,7 @@
   text-transform: uppercase;
   white-space: nowrap;
   border: 1px solid rgba(var(--accent-rgb), 0.4);
-  border-radius: var(--lobby-radius-pill);
+  border-radius: 0;
 }
 
 .lobby-pill-announced {
@@ -534,7 +534,7 @@
   height: 56px;
   object-fit: cover;
   border: 1px solid var(--lobby-gold);
-  border-radius: 6px;
+  border-radius: 0;
 }
 
 .lobby-guides-copy {
@@ -832,7 +832,7 @@
   text-transform: uppercase;
   background: rgba(var(--accent-rgb), 0.08);
   border: 1px solid rgba(var(--accent-rgb), 0.4);
-  border-radius: var(--lobby-radius-control);
+  border-radius: 0;
   cursor: pointer;
   transition:
     border-color var(--lobby-ease),
@@ -910,7 +910,7 @@
   color: var(--lobby-on-gold);
   text-decoration: none;
   background: var(--accent);
-  border-radius: var(--lobby-radius-pill);
+  border-radius: 0;
 }
 
 .lobby-toggle {
@@ -921,7 +921,7 @@
   padding: 0;
   background: rgba(125, 135, 148, 0.35);
   border: none;
-  border-radius: 12px;
+  border-radius: 0;
   cursor: pointer;
   transition: background 0.2s;
 }
@@ -942,7 +942,7 @@
   width: 18px;
   height: 18px;
   background: #1a1208;
-  border-radius: 50%;
+  border-radius: 0;
   transition: left 0.2s;
 }
 
@@ -1010,7 +1010,7 @@
   letter-spacing: 0.16em;
   text-transform: uppercase;
   border: 1px solid rgba(var(--accent-rgb), 0.4);
-  border-radius: 3px;
+  border-radius: 0;
 }
 
 .lobby-tag-world {
@@ -1050,7 +1050,7 @@
   color: var(--cream);
   background: rgba(var(--accent-rgb), 0.08);
   border-left: 3px solid var(--gold);
-  border-radius: 0 4px 4px 0;
+  border-radius: 0;
 }
 
 .lobby-guide-closer {
@@ -1206,7 +1206,7 @@
   letter-spacing: 0.14em;
   text-transform: uppercase;
   border: 1px solid rgba(236, 224, 204, 0.24);
-  border-radius: 3px;
+  border-radius: 0;
 }
 
 .lobby-pill-ok {
@@ -1229,7 +1229,7 @@
   font-size: 15px;
   background: rgba(12, 8, 7, 0.5);
   border: 1px solid rgba(var(--accent-rgb), 0.3);
-  border-radius: var(--lobby-radius-control);
+  border-radius: 0;
 }
 
 .lobby-danger-actions {

@@ -201,7 +201,7 @@ function RoutinesCard({ onRefresh }: PanelProps) {
         return (
           <div key={key} style={{ display: "grid", gridTemplateColumns: "84px 1fr auto", gap: 8, alignItems: "center", fontSize: 11 }}>
             <span style={{ textTransform: "uppercase", letterSpacing: "0.06em", opacity: 0.8 }}>{LADDER_LABELS[key] ?? key}</span>
-            <span style={{ height: 6, borderRadius: 3, background: "rgba(12, 8, 7, 0.5)", border: "1px solid rgba(var(--accent-rgb), 0.18)", overflow: "hidden" }}>
+            <span style={{ height: 6, borderRadius: 0, background: "rgba(12, 8, 7, 0.5)", border: "1px solid rgba(var(--accent-rgb), 0.18)", overflow: "hidden" }}>
               <span style={{ display: "block", height: "100%", width: `${pct}%`, background: "var(--dash-good)" }} />
             </span>
             <span style={{ opacity: 0.7 }}>{ladder.nextThreshold !== null ? `${ladder.xp}/${ladder.nextThreshold}` : `${ladder.xp} ✓`}</span>

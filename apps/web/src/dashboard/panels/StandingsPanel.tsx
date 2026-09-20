@@ -30,7 +30,7 @@ const standingsRowStyle: CSSProperties = {
 const standingsViewerRowStyle: CSSProperties = {
   ...standingsRowStyle,
   background: "var(--dash-panel-soft)",
-  borderRadius: 6,
+  borderRadius: 0,
   borderBottom: "1px solid var(--dash-gold)",
 };
 const standingsRankStyle: CSSProperties = {
