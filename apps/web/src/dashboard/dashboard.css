@@ -3424,7 +3424,7 @@
 /* The Oligarchy Chamber (Politics Prompt 1): hemicycle, seat purchase, ledger. */
 /* The 300-seat hemicycle sits in front of the front-page government art
    (Politics.jpg), dimmed hard so the seat dots and labels stay legible. */
-.dashboard-shell .chamber-card { margin-bottom: 14px; padding: 14px; border: 1px solid rgba(var(--accent-rgb), 0.4); position: relative; isolation: isolate; background: linear-gradient(180deg, rgba(18, 12, 8, 0.84), rgba(12, 8, 6, 0.9)), url("../assets/Politics.jpg") center / cover no-repeat, #130d0a; }
+.dashboard-shell .chamber-card { margin-bottom: 14px; padding: 14px; border: 1px solid rgba(var(--accent-rgb), 0.4); position: relative; isolation: isolate; background: linear-gradient(180deg, rgba(14, 9, 7, 0.9), rgba(10, 7, 5, 0.94)), url("../assets/Politics.jpg") center / cover no-repeat, #130d0a; }
 .dashboard-shell .chamber-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(180px, 1fr); gap: 14px; align-items: center; }
 .dashboard-shell .hemicycle { width: 100%; height: auto; display: block; }
 .dashboard-shell .seat-dot { stroke: rgba(0, 0, 0, 0.45); stroke-width: 0.6; }

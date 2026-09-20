@@ -137,7 +137,7 @@ body {
   min-height: 100dvh; /* avoid mobile address-bar gap/cutoff */
   isolation: isolate;
   background:
-    linear-gradient(90deg, rgba(13, 8, 6, 0.9) 0%, rgba(18, 11, 8, 0.78) 42%, rgba(17, 10, 8, 0.18) 72%, rgba(12, 7, 6, 0.76) 100%),
+    linear-gradient(90deg, rgba(13, 8, 6, 0.55) 0%, rgba(18, 11, 8, 0.82) 30%, rgba(18, 11, 8, 0.82) 70%, rgba(13, 8, 6, 0.55) 100%),
     linear-gradient(180deg, rgba(11, 7, 5, 0.62), transparent 34%, rgba(12, 7, 5, 0.8)),
     url("../assets/MASSALIA FRONT.jpg") center / cover no-repeat;
 }
@@ -381,6 +381,7 @@ body {
 .stat-row dt {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   color: rgba(236, 224, 204, 0.66);
   font-size: 12px;
@@ -1590,6 +1591,10 @@ button.auth-forgot {
   .closing-cta {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .cta-note {
+    align-self: center;
   }
 
   .primary-cta {

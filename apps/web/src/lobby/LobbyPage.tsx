@@ -422,7 +422,7 @@ function CentreColumn({
                   <h4>{world.name}</h4>
                   <span className="lobby-pill lobby-pill-ended">Ended</span>
                 </div>
-                <img className="lobby-cal-art" src={CALENDAR_ENDED} alt="" loading="lazy" />
+                <img className="lobby-cal-art lobby-cal-art-ended" src={CALENDAR_ENDED} alt="" loading="lazy" />
                 <p className="lobby-cal-line">
                   closed on {longDate(world.endsAt)} · {count(world.playerCount, "player", "players")}
                 </p>

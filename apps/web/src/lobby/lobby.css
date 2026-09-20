@@ -498,6 +498,10 @@
   filter: saturate(0.85);
 }
 
+.lobby-cal-art-ended {
+  filter: saturate(0.4) brightness(0.6);
+}
+
 .lobby-cal-line {
   margin: 0;
   padding: 12px 16px;
