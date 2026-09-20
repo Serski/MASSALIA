@@ -12,7 +12,7 @@
 .w2map-status {
   margin-bottom: 8px;
   font-size: 12px;
-  color: var(--dash-gold-bright, #d1ae63);
+  color: var(--dash-gold-bright, var(--accent-bright));
 }
 
 /* On desktop the stage is aspect-locked to the world (inline aspect-ratio); on
@@ -45,7 +45,7 @@
 }
 
 .w2map-svg:focus-visible {
-  box-shadow: inset 0 0 0 2px var(--dash-gold, #b58a45);
+  box-shadow: inset 0 0 0 2px var(--dash-gold, var(--accent));
 }
 
 /* Fill mode: the map owns a locked pane (dashboard Atlas). The stage fills all
@@ -90,7 +90,7 @@
   line-height: 1;
   color: var(--dash-parchment, #ece0cc);
   background: rgba(20, 13, 10, 0.82);
-  border: 1px solid rgba(181, 138, 69, 0.5);
+  border: 1px solid rgba(var(--accent-rgb), 0.5);
   border-radius: 8px;
   cursor: pointer;
   backdrop-filter: blur(3px);
@@ -98,13 +98,13 @@
 }
 
 .w2map-btn:hover {
-  border-color: var(--dash-gold, #b58a45);
+  border-color: var(--dash-gold, var(--accent));
   background: rgba(30, 20, 14, 0.9);
 }
 
 .w2map-btn:focus-visible {
   outline: none;
-  border-color: var(--dash-gold-bright, #d1ae63);
+  border-color: var(--dash-gold-bright, var(--accent-bright));
 }
 
 /* Realm name labels (SVG text): the display face, and a short opacity ease so the
@@ -132,14 +132,14 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   background: none;
-  border: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28));
+  border: 1px solid var(--dash-line, rgba(var(--accent-rgb), 0.28));
   border-radius: 6px;
   cursor: pointer;
 }
 
 .w2map-info-close:hover {
   color: var(--dash-parchment, #ece0cc);
-  border-color: var(--dash-gold, #b58a45);
+  border-color: var(--dash-gold, var(--accent));
 }
 
 .w2map-info-body {
@@ -153,7 +153,7 @@
   gap: 9px;
   align-items: center;
   margin: 12px 0 6px;
-  color: var(--dash-gold, #b58a45);
+  color: var(--dash-gold, var(--accent));
   font-family: var(--font-display, "Cinzel", serif);
   font-size: 10px;
   letter-spacing: 0.16em;
@@ -164,7 +164,7 @@
   flex: 1;
   height: 1px;
   content: "";
-  background: var(--dash-line, rgba(181, 138, 69, 0.28));
+  background: var(--dash-line, rgba(var(--accent-rgb), 0.28));
 }
 
 .w2map-owner-icon {
@@ -196,21 +196,21 @@
   font: inherit;
   font-size: 12.5px;
   color: var(--dash-parchment, #ece0cc);
-  background: rgba(181, 138, 69, 0.12);
-  border: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28));
+  background: rgba(var(--accent-rgb), 0.12);
+  border: 1px solid var(--dash-line, rgba(var(--accent-rgb), 0.28));
   border-radius: 999px;
   cursor: pointer;
   transition: border-color 140ms ease, background 140ms ease;
 }
 
 .w2map-town-chip:hover {
-  border-color: var(--dash-gold, #b58a45);
-  background: rgba(181, 138, 69, 0.22);
+  border-color: var(--dash-gold, var(--accent));
+  background: rgba(var(--accent-rgb), 0.22);
 }
 
 .w2map-town-chip:focus-visible {
   outline: none;
-  border-color: var(--dash-gold-bright, #d1ae63);
+  border-color: var(--dash-gold-bright, var(--accent-bright));
 }
 
 /* Town entries on a region card that has towns: full-width rows that open the
@@ -226,15 +226,15 @@
   font: inherit;
   font-size: 13px;
   color: var(--dash-parchment, #ece0cc);
-  background: rgba(181, 138, 69, 0.1);
-  border: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28));
+  background: rgba(var(--accent-rgb), 0.1);
+  border: 1px solid var(--dash-line, rgba(var(--accent-rgb), 0.28));
   border-radius: 8px;
   cursor: pointer;
   text-align: left;
 }
-.w2map-town-entry:hover { border-color: var(--dash-gold, #b58a45); background: rgba(181, 138, 69, 0.2); }
-.w2map-town-entry:focus-visible { outline: none; border-color: var(--dash-gold-bright, #d1ae63); }
-.w2map-town-entry-go { color: var(--dash-gold, #b58a45); font-size: 16px; line-height: 1; }
+.w2map-town-entry:hover { border-color: var(--dash-gold, var(--accent)); background: rgba(var(--accent-rgb), 0.2); }
+.w2map-town-entry:focus-visible { outline: none; border-color: var(--dash-gold-bright, var(--accent-bright)); }
+.w2map-town-entry-go { color: var(--dash-gold, var(--accent)); font-size: 16px; line-height: 1; }
 .w2map-info-note { margin: 6px 0 0; color: var(--dash-stone-dim, #9a8c72); font-size: 12px; font-style: italic; }
 .w2map-btn:disabled { opacity: 0.4; cursor: default; }
 
@@ -293,14 +293,14 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   background: none;
-  border: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28));
+  border: 1px solid var(--dash-line, rgba(var(--accent-rgb), 0.28));
   border-radius: 6px;
   cursor: pointer;
 }
 
 .w2map-back:hover {
   color: var(--dash-parchment, #ece0cc);
-  border-color: var(--dash-gold, #b58a45);
+  border-color: var(--dash-gold, var(--accent));
 }
 
 .w2map-stats {
@@ -315,7 +315,7 @@
   align-items: baseline;
   gap: 12px;
   padding: 6px 0;
-  border-bottom: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28));
+  border-bottom: 1px solid var(--dash-line, rgba(var(--accent-rgb), 0.28));
   font-size: 13px;
 }
 
@@ -336,7 +336,7 @@
 
 .w2map-stat-pips {
   margin-right: 6px;
-  color: var(--dash-gold, #b58a45);
+  color: var(--dash-gold, var(--accent));
   letter-spacing: 1px;
 }
 
@@ -375,7 +375,7 @@ p.w2map-stat-asof {
   font-size: 9.5px;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  background: linear-gradient(135deg, var(--dash-gold-bright, #d2a55c), var(--dash-bronze, #8c6428));
+  background: linear-gradient(135deg, var(--dash-gold-bright, var(--accent-bright)), var(--dash-bronze, var(--accent)));
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -408,7 +408,7 @@ p.w2map-stat-asof {
   display: flex;
   flex-direction: column;
   background: linear-gradient(180deg, #221a14, #15100c);
-  border: 1px solid var(--dash-gold, #b58a45);
+  border: 1px solid var(--dash-gold, var(--accent));
   border-radius: 12px;
   box-shadow: 0 16px 44px rgba(0, 0, 0, 0.6);
   overscroll-behavior: contain;
@@ -431,7 +431,7 @@ p.w2map-stat-asof {
   flex-direction: column;
   max-height: 70%;
   background: linear-gradient(180deg, #221a14, #15100c);
-  border: 1px solid var(--dash-gold, #b58a45);
+  border: 1px solid var(--dash-gold, var(--accent));
   border-radius: 16px;
   box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.6);
   overscroll-behavior: contain;
@@ -527,7 +527,7 @@ p.w2map-stat-asof {
   min-height: 0;
   color: var(--dash-parchment, #ece0cc);
   background: rgba(20, 13, 10, 0.96);
-  border: 1px solid rgba(181, 138, 69, 0.5);
+  border: 1px solid rgba(var(--accent-rgb), 0.5);
   border-radius: 12px;
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
 }
@@ -551,7 +551,7 @@ p.w2map-stat-asof {
 .w2map-modal-footer {
   flex: none;
   padding: 8px 14px 14px;
-  border-top: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28));
+  border-top: 1px solid var(--dash-line, rgba(var(--accent-rgb), 0.28));
   background: rgba(20, 13, 10, 0.98);
   border-radius: 0 0 12px 12px;
 }
@@ -572,10 +572,10 @@ p.w2map-stat-asof {
 .w2map-survey-line { margin: 0 0 8px; color: var(--dash-parchment, #ece0cc); font-size: 13px; font-variant-numeric: tabular-nums; }
 
 /* SEND MEN HERE stands in for the action row on a place of the player's. */
-.w2map-action-move { background: var(--dash-gold-bright, #d1ae63); }
+.w2map-action-move { background: var(--dash-gold-bright, var(--accent-bright)); }
 
 /* The ships of a sea crossing, under the men: a count per hull type in port. */
-.w2map-pick-ships { margin-top: 6px; border-top: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28)); }
+.w2map-pick-ships { margin-top: 6px; border-top: 1px solid var(--dash-line, rgba(var(--accent-rgb), 0.28)); }
 
 /* The move picker's destination selector (the Barracks' way in). */
 .w2map-pick-dest { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; font-size: 12px; color: var(--dash-stone, #c9bb9f); }
@@ -589,7 +589,7 @@ p.w2map-stat-asof {
   flex-direction: column;
   gap: 2px;
   padding: 7px 0;
-  border-bottom: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28));
+  border-bottom: 1px solid var(--dash-line, rgba(var(--accent-rgb), 0.28));
 }
 
 .w2map-pick-row.dim { opacity: 0.5; }
@@ -609,20 +609,20 @@ p.w2map-stat-asof {
   background: rgba(187, 106, 82, 0.12);
 }
 
-.w2map-verdict.ok { border-color: rgba(181, 138, 69, 0.5); background: rgba(181, 138, 69, 0.12); }
+.w2map-verdict.ok { border-color: rgba(var(--accent-rgb), 0.5); background: rgba(var(--accent-rgb), 0.12); }
 
 .w2map-action.ghost {
   color: var(--dash-stone, #c9bb9f);
   background: none;
-  border: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28));
+  border: 1px solid var(--dash-line, rgba(var(--accent-rgb), 0.28));
 }
 
-.w2map-held { margin: 0 0 10px; color: var(--dash-gold-bright, #d1ae63); font-size: 12px; }
+.w2map-held { margin: 0 0 10px; color: var(--dash-gold-bright, var(--accent-bright)); font-size: 12px; }
 
 .w2map-report-line { margin: 0 0 10px; font-family: "Spectral", serif; font-size: 14px; line-height: 1.4; }
 .w2map-report-table { width: 100%; margin: 0 0 10px; font-size: 12px; border-collapse: collapse; }
 .w2map-report-table th,
-.w2map-report-table td { padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28)); }
+.w2map-report-table td { padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--dash-line, rgba(var(--accent-rgb), 0.28)); }
 .w2map-report-table th { color: var(--dash-stone-dim, #9a8c72); font-weight: 600; }
 .w2map-report-enemy td { color: #e0a49a; }
 .w2map-report-note { margin: 0 0 8px; color: var(--dash-stone, #c9bb9f); font-size: 12px; }
@@ -638,10 +638,10 @@ p.w2map-stat-asof {
   font-size: 11px;
   text-align: center;
   background: rgba(0, 0, 0, 0.25);
-  border: 1px solid var(--dash-line, rgba(181, 138, 69, 0.28));
+  border: 1px solid var(--dash-line, rgba(var(--accent-rgb), 0.28));
   border-radius: 6px;
 }
 .w2map-pick-count:disabled { opacity: 0.45; }
 
 /* The player's own men in the selected region (garrison, or a party on the way). */
-.w2map-your-men { margin: 0 0 8px; color: var(--dash-gold-bright, #d1ae63); font-size: 12px; }
+.w2map-your-men { margin: 0 0 8px; color: var(--dash-gold-bright, var(--accent-bright)); font-size: 12px; }

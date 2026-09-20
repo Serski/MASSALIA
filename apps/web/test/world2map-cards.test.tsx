@@ -110,6 +110,8 @@ describe("World2Map region cards", () => {
   it("a townless region keeps its action row, and Massalia's own region shows Send Men Here", async () => {
     const { view, svg } = await mountMap();
     await act(async () => tap(svg, "R046"));
+    // The selection outline is drawn in the bright accent.
+    expect(document.querySelector('path[stroke="#d6873f"]')).not.toBeNull();
     const card = view.container.querySelector('[role="dialog"][data-region="R046"]')!;
     expect([...card.querySelectorAll(".w2map-action")].map((b) => b.textContent)).toEqual(["Attack", "Raid", "Scout", "Colonise"]);
     expect(card.textContent).toContain("No towns in this region.");

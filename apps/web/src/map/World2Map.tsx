@@ -116,8 +116,8 @@ const POPOVER_OFFSET = 16;
 const POPOVER_PAD = 8;
 
 // Palette.
-const SELECT_GOLD = "#d8b56a";
-const HOVER_WASH = "#c8ad73";
+const SELECT_GOLD = "#d6873f";
+const HOVER_WASH = "#d6873f";
 const SEA_LATTICE = "#4d82b8";
 const FOG_DARK = "#0b0a08";
 // CK2-style borders. The seam-seal stroke (world units) fattens each owned
