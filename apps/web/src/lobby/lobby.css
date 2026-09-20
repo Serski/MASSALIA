@@ -879,6 +879,7 @@
 
 .lobby-btn-danger {
   color: var(--danger-text);
+  background: transparent;
   border-color: var(--danger);
 }
 

@@ -3264,7 +3264,7 @@
 }
 .dashboard-shell .composure-fill.tone-high{ background: linear-gradient(90deg, var(--dash-good), #9ec487); }
 .dashboard-shell .composure-fill.tone-mid{ background: linear-gradient(90deg, var(--dash-bronze), var(--dash-gold-bright)); }
-.dashboard-shell .composure-fill.tone-low{ background: linear-gradient(90deg, var(--danger), var(--danger)); }
+.dashboard-shell .composure-fill.tone-low{ background: linear-gradient(90deg, var(--danger), var(--dash-bad)); }
 .dashboard-shell .composure-read{
   display: flex;
   align-items: center;
@@ -3306,7 +3306,7 @@
 .dashboard-shell .cs-stat-cap { font-size: 10px; opacity: 0.5; margin-left: 1px; }
 .dashboard-shell .cs-stat.declining .cs-stat-v { color: var(--danger-text); }
 .dashboard-shell .cs-stat-decay { font-size: 10px; color: var(--danger-text); margin-left: 3px; vertical-align: middle; }
-.dashboard-shell .cs-deceased { color: rgba(201, 139, 106, 0.9); font-weight: 700; }
+.dashboard-shell .cs-deceased { color: var(--danger-text); font-weight: 700; }
 
 /* Family pack, Prompt B: children & birth event. */
 .dashboard-shell .child-card, .dashboard-shell .birth-card { margin-bottom: 8px; }
@@ -3664,9 +3664,8 @@
   cursor: default;
 }
 
-/* Secondary (Sell) buttons, class name still "silver": the secondary fill is cream,
-   flat like the accent button (theme prompt 1). Its is-busy (pressed) and
-   is-waiting (frozen sibling) companions live with the Phase-5 in-flight rules above. */
+/* The secondary Sell buttons are a flat cream fill with dark text; the is-busy and
+   is-waiting companions live with the in-flight rules above. */
 .dashboard-shell .panel-btn.silver{
   color: var(--on-accent);
   background: var(--cream);
