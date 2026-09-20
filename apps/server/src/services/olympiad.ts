@@ -247,7 +247,7 @@ export async function olympiadStatus(character: CharacterRow) {
     const cand = await db
       .select({ id: olympicCandidates.id })
       .from(olympicCandidates)
-      .where(and(eq(olympicCandidates.olympiadGameYear, cycle.gameYear), eq(olympicCandidates.characterId, character.id)))
+      .where(and(eq(olympicCandidates.worldId, cycle.worldId), eq(olympicCandidates.olympiadGameYear, cycle.gameYear), eq(olympicCandidates.characterId, character.id)))
       .limit(1);
     youAreCandidate = cand.length > 0;
   }

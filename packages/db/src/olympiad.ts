@@ -41,6 +41,9 @@ async function activeWorld(): Promise<{ id: string; startedMs: number } | null> 
   return rows[0] ? { id: rows[0].id, startedMs: rows[0].startedAt.getTime() } : null;
 }
 
+// The active world's characters, as a subquery for IN (...).
+const charactersOf = (worldId: string) => db.select({ id: playerCharacters.id }).from(playerCharacters).where(eq(playerCharacters.worldId, worldId));
+
 // The most recent Olympiad row for the active world (for status + announcements).
 export async function latestOlympiad(): Promise<OlympiadRow | null> {
   const world = await activeWorld();
@@ -107,10 +110,12 @@ export async function deliverOlympicNominationForCharacterId(characterId: string
 }
 
 // The global sweep delivery: ensure the cycle, then deliver the nominate event to
-// EVERY living, non-excluded character. Returns the number delivered.
+// EVERY living, non-excluded character of the active world. Returns the number delivered.
 export async function deliverOlympicNominationToAll(cfg: CalendarConfig, now: Date = new Date()): Promise<number> {
   const olympiad = olympiadConfig(cfg);
   if (!olympiad) return 0;
+  const world = await activeWorld();
+  if (!world) return 0;
   const cycle = await ensureOlympiad(cfg, now);
   if (!cycle || cycle.phase !== "nomination") return 0;
 
@@ -118,7 +123,7 @@ export async function deliverOlympicNominationToAll(cfg: CalendarConfig, now: Da
     .select({ id: playerCharacters.id, classId: playerCharacters.classId })
     .from(playerCharacters)
     .innerJoin(players, eq(players.id, playerCharacters.playerId))
-    .where(and(eq(playerCharacters.status, "alive"), eq(players.isActive, true)));
+    .where(and(eq(playerCharacters.worldId, world.id), eq(playerCharacters.status, "alive"), eq(players.isActive, true)));
 
   let delivered = 0;
   for (const row of living) {
@@ -162,6 +167,8 @@ export interface BallotEntry {
 // The candidates of an Olympiad (name/house/class/prestige) — standings are NOT
 // included here; the caller keeps live tallies hidden until close.
 export async function getOlympiadBallot(gameYear: number): Promise<BallotEntry[]> {
+  const world = await activeWorld();
+  if (!world) return [];
   const rows = await db
     .select({
       characterId: olympicCandidates.characterId,
@@ -176,7 +183,7 @@ export async function getOlympiadBallot(gameYear: number): Promise<BallotEntry[]
     .innerJoin(playerCharacters, eq(playerCharacters.id, olympicCandidates.characterId))
     .innerJoin(players, eq(players.id, playerCharacters.playerId))
     .innerJoin(houses, eq(houses.slug, players.houseSlug))
-    .where(eq(olympicCandidates.olympiadGameYear, gameYear));
+    .where(and(eq(olympicCandidates.worldId, world.id), eq(olympicCandidates.olympiadGameYear, gameYear)));
 
   return rows.map((row) => ({
     characterId: row.characterId,
@@ -208,7 +215,7 @@ export async function castOlympiadVote(voterCharacterId: string, candidateCharac
     await db
       .select({ id: olympicCandidates.id })
       .from(olympicCandidates)
-      .where(and(eq(olympicCandidates.olympiadGameYear, gameYear), eq(olympicCandidates.characterId, candidateCharacterId)))
+      .where(and(eq(olympicCandidates.worldId, world.id), eq(olympicCandidates.olympiadGameYear, gameYear), eq(olympicCandidates.characterId, candidateCharacterId)))
       .limit(1)
   )[0];
   if (!candidate) return "unknown_candidate";
@@ -218,7 +225,7 @@ export async function castOlympiadVote(voterCharacterId: string, candidateCharac
     await db
       .select({ id: olympicVotes.id })
       .from(olympicVotes)
-      .where(and(eq(olympicVotes.olympiadGameYear, gameYear), eq(olympicVotes.voterCharacterId, voterCharacterId)))
+      .where(and(eq(olympicVotes.worldId, world.id), eq(olympicVotes.olympiadGameYear, gameYear), eq(olympicVotes.voterCharacterId, voterCharacterId)))
       .limit(1)
   )[0];
   if (existing) return "already_voted";
@@ -233,10 +240,12 @@ export async function castOlympiadVote(voterCharacterId: string, candidateCharac
 }
 
 export async function getVoterChoice(voterCharacterId: string, gameYear: number): Promise<string | null> {
+  const world = await activeWorld();
+  if (!world) return null;
   const rows = await db
     .select({ candidateCharacterId: olympicVotes.candidateCharacterId })
     .from(olympicVotes)
-    .where(and(eq(olympicVotes.olympiadGameYear, gameYear), eq(olympicVotes.voterCharacterId, voterCharacterId)))
+    .where(and(eq(olympicVotes.worldId, world.id), eq(olympicVotes.olympiadGameYear, gameYear), eq(olympicVotes.voterCharacterId, voterCharacterId)))
     .limit(1);
   return rows[0]?.candidateCharacterId ?? null;
 }
@@ -244,11 +253,13 @@ export async function getVoterChoice(voterCharacterId: string, gameYear: number)
 // The current delegates of an Olympiad: this year's candidates who hold the
 // delegate trait (scoped so a stale grant elsewhere never leaks in).
 export async function olympiadDelegates(gameYear: number): Promise<{ characterId: string; status: string }[]> {
+  const world = await activeWorld();
+  if (!world) return [];
   const candidates = await db
     .select({ characterId: olympicCandidates.characterId, status: playerCharacters.status })
     .from(olympicCandidates)
     .innerJoin(playerCharacters, eq(playerCharacters.id, olympicCandidates.characterId))
-    .where(eq(olympicCandidates.olympiadGameYear, gameYear));
+    .where(and(eq(olympicCandidates.worldId, world.id), eq(olympicCandidates.olympiadGameYear, gameYear)));
   if (candidates.length === 0) return [];
 
   const delegateRows = await db
@@ -291,11 +302,12 @@ export async function advanceOlympiads(cfg: CalendarConfig, now: Date = new Date
     // nomination → voting
     if (cycle.phase === "nomination" && cycle.nominationEndsAt && now.getTime() >= cycle.nominationEndsAt.getTime()) {
       await db.update(olympiads).set({ phase: "voting", votingEndsAt: new Date(now.getTime() + olympiad.votingRealDays * period) }).where(and(eq(olympiads.id, cycle.id), eq(olympiads.phase, "nomination")));
-      // The nominate window has shut — stop surfacing the (unresolved) card.
+      // The nominate window has shut — stop surfacing the (unresolved) card. Only this
+      // world's cards: an ended world keeps the same festival id and game years.
       await db
         .update(festivalEvents)
         .set({ resolved: true, resolvedChoiceId: "expired" })
-        .where(and(eq(festivalEvents.festivalId, olympiad.id), eq(festivalEvents.gameYear, cycle.gameYear), eq(festivalEvents.resolved, false)));
+        .where(and(eq(festivalEvents.festivalId, olympiad.id), eq(festivalEvents.gameYear, cycle.gameYear), eq(festivalEvents.resolved, false), inArray(festivalEvents.characterId, charactersOf(world.id))));
       cycle.phase = "voting";
       cycle.votingEndsAt = new Date(now.getTime() + olympiad.votingRealDays * period);
       summary.transitions.push("nomination→voting");
@@ -303,7 +315,7 @@ export async function advanceOlympiads(cfg: CalendarConfig, now: Date = new Date
 
     // voting → resolved (tally, crown delegates)
     if (cycle.phase === "voting" && cycle.votingEndsAt && now.getTime() >= cycle.votingEndsAt.getTime()) {
-      const winners = await resolveBallot(cycle.gameYear, olympiad);
+      const winners = await resolveBallot(world.id, cycle.gameYear, olympiad);
       await db.update(olympiads).set({ phase: "resolved", payoffAt: new Date(now.getTime() + olympiad.payoffPeriodsLater * period) }).where(and(eq(olympiads.id, cycle.id), eq(olympiads.phase, "voting")));
       cycle.phase = "resolved";
       cycle.payoffAt = new Date(now.getTime() + olympiad.payoffPeriodsLater * period);
@@ -327,16 +339,16 @@ export async function advanceOlympiads(cfg: CalendarConfig, now: Date = new Date
 
 // Tally + crown: grant the delegate trait to the top `seats` (tie-breaks in the
 // shared module). Returns the winners' character ids.
-async function resolveBallot(gameYear: number, olympiad: OlympiadConfig): Promise<string[]> {
+async function resolveBallot(worldId: string, gameYear: number, olympiad: OlympiadConfig): Promise<string[]> {
   const candidateRows = await db
     .select({ characterId: olympicCandidates.characterId, prestige: playerCharacters.prestige, nominatedAt: olympicCandidates.nominatedAt })
     .from(olympicCandidates)
     .innerJoin(playerCharacters, eq(playerCharacters.id, olympicCandidates.characterId))
-    .where(eq(olympicCandidates.olympiadGameYear, gameYear));
+    .where(and(eq(olympicCandidates.worldId, worldId), eq(olympicCandidates.olympiadGameYear, gameYear)));
   const voteRows = await db
     .select({ voterCharacterId: olympicVotes.voterCharacterId, candidateCharacterId: olympicVotes.candidateCharacterId })
     .from(olympicVotes)
-    .where(eq(olympicVotes.olympiadGameYear, gameYear));
+    .where(and(eq(olympicVotes.worldId, worldId), eq(olympicVotes.olympiadGameYear, gameYear)));
 
   const candidates: BallotCandidate[] = candidateRows.map((row) => ({ characterId: row.characterId, prestige: row.prestige, nominatedAt: row.nominatedAt.getTime() }));
   const votes: BallotVote[] = voteRows.map((row) => ({ voterCharacterId: row.voterCharacterId, candidateCharacterId: row.candidateCharacterId }));
