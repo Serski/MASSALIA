@@ -553,7 +553,7 @@ body {
 
 .atlas-section {
   display: grid;
-  grid-template-columns: minmax(250px, 0.44fr) minmax(420px, 1.1fr);
+  grid-template-columns: minmax(300px, 0.66fr) minmax(420px, 1fr);
   gap: clamp(24px, 4vw, 56px);
   align-items: center;
   background:
