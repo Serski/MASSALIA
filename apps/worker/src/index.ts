@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Queue, Worker, type Job } from "bullmq";
 import { BACKUP_JOB_NAME, BACKUP_SCHEDULE, runBackup } from "./jobs/backup.js";
 import { completionDelayMs, parseAgeConfig, parseAgendaFile, parseCalendarConfig, parseContractsContent, parseFamilyConfig, parsePoliticsConfig, parseTraitsFile, REAL_MS_PER_SEASON, type AgeConfig, type AgendaScope, type CalendarConfig, type ContractsContent, type FamilyConfig, type PoliticsConfig, type Trait } from "@massalia/shared";
-import { accrueLeagueCities, accrueTreasuries, advanceAgendaCycles, advanceElections, advanceOlympiads, closeDueChamberVotes, closeDueFestivals, createDb, deleteExpiredSessions, deliverOlympicNominationToAll, drawFamilyCandidates, endDbPools, ensurePartyLeaders, fireFestivalsForAll, openAgendaCycleIfDue, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, sweepMercenaryContracts, sweepSpouseDeaths, type AgendaPools, type MercContractCfgMap } from "@massalia/db";
+import { accrueLeagueCities, accrueTreasuries, advanceAgendaCycles, advanceElections, advanceOlympiads, characterInActiveWorld, closeDueChamberVotes, closeDueFestivals, createDb, deleteExpiredSessions, deliverOlympicNominationToAll, drawFamilyCandidates, endDbPools, ensurePartyLeaders, fireFestivalsForAll, openAgendaCycleIfDue, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, sweepMercenaryContracts, sweepSpouseDeaths, type AgendaPools, type MercContractCfgMap } from "@massalia/db";
 
 const redisUrl = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
 const connection = {
@@ -252,12 +252,21 @@ const processJob = async (job: Job) => {
       return;
     }
     if (job.name === "censure-resolve") {
-      const outcome = await resolveCensureIfExpired(job.data.characterId as string);
-      console.log(`Resolved censure for ${job.data.characterId}: ${outcome}`);
+      const characterId = job.data.characterId as string;
+      if (!(await characterInActiveWorld(characterId))) {
+        console.log(`${job.name} for ${characterId}: character not in the active world, dropped (not re-armed)`);
+        return;
+      }
+      const outcome = await resolveCensureIfExpired(characterId);
+      console.log(`Resolved censure for ${characterId}: ${outcome}`);
       return;
     }
     if (job.name === "family-candidate-draw") {
       const characterId = job.data.characterId as string;
+      if (!(await characterInActiveWorld(characterId))) {
+        console.log(`${job.name} for ${characterId}: character not in the active world, dropped (not re-armed)`);
+        return;
+      }
       const { familyCfg: fc, ageCfg: ac } = await configs();
       const drawn = await drawFamilyCandidates(characterId, { familyCfg: fc, ageCfg: ac });
       console.log(`Drew ${drawn.length} family candidates for ${characterId}`);
@@ -271,6 +280,10 @@ const processJob = async (job: Job) => {
     }
     if (job.name === "family-child-roll") {
       const characterId = job.data.characterId as string;
+      if (!(await characterInActiveWorld(characterId))) {
+        console.log(`${job.name} for ${characterId}: character not in the active world, dropped (not re-armed)`);
+        return;
+      }
       const { familyCfg: fc, ageCfg: ac } = await configs();
       const births = await rollChildrenDue(characterId, { familyCfg: fc, ageCfg: ac });
       console.log(`Child roll for ${characterId}: ${births.length} birth(s)`);
