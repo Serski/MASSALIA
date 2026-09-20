@@ -29,7 +29,7 @@ const FACTION_GROUP_META: { id: FactionGroup; label: string }[] = [
 // Colour a relation by its display band's −2..+2 value (hostile → cordial).
 function stanceColor(value: number): string {
   if (value <= -2) return "var(--dash-bad)";
-  if (value === -1) return "#c98b6a";
+  if (value === -1) return "#cfa0a5";
   if (value === 0) return "var(--dash-stone)";
   if (value === 1) return "#9bb87a";
   return "var(--dash-good)";
@@ -37,8 +37,8 @@ function stanceColor(value: number): string {
 
 // Faint stance-tinted background for the list pill, matching stanceColor's bands.
 function stanceTint(value: number): string {
-  if (value <= -2) return "rgba(187, 106, 82, 0.16)";
-  if (value === -1) return "rgba(201, 139, 106, 0.14)";
+  if (value <= -2) return "rgba(184, 67, 79, 0.16)";
+  if (value === -1) return "rgba(184, 67, 79, 0.10)";
   if (value === 0) return "rgba(184, 168, 144, 0.10)";
   if (value === 1) return "rgba(155, 184, 122, 0.14)";
   return "rgba(126, 163, 106, 0.16)";

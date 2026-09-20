@@ -604,9 +604,9 @@ p.w2map-stat-asof {
   margin: 10px 0;
   padding: 8px 10px;
   font-size: 12px;
-  border: 1px solid rgba(187, 106, 82, 0.5);
+  border: 1px solid rgba(var(--danger-rgb), 0.5);
   border-radius: 0;
-  background: rgba(187, 106, 82, 0.12);
+  background: rgba(var(--danger-rgb), 0.12);
 }
 
 .w2map-verdict.ok { border-color: rgba(var(--accent-rgb), 0.5); background: rgba(var(--accent-rgb), 0.12); }
@@ -624,7 +624,7 @@ p.w2map-stat-asof {
 .w2map-report-table th,
 .w2map-report-table td { padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--dash-line, rgba(var(--accent-rgb), 0.28)); }
 .w2map-report-table th { color: var(--dash-stone-dim, #9a8c72); font-weight: 600; }
-.w2map-report-enemy td { color: #e0a49a; }
+.w2map-report-enemy td { color: var(--danger-text); }
 .w2map-report-note { margin: 0 0 8px; color: var(--dash-stone, #c9bb9f); font-size: 12px; }
 
 /* Picker and report icons (the Barracks roster's size), and the men count for a trained row. */
