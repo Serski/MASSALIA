@@ -243,3 +243,23 @@ STOP 0 ruling (Argiris, 20 Sept 2026). Save it verbatim at the end of the prompt
 2. The shared rule at dashboard.css:350 to 356 is changed as one rule for both navs: the gradient wash becomes `background: rgba(var(--accent-rgb), 0.16); border-color: var(--accent);` and its `color` goes cream through the table. No split, no new rule. The lobby rule at 909 to 916 is read the same way: all three selectors, `.lobby-nav-active`, `.lobby-header-actions .lobby-nav-active` and its `:hover`, take `background: var(--accent)`.
 
 3. The table applies to `.align-bar`. Its midpoint becomes `rgba(var(--accent-rgb), 0.25)`; the `#c08a5e` stop is in no table and stays, with `var(--dash-ref)` at the other end. The fence entry for line 2162 is withdrawn and the Phase 5 dist allowance is unchanged. `.closing-cta` is a section, not a button, and stays as it is.
+
+## STOP 1 ruling (20 Sept 2026)
+
+STOP 1 ruling (Argiris, 20 Sept 2026). Save it verbatim at the end of docs/theme/theme-prompt-1.md in the first of the two commits below, then proceed.
+
+Item 3, accent text goes bright (commit 5, `theme: accent text goes bright`). Terracotta is a fill and border colour, never a text colour. In the five stylesheets, every declaration of the property `color` (the property itself, not `border-color`, `background-color` or `accent-color`) whose value reads `--gold`, `--dash-gold`, `--lobby-gold`, `--bronze`, `--dash-bronze`, `--lobby-bronze` or `--accent` moves to the bright name of its family: `--gold` → `--gold-bright`, `--dash-gold` → `--dash-gold-bright`, `--lobby-gold` → `--lobby-gold-bright`, the three bronzes and `--accent` → `--accent-bright`. A fallback inside the `var()` moves with it, so `var(--dash-gold, var(--accent))` becomes `var(--dash-gold-bright, var(--accent-bright))`. Counted at c6b2f9e that is 34 declarations: 7 in styles.css, 17 in dashboard.css, 4 in lobby.css, 3 in characterCreation.css, 3 in World2Map.css, four of them mid-line in one-line rules. Three inline styles move the same way, to `"var(--dash-gold-bright)"`: `dashboard/panels/CitiesView.tsx:75`, `DiplomacyView.tsx:133`, `StandingsPanel.tsx:75`; CitiesView.tsx is added to the fence for that one line. `fill` and `stroke` do not move. Verify: the grep for a `color` declaration on any of those seven names over the five files and `apps/web/src` returns nothing.
+
+Items 1, 2, 6, 9, 10 and 11 (commit 6, `theme: STOP 1 fixes`):
+1. `.nav-signup` (styles.css:242) takes the Phase 2 recipe: `background: var(--accent); color: var(--on-accent); border-color: var(--accent);` and its hover rule, if one exists, the bright fill.
+2. `.cs-deceased` becomes `color: var(--danger-text)`, no alpha.
+6. `.composure-fill.tone-low` reads `linear-gradient(90deg, var(--danger), var(--dash-bad))`, dark to light like its two siblings.
+9. `.auth-tab-toggle button.active` loses its whole `box-shadow`, the blue inset ring and the drop shadow. The flat fill alone marks the active tab.
+10. `.lobby-btn-danger` takes `background: transparent`; its hover keeps the wine tint.
+11. The comment at dashboard.css:3679 to 3681 is rewritten in one place to say: the secondary Sell buttons are a flat cream fill with dark text; the is-busy and is-waiting companions live with the in-flight rules above.
+
+Accepted as they stand, no change: item 4, everything at 50% stays round, as Phase 3 says; item 5, pre-existing; item 7, the phone override at 1560 stays; item 8, the stepper bar takes only the fill; item 12, the Messapi polity colour is map data and stays.
+
+Then: the gate at HEAD after commit 6, ending GATE GREEN; the computed-style scan again on every surface, and it must report zero text in #b8612f and zero gradients on buttons, the Sign up button included; the captures retaken for landing, auth-sheet, lobby-worlds, court, ledger, barracks, atlas-force-picker and character-sheet-alignment at both widths.
+
+Push. Fast-forward only, plain `git push`, the six commits ca3df1c to the new HEAD. Report remote HEAD, the CI run and its Gate step, the Pages run, and the Railway server and worker deploys (they rebuild on any push; nothing in them changed, no migration). Then the close-out: dev servers and the throwaway Postgres stopped, tree clean at remote HEAD, and a short handoff with the six `Committed:` lines, the gate line and the two scan counts.

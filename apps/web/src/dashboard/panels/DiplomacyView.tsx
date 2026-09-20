@@ -130,7 +130,7 @@ function FactionStatusBadges({ faction }: { faction: FactionView }) {
 // Small uppercase section heading inside the detail panel.
 function PanelSectionLabel({ children }: { children: ReactNode }) {
   return (
-    <div style={{ color: "var(--dash-gold)", textTransform: "uppercase", letterSpacing: "0.12em", fontSize: "0.72em", fontWeight: 700, margin: "0 0 4px" }}>
+    <div style={{ color: "var(--dash-gold-bright)", textTransform: "uppercase", letterSpacing: "0.12em", fontSize: "0.72em", fontWeight: 700, margin: "0 0 4px" }}>
       {children}
     </div>
   );

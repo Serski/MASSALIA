@@ -72,7 +72,7 @@ export function CitiesView() {
                 <span style={numCellStyle}>{c.population.toLocaleString()}</span>
                 <span style={numCellStyle}>{c.tax.toLocaleString()}</span>
                 <span style={numCellStyle}>{c.stability}</span>
-                <span style={{ ...numCellStyle, color: "var(--dash-gold)", letterSpacing: "1px" }} title={`${c.fortifications}/5`}>
+                <span style={{ ...numCellStyle, color: "var(--dash-gold-bright)", letterSpacing: "1px" }} title={`${c.fortifications}/5`}>
                   {fortPips(c.fortifications)}
                 </span>
                 <span style={numCellStyle}>{c.garrison.toLocaleString()}</span>

@@ -1195,7 +1195,7 @@
     order: 1;
     min-height: 0;
     margin-bottom: 12px;
-    color: var(--dash-gold);
+    color: var(--dash-gold-bright);
     font-size: 9.5px;
     letter-spacing: 0.16em;
   }
@@ -1208,7 +1208,7 @@
   }
 
   .dashboard-shell .season-strip strong{
-    color: var(--dash-gold);
+    color: var(--dash-gold-bright);
     font-size: 9.5px;
     font-weight: 900;
   }
@@ -1280,7 +1280,7 @@
     gap: 8px;
     align-items: center;
     margin: 6px 0 10px;
-    color: var(--dash-gold);
+    color: var(--dash-gold-bright);
     font-size: 10px;
     letter-spacing: 0.18em;
   }
@@ -1372,7 +1372,7 @@
   }
 
   .dashboard-shell .decision-subhead strong{
-    color: var(--dash-gold);
+    color: var(--dash-gold-bright);
     font-family: var(--font-display);
     font-size: 10px;
     font-weight: 900;
@@ -1722,7 +1722,7 @@
   gap: 9px;
   align-items: center;
   margin: 16px 0 10px;
-  color: var(--dash-gold);
+  color: var(--dash-gold-bright);
   font-family: var(--font-display);
   font-size: 10px;
   letter-spacing: 0.18em;
@@ -1987,7 +1987,7 @@
 }
 
 .dashboard-shell .res-sub{
-  color: var(--dash-gold);
+  color: var(--dash-gold-bright);
   font-size: 9px;
 }
 
@@ -2478,7 +2478,7 @@
   gap: 10px;
   align-items: center;
   margin: 0 0 12px;
-  color: var(--dash-gold);
+  color: var(--dash-gold-bright);
   font-family: var(--font-display);
   font-size: 10.5px;
   letter-spacing: 0.16em;
@@ -2678,7 +2678,7 @@
 }
 .dashboard-shell .choice-picker-chevron{
   flex: none;
-  color: var(--dash-gold);
+  color: var(--dash-gold-bright);
   transition: transform 0.15s;
 }
 .dashboard-shell .choice-picker.open .choice-picker-chevron{
@@ -2844,7 +2844,7 @@
   height: 50px;
   flex: none;
   place-items: center;
-  color: var(--dash-gold);
+  color: var(--dash-gold-bright);
   background: radial-gradient(circle at 42% 32%, #2c2419, #15100c);
   border: 2px solid var(--dash-gold);
   border-radius: 50%;
@@ -3111,7 +3111,7 @@
 }
 
 .dashboard-shell .mkt-seller.game{
-  color: var(--dash-gold);
+  color: var(--dash-gold-bright);
 }
 
 .dashboard-shell .mkt-act{
@@ -3172,7 +3172,7 @@
 .dashboard-shell .party-body{ padding: 13px 15px; }
 
 .dashboard-shell .party-greek{
-  color: var(--dash-gold);
+  color: var(--dash-gold-bright);
   font-family: var(--font-display);
   font-size: 9.5px;
   letter-spacing: 0.14em;
@@ -3380,7 +3380,7 @@
 /* Family pack, Prompt C: succession screen, regent badge, dynasty header. */
 .succession-shell { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: radial-gradient(ellipse at top, rgba(40, 26, 16, 0.6), rgba(10, 7, 5, 0.98)); }
 .succession-card { max-width: 540px; width: 100%; padding: 28px; border-radius: 0; background: rgba(18, 13, 9, 0.92); border: 1px solid rgba(var(--accent-rgb), 0.3); box-shadow: 0 24px 60px rgba(0,0,0,0.5); display: grid; gap: 14px; }
-.succession-title { font-size: 24px; line-height: 1.25; color: var(--dash-gold, var(--accent-bright)); }
+.succession-title { font-size: 24px; line-height: 1.25; color: var(--dash-gold-bright, var(--accent-bright)); }
 .succession-epitaph { opacity: 0.78; }
 /* Murder variant (assassination / poison): a crimson cast so a killing does not read
    like a quiet passing. Reuses the affliction-banner crimson. */
@@ -3477,7 +3477,7 @@
 .dashboard-shell .office-seat-title { font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--dash-stone); }
 .dashboard-shell .office-seat-sub { font-size: 13px; color: var(--dash-parchment); margin-top: 2px; }
 .dashboard-shell .office-seat-sub.vacant { color: var(--dash-stone-dim); font-style: italic; }
-.dashboard-shell .office-via { color: var(--dash-gold); }
+.dashboard-shell .office-via { color: var(--dash-gold-bright); }
 .dashboard-shell .appoint-picker { display: flex; flex-direction: column; gap: 6px; width: 100%; margin-top: 4px; }
 .dashboard-shell .election-card { margin-bottom: 14px; border: 1px solid rgba(var(--accent-rgb), 0.45); background: linear-gradient(180deg, rgba(40, 30, 18, 0.5), rgba(16, 12, 9, 0.6)); }
 .dashboard-shell .ballot-side { margin-top: 8px; }
@@ -3808,7 +3808,7 @@
   width: 30px;
   height: 30px;
   margin-top: 1px;
-  color: var(--dash-gold);
+  color: var(--dash-gold-bright);
 }
 
 .dashboard-shell .welcome-tab-ic svg{
@@ -3837,7 +3837,7 @@
 
 .dashboard-shell .welcome-section{
   margin: 22px 0 12px;
-  color: var(--dash-gold);
+  color: var(--dash-gold-bright);
   font-family: var(--font-display);
   font-size: 11px;
   letter-spacing: 0.16em;
@@ -3924,7 +3924,7 @@
 /* The overlay's closing "read this again" pointer to the Guide. */
 .dashboard-shell .welcome-reread{
   margin: 10px 0 0;
-  color: var(--dash-gold);
+  color: var(--dash-gold-bright);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -4029,7 +4029,7 @@
 .dashboard-shell .barracks-stack{ display: flex; flex-direction: column; gap: 22px; }
 .dashboard-shell .barracks-section{ display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .dashboard-shell .barracks-head{ display: flex; align-items: center; gap: 14px; }
-.dashboard-shell .barracks-head-title{ color: var(--dash-gold); font-family: var(--font-display); font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; }
+.dashboard-shell .barracks-head-title{ color: var(--dash-gold-bright); font-family: var(--font-display); font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; }
 .dashboard-shell .barracks-head-rule{ flex: 1; height: 1px; background: var(--dash-line); }
 .dashboard-shell .barracks-head-note{ color: var(--dash-stone-dim); font-size: 12px; letter-spacing: 0.04em; }
 

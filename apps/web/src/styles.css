@@ -288,7 +288,7 @@ body {
 .hero-eyebrow,
 .section-eyebrow {
   margin: 0;
-  color: var(--gold);
+  color: var(--gold-bright);
   font-family: var(--font-display);
   font-size: 12px;
   font-weight: 700;
@@ -571,7 +571,7 @@ body {
 }
 
 .pillar-kicker {
-  color: var(--gold);
+  color: var(--gold-bright);
   font-family: var(--font-display);
   font-size: 13px;
   font-weight: 800;
@@ -639,7 +639,7 @@ body {
 
 .tile-kicker,
 .house-align {
-  color: var(--gold);
+  color: var(--gold-bright);
   font-family: var(--font-display);
   font-size: 12px;
   font-weight: 700;
@@ -951,7 +951,7 @@ body {
 }
 
 .city-item strong {
-  color: var(--gold);
+  color: var(--gold-bright);
   font-weight: 600;
 }
 
@@ -1333,7 +1333,7 @@ body {
 }
 
 .tier-list span {
-  color: var(--gold);
+  color: var(--gold-bright);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -1574,7 +1574,7 @@ body {
 .auth-brandline {
   z-index: 1;
   margin: 0;
-  color: var(--gold);
+  color: var(--gold-bright);
   font-size: 9px;
   letter-spacing: 0.2em;
 }
@@ -1927,7 +1927,7 @@ button.auth-forgot {
 }
 
 .legal-article strong {
-  color: var(--gold, var(--accent));
+  color: var(--gold-bright, var(--accent-bright));
 }
 
 .legal-article a {

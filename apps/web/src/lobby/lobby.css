@@ -90,7 +90,7 @@
 }
 
 .lobby-brand-text small {
-  color: var(--lobby-gold);
+  color: var(--lobby-gold-bright);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.22em;
@@ -640,7 +640,7 @@
 
 .lobby-citizen-rank {
   flex: 0 0 28px;
-  color: var(--lobby-gold);
+  color: var(--lobby-gold-bright);
   font-family: var(--font-display);
   font-size: 12px;
   font-weight: 700;
@@ -730,7 +730,7 @@
 
 .lobby-eyebrow {
   margin: 0;
-  color: var(--lobby-gold);
+  color: var(--lobby-gold-bright);
   font-family: var(--font-display);
   font-size: 10.5px;
   font-weight: 700;
@@ -1003,7 +1003,7 @@
 
 .lobby-tag {
   padding: 2px 8px;
-  color: var(--gold);
+  color: var(--gold-bright);
   font-family: var(--font-display);
   font-size: 9.5px;
   font-weight: 700;

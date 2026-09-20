@@ -153,7 +153,7 @@
   gap: 9px;
   align-items: center;
   margin: 12px 0 6px;
-  color: var(--dash-gold, var(--accent));
+  color: var(--dash-gold-bright, var(--accent-bright));
   font-family: var(--font-display, "Cinzel", serif);
   font-size: 10px;
   letter-spacing: 0.16em;
@@ -234,7 +234,7 @@
 }
 .w2map-town-entry:hover { border-color: var(--dash-gold, var(--accent)); background: rgba(var(--accent-rgb), 0.2); }
 .w2map-town-entry:focus-visible { outline: none; border-color: var(--dash-gold-bright, var(--accent-bright)); }
-.w2map-town-entry-go { color: var(--dash-gold, var(--accent)); font-size: 16px; line-height: 1; }
+.w2map-town-entry-go { color: var(--dash-gold-bright, var(--accent-bright)); font-size: 16px; line-height: 1; }
 .w2map-info-note { margin: 6px 0 0; color: var(--dash-stone-dim, #9a8c72); font-size: 12px; font-style: italic; }
 .w2map-btn:disabled { opacity: 0.4; cursor: default; }
 
@@ -336,7 +336,7 @@
 
 .w2map-stat-pips {
   margin-right: 6px;
-  color: var(--dash-gold, var(--accent));
+  color: var(--dash-gold-bright, var(--accent-bright));
   letter-spacing: 1px;
 }
 

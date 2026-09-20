@@ -72,7 +72,7 @@ function StandingsRowItem({ row, onOpen }: { row: StandingRow; onOpen: (row: Sta
       <span style={standingsNameStyle}>
         <HouseCrest house={row.house} />
         {row.name}
-        {row.isViewer ? <strong style={{ color: "var(--dash-gold)" }}> · You</strong> : null}
+        {row.isViewer ? <strong style={{ color: "var(--dash-gold-bright)" }}> · You</strong> : null}
       </span>
       <span style={standingsMetaStyle}>
         {titleCase(row.house)}
