@@ -1222,7 +1222,7 @@
 
   .dashboard-shell .topbar-actions{
     order: 2;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 8px;
     width: 100%;
     justify-self: stretch;
@@ -1235,6 +1235,7 @@
   .dashboard-shell .avatar-btn{
     margin-left: auto;
     padding-left: 10px;
+    flex: 0 0 auto;
   }
 
   .dashboard-shell .avatar-av{
@@ -1626,6 +1627,27 @@
     border-color: rgba(var(--accent-bright-rgb), 0.5);
     background: rgba(var(--accent-rgb), 0.12);
   }
+}
+
+@media (max-width: 480px) {
+  /* Phones: the purse stacks its label under the number, as the Inventory chip
+     stacks its two lines, so both chips and the portrait hold one row. */
+  .dashboard-shell .topbar-vital{ padding: 7px 10px; }
+  .dashboard-shell .topbar-vital:has(> .vital-v){
+    display: inline-grid;
+    grid-template-columns: auto auto;
+    grid-template-areas: "ic v" "ic k";
+    gap: 2px 9px;
+    align-items: center;
+  }
+  .dashboard-shell .topbar-vital:has(> .vital-v) > .vital-ic{ grid-area: ic; }
+  .dashboard-shell .topbar-vital:has(> .vital-v) > .vital-v{ grid-area: v; text-align: left; }
+  .dashboard-shell .topbar-vital:has(> .vital-v) > .vital-meta{ grid-area: k; }
+  .dashboard-shell .avatar-btn{ padding: 4px 0 4px 10px; }
+}
+
+@media (max-width: 340px) {
+  .dashboard-shell .inventory-vital > .vital-ic{ display: none; }
 }
 
 @media (max-width: 620px) {
