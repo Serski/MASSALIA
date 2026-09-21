@@ -476,13 +476,6 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
         <button className="creation-ghost-button" type="button" onClick={onExit}>Exit</button>
       </nav>
       <section className="creation-layout" aria-labelledby="creation-title">
-        <SummaryCard
-          selectedClass={selectedClass}
-          selectedHouse={selectedHouse}
-          portraitImage={selectedAvatar ? avatarSignupImage(selectedAvatar) : undefined}
-          portraitFallback={selectedAge !== null ? `Age ${selectedAge}` : "—"}
-          name={name}
-        />
         <section className="creation-panel">
           <p className="section-eyebrow">Character Creation · Step {step} of 4</p>
           <h1 id="creation-title">{steps[step - 1]}</h1>
@@ -641,6 +634,13 @@ export function CharacterCreation({ onExit, onComplete }: { onExit: () => void; 
             )}
           </footer>
         </section>
+        <SummaryCard
+          selectedClass={selectedClass}
+          selectedHouse={selectedHouse}
+          portraitImage={selectedAvatar ? avatarSignupImage(selectedAvatar) : undefined}
+          portraitFallback={selectedAge !== null ? `Age ${selectedAge}` : "—"}
+          name={name}
+        />
       </section>
       <DetailSheet
         sheet={sheet}

@@ -72,7 +72,6 @@
 .creation-summary {
   display: grid;
   gap: 14px;
-  order: -1;
   padding: 22px;
 }
 
@@ -582,7 +581,7 @@
   .creation-summary {
     position: sticky;
     top: 96px;
-    order: 0;
+    grid-row: 1;
     grid-column: 2;
   }
 
