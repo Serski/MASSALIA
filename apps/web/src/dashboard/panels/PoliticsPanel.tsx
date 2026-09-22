@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type KeyboardEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type AgendaScopeView } from "../../api.js";
 import { assetPath } from "../../data/league.js";
 import { AssetIcon, DashboardCard, DigestList, PanelBanner, type PanelProps, PanelRow, PersonRow, formatDuration, ideologyReadout, titleCase, useCountdownSeconds } from "../shared.js";
@@ -34,33 +34,49 @@ const SEAT_PARTY_LABELS: Record<SeatParty, string> = {
   independent: "Independent",
 };
 
-type SeatDot = { x: number; y: number; seat: ChamberSeat };
+type SeatDot = { x: number; y: number; angle: number; seat: ChamberSeat };
 
-// Lay the chamber out as a parliament arc: rows of dots, seats per row
-// proportional to the row's circumference. Display order groups the benches —
+// Chamber geometry (politics prompt 1): eight rows of square seats, the inner
+// row at 0.42 of the outer radius, seats per row proportional to the radius.
+const HEMI_ROWS = 8;
+const HEMI_INNER = 0.42;
+const HEMI_CX = 230;
+const HEMI_CY = 210;
+const HEMI_R = 200;
+const SEAT_HALF = 3.25;
+
+const rowRadius = (i: number) => HEMI_INNER + (i * (1 - HEMI_INNER)) / (HEMI_ROWS - 1);
+
+// Seats per row by largest remainder, so the rows always sum to the seat count
+// (300 gives 22, 27, 31, 35, 40, 44, 48, 53).
+export function hemicycleRows(total: number): number[] {
+  const radii = Array.from({ length: HEMI_ROWS }, (_, i) => rowRadius(i));
+  const weight = radii.reduce((sum, r) => sum + r, 0);
+  const exact = radii.map((r) => (total * r) / weight);
+  const counts = exact.map((x) => Math.floor(x));
+  const order = exact.map((x, i) => ({ i, frac: x - Math.floor(x) })).sort((a, b) => b.frac - a.frac || b.i - a.i);
+  let remainder = total - counts.reduce((sum, n) => sum + n, 0);
+  for (let k = 0; remainder > 0; k++, remainder--) counts[order[k % HEMI_ROWS]!.i]!++;
+  return counts;
+}
+
+// Lay the chamber out as a parliament arc. Display order groups the benches:
 // Palaioi NPCs far left, Dynatoi NPCs far right, independents in the centre,
 // and the bought/empty seats (seat_index 110+) filling the gaps left-to-right
 // as players buy in. seat_index is the stable identity; this mapping is purely
 // presentational.
-function hemicycleLayout(seats: ChamberSeat[]): SeatDot[] {
+export function hemicycleLayout(seats: ChamberSeat[]): SeatDot[] {
   const total = seats.length;
   if (!total) return [];
-  const cx = 230;
-  const cy = 212;
-  const rowCount = 6;
-  const radii = Array.from({ length: rowCount }, (_, i) => 86 + i * 22);
-  const weight = radii.reduce((sum, r) => sum + r, 0);
-  const counts = radii.map((r) => Math.floor((total * r) / weight));
-  let remainder = total - counts.reduce((sum, n) => sum + n, 0);
-  for (let i = rowCount - 1; remainder > 0; i = (i - 1 + rowCount) % rowCount, remainder--) counts[i]!++;
+  const counts = hemicycleRows(total);
 
-  // All dot positions, sorted left -> right across the arc.
+  // All seat positions, sorted left -> right across the arc.
   const positions: { x: number; y: number; angle: number }[] = [];
   counts.forEach((n, i) => {
-    const r = radii[i]!;
+    const r = HEMI_R * rowRadius(i);
     for (let k = 0; k < n; k++) {
       const angle = n === 1 ? Math.PI / 2 : Math.PI - (Math.PI * k) / (n - 1);
-      positions.push({ x: cx + r * Math.cos(angle), y: cy - r * Math.sin(angle), angle });
+      positions.push({ x: HEMI_CX + r * Math.cos(angle), y: HEMI_CY - r * Math.sin(angle), angle });
     }
   });
   positions.sort((a, b) => b.angle - a.angle || a.y - b.y);
@@ -85,34 +101,67 @@ function hemicycleLayout(seats: ChamberSeat[]): SeatDot[] {
     slots[cursor] = seat;
   }
 
-  return slots.map((seat, i) => ({ x: positions[i]!.x, y: positions[i]!.y, seat: seat! }));
+  return slots.map((seat, i) => ({ ...positions[i]!, seat: seat! }));
 }
 
-function Hemicycle({ seats, onSeatClick }: { seats: ChamberSeat[]; onSeatClick: (seat: ChamberSeat) => void }) {
+const seatParty = (seat: ChamberSeat) => SEAT_PARTY_LABELS[seat.party ?? "independent"];
+
+// The line under a seat's number in the focus label.
+function seatNote(seat: ChamberSeat, seatPrice: number): string {
+  if (seat.holderType === "player") return `${seat.holderName ?? "A citizen"} · ${seatParty(seat)}`;
+  if (seat.holderType === "npc") return `${seatParty(seat)} bench`;
+  return `Empty · ${seatPrice} dr.`;
+}
+
+function Hemicycle({
+  seats,
+  yourSeat,
+  seatPrice,
+  onSeatClick,
+  onFocusSeat,
+}: {
+  seats: ChamberSeat[];
+  yourSeat: number | null;
+  seatPrice: number;
+  onSeatClick: (seat: ChamberSeat) => void;
+  onFocusSeat: (seat: ChamberSeat | null) => void;
+}) {
   const dots = useMemo(() => hemicycleLayout(seats), [seats]);
   return (
-    <svg className="hemicycle" viewBox="0 0 460 226" role="img" aria-label="The Oligarchy chamber — 300 seats">
-      {dots.map(({ x, y, seat }) => {
-        // Only player-held seats are interactive — they open the holder's public
-        // profile. NPC and empty seats stay inert.
-        const held = seat.holderType === "player" && seat.characterId !== null;
+    <svg className="hemicycle" viewBox="20 0 420 220" role="group" aria-label={`The Oligarchy chamber, ${seats.length} seats`} onMouseLeave={() => onFocusSeat(null)}>
+      {dots.map(({ x, y, angle, seat }) => {
+        // Every seat names itself in the focus label on hover or tap; only
+        // player-held seats open the holder's public profile.
+        const held = seat.holderType === "player";
+        const clickable = held && seat.characterId !== null;
+        const yours = yourSeat !== null && seat.seatIndex === yourSeat;
+        const ring = yours ? 5.25 : 5;
+        const interactive = clickable
+          ? {
+              role: "button",
+              tabIndex: 0,
+              "aria-label": `Seat ${seat.seatIndex}, ${seatNote(seat, seatPrice)}`,
+              onFocus: () => onFocusSeat(seat),
+              onKeyDown: (event: KeyboardEvent<SVGGElement>) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                onSeatClick(seat);
+              },
+            }
+          : {};
         return (
-        <circle
-          key={seat.seatIndex}
-          cx={x}
-          cy={y}
-          r={seat.holderType === "player" ? 5.2 : 4.2}
-          className={`seat-dot seat-${seat.party ?? "empty"}${seat.holderType === "player" ? " seat-held" : ""}${held ? " seat-clickable" : ""}`}
-          onClick={held ? () => onSeatClick(seat) : undefined}
-        >
-          <title>
-            {seat.holderType === "player"
-              ? `${seat.holderName ?? "A citizen"} — seat ${seat.seatIndex} (${SEAT_PARTY_LABELS[seat.party ?? "independent"]})`
-              : seat.holderType === "npc"
-                ? `${SEAT_PARTY_LABELS[seat.party!]} bench — seat ${seat.seatIndex}`
-                : `Empty seat ${seat.seatIndex} — 300 dr.`}
-          </title>
-        </circle>
+          <g
+            key={seat.seatIndex}
+            data-seat={seat.seatIndex}
+            className={`seat seat-${seat.party ?? "empty"}${clickable ? " seat-clickable" : ""}`}
+            transform={`translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${((-angle * 180) / Math.PI).toFixed(2)})`}
+            onMouseEnter={() => onFocusSeat(seat)}
+            onClick={() => (clickable ? onSeatClick(seat) : onFocusSeat(seat))}
+            {...interactive}
+          >
+            {held ? <rect className={`seat-ring${yours ? " seat-ring-you" : ""}`} x={-ring} y={-ring} width={ring * 2} height={ring * 2} /> : null}
+            <rect className="seat-mark" x={-SEAT_HALF} y={-SEAT_HALF} width={SEAT_HALF * 2} height={SEAT_HALF * 2} />
+          </g>
         );
       })}
     </svg>
@@ -133,13 +182,15 @@ function BallotLedger({ ballots }: { ballots: ChamberVoteView["ballots"] }) {
   );
 }
 
-function OligarchySection({ onRefresh }: PanelProps) {
+function OligarchySection({ player, onRefresh }: PanelProps) {
   const [chamber, setChamber] = useState<ChamberView | null>(null);
   const [votes, setVotes] = useState<ChamberVotesView | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
   const [profileTarget, setProfileTarget] = useState<ProfileTarget | null>(null);
+  // The seat under the pointer (or last tapped); null shows the resting label.
+  const [focusSeat, setFocusSeat] = useState<ChamberSeat | null>(null);
 
   const load = useCallback(() => {
     api.oligarchyChamber().then(setChamber).catch((err) => setError(err instanceof ApiError ? err.message : "The chamber rolls could not be read."));
@@ -185,6 +236,25 @@ function OligarchySection({ onRefresh }: PanelProps) {
   if (!chamber) return <p className="dashboard-todo">Loading the chamber…</p>;
 
   const { composition, you } = chamber;
+  const filled = chamber.capacity - composition.empty;
+  const yourSeat = you.holdsSeat ? chamber.seats.find((seat) => seat.seatIndex === you.seatIndex) ?? null : null;
+  const yourParty = player.party === "Unaligned" ? null : player.party.toLowerCase();
+  const citizens = (n: number) => `${n} ${n === 1 ? "citizen" : "citizens"}`;
+  const tiles: { key: SeatParty | "empty"; label: string; count: number; sub: string }[] = [
+    { key: "palaioi", label: "Palaioi", count: composition.npc.palaioi + composition.players.palaioi, sub: citizens(composition.players.palaioi) },
+    { key: "dynatoi", label: "Dynatoi", count: composition.npc.dynatoi + composition.players.dynatoi, sub: citizens(composition.players.dynatoi) },
+    { key: "independent", label: "Independent", count: composition.npc.independent + composition.players.independent, sub: citizens(composition.players.independent) },
+    { key: "empty", label: "Empty", count: composition.empty, sub: `${chamber.seatPrice} dr. a seat` },
+  ];
+  // The label under the arc: the hovered or tapped seat, else your own seat,
+  // else the chamber's fill.
+  const shown = focusSeat ?? yourSeat;
+  const focus =
+    shown && yourSeat && shown.seatIndex === yourSeat.seatIndex
+      ? { kicker: "Your seat", number: String(shown.seatIndex), sub: `House ${player.house.name} · ${seatParty(shown)}` }
+      : shown
+        ? { kicker: "Seat", number: String(shown.seatIndex), sub: seatNote(shown, chamber.seatPrice) }
+        : { kicker: "The Three Hundred", number: String(filled), sub: "seats filled" };
 
   // A player-held seat opens the holder's public profile. Self-detection uses the
   // viewer's own seat index (so their own profile hides the interaction row).
@@ -200,19 +270,47 @@ function OligarchySection({ onRefresh }: PanelProps) {
         The Oligarchy — the Three Hundred
       </div>
       <DashboardCard className="chamber-card">
-        <div className="chamber-grid">
-          <Hemicycle seats={chamber.seats} onSeatClick={openSeat} />
-          <div className="chamber-legend">
-            <div className="legend-row"><span className="legend-dot seat-palaioi" /> Palaioi · {composition.npc.palaioi + composition.players.palaioi} ({composition.players.palaioi} citizens)</div>
-            <div className="legend-row"><span className="legend-dot seat-dynatoi" /> Dynatoi · {composition.npc.dynatoi + composition.players.dynatoi} ({composition.players.dynatoi} citizens)</div>
-            <div className="legend-row"><span className="legend-dot seat-independent" /> Independent · {composition.npc.independent + composition.players.independent} ({composition.players.independent} citizens)</div>
-            <div className="legend-row"><span className="legend-dot seat-empty" /> Empty · {composition.empty}</div>
-            <div className="legend-note">{composition.playersTotal} seats held by living dynasties.</div>
-            {you.holdsSeat ? (
-              <div className="legend-note legend-yours">🏛️ Your dynasty holds seat {you.seatIndex}.</div>
-            ) : null}
+        <div className="meander" aria-hidden="true" />
+        <div className="chamber-body">
+          <div className="chamber-head">
+            <span className="chamber-head-label">Seats · {chamber.capacity} · {filled} filled</span>
+            <span className="chamber-rule" aria-hidden="true" />
+          </div>
+          <div className="chamber-grid">
+            <div className="chamber-floor">
+              <Hemicycle seats={chamber.seats} yourSeat={yourSeat?.seatIndex ?? null} seatPrice={chamber.seatPrice} onSeatClick={openSeat} onFocusSeat={setFocusSeat} />
+              <div className="chamber-focus">
+                <span className="chamber-focus-kicker">{focus.kicker}</span>
+                <span className="chamber-focus-number">{focus.number}</span>
+                <span className="chamber-focus-sub">{focus.sub}</span>
+              </div>
+              <div className="chamber-benches" aria-hidden="true">
+                <span>◂ Left benches</span>
+                <span>Right benches ▸</span>
+              </div>
+            </div>
+            <div className="chamber-legend">
+              <div className="chamber-tiles">
+                {tiles.map((tile) => (
+                  <div key={tile.key} className={`chamber-tile seat-${tile.key}${tile.key === yourParty ? " is-yours" : ""}`}>
+                    <span className="chamber-tile-swatch" aria-hidden="true" />
+                    <span className="chamber-tile-count">
+                      {tile.count}
+                      <small>/{chamber.capacity}</small>
+                    </span>
+                    <span className="chamber-tile-name">{tile.label}</span>
+                    <span className="chamber-tile-sub">{tile.sub}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="chamber-ringed">
+                <span className="chamber-ringed-mark" aria-hidden="true" />
+                Ringed seats · {composition.playersTotal} held by living dynasties
+              </div>
+            </div>
           </div>
         </div>
+        <div className="meander" aria-hidden="true" />
       </DashboardCard>
 
       {!you.holdsSeat && you.canBuy ? (
