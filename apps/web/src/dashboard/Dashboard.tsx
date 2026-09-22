@@ -479,7 +479,7 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
         </div>
       ) : null}
 
-      <InventorySheet open={activeSheet === "inventory"} onClose={closeSheet} player={player} initialTab={inventoryTab} />
+      <InventorySheet open={activeSheet === "inventory"} onClose={closeSheet} player={player} initialTab={inventoryTab} onRefresh={refreshState} />
       <CharacterSheet open={activeSheet === "character"} onClose={closeSheet} player={player} onExit={onExit} onLogout={handleLogout} onAccountDeleted={onRequireLogin} />
 
       {activeSheet === "guide" ? (

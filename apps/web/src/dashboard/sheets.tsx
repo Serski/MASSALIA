@@ -630,11 +630,15 @@ export function InventorySheet({
   onClose,
   player,
   initialTab = "resources",
+  onRefresh,
 }: {
   open: boolean;
   onClose: () => void;
   player: PlayerDashboardView;
   initialTab?: InventoryTab;
+  // The dashboard's refetch of /me/state: a dismiss changes the household, so the
+  // header (drachmae, resources) re-reads after the sheet's own payload reloads.
+  onRefresh: () => void;
 }) {
   const [tab, setTab] = useState<InventoryTab>(initialTab);
   // Open to the requested tab each time the sheet opens (Resources for the inventory
@@ -693,7 +697,16 @@ export function InventorySheet({
       />
       {tab === "resources" ? <InventoryResources player={player} goodLabels={goodLabels} /> : null}
       {tab === "economy" ? <InventoryEconomy data={data} goodLabels={goodLabels} /> : null}
-      {tab === "units" ? <InventoryUnits household={household} goodLabels={goodLabels} onChanged={reload} /> : null}
+      {tab === "units" ? (
+        <InventoryUnits
+          household={household}
+          goodLabels={goodLabels}
+          onChanged={async () => {
+            await reload();
+            onRefresh();
+          }}
+        />
+      ) : null}
     </BottomSheet>
   );
 }
