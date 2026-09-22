@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { api, ApiError, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice } from "../../api.js";
+import { api, ApiError, webAssetUrl, type EventResolution, type DailySet, type RoutineSet, type RoutineResult, type FestivalLive, type OlympiadStatus, type OlympiadBallot, type ManumissionChoice, type PlayerState } from "../../api.js";
 import { assetPath } from "../../data/league.js";
 import { DashboardCard, PanelBanner, type PanelProps, timeUntil, titleCase } from "../shared.js";
 import { CardClose, FestivalBanner, OlympicBanner } from "../banners.js";
@@ -458,6 +458,25 @@ function FreedomPanel({ onRefresh }: { onRefresh: () => void }) {
   );
 }
 
+// The Court's story offer card: one per offer or resume the server lists. Exported
+// so a render test can mount it alone. The banner is the story's start-node art.
+export function StoryOfferCard({ story, onOpen }: { story: PlayerState["stories"][number]; onOpen: () => void }) {
+  return (
+    <DashboardCard className="event-card">
+      <div className="event-body">
+        <span className="dashboard-label event-kicker">A matter requires you</span>
+        {story.image ? <PanelBanner scene="" art={webAssetUrl(story.image)} /> : null}
+        <h3>{story.title || (story.status === "active" ? "Your tale continues." : "An untold matter awaits.")}</h3>
+        <div className="event-choice-stack">
+          <button className="event-choice-button" type="button" onClick={onOpen}>
+            <strong>{story.status === "active" ? "Continue" : "Begin"}</strong>
+          </button>
+        </div>
+      </div>
+    </DashboardCard>
+  );
+}
+
 export default function CourtPanel({ player, onRefresh }: PanelProps) {
   // Card persistence (Bug 4): calendar cards (festival / Olympiad) vanish the moment
   // the server stops returning them on resolve. Keep a sticky snapshot so the SAME
@@ -514,17 +533,7 @@ export default function CourtPanel({ player, onRefresh }: PanelProps) {
           {/* Festival-gated story offers. No client dismiss: a card lives while the
               server offers it and vanishes by being played. Empty array → nothing. */}
           {player.stories.map((story) => (
-            <DashboardCard className="event-card" key={story.storyId}>
-              <div className="event-body">
-                <span className="dashboard-label event-kicker">A matter requires you</span>
-                <h3>{story.title || (story.status === "active" ? "Your tale continues." : "An untold matter awaits.")}</h3>
-                <div className="event-choice-stack">
-                  <button className="event-choice-button" type="button" onClick={() => setOpenStoryId(story.storyId)}>
-                    <strong>{story.status === "active" ? "Continue" : "Begin"}</strong>
-                  </button>
-                </div>
-              </div>
-            </DashboardCard>
+            <StoryOfferCard key={story.storyId} story={story} onOpen={() => setOpenStoryId(story.storyId)} />
           ))}
           {openStoryId ? (
             <Suspense fallback={null}>

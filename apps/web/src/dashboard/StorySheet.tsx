@@ -29,6 +29,8 @@ function rewardLabel(r: StoryReward): string {
       return `${signed(r.amount)} Composure`;
     case "trait":
       return `Gained trait: ${r.name}`;
+    case "good":
+      return `${signed(r.amount)} ${r.name}`;
   }
 }
 const rewardTone = (r: StoryReward): string => (r.kind !== "trait" && r.amount < 0 ? "cost-negative" : "cost-positive");
@@ -179,10 +181,21 @@ export default function StorySheet({
                       className="event-choice-button"
                       type="button"
                       key={choice.id}
-                      disabled={busy}
+                      disabled={busy || choice.locked === true}
                       onClick={() => choose(choice.id)}
                     >
                       <strong>{choice.text}</strong>
+                      {/* A locked choice says what it asks for; an open one that costs
+                          silver says the price. Reuses the daily cards' cost chips. */}
+                      {choice.locked || choice.price !== undefined ? (
+                        <span className="choice-costs">
+                          {choice.locked ? (
+                            <span className="cost-chip cost-negative">Needs {choice.requirement}</span>
+                          ) : (
+                            <span className="cost-chip cost-negative">−{choice.price} drachmae</span>
+                          )}
+                        </span>
+                      ) : null}
                     </button>
                   ))}
                 </div>

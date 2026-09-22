@@ -206,8 +206,9 @@ export type PlayerState = {
   succession: SuccessionState | null;
   // The festival live for the player this season (a free civic event), or null.
   festival: FestivalLive | null;
-  // Festival-gated story offers/resumes for this character (Pack 2).
-  stories: Array<{ storyId: string; status: "offered" | "active"; title: string }>;
+  // Story offers/resumes for this character (Pack 2). `image` is the start node's
+  // art, shown on the offer card.
+  stories: Array<{ storyId: string; status: "offered" | "active"; title: string; image?: string }>;
   // The Olympiad cycle status (phase, badges, live event, city-wide victor), or null.
   olympiad: OlympiadStatus | null;
   // City-wide scandal headline: a fresh Notorious Divorcer branding, or null.
@@ -247,7 +248,10 @@ export type PlayerState = {
 // `choices` INSIDE the node-now-current.
 export type StoryNodeBody = { eyebrow?: string; paragraphs: string[] };
 export type StoryNodeView = { id: string; type: "scene" | "terminal"; body: StoryNodeBody; image?: string };
-export type StoryChoiceView = { id: string; text: string };
+// A locked choice is disabled and wears its requirement; an unlocked one with a
+// price wears the price. A choice whose requirement has a fallback carries none
+// of the three — it never locks, and its fork stays hidden.
+export type StoryChoiceView = { id: string; text: string; locked?: boolean; requirement?: string; price?: number };
 export type StoryStateView = { storyId: string; status: string; node: StoryNodeView; choices?: StoryChoiceView[] };
 // Post-grant summary of what an advance just applied (mirrors the server shape). It
 // appears ONLY on advance responses — never on node/state projections.
@@ -255,7 +259,8 @@ export type StoryReward =
   | { kind: "stat"; stat: string; amount: number }
   | { kind: "drachmae"; amount: number }
   | { kind: "trait"; traitId: string; name: string }
-  | { kind: "composure"; amount: number };
+  | { kind: "composure"; amount: number }
+  | { kind: "good"; good: string; name: string; amount: number };
 export type StoryAdvanceView = { resultText: string | null; completed: boolean; node: StoryNodeView & { choices?: StoryChoiceView[] }; rewardsGranted: StoryReward[] };
 
 // The Player Chronicle (Timeline): a dated, generation-tagged life-event, with a
