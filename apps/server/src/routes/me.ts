@@ -1,11 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { createDb, gatherChronicleForCharacter, houses, players, professions, resources, users, worlds } from "@massalia/db";
-import { currentAge, decayBandFor, formatGameDate, gameDate, isDeceased, isWithdrawn, lifeStage, portraitFor } from "@massalia/shared";
+import { currentAge, decayBandFor, formatGameDate, gameDate, isDeceased, isWithdrawn, lifeStage, portraitFor, REAL_MS_PER_SEASON } from "@massalia/shared";
 import { requireAuth } from "../services/auth.js";
 import { ensureCharacterRow, findCharacterRow } from "../services/character.js";
 import { activeCensure } from "../services/politics.js";
-import { recoverComposure } from "../services/composure.js";
+import { applyComposureDelta, recoverComposure } from "../services/composure.js";
 import { decayCharacter, getAgeConfig, portraitUrl } from "../services/age.js";
 import { enforceDeathAndHandoff, regentBadge, successionInfo } from "../services/succession.js";
 import { closeDueFestivals, fireFestivalsForCharacter, liveFestivalForCharacter } from "../services/festival.js";
@@ -15,6 +15,8 @@ import { familyPendingCount, scandalHeadline } from "../services/family.js";
 import { manumissionStatus } from "../services/manumission.js";
 import { syncAgenda } from "../services/agenda.js";
 import { syncElections } from "../services/elections.js";
+import { settleAll } from "../services/buildings.js";
+import { lockPlayer } from "../services/lock.js";
 
 const db = createDb();
 
@@ -120,6 +122,21 @@ export async function meRoutes(app: FastifyInstance) {
     // Manumission (the slave's path out): is this a slave who has earned freedom?
     const manumission = await manumissionStatus(character);
 
+    // Settle the economy up to now under the player lock, the way GET /api/barracks
+    // does: goods, income, upkeep, wages and the barracks bank before the resources
+    // read below, so opening the dashboard shows settled stock instead of whatever
+    // the last settling action left. A settle that throws answers 500 for this
+    // player (the error handler hides the message); that surfaces the bug rather
+    // than leaving goods unbanked. Shrine composure is applied after the
+    // transaction, break-aware, exactly as collect and the barracks do.
+    const now = new Date();
+    const settleCtx = { playerId: state.player.id, worldId: world.id, worldStartedMs: world.startedAt.getTime() };
+    const settled = await db.transaction(async (tx) => {
+      await lockPlayer(tx, state.player.id);
+      return settleAll(tx, settleCtx, now);
+    });
+    if (settled.composureDays > 0) await applyComposureDelta(character.id, settled.composureDays, "building:shrine", now);
+
     const resourceRows = await db.select().from(resources).where(and(eq(resources.scope, "player"), eq(resources.scopeId, state.player.id)));
     const resourceMap = new Map(resourceRows.map((resource) => [resource.type, numberAmount(resource.amount)]));
     // A known slug maps to its resource (or null = no class resource, e.g. shipbuilder);
@@ -140,14 +157,22 @@ export async function meRoutes(app: FastifyInstance) {
       .limit(1);
 
     // Written in-game date, derived from the world's DB start instant.
-    const worldGameDate = gameDate(Date.now(), world.startedAt.getTime());
+    const worldGameDate = gameDate(now.getTime(), world.startedAt.getTime());
+    // The next season boundary: the next whole REAL_MS_PER_SEASON step from the
+    // world's start. The client arms its rollover refetch from this and `now`,
+    // never from the device clock or a midnight assumption.
+    const seasonEndsAt = new Date(world.startedAt.getTime() + (worldGameDate.seasonIndex + 1) * REAL_MS_PER_SEASON);
 
     // Life-arc for the character sheet: age, stage, aging portrait, decay band.
     const ageCfg = getAgeConfig();
-    const age = currentAge(character.startAge, character.createdAt.getTime(), Date.now(), ageCfg);
+    const age = currentAge(character.startAge, character.createdAt.getTime(), now.getTime(), ageCfg);
     const decayingStats = Object.keys(decayBandFor(age, ageCfg));
 
     return {
+      // Server clock at this read (ISO) and the instant the current season ends:
+      // the client's rollover timer is armed from their difference.
+      now: now.toISOString(),
+      seasonEndsAt: seasonEndsAt.toISOString(),
       user: {
         ...user,
         newsletterOptIn: userRows[0]?.newsletterOptIn ?? false,
@@ -160,7 +185,7 @@ export async function meRoutes(app: FastifyInstance) {
         gameDate: worldGameDate,
         gameDateLabel: formatGameDate(worldGameDate),
         // Secondary real-time countdown to the end of the 182-day run.
-        seasonEndsIn: Math.max(0, Math.ceil((world.endsAt.getTime() - Date.now()) / 86_400_000)),
+        seasonEndsIn: Math.max(0, Math.ceil((world.endsAt.getTime() - now.getTime()) / 86_400_000)),
       },
       character: {
         id: state.player.id,

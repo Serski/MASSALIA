@@ -153,6 +153,11 @@ export type CreationRequest = {
 };
 
 export type PlayerState = {
+  // Server clock at this read (ISO) and the instant the current season ends (the
+  // next whole-day step from the world's start): the dashboard's rollover refetch
+  // is armed from their difference, never from the device clock.
+  now: string;
+  seasonEndsAt: string;
   user: { id: string; email: string; newsletterOptIn: boolean; emailVerified: boolean };
   world: {
     id: string;
