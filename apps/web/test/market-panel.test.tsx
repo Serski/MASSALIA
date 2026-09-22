@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, type BuildingsCatalog, type BuildingsMine, type MarketListing, type MarketView, type PeopleView, type PlayerState } from "../src/api.js";
+import { api, type BuildingsCatalog, type BuildingsMine, type MarketListing, type MarketView, type PeopleView } from "../src/api.js";
 import MarketPanel from "../src/dashboard/panels/MarketPanel.js";
+import type { PlayerDashboardView } from "../src/dashboard/shared.js";
 
 // ---------------------------------------------------------------------------
 // The Market panel's Player market tab (market prompt 1) mounted against a mocked
@@ -30,7 +31,9 @@ const catalog = {
 } as unknown as BuildingsCatalog;
 const mine = { now: new Date().toISOString(), pops: {} } as unknown as BuildingsMine;
 const people = { pops: [], foodGood: "grain", spymaster: { posture: "guard", cooldownRemainingMs: 0 } } as unknown as PeopleView;
-const state = (drachmae: number) => ({ resources: { drachmae, balances: { wine: 7.8, grain: 3, iron: 0.5 } } }) as unknown as PlayerState;
+// The wallet and the goods stock reach the panel through the dashboard's `player`
+// prop (no api.state() of its own).
+const playerWith = (drachmae: number) => ({ drachmae, balances: { wine: 7.8, grain: 3, iron: 0.5 } }) as unknown as PlayerDashboardView;
 
 const seller = (name: string, houseSlug: string) => ({ playerId: `p-${name}`, name, houseSlug, houseName: houseSlug[0]!.toUpperCase() + houseSlug.slice(1), professionSlug: null, faceId: null, portrait: null });
 const stall = (over: Partial<MarketListing> & { id: string }): MarketListing => ({
@@ -62,9 +65,8 @@ async function mount(market: MarketView, wallet = 100) {
   vi.spyOn(api, "buildingsCatalog").mockResolvedValue(catalog);
   vi.spyOn(api, "buildingsMine").mockResolvedValue(mine);
   vi.spyOn(api, "people").mockResolvedValue(people);
-  vi.spyOn(api, "state").mockResolvedValue(state(wallet));
   const marketSpy = vi.spyOn(api, "market").mockResolvedValue(market);
-  const utils = render(<MarketPanel player={{} as never} onRefresh={() => {}} />);
+  const utils = render(<MarketPanel player={playerWith(wallet)} onRefresh={() => {}} />);
   await flush();
   fireEvent.click(utils.getByRole("tab", { name: "Player market" }));
   await flush();
@@ -193,14 +195,17 @@ describe("MarketPanel · Player market", () => {
   });
 
   it("a mocked buy re-renders the stall with the new remaining and notes the purchase", async () => {
-    const { container, marketSpy } = await mount(view());
+    const { container, marketSpy, rerender } = await mount(view());
     const buy = vi.spyOn(api, "marketBuy").mockResolvedValue({ ok: true, qty: 2, total: 60, tax: 6, wallet: 40, balance: 2, remaining: 3 });
     marketSpy.mockResolvedValue(view({ listings: [stall({ id: "wine-kallias", remaining: 3 }), ownStall, grainStall, dearStall] }));
-    vi.spyOn(api, "state").mockResolvedValue(state(40));
 
     const wine = rowOf(container, "wine-kallias");
     fireEvent.click(within(wine).getByLabelText("increase quantity"));
     fireEvent.click(buttons(wine).find((b) => b.textContent === "Buy 2 · 60dr")!);
+    await flush();
+    // The dashboard answers the panel's onRefresh with a fresh payload: the wallet
+    // reaches the panel as a new `player` prop, the way the live dashboard re-renders it.
+    rerender(<MarketPanel player={playerWith(40)} onRefresh={() => {}} />);
     await flush();
 
     expect(buy).toHaveBeenCalledWith("wine-kallias", 2);

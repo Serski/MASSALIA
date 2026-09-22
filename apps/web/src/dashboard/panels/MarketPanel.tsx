@@ -310,16 +310,18 @@ function SpymasterPostureControl({
   );
 }
 
-export default function MarketPanel({ onRefresh }: PanelProps) {
+export default function MarketPanel({ player, onRefresh }: PanelProps) {
   const [catalog, setCatalog] = useState<BuildingsCatalog | null>(null);
   const [mine, setMine] = useState<BuildingsMine | null>(null);
   const [people, setPeople] = useState<PeopleView | null>(null);
   const [market, setMarket] = useState<MarketView | null>(null);
-  // The wallet (from /me/state) bounds the Player market's Buy stepper.
-  const [wallet, setWallet] = useState(0);
-  // Current goods stock (type -> amount), the same balances the Inventory drawer
-  // reads — used to show holdings in the row title and clamp the Sell stepper.
-  const [balances, setBalances] = useState<Record<string, number>>({});
+  // The wallet bounds the Player market's Buy stepper, and the goods stock (type ->
+  // amount) shows holdings in the row title and clamps the Sell stepper. Both come
+  // from the dashboard's payload through `player`, not a second /me/state read of
+  // this panel's own: every action calls onRefresh(), and the dashboard's own
+  // refetches (return to the tab, the season rollover) reach here as fresh props.
+  const wallet = player.drachmae;
+  const balances = player.balances;
   const [tab, setTab] = useState<MarketTab>("goods");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -328,12 +330,10 @@ export default function MarketPanel({ onRefresh }: PanelProps) {
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [c, m, p, s, mk] = await Promise.all([api.buildingsCatalog(), api.buildingsMine(), api.people(), api.state(), api.market()]);
+    const [c, m, p, mk] = await Promise.all([api.buildingsCatalog(), api.buildingsMine(), api.people(), api.market()]);
     setCatalog(c);
     setMine(m);
     setPeople(p);
-    setBalances(s.resources.balances);
-    setWallet(s.resources.drachmae);
     setMarket(mk);
   }, []);
   useEffect(() => {
