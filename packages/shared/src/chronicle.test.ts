@@ -340,6 +340,48 @@ describe("buildChronicle — player market (market prompt 1)", () => {
   });
 });
 
+describe("buildChronicle — story lines (story engine)", () => {
+  const base = { startedMs: 0, successionBoundariesMs: [] as number[], marriages: [], births: [], choregos: [], festivals: [], olympics: [] };
+  const marketPayload = {
+    listingId: "l1",
+    good: "wine",
+    goodLabel: "Wine",
+    qty: 5,
+    price: 9,
+    total: 45,
+    tax: 4,
+    net: 41,
+    sellerName: "Kallias",
+    sellerHouseName: "Xanthippos",
+    buyerName: "Deon",
+    buyerHouseName: "Protis",
+    source: "market" as const,
+  };
+
+  it("keeps two lines from one ending in the order they were written, after the market kinds", () => {
+    const entries = buildChronicle({
+      ...base,
+      // The writer nudges each line's instant by its index; the market row shares
+      // the season so the TYPE_ORDER tiebreak (19 before 20) is exercised too.
+      market: [{ id: "m1", at: 8 * S + 5, kind: "market_purchase", payload: marketPayload }],
+      stories: [
+        { id: "s1", at: 8 * S, payload: { storyId: "house-of-roses", line: "The thief was found before the symposium." } },
+        { id: "s2", at: 8 * S + 1, payload: { storyId: "house-of-roses", line: "The steward of House Timon is buying poison." } },
+      ],
+    });
+    expect(entries.map((e) => e.type)).toEqual(["market_purchase", "story_line", "story_line"]);
+    expect(entries.every((e) => e.seasonIndex === 8)).toBe(true);
+    expect(entries.slice(1).map((e) => e.payload.line)).toEqual([
+      "The thief was found before the symposium.",
+      "The steward of House Timon is buying poison.",
+    ]);
+  });
+
+  it("no story rows → no story entries", () => {
+    expect(buildChronicle(base).some((e) => e.type === "story_line")).toBe(false);
+  });
+});
+
 describe("buildChronicle — deaths", () => {
   // Boundaries are OFFSET from a season edge (the +100), matching production, where a
   // succession instant is an arbitrary `now`, never season-aligned.

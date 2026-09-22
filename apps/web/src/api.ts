@@ -280,7 +280,8 @@ export type ChronicleType =
   | "holding_reverted"
   | "holding_tribute"
   | "market_sale"
-  | "market_purchase";
+  | "market_purchase"
+  | "story_line";
 
 export type ChronicleEntry = {
   seasonIndex: number;

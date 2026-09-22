@@ -26,3 +26,12 @@ describe("renderChronicleEntry · player market", () => {
     expect(renderChronicleEntry(entry("market_purchase", sale))).toBe("Bought 5 olive oil from Kallias of House Xanthippos for 45 drachmae.");
   });
 });
+
+describe("renderChronicleEntry · story lines", () => {
+  it("renders the authored line as it stands, and an empty string when there is none", () => {
+    expect(renderChronicleEntry(entry("story_line", { storyId: "house-of-roses", line: "The steward of House Timon is buying poison." }))).toBe(
+      "The steward of House Timon is buying poison.",
+    );
+    expect(renderChronicleEntry(entry("story_line", { storyId: "house-of-roses" }))).toBe("");
+  });
+});

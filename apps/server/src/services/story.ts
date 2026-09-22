@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, eq, exists, sql } from "drizzle-orm";
-import { createDb, festivalChoregos, festivalEvents, playerCharacters, stories, storyProgress, worlds } from "@massalia/db";
+import { createDb, effectLog, festivalChoregos, festivalEvents, playerCharacters, stories, storyProgress, worlds } from "@massalia/db";
 import {
   datedSeasonIndex,
   fillStoryText,
@@ -386,6 +386,22 @@ export async function advanceStory(characterId: string, storyId: string, choiceI
         const r = await applyEffectsInTx(tx, { characterId, eventId: `story:${storyId}:${next.id}`, effects: termRewards, cityDef, factionDef });
         ideologyTouched = ideologyTouched || r.ideologyTouched;
         applied.push(...termRewards);
+      }
+      // The terminal's Chronicle lines, in the same transaction and after its
+      // rewards. The line is stored as prose (already filled), because the web
+      // ships no story content to render it from; createdAt is nudged by the
+      // line's index so several lines keep their authored order.
+      if (next.chronicle?.length) {
+        const house = storyHouseName(characterId, storyId, (await storyContext(characterId, now, tx)).houseSlug);
+        const at = new Date();
+        await tx.insert(effectLog).values(
+          next.chronicle.map((line, index) => ({
+            characterId,
+            kind: "story_line",
+            detail: { chronicle: { storyId, line: fillStoryText(line, { house }) } },
+            createdAt: new Date(at.getTime() + index),
+          })),
+        );
       }
       await tx
         .update(storyProgress)

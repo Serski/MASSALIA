@@ -808,6 +808,9 @@ const chronicleRenderers: Record<ChronicleEntry["type"], (payload: Record<string
   market_sale: (p) =>
     `Sold ${p.qty} ${String(p.goodLabel).toLowerCase()} to ${p.buyerName} of House ${p.buyerHouseName} for ${p.net} drachmae.${Number(p.tax) > 0 ? ` The city took ${p.tax}.` : ""}`,
   market_purchase: (p) => `Bought ${p.qty} ${String(p.goodLabel).toLowerCase()} from ${p.sellerName} of House ${p.sellerHouseName} for ${p.total} drachmae.`,
+  // The one kind whose payload is already prose: the story authored the line and
+  // the server filled its token, because the web ships no story content.
+  story_line: (p) => String(p.line ?? ""),
 };
 
 export function renderChronicleEntry(entry: ChronicleEntry): string {

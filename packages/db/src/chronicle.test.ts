@@ -4,8 +4,9 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 // ---------------------------------------------------------------------------
 // The chronicle fetch layer's effect_log read (market prompt 1). Integration test
 // against a REAL Postgres, guarded to a *_test database (mirrors pops.test.ts).
-// Proves market_sale and market_purchase rows reach the chronicle through their
-// nested detail.chronicle block, and that a row without the block is skipped.
+// Proves market_sale, market_purchase and story_line rows reach the chronicle
+// through their nested detail.chronicle block, and that a row without the block
+// is skipped.
 // ---------------------------------------------------------------------------
 
 const dbUrl = process.env.DATABASE_URL ?? "";
@@ -70,5 +71,18 @@ suite("chronicle effect_log kinds (integration)", () => {
     expect(entries.map((e) => e.type)).toEqual(["market_sale", "market_purchase"]);
     expect(entries[0]!.payload).toEqual(payload);
     expect(entries[1]!.payload).toEqual(payload);
+  });
+
+  it("reads a story_line through detail.chronicle and skips one without it", async () => {
+    const payload = { storyId: "house-of-roses", line: "The steward of House Timon is buying poison." };
+    const at = new Date(T0 + 3 * DAY);
+    await db.insert(dbPkg.effectLog).values([
+      { characterId, kind: "story_line", detail: { chronicle: payload }, createdAt: at },
+      { characterId, kind: "story_line", detail: { storyId: payload.storyId }, createdAt: at }, // no chronicle block
+    ]);
+
+    const entries = await chronicle.gatherChronicleForCharacter(characterId);
+    expect(entries.map((e) => e.type)).toEqual(["story_line"]);
+    expect(entries[0]!.payload).toEqual(payload);
   });
 });

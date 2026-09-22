@@ -63,7 +63,11 @@ export type ChronicleType =
   // Market prompt 1: one line on each side of a player-market sale, sourced from
   // effect_log like the campaign lines (the detail's nested `chronicle` block).
   | "market_sale"
-  | "market_purchase";
+  | "market_purchase"
+  // Story engine: a line an authored story wrote when it ended. The ONE kind whose
+  // payload is prose — the authored line with its token already filled — because
+  // the web ships no story content to render from.
+  | "story_line";
 
 export type ChronicleEntry = {
   // Sort key, from gameDate(timestamp, startedMs).seasonIndex.
@@ -155,6 +159,9 @@ export type ChronicleInput = {
   // Market prompt 1: player-market sales and purchases from effect_log.
   // Optional — pre-existing fixtures need not supply it.
   market?: ChronicleMarketRow[];
+  // Story engine: the lines a finished story wrote, from effect_log.
+  // Optional — pre-existing fixtures need not supply it.
+  stories?: ChronicleStoryRow[];
 };
 
 // A map action or a holding reversion, dated at the effect_log instant. The
@@ -163,17 +170,30 @@ export type ChronicleCampaignKind = "map_action" | "holding_reverted" | "holding
 // A player-market sale (seller's side) or purchase (buyer's side).
 export type ChronicleMarketKind = "market_sale" | "market_purchase";
 // Every effect_log kind the chronicle reads (each through detail.chronicle).
-export type ChronicleEffectLogKind = ChronicleCampaignKind | ChronicleMarketKind;
+export type ChronicleEffectLogKind = ChronicleCampaignKind | ChronicleMarketKind | "story_line";
 export const CHRONICLE_EFFECT_LOG_KINDS: readonly ChronicleEffectLogKind[] = [
   "map_action",
   "holding_reverted",
   "holding_tribute",
   "market_sale",
   "market_purchase",
+  "story_line",
 ];
 export function isChronicleMarketKind(kind: string): kind is ChronicleMarketKind {
   return kind === "market_sale" || kind === "market_purchase";
 }
+export function isChronicleStoryKind(kind: string): kind is "story_line" {
+  return kind === "story_line";
+}
+
+// A line a finished story wrote, dated at the effect_log instant. Unlike every
+// other payload this one is already prose: the story's authored line, with its
+// {house} token filled by the server that wrote it.
+export type ChronicleStoryRow = {
+  id: string;
+  at: number;
+  payload: { storyId: string; line: string };
+};
 
 // One side of a player-market sale, dated at the effect_log instant.
 export type ChronicleMarketRow = {
@@ -361,6 +381,7 @@ const TYPE_ORDER: Record<ChronicleType, number> = {
   holding_tribute: 17,
   market_sale: 18,
   market_purchase: 19,
+  story_line: 20,
 };
 
 // generation = 1 + (boundaries that occurred at or before the event). An event at
@@ -446,6 +467,9 @@ export function buildChronicle(input: ChronicleInput): ChronicleEntry[] {
   }
   for (const mk of input.market ?? []) {
     staged.push(stage(mk.id, mk.at, mk.kind, { ...mk.payload }, input));
+  }
+  for (const st of input.stories ?? []) {
+    staged.push(stage(st.id, st.at, "story_line", { ...st.payload }, input));
   }
   for (const d of input.deaths ?? []) {
     // The succession instant is a generation boundary, so a death dated exactly on it

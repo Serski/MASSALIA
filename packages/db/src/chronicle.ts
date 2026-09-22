@@ -3,6 +3,7 @@ import {
   buildChronicle,
   CHRONICLE_EFFECT_LOG_KINDS,
   isChronicleMarketKind,
+  isChronicleStoryKind,
   OLYMPIAD_GAMES_FESTIVAL_ID,
   type ChronicleAfflictionRow,
   type ChronicleCampaignRow,
@@ -10,6 +11,7 @@ import {
   type ChronicleEntry,
   type ChronicleInput,
   type ChronicleMarketRow,
+  type ChronicleStoryRow,
   type DeathCause,
 } from "@massalia/shared";
 import { createDb } from "./client.js";
@@ -252,11 +254,14 @@ export async function gatherChronicleForCharacter(characterId: string): Promise<
     .where(and(eq(effectLog.characterId, slot.id), inArray(effectLog.kind, [...CHRONICLE_EFFECT_LOG_KINDS])));
   const campaigns: ChronicleCampaignRow[] = [];
   const market: ChronicleMarketRow[] = [];
+  const storyLines: ChronicleStoryRow[] = [];
   for (const row of effectRows) {
     const chronicle = (row.detail as { chronicle?: unknown }).chronicle;
     if (!chronicle) continue;
     const at = row.createdAt.getTime();
-    if (isChronicleMarketKind(row.kind)) {
+    if (isChronicleStoryKind(row.kind)) {
+      storyLines.push({ id: row.id, at, payload: chronicle as ChronicleStoryRow["payload"] });
+    } else if (isChronicleMarketKind(row.kind)) {
       market.push({ id: row.id, at, kind: row.kind, payload: chronicle as ChronicleMarketRow["payload"] });
     } else {
       campaigns.push({ id: row.id, at, kind: row.kind as ChronicleCampaignRow["kind"], payload: chronicle as ChronicleCampaignRow["payload"] });
@@ -277,5 +282,6 @@ export async function gatherChronicleForCharacter(characterId: string): Promise<
     deaths,
     campaigns,
     market,
+    stories: storyLines,
   });
 }

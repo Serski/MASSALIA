@@ -133,6 +133,32 @@ const GATED_STORY = {
   ],
 };
 
+// Two endings: one that writes two Chronicle lines (one with a {house} token),
+// one that writes none.
+const CHRONICLED_STORY = {
+  title: "The Ledger",
+  start: "L1",
+  nodes: [
+    {
+      type: "scene",
+      id: "L1",
+      body: { paragraphs: ["The ledger lies open."] },
+      choices: [
+        { id: "tell", text: "Tell the city", next: "LTOLD" },
+        { id: "hush", text: "Say nothing", next: "LHUSH" },
+      ],
+    },
+    {
+      type: "terminal",
+      id: "LTOLD",
+      body: { paragraphs: ["The agora hears of it."] },
+      rewards: [],
+      chronicle: ["The forger was named before the archons.", "The steward of House {house} is buying poison."],
+    },
+    { type: "terminal", id: "LHUSH", body: { paragraphs: ["The ledger burns."] }, rewards: [] },
+  ],
+};
+
 suite("story play service (integration)", () => {
   let m: Mods;
   let db: ReturnType<Mods["dbPkg"]["createDb"]>;
@@ -237,6 +263,7 @@ suite("story play service (integration)", () => {
     await db.insert(m.dbPkg.stories).values({ id: "plain-story", tree: m.shared.parseStoryTree(PLAIN_STORY) as unknown as Record<string, unknown> });
     await db.insert(m.dbPkg.stories).values({ id: "class-story", tree: m.shared.parseStoryTree(CLASS_STORY) as unknown as Record<string, unknown> });
     await db.insert(m.dbPkg.stories).values({ id: "gated-story", tree: m.shared.parseStoryTree(GATED_STORY) as unknown as Record<string, unknown> });
+    await db.insert(m.dbPkg.stories).values({ id: "chronicled-story", tree: m.shared.parseStoryTree(CHRONICLED_STORY) as unknown as Record<string, unknown> });
   });
 
   it("1. start + resume: creates exactly one active row at S1; re-calling resumes it", async () => {
@@ -701,6 +728,29 @@ suite("story play service (integration)", () => {
     const res = await m.story.advanceStory(c.id, "gated-story", "press");
     expect(res.resultText).toBe(`The steward of House ${named} looks away.`);
     for (const text of strings(res.node)) expect(text).not.toMatch(/[{}]/);
+  });
+
+  it("34. a terminal's chronicle lines are written in order, with {house} filled; one without them writes none", async () => {
+    const teller = await createCharacter("Teller");
+    await m.story.getOrStartStory(teller.id, "chronicled-story");
+    await m.story.advanceStory(teller.id, "chronicled-story", "tell");
+
+    const rows = await db
+      .select()
+      .from(m.dbPkg.effectLog)
+      .where(and(eq(m.dbPkg.effectLog.characterId, teller.id), eq(m.dbPkg.effectLog.kind, "story_line")))
+      .orderBy(m.dbPkg.effectLog.createdAt);
+    expect(rows.length).toBe(2);
+    const lines = rows.map((r) => (r.detail as { chronicle: { storyId: string; line: string } }).chronicle);
+    expect(lines[0]).toEqual({ storyId: "chronicled-story", line: "The forger was named before the archons." });
+    expect(lines[1]!.line).toMatch(/^The steward of House .+ is buying poison\.$/);
+    expect(lines[1]!.line).not.toMatch(/[{}]/); // the token is filled, not shipped
+    expect(rows[0]!.createdAt.getTime()).toBeLessThan(rows[1]!.createdAt.getTime()); // the authored order survives
+
+    const quiet = await createCharacter("Quiet");
+    await m.story.getOrStartStory(quiet.id, "chronicled-story");
+    await m.story.advanceStory(quiet.id, "chronicled-story", "hush");
+    expect(await effectLogCountByKind(quiet.id, "story_line")).toBe(0);
   });
 
   it("33. a gain_good reward credits the player's stock and summarizes with the good's name", async () => {
