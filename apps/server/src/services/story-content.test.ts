@@ -3,15 +3,17 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
-import { parseStoryTree, parseTraitsFile, validateStoryGraph, type StoryTree } from "@massalia/shared";
+import { parseStoryTree, parseTraitsFile, validateStoryGraph, type EventEffect, type StoryTree } from "@massalia/shared";
 
-// Cross-content integrity for the authored Artemisia story + the seed loader.
+// Cross-content integrity for the authored stories + the seed loader.
 // The content-integrity block is pure (no DB) and runs always; the seed block is
 // DB-gated like the other integration suites.
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const storyFile = resolve(root, "content/stories/artemisia-silver.json");
+const rosesFile = resolve(root, "content/stories/house-of-roses.json");
 const traitsFile = resolve(root, "content/traits/traits.json");
+const buildingsFile = resolve(root, "content/buildings/buildings.json");
 
 function readStory(): { id: string; version: number; tree: StoryTree } {
   const raw = JSON.parse(readFileSync(storyFile, "utf8")) as { id: string; version: number; tree: unknown };
@@ -74,6 +76,78 @@ describe("Artemisia story content integrity (pure)", () => {
   });
 });
 
+describe("House of Roses story content integrity (pure)", () => {
+  function readRoses(): { id: string; version: number; tree: StoryTree } {
+    const raw = JSON.parse(readFileSync(rosesFile, "utf8")) as { id: string; version: number; tree: unknown };
+    return { id: raw.id, version: raw.version, tree: parseStoryTree(raw.tree) };
+  }
+
+  // Every effect the tree can apply, from both branches of every choice and from
+  // every terminal.
+  function effectsInTree(tree: StoryTree) {
+    return tree.nodes.flatMap((node) =>
+      node.type === "scene"
+        ? node.choices.flatMap((c) => [...(c.rewards ?? []), ...(c.otherwise?.rewards ?? [])])
+        : node.rewards,
+    );
+  }
+
+  it("6. the real content parses and validateStoryGraph returns []", () => {
+    expect(validateStoryGraph(readRoses().tree)).toEqual([]);
+  });
+
+  it("7. shape sanity: start OPEN, 35 nodes — 31 scenes and 4 terminals", () => {
+    const { tree } = readRoses();
+    expect(tree.start).toBe("OPEN");
+    expect(tree.nodes.length).toBe(35);
+    expect(tree.nodes.filter((n) => n.type === "scene").length).toBe(31);
+    expect(tree.nodes.filter((n) => n.type === "terminal").length).toBe(4);
+  });
+
+  it("8. every gain_good names a good the buildings catalog labels (the typo tripwire)", () => {
+    const { tree } = readRoses();
+    const labels = (JSON.parse(readFileSync(buildingsFile, "utf8")) as { goodLabels: Record<string, string> }).goodLabels;
+    const goods = effectsInTree(tree).flatMap((e) => (e.type === "gain_good" ? [e.good] : []));
+    expect(goods.length).toBeGreaterThan(0);
+    for (const good of goods) expect(labels[good], `good "${good}" is not in buildings.json goodLabels`).toBeTruthy();
+  });
+
+  it("9. every path ends, credits 2 remedies and the vial unless the watch took it, and only `name` reaches END-full", () => {
+    const { tree } = readRoses();
+    const byId = new Map(tree.nodes.map((n) => [n.id, n]));
+    const paths: { terminal: string; goods: Record<string, number>; namedTheHouse: boolean }[] = [];
+
+    // Exhaustive walk: every choice, and every fallback branch, from OPEN. The tree
+    // is a DAG (the graph validator proves every path terminates), so this halts.
+    const walk = (nodeId: string, goods: Record<string, number>, namedTheHouse: boolean) => {
+      const node = byId.get(nodeId)!;
+      const credit = (into: Record<string, number>, rewards: EventEffect[] | undefined) => {
+        const out = { ...into };
+        for (const e of rewards ?? []) if (e.type === "gain_good") out[e.good] = (out[e.good] ?? 0) + e.amount;
+        return out;
+      };
+      if (node.type === "terminal") {
+        paths.push({ terminal: node.id, goods: credit(goods, node.rewards), namedTheHouse });
+        return;
+      }
+      for (const choice of node.choices) {
+        const branches = choice.otherwise ? [choice, choice.otherwise] : [choice];
+        for (const branch of branches) {
+          walk(branch.next, credit(goods, branch.rewards), namedTheHouse || choice.id === "name");
+        }
+      }
+    };
+    walk(tree.start, {}, false);
+
+    expect(paths.length).toBe(12_636);
+    for (const path of paths) {
+      expect(path.goods.remedy, `${path.terminal}: the two remedies come home on every path`).toBe(2);
+      expect(path.goods.poison ?? 0, `${path.terminal}: the vial`).toBe(path.terminal === "END-watch" ? 0 : 1);
+      expect(path.terminal === "END-full", `${path.terminal}: the full solve is exactly the "name" choice`).toBe(path.namedTheHouse);
+    }
+  });
+});
+
 const dbUrl = process.env.DATABASE_URL ?? "";
 const suite = describe.runIf(dbUrl.includes("_test"));
 
@@ -107,5 +181,20 @@ suite("loadStories seed (integration)", () => {
     const tree = rows[0]!.tree as { start: string; nodes: unknown[] };
     expect(tree.start).toBe("P1"); // spot-check start
     expect(tree.nodes.length).toBe(15); // spot-check node count
+  });
+
+  it("10. the House of Roses is seeded too, and its trigger opens it to the Hetaira in Winter 298 BC", async () => {
+    await m.story.loadStories();
+
+    const rows = await db.select().from(m.dbPkg.stories).where(eq(m.dbPkg.stories.id, "house-of-roses"));
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.version).toBe(1);
+    expect((rows[0]!.tree as { nodes: unknown[] }).nodes.length).toBe(35);
+
+    expect(m.story.STORY_TRIGGERS["house-of-roses"]).toEqual({
+      kind: "class",
+      classId: "hetaira",
+      opensAt: { yearBC: 298, season: 1 },
+    });
   });
 });

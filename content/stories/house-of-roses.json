@@ -1,0 +1,1404 @@
+{
+  "id": "house-of-roses",
+  "version": 1,
+  "tree": {
+    "title": "The House of Roses",
+    "start": "OPEN",
+    "nodes": [
+      {
+        "type": "scene",
+        "id": "OPEN",
+        "body": {
+          "paragraphs": [
+            "The count is short again. Forty drachmae gone from the strongbox in a month, from a box with two keys and not a scratch on it. Tonight, for the first time since the Dionysia, you opened the cedar chest, and the blue vial was not in its straw. On the physician's shelf, two of the five stoppered remedies are missing.",
+            "Silver you can lose. Remedies you can buy again. But a vial of that particular blue, found anywhere in this city with your house's seal on the wax, is a rope.",
+            "Someone in the House of Roses is stealing. The next symposium is tomorrow. You have tonight."
+          ]
+        },
+        "image": "/stories/story-roses-00-opening.webp",
+        "choices": [
+          {
+            "id": "lamp",
+            "text": "Take up the lamp.",
+            "next": "S1"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S1",
+        "body": {
+          "eyebrow": "Where to begin",
+          "paragraphs": [
+            "The house is asleep. Where do you begin?"
+          ]
+        },
+        "image": "/stories/story-roses-01-courtyard.webp",
+        "choices": [
+          {
+            "id": "strongbox",
+            "text": "The strongbox.",
+            "result": "Two keys open it. Yours is on the cord at your neck. The other hangs from Bion's belt, and Bion has grown fond of the wine he pours for guests. The lock is clean. Whoever opened it had a key.",
+            "next": "S2"
+          },
+          {
+            "id": "chest",
+            "text": "The cedar chest.",
+            "result": "You bring the lamp close. The clasp is whole, but there are three fine scratches beside the keyhole, the kind a picklock leaves and a key never does. This was not a girl with borrowed keys. This was a hand that has done it before.",
+            "next": "S2"
+          },
+          {
+            "id": "women",
+            "text": "The women, all together.",
+            "result": "You call them to the courtyard and say nothing about the vial, only the silver. They close ranks the way women do who share a roof. You learn what silence teaches: Lyris keeps glancing at the back gate. Myrto looks at her feet.",
+            "next": "S2"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S2",
+        "body": {
+          "eyebrow": "Bion",
+          "paragraphs": [
+            "Bion has kept this house since before you owned it. He is honest in the way old men are honest, which is to say he is ashamed of the things he does badly. He is waiting for you by the kitchen fire with his hands folded."
+          ]
+        },
+        "image": "/stories/story-roses-02-kitchen.webp",
+        "choices": [
+          {
+            "id": "press",
+            "text": "Press him.",
+            "requires": {
+              "composure": 50
+            },
+            "result": "\"Bion. The nights of the last two symposia. Where were your keys?\" He looks at the fire for a long time. \"On my belt, mistress. And I was asleep on the bench by the door, because the Milesian would not stop filling my cup. When I woke the keys were on the wrong hip.\" He has said it before you asked. That is the whole of his confession, and it is enough.",
+            "next": "S3-b"
+          },
+          {
+            "id": "pour",
+            "text": "Pour him a cup.",
+            "result": "You pour, and sit, and let him talk of the old days until the wine does your work. \"I fell asleep at the door, mistress. Twice. The keys were on my belt and I cannot swear they stayed there.\" He does not look at you. He knows what it means.",
+            "next": "S3-b"
+          },
+          {
+            "id": "accuse",
+            "text": "Accuse him.",
+            "result": "\"It was you.\" He stands up slowly. He does not argue, and that is worse. \"Then I will fetch my things in the morning.\" He goes to his room and bars it, and for the rest of the night the door does not open. Whatever else happens, you have lost his help.",
+            "next": "S3-x"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S3-b",
+        "body": {
+          "eyebrow": "Myrto",
+          "paragraphs": [
+            "Myrto came from Emporion in the spring, the youngest woman of the house and the quickest to learn. She has a new bracelet of twisted silver that she keeps turning on her wrist."
+          ]
+        },
+        "image": "/stories/story-roses-03-myrto-room.webp",
+        "choices": [
+          {
+            "id": "bracelet",
+            "text": "Admire the bracelet.",
+            "result": "\"That is fine work. Who has good taste?\" She colours and laughs. \"The shipowner's son. The one who cannot sing.\" The tension goes out of her, and she talks. \"Mistress, if you are asking about the silver, ask Lyris why she is awake at the third watch. I am not.\"",
+            "next": "S4-b"
+          },
+          {
+            "id": "straight",
+            "text": "Ask her straight.",
+            "result": "\"Did you take from this house?\" Her eyes fill and she shakes her head, and keeps shaking it. You learn nothing, and she will not speak to you again tonight.",
+            "next": "S4-b"
+          },
+          {
+            "id": "search",
+            "text": "Search her room.",
+            "result": "Under the mattress, a letter from Emporion in a bad hand: her mother is sick and the physician there wants more than a flute girl's wages. Under the bed, wrapped in a shawl, two clay bottles with your physician's mark. She is in the doorway before you turn. \"I was going to send them with the next ship. Only those two. I never touched the box, mistress, I swear it on my mother.\" You believe her about the box. The scratches on the chest were not made by a girl who hides bottles under her bed.",
+            "next": "S4-b"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S3-x",
+        "body": {
+          "eyebrow": "Myrto",
+          "paragraphs": [
+            "Myrto came from Emporion in the spring, the youngest woman of the house and the quickest to learn. She has a new bracelet of twisted silver that she keeps turning on her wrist."
+          ]
+        },
+        "image": "/stories/story-roses-03-myrto-room.webp",
+        "choices": [
+          {
+            "id": "bracelet",
+            "text": "Admire the bracelet.",
+            "result": "\"That is fine work. Who has good taste?\" She colours and laughs. \"The shipowner's son. The one who cannot sing.\" The tension goes out of her, and she talks. \"Mistress, if you are asking about the silver, ask Lyris why she is awake at the third watch. I am not.\"",
+            "next": "S4-x"
+          },
+          {
+            "id": "straight",
+            "text": "Ask her straight.",
+            "result": "\"Did you take from this house?\" Her eyes fill and she shakes her head, and keeps shaking it. You learn nothing, and she will not speak to you again tonight.",
+            "next": "S4-x"
+          },
+          {
+            "id": "search",
+            "text": "Search her room.",
+            "result": "Under the mattress, a letter from Emporion in a bad hand: her mother is sick and the physician there wants more than a flute girl's wages. Under the bed, wrapped in a shawl, two clay bottles with your physician's mark. She is in the doorway before you turn. \"I was going to send them with the next ship. Only those two. I never touched the box, mistress, I swear it on my mother.\" You believe her about the box. The scratches on the chest were not made by a girl who hides bottles under her bed.",
+            "next": "S4-x"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S4-b",
+        "body": {
+          "eyebrow": "Lyris",
+          "paragraphs": [
+            "Lyris plays the flute at your symposia and hears everything a man says when he thinks a flute girl is furniture. She is sitting on the stairs with the instrument across her knees."
+          ]
+        },
+        "image": "/stories/story-roses-04-stairs.webp",
+        "choices": [
+          {
+            "id": "standing",
+            "text": "Ask her as a woman of standing asks.",
+            "requires": {
+              "prestige": 10
+            },
+            "result": "She looks at you the way she looks at the men, deciding. Then: \"Sandals, mistress. A man's. At the back gate, after the last two symposia, when the steward was asleep on his bench. He did not climb. The bar was up for him.\" She has said it and now she is afraid. \"Kerdon lifts the bar.\"",
+            "next": "S5-b"
+          },
+          {
+            "id": "coin",
+            "text": "A coin in her hand.",
+            "requires": {
+              "drachmae": 5
+            },
+            "result": "She closes her fingers over it. \"A man came through the back gate. Twice. Both times on the nights old Bion drank. Nobody climbs that wall. Somebody lifts the bar.\" She does not say the name. She does not have to. Only Kerdon sleeps by the bar.",
+            "next": "S5-b",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": -5
+              }
+            ]
+          },
+          {
+            "id": "kindly",
+            "text": "Ask kindly, with nothing.",
+            "result": "She lifts the flute and plays a few bars of something Ionian and looks at the wall. You are her mistress, not her friend. When you stand to go she says, very quietly, \"I don't like the doorkeeper.\" It is all you will get.",
+            "next": "S5-b"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S4-x",
+        "body": {
+          "eyebrow": "Lyris",
+          "paragraphs": [
+            "Lyris plays the flute at your symposia and hears everything a man says when he thinks a flute girl is furniture. She is sitting on the stairs with the instrument across her knees."
+          ]
+        },
+        "image": "/stories/story-roses-04-stairs.webp",
+        "choices": [
+          {
+            "id": "standing",
+            "text": "Ask her as a woman of standing asks.",
+            "requires": {
+              "prestige": 10
+            },
+            "result": "She looks at you the way she looks at the men, deciding. Then: \"Sandals, mistress. A man's. At the back gate, after the last two symposia, when the steward was asleep on his bench. He did not climb. The bar was up for him.\" She has said it and now she is afraid. \"Kerdon lifts the bar.\"",
+            "next": "S5-x"
+          },
+          {
+            "id": "coin",
+            "text": "A coin in her hand.",
+            "requires": {
+              "drachmae": 5
+            },
+            "result": "She closes her fingers over it. \"A man came through the back gate. Twice. Both times on the nights old Bion drank. Nobody climbs that wall. Somebody lifts the bar.\" She does not say the name. She does not have to. Only Kerdon sleeps by the bar.",
+            "next": "S5-x",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": -5
+              }
+            ]
+          },
+          {
+            "id": "kindly",
+            "text": "Ask kindly, with nothing.",
+            "result": "She lifts the flute and plays a few bars of something Ionian and looks at the wall. You are her mistress, not her friend. When you stand to go she says, very quietly, \"I don't like the doorkeeper.\" It is all you will get.",
+            "next": "S5-x"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S5-b",
+        "body": {
+          "eyebrow": "Kerdon",
+          "paragraphs": [
+            "Kerdon sleeps in the alcove by the back gate. He is not a bad slave, only a cheap one, and cheap men are bought cheaply."
+          ]
+        },
+        "image": "/stories/story-roses-05-alcove.webp",
+        "choices": [
+          {
+            "id": "threaten",
+            "text": "Threaten him.",
+            "requires": {
+              "composure": 50
+            },
+            "result": "You do not raise your voice. You tell him what the market pays for a doorkeeper who lifts bars at night, and which of your patrons sits on the bench that hears such cases. He talks. \"A gentleman's man, mistress. Grey cloak. He gives two obols to have the bar up on symposium nights. He said he was collecting messages. I never looked at what he carried.\"",
+            "next": "S6-b-p"
+          },
+          {
+            "id": "buy",
+            "text": "Buy him.",
+            "requires": {
+              "drachmae": 10
+            },
+            "result": "The coins do what fear would have done, and quicker. \"Grey cloak, a gentleman's man. Two obols to lift the bar on symposium nights, when the steward drinks. He comes and goes in the time it takes to say a prayer.\" He adds, unasked, \"He is due tomorrow.\"",
+            "next": "S6-b-p",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": -10
+              }
+            ]
+          },
+          {
+            "id": "signal",
+            "text": "Ask him to signal next time.",
+            "result": "He swears he will. He swears on Hermes. You have heard Kerdon swear before.",
+            "next": "S6-b-q"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S5-x",
+        "body": {
+          "eyebrow": "Kerdon",
+          "paragraphs": [
+            "Kerdon sleeps in the alcove by the back gate. He is not a bad slave, only a cheap one, and cheap men are bought cheaply."
+          ]
+        },
+        "image": "/stories/story-roses-05-alcove.webp",
+        "choices": [
+          {
+            "id": "threaten",
+            "text": "Threaten him.",
+            "requires": {
+              "composure": 50
+            },
+            "result": "You do not raise your voice. You tell him what the market pays for a doorkeeper who lifts bars at night, and which of your patrons sits on the bench that hears such cases. He talks. \"A gentleman's man, mistress. Grey cloak. He gives two obols to have the bar up on symposium nights. He said he was collecting messages. I never looked at what he carried.\"",
+            "next": "S6-x-p"
+          },
+          {
+            "id": "buy",
+            "text": "Buy him.",
+            "requires": {
+              "drachmae": 10
+            },
+            "result": "The coins do what fear would have done, and quicker. \"Grey cloak, a gentleman's man. Two obols to lift the bar on symposium nights, when the steward drinks. He comes and goes in the time it takes to say a prayer.\" He adds, unasked, \"He is due tomorrow.\"",
+            "next": "S6-x-p",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": -10
+              }
+            ]
+          },
+          {
+            "id": "signal",
+            "text": "Ask him to signal next time.",
+            "result": "He swears he will. He swears on Hermes. You have heard Kerdon swear before.",
+            "next": "S6-x-q"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S6-b-p",
+        "body": {
+          "eyebrow": "The trap",
+          "paragraphs": [
+            "Tomorrow is a symposium night. You set the table as always, let the wine go round, let Bion pour, and when the last guest is gone you leave the strongbox where it stands with twenty drachmae in it, each coin nicked once at the rim with a knife."
+          ]
+        },
+        "image": "/stories/story-roses-06-trap.webp",
+        "choices": [
+          {
+            "id": "wait",
+            "text": "Sit in the dark and wait.",
+            "requires": {
+              "composure": 50
+            },
+            "result": "The lamp is shuttered. The house creaks and settles. Past the third watch the bar lifts with barely a sound and a grey cloak crosses the courtyard, straight to the cedar chest, and you understand that he is not here for silver at all. He has the vial in his hand when your light opens on him.",
+            "next": "S7-b"
+          },
+          {
+            "id": "kerdon",
+            "text": "Let Kerdon watch.",
+            "result": "Kerdon is awake because he is afraid, which is the only reason Kerdon is ever awake. When the bar lifts he shouts, and the man in the grey cloak is caught with the chest open and the vial in his hand.",
+            "next": "S7-b"
+          },
+          {
+            "id": "flute",
+            "text": "Have Lyris play late.",
+            "result": "The flute goes on past midnight and the house sounds awake, and no one comes. The next symposium, four days on, you are ready. Bion pours water into his own cup all evening and sits by the door with his eyes open, and when the bar lifts, the man in the grey cloak walks into two lamps.",
+            "next": "S7-b"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S6-b-q",
+        "body": {
+          "eyebrow": "The trap",
+          "paragraphs": [
+            "Tomorrow is a symposium night. You set the table as always, let the wine go round, let Bion pour, and when the last guest is gone you leave the strongbox where it stands with twenty drachmae in it, each coin nicked once at the rim with a knife."
+          ]
+        },
+        "image": "/stories/story-roses-06-trap.webp",
+        "choices": [
+          {
+            "id": "wait",
+            "text": "Sit in the dark and wait.",
+            "requires": {
+              "composure": 50
+            },
+            "result": "The lamp is shuttered. The house creaks and settles. Past the third watch the bar lifts with barely a sound and a grey cloak crosses the courtyard, straight to the cedar chest, and you understand that he is not here for silver at all. He has the vial in his hand when your light opens on him.",
+            "next": "S7-b"
+          },
+          {
+            "id": "kerdon",
+            "text": "Let Kerdon watch.",
+            "result": "Kerdon sleeps. You wake to the sound of the bar dropping back and run to the courtyard in time to see a grey cloak go over the gate. On the flagstones where he fell, the blue vial, unbroken. The marked silver is gone with him, and so is his name.",
+            "next": "S8-b-escaped",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "poison",
+                "amount": 1
+              }
+            ]
+          },
+          {
+            "id": "flute",
+            "text": "Have Lyris play late.",
+            "result": "The flute goes on past midnight and the house sounds awake, and no one comes. The next symposium, four days on, you are ready. Bion pours water into his own cup all evening and sits by the door with his eyes open, and when the bar lifts, the man in the grey cloak walks into two lamps.",
+            "next": "S7-b"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S6-x-p",
+        "body": {
+          "eyebrow": "The trap",
+          "paragraphs": [
+            "Tomorrow is a symposium night. You set the table as always, let the wine go round, let Bion pour, and when the last guest is gone you leave the strongbox where it stands with twenty drachmae in it, each coin nicked once at the rim with a knife."
+          ]
+        },
+        "image": "/stories/story-roses-06-trap.webp",
+        "choices": [
+          {
+            "id": "wait",
+            "text": "Sit in the dark and wait.",
+            "requires": {
+              "composure": 50
+            },
+            "result": "The lamp is shuttered. The house creaks and settles. Past the third watch the bar lifts with barely a sound and a grey cloak crosses the courtyard, straight to the cedar chest, and you understand that he is not here for silver at all. He has the vial in his hand when your light opens on him.",
+            "next": "S7-x"
+          },
+          {
+            "id": "kerdon",
+            "text": "Let Kerdon watch.",
+            "result": "Kerdon is awake because he is afraid, which is the only reason Kerdon is ever awake. When the bar lifts he shouts, and the man in the grey cloak is caught with the chest open and the vial in his hand.",
+            "next": "S7-x"
+          },
+          {
+            "id": "flute",
+            "text": "Have Lyris play late.",
+            "requires": {
+              "composure": 50
+            },
+            "result": "The flute goes on past midnight and the house sounds awake, and no one comes. The next symposium, four days on, you are ready. You sit by the door yourself, because there is no one else, and when the bar lifts, the man in the grey cloak walks into your lamp.",
+            "next": "S7-x",
+            "otherwise": {
+              "result": "The flute goes on past midnight and the house sounds awake, and no one comes. The next symposium, four days on, you sit by the door yourself, because there is no one else. Past the third watch your eyes close. You wake to the sound of the bar dropping back and run to the courtyard in time to see a grey cloak go over the gate. On the flagstones where he fell, the blue vial, unbroken. The marked silver is gone with him, and so is his name.",
+              "next": "S8-x-escaped",
+              "rewards": [
+                {
+                  "type": "gain_good",
+                  "good": "poison",
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S6-x-q",
+        "body": {
+          "eyebrow": "The trap",
+          "paragraphs": [
+            "Tomorrow is a symposium night. You set the table as always, let the wine go round, let Bion pour, and when the last guest is gone you leave the strongbox where it stands with twenty drachmae in it, each coin nicked once at the rim with a knife."
+          ]
+        },
+        "image": "/stories/story-roses-06-trap.webp",
+        "choices": [
+          {
+            "id": "wait",
+            "text": "Sit in the dark and wait.",
+            "requires": {
+              "composure": 50
+            },
+            "result": "The lamp is shuttered. The house creaks and settles. Past the third watch the bar lifts with barely a sound and a grey cloak crosses the courtyard, straight to the cedar chest, and you understand that he is not here for silver at all. He has the vial in his hand when your light opens on him.",
+            "next": "S7-x"
+          },
+          {
+            "id": "kerdon",
+            "text": "Let Kerdon watch.",
+            "result": "Kerdon sleeps. You wake to the sound of the bar dropping back and run to the courtyard in time to see a grey cloak go over the gate. On the flagstones where he fell, the blue vial, unbroken. The marked silver is gone with him, and so is his name.",
+            "next": "S8-x-escaped",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "poison",
+                "amount": 1
+              }
+            ]
+          },
+          {
+            "id": "flute",
+            "text": "Have Lyris play late.",
+            "requires": {
+              "composure": 50
+            },
+            "result": "The flute goes on past midnight and the house sounds awake, and no one comes. The next symposium, four days on, you are ready. You sit by the door yourself, because there is no one else, and when the bar lifts, the man in the grey cloak walks into your lamp.",
+            "next": "S7-x",
+            "otherwise": {
+              "result": "The flute goes on past midnight and the house sounds awake, and no one comes. The next symposium, four days on, you sit by the door yourself, because there is no one else. Past the third watch your eyes close. You wake to the sound of the bar dropping back and run to the courtyard in time to see a grey cloak go over the gate. On the flagstones where he fell, the blue vial, unbroken. The marked silver is gone with him, and so is his name.",
+              "next": "S8-x-escaped",
+              "rewards": [
+                {
+                  "type": "gain_good",
+                  "good": "poison",
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S7-b",
+        "body": {
+          "eyebrow": "The man in the grey cloak",
+          "paragraphs": [
+            "He is a servant, not a thief by trade, and he knows it. He is on his knees with the vial in his fist and your marked silver in his purse, and he is looking at the gate."
+          ]
+        },
+        "image": "/stories/story-roses-07-grey-cloak.webp",
+        "choices": [
+          {
+            "id": "watch",
+            "text": "Call the watch.",
+            "result": "The watchmen come with torches and take him, and they take the vial, and by the time the sun is up the agora knows that a hetaira keeps poison in a cedar chest. The Ephors have the vial now. Your name is on the wax.",
+            "next": "S8-b-watch"
+          },
+          {
+            "id": "name",
+            "text": "His freedom for a name.",
+            "result": "\"Who sends you?\" He weighs the gate against you and chooses you. \"The steward of House {house}. He pays for quiet things and asks no questions. I was to bring the blue one tonight.\" You take the vial from his hand and the marked coins from his purse, and you open the gate yourself. A name is worth more than a servant.",
+            "next": "S8-b-full",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "poison",
+                "amount": 1
+              },
+              {
+                "type": "change_drachmae",
+                "amount": 20
+              }
+            ]
+          },
+          {
+            "id": "purse",
+            "text": "Vial, purse, and the street.",
+            "result": "You take the vial and the whole purse, yours and his, and Kerdon throws him into the lane. He goes without a word, and takes his master's name with him.",
+            "next": "S8-b-caught",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "poison",
+                "amount": 1
+              },
+              {
+                "type": "change_drachmae",
+                "amount": 50
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S7-x",
+        "body": {
+          "eyebrow": "The man in the grey cloak",
+          "paragraphs": [
+            "He is a servant, not a thief by trade, and he knows it. He is on his knees with the vial in his fist and your marked silver in his purse, and he is looking at the gate."
+          ]
+        },
+        "image": "/stories/story-roses-07-grey-cloak.webp",
+        "choices": [
+          {
+            "id": "watch",
+            "text": "Call the watch.",
+            "result": "The watchmen come with torches and take him, and they take the vial, and by the time the sun is up the agora knows that a hetaira keeps poison in a cedar chest. The Ephors have the vial now. Your name is on the wax.",
+            "next": "S8-x-watch"
+          },
+          {
+            "id": "name",
+            "text": "His freedom for a name.",
+            "result": "\"Who sends you?\" He weighs the gate against you and chooses you. \"The steward of House {house}. He pays for quiet things and asks no questions. I was to bring the blue one tonight.\" You take the vial from his hand and the marked coins from his purse, and you open the gate yourself. A name is worth more than a servant.",
+            "next": "S8-x-full",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "poison",
+                "amount": 1
+              },
+              {
+                "type": "change_drachmae",
+                "amount": 20
+              }
+            ]
+          },
+          {
+            "id": "purse",
+            "text": "Vial, purse, and the street.",
+            "result": "You take the vial and the whole purse, yours and his, and Kerdon throws him into the lane. He goes without a word, and takes his master's name with him.",
+            "next": "S8-x-caught",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "poison",
+                "amount": 1
+              },
+              {
+                "type": "change_drachmae",
+                "amount": 50
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S8-b-full",
+        "body": {
+          "eyebrow": "Myrto",
+          "paragraphs": [
+            "The night is nearly done. Whatever else you found, the two remedies are back on the shelf, from under her bed in the end, wrapped in her shawl, and Myrto is waiting in the courtyard because she has nowhere else to wait."
+          ]
+        },
+        "image": "/stories/story-roses-08-first-light.webp",
+        "choices": [
+          {
+            "id": "keep",
+            "text": "Keep her.",
+            "result": "\"Your mother's physician will be paid from this house, and you will pay it back from your share, slowly, and you will never again take from this roof what you could have asked for.\" She weeps, which is a waste, and then she kisses your hand, which is not.",
+            "next": "S9-b-full",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              },
+              {
+                "type": "change_composure",
+                "amount": 5
+              }
+            ]
+          },
+          {
+            "id": "send",
+            "text": "Send her away.",
+            "result": "You give her the bracelet and her wages to the day and the name of a house in Emporion that will take her. She goes at dawn. The house is a woman short, and the shipowner's son will be sorry.",
+            "next": "S9-b-full",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              }
+            ]
+          },
+          {
+            "id": "share",
+            "text": "Take it from her share.",
+            "result": "\"Two bottles at the physician's price. It comes out of your share until it is paid.\" She agrees because she must. She stays, and she does not forget.",
+            "next": "S9-b-full",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              },
+              {
+                "type": "change_drachmae",
+                "amount": 10
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S8-b-caught",
+        "body": {
+          "eyebrow": "Myrto",
+          "paragraphs": [
+            "The night is nearly done. Whatever else you found, the two remedies are back on the shelf, from under her bed in the end, wrapped in her shawl, and Myrto is waiting in the courtyard because she has nowhere else to wait."
+          ]
+        },
+        "image": "/stories/story-roses-08-first-light.webp",
+        "choices": [
+          {
+            "id": "keep",
+            "text": "Keep her.",
+            "result": "\"Your mother's physician will be paid from this house, and you will pay it back from your share, slowly, and you will never again take from this roof what you could have asked for.\" She weeps, which is a waste, and then she kisses your hand, which is not.",
+            "next": "S9-b-caught",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              },
+              {
+                "type": "change_composure",
+                "amount": 5
+              }
+            ]
+          },
+          {
+            "id": "send",
+            "text": "Send her away.",
+            "result": "You give her the bracelet and her wages to the day and the name of a house in Emporion that will take her. She goes at dawn. The house is a woman short, and the shipowner's son will be sorry.",
+            "next": "S9-b-caught",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              }
+            ]
+          },
+          {
+            "id": "share",
+            "text": "Take it from her share.",
+            "result": "\"Two bottles at the physician's price. It comes out of your share until it is paid.\" She agrees because she must. She stays, and she does not forget.",
+            "next": "S9-b-caught",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              },
+              {
+                "type": "change_drachmae",
+                "amount": 10
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S8-b-escaped",
+        "body": {
+          "eyebrow": "Myrto",
+          "paragraphs": [
+            "The night is nearly done. Whatever else you found, the two remedies are back on the shelf, from under her bed in the end, wrapped in her shawl, and Myrto is waiting in the courtyard because she has nowhere else to wait."
+          ]
+        },
+        "image": "/stories/story-roses-08-first-light.webp",
+        "choices": [
+          {
+            "id": "keep",
+            "text": "Keep her.",
+            "result": "\"Your mother's physician will be paid from this house, and you will pay it back from your share, slowly, and you will never again take from this roof what you could have asked for.\" She weeps, which is a waste, and then she kisses your hand, which is not.",
+            "next": "S9-b-escaped",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              },
+              {
+                "type": "change_composure",
+                "amount": 5
+              }
+            ]
+          },
+          {
+            "id": "send",
+            "text": "Send her away.",
+            "result": "You give her the bracelet and her wages to the day and the name of a house in Emporion that will take her. She goes at dawn. The house is a woman short, and the shipowner's son will be sorry.",
+            "next": "S9-b-escaped",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              }
+            ]
+          },
+          {
+            "id": "share",
+            "text": "Take it from her share.",
+            "result": "\"Two bottles at the physician's price. It comes out of your share until it is paid.\" She agrees because she must. She stays, and she does not forget.",
+            "next": "S9-b-escaped",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              },
+              {
+                "type": "change_drachmae",
+                "amount": 10
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S8-b-watch",
+        "body": {
+          "eyebrow": "Myrto",
+          "paragraphs": [
+            "The night is nearly done. Whatever else you found, the two remedies are back on the shelf, from under her bed in the end, wrapped in her shawl, and Myrto is waiting in the courtyard because she has nowhere else to wait."
+          ]
+        },
+        "image": "/stories/story-roses-08-first-light.webp",
+        "choices": [
+          {
+            "id": "keep",
+            "text": "Keep her.",
+            "result": "\"Your mother's physician will be paid from this house, and you will pay it back from your share, slowly, and you will never again take from this roof what you could have asked for.\" She weeps, which is a waste, and then she kisses your hand, which is not.",
+            "next": "S9-b-watch",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              },
+              {
+                "type": "change_composure",
+                "amount": 5
+              }
+            ]
+          },
+          {
+            "id": "send",
+            "text": "Send her away.",
+            "result": "You give her the bracelet and her wages to the day and the name of a house in Emporion that will take her. She goes at dawn. The house is a woman short, and the shipowner's son will be sorry.",
+            "next": "S9-b-watch",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              }
+            ]
+          },
+          {
+            "id": "share",
+            "text": "Take it from her share.",
+            "result": "\"Two bottles at the physician's price. It comes out of your share until it is paid.\" She agrees because she must. She stays, and she does not forget.",
+            "next": "S9-b-watch",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              },
+              {
+                "type": "change_drachmae",
+                "amount": 10
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S8-x-full",
+        "body": {
+          "eyebrow": "Myrto",
+          "paragraphs": [
+            "The night is nearly done. Whatever else you found, the two remedies are back on the shelf, from under her bed in the end, wrapped in her shawl, and Myrto is waiting in the courtyard because she has nowhere else to wait."
+          ]
+        },
+        "image": "/stories/story-roses-08-first-light.webp",
+        "choices": [
+          {
+            "id": "keep",
+            "text": "Keep her.",
+            "result": "\"Your mother's physician will be paid from this house, and you will pay it back from your share, slowly, and you will never again take from this roof what you could have asked for.\" She weeps, which is a waste, and then she kisses your hand, which is not.",
+            "next": "S9-x-full",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              },
+              {
+                "type": "change_composure",
+                "amount": 5
+              }
+            ]
+          },
+          {
+            "id": "send",
+            "text": "Send her away.",
+            "result": "You give her the bracelet and her wages to the day and the name of a house in Emporion that will take her. She goes at dawn. The house is a woman short, and the shipowner's son will be sorry.",
+            "next": "S9-x-full",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              }
+            ]
+          },
+          {
+            "id": "share",
+            "text": "Take it from her share.",
+            "result": "\"Two bottles at the physician's price. It comes out of your share until it is paid.\" She agrees because she must. She stays, and she does not forget.",
+            "next": "S9-x-full",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              },
+              {
+                "type": "change_drachmae",
+                "amount": 10
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S8-x-caught",
+        "body": {
+          "eyebrow": "Myrto",
+          "paragraphs": [
+            "The night is nearly done. Whatever else you found, the two remedies are back on the shelf, from under her bed in the end, wrapped in her shawl, and Myrto is waiting in the courtyard because she has nowhere else to wait."
+          ]
+        },
+        "image": "/stories/story-roses-08-first-light.webp",
+        "choices": [
+          {
+            "id": "keep",
+            "text": "Keep her.",
+            "result": "\"Your mother's physician will be paid from this house, and you will pay it back from your share, slowly, and you will never again take from this roof what you could have asked for.\" She weeps, which is a waste, and then she kisses your hand, which is not.",
+            "next": "S9-x-caught",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              },
+              {
+                "type": "change_composure",
+                "amount": 5
+              }
+            ]
+          },
+          {
+            "id": "send",
+            "text": "Send her away.",
+            "result": "You give her the bracelet and her wages to the day and the name of a house in Emporion that will take her. She goes at dawn. The house is a woman short, and the shipowner's son will be sorry.",
+            "next": "S9-x-caught",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              }
+            ]
+          },
+          {
+            "id": "share",
+            "text": "Take it from her share.",
+            "result": "\"Two bottles at the physician's price. It comes out of your share until it is paid.\" She agrees because she must. She stays, and she does not forget.",
+            "next": "S9-x-caught",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              },
+              {
+                "type": "change_drachmae",
+                "amount": 10
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S8-x-escaped",
+        "body": {
+          "eyebrow": "Myrto",
+          "paragraphs": [
+            "The night is nearly done. Whatever else you found, the two remedies are back on the shelf, from under her bed in the end, wrapped in her shawl, and Myrto is waiting in the courtyard because she has nowhere else to wait."
+          ]
+        },
+        "image": "/stories/story-roses-08-first-light.webp",
+        "choices": [
+          {
+            "id": "keep",
+            "text": "Keep her.",
+            "result": "\"Your mother's physician will be paid from this house, and you will pay it back from your share, slowly, and you will never again take from this roof what you could have asked for.\" She weeps, which is a waste, and then she kisses your hand, which is not.",
+            "next": "S9-x-escaped",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              },
+              {
+                "type": "change_composure",
+                "amount": 5
+              }
+            ]
+          },
+          {
+            "id": "send",
+            "text": "Send her away.",
+            "result": "You give her the bracelet and her wages to the day and the name of a house in Emporion that will take her. She goes at dawn. The house is a woman short, and the shipowner's son will be sorry.",
+            "next": "S9-x-escaped",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              }
+            ]
+          },
+          {
+            "id": "share",
+            "text": "Take it from her share.",
+            "result": "\"Two bottles at the physician's price. It comes out of your share until it is paid.\" She agrees because she must. She stays, and she does not forget.",
+            "next": "S9-x-escaped",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              },
+              {
+                "type": "change_drachmae",
+                "amount": 10
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S8-x-watch",
+        "body": {
+          "eyebrow": "Myrto",
+          "paragraphs": [
+            "The night is nearly done. Whatever else you found, the two remedies are back on the shelf, from under her bed in the end, wrapped in her shawl, and Myrto is waiting in the courtyard because she has nowhere else to wait."
+          ]
+        },
+        "image": "/stories/story-roses-08-first-light.webp",
+        "choices": [
+          {
+            "id": "keep",
+            "text": "Keep her.",
+            "result": "\"Your mother's physician will be paid from this house, and you will pay it back from your share, slowly, and you will never again take from this roof what you could have asked for.\" She weeps, which is a waste, and then she kisses your hand, which is not.",
+            "next": "S9-x-watch",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              },
+              {
+                "type": "change_composure",
+                "amount": 5
+              }
+            ]
+          },
+          {
+            "id": "send",
+            "text": "Send her away.",
+            "result": "You give her the bracelet and her wages to the day and the name of a house in Emporion that will take her. She goes at dawn. The house is a woman short, and the shipowner's son will be sorry.",
+            "next": "S9-x-watch",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              }
+            ]
+          },
+          {
+            "id": "share",
+            "text": "Take it from her share.",
+            "result": "\"Two bottles at the physician's price. It comes out of your share until it is paid.\" She agrees because she must. She stays, and she does not forget.",
+            "next": "S9-x-watch",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "remedy",
+                "amount": 2
+              },
+              {
+                "type": "change_drachmae",
+                "amount": 10
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S9-b-full",
+        "body": {
+          "eyebrow": "Bion and the keys",
+          "paragraphs": [
+            "First light. Bion is at the gate with the ring of keys in his hand, waiting to hear what becomes of them."
+          ]
+        },
+        "image": "/stories/story-roses-09-gate.webp",
+        "choices": [
+          {
+            "id": "locks",
+            "text": "New locks, from his wages.",
+            "result": "He agrees before you finish the sentence. \"And no wine at the door, mistress. Water.\" The smith comes at noon.",
+            "next": "END-full",
+            "rewards": [
+              {
+                "type": "change_composure",
+                "amount": 5
+              }
+            ]
+          },
+          {
+            "id": "shame",
+            "text": "He keeps the key and the shame.",
+            "result": "You leave the key on his belt. He understands what that means, and it is heavier than any lock.",
+            "next": "END-full"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S9-b-caught",
+        "body": {
+          "eyebrow": "Bion and the keys",
+          "paragraphs": [
+            "First light. Bion is at the gate with the ring of keys in his hand, waiting to hear what becomes of them."
+          ]
+        },
+        "image": "/stories/story-roses-09-gate.webp",
+        "choices": [
+          {
+            "id": "locks",
+            "text": "New locks, from his wages.",
+            "result": "He agrees before you finish the sentence. \"And no wine at the door, mistress. Water.\" The smith comes at noon.",
+            "next": "END-caught",
+            "rewards": [
+              {
+                "type": "change_composure",
+                "amount": 5
+              }
+            ]
+          },
+          {
+            "id": "shame",
+            "text": "He keeps the key and the shame.",
+            "result": "You leave the key on his belt. He understands what that means, and it is heavier than any lock.",
+            "next": "END-caught"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S9-b-escaped",
+        "body": {
+          "eyebrow": "Bion and the keys",
+          "paragraphs": [
+            "First light. Bion is at the gate with the ring of keys in his hand, waiting to hear what becomes of them."
+          ]
+        },
+        "image": "/stories/story-roses-09-gate.webp",
+        "choices": [
+          {
+            "id": "locks",
+            "text": "New locks, from his wages.",
+            "result": "He agrees before you finish the sentence. \"And no wine at the door, mistress. Water.\" The smith comes at noon.",
+            "next": "END-escaped",
+            "rewards": [
+              {
+                "type": "change_composure",
+                "amount": 5
+              }
+            ]
+          },
+          {
+            "id": "shame",
+            "text": "He keeps the key and the shame.",
+            "result": "You leave the key on his belt. He understands what that means, and it is heavier than any lock.",
+            "next": "END-escaped"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S9-b-watch",
+        "body": {
+          "eyebrow": "Bion and the keys",
+          "paragraphs": [
+            "First light. Bion is at the gate with the ring of keys in his hand, waiting to hear what becomes of them."
+          ]
+        },
+        "image": "/stories/story-roses-09-gate.webp",
+        "choices": [
+          {
+            "id": "locks",
+            "text": "New locks, from his wages.",
+            "result": "He agrees before you finish the sentence. \"And no wine at the door, mistress. Water.\" The smith comes at noon.",
+            "next": "END-watch",
+            "rewards": [
+              {
+                "type": "change_composure",
+                "amount": 5
+              }
+            ]
+          },
+          {
+            "id": "shame",
+            "text": "He keeps the key and the shame.",
+            "result": "You leave the key on his belt. He understands what that means, and it is heavier than any lock.",
+            "next": "END-watch"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S9-x-full",
+        "body": {
+          "eyebrow": "Bion and the keys",
+          "paragraphs": [
+            "First light. Bion is at the gate with his bundle over his shoulder."
+          ]
+        },
+        "image": "/stories/story-roses-09-gate.webp",
+        "choices": [
+          {
+            "id": "let-go",
+            "text": "Let him go.",
+            "result": "He leaves with his bundle at first light and does not look back at the house he kept for twenty years. The new steward will be honest for a month.",
+            "next": "END-full"
+          },
+          {
+            "id": "stay",
+            "text": "Ask him to stay.",
+            "result": "You find him with his bundle tied and you say the word you do not say. He unties the bundle. He does not forgive you. He stays, which is more useful.",
+            "next": "END-full",
+            "rewards": [
+              {
+                "type": "change_composure",
+                "amount": -5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S9-x-caught",
+        "body": {
+          "eyebrow": "Bion and the keys",
+          "paragraphs": [
+            "First light. Bion is at the gate with his bundle over his shoulder."
+          ]
+        },
+        "image": "/stories/story-roses-09-gate.webp",
+        "choices": [
+          {
+            "id": "let-go",
+            "text": "Let him go.",
+            "result": "He leaves with his bundle at first light and does not look back at the house he kept for twenty years. The new steward will be honest for a month.",
+            "next": "END-caught"
+          },
+          {
+            "id": "stay",
+            "text": "Ask him to stay.",
+            "result": "You find him with his bundle tied and you say the word you do not say. He unties the bundle. He does not forgive you. He stays, which is more useful.",
+            "next": "END-caught",
+            "rewards": [
+              {
+                "type": "change_composure",
+                "amount": -5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S9-x-escaped",
+        "body": {
+          "eyebrow": "Bion and the keys",
+          "paragraphs": [
+            "First light. Bion is at the gate with his bundle over his shoulder."
+          ]
+        },
+        "image": "/stories/story-roses-09-gate.webp",
+        "choices": [
+          {
+            "id": "let-go",
+            "text": "Let him go.",
+            "result": "He leaves with his bundle at first light and does not look back at the house he kept for twenty years. The new steward will be honest for a month.",
+            "next": "END-escaped"
+          },
+          {
+            "id": "stay",
+            "text": "Ask him to stay.",
+            "result": "You find him with his bundle tied and you say the word you do not say. He unties the bundle. He does not forgive you. He stays, which is more useful.",
+            "next": "END-escaped",
+            "rewards": [
+              {
+                "type": "change_composure",
+                "amount": -5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S9-x-watch",
+        "body": {
+          "eyebrow": "Bion and the keys",
+          "paragraphs": [
+            "First light. Bion is at the gate with his bundle over his shoulder."
+          ]
+        },
+        "image": "/stories/story-roses-09-gate.webp",
+        "choices": [
+          {
+            "id": "let-go",
+            "text": "Let him go.",
+            "result": "He leaves with his bundle at first light and does not look back at the house he kept for twenty years. The new steward will be honest for a month.",
+            "next": "END-watch"
+          },
+          {
+            "id": "stay",
+            "text": "Ask him to stay.",
+            "result": "You find him with his bundle tied and you say the word you do not say. He unties the bundle. He does not forgive you. He stays, which is more useful.",
+            "next": "END-watch",
+            "rewards": [
+              {
+                "type": "change_composure",
+                "amount": -5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "id": "END-full",
+        "body": {
+          "paragraphs": [
+            "The night the House of Roses caught its thief. The vial came home, and so did a name.",
+            "The steward of House {house} is buying poison."
+          ]
+        },
+        "chronicle": [
+          "The night the House of Roses caught its thief. The vial came home, and so did a name.",
+          "The steward of House {house} is buying poison."
+        ],
+        "rewards": []
+      },
+      {
+        "type": "terminal",
+        "id": "END-caught",
+        "body": {
+          "paragraphs": [
+            "The night the House of Roses caught its thief. The vial came home; the man's name went with him."
+          ]
+        },
+        "chronicle": [
+          "The night the House of Roses caught its thief. The vial came home; the man's name went with him."
+        ],
+        "rewards": []
+      },
+      {
+        "type": "terminal",
+        "id": "END-escaped",
+        "body": {
+          "paragraphs": [
+            "The night a grey cloak went over the gate of the House of Roses and left a blue vial on the stones."
+          ]
+        },
+        "chronicle": [
+          "The night a grey cloak went over the gate of the House of Roses and left a blue vial on the stones."
+        ],
+        "rewards": []
+      },
+      {
+        "type": "terminal",
+        "id": "END-watch",
+        "body": {
+          "paragraphs": [
+            "The night the watch took a man and a vial from the House of Roses, and the agora talked until the Artemisia."
+          ]
+        },
+        "chronicle": [
+          "The night the watch took a man and a vial from the House of Roses, and the agora talked until the Artemisia."
+        ],
+        "rewards": [
+          {
+            "type": "change_composure",
+            "amount": -5
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -3
+          }
+        ]
+      }
+    ]
+  }
+}

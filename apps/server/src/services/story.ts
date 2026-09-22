@@ -71,6 +71,8 @@ export type StoryTrigger =
   | { kind: "class"; classId: string; opensAt?: { yearBC: number; season: number } };
 export const STORY_TRIGGERS: Record<string, StoryTrigger> = {
   "artemisia-silver": { kind: "festival", festivalId: "fest-artemisia" },
+  // Winter 298 BC is seasonIndex 8 — the ninth day of a world's run.
+  "house-of-roses": { kind: "class", classId: "hetaira", opensAt: { yearBC: 298, season: 1 } },
 };
 
 // Boot-time content load: validate + upsert every authored story. A directory read
