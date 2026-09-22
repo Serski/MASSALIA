@@ -3622,6 +3622,16 @@
 .dashboard-shell .cs-tabs{ overflow-x: auto; scrollbar-width: none; }
 .dashboard-shell .cs-tabs::-webkit-scrollbar{ display: none; }
 .dashboard-shell .cs-tab{ white-space: nowrap; flex: none; }
+/* Pottery tabs (politics prompt 1): flat blocks behind a diamond, one terracotta
+   rule under the row, the active tab a solid terracotta fill. A panel opts in
+   with `cs-tabs pottery`; the other tab rows keep the rules above. */
+.dashboard-shell .cs-tabs.pottery{ gap: 4px; padding: 0; border-bottom: 1px solid var(--accent); }
+.dashboard-shell .cs-tabs.pottery .cs-tab{ gap: 8px; padding: 10px 16px; color: rgba(var(--cream-rgb), 0.85); font-size: 11.5px; font-weight: 600; letter-spacing: 0.16em; background: transparent; border-bottom: 0; }
+.dashboard-shell .cs-tabs.pottery .cs-tab::before{ content: "\25C6"; color: var(--accent-bright); font-size: 8px; letter-spacing: 0; }
+.dashboard-shell .cs-tabs.pottery .cs-tab:hover{ color: var(--cream); background: rgba(var(--accent-rgb), 0.12); }
+.dashboard-shell .cs-tabs.pottery .cs-tab.on{ color: var(--on-accent); background: var(--accent); }
+.dashboard-shell .cs-tabs.pottery .cs-tab.on::before,
+.dashboard-shell .cs-tabs.pottery .cs-tab.on .party-tab-tag{ color: inherit; }
 
 /* Buttons: hover/active life for the gold button and the ghost variant. */
 .dashboard-shell .panel-btn{

@@ -218,7 +218,7 @@ function OligarchySection({ onRefresh }: PanelProps) {
       {!you.holdsSeat && you.canBuy ? (
         <DashboardCard className="oligarchy-buy-card">
           <div className="event-body">
-            <span className="dashboard-label oligarchy-kicker">🏛️ A seat among the Three Hundred</span>
+            <span className="dashboard-label oligarchy-kicker">A seat among the Three Hundred</span>
             <h3>The chamber has empty marble. Buy your dynasty's seat — it passes to your heirs with your name.</h3>
             <p className="dashboard-todo">A seat seats you in the Oligarchy Council: its daily matters reach your desk, and the yearly chamber vote counts your voice — publicly.</p>
             <button className="event-choice-button" type="button" disabled={busy} onClick={buy}>
@@ -228,13 +228,13 @@ function OligarchySection({ onRefresh }: PanelProps) {
         </DashboardCard>
       ) : null}
       {!you.holdsSeat && !you.canBuy && you.reason ? (
-        <PanelRow icon="🏛️" title="A seat among the Three Hundred" sub={you.reason} dim tag="—" />
+        <PanelRow icon={<img className="good-glyph" src={assetPath(OFFICE_ICON.oligarch ?? "")} alt="" loading="lazy" />} title="A seat among the Three Hundred" sub={you.reason} dim tag="—" />
       ) : null}
 
       {openVote ? (
         <DashboardCard className="chamber-vote-card">
           <div className="event-body">
-            <span className="dashboard-label oligarchy-kicker">🗳️ The chamber votes — closes in {formatDuration(countdown)}</span>
+            <span className="dashboard-label oligarchy-kicker">The chamber votes — closes in {formatDuration(countdown)}</span>
             <h3>{openVote.title}</h3>
             <p className="chamber-vote-desc">{openVote.description}</p>
             {openVote.youMayVote ? (
@@ -275,7 +275,7 @@ function OligarchySection({ onRefresh }: PanelProps) {
         <DashboardCard className={`chamber-result-card ${lastVote.status}`}>
           <div className="event-body">
             <span className="dashboard-label oligarchy-kicker">
-              {lastVote.status === "passed" ? "✅ The chamber assented" : "❌ The chamber refused"} · year {300 - lastVote.gameYear} BC
+              {lastVote.status === "passed" ? "The chamber assented" : "The chamber refused"} · year {300 - lastVote.gameYear} BC
             </span>
             <h3>{lastVote.title} — {lastVote.yesCount ?? 0} aye, {lastVote.noCount ?? 0} nay</h3>
             <div className="panel-label">The ledger — who voted how</div>
@@ -426,7 +426,7 @@ function ElectionCycleCard({ office, onRefresh }: { office: ElectionOfficeView; 
     <DashboardCard className="election-card">
       <div className="event-body">
         <span className="dashboard-label oligarchy-kicker">
-          🗳️ {OFFICE_LABEL[office.office]} election — {office.phase === "declaration" ? "declarations close" : "voting closes"} in {formatDuration(countdown)}
+          {OFFICE_LABEL[office.office]} election — {office.phase === "declaration" ? "declarations close" : "voting closes"} in {formatDuration(countdown)}
         </span>
         {office.phase === "declaration" ? (
           <>
@@ -453,7 +453,7 @@ function ElectionCycleCard({ office, onRefresh }: { office: ElectionOfficeView; 
         ) : (
           <>
             <h3>Cast your vote for {OFFICE_LABEL[office.office]} — one per bench.</h3>
-            <p className="dashboard-todo">🔒 The ballot is secret. Only the winners are announced; no tally is shown until close.</p>
+            <p className="dashboard-todo">The ballot is secret. Only the winners are announced; no tally is shown until close.</p>
             {(["palaioi", "dynatoi"] as OfficeSide[]).map((side) => {
               const sideCandidates = office.candidates.filter((c) => c.side === side);
               return (
@@ -604,7 +604,7 @@ function AgendaScopeSection({ view, onRefresh }: { view: AgendaScopeView; onRefr
     try { await fn(); setNote(ok); onRefresh(); } catch (err) { setNote(err instanceof ApiError ? err.message : "That could not be done."); } finally { setBusy(false); }
   };
   const drafted = view.cards.find((c) => c.id === view.draftedCardId);
-  const kicker = view.scope === "league" ? "🏛️ The League agenda" : `⚖️ ${titleCase(view.scope)} agenda`;
+  const kicker = view.scope === "league" ? "The League agenda" : `${titleCase(view.scope)} agenda`;
   return (
     <DashboardCard className="agenda-card">
       <div className="event-body">
@@ -639,7 +639,7 @@ function AgendaScopeSection({ view, onRefresh }: { view: AgendaScopeView; onRefr
             </div>
             {view.youMayVeto && drafted ? (
               <button className="dashboard-ghost-button agenda-veto-btn" type="button" disabled={busy} onClick={() => act(() => api.vetoAgenda(view.scope), `You vetoed ${drafted.title}.`)}>
-                ⛔ Veto {drafted.title} (one per term)
+                Veto {drafted.title} (one per term)
               </button>
             ) : null}
           </>
@@ -735,12 +735,12 @@ export default function PoliticsPanel({ player, onRefresh }: PanelProps) {
         </>
       ) : (
         <>
-      <div className="cs-tabs" role="tablist">
+      <div className="cs-tabs pottery" role="tablist">
         <button type="button" role="tab" aria-selected={tab === "council"} className={`cs-tab${tab === "council" ? " on" : ""}`} onClick={() => setTab("council")}>
           Oligarchy Council
         </button>
         <button type="button" role="tab" aria-selected={tab === "party"} className={`cs-tab${tab === "party" ? " on" : ""}`} onClick={() => setTab("party")}>
-          Your Party {joined ? <span className="party-tab-tag">{PARTY_ICON[player.party.toLowerCase()] ? <AssetIcon file={PARTY_ICON[player.party.toLowerCase()]!} alt="" className="asset-icon party-icon" /> : null} · {player.party}</span> : <span className="party-tab-lock" aria-label="locked">🔒</span>}
+          Your Party {joined ? <span className="party-tab-tag">{PARTY_ICON[player.party.toLowerCase()] ? <AssetIcon file={PARTY_ICON[player.party.toLowerCase()]!} alt="" className="asset-icon party-icon" /> : null} · {player.party}</span> : <span className="party-tab-lock">· Unaligned</span>}
         </button>
         <button type="button" role="tab" aria-selected={tab === "cities"} className={`cs-tab${tab === "cities" ? " on" : ""}`} onClick={() => setTab("cities")}>
           Cities
