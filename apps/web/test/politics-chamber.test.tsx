@@ -85,6 +85,26 @@ describe("chamber layout", () => {
   });
 });
 
+describe("chamber benches", () => {
+  it("seats each player with their own party's bench and leaves the empties between", () => {
+    const dots = hemicycleLayout(seats());
+    const idx = (from: number, to: number) => dots.slice(from, to).map((d) => d.seat.seatIndex);
+    expect(idx(50, 53)).toEqual([110, 114, 116]);
+    expect(idx(246, 250)).toEqual([117, 115, 112, 111]);
+    expect(idx(144, 155)).toEqual([100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 113]);
+    expect(dots.slice(53, 144).every((d) => d.seat.holderType === "empty")).toBe(true);
+    expect(dots.slice(155, 246).every((d) => d.seat.holderType === "empty")).toBe(true);
+  });
+
+  it("still places every seat once when one party buys the whole chamber", () => {
+    const full = seats().map((s): ChamberSeat => (s.holderType === "empty" ? { ...s, holderType: "player", party: "palaioi", holderName: "P", characterId: `p-${s.seatIndex}` } : s));
+    const dots = hemicycleLayout(full);
+    expect(dots.every((d) => d.seat !== undefined)).toBe(true);
+    expect(new Set(dots.map((d) => d.seat.seatIndex)).size).toBe(300);
+    expect(dots.slice(235, 246).every((d) => d.seat.party === "independent")).toBe(true);
+  });
+});
+
 describe("council tab", () => {
   it("renders the pottery tabs, the chamber and the tiles for a seated Dynatoi", async () => {
     const { container } = await mount(chamber(true), "Dynatoi");

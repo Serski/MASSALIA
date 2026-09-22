@@ -606,3 +606,28 @@ Scan: accent text <n>, gradients <n>, radii <n>, emoji <n> (each must be 0)
 Deviations: <none, or one line each>
 Ruling items: <none, or one line each>
 ```
+
+STOP 1 ruling (Argiris, 22 Sept 2026).
+
+All seven ruling items accepted as reported, no code change:
+1, 3, 4: pass.
+2: the tab row scrolling sideways at 390px stays, same as every other tab row.
+5: seat density at 390px stays.
+6: the bought-seat placement stays for this push (a separate prompt follows); the outlined swatch on the viewer's own tile stays.
+7: Cities and Diplomacy get a live look after deploy, no captures needed.
+The gradient the scan found on the hidden dashboard-card top line is accepted, since the chamber sets it to display: none.
+The drachmae and seat written to the throwaway database need no action.
+
+No new commit. This ruling is appended to docs/politics/politics-prompt-1.md in the first commit of the next politics prompt, not now.
+
+Push: fast-forward only, plain git push, the three commits a9cce4a, 6c27b0a, 6e958ca.
+Report:
+- remote HEAD
+- the CI run and its Gate step
+- the Pages run
+- the Railway server and worker deploys (nothing server-side changed, no migration)
+
+Close-out:
+- stop the dev servers and the throwaway Postgres on 5433
+- tree clean at remote HEAD
+- a short handoff

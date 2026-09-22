@@ -61,10 +61,9 @@ export function hemicycleRows(total: number): number[] {
 }
 
 // Lay the chamber out as a parliament arc. Display order groups the benches:
-// Palaioi NPCs far left, Dynatoi NPCs far right, independents in the centre,
-// and the bought/empty seats (seat_index 110+) filling the gaps left-to-right
-// as players buy in. seat_index is the stable identity; this mapping is purely
-// presentational.
+// Palaioi far left, Dynatoi far right, independents in the centre, a bought
+// seat joining its own party's bench, and the empty seats between. seat_index
+// is the stable identity; this mapping is purely presentational.
 export function hemicycleLayout(seats: ChamberSeat[]): SeatDot[] {
   const total = seats.length;
   if (!total) return [];
@@ -81,25 +80,40 @@ export function hemicycleLayout(seats: ChamberSeat[]): SeatDot[] {
   });
   positions.sort((a, b) => b.angle - a.angle || a.y - b.y);
 
-  // Benches: Palaioi left, Dynatoi right (mirrored), independents centred,
-  // everything else (player + empty, by seat_index) fills the free slots.
+  // Benches: Palaioi from the left edge, Dynatoi from the right (mirrored),
+  // independents from the centre. Each bench is its NPC seats, then its player
+  // seats by seat_index, so a bought seat sits with its own party and the bench
+  // grows inward as players buy in. Empty seats take what is left, left to right.
   const ordered = [...seats].sort((a, b) => a.seatIndex - b.seatIndex);
   const slots = new Array<ChamberSeat | undefined>(total);
-  const npc = (party: SeatParty) => ordered.filter((seat) => seat.holderType === "npc" && seat.party === party);
-  npc("palaioi").forEach((seat, i) => (slots[i] = seat));
-  npc("dynatoi").forEach((seat, i) => (slots[total - 1 - i] = seat));
-  const independents = npc("independent");
-  let cursor = Math.floor((total - independents.length) / 2);
-  for (const seat of independents) {
-    while (slots[cursor]) cursor++;
-    slots[cursor] = seat;
-  }
-  cursor = 0;
-  for (const seat of ordered) {
-    if (seat.holderType === "npc") continue;
-    while (slots[cursor]) cursor++;
-    slots[cursor] = seat;
-  }
+  const bench = (party: SeatParty) => [
+    ...ordered.filter((seat) => seat.holderType === "npc" && seat.party === party),
+    ...ordered.filter((seat) => seat.holderType === "player" && (seat.party ?? "independent") === party),
+  ];
+  // The first free slot from `start` going `step`; if that runs off the arc,
+  // the nearest free slot back the other way. Slots and seats are equal in
+  // number, so there always is one.
+  const place = (seat: ChamberSeat, start: number, step: 1 | -1): number => {
+    for (const dir of [step, -step]) {
+      for (let i = dir === step ? start : start - step; i >= 0 && i < total; i += dir) {
+        if (!slots[i]) {
+          slots[i] = seat;
+          return i;
+        }
+      }
+    }
+    return -1;
+  };
+  let left = 0;
+  for (const seat of bench("palaioi")) left = place(seat, left, 1) + 1;
+  let right = total - 1;
+  for (const seat of bench("dynatoi")) right = place(seat, right, -1) - 1;
+  const centre = bench("independent");
+  let mid = Math.floor((total - centre.length) / 2);
+  for (const seat of centre) mid = place(seat, mid, 1) + 1;
+  const placed = new Set(slots);
+  let rest = 0;
+  for (const seat of ordered) if (!placed.has(seat)) rest = place(seat, rest, 1) + 1;
 
   return slots.map((seat, i) => ({ ...positions[i]!, seat: seat! }));
 }
