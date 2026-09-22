@@ -108,6 +108,13 @@ function seasonIcon(seasonName: string): string {
 
 // TODO: real "new items" badge once the items system exists. 0 = nothing to show.
 const PLACEHOLDER_NEW_ITEM_COUNT = 0;
+// A tab left open goes stale: coming back to it (visibility or focus) refetches
+// the payload when the last fetch is older than this.
+const REFETCH_AFTER_MS = 60_000;
+// The season rollover refetch fires this long after the payload's seasonEndsAt,
+// and never sooner than the floor after the payload was read.
+const ROLLOVER_GRACE_MS = 5_000;
+const ROLLOVER_FLOOR_MS = 5_000;
 const panelComponents: Record<DashboardSection, LazyExoticComponent<ComponentType<PanelProps>>> = {
   court: CourtPanel,
   ledger: LedgerPanel,
@@ -184,8 +191,13 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
     setIsMoreOpen(false);
   };
 
-  // Re-pull /me/state. Used on mount and after real mutations (party join/leave).
+  // When the payload was last requested (device clock): the return-to-tab
+  // refetch below throttles on it, one timestamp shared by both events.
+  const lastFetchRef = useRef(0);
+  // Re-pull /me/state. Used on mount, after real mutations (party join/leave),
+  // on return to a stale tab and at the season rollover.
   const refreshState = useCallback(() => {
+    lastFetchRef.current = Date.now();
     api.state()
       .then((state) => setPlayerState(state))
       .catch((error) => {
@@ -215,6 +227,35 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
   useEffect(() => {
     refreshState();
   }, [refreshState]);
+
+  // Return to the tab: a visibilitychange to visible or a window focus refetches
+  // when the last fetch is more than REFETCH_AFTER_MS old. Nothing on hidden.
+  useEffect(() => {
+    const onReturn = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastFetchRef.current < REFETCH_AFTER_MS) return;
+      refreshState();
+    };
+    document.addEventListener("visibilitychange", onReturn);
+    window.addEventListener("focus", onReturn);
+    return () => {
+      document.removeEventListener("visibilitychange", onReturn);
+      window.removeEventListener("focus", onReturn);
+    };
+  }, [refreshState]);
+
+  // Season rollover: one timer armed from the payload's own clock (seasonEndsAt
+  // minus now, plus the grace, floored), re-armed from each fresh payload since
+  // both strings change with it, cleared on unmount. Never from Date.now().
+  const payloadNow = playerState?.now;
+  const seasonEndsAt = playerState?.seasonEndsAt;
+  useEffect(() => {
+    if (!payloadNow || !seasonEndsAt) return;
+    const untilBoundary = Date.parse(seasonEndsAt) - Date.parse(payloadNow);
+    if (Number.isNaN(untilBoundary)) return;
+    const timer = setTimeout(refreshState, Math.max(ROLLOVER_FLOOR_MS, untilBoundary + ROLLOVER_GRACE_MS));
+    return () => clearTimeout(timer);
+  }, [payloadNow, seasonEndsAt, refreshState]);
 
   // A death opens a blocking Succession screen until the player picks an heir.
   if (playerState?.succession?.pending) {
