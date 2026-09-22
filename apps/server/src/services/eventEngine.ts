@@ -26,6 +26,7 @@ import { applyChangeTrait, TraitRuleError } from "./traits.js";
 import { onIdeologyChanged } from "./politics.js";
 import { getAgeConfig } from "./age.js";
 import { lockCharacterOwner } from "./lock.js";
+import { creditResource, getOrCreateResource } from "./buildings.js";
 
 const db = createDb();
 
@@ -194,6 +195,22 @@ export async function applyEffectsInTx(
         case "gain_resource":
           await tx.insert(effectLog).values({ characterId: actingCharacterId, kind: "gain_resource", detail: { ...effect } });
           break;
+        case "gain_good": {
+          // Credit the acting PLAYER's stock of a good, through the same
+          // ensure-on-read + relative credit the buildings settle uses. Every
+          // caller already holds the player lock (lockCharacterOwner above).
+          const rows = await tx
+            .select({ playerId: playerCharacters.playerId })
+            .from(playerCharacters)
+            .where(eq(playerCharacters.id, actingCharacterId))
+            .limit(1);
+          const playerId = rows[0]?.playerId;
+          if (!playerId) break;
+          const row = await getOrCreateResource(tx, playerId, effect.good, new Date());
+          const value = await creditResource(tx, row.id, effect.amount);
+          await tx.insert(effectLog).values({ characterId: actingCharacterId, kind: "gain_good", detail: { good: effect.good, amount: effect.amount, value } });
+          break;
+        }
         case "set_province_owner":
           setProvinceOwner(effect.provinceId, resolveOwnerToken(effect.ownerPlayerId));
           break;

@@ -10,6 +10,9 @@ export type EventCondition =
 // change_trait / change_ideology keep an optional characterId for back-compat.
 export type EventEffect =
   | { type: "gain_resource"; scope: "player" | "province"; id: string; resource: string; amount: number }
+  // Credits the acting player's stock of a good (the market/buildings goods, by
+  // their `goodLabels` id) — unlike gain_resource, which only writes a log row.
+  | { type: "gain_good"; good: string; amount: number }
   | { type: "set_province_owner"; provinceId: string; ownerPlayerId: string }
   // World-scoped, explicitly-targeted effects (Atlas Phase 2b-ii). Trigger-agnostic:
   // the target city/faction is named in the payload — these NEVER read the acting
@@ -106,6 +109,8 @@ const cityStatName = z.enum(["population", "tax", "stability", "garrison"]);
 
 export const effectSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("gain_resource"), scope: z.enum(["player", "province"]), id: z.string(), resource: z.string(), amount: z.number() }),
+  // Credits the acting player's stock of a good.
+  z.object({ type: z.literal("gain_good"), good: z.string().min(1), amount: z.number().int().positive() }),
   z.object({ type: z.literal("set_province_owner"), provinceId: z.string(), ownerPlayerId: z.string() }),
   z.object({ type: z.literal("change_city_stat"), cityId: z.string(), stat: cityStatName, amount: z.number() }),
   z.object({ type: z.literal("change_faction_stance"), factionId: z.string(), amount: z.number() }),

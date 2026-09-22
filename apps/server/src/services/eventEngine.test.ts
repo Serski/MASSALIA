@@ -115,6 +115,51 @@ suite("applyEffectsInTx + applyChoiceEffects (integration)", () => {
     expect(result!.ideologyTouched).toBe(false);
   });
 
+  it("gain_good ensures the stock row and credits it relatively, logging the new value", async () => {
+    const c = await createCharacter("Apothecary");
+    const player = (await db.select().from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.id, c.id)).limit(1))[0]!.playerId;
+    const stock = async () =>
+      (
+        await db
+          .select()
+          .from(m.dbPkg.resources)
+          .where(and(eq(m.dbPkg.resources.scope, "player"), eq(m.dbPkg.resources.scopeId, player), eq(m.dbPkg.resources.type, "remedy")))
+      )[0];
+
+    // No row before the first credit — the effect ensures it on read.
+    expect(await stock()).toBeUndefined();
+
+    await db.transaction(async (tx) => {
+      await m.engine.applyEffectsInTx(tx, {
+        characterId: c.id,
+        eventId: "story:house-of-roses:S8",
+        effects: [{ type: "gain_good", good: "remedy", amount: 2 }],
+        cityDef: null,
+        factionDef: null,
+      });
+    });
+    expect(Number((await stock())!.amount)).toBe(2);
+
+    // A second credit adds to the same row (relative, never a read-then-write).
+    await db.transaction(async (tx) => {
+      await m.engine.applyEffectsInTx(tx, {
+        characterId: c.id,
+        eventId: "story:house-of-roses:S8",
+        effects: [{ type: "gain_good", good: "remedy", amount: 2 }],
+        cityDef: null,
+        factionDef: null,
+      });
+    });
+    expect(Number((await stock())!.amount)).toBe(4);
+
+    // One effect_log row per effect, each carrying the stock AFTER it applied.
+    const rows = await effectLogRows(c.id, "gain_good");
+    expect(rows.length).toBe(2);
+    const details = rows.map((r) => r.detail as { good: string; amount: number; value: number });
+    expect(details.every((d) => d.good === "remedy" && d.amount === 2)).toBe(true);
+    expect(details.map((d) => d.value).sort((a, b) => a - b)).toEqual([2, 4]);
+  });
+
   it("writes NO event_history row (the point of the extraction)", async () => {
     const c = await createCharacter("NoHistory");
     await db.transaction(async (tx) => {
