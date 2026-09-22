@@ -2,11 +2,26 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, eq, exists, sql } from "drizzle-orm";
-import { createDb, festivalChoregos, festivalEvents, playerCharacters, stories, storyProgress } from "@massalia/db";
-import { parseStoryTree, validateStoryGraph, type EventEffect, type NodeBody, type StoryNode, type StoryTree } from "@massalia/shared";
+import { createDb, festivalChoregos, festivalEvents, playerCharacters, stories, storyProgress, worlds } from "@massalia/db";
+import {
+  datedSeasonIndex,
+  fillStoryText,
+  gameDate,
+  parseStoryTree,
+  requirementLabel,
+  requirementMet,
+  storyCover,
+  storyHouseName,
+  validateStoryGraph,
+  type EventEffect,
+  type NodeBody,
+  type StoryNode,
+  type StoryTree,
+} from "@massalia/shared";
 import { applyEffectsInTx, getCityDefaults, getFactionDefaults } from "./eventEngine.js";
+import { getBuildingsContent } from "./buildings.js";
 import { applyChangeTrait, getTraitDef, TraitRuleError } from "./traits.js";
-import { applyComposureDelta } from "./composure.js";
+import { applyComposureDelta, recoverComposure } from "./composure.js";
 import { onIdeologyChanged } from "./politics.js";
 import { broadcastState } from "./worldState.js";
 import { lockCharacterOwner } from "./lock.js";
@@ -27,7 +42,7 @@ const storiesDir = path.resolve(__dirname, "../../../..", "content/stories");
 
 // Domain error signalled to routes, mirroring TraitRuleError's shape (reason +
 // derived statusCode). The next pack's route maps these to 4xx/5xx.
-export type StoryRuleReason = "unknown_story" | "not_started" | "unknown_choice" | "not_eligible" | "invariant";
+export type StoryRuleReason = "unknown_story" | "not_started" | "unknown_choice" | "not_eligible" | "locked" | "invariant";
 export class StoryRuleError extends Error {
   reason: StoryRuleReason;
   statusCode: number;
@@ -39,17 +54,21 @@ export class StoryRuleError extends Error {
         ? 404
         : reason === "unknown_choice"
           ? 400
-          : reason === "not_eligible"
+          : reason === "not_eligible" || reason === "locked"
             ? 403
             : 500;
   }
 }
 
-// What makes a story eligible to be offered. Only "festival" exists today: the
-// story is offered once the named festival's instance has closed for a character
-// who attended it. A `trigger` column on `stories` is the eventual home if a
-// second kind ever appears — a registry is deliberate for now (do not add a column).
-export type StoryTrigger = { kind: "festival"; festivalId: string };
+// What makes a story eligible to be offered. Two kinds: "festival" offers the
+// story once the named festival's instance has closed for a character who
+// attended it; "class" offers it to every character of a class, optionally not
+// before a GAME date (like a dated event card, so a future world opens it on its
+// own calendar). A `trigger` column on `stories` is the eventual home — the
+// registry is still deliberate (do not add a column).
+export type StoryTrigger =
+  | { kind: "festival"; festivalId: string }
+  | { kind: "class"; classId: string; opensAt?: { yearBC: number; season: number } };
 export const STORY_TRIGGERS: Record<string, StoryTrigger> = {
   "artemisia-silver": { kind: "festival", festivalId: "fest-artemisia" },
 };
@@ -108,28 +127,80 @@ function mustNode(tree: StoryTree, id: string): StoryNode {
   return node;
 }
 
+// --- The reading character's context ------------------------------------------
+
+// What a projection needs about the character: the house her {house} token must
+// avoid, and the three values a requirement can ask for. Composure comes from
+// recoverComposure so a locked choice reflects the composure she actually has
+// now, not the last persisted value. `exec` runs it inside a caller's tx.
+export type StoryContext = { houseSlug: string; composure: number; prestige: number; drachmae: number };
+type Exec = Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db;
+
+export async function storyContext(characterId: string, now: Date = new Date(), exec: Exec = db): Promise<StoryContext> {
+  const composure = await recoverComposure(characterId, now, exec);
+  const rows = await exec
+    .select({ houseSlug: playerCharacters.houseSlug, prestige: playerCharacters.prestige, drachmae: playerCharacters.drachmae })
+    .from(playerCharacters)
+    .where(eq(playerCharacters.id, characterId))
+    .limit(1);
+  const row = rows[0];
+  return { houseSlug: row?.houseSlug ?? "", composure, prestige: row?.prestige ?? 0, drachmae: row?.drachmae ?? 0 };
+}
+
 // --- Projections (never expose next / rewards / result via inspection) --------
 
+// Everything a projection needs beyond the node itself: the rival house this
+// character's {house} token names (fixed for her, for this story) and the values
+// her locks are judged against.
+type Projection = { house: string; ctx: StoryContext };
+const fill = (p: Projection, text: string) => fillStoryText(text, { house: p.house });
+
+async function projectionFor(characterId: string, storyId: string, now: Date = new Date(), exec: Exec = db): Promise<Projection> {
+  const ctx = await storyContext(characterId, now, exec);
+  return { house: storyHouseName(characterId, storyId, ctx.houseSlug), ctx };
+}
+
 type NodeView = { id: string; type: StoryNode["type"]; body: NodeBody; image?: string };
-const nodeView = (node: StoryNode): NodeView =>
+const bodyView = (body: NodeBody, p: Projection): NodeBody => ({
+  ...(body.eyebrow !== undefined ? { eyebrow: fill(p, body.eyebrow) } : {}),
+  paragraphs: body.paragraphs.map((text) => fill(p, text)),
+});
+const nodeView = (node: StoryNode, p: Projection): NodeView =>
   node.image !== undefined
-    ? { id: node.id, type: node.type, body: node.body, image: node.image }
-    : { id: node.id, type: node.type, body: node.body };
-const sceneChoices = (node: StoryNode): { id: string; text: string }[] | undefined =>
-  node.type === "scene" ? node.choices.map((c) => ({ id: c.id, text: c.text })) : undefined;
+    ? { id: node.id, type: node.type, body: bodyView(node.body, p), image: node.image }
+    : { id: node.id, type: node.type, body: bodyView(node.body, p) };
+
+// A choice as the player sees it. A choice with a FALLBACK never carries any of
+// the three: it cannot lock, and its requirement is a hidden fork, not a price
+// list. A choice without one locks when unmet (the server refuses it too) and
+// always shows a drachmae requirement as its price.
+type ChoiceView = { id: string; text: string; locked?: true; requirement?: string; price?: number };
+const sceneChoices = (node: StoryNode, p: Projection): ChoiceView[] | undefined =>
+  node.type !== "scene"
+    ? undefined
+    : node.choices.map((c) => {
+        const view: ChoiceView = { id: c.id, text: fill(p, c.text) };
+        if (!c.requires || c.otherwise) return view;
+        if (!requirementMet(c.requires, p.ctx)) {
+          view.locked = true;
+          view.requirement = requirementLabel(c.requires);
+        }
+        if (c.requires.drachmae !== undefined) view.price = c.requires.drachmae;
+        return view;
+      });
 
 // The node-now-current projection returned by advanceStory: the view plus its
 // choices when it is (still) a scene.
-function projectNode(node: StoryNode) {
-  const choices = sceneChoices(node);
-  return choices ? { ...nodeView(node), choices } : nodeView(node);
+function projectNode(node: StoryNode, p: Projection) {
+  const choices = sceneChoices(node, p);
+  return choices ? { ...nodeView(node, p), choices } : nodeView(node, p);
 }
 
 type ProgressRow = typeof storyProgress.$inferSelect;
-function projectState(storyId: string, tree: StoryTree, row: ProgressRow) {
+function projectState(storyId: string, tree: StoryTree, row: ProgressRow, p: Projection) {
   const node = mustNode(tree, row.currentNode);
-  const choices = sceneChoices(node);
-  return { storyId, status: row.status, node: nodeView(node), ...(choices ? { choices } : {}) };
+  const choices = sceneChoices(node, p);
+  return { storyId, status: row.status, node: nodeView(node, p), ...(choices ? { choices } : {}) };
 }
 
 const readRow = async (characterId: string, storyId: string): Promise<ProgressRow | undefined> =>
@@ -153,7 +224,7 @@ export async function getOrStartStory(characterId: string, storyId: string) {
     .onConflictDoNothing();
   const row = await readRow(characterId, storyId);
   if (!row) throw new StoryRuleError("invariant", `story_progress vanished for ${storyId}`);
-  return projectState(storyId, tree, row);
+  return projectState(storyId, tree, row, await projectionFor(characterId, storyId));
 }
 
 // Gated start (Pack 2 Phase B): "you cannot start what was never offered."
@@ -173,7 +244,7 @@ export async function getStoryState(characterId: string, storyId: string) {
   const tree = await loadTree(storyId);
   const row = await readRow(characterId, storyId);
   if (!row) throw new StoryRuleError("not_started", `Story not started: ${storyId}`);
-  return projectState(storyId, tree, row);
+  return projectState(storyId, tree, row, await projectionFor(characterId, storyId));
 }
 
 // A post-grant summary of what an advance just applied — NEVER a pre-choice preview
@@ -182,7 +253,8 @@ export type StoryReward =
   | { kind: "stat"; stat: string; amount: number }
   | { kind: "drachmae"; amount: number }
   | { kind: "trait"; traitId: string; name: string }
-  | { kind: "composure"; amount: number };
+  | { kind: "composure"; amount: number }
+  | { kind: "good"; good: string; name: string; amount: number };
 
 // Summarize the effects THIS advance actually applied (choice layer then, if a
 // terminal was reached, terminal layer — the order `applied` was built in).
@@ -208,6 +280,11 @@ function summarizeRewards(applied: EventEffect[]): StoryReward[] {
         if (def) out.push({ kind: "trait", traitId: e.traitId, name: def.name }); // omit unknown ids (the swallow path)
         break;
       }
+      case "gain_good":
+        // The good's display name comes from the buildings catalog, which the
+        // market and the Inventory already read; an unlabelled id shows as itself.
+        out.push({ kind: "good", good: e.good, name: getBuildingsContent().goodLabels?.[e.good] ?? e.good, amount: e.amount });
+        break;
       default:
         break;
     }
@@ -217,7 +294,7 @@ function summarizeRewards(applied: EventEffect[]): StoryReward[] {
 
 // Advance the run by resolving choiceId on the current scene, applying rewards, and
 // (if the next node is a terminal) flipping to completed — all in one transaction.
-export async function advanceStory(characterId: string, storyId: string, choiceId: string) {
+export async function advanceStory(characterId: string, storyId: string, choiceId: string, now: Date = new Date()) {
   const tree = await loadTree(storyId);
 
   // Pre-tx (non-authoritative) read to mirror the wrapper's pre-tx dance: resolve
@@ -230,8 +307,12 @@ export async function advanceStory(characterId: string, storyId: string, choiceI
     const node = findNode(tree, pre.currentNode);
     const choice = node?.type === "scene" ? node.choices.find((c) => c.id === choiceId) : undefined;
     if (choice) {
-      const nextNode = findNode(tree, choice.next);
-      const rewards = [...(choice.rewards ?? []), ...(nextNode?.type === "terminal" ? nextNode.rewards : [])];
+      // Either branch may be the one taken, so the pre-tx load considers both.
+      const branches = choice.otherwise ? [choice, choice.otherwise] : [choice];
+      const rewards = branches.flatMap((b) => {
+        const nextNode = findNode(tree, b.next);
+        return [...(b.rewards ?? []), ...(nextNode?.type === "terminal" ? nextNode.rewards : [])];
+      });
       if (rewards.some(isWorldEffect)) {
         cityDef = await getCityDefaults();
         factionDef = await getFactionDefaults();
@@ -241,7 +322,10 @@ export async function advanceStory(characterId: string, storyId: string, choiceI
 
   let ideologyTouched = false;
   const applied: EventEffect[] = []; // effects actually applied, for the post-tx passes
-  let result: { resultText: string | null; completed: boolean; node: ReturnType<typeof projectNode> };
+  // What the transaction decided. The node is named, not projected, here: its locks
+  // are read again AFTER the post-tx passes, so they reflect the wallet and the
+  // composure this very choice just moved.
+  let outcome: { resultText: string | null; completed: boolean; nodeId: string };
 
   await db.transaction(async (tx) => {
     // 0. Serialize against every other mutation of this player (rewards touch the
@@ -259,7 +343,7 @@ export async function advanceStory(characterId: string, storyId: string, choiceI
 
     // 2. Completed → no-op replay (before choice validation): return completed state.
     if (prog.status === "completed") {
-      result = { resultText: null, completed: true, node: projectNode(mustNode(tree, prog.currentNode)) };
+      outcome = { resultText: null, completed: true, nodeId: mustNode(tree, prog.currentNode).id };
       return;
     }
 
@@ -271,18 +355,31 @@ export async function advanceStory(characterId: string, storyId: string, choiceI
     const choice = current.choices.find((c) => c.id === choiceId);
     if (!choice) throw new StoryRuleError("unknown_choice", `Unknown choice ${choiceId} on node ${current.id}`);
 
-    // 5. Apply the choice's pass-through rewards, then move onto choice.next.
-    const choiceRewards = choice.rewards ?? [];
+    // 5. Requirements, read inside the lock so nothing can move under them. With no
+    //    fallback an unmet requirement is a refusal BEFORE any write; with one it
+    //    silently becomes the fallback branch, whose rewards and result replace the
+    //    choice's own (the choice never resolved).
+    let branch: { result?: string; next: string; rewards?: EventEffect[] } = choice;
+    if (choice.requires) {
+      const ctx = await storyContext(characterId, now, tx);
+      if (!requirementMet(choice.requires, ctx)) {
+        if (!choice.otherwise) throw new StoryRuleError("locked", "That choice is closed to you.");
+        branch = choice.otherwise;
+      }
+    }
+
+    // 6. Apply the branch's pass-through rewards, then move onto its next node.
+    const choiceRewards = branch.rewards ?? [];
     if (choiceRewards.length) {
       const r = await applyEffectsInTx(tx, { characterId, eventId: `story:${storyId}:${choiceId}`, effects: choiceRewards, cityDef, factionDef });
       ideologyTouched = ideologyTouched || r.ideologyTouched;
       applied.push(...choiceRewards);
     }
 
-    const next = mustNode(tree, choice.next);
+    const next = mustNode(tree, branch.next);
     if (next.type === "scene") {
       await tx.update(storyProgress).set({ currentNode: next.id }).where(eq(storyProgress.id, prog.id));
-      result = { resultText: choice.result ?? null, completed: false, node: projectNode(next) };
+      outcome = { resultText: branch.result ?? null, completed: false, nodeId: next.id };
     } else {
       const termRewards = next.rewards;
       if (termRewards.length) {
@@ -294,7 +391,7 @@ export async function advanceStory(characterId: string, storyId: string, choiceI
         .update(storyProgress)
         .set({ currentNode: next.id, status: "completed", completedAt: new Date() })
         .where(eq(storyProgress.id, prog.id));
-      result = { resultText: choice.result ?? null, completed: true, node: projectNode(next) };
+      outcome = { resultText: branch.result ?? null, completed: true, nodeId: next.id };
     }
   });
 
@@ -318,9 +415,17 @@ export async function advanceStory(characterId: string, storyId: string, choiceI
   if (ideologyTouched) await onIdeologyChanged(characterId);
   await broadcastState();
 
+  // The projection is built LAST, so the node now current shows its locks against
+  // the composure and the wallet this advance left behind.
+  const p = await projectionFor(characterId, storyId, now);
   // Post-grant summary only — describes effects THIS advance applied (empty for the
   // completed-replay no-op, since `applied` stays empty). Never a pre-choice preview.
-  return { ...result!, rewardsGranted: summarizeRewards(applied) };
+  return {
+    resultText: outcome!.resultText === null ? null : fill(p, outcome!.resultText),
+    completed: outcome!.completed,
+    node: projectNode(mustNode(tree, outcome!.nodeId), p),
+    rewardsGranted: summarizeRewards(applied),
+  };
 }
 
 // All stories joined against this character's progress, dropping completed runs.
@@ -341,30 +446,57 @@ export async function listPlayableStories(characterId: string): Promise<{ storyI
   return out;
 }
 
+// One PK read of a story's tree, projected to what an offer card shows: the title
+// and the art of the node it starts on. null when the story is not seeded, which
+// is also the "is it seeded?" answer the class trigger needs.
+async function storyCard(storyId: string): Promise<{ title: string; image?: string } | null> {
+  const rows = await db.select({ tree: stories.tree }).from(stories).where(eq(stories.id, storyId)).limit(1);
+  return rows[0] ? storyCover(parseStoryTree(rows[0].tree)) : null;
+}
+
 // The lazy, read-side eligibility check (Pack 2 Phase A). For each registered
-// festival-triggered story: an in-flight run resumes as "active"; a completed run
-// is omitted; otherwise it is "offered" iff the story is seeded AND the character
-// attended a now-closed instance of the trigger festival (any game year — the
-// offer persists until played). Attendance counts however the festival_events row
-// resolved, incl. the offline auto-resolve to "attend" (closeInstance writes the
-// festival_choregos guard row unconditionally, even winnerless).
+// story: an in-flight run resumes as "active"; a completed run is omitted;
+// otherwise the trigger decides. A "festival" story is "offered" iff it is seeded
+// AND the character attended a now-closed instance of the trigger festival (any
+// game year — the offer persists until played). Attendance counts however the
+// festival_events row resolved, incl. the offline auto-resolve to "attend"
+// (closeInstance writes the festival_choregos guard row unconditionally, even
+// winnerless). A "class" story is "offered" iff it is seeded, the character's
+// class matches, and the world has reached the trigger's game date — read lazily
+// here, so a deploy after the opening season still offers it to everyone.
 //
 // Per registered story: one progress lookup (unique index on character_id,
 // story_id), and — only when there is no progress row — one guard query that is a
 // single row from `stories` (PK) with an EXISTS over the festival_events ⋈
-// festival_choregos join (both sides index-covered). No scans.
+// festival_choregos join (both sides index-covered). No scans. The class and the
+// world start are read ONCE per call, and only when a class trigger is registered.
 export async function availableStories(
   characterId: string,
   registry: Record<string, StoryTrigger> = STORY_TRIGGERS,
-): Promise<Array<{ storyId: string; status: "offered" | "active"; title: string }>> {
-  const out: Array<{ storyId: string; status: "offered" | "active"; title: string }> = [];
+  now: Date = new Date(),
+): Promise<Array<{ storyId: string; status: "offered" | "active"; title: string; image?: string }>> {
+  const out: Array<{ storyId: string; status: "offered" | "active"; title: string; image?: string }> = [];
   // The story's display title, extracted from the jsonb tree. Never break the payload
   // over a display string: a null/empty extraction falls back to the storyId.
   const titleExpr = sql<string | null>`${stories.tree}->>'title'`;
   const titleOr = (raw: string | null | undefined, storyId: string) => (raw && raw.length > 0 ? raw : storyId);
-  for (const [storyId, trigger] of Object.entries(registry)) {
-    if (trigger.kind !== "festival") continue;
+  const entry = (storyId: string, status: "offered" | "active", title: string, card: { image?: string } | null) => {
+    out.push({ storyId, status, title, ...(card?.image ? { image: card.image } : {}) });
+  };
 
+  const trigs = Object.entries(registry);
+  const character = trigs.some(([, t]) => t.kind === "class")
+    ? (
+        await db
+          .select({ classId: playerCharacters.classId, startedAt: worlds.startedAt })
+          .from(playerCharacters)
+          .innerJoin(worlds, eq(worlds.id, playerCharacters.worldId))
+          .where(eq(playerCharacters.id, characterId))
+          .limit(1)
+      )[0] ?? null
+    : null;
+
+  for (const [storyId, trigger] of trigs) {
     // In-flight / finished short-circuits the offer check.
     const prog = (
       await db
@@ -375,11 +507,20 @@ export async function availableStories(
     )[0];
     if (prog) {
       if (prog.status === "active") {
-        // One PK read on `stories` for the title (the offer query is skipped here).
-        const titleRows = await db.select({ title: titleExpr }).from(stories).where(eq(stories.id, storyId)).limit(1);
-        out.push({ storyId, status: "active", title: titleOr(titleRows[0]?.title, storyId) });
+        // One PK read on `stories` for the card (the offer query is skipped here).
+        const card = await storyCard(storyId);
+        entry(storyId, "active", titleOr(card?.title, storyId), card);
       }
       continue; // "completed" (or any non-active) → omit
+    }
+
+    if (trigger.kind === "class") {
+      if (!character || character.classId !== trigger.classId) continue;
+      if (trigger.opensAt && gameDate(now.getTime(), character.startedAt.getTime()).seasonIndex < datedSeasonIndex(trigger.opensAt)) continue;
+      const card = await storyCard(storyId); // the PK read IS the seeded check
+      if (!card) continue;
+      entry(storyId, "offered", titleOr(card.title, storyId), card);
+      continue;
     }
 
     // No progress row: seeded story AND an attended, closed instance → offered.
@@ -408,7 +549,8 @@ export async function availableStories(
         ),
       )
       .limit(1);
-    if (seededAndAttended.length > 0) out.push({ storyId, status: "offered", title: titleOr(seededAndAttended[0]!.title, storyId) });
+    // The guard query decides; a second PK read gives the offer card its art.
+    if (seededAndAttended.length > 0) entry(storyId, "offered", titleOr(seededAndAttended[0]!.title, storyId), await storyCard(storyId));
   }
   return out;
 }

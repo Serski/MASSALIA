@@ -17,8 +17,9 @@ async function loadModules() {
   const composure = await import("./composure.js");
   const traits = await import("./traits.js");
   const story = await import("./story.js");
+  const buildings = await import("./buildings.js");
   const shared = await import("@massalia/shared");
-  return { dbPkg, age, composure, traits, story, shared };
+  return { dbPkg, age, buildings, composure, traits, story, shared };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -85,17 +86,64 @@ const PLAIN_STORY = {
   ],
 };
 
+// A class-triggered story with art on its start node (the offer card's cover).
+const CLASS_STORY = {
+  title: "The House of Fixtures",
+  start: "H1",
+  nodes: [
+    {
+      type: "scene",
+      id: "H1",
+      body: { paragraphs: ["A matter for a hetaira alone."] },
+      image: "/stories/story-fixture-open.webp",
+      choices: [{ id: "go", text: "See to it", next: "HEND" }],
+    },
+    { type: "terminal", id: "HEND", body: { paragraphs: ["It is settled."] }, rewards: [] },
+  ],
+};
+
+// Every gated shape in one tree: a locking prestige gate, a priced drachmae gate,
+// a composure gate with a fallback branch, and {house} in prose and in a result.
+const GATED_STORY = {
+  title: "The Gate",
+  start: "G1",
+  nodes: [
+    {
+      type: "scene",
+      id: "G1",
+      body: { eyebrow: "The gate", paragraphs: ["House {house} watches the door."] },
+      choices: [
+        { id: "proud", text: "Speak as an equal", next: "GEND", requires: { prestige: 10 }, rewards: [{ type: "change_stat", stat: "devotion", amount: 1 }] },
+        { id: "buy", text: "Buy the doorkeeper", next: "GEND", requires: { drachmae: 5 }, rewards: [{ type: "change_drachmae", amount: -5 }] },
+        {
+          id: "press",
+          text: "Press him hard",
+          result: "The steward of House {house} looks away.",
+          next: "GEND",
+          requires: { composure: 50 },
+          rewards: [{ type: "change_stat", stat: "intelligence", amount: 1 }],
+          otherwise: { result: "Your voice fails you.", next: "GSOFT", rewards: [{ type: "change_drachmae", amount: 3 }] },
+        },
+        { id: "leave", text: "Leave", next: "GEND" },
+        { id: "gift", text: "Take the physician's parcel", next: "GEND", rewards: [{ type: "gain_good", good: "remedy", amount: 2 }] },
+      ],
+    },
+    { type: "scene", id: "GSOFT", body: { paragraphs: ["A softer road, past House {house}."] }, choices: [{ id: "on", text: "Go on", next: "GEND" }] },
+    { type: "terminal", id: "GEND", body: { paragraphs: ["The gate closes behind you."] }, rewards: [] },
+  ],
+};
+
 suite("story play service (integration)", () => {
   let m: Mods;
   let db: ReturnType<Mods["dbPkg"]["createDb"]>;
   let worldId: string;
   const now = new Date();
 
-  async function createCharacter(name: string) {
+  async function createCharacter(name: string, classId = "trader") {
     const { users, players, playerCharacters } = m.dbPkg;
     const user = (await db.insert(users).values({ email: `${name}-${Math.random().toString(36).slice(2)}@t`, passwordHash: "x" }).returning())[0]!;
     const player = (await db.insert(players).values({ worldId, userId: user.id, name, color: "#123456", houseSlug: "test-house" }).returning())[0]!;
-    return (await db.insert(playerCharacters).values({ playerId: player.id, worldId, houseSlug: "test-house", classId: "trader", startAge: 30, deathAge: 90 }).returning())[0]!;
+    return (await db.insert(playerCharacters).values({ playerId: player.id, worldId, houseSlug: "test-house", classId, startAge: 30, deathAge: 90 }).returning())[0]!;
   }
 
   const charRow = async (id: string) =>
@@ -122,6 +170,33 @@ suite("story play service (integration)", () => {
   // an UNSEEDED id so the "no stories row" case has a trigger with no content.
   const REG = { "test-story": { kind: "festival" as const, festivalId: "fest-test" } };
   const REG_UNSEEDED = { "no-such-story": { kind: "festival" as const, festivalId: "fest-test" } };
+  // The class trigger, with and without an opening game date (Winter 298 BC is
+  // seasonIndex 8, so it opens on the world's ninth day).
+  const REG_CLASS = { "class-story": { kind: "class" as const, classId: "hetaira", opensAt: { yearBC: 298, season: 1 } } };
+  const REG_CLASS_OPEN = { "class-story": { kind: "class" as const, classId: "hetaira" } };
+  // Age the world by rewriting its start, so "today" falls the given number of
+  // days into the run.
+  const worldStartedDaysAgo = async (days: number, extraMs = 0) =>
+    db
+      .update(m.dbPkg.worlds)
+      .set({ startedAt: new Date(now.getTime() - days * 86_400_000 - extraMs) })
+      .where(eq(m.dbPkg.worlds.id, worldId));
+  const setStats = async (charId: string, values: Partial<{ prestige: number; drachmae: number; composure: number }>) =>
+    db
+      .update(m.dbPkg.playerCharacters)
+      .set({ ...values, ...(values.composure !== undefined ? { lastComposureUpdate: new Date() } : {}) })
+      .where(eq(m.dbPkg.playerCharacters.id, charId));
+  const choiceView = (choices: { id: string }[] | undefined, id: string) => choices?.find((c) => c.id === id) as
+    | { id: string; text: string; locked?: true; requirement?: string; price?: number }
+    | undefined;
+  const stockOf = async (charId: string, good: string) => {
+    const playerId = (await charRow(charId)).playerId;
+    const rows = await db
+      .select()
+      .from(m.dbPkg.resources)
+      .where(and(eq(m.dbPkg.resources.scope, "player"), eq(m.dbPkg.resources.scopeId, playerId), eq(m.dbPkg.resources.type, good)));
+    return rows[0] ? Number(rows[0].amount) : 0;
+  };
 
   const attend = async (charId: string, festivalId: string, gameYear: number, opts: { resolved?: boolean; resolvedChoiceId?: string } = {}) =>
     db.insert(m.dbPkg.festivalEvents).values({
@@ -145,6 +220,7 @@ suite("story play service (integration)", () => {
     await m.age.loadAgeConfig(); // change_stat cap
     await m.composure.loadComposureConfig(); // applyComposureDelta
     await m.traits.loadTraitDefs(); // applyChangeTrait
+    await m.buildings.loadBuildingsContent(); // gain_good's display name (goodLabels)
   });
 
   beforeEach(async () => {
@@ -159,6 +235,8 @@ suite("story play service (integration)", () => {
     await db.insert(m.dbPkg.stories).values({ id: "test-story", tree: m.shared.parseStoryTree(STORY) as unknown as Record<string, unknown> });
     await db.insert(m.dbPkg.stories).values({ id: "bad-trait-story", tree: m.shared.parseStoryTree(BAD_TRAIT_STORY) as unknown as Record<string, unknown> });
     await db.insert(m.dbPkg.stories).values({ id: "plain-story", tree: m.shared.parseStoryTree(PLAIN_STORY) as unknown as Record<string, unknown> });
+    await db.insert(m.dbPkg.stories).values({ id: "class-story", tree: m.shared.parseStoryTree(CLASS_STORY) as unknown as Record<string, unknown> });
+    await db.insert(m.dbPkg.stories).values({ id: "gated-story", tree: m.shared.parseStoryTree(GATED_STORY) as unknown as Record<string, unknown> });
   });
 
   it("1. start + resume: creates exactly one active row at S1; re-calling resumes it", async () => {
@@ -492,5 +570,146 @@ suite("story play service (integration)", () => {
     const res = await m.story.advanceStory(c.id, "test-story", "c1");
     expect(JSON.stringify(res.node)).not.toMatch(/"rewards"/); // the node-now-current never leaks rewards
     expect("rewardsGranted" in res).toBe(true); // but the post-grant summary IS present on advance
+
+    // The gating vocabulary is authoring-side too: none of it reaches the client.
+    const g = await createCharacter("NoSpoilerGate");
+    await m.story.getOrStartStory(g.id, "gated-story");
+    const gated = await m.story.getStoryState(g.id, "gated-story");
+    for (const key of ['"requires"', '"otherwise"', '"chronicle"', '"next"', '"result"']) {
+      expect(JSON.stringify(gated)).not.toMatch(key);
+    }
+    const gres = await m.story.advanceStory(g.id, "gated-story", "leave");
+    for (const key of ['"requires"', '"otherwise"', '"chronicle"', '"next"']) {
+      expect(JSON.stringify(gres.node)).not.toMatch(key);
+    }
+  });
+
+  // --- The class trigger --------------------------------------------------
+
+  it("27. a class trigger offers the story to its class once the world reaches the opening date", async () => {
+    const hetaira = await createCharacter("Phryne", "hetaira");
+    const trader = await createCharacter("Kleon", "trader");
+
+    // Day 8 of the run (seasonIndex 7, Autumn 299 BC) — one season too early.
+    await worldStartedDaysAgo(7, 10 * 60_000);
+    expect(await m.story.availableStories(hetaira.id, REG_CLASS, now)).toEqual([]);
+
+    // Day 9 (seasonIndex 8, Winter 298 BC) — open, with the start node's art.
+    await worldStartedDaysAgo(8, 10 * 60_000);
+    const offered = await m.story.availableStories(hetaira.id, REG_CLASS, now);
+    expect(offered).toEqual([
+      { storyId: "class-story", status: "offered", title: "The House of Fixtures", image: "/stories/story-fixture-open.webp" },
+    ]);
+
+    // The class is the gate: a trader of the same world is offered nothing.
+    expect(await m.story.availableStories(trader.id, REG_CLASS, now)).toEqual([]);
+
+    // With no opensAt, a hetaira is offered it from the world's first instant.
+    await worldStartedDaysAgo(0);
+    expect((await m.story.availableStories(hetaira.id, REG_CLASS_OPEN, now)).map((e) => e.status)).toEqual(["offered"]);
+  });
+
+  it("28. startStory honors the class gate: the hetaira starts at tree.start, the trader is refused", async () => {
+    await worldStartedDaysAgo(8, 10 * 60_000);
+    const hetaira = await createCharacter("Lais", "hetaira");
+    const state = await m.story.startStory(hetaira.id, "class-story", REG_CLASS);
+    expect(state.node.id).toBe("H1");
+    expect((await progRow(hetaira.id, "class-story")).currentNode).toBe("H1");
+
+    const trader = await createCharacter("Demos", "trader");
+    await expect(m.story.startStory(trader.id, "class-story", REG_CLASS)).rejects.toMatchObject({ reason: "not_eligible", statusCode: 403 });
+    expect(await progressCount(trader.id, "class-story")).toBe(0);
+  });
+
+  // --- Requirements: locked choices, prices and fallback branches ------------
+
+  it("29. a requirement with no fallback shows locked, is refused, and writes nothing", async () => {
+    const c = await createCharacter("Unproven");
+    await setStats(c.id, { prestige: 0 });
+    const state = await m.story.getOrStartStory(c.id, "gated-story");
+    const proud = choiceView(state.choices, "proud");
+    expect(proud!.locked).toBe(true);
+    expect(proud!.requirement).toBe("Prestige 10");
+
+    const before = await charRow(c.id);
+    await expect(m.story.advanceStory(c.id, "gated-story", "proud")).rejects.toMatchObject({ reason: "locked", statusCode: 403 });
+    const after = await charRow(c.id);
+    expect((await progRow(c.id, "gated-story")).currentNode).toBe("G1"); // still on the scene
+    expect(after.drachmae).toBe(before.drachmae);
+    expect(after.devotion).toBe(before.devotion);
+    expect(await effectLogCount(c.id)).toBe(0);
+
+    // At the asked-for prestige the same choice is open and resolves.
+    await setStats(c.id, { prestige: 10 });
+    const open = await m.story.getStoryState(c.id, "gated-story");
+    expect(choiceView(open.choices, "proud")!.locked).toBeUndefined();
+    const res = await m.story.advanceStory(c.id, "gated-story", "proud");
+    expect(res.completed).toBe(true);
+  });
+
+  it("30. a drachmae requirement projects its price and locks an empty purse", async () => {
+    const c = await createCharacter("ShortPurse");
+    await setStats(c.id, { drachmae: 4 });
+    const poor = await m.story.getOrStartStory(c.id, "gated-story");
+    expect(choiceView(poor.choices, "buy")).toEqual({ id: "buy", text: "Buy the doorkeeper", locked: true, requirement: "5 drachmae", price: 5 });
+
+    await setStats(c.id, { drachmae: 5 });
+    const paid = await m.story.getStoryState(c.id, "gated-story");
+    expect(choiceView(paid.choices, "buy")).toEqual({ id: "buy", text: "Buy the doorkeeper", price: 5 });
+    await m.story.advanceStory(c.id, "gated-story", "buy");
+    expect((await charRow(c.id)).drachmae).toBe(0);
+  });
+
+  it("31. a requirement with a fallback never locks — it routes the unprepared down the other branch", async () => {
+    const shaken = await createCharacter("Shaken");
+    await setStats(shaken.id, { composure: 40, drachmae: 100 });
+    const state = await m.story.getOrStartStory(shaken.id, "gated-story");
+    // A fallback choice carries none of the three: no lock, no requirement, no price.
+    expect(choiceView(state.choices, "press")).toEqual({ id: "press", text: "Press him hard" });
+
+    const soft = await m.story.advanceStory(shaken.id, "gated-story", "press");
+    expect(soft.node.id).toBe("GSOFT");
+    expect(soft.resultText).toBe("Your voice fails you.");
+    expect(soft.completed).toBe(false);
+    expect((await charRow(shaken.id)).drachmae).toBe(103); // the fallback's reward
+    expect(await effectLogCountByKind(shaken.id, "change_stat")).toBe(0); // NOT the choice's own
+
+    const steady = await createCharacter("Steady");
+    await setStats(steady.id, { composure: 60 });
+    await m.story.getOrStartStory(steady.id, "gated-story");
+    const hard = await m.story.advanceStory(steady.id, "gated-story", "press");
+    expect(hard.node.id).toBe("GEND");
+    expect(await effectLogCountByKind(steady.id, "change_stat")).toBe(1);
+  });
+
+  it("32. {house} is filled with a noble house, the same one on every read", async () => {
+    const c = await createCharacter("Named");
+    const state = await m.story.getOrStartStory(c.id, "gated-story");
+    const houseNames = new Set(m.shared.nobleHouses.map((h) => h.name));
+    const paragraph = state.node.body.paragraphs[0]!;
+    const named = [...houseNames].find((name) => paragraph === `House ${name} watches the door.`);
+    expect(named, `"${paragraph}" must name a noble house`).toBeTruthy();
+    expect((await m.story.getStoryState(c.id, "gated-story")).node.body.paragraphs[0]).toBe(paragraph);
+    // No token survives in ANY projected string (the eyebrow and the choice texts
+    // go through the same filler as the paragraphs).
+    const strings = (value: unknown): string[] =>
+      typeof value === "string" ? [value] : value && typeof value === "object" ? Object.values(value).flatMap(strings) : [];
+    for (const text of strings(state)) expect(text).not.toMatch(/[{}]/);
+
+    // A result carries the token too, and it is filled with the same house.
+    await setStats(c.id, { composure: 80 });
+    const res = await m.story.advanceStory(c.id, "gated-story", "press");
+    expect(res.resultText).toBe(`The steward of House ${named} looks away.`);
+    for (const text of strings(res.node)) expect(text).not.toMatch(/[{}]/);
+  });
+
+  it("33. a gain_good reward credits the player's stock and summarizes with the good's name", async () => {
+    const c = await createCharacter("Apothecary");
+    await m.story.getOrStartStory(c.id, "gated-story");
+    expect(await stockOf(c.id, "remedy")).toBe(0);
+
+    const res = await m.story.advanceStory(c.id, "gated-story", "gift");
+    expect(await stockOf(c.id, "remedy")).toBe(2);
+    expect(res.rewardsGranted).toContainEqual({ kind: "good", good: "remedy", name: "Remedy", amount: 2 });
   });
 });
