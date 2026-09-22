@@ -486,7 +486,6 @@ function ResetPasswordPage({
                     minLength={8}
                     required
                   />
-                  <i aria-hidden="true">▣</i>
                 </label>
                 <label>
                   <span>Confirm password</span>
@@ -500,7 +499,6 @@ function ResetPasswordPage({
                     minLength={8}
                     required
                   />
-                  <i aria-hidden="true">▣</i>
                 </label>
 
                 {message ? <p className="auth-message" role="status">{message}</p> : null}
