@@ -544,3 +544,14 @@ Deviations: <none, or one line each>
 Ruling items: <none, or one line each>
 
 ```
+
+STOP 1 ruling (Argiris, 22 Sept 2026). Save it verbatim at the end of docs/auth/auth-prompt-1.md in commit 3, then proceed.
+Commit 3, `web: auth frame polish after STOP 1`, three changes in `styles.css`:
+
+* Item 1: `.auth-card`'s `padding: 0` becomes `padding: 28px 0 0`, and `.auth-tab-toggle`'s `margin: 28px auto 0` becomes `margin: 0 auto`. In the 560px block the `.auth-close { top: 26px; }` override is deleted; the base `top: 28px` holds at both widths, so the close button's top edge sits on the tab toggle's top edge. The 560px `.auth-tab-toggle { width: calc(100% - 96px); margin-left: 20px; }` override stays and still wins over the auto.
+* Item 2: in `.auth-meander`, the `repeat-x` at the end of the `background` shorthand becomes `round`. The tile stretches under two percent at either width and the band ends on a whole key.
+* Item 3: `.auth-scroll-frame` gains `box-sizing: border-box;`, so the frame is 520 wide inside the 520 shell and 362 inside 362.
+
+Commit 4, `web: reset page loses its field glyphs`. The fence widens to `ResetPasswordPage` in `App.tsx`: its two `<i aria-hidden="true">▣</i>` are deleted, the same treatment the panel got in commit 1. Then `git grep -n '<i aria-hidden' apps/web/src/App.tsx` must find nothing; if it finds one inside any other `.auth-form` (the verify page, say), delete it in the same commit and name it in the report. No test for the reset page.
+Item 5: noted, nothing to do. Stopping the dev servers and the throwaway Postgres early is accepted; bring them back for the gate.
+Then: the gate at HEAD after commit 4, ending GATE GREEN, no rerun on a red; the scan again on the login modal and the reset page at both widths, all three counts still 0; retakes into theme-shots prefixed `auth-`: the login modal at 1280 and 390 (the close button on the tab row, the band ending on a whole key, the frame flush with the shell) and the reset page (`?reset=` with any token string, the form before submission) at 1280 and 390; and the push as the prompt says, four commits 2c5d328 to HEAD, fast-forward only, with the full push and close-out report: remote HEAD, the CI run and its Gate step, the Pages run, the Railway server and worker deploys, dev servers and the throwaway Postgres stopped, tree clean at remote HEAD.

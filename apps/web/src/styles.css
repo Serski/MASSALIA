@@ -911,6 +911,7 @@ body {
 
 .auth-scroll-frame {
   position: relative;
+  box-sizing: border-box;
   width: min(100%, 520px);
   padding: 0;
   background: var(--card);
@@ -924,12 +925,12 @@ body {
   height: 12px;
   margin: 0;
   border: 0;
-  background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='12' viewBox='0 0 24 12'%3E%3Cpath d='M0 1.5H24M0 10.5H24M3 1.5V8.5H19V4.5H8V6.5H15' fill='none' stroke='%2317110e' stroke-width='1.6'/%3E%3C/svg%3E") repeat-x;
+  background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='12' viewBox='0 0 24 12'%3E%3Cpath d='M0 1.5H24M0 10.5H24M3 1.5V8.5H19V4.5H8V6.5H15' fill='none' stroke='%2317110e' stroke-width='1.6'/%3E%3C/svg%3E") round;
 }
 
 .auth-card {
   position: relative;
-  padding: 0;
+  padding: 28px 0 0;
   background: var(--card);
   border: 0;
   border-radius: 0;
@@ -942,7 +943,7 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   width: min(300px, calc(100% - 140px));
-  margin: 28px auto 0;
+  margin: 0 auto;
   background: transparent;
   border: 1px solid var(--accent);
   border-radius: 0;
@@ -1624,10 +1625,6 @@ button.auth-forgot:focus-visible {
     font-size: 13px;
     letter-spacing: 0.22em;
     text-indent: 0.22em;
-  }
-
-  .auth-close {
-    top: 26px;
   }
 
   .auth-form input[type="email"],
