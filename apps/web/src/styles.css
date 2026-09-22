@@ -920,8 +920,10 @@ body {
   box-shadow: 0 34px 84px rgba(0, 0, 0, 0.52);
 }
 
-/* Greek key band: one 24x12 tile drawn in the card colour on the accent. */
-.auth-meander {
+/* Greek key band: one 24x12 tile drawn in the card colour on the accent.
+   `.meander` is the same band for any other framed card (the chamber). */
+.auth-meander,
+.meander {
   height: 12px;
   margin: 0;
   border: 0;
