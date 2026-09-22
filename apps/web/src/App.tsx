@@ -122,7 +122,7 @@ function Crest({ initial, image, label, className = "" }: { initial: string; ima
   );
 }
 
-function AuthPanel({
+export function AuthPanel({
   mode,
   onModeChange,
   onClose,
@@ -226,26 +226,16 @@ function AuthPanel({
 
   return (
     <div className="auth-scroll-frame" ref={panelRef} onKeyDown={handleKeyDown}>
-      <div className="auth-rod auth-rod-top" aria-hidden="true" />
-      <div className="auth-rod auth-rod-bottom" aria-hidden="true" />
-      <span className="auth-finial auth-finial-top-left" aria-hidden="true" />
-      <span className="auth-finial auth-finial-top-right" aria-hidden="true" />
-      <span className="auth-finial auth-finial-bottom-left" aria-hidden="true" />
-      <span className="auth-finial auth-finial-bottom-right" aria-hidden="true" />
-      <div className="auth-tab-toggle" role="tablist" aria-label="Auth mode">
-        <button className={mode === "login" ? "active" : ""} type="button" onClick={() => onModeChange("login")}>
-          Log In
-        </button>
-        <button className={mode === "signup" ? "active" : ""} type="button" onClick={() => onModeChange("signup")}>
-          Sign Up
-        </button>
-      </div>
       <div className="auth-meander auth-meander-top" aria-hidden="true" />
       <div className="auth-card">
-        <div className="auth-corner auth-corner-tl" aria-hidden="true" />
-        <div className="auth-corner auth-corner-tr" aria-hidden="true" />
-        <div className="auth-corner auth-corner-bl" aria-hidden="true" />
-        <div className="auth-corner auth-corner-br" aria-hidden="true" />
+        <div className="auth-tab-toggle" role="tablist" aria-label="Auth mode">
+          <button className={mode === "login" ? "active" : ""} type="button" onClick={() => onModeChange("login")}>
+            Log In
+          </button>
+          <button className={mode === "signup" ? "active" : ""} type="button" onClick={() => onModeChange("signup")}>
+            Sign Up
+          </button>
+        </div>
         {onClose ? (
           <button className="auth-close" type="button" onClick={onClose} aria-label="Close authentication panel">
             ×
@@ -272,7 +262,6 @@ function AuthPanel({
                   placeholder="Email address"
                   required
                 />
-                <i aria-hidden="true">✉</i>
               </label>
 
               {message ? (
@@ -318,7 +307,6 @@ function AuthPanel({
                     placeholder="Email address"
                     required
                   />
-                  <i aria-hidden="true">✉</i>
                 </label>
                 <label>
                   <span>Password</span>
@@ -332,7 +320,6 @@ function AuthPanel({
                     minLength={8}
                     required
                   />
-                  <i aria-hidden="true">▣</i>
                 </label>
 
                 {isSignup ? (
