@@ -848,8 +848,7 @@ export function PopGlyph({ type }: { type: string }) {
 
 // Resource/good artwork, keyed by GOOD ID (not display name — grain's picture is
 // wheat, timber's is wood). 128x128 lossless WebP with alpha, same pattern as
-// POP_WEBP. Ship goods (galley/naval-supplies/trade-ship) have no artwork and fall
-// through to their emoji. EXACT on-disk filenames — do not rename (Linux is
+// POP_WEBP. EXACT on-disk filenames — do not rename (Linux is
 // case-sensitive; spaces are encoded by assetIconUrl).
 export const RESOURCE_WEBP: Record<string, string> = {
   bull: "BULL.webp",
@@ -860,12 +859,15 @@ export const RESOURCE_WEBP: Record<string, string> = {
   lead: "LEAD.webp",
   leather: "LEATHER.webp",
   marble: "MARBLE.webp",
+  "naval-supplies": "NAVAL SUPPLIES.webp",
   oliveoil: "OLIVE OIL.webp",
+  "trade-ship": "PENTEKONTER.webp",
   poison: "POISON.webp",
   remedy: "REMEDY.webp",
   salt: "SALT.webp",
   stone: "STONE.webp",
   tin: "TIN.webp",
+  galley: "TRIREME.webp",
   grain: "WHEAT.webp",
   wine: "WINE.webp",
   timber: "WOOD.webp",
