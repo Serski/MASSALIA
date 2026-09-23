@@ -158,18 +158,20 @@ async function readWallet(exec: Exec, playerId: string): Promise<number> {
 
 type ResourceRow = typeof resources.$inferSelect;
 
+// One row per (scope, scope_id, type) (migration 0061): the insert yields to a row
+// that already exists or that a concurrent caller commits first, then the select
+// reads whichever row stands.
 async function getOrCreateResource(exec: Exec, playerId: string, type: string, now: Date): Promise<ResourceRow> {
-  const existing = await exec
+  await exec
+    .insert(resources)
+    .values({ scope: "player", scopeId: playerId, type, amount: "0", ratePerSecond: "0", lastUpdatedAt: now })
+    .onConflictDoNothing({ target: [resources.scope, resources.scopeId, resources.type] });
+  const rows = await exec
     .select()
     .from(resources)
     .where(and(eq(resources.scope, "player"), eq(resources.scopeId, playerId), eq(resources.type, type)))
     .limit(1);
-  if (existing[0]) return existing[0];
-  const inserted = await exec
-    .insert(resources)
-    .values({ scope: "player", scopeId: playerId, type, amount: "0", ratePerSecond: "0", lastUpdatedAt: now })
-    .returning();
-  return inserted[0]!;
+  return rows[0]!;
 }
 
 // Relative stock credit on one resources row (gear coming back on a cancel).
@@ -588,7 +590,7 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
   // advanced the same way) so the partial-day remainder carries.
   const advancedMs = lastMs + days * MS_PER_DAY;
   if (marker) await exec.update(resources).set({ lastUpdatedAt: new Date(advancedMs) }).where(eq(resources.id, marker.id));
-  else await exec.insert(resources).values({ scope: "player", scopeId: ctx.playerId, type: UPKEEP_TYPE, amount: "0", ratePerSecond: "0", lastUpdatedAt: new Date(advancedMs) });
+  else await exec.insert(resources).values({ scope: "player", scopeId: ctx.playerId, type: UPKEEP_TYPE, amount: "0", ratePerSecond: "0", lastUpdatedAt: new Date(advancedMs) }).onConflictDoNothing({ target: [resources.scope, resources.scopeId, resources.type] });
   return out;
 }
 

@@ -631,6 +631,43 @@ suite("Ledger / building engine (integration)", () => {
     expect(await slaveOf(enslaved)).toBe(0);
   });
 
+  it("(R1) two concurrent getOrCreateResource calls for one player and type leave one row", async () => {
+    const now = new Date(T0);
+    const grainRows = async () =>
+      db.select().from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scope, "player"), eq(m.dbPkg.resources.scopeId, playerId), eq(m.dbPkg.resources.type, "grain")));
+    expect(await grainRows()).toHaveLength(0);
+
+    // A creates the row and holds its transaction open; B starts while A's row is
+    // uncommitted, so B's insert must wait on A's and then yield to it.
+    let inserted!: () => void;
+    const aInserted = new Promise<void>((resolve) => (inserted = resolve));
+    let release!: () => void;
+    const aReleased = new Promise<void>((resolve) => (release = resolve));
+    const a = db.transaction(async (tx) => {
+      const row = await m.buildings.getOrCreateResource(tx, playerId, "grain", now);
+      inserted();
+      await aReleased;
+      return row;
+    });
+    await aInserted;
+    const b = m.buildings.getOrCreateResource(db, playerId, "grain", now);
+    const bWaits = async () =>
+      ((await db.execute(sql`SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query ILIKE 'insert into "resources"%'`)).rows[0] as { n: number }).n > 0;
+    try {
+      const deadline = Date.now() + 20_000;
+      while (!(await bWaits())) {
+        if (Date.now() > deadline) throw new Error("B's insert never waited on A's uncommitted row");
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    } finally {
+      release();
+    }
+
+    const [rowA, rowB] = await Promise.all([a, b]);
+    expect(rowB.id).toBe(rowA.id);
+    expect(await grainRows()).toHaveLength(1);
+  });
+
   // --- Upgrade-in-progress earns the PRIOR tier (Option A) -------------------
 
   it("(U1) an upgrade-in-progress keeps earning its PRIOR tier's income during construction (not 0)", async () => {

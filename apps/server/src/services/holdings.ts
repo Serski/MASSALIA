@@ -1,7 +1,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { createDb, effectLog, playerCharacters, playerHoldings, playerUnits, resources } from "@massalia/db";
+import { createDb, effectLog, playerCharacters, playerHoldings, playerUnits } from "@massalia/db";
 import { renderCampaignLine, type CampaignPayload } from "@massalia/shared";
-import type { ActingContext } from "./buildings.js";
+import { creditResource, getOrCreateResource, type ActingContext } from "./buildings.js";
 import { getBattleContent, isActive } from "./barracks.js";
 import { regionBaseWarband, townBaseGarrison, writeRegionWarband, writeTownGarrison } from "./mapPools.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
@@ -64,9 +64,8 @@ export async function creditDrachmae(exec: Exec, playerId: string, amount: numbe
 
 export async function creditGood(exec: Exec, playerId: string, type: string, qty: number, now: Date): Promise<void> {
   if (qty <= 0) return;
-  const existing = (await exec.select({ id: resources.id }).from(resources).where(and(eq(resources.scope, "player"), eq(resources.scopeId, playerId), eq(resources.type, type))).limit(1))[0];
-  if (existing) await exec.update(resources).set({ amount: sql`${resources.amount} + ${String(qty)}::numeric` }).where(eq(resources.id, existing.id));
-  else await exec.insert(resources).values({ scope: "player", scopeId: playerId, type, amount: String(qty), ratePerSecond: "0", lastUpdatedAt: now });
+  const row = await getOrCreateResource(exec, playerId, type, now);
+  await creditResource(exec, row.id, qty);
 }
 
 export type HoldingsSettle = { reverted: { regionId: string; townId: string; kind: string; previousOwner: string | null }[] };

@@ -192,7 +192,7 @@ async function seedWorldState() {
       { scope: "province", scopeId: "massalia-harbor", type: "grain", amount: "240", ratePerSecond: "0.05", lastUpdatedAt: now },
       { scope: "province", scopeId: "aix", type: "silver", amount: "80", ratePerSecond: "0.01", lastUpdatedAt: now },
       { scope: "province", scopeId: "brignoles", type: "timber", amount: "130", ratePerSecond: "0.03", lastUpdatedAt: now },
-    ]);
+    ]).onConflictDoNothing({ target: [resources.scope, resources.scopeId, resources.type] });
   }
 
   return world;

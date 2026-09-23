@@ -188,7 +188,7 @@ export async function characterRoutes(app: FastifyInstance) {
           ratePerSecond: "0",
           lastUpdatedAt: new Date(),
         })),
-      );
+      ).onConflictDoNothing({ target: [resources.scope, resources.scopeId, resources.type] });
 
       // Starting package (free classes only): 10 wheat + 1 slave.
       await grantStartingPackage(tx, player.id, world.id, profession.slug as ClassId);

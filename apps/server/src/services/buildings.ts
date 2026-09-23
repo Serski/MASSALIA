@@ -203,18 +203,20 @@ async function resourceRows(exec: Exec, playerId: string): Promise<ResourceRow[]
   return exec.select().from(resources).where(and(eq(resources.scope, "player"), eq(resources.scopeId, playerId)));
 }
 
+// One row per (scope, scope_id, type) (migration 0061): the insert yields to a row
+// that already exists or that a concurrent caller commits first, then the select
+// reads whichever row stands.
 export async function getOrCreateResource(exec: Exec, playerId: string, type: string, now: Date): Promise<ResourceRow> {
-  const existing = await exec
+  await exec
+    .insert(resources)
+    .values({ scope: "player", scopeId: playerId, type, amount: "0", ratePerSecond: "0", lastUpdatedAt: now })
+    .onConflictDoNothing({ target: [resources.scope, resources.scopeId, resources.type] });
+  const rows = await exec
     .select()
     .from(resources)
     .where(and(eq(resources.scope, "player"), eq(resources.scopeId, playerId), eq(resources.type, type)))
     .limit(1);
-  if (existing[0]) return existing[0];
-  const inserted = await exec
-    .insert(resources)
-    .values({ scope: "player", scopeId: playerId, type, amount: "0", ratePerSecond: "0", lastUpdatedAt: now })
-    .returning();
-  return inserted[0]!;
+  return rows[0]!;
 }
 
 // --- Wallet / stock primitives ---------------------------------------------
@@ -591,7 +593,7 @@ async function settleWallet(exec: Exec, ctx: ActingContext, rows: BuildingRow[],
   if (existing) {
     await exec.update(resources).set({ amount: "0", lastUpdatedAt: now }).where(eq(resources.id, existing.id));
   } else {
-    await exec.insert(resources).values({ scope: "player", scopeId: ctx.playerId, type: INCOME_TYPE, amount: "0", ratePerSecond: "0", lastUpdatedAt: now });
+    await exec.insert(resources).values({ scope: "player", scopeId: ctx.playerId, type: INCOME_TYPE, amount: "0", ratePerSecond: "0", lastUpdatedAt: now }).onConflictDoNothing({ target: [resources.scope, resources.scopeId, resources.type] });
   }
   return { income, upkeep, collected: Math.round(net), owed: Math.round(owed) };
 }
@@ -670,7 +672,7 @@ async function settleStaffing(exec: Exec, ctx: ActingContext, rows: BuildingRow[
   }
   const advancedMs = lastMs + days * MS_PER_DAY;
   if (existing) await exec.update(resources).set({ lastUpdatedAt: new Date(advancedMs) }).where(eq(resources.id, existing.id));
-  else await exec.insert(resources).values({ scope: "player", scopeId: ctx.playerId, type: STAFF_TYPE, amount: "0", ratePerSecond: "0", lastUpdatedAt: new Date(advancedMs) });
+  else await exec.insert(resources).values({ scope: "player", scopeId: ctx.playerId, type: STAFF_TYPE, amount: "0", ratePerSecond: "0", lastUpdatedAt: new Date(advancedMs) }).onConflictDoNothing({ target: [resources.scope, resources.scopeId, resources.type] });
   return { staffUpkeep: Math.round(staffUpkeep), foodNeeded, foodDrawn, foodBought, foodCost: Math.round(foodCost), owed: Math.round(owed) };
 }
 
