@@ -79,6 +79,8 @@ export const STORY_TRIGGERS: Record<string, StoryTrigger> = {
   "house-of-roses": { kind: "class", classId: "hetaira", opensAt: { yearBC: 298, season: 1 } },
   // Spring 298 BC is seasonIndex 9, the tenth day of a world's run.
   "river-nails": { kind: "class", classId: "shipbuilder", opensAt: { yearBC: 298, season: 2 } },
+  // Spring 298 BC only (seasonIndex 9, the tenth day of a world's run), every class.
+  "samnite-war": { kind: "dated", date: { yearBC: 298, season: 2 } },
 };
 
 // Boot-time content load: validate + upsert every authored story. A directory read

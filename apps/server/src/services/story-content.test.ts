@@ -359,4 +359,18 @@ suite("loadStories seed (integration)", () => {
       opensAt: { yearBC: 298, season: 2 },
     });
   });
+
+  it("18. News from Neapolis is seeded, and its trigger offers it to every class in Spring 298 BC only", async () => {
+    await m.story.loadStories();
+
+    const rows = await db.select().from(m.dbPkg.stories).where(eq(m.dbPkg.stories.id, "samnite-war"));
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.version).toBe(1);
+    expect((rows[0]!.tree as { nodes: unknown[] }).nodes.length).toBe(3);
+
+    expect(m.story.STORY_TRIGGERS["samnite-war"]).toEqual({
+      kind: "dated",
+      date: { yearBC: 298, season: 2 },
+    });
+  });
 });

@@ -1,0 +1,56 @@
+{
+  "id": "samnite-war",
+  "version": 1,
+  "tree": {
+    "title": "News from Neapolis",
+    "start": "OPEN",
+    "nodes": [
+      {
+        "type": "scene",
+        "id": "OPEN",
+        "body": {
+          "paragraphs": [
+            "The first ship of the season is in from Neapolis, and her master shouts the news up the quay before the lines are made fast: Rome has declared war on the Samnites, the third war between them in fifty years.",
+            "The Lucanians begged Rome for protection, and the Samnites turned Rome's heralds back with threats."
+          ]
+        },
+        "image": "/stories/story-samnite-00-news.webp",
+        "choices": [
+          {
+            "id": "hear",
+            "text": "Hear him out",
+            "requires": { "drachmae": 3 },
+            "rewards": [{ "type": "change_drachmae", "amount": -3 }],
+            "next": "END"
+          },
+          {
+            "id": "walk",
+            "text": "Walk on",
+            "next": "END-walk"
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "id": "END",
+        "body": {
+          "paragraphs": [
+            "He tells the rest over wine. Rome has sworn the Lucanians into alliance, and the consuls are raising their legions for the summer.",
+            "The old men on the quay remind everyone that Rome is Massalia's ally: when the Gauls burned Rome, Massalia sent gold toward the ransom, and Rome's thank-offering to Apollo after Veii was laid up in our treasury at Delphi."
+          ]
+        },
+        "image": "/stories/story-samnite-01-wine.webp",
+        "rewards": [],
+        "chronicle": ["Word came up the Lakydon that Rome had gone to war with the Samnites."]
+      },
+      {
+        "type": "terminal",
+        "id": "END-walk",
+        "body": {
+          "paragraphs": ["You leave him to the crowd. By nightfall the news is all over the agora."]
+        },
+        "rewards": []
+      }
+    ]
+  }
+}
