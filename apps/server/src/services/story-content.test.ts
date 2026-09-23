@@ -12,6 +12,7 @@ import { parseStoryTree, parseTraitsFile, validateStoryGraph, type EventEffect, 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const storyFile = resolve(root, "content/stories/artemisia-silver.json");
 const rosesFile = resolve(root, "content/stories/house-of-roses.json");
+const riverFile = resolve(root, "content/stories/river-nails.json");
 const traitsFile = resolve(root, "content/traits/traits.json");
 const buildingsFile = resolve(root, "content/buildings/buildings.json");
 
@@ -148,6 +149,152 @@ describe("House of Roses story content integrity (pure)", () => {
   });
 });
 
+describe("River Nails story content integrity (pure)", () => {
+  function readRiver(): { id: string; version: number; tree: StoryTree } {
+    const raw = JSON.parse(readFileSync(riverFile, "utf8")) as { id: string; version: number; tree: unknown };
+    return { id: raw.id, version: raw.version, tree: parseStoryTree(raw.tree) };
+  }
+
+  // Every effect the tree can apply, from both branches of every choice and from
+  // every terminal.
+  function effectsInTree(tree: StoryTree) {
+    return tree.nodes.flatMap((node) =>
+      node.type === "scene"
+        ? node.choices.flatMap((c) => [...(c.rewards ?? []), ...(c.otherwise?.rewards ?? [])])
+        : node.rewards,
+    );
+  }
+
+  it("11. the real content parses and validateStoryGraph returns []", () => {
+    expect(validateStoryGraph(readRiver().tree)).toEqual([]);
+  });
+
+  it("12. shape sanity: start OPEN, 58 nodes — 53 scenes and 5 terminals, each writing its one paragraph to the Chronicle", () => {
+    const { tree } = readRiver();
+    expect(tree.start).toBe("OPEN");
+    expect(tree.nodes.length).toBe(58);
+    expect(tree.nodes.filter((n) => n.type === "scene").length).toBe(53);
+    const terminals: string[] = [];
+    for (const node of tree.nodes) {
+      if (node.type !== "terminal") continue;
+      terminals.push(node.id);
+      expect(node.body.paragraphs.length, `${node.id}: one paragraph`).toBe(1);
+      expect(node.chronicle, `${node.id}: its Chronicle line is its paragraph`).toEqual(node.body.paragraphs);
+    }
+    expect(new Set(terminals)).toEqual(new Set(["END-river", "END-wreck", "END-sold", "END-pegged", "END-late"]));
+    expect(terminals.length).toBe(5);
+  });
+
+  it("13. every gain_good names a good the buildings catalog labels, and naval supplies are the only good credited", () => {
+    const { tree } = readRiver();
+    const labels = (JSON.parse(readFileSync(buildingsFile, "utf8")) as { goodLabels: Record<string, string> }).goodLabels;
+    const goods = effectsInTree(tree).flatMap((e) => (e.type === "gain_good" ? [e.good] : []));
+    expect(goods.length).toBeGreaterThan(0);
+    for (const good of goods) expect(labels[good], `good "${good}" is not in buildings.json goodLabels`).toBeTruthy();
+    expect(new Set(goods)).toEqual(new Set(["naval-supplies"]));
+  });
+
+  it("14. every path ends: 22,032 of them, naval supplies exactly when the nails went in, END-sold exactly on `sell`, drachmae −30 to 150", () => {
+    const { tree } = readRiver();
+    const byId = new Map(tree.nodes.map((n) => [n.id, n]));
+    const paths: { terminal: string; drachmae: number; goods: Record<string, number>; tookNails: boolean; sold: boolean }[] = [];
+
+    // Exhaustive walk, as test 9: every choice, and every fallback branch, from OPEN.
+    const walk = (nodeId: string, drachmae: number, goods: Record<string, number>, tookNails: boolean, sold: boolean) => {
+      const node = byId.get(nodeId)!;
+      const credit = (rewards: EventEffect[] | undefined) => {
+        let d = drachmae;
+        const g = { ...goods };
+        for (const e of rewards ?? []) {
+          if (e.type === "change_drachmae") d += e.amount;
+          if (e.type === "gain_good") g[e.good] = (g[e.good] ?? 0) + e.amount;
+        }
+        return { d, g };
+      };
+      if (node.type === "terminal") {
+        const { d, g } = credit(node.rewards);
+        paths.push({ terminal: node.id, drachmae: d, goods: g, tookNails, sold });
+        return;
+      }
+      for (const choice of node.choices) {
+        const nails = tookNails || (node.id.startsWith("S5-") && (choice.id === "quietly" || choice.id === "glaukos"));
+        const branches = choice.otherwise ? [choice, choice.otherwise] : [choice];
+        for (const branch of branches) {
+          const { d, g } = credit(branch.rewards);
+          walk(branch.next, d, g, nails, sold || choice.id === "sell");
+        }
+      }
+    };
+    walk(tree.start, 0, {}, false, false);
+
+    expect(paths.length).toBe(22_032);
+    const byTerminal: Record<string, number> = {};
+    for (const path of paths) byTerminal[path.terminal] = (byTerminal[path.terminal] ?? 0) + 1;
+    expect(byTerminal).toEqual({ "END-river": 8_640, "END-sold": 6_480, "END-wreck": 4_320, "END-pegged": 1_728, "END-late": 864 });
+    for (const path of paths) {
+      expect(path.goods, `${path.terminal}: the naval supplies come with Glaukos's share`).toEqual(path.tookNails ? { "naval-supplies": 2 } : {});
+      expect(path.terminal === "END-sold", `${path.terminal}: the method is sold exactly on "sell"`).toBe(path.sold);
+    }
+    expect(paths.reduce((lo, p) => Math.min(lo, p.drachmae), Infinity)).toBe(-30);
+    expect(paths.reduce((hi, p) => Math.max(hi, p.drachmae), -Infinity)).toBe(150);
+  });
+
+  it("15. trust routing: the 144 walks to Step 5 reach S5-high exactly when Segomaros's trust is 3 or more", () => {
+    const { tree } = readRiver();
+    const byId = new Map(tree.nodes.map((n) => [n.id, n]));
+    // One trust for: S1 `ask`; S2 `shoulder` on either branch; S3 `bind` on its main
+    // branch, and `physician`; S4 `supper` on its main branch, and `wages`.
+    const earnsTrust = (nodeId: string, choiceId: string, main: boolean) =>
+      (nodeId === "S1" && choiceId === "ask") ||
+      (nodeId.startsWith("S2-") && choiceId === "shoulder") ||
+      (nodeId.startsWith("S3-") && ((choiceId === "bind" && main) || choiceId === "physician")) ||
+      (nodeId.startsWith("S4-") && ((choiceId === "supper" && main) || choiceId === "wages"));
+    const arrivals: { node: string; trust: number }[] = [];
+
+    const walk = (nodeId: string, trust: number) => {
+      if (nodeId.startsWith("S5-")) {
+        arrivals.push({ node: nodeId, trust });
+        return;
+      }
+      const node = byId.get(nodeId)!;
+      if (node.type === "terminal") throw new Error(`${nodeId}: a terminal before Step 5`);
+      for (const choice of node.choices) {
+        walk(choice.next, trust + (earnsTrust(node.id, choice.id, true) ? 1 : 0));
+        if (choice.otherwise) walk(choice.otherwise.next, trust + (earnsTrust(node.id, choice.id, false) ? 1 : 0));
+      }
+    };
+    walk(tree.start, 0);
+
+    expect(arrivals.length).toBe(144);
+    for (const arrival of arrivals) expect(arrival.node, `trust ${arrival.trust}`).toBe(arrival.trust >= 3 ? "S5-high" : "S5-low");
+  });
+
+  it("16. the pay table: each PAY-nails beat's one `wait` credits Glaukos's share and 2 naval supplies, and a prestige only when pitched", () => {
+    const { tree } = readRiver();
+    const share: Record<string, Record<string, number>> = {
+      "high-9": { clean: 90, docked: 80, pitched: 90 },
+      "low-9": { clean: 81, docked: 72, pitched: 81 },
+      "high-10": { clean: 60, docked: 50, pitched: 60 },
+      "low-10": { clean: 54, docked: 45, pitched: 54 },
+    };
+    expect(tree.nodes.filter((n) => n.id.startsWith("PAY-nails-")).length).toBe(12);
+    for (const [state, byOutcome] of Object.entries(share)) {
+      for (const [outcome, drachmae] of Object.entries(byOutcome)) {
+        const id = `PAY-nails-${state}-${outcome}`;
+        const node = tree.nodes.find((n) => n.id === id);
+        expect(node?.type, `${id} is a scene`).toBe("scene");
+        if (node?.type !== "scene") continue;
+        expect(node.choices.map((c) => c.id), `${id}: one choice`).toEqual(["wait"]);
+        expect(node.choices[0]!.rewards, id).toEqual([
+          { type: "change_drachmae", amount: drachmae },
+          { type: "gain_good", good: "naval-supplies", amount: 2 },
+          ...(outcome === "pitched" ? [{ type: "change_stat", stat: "prestige", amount: -1 }] : []),
+        ]);
+      }
+    }
+  });
+});
+
 const dbUrl = process.env.DATABASE_URL ?? "";
 const suite = describe.runIf(dbUrl.includes("_test"));
 
@@ -195,6 +342,21 @@ suite("loadStories seed (integration)", () => {
       kind: "class",
       classId: "hetaira",
       opensAt: { yearBC: 298, season: 1 },
+    });
+  });
+
+  it("17. River Nails is seeded too, and its trigger opens it to the Shipbuilder in Spring 298 BC", async () => {
+    await m.story.loadStories();
+
+    const rows = await db.select().from(m.dbPkg.stories).where(eq(m.dbPkg.stories.id, "river-nails"));
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.version).toBe(1);
+    expect((rows[0]!.tree as { nodes: unknown[] }).nodes.length).toBe(58);
+
+    expect(m.story.STORY_TRIGGERS["river-nails"]).toEqual({
+      kind: "class",
+      classId: "shipbuilder",
+      opensAt: { yearBC: 298, season: 2 },
     });
   });
 });
