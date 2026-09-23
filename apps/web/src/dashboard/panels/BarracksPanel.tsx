@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, type BarracksOffer, type BarracksRosterRow, type BarracksUnit, type BarracksView, type BaseView, type MapReachView } from "../../api.js";
 import { BattleReport, ForcePicker, type PickerReport } from "../../map/World2Map.js";
-import { AssetIcon, formatClock, formatDuration, GoodGlyph, onDeviceClock, type PanelProps, ProgressBar, REGION_NAMES_SRC, useCountdownSeconds } from "../shared.js";
+import { AssetIcon, formatClock, formatDuration, GoodGlyph, onDeviceClock, type PanelProps, ProgressBar, REGION_NAMES_SRC, RESOURCE_WEBP, useCountdownSeconds } from "../shared.js";
 
 // The Barracks tab (military prompt ui-2). Renders the GET /api/barracks view to
 // the design in docs/barracks/design/Barracks_dc.html: a summary strip, At Home
@@ -671,18 +671,22 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
                 {placeId === massaliaId && fleetShips.length > 0 ? (
                   <>
                     <div className="barracks-list-head">Fleet · {fleetShips.reduce((n, s) => n + s.count, 0)} hulls</div>
-                    {fleetShips.map((s) => (
-                      <div key={s.id} className="barracks-row barracks-ship" data-ship={s.id}>
-                        <div className="barracks-row-grid two">
-                          <div className="barracks-row-body">
-                            <div className="barracks-row-name">
-                              {s.label} <span className="barracks-row-count">· {s.count}</span>
+                    {fleetShips.map((s) => {
+                      const art = RESOURCE_WEBP[s.id];
+                      return (
+                        <div key={s.id} className="barracks-row barracks-ship" data-ship={s.id}>
+                          <div className="barracks-row-grid ship">
+                            <span className="barracks-row-ic">{art ? <UnitGlyph file={art} fallback="⛵" /> : <span aria-hidden="true">⛵</span>}</span>
+                            <div className="barracks-row-body">
+                              <div className="barracks-row-name">
+                                {s.label} <span className="barracks-row-count">· {s.count}</span>
+                              </div>
+                              <div className="barracks-row-sub">{s.role === "warship" ? "escort" : `carries ${s.troopSpace}`} · range {s.range}</div>
                             </div>
-                            <div className="barracks-row-sub">{s.role === "warship" ? "escort" : `carries ${s.troopSpace}`} · range {s.range}</div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </>
                 ) : null}
               </div>

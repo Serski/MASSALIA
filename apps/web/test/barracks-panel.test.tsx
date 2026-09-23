@@ -251,6 +251,8 @@ describe("BarracksPanel", () => {
     const ships = [...places[0]!.querySelectorAll(".barracks-ship")];
     expect(ships.map((s) => `${s.querySelector(".barracks-row-name")!.textContent} · ${s.querySelector(".barracks-row-sub")!.textContent}`)).toEqual(["Pentekonter · 1 · carries 20 · range 7", "Trireme · 2 · escort · range 4"]);
     expect(ships.every((s) => s.querySelector(".barracks-row-service") === null)).toBe(true);
+    // Each hull type shows its goods artwork in the row's icon cell.
+    expect(ships.map((s) => s.querySelector(".barracks-row-ic img")?.getAttribute("src"))).toEqual([expect.stringMatching(/\/assets\/PENTEKONTER\.webp$/), expect.stringMatching(/\/assets\/TRIREME\.webp$/)]);
     expect(container.querySelectorAll('[data-section="home"] .barracks-ship')).toHaveLength(2);
     // No ships: the Fleet sub-section is hidden; men alone keep the place.
     cleanup();

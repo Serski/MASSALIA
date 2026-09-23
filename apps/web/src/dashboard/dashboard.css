@@ -4115,6 +4115,7 @@
 .dashboard-shell .barracks-row:last-child{ border-bottom: none; }
 .dashboard-shell .barracks-row-grid{ display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 14px; }
 .dashboard-shell .barracks-row-grid.two{ grid-template-columns: minmax(0, 1fr) auto; }
+.dashboard-shell .barracks-row-grid.ship{ grid-template-columns: 36px minmax(0, 1fr); }
 .dashboard-shell .barracks-row-ic{ display: grid; width: 36px; height: 36px; flex: none; place-items: center; background: rgba(var(--accent-rgb), 0.12); border-radius: 50%; }
 .dashboard-shell .barracks-row-body{ min-width: 0; }
 .dashboard-shell .barracks-row-name{ color: var(--dash-parchment); font-family: var(--font-display); font-size: 14px; font-weight: 700; }
