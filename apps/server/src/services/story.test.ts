@@ -200,6 +200,9 @@ suite("story play service (integration)", () => {
   // seasonIndex 8, so it opens on the world's ninth day).
   const REG_CLASS = { "class-story": { kind: "class" as const, classId: "hetaira", opensAt: { yearBC: 298, season: 1 } } };
   const REG_CLASS_OPEN = { "class-story": { kind: "class" as const, classId: "hetaira" } };
+  // The same fixture under a dated trigger: every class, Spring 298 BC
+  // (seasonIndex 9, the world's tenth day) and no other season.
+  const REG_DATED = { "class-story": { kind: "dated" as const, date: { yearBC: 298, season: 2 } } };
   // Age the world by rewriting its start, so "today" falls the given number of
   // days into the run.
   const worldStartedDaysAgo = async (days: number, extraMs = 0) =>
@@ -646,6 +649,35 @@ suite("story play service (integration)", () => {
     const trader = await createCharacter("Demos", "trader");
     await expect(m.story.startStory(trader.id, "class-story", REG_CLASS)).rejects.toMatchObject({ reason: "not_eligible", statusCode: 403 });
     expect(await progressCount(trader.id, "class-story")).toBe(0);
+  });
+
+  it("35. a dated trigger offers the story to every class in its one season only; a run started then stays listed", async () => {
+    const hetaira = await createCharacter("Aspasia", "hetaira");
+    const trader = await createCharacter("Lykon", "trader");
+    const offer = { storyId: "class-story", status: "offered", title: "The House of Fixtures", image: "/stories/story-fixture-open.webp" };
+
+    // Day 9 (seasonIndex 8, Winter 298 BC) — one season too early, for every class.
+    await worldStartedDaysAgo(8, 10 * 60_000);
+    expect(await m.story.availableStories(hetaira.id, REG_DATED, now)).toEqual([]);
+    expect(await m.story.availableStories(trader.id, REG_DATED, now)).toEqual([]);
+    await expect(m.story.startStory(trader.id, "class-story", REG_DATED)).rejects.toMatchObject({ reason: "not_eligible", statusCode: 403 });
+    expect(await progressCount(trader.id, "class-story")).toBe(0);
+
+    // Day 10 (seasonIndex 9, Spring 298 BC) — offered to both, and the trader starts it.
+    await worldStartedDaysAgo(9, 10 * 60_000);
+    expect(await m.story.availableStories(hetaira.id, REG_DATED, now)).toEqual([offer]);
+    expect(await m.story.availableStories(trader.id, REG_DATED, now)).toEqual([offer]);
+    const state = await m.story.startStory(trader.id, "class-story", REG_DATED);
+    expect(state.node.id).toBe("H1");
+    expect((await progRow(trader.id, "class-story")).currentNode).toBe("H1");
+
+    // Day 11 (seasonIndex 10, Summer 298 BC) — closed to the hetaira, who never started it...
+    await worldStartedDaysAgo(10, 10 * 60_000);
+    expect(await m.story.availableStories(hetaira.id, REG_DATED, now)).toEqual([]);
+    await expect(m.story.startStory(hetaira.id, "class-story", REG_DATED)).rejects.toMatchObject({ reason: "not_eligible", statusCode: 403 });
+    expect(await progressCount(hetaira.id, "class-story")).toBe(0);
+    // ...while the trader's run is still listed.
+    expect(await m.story.availableStories(trader.id, REG_DATED, now)).toEqual([{ ...offer, status: "active" }]);
   });
 
   // --- Requirements: locked choices, prices and fallback branches ------------

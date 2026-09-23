@@ -60,15 +60,19 @@ export class StoryRuleError extends Error {
   }
 }
 
-// What makes a story eligible to be offered. Two kinds: "festival" offers the
+// What makes a story eligible to be offered. Three kinds: "festival" offers the
 // story once the named festival's instance has closed for a character who
 // attended it; "class" offers it to every character of a class, optionally not
 // before a GAME date (like a dated event card, so a future world opens it on its
-// own calendar). A `trigger` column on `stories` is the eventual home — the
-// registry is still deliberate (do not add a column).
+// own calendar); "dated" is below. A `trigger` column on `stories` is the
+// eventual home — the registry is still deliberate (do not add a column).
 export type StoryTrigger =
   | { kind: "festival"; festivalId: string }
-  | { kind: "class"; classId: string; opensAt?: { yearBC: number; season: number } };
+  | { kind: "class"; classId: string; opensAt?: { yearBC: number; season: number } }
+  // Offered to every character of every class only while the world is in that
+  // one season (season 1 = Winter, as the dated cards), then never again. A run
+  // started in the season can be finished after it.
+  | { kind: "dated"; date: { yearBC: number; season: number } };
 export const STORY_TRIGGERS: Record<string, StoryTrigger> = {
   "artemisia-silver": { kind: "festival", festivalId: "fest-artemisia" },
   // Winter 298 BC is seasonIndex 8 — the ninth day of a world's run.
@@ -483,13 +487,16 @@ async function storyCard(storyId: string): Promise<{ title: string; image?: stri
 // (closeInstance writes the festival_choregos guard row unconditionally, even
 // winnerless). A "class" story is "offered" iff it is seeded, the character's
 // class matches, and the world has reached the trigger's game date — read lazily
-// here, so a deploy after the opening season still offers it to everyone.
+// here, so a deploy after the opening season still offers it to everyone. A
+// "dated" story is "offered" iff it is seeded and the world is in exactly the
+// trigger's season, whatever the class.
 //
 // Per registered story: one progress lookup (unique index on character_id,
 // story_id), and — only when there is no progress row — one guard query that is a
 // single row from `stories` (PK) with an EXISTS over the festival_events ⋈
 // festival_choregos join (both sides index-covered). No scans. The class and the
-// world start are read ONCE per call, and only when a class trigger is registered.
+// world start are read ONCE per call, and only when a class or dated trigger is
+// registered.
 export async function availableStories(
   characterId: string,
   registry: Record<string, StoryTrigger> = STORY_TRIGGERS,
@@ -505,7 +512,7 @@ export async function availableStories(
   };
 
   const trigs = Object.entries(registry);
-  const character = trigs.some(([, t]) => t.kind === "class")
+  const character = trigs.some(([, t]) => t.kind === "class" || t.kind === "dated")
     ? (
         await db
           .select({ classId: playerCharacters.classId, startedAt: worlds.startedAt })
@@ -537,6 +544,15 @@ export async function availableStories(
     if (trigger.kind === "class") {
       if (!character || character.classId !== trigger.classId) continue;
       if (trigger.opensAt && gameDate(now.getTime(), character.startedAt.getTime()).seasonIndex < datedSeasonIndex(trigger.opensAt)) continue;
+      const card = await storyCard(storyId); // the PK read IS the seeded check
+      if (!card) continue;
+      entry(storyId, "offered", titleOr(card.title, storyId), card);
+      continue;
+    }
+
+    if (trigger.kind === "dated") {
+      if (!character) continue;
+      if (gameDate(now.getTime(), character.startedAt.getTime()).seasonIndex !== datedSeasonIndex(trigger.date)) continue;
       const card = await storyCard(storyId); // the PK read IS the seeded check
       if (!card) continue;
       entry(storyId, "offered", titleOr(card.title, storyId), card);
