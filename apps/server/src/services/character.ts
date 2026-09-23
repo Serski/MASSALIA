@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { characterTraits, createDb, dynasties, players, playerCharacters, playerPops, resources, users, worlds } from "@massalia/db";
+import { characterTraits, createDb, dynasties, players, playerCharacters, playerPops, users, worlds } from "@massalia/db";
 import {
   capStat,
   CLASS_START,
@@ -22,6 +22,7 @@ import {
 } from "@massalia/shared";
 import { getComposureConfig } from "./composure.js";
 import { getAgeConfig, portraitUrl } from "./age.js";
+import { creditResource, getOrCreateResource } from "./buildings.js";
 import { lockPlayer } from "./lock.js";
 
 const db = createDb();
@@ -38,9 +39,13 @@ export type PlayerRow = typeof players.$inferSelect;
 // (grain) + 1 slave. The 150 starting drachmae lives on the character row (CLASS_START).
 // A slave-class character gets nothing — the enslaved start is deliberately bare (a
 // slave owning a slave from day one would be strange), so the grant is class-scoped.
+// The wheat is a relative credit on the player's one grain row: a Landowner's create
+// already seeded that row at 0 as the class resource, and a second row would split
+// the stock between what the UI shows and what the market and the vendor debit.
 export async function grantStartingPackage(exec: Exec, playerId: string, worldId: string, classId: ClassId, now: Date = new Date()): Promise<void> {
   if (classId === "slave") return;
-  await exec.insert(resources).values({ scope: "player", scopeId: playerId, type: "grain", amount: "10", ratePerSecond: "0", lastUpdatedAt: now });
+  const grain = await getOrCreateResource(exec, playerId, "grain", now);
+  await creditResource(exec, grain.id, 10);
   await exec.insert(playerPops).values({ worldId, ownerPlayerId: playerId, popType: "slave", count: 1 });
 }
 
