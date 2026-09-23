@@ -964,7 +964,10 @@ export const resources = pgTable("resources", {
   amount: numeric("amount").notNull().default("0"),
   ratePerSecond: numeric("rate_per_second").notNull().default("0"),
   lastUpdatedAt: timestamp("last_updated_at", { withTimezone: true }).notNull(),
-});
+}, (table) => ({
+  // Migration 0061: one row per (scope, scope_id, type); inserts target it with ON CONFLICT.
+  scopeTypeUq: uniqueIndex("resources_scope_type_uq").on(table.scope, table.scopeId, table.type),
+}));
 
 export const armies = pgTable("armies", {
   id: uuid("id").primaryKey().defaultRandom(),
