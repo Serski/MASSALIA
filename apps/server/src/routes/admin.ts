@@ -1,8 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { and, desc, eq, ilike, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
-import { adminAudit, authEvents, createDb, effectLog, interactions, playerCharacters, players, sessions, users, type DbExec } from "@massalia/db";
-import { hasLetter, sanitizeDisplayName } from "@massalia/shared";
+import { adminAudit, authEvents, createDb, effectLog, interactions, playerCharacters, playerPops, players, resources, sessions, users, type DbExec } from "@massalia/db";
+import { hasLetter, sanitizeDisplayName, type PopType } from "@massalia/shared";
 import { requireAdmin } from "../services/auth.js";
+import { buildingContext, creditResource, debitResource, getBuildingsContent, getOrCreateResource, getPopsContent, settleAll } from "../services/buildings.js";
+import { applyComposureDelta } from "../services/composure.js";
 import { lockPlayer } from "../services/lock.js";
 import { nameTaken } from "../services/playerNames.js";
 
@@ -18,6 +20,12 @@ const db = createDb();
 const CLUSTER_WINDOW_DAYS = 30;
 const LIST_LIMIT = 100;
 const LOG_LIMIT = 200;
+
+// The four leadership stats (CHECK 0..100 since migration 0014).
+const STATS = ["prestige", "devotion", "militia", "intelligence"] as const;
+type Stat = (typeof STATS)[number];
+const STAT_MIN = 0;
+const STAT_MAX = 100;
 
 function httpError(message: string, statusCode: number): never {
   const error = new Error(message) as Error & { statusCode?: number };
@@ -48,9 +56,11 @@ function publicUser(row: UserRow) {
   };
 }
 
+type AdminCharacterRow = { characterId: string; playerId: string; worldId: string; name: string; drachmae: number; status: string; isActive: boolean } & Record<Stat, number>;
+
 // The character rows (player + character) behind a set of users, for the list view.
 async function charactersOf(userIds: string[]) {
-  if (!userIds.length) return new Map<string, { characterId: string; playerId: string; worldId: string; name: string; drachmae: number; status: string; isActive: boolean }[]>();
+  if (!userIds.length) return new Map<string, AdminCharacterRow[]>();
   const rows = await db
     .select({
       userId: players.userId,
@@ -61,14 +71,21 @@ async function charactersOf(userIds: string[]) {
       characterId: playerCharacters.id,
       drachmae: playerCharacters.drachmae,
       status: playerCharacters.status,
+      prestige: playerCharacters.prestige,
+      devotion: playerCharacters.devotion,
+      militia: playerCharacters.militia,
+      intelligence: playerCharacters.intelligence,
     })
     .from(players)
     .innerJoin(playerCharacters, eq(playerCharacters.playerId, players.id))
     .where(inArray(players.userId, userIds));
-  const byUser = new Map<string, { characterId: string; playerId: string; worldId: string; name: string; drachmae: number; status: string; isActive: boolean }[]>();
+  const byUser = new Map<string, AdminCharacterRow[]>();
   for (const row of rows) {
     const list = byUser.get(row.userId) ?? [];
-    list.push({ characterId: row.characterId, playerId: row.playerId, worldId: row.worldId, name: row.name, drachmae: row.drachmae, status: row.status, isActive: row.isActive });
+    list.push({
+      characterId: row.characterId, playerId: row.playerId, worldId: row.worldId, name: row.name, drachmae: row.drachmae, status: row.status, isActive: row.isActive,
+      prestige: row.prestige, devotion: row.devotion, militia: row.militia, intelligence: row.intelligence,
+    });
     byUser.set(row.userId, list);
   }
   return byUser;
@@ -106,6 +123,44 @@ function reasonOf(request: FastifyRequest, required: boolean): string {
   const reason = typeof body?.reason === "string" ? body.reason.trim().slice(0, 500) : "";
   if (required && !reason) httpError("A reason is required.", 400);
   return reason;
+}
+
+// A relative adjustment: a non-zero whole number within ±max.
+function deltaOf(request: FastifyRequest, max: number): number {
+  const body = request.body as { delta?: unknown } | undefined;
+  const delta = body?.delta;
+  if (typeof delta !== "number" || !Number.isInteger(delta) || delta === 0 || Math.abs(delta) > max) {
+    httpError(`delta must be a non-zero whole number within ±${max.toLocaleString("en-US")}.`, 400);
+  }
+  return delta;
+}
+
+function bodyText(request: FastifyRequest, key: string): string {
+  const value = (request.body as Record<string, unknown> | undefined)?.[key];
+  return typeof value === "string" ? value : "";
+}
+
+const capitalise = (id: string) => id.charAt(0).toUpperCase() + id.slice(1);
+const goodLabel = (good: string) => getBuildingsContent().goodLabels?.[good] ?? capitalise(good);
+
+type Owner = Awaited<ReturnType<typeof characterOwner>>;
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// A goods or household edit is a checkpoint, as hire and dismiss are: the player's
+// economy settles up to now under the lock first, so pending output banks and past
+// wages and food are charged at the pre-edit counts; the edit applies on top, in the
+// same transaction. Shrine composure banked by the settle is applied after the
+// transaction, break-aware, as collect does.
+async function settledEdit<T>(owner: Owner, edit: (tx: Tx, now: Date) => Promise<T>): Promise<T> {
+  const ctx = (await buildingContext(owner.playerId, owner.worldId)) ?? httpError("No such world.", 404);
+  const now = new Date();
+  const outcome = await db.transaction(async (tx) => {
+    await lockPlayer(tx, owner.playerId);
+    const settled = await settleAll(tx, ctx, now);
+    return { composureDays: settled.composureDays, result: await edit(tx, now) };
+  });
+  if (outcome.composureDays > 0) await applyComposureDelta(owner.characterId, outcome.composureDays, "building:shrine", now);
+  return outcome.result;
 }
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -234,9 +289,7 @@ export async function adminRoutes(app: FastifyInstance) {
   app.post("/characters/:characterId/drachmae", { schema: uuidParam("characterId") }, async (request) => {
     const admin = await requireAdmin(request);
     const { characterId } = request.params as { characterId: string };
-    const body = request.body as { delta?: unknown } | undefined;
-    const delta = typeof body?.delta === "number" && Number.isInteger(body.delta) ? body.delta : NaN;
-    if (!Number.isFinite(delta) || delta === 0 || Math.abs(delta) > 1_000_000) httpError("delta must be a non-zero whole number within ±1,000,000.", 400);
+    const delta = deltaOf(request, 1_000_000);
     const reason = reasonOf(request, true);
     const owner = await characterOwner(characterId);
     const drachmae = await db.transaction(async (tx) => {
@@ -293,5 +346,118 @@ export async function adminRoutes(app: FastifyInstance) {
       .limit(LOG_LIMIT);
     await audit(db, admin.id, "characters.interactions", owner.userId, { characterId, returned: rows.length });
     return { characterId, interactions: rows };
+  });
+
+  // --- Stats and inventory -------------------------------------------------------
+  // The four stats, every content good and every household pop type, held or not,
+  // so a missing one can be granted. Amounts are as stored: like the drachmae
+  // column they stand as of the player's last settle, and an edit below settles.
+  app.get("/characters/:characterId/sheet", { schema: uuidParam("characterId") }, async (request) => {
+    const admin = await requireAdmin(request);
+    const { characterId } = request.params as { characterId: string };
+    const owner = await characterOwner(characterId);
+    const [character] = await db
+      .select({ drachmae: playerCharacters.drachmae, prestige: playerCharacters.prestige, devotion: playerCharacters.devotion, militia: playerCharacters.militia, intelligence: playerCharacters.intelligence })
+      .from(playerCharacters)
+      .where(eq(playerCharacters.id, characterId))
+      .limit(1);
+    const held = await db.select({ type: resources.type, amount: resources.amount }).from(resources).where(and(eq(resources.scope, "player"), eq(resources.scopeId, owner.playerId)));
+    const kept = await db.select({ popType: playerPops.popType, count: playerPops.count }).from(playerPops).where(and(eq(playerPops.worldId, owner.worldId), eq(playerPops.ownerPlayerId, owner.playerId)));
+    const amounts = new Map(held.map((row) => [row.type, Number(row.amount)]));
+    const counts = new Map(kept.map((row) => [row.popType, row.count]));
+    const goods = Object.keys(getBuildingsContent().vendor)
+      .map((type) => ({ type, label: goodLabel(type), amount: amounts.get(type) ?? 0 }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    const pops = Object.entries(getPopsContent().pops).map(([type, def]) => ({ type, label: def.label, count: counts.get(type) ?? 0, max: def.max ?? null }));
+    await audit(db, admin.id, "characters.sheet", owner.userId, { characterId });
+    const { drachmae, ...stats } = character!;
+    return { characterId, name: owner.name, drachmae, stats, goods, pops };
+  });
+
+  // Relative stat adjustment under the player lock, refused (not clamped) when it
+  // would leave 0..100.
+  app.post("/characters/:characterId/stats", { schema: uuidParam("characterId") }, async (request) => {
+    const admin = await requireAdmin(request);
+    const { characterId } = request.params as { characterId: string };
+    const stat = bodyText(request, "stat") as Stat;
+    if (!STATS.includes(stat)) httpError(`stat must be one of ${STATS.join(", ")}.`, 400);
+    const delta = deltaOf(request, STAT_MAX);
+    const reason = reasonOf(request, true);
+    const owner = await characterOwner(characterId);
+    const column = playerCharacters[stat];
+    const value = await db.transaction(async (tx) => {
+      await lockPlayer(tx, owner.playerId);
+      const updated = await tx
+        .update(playerCharacters)
+        .set({ [stat]: sql`${column} + ${delta}` })
+        .where(and(eq(playerCharacters.id, characterId), sql`${column} + ${delta} BETWEEN ${STAT_MIN} AND ${STAT_MAX}`))
+        .returning({ value: column });
+      if (!updated.length) {
+        const [current] = await tx.select({ value: column }).from(playerCharacters).where(eq(playerCharacters.id, characterId));
+        httpError(`${capitalise(stat)} is ${current!.value}; ${delta > 0 ? "+" : ""}${delta} would take it outside ${STAT_MIN}–${STAT_MAX}.`, 409);
+      }
+      await tx.insert(effectLog).values({ characterId, kind: "admin_adjust_stat", detail: { stat, delta, reason, adminUserId: admin.id } });
+      await audit(tx, admin.id, "characters.stat", owner.userId, { characterId, stat, delta, reason, value: updated[0]!.value });
+      return updated[0]!.value;
+    });
+    return { ok: true, characterId, stat, value };
+  });
+
+  // Relative goods adjustment for any content good; a removal is a guarded debit
+  // that never takes the stock below zero.
+  app.post("/characters/:characterId/goods", { schema: uuidParam("characterId") }, async (request) => {
+    const admin = await requireAdmin(request);
+    const { characterId } = request.params as { characterId: string };
+    const good = bodyText(request, "good");
+    if (!Object.hasOwn(getBuildingsContent().vendor, good)) httpError("No such good.", 400);
+    const delta = deltaOf(request, 1_000_000);
+    const reason = reasonOf(request, true);
+    const owner = await characterOwner(characterId);
+    const amount = await settledEdit(owner, async (tx, now) => {
+      const row = await getOrCreateResource(tx, owner.playerId, good, now);
+      const after = delta > 0 ? await creditResource(tx, row.id, delta) : await debitResource(tx, row.id, -delta);
+      if (after === null) httpError(`They hold only ${Math.floor(Number(row.amount))} ${goodLabel(good)}.`, 409);
+      await tx.insert(effectLog).values({ characterId, kind: "admin_adjust_goods", detail: { good, delta, reason, adminUserId: admin.id } });
+      await audit(tx, admin.id, "characters.goods", owner.userId, { characterId, good, delta, reason, amount: after });
+      return after;
+    });
+    return { ok: true, characterId, good, amount };
+  });
+
+  // Relative household adjustment for any content pop type: never below zero, and
+  // never above a type's retention cap (the physician's max 1).
+  app.post("/characters/:characterId/pops", { schema: uuidParam("characterId") }, async (request) => {
+    const admin = await requireAdmin(request);
+    const { characterId } = request.params as { characterId: string };
+    const popType = bodyText(request, "popType");
+    const pops = getPopsContent().pops;
+    const def = Object.hasOwn(pops, popType) ? pops[popType as PopType] : httpError("No such pop type.", 400);
+    const delta = deltaOf(request, 10_000);
+    const reason = reasonOf(request, true);
+    const owner = await characterOwner(characterId);
+    const count = await settledEdit(owner, async (tx) => {
+      const mine = and(eq(playerPops.worldId, owner.worldId), eq(playerPops.ownerPlayerId, owner.playerId), eq(playerPops.popType, popType));
+      const [existing] = await tx.select({ id: playerPops.id, count: playerPops.count }).from(playerPops).where(mine).limit(1);
+      const have = existing?.count ?? 0;
+      if (have + delta < 0) httpError(`They keep only ${have} ${def.label.toLowerCase()}.`, 409);
+      if (def.max !== undefined && have + delta > def.max) httpError(`A household retains at most ${def.max} ${def.label.toLowerCase()}.`, 409);
+      let after: number;
+      if (existing) {
+        const updated = await tx
+          .update(playerPops)
+          .set({ count: sql`${playerPops.count} + ${delta}` })
+          .where(and(eq(playerPops.id, existing.id), sql`${playerPops.count} + ${delta} >= 0`))
+          .returning({ count: playerPops.count });
+        if (!updated.length) httpError(`They keep only ${have} ${def.label.toLowerCase()}.`, 409);
+        after = updated[0]!.count;
+      } else {
+        await tx.insert(playerPops).values({ worldId: owner.worldId, ownerPlayerId: owner.playerId, popType, count: delta });
+        after = delta;
+      }
+      await tx.insert(effectLog).values({ characterId, kind: "admin_adjust_pops", detail: { popType, delta, reason, adminUserId: admin.id } });
+      await audit(tx, admin.id, "characters.pops", owner.userId, { characterId, popType, delta, reason, count: after });
+      return after;
+    });
+    return { ok: true, characterId, popType, count };
   });
 }
