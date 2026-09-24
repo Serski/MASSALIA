@@ -67,6 +67,8 @@ describe("AdminPage verify action", () => {
     await flush();
     expect(adminVerify).toHaveBeenCalledTimes(1);
     expect(adminVerify).toHaveBeenCalledWith("u1", "link expired");
+    // The outcome stays in the status line; the list refresh does not replace it.
+    expect(document.querySelector('[role="status"]')!.textContent).toBe("Verified stuck@t.");
 
     // The Verified any/yes/no control feeds the `verified` param of adminUsers.
     fireEvent.change(document.querySelector<HTMLSelectElement>("select")!, { target: { value: "no" } });

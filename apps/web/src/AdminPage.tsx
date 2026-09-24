@@ -41,13 +41,14 @@ export function AdminPage() {
     }
   };
 
-  // Run an action after a confirmation, then refresh the list.
+  // Run an action after a confirmation, then refresh the list. The outcome goes in
+  // the status line last, so the list refresh never hides it.
   const act = async (confirmText: string, work: () => Promise<unknown>, done: string) => {
     if (!window.confirm(confirmText)) return;
     try {
       await work();
-      setStatus(done);
       await search();
+      setStatus(done);
     } catch (error) {
       setStatus(errorText(error));
     }
