@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { REAL_MS_PER_SEASON } from "./calendar.js";
-import { buildChronicle, type ChronicleInput, renderCampaignLine, renderForce } from "./chronicle.js";
+import { buildChronicle, CHRONICLE_EFFECT_LOG_KINDS, type ChronicleInput, renderCampaignLine, renderForce } from "./chronicle.js";
 
 // One real day = one in-game season; tests anchor the world start at ms 0 so a
 // timestamp of N seasons is simply N * REAL_MS_PER_SEASON.
@@ -298,80 +298,21 @@ describe("buildChronicle — adoption (the rite)", () => {
   });
 });
 
-describe("buildChronicle — player market (market prompt 1)", () => {
-  const base = { startedMs: 0, successionBoundariesMs: [] as number[], marriages: [], births: [], choregos: [], festivals: [], olympics: [] };
-  const payload = {
-    listingId: "l1",
-    good: "wine",
-    goodLabel: "Wine",
-    qty: 5,
-    price: 9,
-    total: 45,
-    tax: 4,
-    net: 41,
-    sellerName: "Kallias",
-    sellerHouseName: "Xanthippos",
-    buyerName: "Deon",
-    buyerHouseName: "Protis",
-    source: "market" as const,
-  };
-
-  it("stages a sale and a purchase dated at the effect_log instant, carrying the payload", () => {
-    const entries = buildChronicle({
-      ...base,
-      market: [
-        { id: "e2", at: 12 * S, kind: "market_purchase", payload },
-        { id: "e1", at: 12 * S, kind: "market_sale", payload },
-      ],
-    });
-    expect(entries.map((e) => e.type)).toEqual(["market_sale", "market_purchase"]); // TYPE_ORDER 18 before 19
-    expect(entries.every((e) => e.seasonIndex === 12)).toBe(true);
-    expect(entries[0]!.payload).toEqual(payload);
-  });
-
-  it("sorts after the campaign kinds in the same season; no market rows → no market entries", () => {
-    const entries = buildChronicle({
-      ...base,
-      market: [{ id: "e1", at: 3 * S, kind: "market_sale", payload }],
-      campaigns: [{ id: "c1", at: 3 * S + 1, kind: "holding_tribute", payload: { regionId: "R001", tribute: [] } }],
-    });
-    expect(entries.map((e) => e.type)).toEqual(["holding_tribute", "market_sale"]);
-    expect(buildChronicle(base).some((e) => e.type === "market_sale" || e.type === "market_purchase")).toBe(false);
-  });
-});
-
 describe("buildChronicle — story lines (story engine)", () => {
   const base = { startedMs: 0, successionBoundariesMs: [] as number[], marriages: [], births: [], choregos: [], festivals: [], olympics: [] };
-  const marketPayload = {
-    listingId: "l1",
-    good: "wine",
-    goodLabel: "Wine",
-    qty: 5,
-    price: 9,
-    total: 45,
-    tax: 4,
-    net: 41,
-    sellerName: "Kallias",
-    sellerHouseName: "Xanthippos",
-    buyerName: "Deon",
-    buyerHouseName: "Protis",
-    source: "market" as const,
-  };
 
-  it("keeps two lines from one ending in the order they were written, after the market kinds", () => {
+  it("keeps two lines from one ending in the order they were written", () => {
     const entries = buildChronicle({
       ...base,
-      // The writer nudges each line's instant by its index; the market row shares
-      // the season so the TYPE_ORDER tiebreak (19 before 20) is exercised too.
-      market: [{ id: "m1", at: 8 * S + 5, kind: "market_purchase", payload: marketPayload }],
+      // The writer nudges each line's instant by its index.
       stories: [
         { id: "s1", at: 8 * S, payload: { storyId: "house-of-roses", line: "The thief was found before the symposium." } },
         { id: "s2", at: 8 * S + 1, payload: { storyId: "house-of-roses", line: "The steward of House Timon is buying poison." } },
       ],
     });
-    expect(entries.map((e) => e.type)).toEqual(["market_purchase", "story_line", "story_line"]);
+    expect(entries.map((e) => e.type)).toEqual(["story_line", "story_line"]);
     expect(entries.every((e) => e.seasonIndex === 8)).toBe(true);
-    expect(entries.slice(1).map((e) => e.payload.line)).toEqual([
+    expect(entries.map((e) => e.payload.line)).toEqual([
       "The thief was found before the symposium.",
       "The steward of House Timon is buying poison.",
     ]);
@@ -379,6 +320,13 @@ describe("buildChronicle — story lines (story engine)", () => {
 
   it("no story rows → no story entries", () => {
     expect(buildChronicle(base).some((e) => e.type === "story_line")).toBe(false);
+  });
+});
+
+describe("CHRONICLE_EFFECT_LOG_KINDS", () => {
+  // Market prompt 2: player-market sales and purchases are not Chronicle lines.
+  it("reads the campaign kinds and story lines, and no market kind", () => {
+    expect(CHRONICLE_EFFECT_LOG_KINDS).toEqual(["map_action", "holding_reverted", "holding_tribute", "story_line"]);
   });
 });
 

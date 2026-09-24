@@ -2,7 +2,6 @@ import { and, eq, inArray, notInArray } from "drizzle-orm";
 import {
   buildChronicle,
   CHRONICLE_EFFECT_LOG_KINDS,
-  isChronicleMarketKind,
   isChronicleStoryKind,
   OLYMPIAD_GAMES_FESTIVAL_ID,
   type ChronicleAfflictionRow,
@@ -10,7 +9,6 @@ import {
   type ChronicleDeathRow,
   type ChronicleEntry,
   type ChronicleInput,
-  type ChronicleMarketRow,
   type ChronicleStoryRow,
   type DeathCause,
 } from "@massalia/shared";
@@ -246,14 +244,12 @@ export async function gatherChronicleForCharacter(characterId: string): Promise<
   }
 
   // Barracks prompt 3b: map actions this slot led and holdings it lost, from
-  // effect_log; market prompt 1: this slot's player-market sales and purchases.
-  // The detail's `chronicle` block is the structured payload for every kind.
+  // effect_log. The detail's `chronicle` block is the structured payload for every kind.
   const effectRows = await db
     .select({ id: effectLog.id, createdAt: effectLog.createdAt, kind: effectLog.kind, detail: effectLog.detail })
     .from(effectLog)
     .where(and(eq(effectLog.characterId, slot.id), inArray(effectLog.kind, [...CHRONICLE_EFFECT_LOG_KINDS])));
   const campaigns: ChronicleCampaignRow[] = [];
-  const market: ChronicleMarketRow[] = [];
   const storyLines: ChronicleStoryRow[] = [];
   for (const row of effectRows) {
     const chronicle = (row.detail as { chronicle?: unknown }).chronicle;
@@ -261,8 +257,6 @@ export async function gatherChronicleForCharacter(characterId: string): Promise<
     const at = row.createdAt.getTime();
     if (isChronicleStoryKind(row.kind)) {
       storyLines.push({ id: row.id, at, payload: chronicle as ChronicleStoryRow["payload"] });
-    } else if (isChronicleMarketKind(row.kind)) {
-      market.push({ id: row.id, at, kind: row.kind, payload: chronicle as ChronicleMarketRow["payload"] });
     } else {
       campaigns.push({ id: row.id, at, kind: row.kind as ChronicleCampaignRow["kind"], payload: chronicle as ChronicleCampaignRow["payload"] });
     }
@@ -281,7 +275,6 @@ export async function gatherChronicleForCharacter(characterId: string): Promise<
     afflictions,
     deaths,
     campaigns,
-    market,
     stories: storyLines,
   });
 }

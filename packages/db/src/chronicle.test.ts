@@ -4,9 +4,9 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 // ---------------------------------------------------------------------------
 // The chronicle fetch layer's effect_log read (market prompt 1). Integration test
 // against a REAL Postgres, guarded to a *_test database (mirrors pops.test.ts).
-// Proves market_sale, market_purchase and story_line rows reach the chronicle
-// through their nested detail.chronicle block, and that a row without the block
-// is skipped.
+// Proves story_line rows reach the chronicle through their nested
+// detail.chronicle block, that a row without the block is skipped, and that
+// market_sale and market_purchase rows no longer do (market prompt 2).
 // ---------------------------------------------------------------------------
 
 const dbUrl = process.env.DATABASE_URL ?? "";
@@ -44,7 +44,7 @@ suite("chronicle effect_log kinds (integration)", () => {
     characterId = character.id;
   });
 
-  it("reads market_sale and market_purchase through detail.chronicle and skips a row without it", async () => {
+  it("skips market_sale and market_purchase rows, even with a detail.chronicle block", async () => {
     const payload = {
       listingId: "00000000-0000-0000-0000-000000000001",
       good: "wine",
@@ -61,16 +61,14 @@ suite("chronicle effect_log kinds (integration)", () => {
       source: "market",
     };
     const at = new Date(T0 + 3 * DAY);
+    // The first two are shaped like the rows market prompt 1 wrote in production.
     await db.insert(dbPkg.effectLog).values([
       { characterId, kind: "market_sale", detail: { ...payload, chronicle: payload }, createdAt: at },
       { characterId, kind: "market_purchase", detail: { ...payload, chronicle: payload }, createdAt: at },
       { characterId, kind: "market_sale", detail: { ...payload }, createdAt: at }, // no chronicle block
     ]);
 
-    const entries = await chronicle.gatherChronicleForCharacter(characterId);
-    expect(entries.map((e) => e.type)).toEqual(["market_sale", "market_purchase"]);
-    expect(entries[0]!.payload).toEqual(payload);
-    expect(entries[1]!.payload).toEqual(payload);
+    expect(await chronicle.gatherChronicleForCharacter(characterId)).toEqual([]);
   });
 
   it("reads a story_line through detail.chronicle and skips one without it", async () => {

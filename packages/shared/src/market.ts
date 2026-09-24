@@ -19,3 +19,23 @@ export const MARKET_TAX_EXEMPT_CLASS = "trader";
 export function marketTax(total: number, exempt: boolean): number {
   return exempt ? 0 : Math.floor(total / 10);
 }
+
+// The flat detail buyListing writes on both effect_log rows of one sale (the
+// seller's market_sale, the buyer's market_purchase): the trade record the admin
+// character log shows. `net` is what the seller received (total − tax); the buyer
+// paid `total`.
+export type MarketTradeDetail = {
+  listingId: string;
+  good: string;
+  goodLabel: string;
+  qty: number;
+  price: number;
+  total: number;
+  tax: number;
+  net: number;
+  sellerName: string;
+  sellerHouseName: string;
+  buyerName: string;
+  buyerHouseName: string;
+  source: "market";
+};

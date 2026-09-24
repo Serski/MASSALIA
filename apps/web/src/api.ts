@@ -284,8 +284,6 @@ export type ChronicleType =
   | "map_action"
   | "holding_reverted"
   | "holding_tribute"
-  | "market_sale"
-  | "market_purchase"
   | "story_line";
 
 export type ChronicleEntry = {

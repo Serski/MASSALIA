@@ -158,7 +158,7 @@ suite("Player market (integration)", () => {
 
   // --- buy --------------------------------------------------------------------
 
-  it("a buy moves the goods, pays the seller total − tax, taxes into the treasury and writes both chronicle rows", async () => {
+  it("a buy moves the goods, pays the seller total − tax, taxes into the treasury and writes both trade rows", async () => {
     const id = await list(landowner, "wine", 20, 9);
     const res = await m.market.buyListing(await ctx(buyer), id, 5, NOW);
     expect(res).toEqual({ ok: true, qty: 5, total: 45, tax: 4, wallet: 955, balance: 5, remaining: 15 });
@@ -196,8 +196,10 @@ suite("Player market (integration)", () => {
     expect(rows).toHaveLength(2);
     expect(sale.characterId).toBe(await characterOf(landowner));
     expect(purchase.characterId).toBe(await characterOf(buyer));
-    expect(sale.detail).toEqual({ ...detail, chronicle: detail });
-    expect(purchase.detail).toEqual({ ...detail, chronicle: detail });
+    expect(sale.detail).toEqual(detail);
+    expect(purchase.detail).toEqual(detail);
+    expect(sale.detail).not.toHaveProperty("chronicle");
+    expect(purchase.detail).not.toHaveProperty("chronicle");
   });
 
   it("a Trader seller receives the full total and the treasury is unchanged", async () => {

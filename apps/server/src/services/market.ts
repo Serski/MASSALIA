@@ -6,7 +6,7 @@ import {
   MARKET_STALL_CAP,
   MARKET_TAX_EXEMPT_CLASS,
   marketTax,
-  type MarketChroniclePayload,
+  type MarketTradeDetail,
 } from "@massalia/shared";
 import { agedPortraitFor } from "./age.js";
 import {
@@ -231,7 +231,7 @@ export async function buyListing(ctx: ActingContext, listingId: string, qty: unk
     const goodRow = await getOrCreateResource(tx, ctx.playerId, listing.good, now);
     const balance = await creditResource(tx, goodRow.id, qty);
 
-    const chronicle: MarketChroniclePayload = {
+    const detail: MarketTradeDetail = {
       listingId,
       good: listing.good,
       goodLabel: goodLabel(listing.good),
@@ -251,7 +251,7 @@ export async function buyListing(ctx: ActingContext, listingId: string, qty: unk
       { characterId: buyer.characterId, kind: "market_purchase" },
     ].filter((e): e is { characterId: string; kind: string } => e.characterId !== null);
     if (entries.length > 0) {
-      await tx.insert(effectLog).values(entries.map((e) => ({ characterId: e.characterId, kind: e.kind, detail: { ...chronicle, chronicle }, createdAt: now })));
+      await tx.insert(effectLog).values(entries.map((e) => ({ characterId: e.characterId, kind: e.kind, detail, createdAt: now })));
     }
 
     return { ok: true as const, qty, total, tax, wallet, balance, remaining };
