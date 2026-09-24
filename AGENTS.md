@@ -48,7 +48,7 @@ pnpm dev:web                    # Vite on :5174
 
 ## Admin tooling
 
-- The admin API lives under `/admin/*` (`apps/server/src/routes/admin.ts`): `requireAdmin` needs a valid, unbanned session whose user has `is_admin`; every call — reads included — writes an `admin_audit` row. The web page is `/admin` (`apps/web/src/AdminPage.tsx`): user search, the same-IP cluster view (users sharing a register/login IP in the last 30 days, from `auth_events`), ban/unban with a reason, delete sessions, adjust drachmae (relative, under the player lock, logged to `effect_log`), rename (same sanitiser and uniqueness as creation), and a character's `effect_log` / `interactions`.
+- The admin API lives under `/admin/*` (`apps/server/src/routes/admin.ts`): `requireAdmin` needs a valid, unbanned session whose user has `is_admin`; every call — reads included — writes an `admin_audit` row. The web page is `/admin` (`apps/web/src/AdminPage.tsx`): user search, the same-IP cluster view (users sharing a register/login IP in the last 30 days, from `auth_events`), ban/unban with a reason, delete sessions, a character's stats and inventory (`GET /admin/characters/:id/sheet`: the four stats, every content good, every household pop type), adjust drachmae, a stat, a good or a pop count (relative with a reason, under the player lock, logged to `effect_log`, refused rather than clamped past a bound: 0–100 for stats, zero for stock, a pop type's `max`; goods and pops settle the economy first, as hire and dismiss do), rename (same sanitiser and uniqueness as creation), and a character's `effect_log` / `interactions`.
 - **Making an admin** is manual and needs the database URL — there is no API for it on purpose:
 
   ```bash

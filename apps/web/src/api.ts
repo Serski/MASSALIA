@@ -124,7 +124,17 @@ export type AuthResponse = {
 };
 
 // --- Admin views (routes/admin.ts) ---
-export type AdminCharacter = { characterId: string; playerId: string; worldId: string; name: string; drachmae: number; status: string; isActive: boolean };
+export type AdminStat = "prestige" | "devotion" | "militia" | "intelligence";
+export type AdminCharacter = { characterId: string; playerId: string; worldId: string; name: string; drachmae: number; status: string; isActive: boolean } & Record<AdminStat, number>;
+// A character's stats and inventory: every content good and pop type, held or not.
+export type AdminSheet = {
+  characterId: string;
+  name: string;
+  drachmae: number;
+  stats: Record<AdminStat, number>;
+  goods: { type: string; label: string; amount: number }[];
+  pops: { type: string; label: string; count: number; max: number | null }[];
+};
 export type AdminUser = {
   id: string;
   email: string;
@@ -408,6 +418,13 @@ export const api = {
   adminAdjustDrachmae: (characterId: string, delta: number, reason: string) =>
     apiFetch<{ ok: true; drachmae: number }>(`/admin/characters/${characterId}/drachmae`, { method: "POST", body: { delta, reason } }),
   adminRename: (characterId: string, name: string) => apiFetch<{ ok: true; name: string }>(`/admin/characters/${characterId}/rename`, { method: "POST", body: { name } }),
+  adminSheet: (characterId: string) => apiFetch<AdminSheet>(`/admin/characters/${characterId}/sheet`),
+  adminAdjustStat: (characterId: string, stat: AdminStat, delta: number, reason: string) =>
+    apiFetch<{ ok: true; value: number }>(`/admin/characters/${characterId}/stats`, { method: "POST", body: { stat, delta, reason } }),
+  adminAdjustGoods: (characterId: string, good: string, delta: number, reason: string) =>
+    apiFetch<{ ok: true; amount: number }>(`/admin/characters/${characterId}/goods`, { method: "POST", body: { good, delta, reason } }),
+  adminAdjustPops: (characterId: string, popType: string, delta: number, reason: string) =>
+    apiFetch<{ ok: true; count: number }>(`/admin/characters/${characterId}/pops`, { method: "POST", body: { popType, delta, reason } }),
   adminEffects: (characterId: string) => apiFetch<{ effects: AdminLogRow[] }>(`/admin/characters/${characterId}/effects`),
   adminInteractions: (characterId: string) => apiFetch<{ interactions: AdminLogRow[] }>(`/admin/characters/${characterId}/interactions`),
   createCharacter: (payload: CreationRequest) => apiFetch("/characters", { method: "POST", body: payload }),
