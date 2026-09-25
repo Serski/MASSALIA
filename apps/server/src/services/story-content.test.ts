@@ -13,6 +13,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const storyFile = resolve(root, "content/stories/artemisia-silver.json");
 const rosesFile = resolve(root, "content/stories/house-of-roses.json");
 const riverFile = resolve(root, "content/stories/river-nails.json");
+const tenthFile = resolve(root, "content/stories/tenth-short.json");
 const traitsFile = resolve(root, "content/traits/traits.json");
 const buildingsFile = resolve(root, "content/buildings/buildings.json");
 
@@ -295,6 +296,125 @@ describe("River Nails story content integrity (pure)", () => {
   });
 });
 
+describe("A Tenth Short story content integrity (pure)", () => {
+  function readTenth(): { id: string; version: number; tree: StoryTree } {
+    const raw = JSON.parse(readFileSync(tenthFile, "utf8")) as { id: string; version: number; tree: unknown };
+    return { id: raw.id, version: raw.version, tree: parseStoryTree(raw.tree) };
+  }
+
+  // Every effect the tree can apply, from both branches of every choice and from
+  // every terminal.
+  function effectsInTree(tree: StoryTree) {
+    return tree.nodes.flatMap((node) =>
+      node.type === "scene"
+        ? node.choices.flatMap((c) => [...(c.rewards ?? []), ...(c.otherwise?.rewards ?? [])])
+        : node.rewards,
+    );
+  }
+
+  it("19. the real content parses and validateStoryGraph returns []", () => {
+    expect(validateStoryGraph(readTenth().tree)).toEqual([]);
+  });
+
+  it("20. shape sanity: start OPEN, 35 nodes — 31 scenes and 4 terminals, each writing its paragraphs to the Chronicle, {house} only on END-name's second line", () => {
+    const { tree } = readTenth();
+    expect(tree.start).toBe("OPEN");
+    expect(tree.nodes.length).toBe(35);
+    expect(tree.nodes.filter((n) => n.type === "scene").length).toBe(31);
+    const terminals: string[] = [];
+    for (const node of tree.nodes) {
+      if (node.type !== "terminal") continue;
+      terminals.push(node.id);
+      expect(node.chronicle, `${node.id}: its Chronicle lines are its paragraphs`).toEqual(node.body.paragraphs);
+    }
+    expect(new Set(terminals)).toEqual(new Set(["END-public", "END-name", "END-quiet", "END-unproven"]));
+    expect(terminals.length).toBe(4);
+    const name = tree.nodes.find((n) => n.id === "END-name");
+    const lines = name?.type === "terminal" ? (name.chronicle ?? []) : [];
+    expect(lines.length).toBe(2);
+    expect(lines.map((line) => line.includes("{house}"))).toEqual([false, true]);
+  });
+
+  it("21. rewards and gates: drachmae and three stats only; composure 50 always falls back, a price always locks and is paid", () => {
+    const { tree } = readTenth();
+    for (const e of effectsInTree(tree)) {
+      expect(["change_drachmae", "change_stat"], `reward type ${e.type}`).toContain(e.type);
+      if (e.type === "change_stat") expect(["prestige", "intelligence", "devotion"], `stat ${e.stat}`).toContain(e.stat);
+    }
+
+    let composureChecks = 0;
+    const prices = new Set<number>();
+    for (const node of tree.nodes) {
+      if (node.type !== "scene") continue;
+      for (const choice of node.choices) {
+        if (!choice.requires) continue;
+        const where = `${node.id}/${choice.id}`;
+        expect(choice.requires.prestige, `${where}: no prestige gate`).toBeUndefined();
+        if (choice.requires.composure !== undefined) {
+          expect(choice.requires, where).toEqual({ composure: 50 });
+          expect(choice.otherwise, `${where}: a composure check has its fallback`).toBeDefined();
+          composureChecks++;
+        } else {
+          expect([{ drachmae: 5 }, { drachmae: 10 }], where).toContainEqual(choice.requires);
+          expect(choice.otherwise, `${where}: a price locks, with no fallback`).toBeUndefined();
+          const price = choice.requires.drachmae!;
+          expect((choice.rewards ?? []).filter((e) => e.type === "change_drachmae"), `${where}: the price is paid`).toEqual([
+            { type: "change_drachmae", amount: -price },
+          ]);
+          prices.add(price);
+        }
+      }
+    }
+    expect(composureChecks).toBeGreaterThan(0);
+    expect(prices).toEqual(new Set([5, 10]));
+  });
+
+  it("22. every path ends: 31,968 of them, END-name exactly on `name`, drachmae −35 to 140, prestige −3 to 3", () => {
+    const { tree } = readTenth();
+    const byId = new Map(tree.nodes.map((n) => [n.id, n]));
+    const paths: { terminal: string; drachmae: number; prestige: number; tookName: boolean }[] = [];
+
+    // Exhaustive walk, as test 9: every choice, and every fallback branch, from OPEN.
+    const walk = (nodeId: string, drachmae: number, prestige: number, tookName: boolean) => {
+      const node = byId.get(nodeId)!;
+      const credit = (rewards: EventEffect[] | undefined) => {
+        let d = drachmae;
+        let p = prestige;
+        for (const e of rewards ?? []) {
+          if (e.type === "change_drachmae") d += e.amount;
+          if (e.type === "change_stat" && e.stat === "prestige") p += e.amount;
+        }
+        return { d, p };
+      };
+      if (node.type === "terminal") {
+        const { d, p } = credit(node.rewards);
+        paths.push({ terminal: node.id, drachmae: d, prestige: p, tookName });
+        return;
+      }
+      for (const choice of node.choices) {
+        const branches = choice.otherwise ? [choice, choice.otherwise] : [choice];
+        for (const branch of branches) {
+          const { d, p } = credit(branch.rewards);
+          walk(branch.next, d, p, tookName || choice.id === "name");
+        }
+      }
+    };
+    walk(tree.start, 0, 0, false);
+
+    expect(paths.length).toBe(31_968);
+    const byTerminal: Record<string, number> = {};
+    for (const path of paths) byTerminal[path.terminal] = (byTerminal[path.terminal] ?? 0) + 1;
+    expect(byTerminal).toEqual({ "END-public": 8_640, "END-name": 8_640, "END-quiet": 8_640, "END-unproven": 6_048 });
+    for (const path of paths) {
+      expect(path.terminal === "END-name", `${path.terminal}: the name comes exactly from "name"`).toBe(path.tookName);
+    }
+    expect(paths.reduce((lo, p) => Math.min(lo, p.drachmae), Infinity)).toBe(-35);
+    expect(paths.reduce((hi, p) => Math.max(hi, p.drachmae), -Infinity)).toBe(140);
+    expect(paths.reduce((lo, p) => Math.min(lo, p.prestige), Infinity)).toBe(-3);
+    expect(paths.reduce((hi, p) => Math.max(hi, p.prestige), -Infinity)).toBe(3);
+  });
+});
+
 const dbUrl = process.env.DATABASE_URL ?? "";
 const suite = describe.runIf(dbUrl.includes("_test"));
 
@@ -372,5 +492,16 @@ suite("loadStories seed (integration)", () => {
       kind: "dated",
       date: { yearBC: 298, season: 2 },
     });
+  });
+
+  it("23. A Tenth Short is seeded too, and its trigger offers it to every Landowner with no opening date", async () => {
+    await m.story.loadStories();
+
+    const rows = await db.select().from(m.dbPkg.stories).where(eq(m.dbPkg.stories.id, "tenth-short"));
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.version).toBe(1);
+    expect((rows[0]!.tree as { nodes: unknown[] }).nodes.length).toBe(35);
+
+    expect(m.story.STORY_TRIGGERS["tenth-short"]).toEqual({ kind: "class", classId: "landowner" });
   });
 });

@@ -81,6 +81,8 @@ export const STORY_TRIGGERS: Record<string, StoryTrigger> = {
   "river-nails": { kind: "class", classId: "shipbuilder", opensAt: { yearBC: 298, season: 2 } },
   // Spring 298 BC only (seasonIndex 9, the tenth day of a world's run), every class.
   "samnite-war": { kind: "dated", date: { yearBC: 298, season: 2 } },
+  // No opening date: every Landowner at once, and a new one from his first day.
+  "tenth-short": { kind: "class", classId: "landowner" },
 };
 
 // Boot-time content load: validate + upsert every authored story. A directory read

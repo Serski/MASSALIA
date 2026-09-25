@@ -1,0 +1,1354 @@
+{
+  "id": "tenth-short",
+  "version": 1,
+  "tree": {
+    "title": "A Tenth Short",
+    "start": "OPEN",
+    "nodes": [
+      {
+        "type": "scene",
+        "id": "OPEN",
+        "body": {
+          "paragraphs": [
+            "A boy has come out from the city with a wax tablet from the grain wardens. Your last three wagons of wheat went into the city's granary yesterday, and by the wardens' count every one of them was a tenth short of the tally your steward signed.",
+            "Short wheat on a city contract is theft from the city's bread. By noon the agora had a name for it, and the name was yours. Someone at the fish stalls was asking, loudly, whether a landowner who cheats the granary should be let near it again.",
+            "The wardens measure your next wagons at dawn. You have tonight."
+          ]
+        },
+        "image": "/stories/story-tenth-00-opening.webp",
+        "choices": [
+          {
+            "id": "lamp",
+            "text": "Take up the lamp.",
+            "next": "S1"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S1",
+        "body": {
+          "eyebrow": "Where to begin",
+          "paragraphs": [
+            "The house is quiet and the hands have eaten. Where do you begin?"
+          ]
+        },
+        "image": "/stories/story-tenth-01-yard.webp",
+        "choices": [
+          {
+            "id": "tablets",
+            "text": "The tally tablets.",
+            "result": "Philinos's wax tablets are in their case, in his careful hand: sacks counted at the threshing floor, sacks counted onto the wagons, the same numbers twice. Either the old man is lying twice, or the wheat left here whole.",
+            "next": "S2"
+          },
+          {
+            "id": "barns",
+            "text": "The barns.",
+            "result": "You take the lamp through the barns. The floor is swept and the empty sacks are folded and counted. Seventy sacks went out and seventy came back empty. Whatever happened to your wheat happened after the gate.",
+            "next": "S2"
+          },
+          {
+            "id": "household",
+            "text": "The whole household.",
+            "result": "You call them into the yard. The hands stand with their hats in their hands and say what hands say. Drakon the carter, who drove the wagons, laughs a little too loud at nothing. Philinos watches him laugh.",
+            "next": "S2"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S2",
+        "body": {
+          "eyebrow": "Philinos",
+          "paragraphs": [
+            "Philinos has kept your fields since your father's time. He counts everything twice and trusts nothing he has not counted, and tonight he looks like a man who has counted his own life and found it short. He is waiting at the barn door with his tablets under his arm."
+          ]
+        },
+        "image": "/stories/story-tenth-02-philinos.webp",
+        "choices": [
+          {
+            "id": "press",
+            "text": "Press him.",
+            "requires": {
+              "composure": 50
+            },
+            "result": "\"The three wagons. Were they full when they left?\" He does not look at his tablets. \"Full to the knot. I tied the last ones myself. And I will tell you what I have not told the wardens. At the granary the clerk would not let me watch the measuring. He sent me outside to wait. In twenty years that has never happened.\"",
+            "next": "S3-k",
+            "otherwise": {
+              "result": "You mean to ask it calmly and it comes out as a charge. He answers only what you asked, \"Full, every sack,\" and closes his tablets. He is still yours tonight, but he will offer you nothing you do not ask for.",
+              "next": "S3-k"
+            }
+          },
+          {
+            "id": "bread",
+            "text": "Share his bread.",
+            "result": "You sit on the barn step and share his bread and let him talk about your father's harvests until he gets to yesterday. \"Full, every sack. But the clerk would not let me watch them measured. In twenty years he always let me watch.\"",
+            "next": "S3-k"
+          },
+          {
+            "id": "blame",
+            "text": "Blame him.",
+            "result": "\"You signed for wheat that was not there.\" He sets the tablets down on the step very carefully, as if they might break. \"Then the tablets are yours,\" he says, and goes to his hut, and the lamp there goes out. Whatever else happens tonight, you have lost the one man who knows every sack.",
+            "next": "S3-x"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S3-k",
+        "body": {
+          "eyebrow": "Drakon",
+          "paragraphs": [
+            "Drakon drives your wagons to the city and back. He was a slave until your father freed him. He is good with mules and bad with money, and tonight he has a new cloak with a Gaulish pin."
+          ]
+        },
+        "image": "/stories/story-tenth-03-drakon.webp",
+        "choices": [
+          {
+            "id": "cloak",
+            "text": "Admire the cloak.",
+            "result": "\"Fine pin. Gaulish work?\" He grins, pleased. \"From the road-house at the ford. Kallisto has a cousin in the hills.\" He talks the way happy men talk. \"You want to know about the granary? Ask why the clerk Hipponax drinks at Kallisto's with men whose cloaks are better than mine.\"",
+            "next": "S4-k"
+          },
+          {
+            "id": "straight",
+            "text": "Ask him straight.",
+            "result": "\"Did any of our wheat not reach the city?\" He swears by every god in the city and two from the hills, and you learn nothing, except that he did not once look you in the eye.",
+            "next": "S4-k"
+          },
+          {
+            "id": "wagon",
+            "text": "Search the wagon.",
+            "result": "Under the driver's bench, folded small, three empty sacks with your estate's mark, and in one of them a wine token from the road-house at the ford. Drakon is behind you before you straighten. \"One sack a trip. For the mules' feed and a cup at Kallisto's. One sack. Never a tenth, I swear it on my freedom.\" You believe him about the tenth. One sack a wagon would not make three wagons a tenth short.",
+            "next": "S4-k"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S3-x",
+        "body": {
+          "eyebrow": "Drakon",
+          "paragraphs": [
+            "Drakon drives your wagons to the city and back. He was a slave until your father freed him. He is good with mules and bad with money, and tonight he has a new cloak with a Gaulish pin."
+          ]
+        },
+        "image": "/stories/story-tenth-03-drakon.webp",
+        "choices": [
+          {
+            "id": "cloak",
+            "text": "Admire the cloak.",
+            "result": "\"Fine pin. Gaulish work?\" He grins, pleased. \"From the road-house at the ford. Kallisto has a cousin in the hills.\" He talks the way happy men talk. \"You want to know about the granary? Ask why the clerk Hipponax drinks at Kallisto's with men whose cloaks are better than mine.\"",
+            "next": "S4-x"
+          },
+          {
+            "id": "straight",
+            "text": "Ask him straight.",
+            "result": "\"Did any of our wheat not reach the city?\" He swears by every god in the city and two from the hills, and you learn nothing, except that he did not once look you in the eye.",
+            "next": "S4-x"
+          },
+          {
+            "id": "wagon",
+            "text": "Search the wagon.",
+            "result": "Under the driver's bench, folded small, three empty sacks with your estate's mark, and in one of them a wine token from the road-house at the ford. Drakon is behind you before you straighten. \"One sack a trip. For the mules' feed and a cup at Kallisto's. One sack. Never a tenth, I swear it on my freedom.\" You believe him about the tenth. One sack a wagon would not make three wagons a tenth short.",
+            "next": "S4-x"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S4-k",
+        "body": {
+          "eyebrow": "Kallisto",
+          "paragraphs": [
+            "You ride to the road-house at the ford by lamplight. Kallisto keeps it: wine, fodder, beds for carters, and ears for everything said over the wine. She is scrubbing the last cups when you come in."
+          ]
+        },
+        "image": "/stories/story-tenth-04-kallisto.webp",
+        "choices": [
+          {
+            "id": "standing",
+            "text": "Ask as a landowner of standing asks.",
+            "requires": {
+              "composure": 50
+            },
+            "result": "She knows your name, and what it will be worth tomorrow. \"The grain clerk, Hipponax. Three nights ago, at that table, with a steward in a good cloak who paid for everything. The clerk was drunk enough to be funny. He said the city's measure had grown a belly, and the steward told him to keep his mouth shut and his belly full.\"",
+            "next": "S5-k",
+            "otherwise": {
+              "result": "She knows your name, and what the agora says it is worth tonight. \"I keep a road-house, not a court,\" she says, and goes on scrubbing. At the door she relents a little. \"Ask the grain clerk where he drinks.\"",
+              "next": "S5-k"
+            }
+          },
+          {
+            "id": "coin",
+            "text": "A coin on the counter.",
+            "requires": {
+              "drachmae": 5
+            },
+            "result": "She makes the coin disappear. \"Hipponax, the grain clerk. Here, three nights ago, with a steward who paid for the wine. The clerk said the city's measure had grown a belly. The steward did not laugh.\"",
+            "next": "S5-k",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": -5
+              }
+            ]
+          },
+          {
+            "id": "cup",
+            "text": "Buy a cup and wait.",
+            "result": "You buy a cup of her thin red and sit where the carters sit. She talks about the weather, the ford, the price of fodder. When you stand to go she says, not looking up, \"Your carter drinks here. He is not the one you want.\" It is all you will get.",
+            "next": "S5-k"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S4-x",
+        "body": {
+          "eyebrow": "Kallisto",
+          "paragraphs": [
+            "You ride to the road-house at the ford by lamplight. Kallisto keeps it: wine, fodder, beds for carters, and ears for everything said over the wine. She is scrubbing the last cups when you come in."
+          ]
+        },
+        "image": "/stories/story-tenth-04-kallisto.webp",
+        "choices": [
+          {
+            "id": "standing",
+            "text": "Ask as a landowner of standing asks.",
+            "requires": {
+              "composure": 50
+            },
+            "result": "She knows your name, and what it will be worth tomorrow. \"The grain clerk, Hipponax. Three nights ago, at that table, with a steward in a good cloak who paid for everything. The clerk was drunk enough to be funny. He said the city's measure had grown a belly, and the steward told him to keep his mouth shut and his belly full.\"",
+            "next": "S5-x",
+            "otherwise": {
+              "result": "She knows your name, and what the agora says it is worth tonight. \"I keep a road-house, not a court,\" she says, and goes on scrubbing. At the door she relents a little. \"Ask the grain clerk where he drinks.\"",
+              "next": "S5-x"
+            }
+          },
+          {
+            "id": "coin",
+            "text": "A coin on the counter.",
+            "requires": {
+              "drachmae": 5
+            },
+            "result": "She makes the coin disappear. \"Hipponax, the grain clerk. Here, three nights ago, with a steward who paid for the wine. The clerk said the city's measure had grown a belly. The steward did not laugh.\"",
+            "next": "S5-x",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": -5
+              }
+            ]
+          },
+          {
+            "id": "cup",
+            "text": "Buy a cup and wait.",
+            "result": "You buy a cup of her thin red and sit where the carters sit. She talks about the weather, the ford, the price of fodder. When you stand to go she says, not looking up, \"Your carter drinks here. He is not the one you want.\" It is all you will get.",
+            "next": "S5-x"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S5-k",
+        "body": {
+          "eyebrow": "Hipponax",
+          "paragraphs": [
+            "You find Hipponax at his door in the potters' quarter an hour before dawn, the granary keys on his belt. He is the wardens' clerk, the man who fills the city's measure. He is not surprised to see you. That is the first thing wrong."
+          ]
+        },
+        "image": "/stories/story-tenth-05-hipponax.webp",
+        "choices": [
+          {
+            "id": "threaten",
+            "text": "Threaten him.",
+            "requires": {
+              "composure": 50
+            },
+            "result": "You keep your voice low and tell him what the Council does to a clerk who cheats the city's bread, and how few days it takes. He goes grey. \"The measure was beaten out. Not by me. I only filled it. A tenth over, every time, and the tenth went out the back door to a man who paid me for it.\" He will not say whose man. Not yet.",
+            "next": "S6-k-p",
+            "otherwise": {
+              "result": "You mean to frighten him and your voice rises instead. He hears it and steadies. \"The city's measure is the city's measure,\" he says, and closes the door.",
+              "next": "S6-k-w"
+            }
+          },
+          {
+            "id": "buy",
+            "text": "Buy him.",
+            "requires": {
+              "drachmae": 10
+            },
+            "result": "The coins go into his sleeve. \"The measure was beaten out at the belly. A tenth over. The tenth went out the back of the granary before the count was sealed.\" He looks past you at the street. \"I will be at the measuring.\"",
+            "next": "S6-k-p",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": -10
+              }
+            ]
+          },
+          {
+            "id": "warn",
+            "text": "Warn him you will be watching.",
+            "result": "He bows and says he looks forward to it. You have met clerks before.",
+            "next": "S6-k-w"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S5-x",
+        "body": {
+          "eyebrow": "Hipponax",
+          "paragraphs": [
+            "You find Hipponax at his door in the potters' quarter an hour before dawn, the granary keys on his belt. He is the wardens' clerk, the man who fills the city's measure. He is not surprised to see you. That is the first thing wrong."
+          ]
+        },
+        "image": "/stories/story-tenth-05-hipponax.webp",
+        "choices": [
+          {
+            "id": "threaten",
+            "text": "Threaten him.",
+            "requires": {
+              "composure": 50
+            },
+            "result": "You keep your voice low and tell him what the Council does to a clerk who cheats the city's bread, and how few days it takes. He goes grey. \"The measure was beaten out. Not by me. I only filled it. A tenth over, every time, and the tenth went out the back door to a man who paid me for it.\" He will not say whose man. Not yet.",
+            "next": "S6-x-p",
+            "otherwise": {
+              "result": "You mean to frighten him and your voice rises instead. He hears it and steadies. \"The city's measure is the city's measure,\" he says, and closes the door.",
+              "next": "S6-x-w"
+            }
+          },
+          {
+            "id": "buy",
+            "text": "Buy him.",
+            "requires": {
+              "drachmae": 10
+            },
+            "result": "The coins go into his sleeve. \"The measure was beaten out at the belly. A tenth over. The tenth went out the back of the granary before the count was sealed.\" He looks past you at the street. \"I will be at the measuring.\"",
+            "next": "S6-x-p",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": -10
+              }
+            ]
+          },
+          {
+            "id": "warn",
+            "text": "Warn him you will be watching.",
+            "result": "He bows and says he looks forward to it. You have met clerks before.",
+            "next": "S6-x-w"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S6-k-p",
+        "body": {
+          "eyebrow": "The measuring",
+          "paragraphs": [
+            "Dawn at the granary. Your next wagons stand in the yard. The chief warden is there with his scribe, and a small crowd that has heard there might be a scandal, and the city's bronze measure on its block, the one that has grown a belly."
+          ]
+        },
+        "image": "/stories/story-tenth-06-measuring.webp",
+        "choices": [
+          {
+            "id": "temple",
+            "text": "Call for the Temple's standard.",
+            "requires": {
+              "composure": 50
+            },
+            "result": "You ask, loudly enough for the crowd, that the standard measure be brought from the Temple of Artemis, as the law allows. The chief warden cannot refuse a name that loud. The standard comes under a cloth, is filled with water and poured into the city's measure, and the city's measure takes it all and a tenth more. The crowd sees it before the warden does.",
+            "next": "S7-k",
+            "otherwise": {
+              "result": "You ask for the Temple's standard, and the chief warden asks who you are to doubt the city's bronze. The crowd laughs with him. Your wagons are measured on the city's measure and come up a tenth short, and the count stands.",
+              "next": "S8-k-unproven"
+            }
+          },
+          {
+            "id": "pour",
+            "text": "Pour Philinos's measure.",
+            "result": "Philinos steps forward with the estate's own bronze measure, stamped by the wardens in your father's time. He fills it with wheat and pours it into the city's measure, three times, in front of everyone, and three times the city's measure is not full. He does not say a word. He does not need to.",
+            "next": "S7-k"
+          },
+          {
+            "id": "clerk",
+            "text": "Let Hipponax speak.",
+            "result": "Hipponax is more afraid of you this morning than of anyone else. When the chief warden hands him the measure he holds it out in both hands, turns it so the crowd can see the new bronze at the belly, and says what it is.",
+            "next": "S7-k"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S6-k-w",
+        "body": {
+          "eyebrow": "The measuring",
+          "paragraphs": [
+            "Dawn at the granary. Your next wagons stand in the yard. The chief warden is there with his scribe, and a small crowd that has heard there might be a scandal, and the city's bronze measure on its block, the one that has grown a belly."
+          ]
+        },
+        "image": "/stories/story-tenth-06-measuring.webp",
+        "choices": [
+          {
+            "id": "temple",
+            "text": "Call for the Temple's standard.",
+            "requires": {
+              "composure": 50
+            },
+            "result": "You ask, loudly enough for the crowd, that the standard measure be brought from the Temple of Artemis, as the law allows. The chief warden cannot refuse a name that loud. The standard comes under a cloth, is filled with water and poured into the city's measure, and the city's measure takes it all and a tenth more. The crowd sees it before the warden does.",
+            "next": "S7-k",
+            "otherwise": {
+              "result": "You ask for the Temple's standard, and the chief warden asks who you are to doubt the city's bronze. The crowd laughs with him. Your wagons are measured on the city's measure and come up a tenth short, and the count stands.",
+              "next": "S8-k-unproven"
+            }
+          },
+          {
+            "id": "pour",
+            "text": "Pour Philinos's measure.",
+            "result": "Philinos steps forward with the estate's own bronze measure, stamped by the wardens in your father's time. He fills it with wheat and pours it into the city's measure, three times, in front of everyone, and three times the city's measure is not full. He does not say a word. He does not need to.",
+            "next": "S7-k"
+          },
+          {
+            "id": "clerk",
+            "text": "Let Hipponax speak.",
+            "result": "Hipponax is not there. A different clerk brings a different measure, true to the Temple's standard, and this morning's wagons weigh full. Yesterday's count stands, and there is no one left to say why.",
+            "next": "S8-k-unproven"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S6-x-p",
+        "body": {
+          "eyebrow": "The measuring",
+          "paragraphs": [
+            "Dawn at the granary. Your next wagons stand in the yard. The chief warden is there with his scribe, and a small crowd that has heard there might be a scandal, and the city's bronze measure on its block, the one that has grown a belly."
+          ]
+        },
+        "image": "/stories/story-tenth-06-measuring.webp",
+        "choices": [
+          {
+            "id": "temple",
+            "text": "Call for the Temple's standard.",
+            "requires": {
+              "composure": 50
+            },
+            "result": "You ask, loudly enough for the crowd, that the standard measure be brought from the Temple of Artemis, as the law allows. The chief warden cannot refuse a name that loud. The standard comes under a cloth, is filled with water and poured into the city's measure, and the city's measure takes it all and a tenth more. The crowd sees it before the warden does.",
+            "next": "S7-x",
+            "otherwise": {
+              "result": "You ask for the Temple's standard, and the chief warden asks who you are to doubt the city's bronze. The crowd laughs with him. Your wagons are measured on the city's measure and come up a tenth short, and the count stands.",
+              "next": "S8-x-unproven"
+            }
+          },
+          {
+            "id": "pour",
+            "text": "Pour Philinos's measure.",
+            "requires": {
+              "composure": 50
+            },
+            "result": "You carry the estate's bronze measure out yourself, because there is no one else, and fill it, and pour it three times, steady, into the city's measure, and three times the city's measure is not full.",
+            "next": "S7-x",
+            "otherwise": {
+              "result": "You carry the estate's measure out yourself, because there is no one else. Your hands are not steady. Wheat goes across the flagstones, the crowd laughs, and the chief warden has your wagons measured the city's way. A tenth short. The count stands.",
+              "next": "S8-x-unproven"
+            }
+          },
+          {
+            "id": "clerk",
+            "text": "Let Hipponax speak.",
+            "result": "Hipponax is more afraid of you this morning than of anyone else. When the chief warden hands him the measure he holds it out in both hands, turns it so the crowd can see the new bronze at the belly, and says what it is.",
+            "next": "S7-x"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S6-x-w",
+        "body": {
+          "eyebrow": "The measuring",
+          "paragraphs": [
+            "Dawn at the granary. Your next wagons stand in the yard. The chief warden is there with his scribe, and a small crowd that has heard there might be a scandal, and the city's bronze measure on its block, the one that has grown a belly."
+          ]
+        },
+        "image": "/stories/story-tenth-06-measuring.webp",
+        "choices": [
+          {
+            "id": "temple",
+            "text": "Call for the Temple's standard.",
+            "requires": {
+              "composure": 50
+            },
+            "result": "You ask, loudly enough for the crowd, that the standard measure be brought from the Temple of Artemis, as the law allows. The chief warden cannot refuse a name that loud. The standard comes under a cloth, is filled with water and poured into the city's measure, and the city's measure takes it all and a tenth more. The crowd sees it before the warden does.",
+            "next": "S7-x",
+            "otherwise": {
+              "result": "You ask for the Temple's standard, and the chief warden asks who you are to doubt the city's bronze. The crowd laughs with him. Your wagons are measured on the city's measure and come up a tenth short, and the count stands.",
+              "next": "S8-x-unproven"
+            }
+          },
+          {
+            "id": "pour",
+            "text": "Pour Philinos's measure.",
+            "requires": {
+              "composure": 50
+            },
+            "result": "You carry the estate's bronze measure out yourself, because there is no one else, and fill it, and pour it three times, steady, into the city's measure, and three times the city's measure is not full.",
+            "next": "S7-x",
+            "otherwise": {
+              "result": "You carry the estate's measure out yourself, because there is no one else. Your hands are not steady. Wheat goes across the flagstones, the crowd laughs, and the chief warden has your wagons measured the city's way. A tenth short. The count stands.",
+              "next": "S8-x-unproven"
+            }
+          },
+          {
+            "id": "clerk",
+            "text": "Let Hipponax speak.",
+            "result": "Hipponax is not there. A different clerk brings a different measure, true to the Temple's standard, and this morning's wagons weigh full. Yesterday's count stands, and there is no one left to say why.",
+            "next": "S8-x-unproven"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S7-k",
+        "body": {
+          "eyebrow": "The clerk",
+          "paragraphs": [
+            "The chief warden has the measure. Hipponax is on his knees in the granary doorway, and the crowd is waiting to see what you will do with him."
+          ]
+        },
+        "image": "/stories/story-tenth-07-clerk.webp",
+        "choices": [
+          {
+            "id": "agora",
+            "text": "Before the whole agora.",
+            "result": "You have the chief warden read the count again, true this time, loud enough for the fish stalls. The city pays your short tenth from the granary chest, and Hipponax is taken before the Council. He names no one, and by noon it does not matter. The agora has a new story, and your name is in it the right way round.",
+            "next": "S8-k-public",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 55
+              },
+              {
+                "type": "change_stat",
+                "stat": "prestige",
+                "amount": 2
+              }
+            ]
+          },
+          {
+            "id": "name",
+            "text": "His silence for a name.",
+            "result": "You ask the warden for a moment with the clerk behind the granary. \"Who paid for the belly?\" He weighs the Council against you and chooses you. \"The steward of House {house}. His master wants your contract. The tenth went to their barns.\" The wardens settle your count quietly, and you walk out with your silver and something worth more.",
+            "next": "S8-k-name",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 45
+              },
+              {
+                "type": "change_stat",
+                "stat": "intelligence",
+                "amount": 2
+              }
+            ]
+          },
+          {
+            "id": "quiet",
+            "text": "The wardens' silver, and quiet.",
+            "result": "The chief warden takes you aside. The city would rather not have its measure talked about. He pays your short tenth and a tenth again for your silence, and Hipponax is sent to count amphorae in Olbia. The agora keeps its old story about you, because no one tells it a better one.",
+            "next": "S8-k-quiet",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 90
+              },
+              {
+                "type": "change_stat",
+                "stat": "prestige",
+                "amount": -1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S7-x",
+        "body": {
+          "eyebrow": "The clerk",
+          "paragraphs": [
+            "The chief warden has the measure. Hipponax is on his knees in the granary doorway, and the crowd is waiting to see what you will do with him."
+          ]
+        },
+        "image": "/stories/story-tenth-07-clerk.webp",
+        "choices": [
+          {
+            "id": "agora",
+            "text": "Before the whole agora.",
+            "result": "You have the chief warden read the count again, true this time, loud enough for the fish stalls. The city pays your short tenth from the granary chest, and Hipponax is taken before the Council. He names no one, and by noon it does not matter. The agora has a new story, and your name is in it the right way round.",
+            "next": "S8-x-public",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 55
+              },
+              {
+                "type": "change_stat",
+                "stat": "prestige",
+                "amount": 2
+              }
+            ]
+          },
+          {
+            "id": "name",
+            "text": "His silence for a name.",
+            "result": "You ask the warden for a moment with the clerk behind the granary. \"Who paid for the belly?\" He weighs the Council against you and chooses you. \"The steward of House {house}. His master wants your contract. The tenth went to their barns.\" The wardens settle your count quietly, and you walk out with your silver and something worth more.",
+            "next": "S8-x-name",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 45
+              },
+              {
+                "type": "change_stat",
+                "stat": "intelligence",
+                "amount": 2
+              }
+            ]
+          },
+          {
+            "id": "quiet",
+            "text": "The wardens' silver, and quiet.",
+            "result": "The chief warden takes you aside. The city would rather not have its measure talked about. He pays your short tenth and a tenth again for your silence, and Hipponax is sent to count amphorae in Olbia. The agora keeps its old story about you, because no one tells it a better one.",
+            "next": "S8-x-quiet",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 90
+              },
+              {
+                "type": "change_stat",
+                "stat": "prestige",
+                "amount": -1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S8-k-public",
+        "body": {
+          "eyebrow": "Drakon",
+          "paragraphs": [
+            "The morning is well up by the time you are home. Whatever else you found, the road-house or the wagon bench says the same thing: Drakon sold one sack a trip for fodder and wine. He is waiting in the yard with his new cloak folded over his arm."
+          ]
+        },
+        "image": "/stories/story-tenth-08-stone.webp",
+        "choices": [
+          {
+            "id": "keep",
+            "text": "Keep him, docked.",
+            "result": "\"One sack a trip, at the granary's price, out of your wages until it is paid.\" He agrees before you finish. He keeps the cloak.",
+            "next": "S9-k-public",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 15
+              }
+            ]
+          },
+          {
+            "id": "send",
+            "text": "Send him away.",
+            "result": "You give him his wages to the day and the mule he likes. He goes down the road toward the ford without looking back. You will need a new carter by the next harvest.",
+            "next": "S9-k-public"
+          },
+          {
+            "id": "oath",
+            "text": "An oath at the boundary stone.",
+            "result": "You walk him to the old stone at the edge of the upper field, where your father swore to Zeus of the Boundaries, and he swears there, his hand on the stone, never to take from this land what he could have asked for. It is an old custom. It will hold him better than wages.",
+            "next": "S9-k-public",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "devotion",
+                "amount": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S8-k-name",
+        "body": {
+          "eyebrow": "Drakon",
+          "paragraphs": [
+            "The morning is well up by the time you are home. Whatever else you found, the road-house or the wagon bench says the same thing: Drakon sold one sack a trip for fodder and wine. He is waiting in the yard with his new cloak folded over his arm."
+          ]
+        },
+        "image": "/stories/story-tenth-08-stone.webp",
+        "choices": [
+          {
+            "id": "keep",
+            "text": "Keep him, docked.",
+            "result": "\"One sack a trip, at the granary's price, out of your wages until it is paid.\" He agrees before you finish. He keeps the cloak.",
+            "next": "S9-k-name",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 15
+              }
+            ]
+          },
+          {
+            "id": "send",
+            "text": "Send him away.",
+            "result": "You give him his wages to the day and the mule he likes. He goes down the road toward the ford without looking back. You will need a new carter by the next harvest.",
+            "next": "S9-k-name"
+          },
+          {
+            "id": "oath",
+            "text": "An oath at the boundary stone.",
+            "result": "You walk him to the old stone at the edge of the upper field, where your father swore to Zeus of the Boundaries, and he swears there, his hand on the stone, never to take from this land what he could have asked for. It is an old custom. It will hold him better than wages.",
+            "next": "S9-k-name",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "devotion",
+                "amount": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S8-k-quiet",
+        "body": {
+          "eyebrow": "Drakon",
+          "paragraphs": [
+            "The morning is well up by the time you are home. Whatever else you found, the road-house or the wagon bench says the same thing: Drakon sold one sack a trip for fodder and wine. He is waiting in the yard with his new cloak folded over his arm."
+          ]
+        },
+        "image": "/stories/story-tenth-08-stone.webp",
+        "choices": [
+          {
+            "id": "keep",
+            "text": "Keep him, docked.",
+            "result": "\"One sack a trip, at the granary's price, out of your wages until it is paid.\" He agrees before you finish. He keeps the cloak.",
+            "next": "S9-k-quiet",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 15
+              }
+            ]
+          },
+          {
+            "id": "send",
+            "text": "Send him away.",
+            "result": "You give him his wages to the day and the mule he likes. He goes down the road toward the ford without looking back. You will need a new carter by the next harvest.",
+            "next": "S9-k-quiet"
+          },
+          {
+            "id": "oath",
+            "text": "An oath at the boundary stone.",
+            "result": "You walk him to the old stone at the edge of the upper field, where your father swore to Zeus of the Boundaries, and he swears there, his hand on the stone, never to take from this land what he could have asked for. It is an old custom. It will hold him better than wages.",
+            "next": "S9-k-quiet",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "devotion",
+                "amount": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S8-k-unproven",
+        "body": {
+          "eyebrow": "Drakon",
+          "paragraphs": [
+            "The morning is well up by the time you are home. Whatever else you found, the road-house or the wagon bench says the same thing: Drakon sold one sack a trip for fodder and wine. He is waiting in the yard with his new cloak folded over his arm."
+          ]
+        },
+        "image": "/stories/story-tenth-08-stone.webp",
+        "choices": [
+          {
+            "id": "keep",
+            "text": "Keep him, docked.",
+            "result": "\"One sack a trip, at the granary's price, out of your wages until it is paid.\" He agrees before you finish. He keeps the cloak.",
+            "next": "S9-k-unproven",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 15
+              }
+            ]
+          },
+          {
+            "id": "send",
+            "text": "Send him away.",
+            "result": "You give him his wages to the day and the mule he likes. He goes down the road toward the ford without looking back. You will need a new carter by the next harvest.",
+            "next": "S9-k-unproven"
+          },
+          {
+            "id": "oath",
+            "text": "An oath at the boundary stone.",
+            "result": "You walk him to the old stone at the edge of the upper field, where your father swore to Zeus of the Boundaries, and he swears there, his hand on the stone, never to take from this land what he could have asked for. It is an old custom. It will hold him better than wages.",
+            "next": "S9-k-unproven",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "devotion",
+                "amount": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S8-x-public",
+        "body": {
+          "eyebrow": "Drakon",
+          "paragraphs": [
+            "The morning is well up by the time you are home. Whatever else you found, the road-house or the wagon bench says the same thing: Drakon sold one sack a trip for fodder and wine. He is waiting in the yard with his new cloak folded over his arm."
+          ]
+        },
+        "image": "/stories/story-tenth-08-stone.webp",
+        "choices": [
+          {
+            "id": "keep",
+            "text": "Keep him, docked.",
+            "result": "\"One sack a trip, at the granary's price, out of your wages until it is paid.\" He agrees before you finish. He keeps the cloak.",
+            "next": "S9-x-public",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 15
+              }
+            ]
+          },
+          {
+            "id": "send",
+            "text": "Send him away.",
+            "result": "You give him his wages to the day and the mule he likes. He goes down the road toward the ford without looking back. You will need a new carter by the next harvest.",
+            "next": "S9-x-public"
+          },
+          {
+            "id": "oath",
+            "text": "An oath at the boundary stone.",
+            "result": "You walk him to the old stone at the edge of the upper field, where your father swore to Zeus of the Boundaries, and he swears there, his hand on the stone, never to take from this land what he could have asked for. It is an old custom. It will hold him better than wages.",
+            "next": "S9-x-public",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "devotion",
+                "amount": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S8-x-name",
+        "body": {
+          "eyebrow": "Drakon",
+          "paragraphs": [
+            "The morning is well up by the time you are home. Whatever else you found, the road-house or the wagon bench says the same thing: Drakon sold one sack a trip for fodder and wine. He is waiting in the yard with his new cloak folded over his arm."
+          ]
+        },
+        "image": "/stories/story-tenth-08-stone.webp",
+        "choices": [
+          {
+            "id": "keep",
+            "text": "Keep him, docked.",
+            "result": "\"One sack a trip, at the granary's price, out of your wages until it is paid.\" He agrees before you finish. He keeps the cloak.",
+            "next": "S9-x-name",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 15
+              }
+            ]
+          },
+          {
+            "id": "send",
+            "text": "Send him away.",
+            "result": "You give him his wages to the day and the mule he likes. He goes down the road toward the ford without looking back. You will need a new carter by the next harvest.",
+            "next": "S9-x-name"
+          },
+          {
+            "id": "oath",
+            "text": "An oath at the boundary stone.",
+            "result": "You walk him to the old stone at the edge of the upper field, where your father swore to Zeus of the Boundaries, and he swears there, his hand on the stone, never to take from this land what he could have asked for. It is an old custom. It will hold him better than wages.",
+            "next": "S9-x-name",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "devotion",
+                "amount": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S8-x-quiet",
+        "body": {
+          "eyebrow": "Drakon",
+          "paragraphs": [
+            "The morning is well up by the time you are home. Whatever else you found, the road-house or the wagon bench says the same thing: Drakon sold one sack a trip for fodder and wine. He is waiting in the yard with his new cloak folded over his arm."
+          ]
+        },
+        "image": "/stories/story-tenth-08-stone.webp",
+        "choices": [
+          {
+            "id": "keep",
+            "text": "Keep him, docked.",
+            "result": "\"One sack a trip, at the granary's price, out of your wages until it is paid.\" He agrees before you finish. He keeps the cloak.",
+            "next": "S9-x-quiet",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 15
+              }
+            ]
+          },
+          {
+            "id": "send",
+            "text": "Send him away.",
+            "result": "You give him his wages to the day and the mule he likes. He goes down the road toward the ford without looking back. You will need a new carter by the next harvest.",
+            "next": "S9-x-quiet"
+          },
+          {
+            "id": "oath",
+            "text": "An oath at the boundary stone.",
+            "result": "You walk him to the old stone at the edge of the upper field, where your father swore to Zeus of the Boundaries, and he swears there, his hand on the stone, never to take from this land what he could have asked for. It is an old custom. It will hold him better than wages.",
+            "next": "S9-x-quiet",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "devotion",
+                "amount": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S8-x-unproven",
+        "body": {
+          "eyebrow": "Drakon",
+          "paragraphs": [
+            "The morning is well up by the time you are home. Whatever else you found, the road-house or the wagon bench says the same thing: Drakon sold one sack a trip for fodder and wine. He is waiting in the yard with his new cloak folded over his arm."
+          ]
+        },
+        "image": "/stories/story-tenth-08-stone.webp",
+        "choices": [
+          {
+            "id": "keep",
+            "text": "Keep him, docked.",
+            "result": "\"One sack a trip, at the granary's price, out of your wages until it is paid.\" He agrees before you finish. He keeps the cloak.",
+            "next": "S9-x-unproven",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 15
+              }
+            ]
+          },
+          {
+            "id": "send",
+            "text": "Send him away.",
+            "result": "You give him his wages to the day and the mule he likes. He goes down the road toward the ford without looking back. You will need a new carter by the next harvest.",
+            "next": "S9-x-unproven"
+          },
+          {
+            "id": "oath",
+            "text": "An oath at the boundary stone.",
+            "result": "You walk him to the old stone at the edge of the upper field, where your father swore to Zeus of the Boundaries, and he swears there, his hand on the stone, never to take from this land what he could have asked for. It is an old custom. It will hold him better than wages.",
+            "next": "S9-x-unproven",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "devotion",
+                "amount": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S9-k-public",
+        "body": {
+          "eyebrow": "Philinos and the contract",
+          "paragraphs": [
+            "Philinos is in the barn with his tablets, counting the empty sacks as if it were any other morning. The granary contract runs out at the next harvest, and he wants to know what to write."
+          ]
+        },
+        "image": "/stories/story-tenth-09-contract.webp",
+        "choices": [
+          {
+            "id": "renew",
+            "text": "Renew the contract.",
+            "result": "\"The city's bread,\" he says, and writes it. \"Next time I watch the measuring.\" The wardens pay the first instalment on the new contract before the ink is dry.",
+            "next": "END-public",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 10
+              },
+              {
+                "type": "change_stat",
+                "stat": "prestige",
+                "amount": 1
+              }
+            ]
+          },
+          {
+            "id": "emporion",
+            "text": "Sell the next harvest to the Emporion ships.",
+            "result": "\"They pay in silver and they bring their own measure,\" he says. \"Good.\" He writes it.",
+            "next": "END-public",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 35
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S9-k-name",
+        "body": {
+          "eyebrow": "Philinos and the contract",
+          "paragraphs": [
+            "Philinos is in the barn with his tablets, counting the empty sacks as if it were any other morning. The granary contract runs out at the next harvest, and he wants to know what to write."
+          ]
+        },
+        "image": "/stories/story-tenth-09-contract.webp",
+        "choices": [
+          {
+            "id": "renew",
+            "text": "Renew the contract.",
+            "result": "\"The city's bread,\" he says, and writes it. \"Next time I watch the measuring.\" The wardens pay the first instalment on the new contract before the ink is dry.",
+            "next": "END-name",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 10
+              },
+              {
+                "type": "change_stat",
+                "stat": "prestige",
+                "amount": 1
+              }
+            ]
+          },
+          {
+            "id": "emporion",
+            "text": "Sell the next harvest to the Emporion ships.",
+            "result": "\"They pay in silver and they bring their own measure,\" he says. \"Good.\" He writes it.",
+            "next": "END-name",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 35
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S9-k-quiet",
+        "body": {
+          "eyebrow": "Philinos and the contract",
+          "paragraphs": [
+            "Philinos is in the barn with his tablets, counting the empty sacks as if it were any other morning. The granary contract runs out at the next harvest, and he wants to know what to write."
+          ]
+        },
+        "image": "/stories/story-tenth-09-contract.webp",
+        "choices": [
+          {
+            "id": "renew",
+            "text": "Renew the contract.",
+            "result": "\"The city's bread,\" he says, and writes it. \"Next time I watch the measuring.\" The wardens pay the first instalment on the new contract before the ink is dry.",
+            "next": "END-quiet",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 10
+              },
+              {
+                "type": "change_stat",
+                "stat": "prestige",
+                "amount": 1
+              }
+            ]
+          },
+          {
+            "id": "emporion",
+            "text": "Sell the next harvest to the Emporion ships.",
+            "result": "\"They pay in silver and they bring their own measure,\" he says. \"Good.\" He writes it.",
+            "next": "END-quiet",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 35
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S9-k-unproven",
+        "body": {
+          "eyebrow": "Philinos and the contract",
+          "paragraphs": [
+            "Philinos is in the barn with his tablets, counting the empty sacks as if it were any other morning. The granary contract runs out at the next harvest, and he wants to know what to write."
+          ]
+        },
+        "image": "/stories/story-tenth-09-contract.webp",
+        "choices": [
+          {
+            "id": "renew",
+            "text": "Renew the contract.",
+            "result": "\"The city's bread,\" he says, and writes it. \"Next time I watch the measuring.\" The wardens pay the first instalment on the new contract before the ink is dry.",
+            "next": "END-unproven",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 10
+              },
+              {
+                "type": "change_stat",
+                "stat": "prestige",
+                "amount": 1
+              }
+            ]
+          },
+          {
+            "id": "emporion",
+            "text": "Sell the next harvest to the Emporion ships.",
+            "result": "\"They pay in silver and they bring their own measure,\" he says. \"Good.\" He writes it.",
+            "next": "END-unproven",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 35
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S9-x-public",
+        "body": {
+          "eyebrow": "Philinos and the contract",
+          "paragraphs": [
+            "Philinos's hut is open. His tablets are on the step, and he is at the gate with a bundle over his shoulder."
+          ]
+        },
+        "image": "/stories/story-tenth-09-contract.webp",
+        "choices": [
+          {
+            "id": "let-go",
+            "text": "Let him go.",
+            "result": "He goes down the road with his bundle and does not look back at the fields he kept for thirty years. The new steward will count everything once.",
+            "next": "END-public"
+          },
+          {
+            "id": "stay",
+            "text": "Ask him to stay.",
+            "result": "You go down to the gate and say, in front of the hands, the word you said wrong last night. He puts the bundle down. He does not forgive you. He stays, and he counts.",
+            "next": "END-public",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "prestige",
+                "amount": -1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S9-x-name",
+        "body": {
+          "eyebrow": "Philinos and the contract",
+          "paragraphs": [
+            "Philinos's hut is open. His tablets are on the step, and he is at the gate with a bundle over his shoulder."
+          ]
+        },
+        "image": "/stories/story-tenth-09-contract.webp",
+        "choices": [
+          {
+            "id": "let-go",
+            "text": "Let him go.",
+            "result": "He goes down the road with his bundle and does not look back at the fields he kept for thirty years. The new steward will count everything once.",
+            "next": "END-name"
+          },
+          {
+            "id": "stay",
+            "text": "Ask him to stay.",
+            "result": "You go down to the gate and say, in front of the hands, the word you said wrong last night. He puts the bundle down. He does not forgive you. He stays, and he counts.",
+            "next": "END-name",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "prestige",
+                "amount": -1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S9-x-quiet",
+        "body": {
+          "eyebrow": "Philinos and the contract",
+          "paragraphs": [
+            "Philinos's hut is open. His tablets are on the step, and he is at the gate with a bundle over his shoulder."
+          ]
+        },
+        "image": "/stories/story-tenth-09-contract.webp",
+        "choices": [
+          {
+            "id": "let-go",
+            "text": "Let him go.",
+            "result": "He goes down the road with his bundle and does not look back at the fields he kept for thirty years. The new steward will count everything once.",
+            "next": "END-quiet"
+          },
+          {
+            "id": "stay",
+            "text": "Ask him to stay.",
+            "result": "You go down to the gate and say, in front of the hands, the word you said wrong last night. He puts the bundle down. He does not forgive you. He stays, and he counts.",
+            "next": "END-quiet",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "prestige",
+                "amount": -1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S9-x-unproven",
+        "body": {
+          "eyebrow": "Philinos and the contract",
+          "paragraphs": [
+            "Philinos's hut is open. His tablets are on the step, and he is at the gate with a bundle over his shoulder."
+          ]
+        },
+        "image": "/stories/story-tenth-09-contract.webp",
+        "choices": [
+          {
+            "id": "let-go",
+            "text": "Let him go.",
+            "result": "He goes down the road with his bundle and does not look back at the fields he kept for thirty years. The new steward will count everything once.",
+            "next": "END-unproven"
+          },
+          {
+            "id": "stay",
+            "text": "Ask him to stay.",
+            "result": "You go down to the gate and say, in front of the hands, the word you said wrong last night. He puts the bundle down. He does not forgive you. He stays, and he counts.",
+            "next": "END-unproven",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "prestige",
+                "amount": -1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "id": "END-public",
+        "body": {
+          "paragraphs": [
+            "The morning the city's measure was found to have a belly, and the whole agora heard it."
+          ]
+        },
+        "chronicle": [
+          "The morning the city's measure was found to have a belly, and the whole agora heard it."
+        ],
+        "rewards": []
+      },
+      {
+        "type": "terminal",
+        "id": "END-name",
+        "body": {
+          "paragraphs": [
+            "The morning the city's measure was found to have a belly, and whose silver put it there.",
+            "The steward of House {house} paid a clerk to cheat the city's grain measure."
+          ]
+        },
+        "chronicle": [
+          "The morning the city's measure was found to have a belly, and whose silver put it there.",
+          "The steward of House {house} paid a clerk to cheat the city's grain measure."
+        ],
+        "rewards": []
+      },
+      {
+        "type": "terminal",
+        "id": "END-quiet",
+        "body": {
+          "paragraphs": [
+            "The morning the city's measure was found to have a belly, and the wardens paid to keep it quiet."
+          ]
+        },
+        "chronicle": [
+          "The morning the city's measure was found to have a belly, and the wardens paid to keep it quiet."
+        ],
+        "rewards": []
+      },
+      {
+        "type": "terminal",
+        "id": "END-unproven",
+        "body": {
+          "paragraphs": [
+            "The morning the granary counted your wheat a tenth short, and the count stood."
+          ]
+        },
+        "chronicle": [
+          "The morning the granary counted your wheat a tenth short, and the count stood."
+        ],
+        "rewards": [
+          {
+            "type": "change_drachmae",
+            "amount": -20
+          },
+          {
+            "type": "change_stat",
+            "stat": "prestige",
+            "amount": -2
+          }
+        ]
+      }
+    ]
+  }
+}
