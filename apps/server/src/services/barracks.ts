@@ -27,6 +27,7 @@ import { lockPlayer } from "./lock.js";
 import { getTopology } from "./mapGraph.js";
 import { heldGarrisonedRegions, settleHoldings, settleTribute, type HoldingsSettle, type TributeSettle } from "./holdings.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
+import { sheetStats } from "./traits.js";
 
 // ---------------------------------------------------------------------------
 // Barracks — the player's army: trained UNITS raised from the levy and hired
@@ -210,13 +211,18 @@ async function logEffect(exec: Exec, characterId: string, kind: string, detail: 
   await exec.insert(effectLog).values({ characterId, kind, detail });
 }
 
-// The militia gate, read from player_characters.militia.
+// The militia gate, on the militia the character sheet shows: base plus trait
+// bonuses, clamped (sheetStats). A trait that lifts the sheet to the gate opens it.
 export type GateView = { stat: "militia"; required: number; current: number; met: boolean };
 
 export async function gateFor(exec: Exec, ctx: ActingContext): Promise<GateView> {
   const required = getUnitsContent().gate.militia;
-  const rows = await exec.select({ militia: playerCharacters.militia }).from(playerCharacters).where(eq(playerCharacters.playerId, ctx.playerId)).limit(1);
-  const current = rows[0]?.militia ?? 0;
+  const rows = await exec
+    .select({ id: playerCharacters.id, prestige: playerCharacters.prestige, devotion: playerCharacters.devotion, militia: playerCharacters.militia, intelligence: playerCharacters.intelligence })
+    .from(playerCharacters)
+    .where(eq(playerCharacters.playerId, ctx.playerId))
+    .limit(1);
+  const current = rows[0] ? (await sheetStats(rows[0], exec)).militia : 0;
   return { stat: "militia", required, current, met: current >= required };
 }
 

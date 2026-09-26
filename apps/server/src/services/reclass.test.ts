@@ -22,7 +22,8 @@ async function loadModules() {
   const merc = await import("./merc.js");
   const age = await import("./age.js");
   const buildings = await import("./buildings.js");
-  return { dbPkg, service, merc, age, buildings };
+  const traits = await import("./traits.js");
+  return { dbPkg, service, merc, age, buildings, traits };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -72,6 +73,7 @@ suite("Hoplite re-class (integration)", () => {
     await m.buildings.loadBuildingsContent();
     await m.buildings.loadPopsContent();
     await m.merc.loadContractsContent();
+    await m.traits.loadTraitDefs();
   });
 
   beforeEach(async () => {

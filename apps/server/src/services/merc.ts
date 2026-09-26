@@ -18,7 +18,7 @@ import {
   type RiskOutcome,
 } from "@massalia/shared";
 import { isHoplite, settleSalary } from "./service.js";
-import { getAllTraitDefs } from "./traits.js";
+import { getAllTraitDefs, sheetStats } from "./traits.js";
 import type { CharacterRow } from "./character.js";
 
 // ---------------------------------------------------------------------------
@@ -198,15 +198,16 @@ async function freshRow(characterId: string): Promise<CharacterRow> {
   return (await db.select().from(playerCharacters).where(eq(playerCharacters.id, characterId)).limit(1))[0]!;
 }
 
+// Contract gates read the sheet's militia and prestige (trait bonuses included).
 async function buildBoard(row: CharacterRow, now: Date, justReturned: JustReturned | null = null): Promise<MercBoard> {
-  const [onStrategos, wounded] = await Promise.all([holdsStrategos(row.id), isWounded(row.id)]);
+  const [onStrategos, wounded, stats] = await Promise.all([holdsStrategos(row.id), isWounded(row.id), sheetStats(row)]);
   return {
     isHoplite: isHoplite(row),
     abroad: row.contractId !== null,
     holdsStrategos: onStrategos,
     wounded,
-    stats: { militia: row.militia, prestige: row.prestige },
-    contracts: getContractsContent().contracts.map((c) => boardEntry(c, row.militia, row.prestige, wounded)),
+    stats: { militia: stats.militia, prestige: stats.prestige },
+    contracts: getContractsContent().contracts.map((c) => boardEntry(c, stats.militia, stats.prestige, wounded)),
     current: currentContractView(row, now),
     justReturned,
   };
@@ -245,8 +246,9 @@ export async function takeContract(row: CharacterRow, contractId: string, now: D
   if (await holdsStrategos(row.id)) return { ok: false, code: 409, error: "A Strategos cannot be sworn abroad." };
   // Step 4 wound bar: the maimed (one-eyed/lamed) may not take HARD contracts.
   if (def.hard && (await isWounded(row.id))) return { ok: false, code: 409, error: "Your wounds bar you from the hard wars." };
-  if (!meetsGate(def.gate, row.militia, row.prestige)) {
-    const short = gateShortfall(def.gate, row.militia, row.prestige);
+  const stats = await sheetStats(row);
+  if (!meetsGate(def.gate, stats.militia, stats.prestige)) {
+    const short = gateShortfall(def.gate, stats.militia, stats.prestige);
     return { ok: false, code: 403, error: `Not yet: need ${def.gate.militia} militia / ${def.gate.prestige} prestige (short ${short.militia} militia, ${short.prestige} prestige).` };
   }
 

@@ -32,7 +32,9 @@ async function loadModules() {
   const actions = await import("./mapActions.js");
   const lock = await import("./lock.js");
   const mapReach = await import("./mapReach.js");
-  return { dbPkg, shared, buildings, barracks, mapGraph, mapPools, holdings, actions, lock, mapReach };
+  const traits = await import("./traits.js");
+  const age = await import("./age.js");
+  return { dbPkg, shared, buildings, barracks, mapGraph, mapPools, holdings, actions, lock, mapReach, traits, age };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -142,6 +144,8 @@ suite("Map actions (integration)", () => {
     await m.buildings.loadPopsContent();
     await m.barracks.loadBarracksContent();
     await m.mapGraph.loadMapGraph();
+    await m.traits.loadTraitDefs();
+    await m.age.loadAgeConfig();
   });
 
   beforeEach(async () => {

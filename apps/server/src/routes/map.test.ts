@@ -22,7 +22,9 @@ async function loadModules() {
   const buildings = await import("../services/buildings.js");
   const barracks = await import("../services/barracks.js");
   const mapGraph = await import("../services/mapGraph.js");
-  return { dbPkg, mapRoutes, errorHandler, buildings, barracks, mapGraph };
+  const traits = await import("../services/traits.js");
+  const age = await import("../services/age.js");
+  return { dbPkg, mapRoutes, errorHandler, buildings, barracks, mapGraph, traits, age };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -51,6 +53,8 @@ suite("/api/map/reach (integration)", () => {
     await m.buildings.loadPopsContent();
     await m.barracks.loadBarracksContent();
     await m.mapGraph.loadMapGraph();
+    await m.traits.loadTraitDefs();
+    await m.age.loadAgeConfig();
     app = Fastify();
     app.setErrorHandler(m.errorHandler);
     await app.register(cookie, { secret: "test-session-secret-at-least-32-chars-long" });

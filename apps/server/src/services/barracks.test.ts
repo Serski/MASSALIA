@@ -27,7 +27,9 @@ async function loadModules() {
   const barracks = await import("./barracks.js");
   const mapGraph = await import("./mapGraph.js");
   const lock = await import("./lock.js");
-  return { dbPkg, shared, buildings, barracks, mapGraph, lock };
+  const traits = await import("./traits.js");
+  const age = await import("./age.js");
+  return { dbPkg, shared, buildings, barracks, mapGraph, lock, traits, age };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -121,6 +123,8 @@ suite("Barracks (integration)", () => {
     await m.buildings.loadPopsContent();
     await m.barracks.loadBarracksContent();
     await m.mapGraph.loadMapGraph();
+    await m.traits.loadTraitDefs();
+    await m.age.loadAgeConfig();
   });
 
   beforeEach(async () => {
@@ -166,6 +170,24 @@ suite("Barracks (integration)", () => {
       expect(await m.barracks.recruitUnits(ok.ctx, "peltast", 1, at(9))).toMatchObject({ ok: true, unitId: "peltast", count: 1 });
       const offers2 = await roll(ok.ctx, 9);
       expect(await m.barracks.hireBand(ok.ctx, offers2[0]!.bandId, at(9))).toMatchObject({ ok: true, bandId: offers2[0]!.bandId });
+    });
+
+    it("reads the sheet's militia: base 18 with Duelist and Sellsword (20) recruits; base 20 with Craven (18) is refused", async () => {
+      const lifted = await makePlayer({ militia: 18 });
+      await db.insert(m.dbPkg.characterTraits).values([
+        { characterId: lifted.characterId, traitId: "duelist" },
+        { characterId: lifted.characterId, traitId: "sellsword" },
+      ]);
+      await giveAll(lifted.ctx, { timber: 50, leather: 50 });
+      expect((await m.barracks.barracksView(lifted.ctx, at(9))).gate).toEqual({ stat: "militia", required: 20, current: 20, met: true });
+      expect(await m.barracks.recruitUnits(lifted.ctx, "peltast", 1, at(9))).toMatchObject({ ok: true, unitId: "peltast", count: 1 });
+
+      const craven = await makePlayer({ militia: 20 });
+      await db.insert(m.dbPkg.characterTraits).values({ characterId: craven.characterId, traitId: "craven" });
+      await giveAll(craven.ctx, { timber: 50, leather: 50 });
+      expect((await m.barracks.barracksView(craven.ctx, at(9))).gate).toMatchObject({ current: 18, met: false });
+      expect(await m.barracks.recruitUnits(craven.ctx, "peltast", 1, at(9))).toMatchObject({ ok: false, code: 403 });
+      expect(await rows(craven.ctx)).toHaveLength(0);
     });
   });
 

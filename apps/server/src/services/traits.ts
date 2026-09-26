@@ -3,7 +3,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, eq } from "drizzle-orm";
 import { characterTraits, createDb } from "@massalia/db";
-import { canAddTrait, parseTraitsFile, type AddTraitRejection, type HeldTrait, type Trait } from "@massalia/shared";
+import { canAddTrait, capStat, effectiveStats, parseTraitsFile, type AddTraitRejection, type CharacterStats, type HeldTrait, type Trait } from "@massalia/shared";
+import { getAgeConfig } from "./age.js";
+import type { DbTx } from "./lock.js";
 
 const db = createDb();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -64,6 +66,25 @@ export async function getHeldTraits(characterId: string): Promise<HeldTrait[]> {
     if (def) out.push({ ...def, gainedAt: row.gainedAt.toISOString() });
   }
   return out;
+}
+
+// The stats the character sheet shows (toCharacterSheet): the base columns plus
+// every held trait's statMod, each clamped to [statFloor, statCap]. A stat gate
+// the player reads against their sheet (the barracks, Hoplite contracts, home
+// ranks) checks these, never the bare columns. `exec` reads the traits inside
+// the caller's transaction when it has one.
+export async function sheetStats(character: CharacterStats & { id: string }, exec: DbTx | typeof db = db): Promise<CharacterStats> {
+  const rows = await exec.select({ traitId: characterTraits.traitId }).from(characterTraits).where(eq(characterTraits.characterId, character.id));
+  const held = rows.map((row) => defs().get(row.traitId)).filter((def): def is Trait => def !== undefined);
+  const base: CharacterStats = { prestige: character.prestige, devotion: character.devotion, militia: character.militia, intelligence: character.intelligence };
+  const raw = effectiveStats(base, held);
+  const cfg = getAgeConfig();
+  return {
+    prestige: capStat(raw.prestige, cfg),
+    devotion: capStat(raw.devotion, cfg),
+    militia: capStat(raw.militia, cfg),
+    intelligence: capStat(raw.intelligence, cfg),
+  };
 }
 
 // Add a trait, enforcing cap + opposite rules. Idempotent on an already-held

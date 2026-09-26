@@ -24,6 +24,7 @@ import {
 import { getAgeConfig } from "./age.js";
 import { lockCharacterOwner } from "./lock.js";
 import { classBuildingIdFor } from "./buildings.js";
+import { sheetStats } from "./traits.js";
 import { broadcastState } from "./worldState.js";
 import type { CharacterRow } from "./character.js";
 
@@ -133,8 +134,10 @@ export async function serviceStatus(row: CharacterRow, now: Date = new Date()): 
   const nextId = nextRankId(rankId);
   const nextDef = nextId ? rankDef(ranks, nextId) : null;
 
-  const qualifies = nextDef ? meetsGate(nextDef.gate, row.militia, row.prestige) : false;
-  const shortfall = nextDef ? gateShortfall(nextDef.gate, row.militia, row.prestige) : null;
+  // Rank gates read the sheet's militia and prestige (trait bonuses included).
+  const stats = await sheetStats(row);
+  const qualifies = nextDef ? meetsGate(nextDef.gate, stats.militia, stats.prestige) : false;
+  const shortfall = nextDef ? gateShortfall(nextDef.gate, stats.militia, stats.prestige) : null;
   // Home salary PAUSES while on a mercenary contract — no home accrual to show.
   const abroad = row.contractId !== null;
   const accrued = currentDef && !abroad ? accrueService(currentDef, anchorMs(row), now.getTime()) : { drachmae: 0, militia: 0 };
@@ -153,7 +156,7 @@ export async function serviceStatus(row: CharacterRow, now: Date = new Date()): 
     shortfall,
     accrued: { drachmae: accrued.drachmae, militia: accrued.militia },
     salaryPerDay: currentDef?.salaryPerDay ?? 0,
-    stats: { militia: row.militia, prestige: row.prestige },
+    stats: { militia: stats.militia, prestige: stats.prestige },
     abroad,
     reclass: { eligible, reason: eligible ? reclassReason(wounded, age) : null, targets: eligible ? RECLASS_CHOICES : [] },
   };
@@ -218,7 +221,8 @@ export async function enlist(row: CharacterRow, now: Date = new Date()): Promise
   const ranks = getRanksContent();
   const recruit = rankDef(ranks, "recruit");
   if (!recruit) return { ok: false, code: 500, error: "Rank ladder misconfigured." };
-  if (!meetsGate(recruit.gate, row.militia, row.prestige)) {
+  const stats = await sheetStats(row);
+  if (!meetsGate(recruit.gate, stats.militia, stats.prestige)) {
     return { ok: false, code: 403, error: "You do not yet meet the muster." };
   }
   await db.update(playerCharacters).set({ armyRank: "recruit", lastSalaryAt: now }).where(eq(playerCharacters.id, row.id));
@@ -235,8 +239,9 @@ export async function promote(row: CharacterRow, now: Date = new Date()): Promis
   const nextId = nextRankId(row.armyRank);
   if (!nextId) return { ok: false, code: 409, error: "You hold the highest rank." };
   const nextDef = rankDef(ranks, nextId)!;
-  if (!meetsGate(nextDef.gate, row.militia, row.prestige)) {
-    const short = gateShortfall(nextDef.gate, row.militia, row.prestige);
+  const stats = await sheetStats(row);
+  if (!meetsGate(nextDef.gate, stats.militia, stats.prestige)) {
+    const short = gateShortfall(nextDef.gate, stats.militia, stats.prestige);
     return { ok: false, code: 403, error: `Not yet: need ${nextDef.gate.militia} militia / ${nextDef.gate.prestige} prestige (short ${short.militia} militia, ${short.prestige} prestige).` };
   }
   await db.transaction(async (tx) => {

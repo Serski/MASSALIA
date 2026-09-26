@@ -214,6 +214,31 @@ suite("Mercenary contracts (integration)", () => {
     if (!s.ok) expect(s.code).toBe(409);
   });
 
+  it("contract gates read the sheet: Levy lifts 18/15 to Syracuse's 20/15; Sellsword's −1 prestige drops 20/15 below it", async () => {
+    const lifted = await makeHoplite({ militia: 18, prestige: 15 });
+    await db.insert(m.dbPkg.characterTraits).values({ characterId: lifted.id, traitId: "gymnasium-1" });
+    const board = await m.merc.board(lifted, at(0));
+    expect(board.stats).toEqual({ militia: 20, prestige: 15 });
+    expect(board.contracts.find((c) => c.id === "syracuse")).toMatchObject({ qualifies: true, shortfall: { militia: 0, prestige: 0 } });
+    expect((await m.merc.takeContract(lifted, "syracuse", at(0))).ok).toBe(true);
+
+    const docked = await makeHoplite({ militia: 20, prestige: 15 });
+    await db.insert(m.dbPkg.characterTraits).values({ characterId: docked.id, traitId: "sellsword" });
+    expect((await m.merc.board(docked, at(0))).contracts.find((c) => c.id === "syracuse")).toMatchObject({ qualifies: false, shortfall: { militia: 0, prestige: 1 } });
+    const refused = await m.merc.takeContract(docked, "syracuse", at(0));
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) expect(refused.code).toBe(403);
+  });
+
+  it("a trait never drags a sheet stat below the floor: 0 militia with Craven reads 0 and clears a 0 gate", async () => {
+    const c = await makeHoplite({ militia: 0, prestige: 0 });
+    await db.insert(m.dbPkg.characterTraits).values({ characterId: c.id, traitId: "craven" });
+    const board = await m.merc.board(c, at(0));
+    expect(board.stats).toEqual({ militia: 0, prestige: 0 });
+    expect(board.contracts.find((x) => x.id === "trade-ship")?.qualifies).toBe(true);
+    expect((await m.merc.takeContract(c, "trade-ship", at(0))).ok).toBe(true);
+  });
+
   it("REGRESSION: a hoplite on contract still satisfies the voting gate (status 'alive')", async () => {
     const c = await makeHoplite({ militia: 20, prestige: 12 });
     await m.merc.takeContract(c, "trade-ship", at(0));

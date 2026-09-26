@@ -21,7 +21,8 @@ async function loadModules() {
   const dbPkg = await import("@massalia/db");
   const service = await import("./service.js");
   const age = await import("./age.js");
-  return { dbPkg, service, age };
+  const traits = await import("./traits.js");
+  return { dbPkg, service, age, traits };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -59,6 +60,7 @@ suite("Hoplite home army (integration)", () => {
     db = m.dbPkg.createDb();
     await m.service.loadRanksContent();
     await m.age.loadAgeConfig();
+    await m.traits.loadTraitDefs();
   });
 
   beforeEach(async () => {
@@ -116,6 +118,21 @@ suite("Hoplite home army (integration)", () => {
     expect(blocked.ok).toBe(false);
     if (!blocked.ok) expect(blocked.code).toBe(403);
     expect((await reload(c.id)).armyRank).toBe("recruit"); // unchanged
+  });
+
+  it("reads the sheet's militia and prestige: Levy (+2 militia) lifts 13/10 to veteran's 15/10 gate", async () => {
+    const c = await makeHoplite({ militia: 13, prestige: 10 });
+    await m.service.enlist(c, new Date(T0));
+    const recruit = await reload(c.id);
+    expect((await m.service.serviceStatus(recruit, new Date(T0))).qualifies).toBe(false);
+
+    await db.insert(m.dbPkg.characterTraits).values({ characterId: c.id, traitId: "gymnasium-1" });
+    const status = await m.service.serviceStatus(recruit, new Date(T0));
+    expect(status.stats).toEqual({ militia: 15, prestige: 10 });
+    expect(status.qualifies).toBe(true);
+    expect(status.shortfall).toEqual({ militia: 0, prestige: 0 });
+    expect((await m.service.promote(recruit, new Date(T0))).ok).toBe(true);
+    expect((await reload(c.id)).armyRank).toBe("veteran");
   });
 
   it("promotes one rank when the gate is met, settling old-rank pay and resetting the anchor", async () => {
