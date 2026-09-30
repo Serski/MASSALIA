@@ -83,6 +83,8 @@ export const STORY_TRIGGERS: Record<string, StoryTrigger> = {
   "samnite-war": { kind: "dated", date: { yearBC: 298, season: 2 } },
   // No opening date: every Landowner at once, and a new one from his first day.
   "tenth-short": { kind: "class", classId: "landowner" },
+  // No opening date: every Hoplite at once, and a new one from his first day.
+  "bronze-left-behind": { kind: "class", classId: "hoplite" },
 };
 
 // Boot-time content load: validate + upsert every authored story. A directory read

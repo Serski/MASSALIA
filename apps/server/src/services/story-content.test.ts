@@ -14,6 +14,7 @@ const storyFile = resolve(root, "content/stories/artemisia-silver.json");
 const rosesFile = resolve(root, "content/stories/house-of-roses.json");
 const riverFile = resolve(root, "content/stories/river-nails.json");
 const tenthFile = resolve(root, "content/stories/tenth-short.json");
+const bronzeFile = resolve(root, "content/stories/bronze-left-behind.json");
 const traitsFile = resolve(root, "content/traits/traits.json");
 const buildingsFile = resolve(root, "content/buildings/buildings.json");
 
@@ -415,6 +416,146 @@ describe("A Tenth Short story content integrity (pure)", () => {
   });
 });
 
+describe("Bronze Left Behind story content integrity (pure)", () => {
+  function readBronze(): { id: string; version: number; tree: StoryTree } {
+    const raw = JSON.parse(readFileSync(bronzeFile, "utf8")) as { id: string; version: number; tree: unknown };
+    return { id: raw.id, version: raw.version, tree: parseStoryTree(raw.tree) };
+  }
+
+  // Every effect the tree can apply, from both branches of every choice and from
+  // every terminal.
+  function effectsInTree(tree: StoryTree) {
+    return tree.nodes.flatMap((node) =>
+      node.type === "scene"
+        ? node.choices.flatMap((c) => [...(c.rewards ?? []), ...(c.otherwise?.rewards ?? [])])
+        : node.rewards,
+    );
+  }
+
+  it("24. the real content parses and validateStoryGraph returns []", () => {
+    expect(validateStoryGraph(readBronze().tree)).toEqual([]);
+  });
+
+  it("25. shape sanity: 14 nodes — 10 scenes and 4 terminals, the six frames used, and each ending's Chronicle line as drafted", () => {
+    const { tree } = readBronze();
+    expect(tree.nodes.length).toBe(14);
+    expect(tree.nodes.filter((n) => n.type === "scene").length).toBe(10);
+    expect(tree.nodes.filter((n) => n.type === "terminal").length).toBe(4);
+
+    expect(tree.nodes.find((n) => n.id === tree.start)?.image).toBe("/stories/story-bronze-00-opening.webp");
+    const frames = ["00-opening", "01-drill", "02-gate", "03-yard", "04-bronze", "05-straton"].map((f) => `/stories/story-bronze-${f}.webp`);
+    expect(new Set(tree.nodes.flatMap((n) => (n.image ? [n.image] : [])))).toEqual(new Set(frames));
+
+    const chronicle: Record<string, string[]> = {
+      "END-sold": ["The day three sellswords ran from a bakery yard and left their bronze behind, and the armourer paid sixty drachmae for it."],
+      "END-arsenal": ["The day three sellswords ran from a bakery yard, and their bronze went to the city arsenal with your name beside it."],
+      "END-euboula": ["The day three sellswords ran from a bakery yard, and an old friend of the family bought new jars with their bronze."],
+      "END-paid": ["The day three sellswords walked out of a bakery yard ten drachmae richer."],
+    };
+    const terminals: string[] = [];
+    for (const node of tree.nodes) {
+      if (node.type !== "terminal") continue;
+      terminals.push(node.id);
+      expect(node.chronicle, `${node.id}: its Chronicle line`).toEqual(chronicle[node.id]);
+    }
+    expect(new Set(terminals)).toEqual(new Set(Object.keys(chronicle)));
+  });
+
+  it("26. rewards and gates exactly as drafted: drachmae, militia and prestige only; composure 50 falls back, a price locks and is paid", () => {
+    const { tree } = readBronze();
+    expect(new Set(effectsInTree(tree).map((e) => e.type))).toEqual(new Set(["change_drachmae", "change_stat"]));
+    expect(new Set(effectsInTree(tree).flatMap((e) => (e.type === "change_stat" ? [e.stat] : [])))).toEqual(new Set(["militia", "prestige"]));
+
+    // Every choice that asks or gives anything, keyed node/choice: its requirement,
+    // its rewards, and (for a check) the rewards of its fallback. A choice missing
+    // from this table must ask and give nothing.
+    const dr = (amount: number) => ({ type: "change_drachmae", amount });
+    const stat = (name: string, amount: number) => ({ type: "change_stat", stat: name, amount });
+    const expected: Record<string, unknown> = {
+      "S1/wall": { rewards: [stat("militia", 1)] },
+      "S1/spar": { requires: { composure: 50 }, rewards: [stat("militia", 2)], otherwise: [] },
+      "S2/friends": { requires: { drachmae: 5 }, rewards: [dr(-5)] },
+      "S3-a/challenge": { requires: { composure: 50 }, rewards: [stat("prestige", 1)], otherwise: [] },
+      "S3-a/shield": { rewards: [stat("militia", 1)] },
+      "S3-a/pay": { requires: { drachmae: 10 }, rewards: [dr(-10)] },
+      "S3-f/lock": { rewards: [stat("militia", 1)] },
+      "S3-f/pay": { requires: { drachmae: 10 }, rewards: [dr(-10)] },
+      "S4/sell": { rewards: [dr(60)] },
+      "S4/arsenal": { rewards: [dr(10), stat("prestige", 2)] },
+      "S4/euboula": { rewards: [dr(30), stat("prestige", 1)] },
+      "S5-paid/tell": { rewards: [stat("prestige", -1)] },
+    };
+    for (const outcome of ["sold", "arsenal", "euboula"]) {
+      expected[`S5-${outcome}/tell`] = { rewards: [stat("prestige", 1)] };
+      expected[`S5-${outcome}/quiet`] = { rewards: [stat("militia", 1)] };
+    }
+
+    const actual: Record<string, unknown> = {};
+    for (const node of tree.nodes) {
+      if (node.type === "terminal") {
+        expect(node.rewards, `${node.id}: an ending grants nothing`).toEqual([]);
+        continue;
+      }
+      for (const choice of node.choices) {
+        if (!choice.requires && !choice.rewards?.length && !choice.otherwise) continue;
+        actual[`${node.id}/${choice.id}`] = {
+          ...(choice.requires ? { requires: choice.requires } : {}),
+          ...(choice.rewards?.length ? { rewards: choice.rewards } : {}),
+          ...(choice.otherwise ? { otherwise: choice.otherwise.rewards ?? [] } : {}),
+        };
+      }
+    }
+    expect(actual).toEqual(expected);
+  });
+
+  it("27. every path ends: 84 of them, 24 each sold, arsenal and Euboula and 12 paid; drachmae −15 to 60, militia 0 to 4, prestige −1 to 4", () => {
+    const { tree } = readBronze();
+    const byId = new Map(tree.nodes.map((n) => [n.id, n]));
+    const paths: { terminal: string; drachmae: number; militia: number; prestige: number }[] = [];
+
+    // Exhaustive walk, as test 9: every choice, and every fallback branch, from the start.
+    const walk = (nodeId: string, drachmae: number, militia: number, prestige: number) => {
+      const node = byId.get(nodeId)!;
+      const credit = (rewards: EventEffect[] | undefined) => {
+        let d = drachmae;
+        let m = militia;
+        let p = prestige;
+        for (const e of rewards ?? []) {
+          if (e.type === "change_drachmae") d += e.amount;
+          if (e.type === "change_stat" && e.stat === "militia") m += e.amount;
+          if (e.type === "change_stat" && e.stat === "prestige") p += e.amount;
+        }
+        return { d, m, p };
+      };
+      if (node.type === "terminal") {
+        const { d, m, p } = credit(node.rewards);
+        paths.push({ terminal: node.id, drachmae: d, militia: m, prestige: p });
+        return;
+      }
+      for (const choice of node.choices) {
+        const branches = choice.otherwise ? [choice, choice.otherwise] : [choice];
+        for (const branch of branches) {
+          const { d, m, p } = credit(branch.rewards);
+          walk(branch.next, d, m, p);
+        }
+      }
+    };
+    walk(tree.start, 0, 0, 0);
+
+    expect(paths.length).toBe(84);
+    const byTerminal: Record<string, number> = {};
+    for (const path of paths) byTerminal[path.terminal] = (byTerminal[path.terminal] ?? 0) + 1;
+    expect(byTerminal).toEqual({ "END-sold": 24, "END-arsenal": 24, "END-euboula": 24, "END-paid": 12 });
+    const range = (key: "drachmae" | "militia" | "prestige") => [
+      paths.reduce((lo, p) => Math.min(lo, p[key]), Infinity),
+      paths.reduce((hi, p) => Math.max(hi, p[key]), -Infinity),
+    ];
+    expect(range("drachmae")).toEqual([-15, 60]);
+    expect(range("militia")).toEqual([0, 4]);
+    expect(range("prestige")).toEqual([-1, 4]);
+  });
+});
+
 const dbUrl = process.env.DATABASE_URL ?? "";
 const suite = describe.runIf(dbUrl.includes("_test"));
 
@@ -503,5 +644,16 @@ suite("loadStories seed (integration)", () => {
     expect((rows[0]!.tree as { nodes: unknown[] }).nodes.length).toBe(35);
 
     expect(m.story.STORY_TRIGGERS["tenth-short"]).toEqual({ kind: "class", classId: "landowner" });
+  });
+
+  it("28. Bronze Left Behind is seeded too, and its trigger offers it to every Hoplite with no opening date", async () => {
+    await m.story.loadStories();
+
+    const rows = await db.select().from(m.dbPkg.stories).where(eq(m.dbPkg.stories.id, "bronze-left-behind"));
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.version).toBe(1);
+    expect((rows[0]!.tree as { nodes: unknown[] }).nodes.length).toBe(14);
+
+    expect(m.story.STORY_TRIGGERS["bronze-left-behind"]).toEqual({ kind: "class", classId: "hoplite" });
   });
 });

@@ -1,0 +1,473 @@
+{
+  "id": "bronze-left-behind",
+  "version": 1,
+  "tree": {
+    "title": "Bronze Left Behind",
+    "start": "OPEN",
+    "nodes": [
+      {
+        "type": "scene",
+        "id": "OPEN",
+        "body": {
+          "paragraphs": [
+            "Dawn in the barracks yard. Forty recruits in their line, with shields too heavy and spears too long, and Straton walking in front of them: one eye, a limp from a war nobody remembers, and a voice that carries to the harbour.",
+            "You have been a soldier of Massalia for a season. You can stand in a line. Straton does not yet think you can do anything else."
+          ]
+        },
+        "image": "/stories/story-bronze-00-opening.webp",
+        "choices": [
+          {
+            "id": "line",
+            "text": "Take your place in the line.",
+            "next": "S1"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S1",
+        "body": {
+          "eyebrow": "The drill",
+          "paragraphs": [
+            "Today it is the shield wall, hour after hour, until the line moves like one man or Straton loses his voice."
+          ]
+        },
+        "image": "/stories/story-bronze-01-drill.webp",
+        "choices": [
+          {
+            "id": "wall",
+            "text": "Hold the wall with the line.",
+            "result": "By the third hour you have stopped feeling your shoulder, which Straton says is the whole point.",
+            "next": "S2",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "militia",
+                "amount": 1
+              }
+            ]
+          },
+          {
+            "id": "spar",
+            "text": "Ask Straton to spar.",
+            "requires": {
+              "composure": 50
+            },
+            "result": "You go down twice and get up twice, and the third time it is his shield that gives a hand's width. \"Again tomorrow,\" he says, which from Straton is a garland.",
+            "next": "S2",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "militia",
+                "amount": 2
+              }
+            ],
+            "otherwise": {
+              "result": "He puts you in the dust three times, and the third time you stay there. \"Better here than on a field.\"",
+              "next": "S2"
+            }
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S2",
+        "body": {
+          "eyebrow": "A boy at the gate",
+          "paragraphs": [
+            "Before noon a boy is at the gate asking for you by name. He is the grandson of old Euboula, who keeps the bakery under the potters' quarter and has been a friend of your family since before you were born.",
+            "Three men have come to her ovens every morning for a week, asking a drachma a day \"to keep the fire safe\". Yesterday she said no, and they broke her jars. They are there now."
+          ]
+        },
+        "image": "/stories/story-bronze-02-gate.webp",
+        "choices": [
+          {
+            "id": "alone",
+            "text": "Go at once, as you are.",
+            "result": "You go at a run in your drill bronze, the boy trotting ahead.",
+            "next": "S3-a"
+          },
+          {
+            "id": "friends",
+            "text": "Bring Dion and Lysis from the line.",
+            "requires": {
+              "drachmae": 5
+            },
+            "result": "They come for the price of a jug of wine tonight, and bring their shields without being asked.",
+            "next": "S3-f",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": -5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S3-a",
+        "body": {
+          "eyebrow": "Euboula's yard",
+          "paragraphs": [
+            "Three men among the broken jars: sellswords paid off from the tyrant of Syracuse's wars, their pay long drunk, with nothing left but their bronze and the habit of being feared.",
+            "The biggest, Bryas, has a Corinthian helmet pushed back on his head and one of Euboula's loaves in his fist. \"A recruit. She sent for a recruit.\""
+          ]
+        },
+        "image": "/stories/story-bronze-03-yard.webp",
+        "choices": [
+          {
+            "id": "challenge",
+            "text": "Challenge Bryas, man to man.",
+            "requires": {
+              "composure": 50
+            },
+            "result": "He learned to fight in taverns, and you learned from Straton. On the third pass he is on the flagstones with your spear-butt at his throat. His friends run and leave their shields and helmets where they dropped them.",
+            "next": "S4",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "prestige",
+                "amount": 1
+              }
+            ],
+            "otherwise": {
+              "result": "He knocks you down twice and you get up both times; the third time he stays down. You win, and the whole street saw how close it was.",
+              "next": "S4"
+            }
+          },
+          {
+            "id": "shield",
+            "text": "Shield up, and drive them out.",
+            "result": "You do what the line does: shield up, head down, one step at a time. Three men with no line are only three men. Their bronze stays in the yard.",
+            "next": "S4",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "militia",
+                "amount": 1
+              }
+            ]
+          },
+          {
+            "id": "pay",
+            "text": "Pay them to go.",
+            "requires": {
+              "drachmae": 10
+            },
+            "result": "Ten drachmae buys their backs. They go out laughing in all their bronze, and Bryas takes the loaf.",
+            "next": "S5-paid",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": -10
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S3-f",
+        "body": {
+          "eyebrow": "Euboula's yard",
+          "paragraphs": [
+            "Three men among the broken jars: sellswords paid off from the tyrant of Syracuse's wars, their pay long drunk, with nothing left but their bronze and the habit of being feared.",
+            "The biggest, Bryas, has a Corinthian helmet pushed back on his head and one of Euboula's loaves in his fist. \"A recruit. She sent for a recruit.\""
+          ]
+        },
+        "image": "/stories/story-bronze-03-yard.webp",
+        "choices": [
+          {
+            "id": "lock",
+            "text": "Lock shields and drive them out.",
+            "result": "Three against three, but only one side is a line. They drop their shields to run faster.",
+            "next": "S4",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "militia",
+                "amount": 1
+              }
+            ]
+          },
+          {
+            "id": "pay",
+            "text": "Pay them to go.",
+            "requires": {
+              "drachmae": 10
+            },
+            "result": "Ten drachmae buys their backs. They go out laughing in all their bronze, and Dion laughs at you all the way back.",
+            "next": "S5-paid",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": -10
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S4",
+        "body": {
+          "eyebrow": "Bronze left behind",
+          "paragraphs": [
+            "Three shields with the paint knocked off, two helmets, a sword in a cracked scabbard and a bundle of spears. Old bronze, but good. Euboula looks at her broken jars, and then at the pile."
+          ]
+        },
+        "image": "/stories/story-bronze-04-bronze.webp",
+        "choices": [
+          {
+            "id": "sell",
+            "text": "Sell it to the armourer by the arsenal.",
+            "result": "He bites the sword and pays sixty drachmae without asking where it came from. Bronze is bronze.",
+            "next": "S5-sold",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 60
+              }
+            ]
+          },
+          {
+            "id": "arsenal",
+            "text": "Hand it in at the city arsenal.",
+            "result": "The clerk writes it down with your name beside it, and the magistrates pay the bounty on bronze taken from men who broke the peace: ten drachmae, and a clerk who tells everyone.",
+            "next": "S5-arsenal",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 10
+              },
+              {
+                "type": "change_stat",
+                "stat": "prestige",
+                "amount": 2
+              }
+            ]
+          },
+          {
+            "id": "euboula",
+            "text": "Let Euboula sell it for her jars.",
+            "result": "\"Half for the jars and half for you, or I bake it into the bread.\"",
+            "next": "S5-euboula",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 30
+              },
+              {
+                "type": "change_stat",
+                "stat": "prestige",
+                "amount": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S5-sold",
+        "body": {
+          "eyebrow": "Straton",
+          "paragraphs": [
+            "By evening everyone in the barracks has heard. Straton finds you at the water trough."
+          ]
+        },
+        "image": "/stories/story-bronze-05-straton.webp",
+        "choices": [
+          {
+            "id": "tell",
+            "text": "Tell him the whole story.",
+            "result": "He tells it again to the whole barracks at supper, better than you did.",
+            "next": "END-sold",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "prestige",
+                "amount": 1
+              }
+            ]
+          },
+          {
+            "id": "quiet",
+            "text": "Say it was nothing.",
+            "result": "\"Good. Then you won't mind doing it again.\" He moves you to the front rank tomorrow.",
+            "next": "END-sold",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "militia",
+                "amount": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S5-arsenal",
+        "body": {
+          "eyebrow": "Straton",
+          "paragraphs": [
+            "By evening everyone in the barracks has heard. Straton finds you at the water trough."
+          ]
+        },
+        "image": "/stories/story-bronze-05-straton.webp",
+        "choices": [
+          {
+            "id": "tell",
+            "text": "Tell him the whole story.",
+            "result": "He tells it again to the whole barracks at supper, better than you did.",
+            "next": "END-arsenal",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "prestige",
+                "amount": 1
+              }
+            ]
+          },
+          {
+            "id": "quiet",
+            "text": "Say it was nothing.",
+            "result": "\"Good. Then you won't mind doing it again.\" He moves you to the front rank tomorrow.",
+            "next": "END-arsenal",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "militia",
+                "amount": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S5-euboula",
+        "body": {
+          "eyebrow": "Straton",
+          "paragraphs": [
+            "By evening everyone in the barracks has heard. Straton finds you at the water trough."
+          ]
+        },
+        "image": "/stories/story-bronze-05-straton.webp",
+        "choices": [
+          {
+            "id": "tell",
+            "text": "Tell him the whole story.",
+            "result": "He tells it again to the whole barracks at supper, better than you did.",
+            "next": "END-euboula",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "prestige",
+                "amount": 1
+              }
+            ]
+          },
+          {
+            "id": "quiet",
+            "text": "Say it was nothing.",
+            "result": "\"Good. Then you won't mind doing it again.\" He moves you to the front rank tomorrow.",
+            "next": "END-euboula",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "militia",
+                "amount": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S5-paid",
+        "body": {
+          "eyebrow": "Straton",
+          "paragraphs": [
+            "By evening everyone in the barracks has heard. Straton finds you at the water trough."
+          ]
+        },
+        "image": "/stories/story-bronze-05-straton.webp",
+        "choices": [
+          {
+            "id": "tell",
+            "text": "Tell him.",
+            "result": "\"Ten drachmae. For three drunks.\" The barracks enjoys it.",
+            "next": "END-paid",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "prestige",
+                "amount": -1
+              }
+            ]
+          },
+          {
+            "id": "quiet",
+            "text": "Say nothing.",
+            "result": "So does he. He does not need to.",
+            "next": "END-paid"
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "id": "END-sold",
+        "body": {
+          "paragraphs": [
+            "The day three sellswords ran from a bakery yard and left their bronze behind, and the armourer paid sixty drachmae for it."
+          ]
+        },
+        "chronicle": [
+          "The day three sellswords ran from a bakery yard and left their bronze behind, and the armourer paid sixty drachmae for it."
+        ],
+        "rewards": []
+      },
+      {
+        "type": "terminal",
+        "id": "END-arsenal",
+        "body": {
+          "paragraphs": [
+            "The day three sellswords ran from a bakery yard, and their bronze went to the city arsenal with your name beside it."
+          ]
+        },
+        "chronicle": [
+          "The day three sellswords ran from a bakery yard, and their bronze went to the city arsenal with your name beside it."
+        ],
+        "rewards": []
+      },
+      {
+        "type": "terminal",
+        "id": "END-euboula",
+        "body": {
+          "paragraphs": [
+            "The day three sellswords ran from a bakery yard, and an old friend of the family bought new jars with their bronze."
+          ]
+        },
+        "chronicle": [
+          "The day three sellswords ran from a bakery yard, and an old friend of the family bought new jars with their bronze."
+        ],
+        "rewards": []
+      },
+      {
+        "type": "terminal",
+        "id": "END-paid",
+        "body": {
+          "paragraphs": [
+            "The day three sellswords walked out of a bakery yard ten drachmae richer."
+          ]
+        },
+        "chronicle": [
+          "The day three sellswords walked out of a bakery yard ten drachmae richer."
+        ],
+        "rewards": []
+      }
+    ]
+  }
+}
