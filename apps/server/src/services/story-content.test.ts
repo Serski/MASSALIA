@@ -15,6 +15,7 @@ const rosesFile = resolve(root, "content/stories/house-of-roses.json");
 const riverFile = resolve(root, "content/stories/river-nails.json");
 const tenthFile = resolve(root, "content/stories/tenth-short.json");
 const bronzeFile = resolve(root, "content/stories/bronze-left-behind.json");
+const guestFile = resolve(root, "content/stories/guest-gift.json");
 const traitsFile = resolve(root, "content/traits/traits.json");
 const buildingsFile = resolve(root, "content/buildings/buildings.json");
 
@@ -556,6 +557,110 @@ describe("Bronze Left Behind story content integrity (pure)", () => {
   });
 });
 
+describe("A Guest-Gift story content integrity (pure)", () => {
+  function readGuest(): { id: string; version: number; tree: StoryTree } {
+    const raw = JSON.parse(readFileSync(guestFile, "utf8")) as { id: string; version: number; tree: unknown };
+    return { id: raw.id, version: raw.version, tree: parseStoryTree(raw.tree) };
+  }
+
+  it("29. the real content parses and validateStoryGraph returns []", () => {
+    expect(validateStoryGraph(readGuest().tree)).toEqual([]);
+  });
+
+  it("30. shape sanity: start S1, 6 nodes — 3 scenes with their frames and 3 terminals writing their paragraphs to the Chronicle; {house} only in S2's paragraph", () => {
+    const { tree } = readGuest();
+    expect(tree.start).toBe("S1");
+    expect(tree.nodes.length).toBe(6);
+    const scenes = tree.nodes.filter((n) => n.type === "scene");
+    expect(scenes.map((n) => [n.id, n.image])).toEqual([
+      ["S1", "/stories/story-guest-00-door.webp"],
+      ["S2", "/stories/story-guest-01-offer.webp"],
+      ["S3", "/stories/story-guest-02-chamber.webp"],
+    ]);
+
+    const terminals: string[] = [];
+    for (const node of tree.nodes) {
+      if (node.type !== "terminal") continue;
+      terminals.push(node.id);
+      expect(node.chronicle, `${node.id}: its Chronicle line is its paragraph`).toEqual(node.body.paragraphs);
+    }
+    expect(new Set(terminals)).toEqual(new Set(["END-named", "END-gift", "END-purse"]));
+    expect(terminals.length).toBe(3);
+
+    // Every authored text with where it sits, to find the one place {house} appears.
+    const texts: [string, string][] = [];
+    for (const node of tree.nodes) {
+      if (node.body.eyebrow) texts.push([`${node.id}/eyebrow`, node.body.eyebrow]);
+      for (const paragraph of node.body.paragraphs) texts.push([`${node.id}/paragraph`, paragraph]);
+      if (node.type === "terminal") {
+        for (const line of node.chronicle ?? []) texts.push([`${node.id}/chronicle`, line]);
+        continue;
+      }
+      for (const choice of node.choices) {
+        texts.push([`${node.id}/${choice.id}/text`, choice.text]);
+        if (choice.result) texts.push([`${node.id}/${choice.id}/result`, choice.result]);
+        if (choice.otherwise?.result) texts.push([`${node.id}/${choice.id}/otherwise`, choice.otherwise.result]);
+      }
+    }
+    expect(texts.filter(([, text]) => text.includes("{house}")).map(([where]) => where)).toEqual(["S2/paragraph"]);
+  });
+
+  it("31. rewards and gates exactly: prestige for naming it, 20 wine for the gift, 100 drachmae and a prestige loss for the purse; nothing else, and no gate", () => {
+    const { tree } = readGuest();
+    // Every choice that asks or gives anything, keyed node/choice. A choice missing
+    // from this table must ask and give nothing.
+    const expected: Record<string, unknown> = {
+      "S3/name": { rewards: [{ type: "change_stat", stat: "prestige", amount: 3 }] },
+      "S3/gift": { rewards: [{ type: "gain_good", good: "wine", amount: 20 }] },
+      "S3/purse": { rewards: [{ type: "change_drachmae", amount: 100 }, { type: "change_stat", stat: "prestige", amount: -3 }] },
+    };
+    const actual: Record<string, unknown> = {};
+    const goods: string[] = [];
+    for (const node of tree.nodes) {
+      if (node.type === "terminal") {
+        expect(node.rewards, `${node.id}: an ending grants nothing`).toEqual([]);
+        continue;
+      }
+      for (const choice of node.choices) {
+        const where = `${node.id}/${choice.id}`;
+        expect(choice.requires, `${where}: no gate`).toBeUndefined();
+        expect(choice.otherwise, `${where}: no fallback`).toBeUndefined();
+        for (const e of choice.rewards ?? []) if (e.type === "gain_good") goods.push(e.good);
+        if (choice.rewards?.length) actual[where] = { rewards: choice.rewards };
+      }
+    }
+    expect(actual).toEqual(expected);
+
+    const labels = (JSON.parse(readFileSync(buildingsFile, "utf8")) as { goodLabels: Record<string, string> }).goodLabels;
+    expect(goods).toEqual(["wine"]);
+    for (const good of goods) expect(labels[good], `good "${good}" is not in buildings.json goodLabels`).toBeTruthy();
+    expect(labels.wine).toBe("Wine");
+  });
+
+  it("32. every path ends: 27 of them, 9 at each ending", () => {
+    const { tree } = readGuest();
+    const byId = new Map(tree.nodes.map((n) => [n.id, n]));
+    const byTerminal: Record<string, number> = {};
+
+    // Exhaustive walk, as test 9: every choice, and every fallback branch, from S1.
+    const walk = (nodeId: string) => {
+      const node = byId.get(nodeId)!;
+      if (node.type === "terminal") {
+        byTerminal[node.id] = (byTerminal[node.id] ?? 0) + 1;
+        return;
+      }
+      for (const choice of node.choices) {
+        const branches = choice.otherwise ? [choice, choice.otherwise] : [choice];
+        for (const branch of branches) walk(branch.next);
+      }
+    };
+    walk(tree.start);
+
+    expect(byTerminal).toEqual({ "END-named": 9, "END-gift": 9, "END-purse": 9 });
+    expect(Object.values(byTerminal).reduce((sum, n) => sum + n, 0)).toBe(27);
+  });
+});
+
 const dbUrl = process.env.DATABASE_URL ?? "";
 const suite = describe.runIf(dbUrl.includes("_test"));
 
@@ -655,5 +760,16 @@ suite("loadStories seed (integration)", () => {
     expect((rows[0]!.tree as { nodes: unknown[] }).nodes.length).toBe(14);
 
     expect(m.story.STORY_TRIGGERS["bronze-left-behind"]).toEqual({ kind: "class", classId: "hoplite" });
+  });
+
+  it("33. A Guest-Gift is seeded too, and its trigger offers it to every seat-holder among the Three Hundred", async () => {
+    await m.story.loadStories();
+
+    const rows = await db.select().from(m.dbPkg.stories).where(eq(m.dbPkg.stories.id, "guest-gift"));
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.version).toBe(1);
+    expect((rows[0]!.tree as { nodes: unknown[] }).nodes.length).toBe(6);
+
+    expect(m.story.STORY_TRIGGERS["guest-gift"]).toEqual({ kind: "seat" });
   });
 });

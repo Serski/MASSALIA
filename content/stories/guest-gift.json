@@ -1,0 +1,167 @@
+{
+  "id": "guest-gift",
+  "version": 1,
+  "tree": {
+    "title": "A Guest-Gift",
+    "start": "S1",
+    "nodes": [
+      {
+        "type": "scene",
+        "id": "S1",
+        "body": {
+          "eyebrow": "A caller at dusk",
+          "paragraphs": [
+            "Tomorrow the Three Hundred decide who gets the three free berths on the inner quay of the Lakydon. Tonight a stranger is at your door: Philokles of Chios, a wine shipper, with a slave behind him carrying a sealed jar. He knows your name and your seat. \"A cup of my wine and a quarter of an hour. I ask nothing else tonight.\""
+          ]
+        },
+        "image": "/stories/story-guest-00-door.webp",
+        "choices": [
+          {
+            "id": "courtyard",
+            "text": "Receive him in the courtyard.",
+            "result": "A lamp is lit and two cups brought. The wine is dark and old and better than anything in your own cellar, which he knows.",
+            "next": "S2"
+          },
+          {
+            "id": "steward",
+            "text": "Receive him with your steward present.",
+            "result": "Your steward stands by the door with his tablet. Philokles smiles at him as if he were furniture, and pours.",
+            "next": "S2"
+          },
+          {
+            "id": "wait",
+            "text": "Keep him waiting an hour.",
+            "result": "He waits the hour in the street without sitting down. When he is brought in he thanks you for your time as though you had given it gladly.",
+            "next": "S2"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S2",
+        "body": {
+          "eyebrow": "The offer",
+          "paragraphs": [
+            "He puts it plainly, as merchants do when they have rehearsed. A berth on the inner quay would save his ships three days of lightering on every voyage. In his cart outside are twenty jars of this vintage, and in his belt is a purse. \"The wine is a guest-gift, and yours whatever you decide. The purse is a hundred drachmae, and it is for a friend. Your colleague of House {house} did not send me away.\""
+          ]
+        },
+        "image": "/stories/story-guest-01-offer.webp",
+        "choices": [
+          {
+            "id": "buys",
+            "text": "Ask what the purse buys.",
+            "result": "\"One voice, raised once, tomorrow. Nothing one of the Three Hundred does not do every day for nothing.\"",
+            "next": "S3"
+          },
+          {
+            "id": "who",
+            "text": "Ask who else has drunk his wine.",
+            "result": "He names no one else. He does not need to: the cart outside holds more jars than one house could drink.",
+            "next": "S3"
+          },
+          {
+            "id": "silence",
+            "text": "Say nothing, and let him fill the silence.",
+            "result": "He fills it. Merchants cannot bear silence. By the time he stops, you know what the berth is worth to him, and it is a great deal more than a hundred drachmae.",
+            "next": "S3"
+          }
+        ]
+      },
+      {
+        "type": "scene",
+        "id": "S3",
+        "body": {
+          "eyebrow": "The Three Hundred",
+          "paragraphs": [
+            "Morning. The Chamber fills. The berths come up third, after the grain accounts. Philokles stands at the back among the petitioners and does not look at you."
+          ]
+        },
+        "image": "/stories/story-guest-02-chamber.webp",
+        "choices": [
+          {
+            "id": "name",
+            "text": "Rise and name the offer before the Chamber.",
+            "result": "You say it plainly: the hour, the purse, the sum. The Chamber is silent, and then it is not. Philokles is gone before you sit down, and his cart goes back to his ship unopened. For a season, yours is the name people use when they mean a seat that cannot be bought.",
+            "next": "END-named",
+            "rewards": [
+              {
+                "type": "change_stat",
+                "stat": "prestige",
+                "amount": 3
+              }
+            ]
+          },
+          {
+            "id": "gift",
+            "text": "Keep the wine, send back the purse, and vote as you judge.",
+            "result": "A guest-gift is a guest-gift; your grandfather took them, and so did his. The purse goes back by your steward before the session. You vote as you would have voted, and twenty jars go down into your cellar.",
+            "next": "END-gift",
+            "rewards": [
+              {
+                "type": "gain_good",
+                "good": "wine",
+                "amount": 20
+              }
+            ]
+          },
+          {
+            "id": "purse",
+            "text": "Take the purse and speak for his berth.",
+            "result": "You speak for him, briefly and well, and he gets his berth. The purse is the right weight. The wine goes back to his ship, because someone who is paid is not also a guest. By evening the fish stalls know what your voice costs.",
+            "next": "END-purse",
+            "rewards": [
+              {
+                "type": "change_drachmae",
+                "amount": 100
+              },
+              {
+                "type": "change_stat",
+                "stat": "prestige",
+                "amount": -3
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "id": "END-named",
+        "body": {
+          "paragraphs": [
+            "The day a Chian's purse was named aloud before the Three Hundred."
+          ]
+        },
+        "chronicle": [
+          "The day a Chian's purse was named aloud before the Three Hundred."
+        ],
+        "rewards": []
+      },
+      {
+        "type": "terminal",
+        "id": "END-gift",
+        "body": {
+          "paragraphs": [
+            "The day twenty jars of Chian wine came as a guest-gift, and the purse went back."
+          ]
+        },
+        "chronicle": [
+          "The day twenty jars of Chian wine came as a guest-gift, and the purse went back."
+        ],
+        "rewards": []
+      },
+      {
+        "type": "terminal",
+        "id": "END-purse",
+        "body": {
+          "paragraphs": [
+            "The day a berth on the inner quay was bought for a hundred drachmae."
+          ]
+        },
+        "chronicle": [
+          "The day a berth on the inner quay was bought for a hundred drachmae."
+        ],
+        "rewards": []
+      }
+    ]
+  }
+}

@@ -89,6 +89,8 @@ export const STORY_TRIGGERS: Record<string, StoryTrigger> = {
   "tenth-short": { kind: "class", classId: "landowner" },
   // No opening date: every Hoplite at once, and a new one from his first day.
   "bronze-left-behind": { kind: "class", classId: "hoplite" },
+  // No opening date: every seat-holder among the Three Hundred, and anyone who takes a seat later.
+  "guest-gift": { kind: "seat" },
 };
 
 // Boot-time content load: validate + upsert every authored story. A directory read
