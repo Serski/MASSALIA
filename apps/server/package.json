@@ -20,7 +20,7 @@
     "bcryptjs": "^3.0.2",
     "bullmq": "^5.56.0",
     "drizzle-orm": "^0.45.2",
-    "fastify": "^5.12.1",
+    "fastify": "^5.12.5",
     "ioredis": "^5.6.1"
   },
   "devDependencies": {
