@@ -203,6 +203,11 @@ suite("story play service (integration)", () => {
   // The same fixture under a dated trigger: every class, Spring 298 BC
   // (seasonIndex 9, the world's tenth day) and no other season.
   const REG_DATED = { "class-story": { kind: "dated" as const, date: { yearBC: 298, season: 2 } } };
+  // The same fixture under a seat trigger: every seat-holder among the Three
+  // Hundred, whatever the class, with no date.
+  const REG_SEAT = { "class-story": { kind: "seat" as const } };
+  const setSeat = async (characterId: string, seated: boolean) =>
+    db.update(m.dbPkg.playerCharacters).set({ isCouncilor: seated }).where(eq(m.dbPkg.playerCharacters.id, characterId));
   // Age the world by rewriting its start, so "today" falls the given number of
   // days into the run.
   const worldStartedDaysAgo = async (days: number, extraMs = 0) =>
@@ -678,6 +683,44 @@ suite("story play service (integration)", () => {
     expect(await progressCount(hetaira.id, "class-story")).toBe(0);
     // ...while the trader's run is still listed.
     expect(await m.story.availableStories(trader.id, REG_DATED, now)).toEqual([{ ...offer, status: "active" }]);
+  });
+
+  it("36. a seat trigger offers the story to every seat-holder among the Three Hundred, whatever the class", async () => {
+    const trader = await createCharacter("Lykon", "trader");
+    const offer = { storyId: "class-story", status: "offered", title: "The House of Fixtures", image: "/stories/story-fixture-open.webp" };
+
+    // No seat: nothing is offered.
+    expect(await m.story.availableStories(trader.id, REG_SEAT, now)).toEqual([]);
+
+    // Seated: the same call offers it.
+    await setSeat(trader.id, true);
+    expect(await m.story.availableStories(trader.id, REG_SEAT, now)).toEqual([offer]);
+
+    // The class does not matter: a seated Hetaira is offered it too.
+    const hetaira = await createCharacter("Aspasia", "hetaira");
+    await setSeat(hetaira.id, true);
+    expect(await m.story.availableStories(hetaira.id, REG_SEAT, now)).toEqual([offer]);
+  });
+
+  it("37. a run started while seated stays listed after the seat is lost; an unstarted offer goes with the seat", async () => {
+    const starter = await createCharacter("Lykon", "trader");
+    const latecomer = await createCharacter("Damon", "trader");
+    const offer = { storyId: "class-story", status: "offered", title: "The House of Fixtures", image: "/stories/story-fixture-open.webp" };
+    await setSeat(starter.id, true);
+    await setSeat(latecomer.id, true);
+
+    // The first starts the story, then loses the seat: the run is still listed.
+    const state = await m.story.startStory(starter.id, "class-story", REG_SEAT);
+    expect(state.node.id).toBe("H1");
+    await setSeat(starter.id, false);
+    expect(await m.story.availableStories(starter.id, REG_SEAT, now)).toEqual([{ ...offer, status: "active" }]);
+
+    // The second loses the seat before starting: the offer goes with it.
+    expect(await m.story.availableStories(latecomer.id, REG_SEAT, now)).toEqual([offer]);
+    await setSeat(latecomer.id, false);
+    expect(await m.story.availableStories(latecomer.id, REG_SEAT, now)).toEqual([]);
+    await expect(m.story.startStory(latecomer.id, "class-story", REG_SEAT)).rejects.toMatchObject({ reason: "not_eligible", statusCode: 403 });
+    expect(await progressCount(latecomer.id, "class-story")).toBe(0);
   });
 
   // --- Requirements: locked choices, prices and fallback branches ------------
