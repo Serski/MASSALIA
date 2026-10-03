@@ -84,23 +84,23 @@ suite("Hoplite home army (integration)", () => {
     await m.service.enlist(c, new Date(T0));
     const enlisted = await reload(c.id);
 
-    // Status after 3 in-game days: recruit pays 8/day → 24dr accrued (militia trickle 0).
+    // Status after 3 in-game days: recruit pays 16/day → 48dr accrued (militia trickle 0).
     const status = await m.service.serviceStatus(enlisted, new Date(T0 + 3 * DAY));
     expect(status.rankId).toBe("recruit");
-    expect(status.accrued.drachmae).toBe(24);
+    expect(status.accrued.drachmae).toBe(48);
     expect(status.accrued.militia).toBe(0);
 
     const collected = await m.service.collectSalary(enlisted, new Date(T0 + 3 * DAY));
     expect(collected.ok).toBe(true);
-    if (collected.ok) expect(collected.collected).toEqual({ drachmae: 24, militia: 0 });
+    if (collected.ok) expect(collected.collected).toEqual({ drachmae: 48, militia: 0 });
     const row = await reload(c.id);
-    expect(row.drachmae).toBe(24); // banked, integer, never negative
+    expect(row.drachmae).toBe(48); // banked, integer, never negative
     expect(row.lastSalaryAt?.getTime()).toBe(T0 + 3 * DAY); // anchor advanced by consumed time
 
     // Collecting again immediately yields nothing (anchor is current).
     const again = await m.service.collectSalary(row, new Date(T0 + 3 * DAY));
     if (again.ok) expect(again.collected).toEqual({ drachmae: 0, militia: 0 });
-    expect((await reload(c.id)).drachmae).toBe(24);
+    expect((await reload(c.id)).drachmae).toBe(48);
   });
 
   it("blocks promotion when the militia/prestige gate is not met, and cannot skip ranks", async () => {
@@ -140,19 +140,19 @@ suite("Hoplite home army (integration)", () => {
     await m.service.enlist(c, new Date(T0));
     const recruit = await reload(c.id);
 
-    // One day as recruit (8dr), then promote to veteran (gate 15/10 met).
+    // One day as recruit (16dr), then promote to veteran (gate 15/10 met).
     const res = await m.service.promote(recruit, new Date(T0 + 1 * DAY));
     expect(res.ok).toBe(true);
     const row = await reload(c.id);
     expect(row.armyRank).toBe("veteran");
-    expect(row.drachmae).toBe(8); // recruit's day of pay banked on promotion
+    expect(row.drachmae).toBe(16); // recruit's day of pay banked on promotion
     expect(row.lastSalaryAt?.getTime()).toBe(T0 + 1 * DAY); // anchor reset to promotion time
 
-    // Veteran pays 16/day + 1 militia/day. After 2 days: 32dr, +2 militia.
+    // Veteran pays 32/day + 1 militia/day. After 2 days: 64dr, +2 militia.
     const collected = await m.service.collectSalary(row, new Date(T0 + 3 * DAY));
-    if (collected.ok) expect(collected.collected).toEqual({ drachmae: 32, militia: 2 });
+    if (collected.ok) expect(collected.collected).toEqual({ drachmae: 64, militia: 2 });
     const after = await reload(c.id);
-    expect(after.drachmae).toBe(40); // 8 + 32
+    expect(after.drachmae).toBe(80); // 16 + 64
     expect(after.militia).toBe(22); // 20 + 2
   });
 

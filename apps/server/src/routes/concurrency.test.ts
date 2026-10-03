@@ -214,8 +214,8 @@ suite("per-player serialization (integration)", () => {
   });
 
   it("salary settle racing a vendor buy lands on the exact expected wallet", async () => {
-    // A recruit (8 dr/day, no militia trickle) enlisted 3 in-game days + 1h ago:
-    // accrueService consumes exactly 3 whole days → 24 dr, whatever the ms jitter.
+    // A recruit (16 dr/day, no militia trickle) enlisted 3 in-game days + 1h ago:
+    // accrueService consumes exactly 3 whole days → 48 dr, whatever the ms jitter.
     const { token, playerId, characterId } = await freshPlayer(1_000_000, "hoplite");
     await db
       .update(m.dbPkg.playerCharacters)
@@ -231,10 +231,10 @@ suite("per-player serialization (integration)", () => {
 
     const [collect, buy] = await Promise.all([post("/api/service/collect", token), post("/api/buildings/vendor", token, { action: "buy", type: "chicken", qty: 1 })]);
     expect(collect.statusCode).toBe(200);
-    expect(collect.json().collected).toEqual({ drachmae: 24, militia: 0 });
+    expect(collect.json().collected).toEqual({ drachmae: 48, militia: 0 });
     expect(buy.statusCode).toBe(200);
-    // price + 24 − price: an absolute salary write would have resurrected the spent price.
-    expect(await wallet(playerId)).toBe(24);
+    // price + 48 − price: an absolute salary write would have resurrected the spent price.
+    expect(await wallet(playerId)).toBe(48);
     expect(await goodBalance(playerId, "chicken")).toBe(2);
   });
 

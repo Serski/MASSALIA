@@ -110,7 +110,7 @@ suite("Mercenary contracts (integration)", () => {
   const traitDefsAll = () => m.traits.getAllTraitDefs();
 
   it("takes a contract: home salary pauses, foreign income accrues per season", async () => {
-    // A veteran (home salary 16/day) takes the trade-ship (foreign 12/season, term 1).
+    // A veteran (home salary 32/day) takes the trade-ship (foreign 24/season, term 1).
     const c = await makeHoplite({ rank: "veteran", militia: 20, prestige: 12, drachmae: 0 });
     const taken = await m.merc.takeContract(c, "trade-ship", at(0));
     expect(taken.ok).toBe(true);
@@ -124,9 +124,9 @@ suite("Mercenary contracts (integration)", () => {
     expect(status.abroad).toBe(true);
     expect(status.accrued.drachmae).toBe(0);
 
-    // Foreign income accrues instead: 12/season → 6 at half a season.
+    // Foreign income accrues instead: 24/season → 12 at half a season.
     const board = await m.merc.board(row, at(0.5));
-    expect(board.current?.accrued).toBe(6);
+    expect(board.current?.accrued).toBe(12);
   });
 
   it("collects foreign income mid-term, then the contract auto-completes at term (lazy)", async () => {
@@ -135,8 +135,8 @@ suite("Mercenary contracts (integration)", () => {
 
     const collected = await m.merc.collectForeign(await reload(c.id), at(0.5));
     expect(collected.ok).toBe(true);
-    if (collected.ok) expect(collected.collected).toBe(6);
-    expect((await reload(c.id)).drachmae).toBe(6);
+    if (collected.ok) expect(collected.collected).toBe(12);
+    expect((await reload(c.id)).drachmae).toBe(12);
     expect((await reload(c.id)).contractId).toBe("trade-ship"); // still serving
 
     // At/after the 1-season term, a board read lazily completes + returns home.
@@ -145,7 +145,7 @@ suite("Mercenary contracts (integration)", () => {
     expect(board.current).toBeNull();
     const home = await reload(c.id);
     expect(home.contractId).toBeNull();
-    expect(home.drachmae).toBe(12); // full term 12/season × 1 (6 collected + 6 final)
+    expect(home.drachmae).toBe(24); // full term 24/season × 1 (12 collected + 12 final)
     expect(home.lastSalaryAt?.getTime()).toBe(at(1).getTime()); // home salary anchor reset to return
   });
 
@@ -158,7 +158,7 @@ suite("Mercenary contracts (integration)", () => {
     expect(swept.completed).toBe(1);
     const home = await reload(c.id);
     expect(home.contractId).toBeNull();
-    expect(home.drachmae).toBe(12);
+    expect(home.drachmae).toBe(24);
     // The sweep also awarded the completion trait for an offline player.
     expect(await heldTraitIds(c.id)).toContain("sellsword");
   });
@@ -183,7 +183,7 @@ suite("Mercenary contracts (integration)", () => {
     expect(early.ok).toBe(true);
     const home = await reload(ts.id);
     expect(home.contractId).toBeNull();
-    expect(home.drachmae).toBe(6); // income earned so far (half a season)
+    expect(home.drachmae).toBe(12); // income earned so far (half a season)
   });
 
   it("rejects ineligible takers: non-hoplite, gate-short, already-abroad, and a Strategos", async () => {
@@ -336,7 +336,7 @@ suite("Mercenary contracts (integration)", () => {
     const row = await reload(c.id);
     expect(row.status).toBe("alive");
     expect(row.contractId).toBeNull();
-    expect(row.drachmae).toBe(12); // full term income home
+    expect(row.drachmae).toBe(24); // full term income home
     expect(await heldTraitIds(c.id)).toEqual(["sellsword"]); // Step-3 completion trait
   });
 
@@ -352,7 +352,7 @@ suite("Mercenary contracts (integration)", () => {
     expect(row.status).toBe("alive");
     expect(await heldTraitIds(c.id)).toContain("war-scarred");
     expect(row.composure).toBe(before.composure - riskCfg().scareComposureHit);
-    expect(row.drachmae).toBe(16); // 1 season gaul income
+    expect(row.drachmae).toBe(32); // 1 season gaul income
   });
 
   it("CAREER INJURY (forced): one-eyed/lamed awarded + hard-contract bar, income home", async () => {
@@ -364,7 +364,7 @@ suite("Mercenary contracts (integration)", () => {
     const row = await reload(c.id);
     expect(row.status).toBe("alive");
     expect(row.contractId).toBeNull();
-    expect(row.drachmae).toBe(44); // 2 seasons syracuse income (22×2) came home
+    expect(row.drachmae).toBe(88); // 2 seasons syracuse income (44×2) came home
     const held = await heldTraitIds(c.id);
     expect(held.some((t) => t === "one-eyed" || t === "lamed")).toBe(true);
 
@@ -386,7 +386,7 @@ suite("Mercenary contracts (integration)", () => {
     const row = await reload(c.id);
     expect(row.status).toBe("deceased");
     expect(row.contractId).toBeNull();
-    expect(row.drachmae).toBe(44); // income came home to the estate (inherited)
+    expect(row.drachmae).toBe(88); // income came home to the estate (inherited)
     expect(row.pendingDeathNote).toMatch(/Brasidas fell in Syracusan service, season \d+/);
     expect(await dynastyPrestige(c.id)).toBe(prestigeBefore + riskCfg().gloriousDeathPrestige);
 
