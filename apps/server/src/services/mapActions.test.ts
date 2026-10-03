@@ -193,8 +193,8 @@ suite("Map actions (integration)", () => {
     expect(r.report.defender!.start).toBe(20);
     const killed = r.report.defender!.losses;
     expect(killed).toBeGreaterThan(0);
-    expect(r.report.plunder).toEqual({ drachmae: killed * 20, grain: killed * 5 });
-    expect(await wallet(ctx)).toBe(100 + killed * 20);
+    expect(r.report.plunder).toEqual({ drachmae: killed * 40, grain: killed * 5 });
+    expect(await wallet(ctx)).toBe(100 + killed * 40);
     expect(await stock(ctx, "grain")).toBe(5000 - 3 * 40 + killed * 5); // 3 whole days after ready_at (at 6) × 40 peltasts × 1 grain, then the plunder
     expect(await warband("R046")).toBe(20 - killed);
     const row = (await rows(ctx)).find((x) => x.id === peltasts.id)!;
@@ -450,8 +450,8 @@ suite("Map actions (integration)", () => {
     expect(r.report).toMatchObject({ type: "raid", townId: "reii", winner: "attacker", defender: { label: "Town garrison", start: 10 }, conquest: null });
     const killed = r.report.defender!.losses;
     expect(killed).toBeGreaterThan(0);
-    expect(r.report.plunder).toEqual({ drachmae: killed * 20 * 2, grain: killed * 5 * 2 });
-    expect(await wallet(ctx)).toBe(100 + killed * 40);
+    expect(r.report.plunder).toEqual({ drachmae: killed * 40 * 2, grain: killed * 5 * 2 });
+    expect(await wallet(ctx)).toBe(100 + killed * 80);
     expect(await garrison("reii")).toBe(10 - killed);
     expect(r.report.line).toMatch(/^Raided Reii with 40 peltasts: \d+ soldiers? slain/);
     await recordChronicle(characterId);
@@ -531,7 +531,7 @@ suite("Map actions (integration)", () => {
     const view = await reach(ctx, at(10));
     // The garrison is what survived (the seed carries the player id, so the losses vary by run).
     const survivors = r.report.attacker.rows[0]!.end;
-    expect(view.bases).toContainEqual({ id: "reii", regionId: "R047", townId: "reii", kind: "conquest", name: "Reii", holding: { garrison: survivors, minGarrison: 15, perDay: { drachmae: 60, grain: 0, timber: 0 }, levyPerYear: 0 } });
+    expect(view.bases).toContainEqual({ id: "reii", regionId: "R047", townId: "reii", kind: "conquest", name: "Reii", holding: { garrison: survivors, minGarrison: 15, perDay: { drachmae: 120, grain: 0, timber: 0 }, levyPerYear: 0 } });
     // The region of a held town keeps its entry (for other towns there), at 0 steps from the town; the next region over is a step.
     expect(view.reach.R047!.byBase.reii).toEqual({ landSteps: 0, seaSteps: null });
     expect(view.reach.R049!.byBase.reii).toEqual({ landSteps: 1, seaSteps: null }); // R047 is inland
@@ -561,35 +561,35 @@ suite("Map actions (integration)", () => {
   it("town tribute: whole days only, only while the garrison meets the population minimum, and never after reversion", async () => {
     const { ctx, characterId } = await makePlayer({ drachmae: 1000 });
     await giveAll(ctx, { wine: 1000, chicken: 1000, herbal: 1000 });
-    // Vienna (R032, population 3,000): 120 dr a day, 30 men needed.
+    // Vienna (R032, population 3,000): 240 dr a day, 30 men needed.
     await m.holdings.insertTownConquest(db, ctx, "R032", "vienna", "cavares", at(9));
     const men = await insertRow(ctx, { unitId: "hoplite", count: 30, basedAt: "vienna", season: 8 });
     const before = await wallet(ctx);
     // Half a day: nothing yet.
     expect((await settle(ctx, at(9.5))).tribute.paid).toEqual([]);
     expect(await wallet(ctx)).toBe(before);
-    // Two whole days: 240 dr, the marker at day 11 exactly.
+    // Two whole days: 480 dr, the marker at day 11 exactly.
     const two = await settle(ctx, at(11.25));
-    expect(two.tribute.paid).toEqual([{ regionId: "R032", townId: "vienna", name: "Vienna", days: 2, drachmae: 240, grain: 0, timber: 0 }]);
-    expect(await wallet(ctx)).toBe(before + 240);
+    expect(two.tribute.paid).toEqual([{ regionId: "R032", townId: "vienna", name: "Vienna", days: 2, drachmae: 480, grain: 0, timber: 0 }]);
+    expect(await wallet(ctx)).toBe(before + 480);
     expect((await holdingsOf(ctx))[0]!.lastTributeAt).toEqual(at(11));
     expect(await logs(characterId, "holding_tribute")).toHaveLength(1);
     // Under the minimum: the day passes unpaid, the marker still advances.
     await db.update(m.dbPkg.playerUnits).set({ count: 29 }).where(eq(m.dbPkg.playerUnits.id, men.id));
     expect((await settle(ctx, at(12.5))).tribute.paid).toEqual([]);
     expect((await holdingsOf(ctx))[0]!.lastTributeAt).toEqual(at(12));
-    expect(await wallet(ctx)).toBe(before + 240);
-    // Back at 30: the next whole day pays 120.
+    expect(await wallet(ctx)).toBe(before + 480);
+    // Back at 30: the next whole day pays 240.
     await db.update(m.dbPkg.playerUnits).set({ count: 30 }).where(eq(m.dbPkg.playerUnits.id, men.id));
-    expect((await settle(ctx, at(13.5))).tribute.paid).toMatchObject([{ name: "Vienna", days: 1, drachmae: 120 }]);
-    expect(await wallet(ctx)).toBe(before + 360);
+    expect((await settle(ctx, at(13.5))).tribute.paid).toMatchObject([{ name: "Vienna", days: 1, drachmae: 240 }]);
+    expect(await wallet(ctx)).toBe(before + 720);
     // The garrison marches away: a day later the town reverts and pays nothing more.
     await db.update(m.dbPkg.playerUnits).set({ basedAt: "R060" }).where(eq(m.dbPkg.playerUnits.id, men.id));
     const gone = await settle(ctx, at(15));
     expect(gone.holdings.reverted).toEqual([{ regionId: "R032", townId: "vienna", kind: "conquest", previousOwner: "cavares" }]);
     expect(gone.tribute.paid).toEqual([]);
     expect(await garrison("vienna")).toBe(120); // the content garrison is back
-    expect(await wallet(ctx)).toBe(before + 360);
+    expect(await wallet(ctx)).toBe(before + 720);
     await recordChronicle(characterId);
   });
 
