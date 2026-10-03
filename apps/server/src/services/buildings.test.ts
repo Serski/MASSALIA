@@ -193,7 +193,7 @@ suite("Ledger / building engine (integration)", () => {
     expect(await wallet()).toBe(240); // 300 − 60
 
     // First collect creates the wallet marker. Drain the purse, then collect after a
-    // long window. Under economy v2.1 the landowner's T2 income (10.8 dr/day) far
+    // long window. Under economy v2.1 the landowner's T2 income (21.6 dr/day) far
     // exceeds the gentle 1 dr/day upkeep, so the net is positive: upkeep is still
     // deducted, `owed` stays 0 (nothing forgiven), and the wallet never goes negative.
     // (A non-zero `owed` is unreachable via any class building now — every line earns
@@ -256,9 +256,9 @@ suite("Ledger / building engine (integration)", () => {
     expect(view.pendingIncomeTotal).toBeGreaterThan(5.5); // offering drachmae pending
 
     const collected = await m.buildings.collect(c, collectAt);
-    // Offering income banks into the integer wallet (income 7.2/day, T1 upkeep 0).
-    expect(collected.collected).toBeGreaterThanOrEqual(5);
-    expect(collected.collected).toBeLessThanOrEqual(8);
+    // Offering income banks into the integer wallet (income 14.4/day, T1 upkeep 0).
+    expect(collected.collected).toBeGreaterThanOrEqual(12);
+    expect(collected.collected).toBeLessThanOrEqual(16);
     // The sanctuary's citizen costs wages (3/day) but no longer eats — the free classes
     // draw no food, so nothing is bought and only wages debit the wallet.
     expect(collected.staffUpkeep).toBeGreaterThan(0);
@@ -319,7 +319,7 @@ suite("Ledger / building engine (integration)", () => {
       const collectAt = new Date(T0 + 2 * DAY);
       const view = await m.buildings.mine(classId, c, collectAt);
       expect(view.buildings[0]!.status).toBe("active");
-      expect(view.pendingIncomeTotal).toBeGreaterThan(5.5); // income 6–7/day pending
+      expect(view.pendingIncomeTotal).toBeGreaterThan(5.5); // income 19.2 to 21.6 a day pending
       expect(Object.keys(view.pendingGoods)).toHaveLength(0); // no tradeable good
 
       const collected = await m.buildings.collect(c, collectAt);
@@ -354,10 +354,10 @@ suite("Ledger / building engine (integration)", () => {
     const view = await m.buildings.mine("shipbuilder", c, collectAt);
     expect(view.buildings[0]!.status).toBe("active");
     expect(view.pendingGoods["naval-supplies"]).toBeGreaterThan(0.8); // ~1/day, guarded full output
-    expect(view.pendingIncomeTotal).toBeGreaterThan(8); // income 8.4/day → ~8.4 after one guarded day
+    expect(view.pendingIncomeTotal).toBeGreaterThan(16); // income 16.8/day → ~16.8 after one guarded day
 
     const collected = await m.buildings.collect(c, collectAt);
-    expect(collected.collected).toBe(8); // round(8.4 income − 0 upkeep)
+    expect(collected.collected).toBe(17); // round(16.8 income − 0 upkeep)
     expect(collected.banked["naval-supplies"]).toBeCloseTo(1, 0);
     expect(await goodBalance("naval-supplies")).toBeCloseTo(1, 0);
 
@@ -409,7 +409,7 @@ suite("Ledger / building engine (integration)", () => {
 
   it("(a) the rebalanced slipway (1 freeman) covers its own keep on cash income alone — staff + food < income", async () => {
     // Phase 4 balance fix: the slipway now needs 1 freeman (2 dr/day wages, no food),
-    // so its 8.4 dr/day cash income covers its keep — naval-supplies are a bonus on top,
+    // so its 16.8 dr/day cash income covers its keep — naval-supplies are a bonus on top,
     // matching every other class (was a 2-freeman cash deficit before).
     playerId = await freshPlayer(100, "shipbuilder");
     const c = await ctx();
@@ -535,7 +535,7 @@ suite("Ledger / building engine (integration)", () => {
   });
 
   // --- Checkpoint-on-staffing-change: hire/dismiss settle before mutating ----
-  // The emporion (trader) is income-only at T1 (9.6 dr/day, no goods), so collect.income
+  // The emporion (trader) is income-only at T1 (19.2 dr/day, no goods), so collect.income
   // isolates the accrual cleanly. Grain is seeded so the freeman's food is DRAWN (free),
   // keeping the net-wallet assertions free of food-buy noise.
 

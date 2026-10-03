@@ -152,8 +152,9 @@ describe("BALANCE GUARDRAIL — the day-1 landowner path", () => {
 //             (vendor.grain.buy for a building that yields grain, since it feeds its
 //             men from its own stock; vendor.grain.sell for every other)
 //   payback = all-in ÷ net, in days
-// Class: slipway 143 ÷ 13.4 = 10.7, salon 115 ÷ 8.8 = 13.1, estate 141 ÷ 10 = 14.1,
-// sanctuary 187 ÷ 12.2 = 15.3, emporion 133 ÷ 7.6 = 17.5, school 159 ÷ 7.8 = 20.4.
+// Class (income doubled, ruling 3 Oct 2026): salon 115 ÷ 19.6 = 5.9, slipway 143 ÷ 21.8 = 6.6,
+// emporion 133 ÷ 17.2 = 7.7, school 159 ÷ 18.6 = 8.5, estate 141 ÷ 16 = 8.8,
+// sanctuary 187 ÷ 19.4 = 9.6.
 // Commons: timber lot 121 ÷ 5 = 24.2, poultry yard 80 ÷ 3 = 26.7, vineyard 137 ÷ 5 = 27.4,
 // horse farm 228 ÷ 4.5 = 50.7, bull farm 195 ÷ 3 = 65.0.
 describe("BALANCE GUARDRAIL — the class line repays first; no common is a trap", () => {
@@ -204,11 +205,11 @@ describe("the priest's Sanctuary (a year-round, dual-yield class line on the sam
 
   it("yields BOTH offering drachmae (the income field → wallet) AND herbal (a good)", () => {
     // Drachmae rides the same income path as building_income (no second mechanism).
-    expect(sanctuary.income).toBe(7.2); // +20% pass
+    expect(sanctuary.income).toBe(14.4); // doubled 3 Oct 2026
     const herbal = sanctuary.yields.find((y) => y.good === "herbal")!;
     expect(herbal.base).toBe(4);
     // Both scale on the shared yield curve, tier over tier.
-    expect(buildingYield(sanctuary.income!, 2)).toBeCloseTo(12.96, 6);
+    expect(buildingYield(sanctuary.income!, 2)).toBeCloseTo(25.92, 6);
     expect(goodPerDay(herbal, 2)).toBeCloseTo(7.2, 6);
   });
 
@@ -249,10 +250,10 @@ describe("the four remaining class lines (content-only, same generic frame)", ()
     }
   });
 
-  it("trader: drachmae income 7 + wine stock from tier 2 (reuses the wine good, scales on the curve)", () => {
+  it("trader: drachmae income + wine stock from tier 2 (reuses the wine good, scales on the curve)", () => {
     expect(trader.id).toBe("emporion");
     expect(trader.category).toBe("yearround");
-    expect(trader.income).toBe(9.6);
+    expect(trader.income).toBe(19.2);
     const wine = trader.yields.find((y) => y.good === "wine")!;
     expect(wine.fromTier).toBe(2);
     expect(goodPerDay(wine, 1)).toBe(0); // dormant at tier 1
@@ -263,8 +264,8 @@ describe("the four remaining class lines (content-only, same generic frame)", ()
   it("philosopher & hetaira are income-only lines (no tradeable good); their STATS are never goods", () => {
     expect(philosopher.id).toBe("school");
     expect(hetaira.id).toBe("salon");
-    expect(philosopher.income).toBe(10.8);
-    expect(hetaira.income).toBe(10.8);
+    expect(philosopher.income).toBe(21.6);
+    expect(hetaira.income).toBe(21.6);
     expect(philosopher.yields).toEqual([]);
     expect(hetaira.yields).toEqual([]);
     // prestige / intelligence are STATS — never registered as tradeable goods.
@@ -276,7 +277,7 @@ describe("the four remaining class lines (content-only, same generic frame)", ()
 
   it("shipbuilder (reworked): earns drachmae income + makes naval-supplies (no longer 'builds ships')", () => {
     expect(shipbuilder.id).toBe("slipway");
-    expect(shipbuilder.income).toBe(8.4); // +20% pass; was 0
+    expect(shipbuilder.income).toBe(16.8); // doubled 3 Oct 2026
     const ns = shipbuilder.yields.find((y) => y.good === "naval-supplies")!;
     expect(ns.base).toBe(1);
     expect(shipbuilder.yields.find((y) => y.good === "ship")).toBeUndefined(); // ship yield retired

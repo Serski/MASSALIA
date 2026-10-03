@@ -37,7 +37,7 @@
           "fromTier": 3
         }
       ],
-      "income": 6.0,
+      "income": 12.0,
       "buildCost": {
         "materials": {
           "timber": 8,
@@ -74,7 +74,7 @@
           "rank": "@Hierophantes"
         }
       ],
-      "income": 7.2,
+      "income": 14.4,
       "yields": [
         {
           "good": "herbal",
@@ -117,7 +117,7 @@
           "rank": "@Megemporos"
         }
       ],
-      "income": 9.6,
+      "income": 19.2,
       "yields": [
         {
           "good": "wine",
@@ -162,7 +162,7 @@
           "rank": "@Philosophos"
         }
       ],
-      "income": 10.8,
+      "income": 21.6,
       "yields": [],
       "buildCost": {
         "materials": {
@@ -200,7 +200,7 @@
           "rank": "@Despoina"
         }
       ],
-      "income": 10.8,
+      "income": 21.6,
       "yields": [],
       "buildCost": {
         "materials": {
@@ -239,7 +239,7 @@
           "rank": "@Meganaupegos"
         }
       ],
-      "income": 8.4,
+      "income": 16.8,
       "yields": [
         {
           "good": "naval-supplies",
