@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { SEASON_NAMES } from "./calendar.js";
 import {
   accruedUnits,
   buildingBuildDays,
@@ -9,6 +10,7 @@ import {
   buildingUpkeep,
   buildingYield,
   coeffFor,
+  goodCategoryFor,
   goodPerDay,
   isGuarded,
   parseBuildingsContent,
@@ -284,14 +286,15 @@ describe("the four remaining class lines (content-only, same generic frame)", ()
     expect(vendor.ship).toBeUndefined(); // 'ship' good removed; replaced by trade-ship/galley
   });
 
-  it("trade-ship & galley are shop-standard goods with vendor bands (~2× floor)", () => {
+  it("trade-ship & galley are shop-standard goods with vendor bands (no wider than 3× floor)", () => {
     for (const g of ["trade-ship", "galley", "naval-supplies"]) {
       const band = vendor[g]!;
       expect(band.sell).toBeGreaterThan(band.buy);
       expect(band.sell / band.buy).toBeLessThanOrEqual(3);
     }
-    expect(vendor["trade-ship"]!.sell).toBe(60);
-    expect(vendor.galley!.sell).toBe(120);
+    // Ruling 3 Oct 2026: asking price +50%, buy-back +20% (see NO VENDOR LOOP below).
+    expect(vendor["trade-ship"]).toEqual({ sell: 90, buy: 36 });
+    expect(vendor.galley).toEqual({ sell: 180, buy: 72 });
     expect(seasonal.goodCategory["trade-ship"]).toBe("agricultural");
   });
 });
@@ -331,6 +334,22 @@ describe("Economy v2.1 — materials, staffing, craft & pops", () => {
     expect(content.craft!["trade-ship"]!.building).toBe("slipway");
     expect(content.craft!["trade-ship"]!.tier).toBe(3);
     expect(content.craft!.galley!.tier).toBe(4);
+  });
+
+  it("NO VENDOR LOOP — in no pair of seasons does the vendor's buy-back for a crafted ship beat his asking price for its recipe", () => {
+    // Crafting is instant and the vendor trades without limit, so a buy-back above the
+    // recipe's asking price would be free money for the yard: inside one season, or
+    // with the materials bought in the cheap season and the hull sold in the dear one.
+    // The tightest pair: a Trireme's recipe bought in Summer (90) against its Winter
+    // buy-back (72 × 1.25 = 90).
+    for (const [good, c] of Object.entries(content.craft!)) {
+      for (const bought of SEASON_NAMES) {
+        const recipeCost = Object.entries(c.recipe).reduce((sum, [g, qty]) => sum + qty * vendorUnitPrice(vendor[g]!, "buy", seasonal, goodCategoryFor(seasonal, g), bought), 0);
+        for (const sold of SEASON_NAMES) {
+          expect(vendorUnitPrice(vendor[good]!, "sell", seasonal, goodCategoryFor(seasonal, good), sold)).toBeLessThanOrEqual(recipeCost);
+        }
+      }
+    }
   });
 
   it("pops: hire costs 30/20/50; only the slave eats + resells (25) with no wage; only freeman/citizen are civic", () => {

@@ -497,12 +497,12 @@
       "buy": 7
     },
     "trade-ship": {
-      "sell": 60,
-      "buy": 30
+      "sell": 90,
+      "buy": 36
     },
     "galley": {
-      "sell": 120,
-      "buy": 60
+      "sell": 180,
+      "buy": 72
     }
   },
   "seasonal": {
