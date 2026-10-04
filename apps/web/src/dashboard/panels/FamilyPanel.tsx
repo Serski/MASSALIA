@@ -821,6 +821,8 @@ const chronicleRenderers: Record<ChronicleEntry["type"], (payload: Record<string
         return `Was expelled from the koinon ${p.koinonName}.`;
       case "leader":
         return `Took the lead of the koinon ${p.koinonName}.`;
+      case "lesche":
+        return `Commissioned a Lesche for the koinon ${p.koinonName}.`;
       default:
         return "";
     }
