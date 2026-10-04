@@ -6,7 +6,9 @@ import { and, asc, eq, sql } from "drizzle-orm";
 // guarded to a *_test database (mirrors market.test.ts). Founding, invites,
 // accepting (and two races for it), leaving and the lead, expulsion, the vice,
 // the absent leader, deleted accounts, the board, the pending count, and the
-// leader's read-only view of the members' soldiers.
+// leader's read-only view of the members' soldiers; and (koinon prompt 2) gifts
+// to the treasury, the Lesche, its upkeep and cap, and the purse going to the
+// city when a koinon ends.
 // ---------------------------------------------------------------------------
 
 const dbUrl = process.env.DATABASE_URL ?? "";
@@ -91,6 +93,19 @@ suite("Koinon (integration)", () => {
     return (await db.insert(m.dbPkg.koinonInvites).values({ worldId, koinonId, playerId, inviterPlayerId: inviterId, createdAt, expiresAt }).returning())[0]!.id;
   }
   const setVice = (koinonId: string, playerId: string | null) => db.update(m.dbPkg.koina).set({ vicePlayerId: playerId }).where(eq(m.dbPkg.koina.id, koinonId));
+  // The treasury and the hall, written directly: `completes` is when the hall
+  // stands, `paidUntil` the end of its last paid day (the same instant when omitted).
+  const setTreasury = (koinonId: string, treasury: number) => db.update(m.dbPkg.koina).set({ treasury }).where(eq(m.dbPkg.koina.id, koinonId));
+  const setHall = (koinonId: string, completes: Date, opts: { paidUntil?: Date; shut?: boolean; treasury?: number } = {}) =>
+    db
+      .update(m.dbPkg.koina)
+      .set({ lescheStartedAt: new Date(completes.getTime() - 2 * DAY), lescheCompletesAt: completes, leschePaidUntil: opts.paidUntil ?? completes, lescheShut: opts.shut ?? false, ...(opts.treasury === undefined ? {} : { treasury: opts.treasury }) })
+      .where(eq(m.dbPkg.koina.id, koinonId));
+  const deposits = (koinonId: string) => db.select().from(m.dbPkg.koinonDeposits).where(eq(m.dbPkg.koinonDeposits.koinonId, koinonId)).orderBy(asc(m.dbPkg.koinonDeposits.createdAt));
+  async function depositLogs(playerId: string) {
+    const { effectLog } = m.dbPkg;
+    return (await db.select().from(effectLog).where(and(eq(effectLog.characterId, await characterId(playerId)), eq(effectLog.kind, "koinon_deposit"))).orderBy(asc(effectLog.createdAt))).map((r) => r.detail);
+  }
   const setCooldown = (playerId: string, until: Date | null) => db.update(m.dbPkg.players).set({ koinonCooldownUntil: until }).where(eq(m.dbPkg.players.id, playerId));
   async function dealtHand(playerId: string, createdAt: Date) {
     await db.insert(m.dbPkg.dailyDecisions).values({ characterId: await characterId(playerId), utcDay: createdAt.toISOString().slice(0, 10), arena: "court", eventId: "test-event", createdAt });
@@ -659,6 +674,252 @@ suite("Koinon (integration)", () => {
     expect(await m.koinon.koinonPendingCount(xenon, worldId, at(HOUR))).toBe(1);
     expect((await m.koinon.koinonView(await ctx(xenon), at(HOUR))).invites.map((i) => i.koinonName)).toEqual(["The Sacred Band"]);
     expect(await m.koinon.koinonPendingCount(xenon, worldId, at(48 * HOUR))).toBe(0);
+  });
+
+  // --- the treasury (koinon prompt 2) -------------------------------------------
+
+  it("a member gives 30: wallet down, treasury up, one deposit row and one plain effect_log row", async () => {
+    const leader = await freshPlayer("Kallias");
+    const member = await freshPlayer("Nikias");
+    const k = await found(leader, "The Sacred Band");
+    await seat(k, member);
+
+    expect(await m.koinon.giveToKoinon(await ctx(member), 30, NOW)).toEqual({ ok: true, wallet: 70, treasury: 30 });
+    expect(await wallet(member)).toBe(70);
+    expect((await koinonRow(k)).treasury).toBe(30);
+    expect((await deposits(k)).map((d) => [d.playerId, d.amount])).toEqual([[member, 30]]);
+    // Recorded, not chronicled: a plain row with no chronicle block.
+    const logs = await depositLogs(member);
+    expect(logs).toEqual([{ koinonId: k, koinonName: "The Sacred Band", amount: 30, treasuryAfter: 30 }]);
+    expect(logs[0]).not.toHaveProperty("chronicle");
+    expect(await lines(member)).toEqual([]);
+    // The gift stays when the giver leaves.
+    expect(await m.koinon.leave(await ctx(member), NOW)).toMatchObject({ ok: true, dissolved: false });
+    expect((await koinonRow(k)).treasury).toBe(30);
+  });
+
+  it("give refuses a non-member, a bad amount and a short wallet, and writes nothing", async () => {
+    const leader = await freshPlayer("Kallias");
+    const outsider = await freshPlayer("Xenon");
+    const k = await found(leader, "The Sacred Band");
+
+    expect(await m.koinon.giveToKoinon(await ctx(outsider), 30, NOW)).toEqual({ ok: false, code: 403, error: "You are not in a koinon." });
+    for (const bad of [0, 1.5, 10_001, -5, "30", null]) {
+      expect(await m.koinon.giveToKoinon(await ctx(leader), bad, NOW)).toEqual({ ok: false, code: 400, error: "Give a whole amount from 1 to 10,000 drachmae." });
+    }
+    // The founder paid 50 of his 100 to found.
+    expect(await m.koinon.giveToKoinon(await ctx(leader), 51, NOW)).toEqual({ ok: false, code: 402, error: "You hold only 50 drachmae." });
+    expect(await wallet(leader)).toBe(50);
+    expect(await wallet(outsider)).toBe(100);
+    expect((await koinonRow(k)).treasury).toBe(0);
+    expect(await deposits(k)).toEqual([]);
+    expect(await depositLogs(leader)).toEqual([]);
+    expect(await m.koinon.giveToKoinon(await ctx(leader), 50, NOW)).toEqual({ ok: true, wallet: 0, treasury: 50 });
+  });
+
+  it("a gift of 50 to a hall shut for three days pays nothing for the shut days and reopens it: 45 left", async () => {
+    const leader = await freshPlayer("Kallias");
+    const member = await freshPlayer("Nikias");
+    const k = await found(leader, "The Sacred Band");
+    await seat(k, member);
+    await setHall(k, at(-5 * DAY), { paidUntil: at(-3 * DAY), shut: true, treasury: 0 });
+
+    expect((await m.koinon.koinonView(await ctx(member), NOW)).koinon).toMatchObject({ treasury: 0, cap: 8, hall: { phase: "shut", daysCovered: 0 } });
+    expect(await m.koinon.giveToKoinon(await ctx(member), 50, NOW)).toEqual({ ok: true, wallet: 50, treasury: 45 });
+    const row = await koinonRow(k);
+    expect(row).toMatchObject({ treasury: 45, lescheShut: false });
+    expect(row.leschePaidUntil!.getTime()).toBe(at(DAY).getTime());
+    expect(await depositLogs(member)).toEqual([{ koinonId: k, koinonName: "The Sacred Band", amount: 50, treasuryAfter: 45 }]);
+    expect((await m.koinon.koinonView(await ctx(member), NOW)).koinon).toMatchObject({ treasury: 45, cap: 12, hall: { phase: "open", daysCovered: 9 } });
+    // A gift too small to pay a day leaves the hall shut and is kept whole.
+    await setHall(k, at(-5 * DAY), { paidUntil: at(-3 * DAY), shut: true, treasury: 0 });
+    expect(await m.koinon.giveToKoinon(await ctx(member), 4, NOW)).toEqual({ ok: true, wallet: 46, treasury: 4 });
+    expect((await koinonRow(k)).lescheShut).toBe(true);
+  });
+
+  // --- the Lesche -----------------------------------------------------------------
+
+  it("build: the vice gets 403, a treasury of 499 is 409, success spends 500 and sets the three instants, a second build is 409", async () => {
+    const leader = await freshPlayer("Kallias");
+    const vice = await freshPlayer("Deon");
+    // Founded an hour earlier, so the founding line sorts before the Lesche line.
+    const k = await found(leader, "The Sacred Band", at(-HOUR));
+    await seat(k, vice);
+    await setVice(k, vice);
+    await setTreasury(k, 499);
+
+    expect(await m.koinon.buildLesche(await ctx(vice), NOW)).toEqual({ ok: false, code: 403, error: "Only the leader may order the Lesche." });
+    expect(await m.koinon.buildLesche(await ctx(leader), NOW)).toEqual({ ok: false, code: 409, error: "The treasury holds 499 drachmae. The Lesche costs 500." });
+    expect(await koinonRow(k)).toMatchObject({ treasury: 499, lescheStartedAt: null, lescheCompletesAt: null });
+
+    await setTreasury(k, 500);
+    expect(await m.koinon.buildLesche(await ctx(leader), NOW)).toEqual({ ok: true, completesAt: at(2 * DAY).toISOString(), treasury: 0 });
+    const row = await koinonRow(k);
+    expect(row).toMatchObject({ treasury: 0, lescheShut: false });
+    expect([row.lescheStartedAt!.getTime(), row.lescheCompletesAt!.getTime(), row.leschePaidUntil!.getTime()]).toEqual([NOW.getTime(), at(2 * DAY).getTime(), at(2 * DAY).getTime()]);
+    expect(await lines(leader)).toEqual([{ event: "founded", koinonName: "The Sacred Band" }, { event: "lesche", koinonName: "The Sacred Band" }]);
+    expect((await m.koinon.koinonView(await ctx(vice), at(DAY))).koinon).toMatchObject({ cap: 8, hall: { phase: "building", startedAt: NOW.toISOString(), completesAt: at(2 * DAY).toISOString(), daysCovered: 0 } });
+
+    await setTreasury(k, 500);
+    expect(await m.koinon.buildLesche(await ctx(leader), at(DAY))).toEqual({ ok: false, code: 409, error: "The Lesche is already being built." });
+    expect(await m.koinon.buildLesche(await ctx(leader), at(3 * DAY))).toEqual({ ok: false, code: 409, error: "The koinon already has its Lesche." });
+  });
+
+  it("the cap: 8 while building, 12 with an open hall, and a shut hall keeps its 12 but takes no one", async () => {
+    const leader = await freshPlayer("Kallias");
+    const k = await found(leader, "The Sacred Band");
+    for (let i = 0; i < 7; i++) await seat(k, await freshPlayer(`Member${i}`));
+    const joiners: string[] = [];
+    for (let i = 0; i < 6; i++) joiners.push(await freshPlayer(`Joiner${i}`));
+    const c = await ctx(leader);
+    // Invite by the rule, then accept: both use the cap in force.
+    const join = async (index: number, now: Date) => {
+      const invited = await m.koinon.invite(c, `Joiner${index}`, now);
+      if (!invited.ok) return invited;
+      return m.koinon.acceptInvite(await ctx(joiners[index]!), invited.invite.id, now);
+    };
+
+    // Building: the cap is still 8, so a 9th seat is refused both ways.
+    await setHall(k, at(DAY), { treasury: 1000 });
+    expect(await m.koinon.invite(c, "Joiner0", NOW)).toEqual({ ok: false, code: 409, error: "The koinon is full: its members and standing invitations already number 8." });
+    const early = await writeInvite(k, joiners[0]!, leader);
+    expect(await m.koinon.acceptInvite(await ctx(joiners[0]!), early, NOW)).toEqual({ ok: false, code: 409, error: "That koinon is full." });
+    await db.delete(m.dbPkg.koinonInvites);
+
+    // Standing and funded: invites and accepts run to 12, and the 13th is refused.
+    const open = at(DAY + HOUR);
+    for (let i = 0; i < 4; i++) expect(await join(i, open), `joiner ${i}`).toMatchObject({ ok: true });
+    expect((await memberIds(k)).length).toBe(12);
+    expect(await m.koinon.invite(c, "Joiner4", open)).toEqual({ ok: false, code: 409, error: "The koinon is full: its members and standing invitations already number 12." });
+    const late = await writeInvite(k, joiners[4]!, leader, at(10 * DAY));
+    expect(await m.koinon.acceptInvite(await ctx(joiners[4]!), late, open)).toEqual({ ok: false, code: 409, error: "That koinon is full." });
+    expect((await m.koinon.koinonView(c, open)).koinon).toMatchObject({ cap: 12, hall: { phase: "open" } });
+    // One day of upkeep was paid at the first settle after it stood.
+    expect(await koinonRow(k)).toMatchObject({ treasury: 995, lescheShut: false });
+
+    // The treasury empty, a day after paid_until: the hall shuts. Nobody is
+    // expelled, and no one new joins while the count is not below 8.
+    await setTreasury(k, 0);
+    const dry = at(3 * DAY);
+    expect(await m.koinon.invite(c, "Joiner5", dry)).toEqual({ ok: false, code: 409, error: "The koinon is full: its members and standing invitations already number 8." });
+    expect(await m.koinon.acceptInvite(await ctx(joiners[4]!), late, dry)).toEqual({ ok: false, code: 409, error: "That koinon is full." });
+    expect(await koinonRow(k)).toMatchObject({ treasury: 0, lescheShut: true });
+    expect((await memberIds(k)).length).toBe(12);
+    expect((await m.koinon.koinonView(c, dry)).koinon).toMatchObject({ cap: 8, treasury: 0, hall: { phase: "shut", daysCovered: 0 } });
+    expect((await m.koinon.koinonView(c, dry)).koinon!.members.length).toBe(12);
+  });
+
+  it("upkeep is paid through a write: a post 3 days after completion with 100 in the treasury leaves 80", async () => {
+    const leader = await freshPlayer("Kallias");
+    const k = await found(leader, "The Sacred Band");
+    await setHall(k, at(-3 * DAY), { treasury: 100 });
+    expect(await m.koinon.post(await ctx(leader), "Muster at dawn.", NOW)).toMatchObject({ ok: true });
+    const row = await koinonRow(k);
+    expect(row).toMatchObject({ treasury: 80, lescheShut: false });
+    expect(row.leschePaidUntil!.getTime()).toBe(at(DAY).getTime());
+    // The same day again costs nothing more.
+    expect(await m.koinon.post(await ctx(leader), "And bring spears.", at(HOUR))).toMatchObject({ ok: true });
+    expect((await koinonRow(k)).treasury).toBe(80);
+  });
+
+  // --- the purse goes to the city -------------------------------------------------
+
+  it("the last member leaving sends the treasury to the city, less the upkeep due, and zeroes the purse", async () => {
+    const leader = await freshPlayer("Kallias");
+    const k = await found(leader, "The Sacred Band");
+    expect(await treasury()).toBe(50); // the founding fee
+    // An open hall paid through now: nothing is due, all 37 go to the city.
+    await setHall(k, at(-2 * DAY), { paidUntil: at(HOUR), treasury: 37 });
+    expect(await m.koinon.leave(await ctx(leader), NOW)).toMatchObject({ ok: true, dissolved: true });
+    expect(await treasury()).toBe(87);
+    expect(await koinonRow(k)).toMatchObject({ treasury: 0 });
+
+    // A day of upkeep due at the end: it is paid first, and the city gets the rest.
+    const other = await freshPlayer("Deon");
+    const k2 = await found(other, "The Elders");
+    await setHall(k2, at(-2 * DAY), { paidUntil: at(-HOUR), treasury: 37 });
+    expect(await m.koinon.leave(await ctx(other), NOW)).toMatchObject({ ok: true, dissolved: true });
+    expect(await treasury()).toBe(87 + 50 + 32);
+    expect(await koinonRow(k2)).toMatchObject({ treasury: 0 });
+    expect((await koinonRow(k2)).dissolvedAt).not.toBeNull();
+  });
+
+  it("an admin dissolve sends the treasury to the city and records treasuryToCity", async () => {
+    const leader = await freshPlayer("Kallias");
+    const member = await freshPlayer("Nikias");
+    const k = await found(leader, "The Sacred Band");
+    await seat(k, member, at(1000));
+    await setHall(k, at(-2 * DAY), { paidUntil: at(HOUR), treasury: 37 });
+    const recorded: unknown[] = [];
+    const res = await m.koinon.adminDissolveKoinon(k, NOW, async (_tx, detail) => {
+      recorded.push(detail);
+    });
+    expect(res).toEqual({ ok: true, name: "The Sacred Band", memberIds: [leader, member], treasuryToCity: 37 });
+    expect(recorded).toEqual([{ name: "The Sacred Band", memberIds: [leader, member], treasuryToCity: 37 }]);
+    expect(await treasury()).toBe(87);
+    expect(await koinonRow(k)).toMatchObject({ treasury: 0 });
+    expect(await memberIds(k)).toEqual([]);
+  });
+
+  // --- the view of the treasury and the hall ---------------------------------------
+
+  it("the view shows the treasury, the hall, every giver's total and the 10 newest gifts", async () => {
+    const leader = await freshPlayer("Kallias", { drachmae: 1000 });
+    const member = await freshPlayer("Nikias", { drachmae: 1000 });
+    const gone = await freshPlayer("Deon", { drachmae: 1000 });
+    const k = await found(leader, "The Sacred Band");
+    await seat(k, member);
+    await seat(k, gone);
+    for (let i = 1; i <= 6; i++) {
+      expect(await m.koinon.giveToKoinon(await ctx(member), i, at(i * 1000))).toMatchObject({ ok: true });
+      expect(await m.koinon.giveToKoinon(await ctx(leader), 10 * i, at(i * 1000 + 1))).toMatchObject({ ok: true });
+    }
+    expect(await m.koinon.giveToKoinon(await ctx(gone), 21, at(8000))).toMatchObject({ ok: true });
+    await m.koinon.leave(await ctx(gone), at(9000));
+
+    const view = (await m.koinon.koinonView(await ctx(member), at(10_000))).koinon!;
+    expect(view.treasury).toBe(21 + 210 + 21);
+    expect(view.hall).toEqual({ phase: "none", startedAt: null, completesAt: null, paidUntil: null, daysCovered: 0 });
+    // Largest total first, then by name; a giver who left is still listed.
+    expect(view.givers).toEqual([
+      { playerId: leader, name: "Kallias", total: 210 },
+      { playerId: gone, name: "Deon", total: 21 },
+      { playerId: member, name: "Nikias", total: 21 },
+    ]);
+    expect(view.gifts.length).toBe(10);
+    expect(view.gifts.slice(0, 3).map((g) => [g.name, g.amount])).toEqual([["Deon", 21], ["Kallias", 60], ["Nikias", 6]]);
+    // 13 gifts were made; the tenth newest is the last one listed.
+    expect(view.gifts[9]).toMatchObject({ name: "Kallias", amount: 20 });
+    expect(view.gifts[0]!.label).toMatch(/, \d+ BC$/);
+  });
+
+  it("the view never writes the hall: a due settle is shown derived, and the koina row is byte-identical after the read", async () => {
+    const leader = await freshPlayer("Kallias");
+    const outsider = await freshPlayer("Xenon");
+    const k = await found(leader, "The Sacred Band");
+    // Three days unsettled: a locked settle would pay 20 of the 100.
+    await setHall(k, at(-3 * DAY), { treasury: 100 });
+    const before = JSON.stringify(await koinonRow(k));
+
+    // Others see the cap as it stands now, and nothing of the purse or the hall.
+    const outside = await m.koinon.koinonView(await ctx(outsider), NOW);
+    expect(outside.koina).toEqual([{ id: k, name: "The Sacred Band", leaderName: "Kallias", members: 1, cap: 12 }]);
+    expect(outside.koinon).toBeNull();
+    const inside = (await m.koinon.koinonView(await ctx(leader), NOW)).koinon!;
+    expect(inside).toMatchObject({ treasury: 80, cap: 12, hall: { phase: "open", paidUntil: at(DAY).toISOString(), daysCovered: 16 } });
+    expect(await m.koinon.adminKoinaList(worldId, NOW)).toMatchObject([{ id: k, treasury: 80, hall: "open" }]);
+    expect(JSON.stringify(await koinonRow(k))).toBe(before);
+
+    // The next write stores exactly what the view showed.
+    expect(await m.koinon.post(await ctx(leader), "Counted.", NOW)).toMatchObject({ ok: true });
+    const row = await koinonRow(k);
+    expect(row.treasury).toBe(80);
+    expect(row.leschePaidUntil!.toISOString()).toBe(inside.hall.paidUntil);
+
+    // With an empty purse the same read shows a shut hall and the plain cap.
+    await setHall(k, at(-3 * DAY), { treasury: 3 });
+    expect((await m.koinon.koinonView(await ctx(outsider), NOW)).koina[0]!.cap).toBe(8);
+    expect(await m.koinon.adminKoinaList(worldId, NOW)).toMatchObject([{ treasury: 3, hall: "shut" }]);
   });
 
   // --- armies -------------------------------------------------------------------

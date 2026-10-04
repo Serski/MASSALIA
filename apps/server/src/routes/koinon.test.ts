@@ -15,7 +15,7 @@ const dbUrl = process.env.DATABASE_URL ?? "";
 const suite = describe.runIf(dbUrl.includes("_test"));
 
 const DAY = 86_400_000;
-const POSTS = ["found", "invite", "withdraw", "accept", "decline", "leave", "expel", "vice", "handover", "take-lead", "post", "post/delete", "read"];
+const POSTS = ["found", "invite", "withdraw", "accept", "decline", "leave", "expel", "vice", "handover", "take-lead", "post", "post/delete", "read", "give", "lesche"];
 
 function hashToken(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
@@ -173,5 +173,35 @@ suite("/api/koinon (integration)", () => {
     expect(view.koinon.members.map((x) => x.name)).toEqual(["Deon"]);
     const cooldowns = await db.select({ id: m.dbPkg.players.id, until: m.dbPkg.players.koinonCooldownUntil }).from(m.dbPkg.players).where(eq(m.dbPkg.players.worldId, worldId));
     expect(cooldowns.filter((p) => p.until !== null).map((p) => p.id).sort()).toEqual([a.playerId, c.playerId].sort());
+  });
+
+  it("give → lesche: a gift into the treasury, then the leader orders the hall", async () => {
+    const a = await freshPlayer("Kallias");
+    const b = await freshPlayer("Deon");
+    expect((await post(a.token, "give", { amount: 10 })).statusCode).toBe(403); // not in a koinon
+    expect((await post(a.token, "found", { name: "The Sacred Band" })).statusCode).toBe(200);
+
+    for (const amount of [0, 1.5, 10_001, "ten", undefined]) expect((await post(a.token, "give", { amount })).statusCode, String(amount)).toBe(400);
+    const tooMuch = await post(a.token, "give", { amount: 51 });
+    expect(tooMuch.statusCode).toBe(402);
+    expect(tooMuch.json()).toEqual({ error: "You hold only 50 drachmae." });
+    const given = await post(a.token, "give", { amount: 50 });
+    expect(given.statusCode).toBe(200);
+    expect(given.json()).toEqual({ ok: true, wallet: 0, treasury: 50 });
+
+    const short = await post(a.token, "lesche");
+    expect(short.statusCode).toBe(409);
+    expect(short.json()).toEqual({ error: "The treasury holds 50 drachmae. The Lesche costs 500." });
+    expect((await post(b.token, "lesche")).statusCode).toBe(403);
+
+    await db.update(m.dbPkg.koina).set({ treasury: 600 });
+    const built = await post(a.token, "lesche");
+    expect(built.statusCode).toBe(200);
+    expect(built.json()).toMatchObject({ ok: true, treasury: 100 });
+    expect((await post(a.token, "lesche")).statusCode).toBe(409);
+
+    const view = (await get(a.token)).json<{ rules: Record<string, number>; koinon: { treasury: number; cap: number; hall: { phase: string }; givers: { name: string; total: number }[]; gifts: { name: string; amount: number }[] } }>();
+    expect(view.rules).toMatchObject({ depositMax: 10000, lescheCost: 500, lescheBuildDays: 2, lescheUpkeep: 5, lescheCap: 12 });
+    expect(view.koinon).toMatchObject({ treasury: 100, cap: 8, hall: { phase: "building" }, givers: [{ name: "Kallias", total: 50 }], gifts: [{ name: "Kallias", amount: 50 }] });
   });
 });

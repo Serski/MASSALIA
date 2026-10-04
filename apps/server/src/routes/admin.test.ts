@@ -353,7 +353,7 @@ suite("admin tooling and account gates (integration)", () => {
     const invited = await characterFor((await register("invited@t")).id, "Xenon");
     const rival = await characterFor((await register("rival@t")).id, "Nikias");
     const foundedAt = new Date(Date.now() - 3 * 86_400_000);
-    const band = (await db.insert(koina).values({ worldId, name: "The Sacred Band", leaderPlayerId: leader.playerId, foundedAt }).returning())[0]!;
+    const band = (await db.insert(koina).values({ worldId, name: "The Sacred Band", leaderPlayerId: leader.playerId, foundedAt, treasury: 37 }).returning())[0]!;
     const elders = (await db.insert(koina).values({ worldId, name: "The Elders", leaderPlayerId: rival.playerId }).returning())[0]!;
     await db.insert(koinonMembers).values([
       { worldId, playerId: leader.playerId, koinonId: band.id, joinedAt: foundedAt },
@@ -376,7 +376,7 @@ suite("admin tooling and account gates (integration)", () => {
     expect(list.json()).toEqual({
       koina: [
         { id: elders.id, name: "The Elders", leaderName: "Nikias", members: 1, foundedAt: expect.any(String), treasury: 0, hall: "none" },
-        { id: band.id, name: "The Sacred Band", leaderName: "Kallias", members: 2, foundedAt: foundedAt.toISOString(), treasury: 0, hall: "none" },
+        { id: band.id, name: "The Sacred Band", leaderName: "Kallias", members: 2, foundedAt: foundedAt.toISOString(), treasury: 37, hall: "none" },
       ],
     });
 
@@ -408,6 +408,9 @@ suite("admin tooling and account gates (integration)", () => {
     const rows = await auditRows();
     expect(rows.map((r) => r.action)).toEqual(["koina.list", "koina.rename", "koina.dissolve", "koina.list"]);
     expect(rows[1]!.detail).toEqual({ koinonId: band.id, from: "The Sacred Band", to: "The Holy Band", reason: "offensive name" });
-    expect(rows[2]!.detail).toEqual({ koinonId: band.id, name: "The Holy Band", memberIds: [leader.playerId, member.playerId], treasuryToCity: 0, reason: "abandoned" });
+    expect(rows[2]!.detail).toEqual({ koinonId: band.id, name: "The Holy Band", memberIds: [leader.playerId, member.playerId], treasuryToCity: 37, reason: "abandoned" });
+    // The purse went to the city, and the koinon keeps none of it.
+    expect((await db.select().from(m.dbPkg.worldTreasury).where(eq(m.dbPkg.worldTreasury.worldId, worldId)))[0]!.balance).toBe(37);
+    expect((await db.select().from(koina).where(eq(koina.id, band.id)))[0]!.treasury).toBe(0);
   });
 });
