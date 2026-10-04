@@ -484,6 +484,8 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   // Dissolve: every member is removed, with no cooldown and no Chronicle line.
+  // What is left in the treasury goes to the city; the audit detail records it
+  // as treasuryToCity.
   app.post("/koina/:id/dissolve", { schema: uuidParam("id") }, async (request) => {
     const admin = await requireAdmin(request);
     const { id } = request.params as { id: string };

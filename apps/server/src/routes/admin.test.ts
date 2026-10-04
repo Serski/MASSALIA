@@ -408,6 +408,6 @@ suite("admin tooling and account gates (integration)", () => {
     const rows = await auditRows();
     expect(rows.map((r) => r.action)).toEqual(["koina.list", "koina.rename", "koina.dissolve", "koina.list"]);
     expect(rows[1]!.detail).toEqual({ koinonId: band.id, from: "The Sacred Band", to: "The Holy Band", reason: "offensive name" });
-    expect(rows[2]!.detail).toEqual({ koinonId: band.id, name: "The Holy Band", memberIds: [leader.playerId, member.playerId], reason: "abandoned" });
+    expect(rows[2]!.detail).toEqual({ koinonId: band.id, name: "The Holy Band", memberIds: [leader.playerId, member.playerId], treasuryToCity: 0, reason: "abandoned" });
   });
 });

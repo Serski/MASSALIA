@@ -140,7 +140,7 @@ async function logKoinon(tx: DbTx, playerId: string, worldId: string, event: Koi
 async function removeMember(tx: DbTx, k: KoinonRow, playerId: string, now: Date): Promise<KoinonRow> {
   await tx.delete(koinonMembers).where(and(eq(koinonMembers.koinonId, k.id), eq(koinonMembers.playerId, playerId)));
   const rest = await membersInOrder(tx, k.id);
-  if (rest.length === 0) return dissolve(tx, k, now);
+  if (rest.length === 0) return (await dissolve(tx, k, now)).row;
   let vice = k.vicePlayerId === playerId ? null : k.vicePlayerId;
   if (k.leaderPlayerId !== playerId) {
     if (vice === k.vicePlayerId) return k;
@@ -153,12 +153,19 @@ async function removeMember(tx: DbTx, k: KoinonRow, playerId: string, now: Date)
   return updated;
 }
 
-// End a koinon: every member row, invite and post goes; the row stays, marked.
-async function dissolve(tx: DbTx, k: KoinonRow, now: Date): Promise<KoinonRow> {
+// End a koinon. The hall is settled first, then whatever is left in the
+// treasury goes to the city (the world treasury) and the purse is zeroed
+// (ruling 7). Every member row, invite and post goes; the row stays, marked,
+// and its gifts stay on record. Returns the row and what the city received.
+async function dissolve(tx: DbTx, k: KoinonRow, now: Date): Promise<{ row: KoinonRow; treasuryToCity: number }> {
+  const { k: settled } = await settleHallLocked(tx, k, now);
+  const treasuryToCity = settled.treasury;
+  await creditWorldTreasury(tx, settled.worldId, treasuryToCity);
   await tx.delete(koinonMembers).where(eq(koinonMembers.koinonId, k.id));
   await tx.delete(koinonInvites).where(eq(koinonInvites.koinonId, k.id));
   await tx.delete(koinonPosts).where(eq(koinonPosts.koinonId, k.id));
-  return (await tx.update(koina).set({ dissolvedAt: now, vicePlayerId: null }).where(eq(koina.id, k.id)).returning())[0]!;
+  const row = (await tx.update(koina).set({ dissolvedAt: now, vicePlayerId: null, treasury: 0 }).where(eq(koina.id, k.id)).returning())[0]!;
+  return { row, treasuryToCity };
 }
 
 // Ruling 9, under the koinon lock: members whose account is gone leave, in
@@ -869,18 +876,18 @@ export async function adminRenameKoinon(koinonId: string, rawName: unknown, reco
   }
 }
 
-export type AdminDissolveResult = KoinonError | { ok: true; name: string; memberIds: string[] };
+export type AdminDissolveResult = KoinonError | { ok: true; name: string; memberIds: string[]; treasuryToCity: number };
 
 // POST /admin/koina/:id/dissolve — ruling 15: every member goes, with no
 // cooldown and no Chronicle line.
-export async function adminDissolveKoinon(koinonId: string, now: Date, record: (tx: DbTx, detail: { name: string; memberIds: string[] }) => Promise<void>): Promise<AdminDissolveResult> {
+export async function adminDissolveKoinon(koinonId: string, now: Date, record: (tx: DbTx, detail: { name: string; memberIds: string[]; treasuryToCity: number }) => Promise<void>): Promise<AdminDissolveResult> {
   return db.transaction(async (tx) => {
     const k = await lockKoinon(tx, koinonId);
     if (!k) return NO_KOINON;
     const memberIds = (await membersInOrder(tx, k.id)).map((m) => m.playerId);
-    await dissolve(tx, k, now);
-    await record(tx, { name: k.name, memberIds });
-    return { ok: true as const, name: k.name, memberIds };
+    const { treasuryToCity } = await dissolve(tx, k, now);
+    await record(tx, { name: k.name, memberIds, treasuryToCity });
+    return { ok: true as const, name: k.name, memberIds, treasuryToCity };
   });
 }
 
