@@ -268,7 +268,14 @@ suite("Player market (integration)", () => {
       const wins = results.filter((r) => r.ok);
       const losses = results.filter((r) => !r.ok);
       expect(wins).toHaveLength(1);
-      expect(losses).toEqual([{ ok: false, code: 409, error: "Only 0 remain at that stall." }]);
+      // The loser is refused either way, and which way is timing: the guarded
+      // claim answers 409 when both buyers read the stall open, and the early
+      // read answers 404 when the winner has already committed and closed it.
+      expect(losses).toHaveLength(1);
+      expect([
+        { ok: false, code: 409, error: "Only 0 remain at that stall." },
+        { ok: false, code: 404, error: "That stall is gone." },
+      ]).toContainEqual(losses[0]);
       expect((await listing(id)).remaining).toBe(0);
     }
     // Stock and money add up across every run.
