@@ -83,6 +83,12 @@ function gameLabel(at: Date, ctx: ActingContext): string {
 
 // --- Locks and shared steps --------------------------------------------------
 
+// LOCK ORDER: a player lock (lockPlayer) may be taken before a koinon lock,
+// never after one. Founding and accepting take the caller's player lock first;
+// every other path takes the koinon lock alone. A transaction that held a
+// koinon lock and then waited for a player lock could deadlock against an
+// accept, which waits the other way round.
+//
 // The koinon lock: the live row, FOR UPDATE. null when the koinon is unknown or
 // dissolved. Emits
 //   SELECT … FROM koina WHERE id = $1 AND dissolved_at IS NULL FOR UPDATE
