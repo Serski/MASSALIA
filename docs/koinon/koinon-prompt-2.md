@@ -332,3 +332,21 @@ Then the full `pnpm gate` at HEAD. If it ends GATE GREEN at HEAD, tree clean, pu
 If the gate is red, STOP with the log. A red caused only by a timeout in a suite this work does not touch is still a STOP, not a rerun.
 
 Report every new commit as `Committed: <SHA> <subject>` and quote the gate's last line.
+
+## Gate ruling
+
+Gate ruling (koinon prompt 2, after the red at 2f07d62)
+
+The timer fix in 2f07d62 is accepted as reported: (a), (b) and (c) hold, with the device-ahead test.
+
+The red is timeout-only, in two suites this work does not touch, under a measured load of 105 to 194, with the server suite at 1059 s against 287 s an hour earlier. Option 1: one rerun on a quiet machine. No test-config commit.
+
+1. Append this ruling verbatim at the end of docs/koinon/koinon-prompt-2.md under "## Gate ruling", as its own commit `docs: koinon prompt 2 gate ruling`.
+2. Check the load average before starting. If the 1-minute figure is above 20, wait and check again; report the figure you started at.
+3. Run the full `pnpm gate` at HEAD once.
+4. If it ends GATE GREEN at HEAD, tree clean: push per the STOP 2 ruling's checklist (plain fast-forward push; remote HEAD; the CI run with its Gate step on postgres:16 and suite counts; Railway server with migration 0063 confirmed read-only in __massalia_migrations; Railway worker; Pages; /health; GET /api/koinon 401 without a session; then stop the throwaway Postgres on 5433).
+5. If it is red again on timeouts only: STOP with both logs. No third run, no config commit.
+6. If it is red on anything else: STOP with the log.
+7. After the push, CI's Gate is the arbiter. If CI is red only on timeouts, STOP and report. Do not push a fix forward without a ruling.
+
+Report every new commit as `Committed: <SHA> <subject>` and quote the gate's last line.
