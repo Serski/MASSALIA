@@ -309,3 +309,26 @@ Append this ruling verbatim at the end of docs/koinon/koinon-prompt-2.md under "
 10. Accepted. HallPhase is exported.
 
 Phase 3 goes ahead as written. Run the full `pnpm gate` at HEAD before STOP 2. Captures as named at STOP 2. Do not push.
+
+## STOP 2 ruling
+
+STOP 2 ruling (koinon prompt 2)
+
+Append this ruling verbatim at the end of docs/koinon/koinon-prompt-2.md under "## STOP 2 ruling", as its own commit `docs: koinon prompt 2 STOP 2 ruling`.
+
+Accepted as reported: the build confirm and its copy; the plural fixes; Give disabled with no reason line on an empty wallet; the 3-member captures; the 1x captures; the admin column showing the phase word as stored; the field label.
+
+Item 2, the one-shot read when the Lesche stands: confirm three things in the report.
+(a) It is armed from the payload's server clock (onDeviceClock(completesAt, offset) with the offset from the payload's `now`), never from Date.now() alone.
+(b) It is cleared on unmount and on every new payload.
+(c) It cannot fire again when the payload that comes back still says `building`; it re-arms only from that payload's own `now`.
+If any of the three does not hold, fix it in one commit `web: the Lesche read is armed from the server clock`, with a render test case for a device clock 10 minutes ahead of the server.
+
+Then the full `pnpm gate` at HEAD. If it ends GATE GREEN at HEAD, tree clean, push without a further STOP:
+- plain `git push`, fast-forward only;
+- report remote HEAD, the CI run with its Gate step on postgres:16 and its suite counts, the Railway server deploy with migration 0063 confirmed by a read of __massalia_migrations through `railway run --service Postgres --environment production` (read only), the Railway worker deploy, the Pages run, /health, and GET /api/koinon answering 401 without a session;
+- stop the throwaway Postgres on 5433 after the report.
+
+If the gate is red, STOP with the log. A red caused only by a timeout in a suite this work does not touch is still a STOP, not a rerun.
+
+Report every new commit as `Committed: <SHA> <subject>` and quote the gate's last line.
