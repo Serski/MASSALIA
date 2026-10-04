@@ -176,6 +176,9 @@ export const players = pgTable("players", {
   // and the character-sheet portrait pulse. NULL = not yet dismissed.
   introSeenAt: timestamp("intro_seen_at", { withTimezone: true }),
   sheetSeenAt: timestamp("sheet_seen_at", { withTimezone: true }),
+  // Koinon (migration 0062): set on leaving or being expelled; until it passes
+  // the player can neither accept an invite nor found a koinon.
+  koinonCooldownUntil: timestamp("koinon_cooldown_until", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   oneActivePlayerPerWorld: uniqueIndex("players_one_active_user_world_idx").on(table.worldId, table.userId),
@@ -954,6 +957,60 @@ export const marketListings = pgTable("market_listings", {
   priceCheck: check("market_listings_price_check", sql`${table.price} >= 1`),
   openIdx: index("market_listings_open_idx").on(table.worldId, table.good).where(sql`closed_at IS NULL`),
   sellerOpenIdx: index("market_listings_seller_open_idx").on(table.sellerPlayerId).where(sql`closed_at IS NULL`),
+}));
+
+// The koinon (migration 0062): a player-made company of citizens. A dissolved
+// koinon keeps its row; the live-name uniqueness (world_id, lower(name) WHERE
+// dissolved_at IS NULL) is an expression index and lives only in the SQL.
+export const koina = pgTable("koina", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  name: text("name").notNull(),
+  leaderPlayerId: uuid("leader_player_id").references(() => players.id),
+  vicePlayerId: uuid("vice_player_id").references(() => players.id),
+  leaderSince: timestamp("leader_since", { withTimezone: true }).notNull().defaultNow(),
+  foundedAt: timestamp("founded_at", { withTimezone: true }).notNull().defaultNow(),
+  dissolvedAt: timestamp("dissolved_at", { withTimezone: true }),
+});
+
+// One row per player per world: the primary key keeps a player in one koinon at
+// a time. Keyed on players.id, so an heir keeps the membership.
+export const koinonMembers = pgTable("koinon_members", {
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  playerId: uuid("player_id").references(() => players.id).notNull(),
+  koinonId: uuid("koinon_id").references(() => koina.id).notNull(),
+  joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+  lastReadAt: timestamp("last_read_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.worldId, table.playerId] }),
+  koinonIdx: index("koinon_members_koinon_idx").on(table.koinonId),
+}));
+
+// A standing invitation: one per koinon and player. An expired row still holds
+// the pair, so the invite path deletes it before inviting again.
+export const koinonInvites = pgTable("koinon_invites", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  koinonId: uuid("koinon_id").references(() => koina.id).notNull(),
+  playerId: uuid("player_id").references(() => players.id).notNull(),
+  inviterPlayerId: uuid("inviter_player_id").references(() => players.id).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+}, (table) => ({
+  onePerPair: unique("koinon_invites_koinon_id_player_id_key").on(table.koinonId, table.playerId),
+  playerIdx: index("koinon_invites_player_idx").on(table.playerId),
+}));
+
+// The board: short messages from the leader and the vice. The posting
+// transaction keeps the newest `post.kept` (content/koinon/koinon.json).
+export const koinonPosts = pgTable("koinon_posts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  koinonId: uuid("koinon_id").references(() => koina.id).notNull(),
+  authorPlayerId: uuid("author_player_id").references(() => players.id).notNull(),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  koinonIdx: index("koinon_posts_koinon_idx").on(table.koinonId, table.createdAt.desc()),
 }));
 
 export const resources = pgTable("resources", {
