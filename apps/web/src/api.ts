@@ -1289,7 +1289,7 @@ export type KoinonMember = {
 };
 export type KoinonPage = {
   now: string;
-  rules: { foundCost: number; foundPrestige: number; memberCap: number; nameMin: number; nameMax: number; postMaxChars: number; cooldownHours: number };
+  rules: { foundCost: number; foundPrestige: number; memberCap: number; nameMin: number; nameMax: number; postMaxChars: number; cooldownHours: number; absentLeaderDays: number };
   me: { playerId: string; role: KoinonRole | null; cooldownUntil: string | null; prestige: number; drachmae: number };
   koina: { id: string; name: string; leaderName: string; members: number; cap: number }[];
   invites: { id: string; koinonId: string; koinonName: string; inviterName: string; expiresAt: string }[];

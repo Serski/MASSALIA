@@ -292,7 +292,7 @@ export function KoinonView({ onRefresh }: PanelProps) {
 
       {koinon.canTakeLead ? (
         <KoinonCard title="The lead" section="take-lead">
-          <p className="koinon-hint">{leader?.name ?? "The leader"} has not been seen for five days. You may take the lead.</p>
+          <p className="koinon-hint">{leader?.name ?? "The leader"} has not been seen for {rules.absentLeaderDays} days. You may take the lead.</p>
           <div className="koinon-actions">
             <button type="button" className="panel-btn" data-action="take-lead" disabled={busy} onClick={() => void run(() => api.koinonTakeLead())}>
               Take the lead

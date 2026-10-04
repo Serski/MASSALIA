@@ -12,7 +12,7 @@ import { awayLine, KoinonView } from "../src/dashboard/panels/KoinonView.js";
 
 const NOW = "2026-10-04T12:00:00.000Z";
 const inHours = (h: number) => new Date(Date.parse(NOW) + h * 3_600_000).toISOString();
-const rules = { foundCost: 50, foundPrestige: 20, memberCap: 8, nameMin: 3, nameMax: 32, postMaxChars: 300, cooldownHours: 24 };
+const rules = { foundCost: 50, foundPrestige: 20, memberCap: 8, nameMin: 3, nameMax: 32, postMaxChars: 300, cooldownHours: 24, absentLeaderDays: 5 };
 
 const member = (playerId: string, name: string, role: KoinonRole): KoinonMember => ({
   playerId, name, houseSlug: "iason", houseName: "Iason", professionSlug: "trader", faceId: null, portrait: null, party: role === "vice" ? "dynatoi" : "none", joinedLabel: "Winter, 300 BC", role,
@@ -249,7 +249,7 @@ describe("KoinonView · in a koinon", () => {
   it("canTakeLead shows the card and its button", async () => {
     const { container } = await mount(inside("deon", { leaderAbsent: true, canTakeLead: true }));
     const card = section(container, "take-lead")!;
-    expect(card.textContent).toContain("Kallias has not been seen for five days. You may take the lead.");
+    expect(card.textContent).toContain("Kallias has not been seen for 5 days. You may take the lead.");
     const takeLead = vi.spyOn(api, "koinonTakeLead").mockResolvedValue({ ok: true });
     fireEvent.click(card.querySelector<HTMLButtonElement>('[data-action="take-lead"]')!);
     await flush();

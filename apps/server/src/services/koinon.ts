@@ -264,7 +264,7 @@ export type KoinonMemberView = {
 
 export type KoinonView = {
   now: string;
-  rules: { foundCost: number; foundPrestige: number; memberCap: number; nameMin: number; nameMax: number; postMaxChars: number; cooldownHours: number };
+  rules: { foundCost: number; foundPrestige: number; memberCap: number; nameMin: number; nameMax: number; postMaxChars: number; cooldownHours: number; absentLeaderDays: number };
   me: { playerId: string; role: KoinonRole | null; cooldownUntil: string | null; prestige: number; drachmae: number };
   koina: { id: string; name: string; leaderName: string; members: number; cap: number }[];
   invites: { id: string; koinonId: string; koinonName: string; inviterName: string; expiresAt: string }[];
@@ -391,7 +391,7 @@ export async function koinonView(ctx: ActingContext, now: Date): Promise<KoinonV
 
   return {
     now: now.toISOString(),
-    rules: { foundCost: c.foundCost, foundPrestige: c.foundPrestige, memberCap: c.memberCap, nameMin: c.name.min, nameMax: c.name.max, postMaxChars: c.post.maxChars, cooldownHours: c.cooldownHours },
+    rules: { foundCost: c.foundCost, foundPrestige: c.foundPrestige, memberCap: c.memberCap, nameMin: c.name.min, nameMax: c.name.max, postMaxChars: c.post.maxChars, cooldownHours: c.cooldownHours, absentLeaderDays: c.absentLeaderDays },
     me: { playerId: ctx.playerId, role: own ? roleOf(own, ctx.playerId) : null, cooldownUntil: cooldown?.toISOString() ?? null, prestige: character?.prestige ?? 0, drachmae: character?.drachmae ?? 0 },
     koina: live.map((k) => ({ id: k.id, name: k.name, leaderName: k.leaderName ?? "—", members: Number(k.members), cap: c.memberCap })),
     invites: invites.map((i) => ({ id: i.id, koinonId: i.koinonId, koinonName: i.koinonName, inviterName: i.inviterName, expiresAt: i.expiresAt.toISOString() })),
