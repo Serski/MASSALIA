@@ -1,9 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { and, asc, count, desc, eq, gt, inArray, isNull, lte, max, ne, notInArray, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, gte, inArray, isNull, lte, max, ne, notInArray, sql } from "drizzle-orm";
 import { createDb, dailyDecisions, effectLog, houses, koina, koinonInvites, koinonMembers, koinonPosts, playerCharacters, playerLevy, playerUnits, players, resources } from "@massalia/db";
-import { bandDef, cleanKoinonName, cleanKoinonPost, formatGameDate, gameDate, parseKoinonContent, sanitizeDisplayName, seasonIndexAt, unitDef, type KoinonChronicle, type KoinonContent, type KoinonEvent } from "@massalia/shared";
+import { bandDef, cleanKoinonName, cleanKoinonPost, formatGameDate, gameDate, parseKoinonContent, sanitizeDisplayName, seasonIndexAt, settleHall, unitDef, type HallSettle, type HallState, type KoinonChronicle, type KoinonContent, type KoinonEvent } from "@massalia/shared";
 import { agedPortraitFor } from "./age.js";
 import { getBandsContent, getUnitsContent } from "./barracks.js";
 import { creditWorldTreasury, debitDrachmae, spendTransaction, SpendRejected, type ActingContext } from "./buildings.js";
@@ -193,21 +193,53 @@ async function sweepInactive(worldId: string, now: Date): Promise<void> {
   }
 }
 
-// One locked transaction on the caller's own koinon: lock, drop the members
-// whose accounts are gone, confirm the caller still sits in it, then run `fn`
-// with the row and the caller's role. `fn` checks before it writes, so a
-// refusal it returns leaves nothing half done.
-async function withOwnKoinon<T>(ctx: ActingContext, now: Date, fn: (tx: DbTx, k: KoinonRow, role: KoinonRole) => Promise<T | KoinonError>): Promise<T | KoinonError> {
-  const mine = await memberRow(db, ctx.playerId, ctx.worldId);
+// The hall as the pure settle reads it, from a koinon row.
+function hallStateOf(k: KoinonRow): HallState {
+  return { completesAt: k.lescheCompletesAt?.getTime() ?? null, paidUntil: k.leschePaidUntil?.getTime() ?? null, shut: k.lescheShut, treasury: k.treasury };
+}
+
+// The Lesche's upkeep, applied to a locked koinon row (koinon prompt 2): the
+// whole days due are paid from the treasury, the hall shuts when a day cannot
+// be paid and reopens when one can. The debit is relative and guarded, with
+// lesche_paid_until and lesche_shut beside it. Returns the row as it stands and
+// the settle (its phase decides the member cap in force). Runs under the
+// koinon lock in every path that touches the koinon's state, so the read-only
+// view, which calls the same pure settleHall, always agrees with it.
+async function settleHallLocked(tx: DbTx, k: KoinonRow, now: Date): Promise<{ k: KoinonRow; settle: HallSettle }> {
+  const before = hallStateOf(k);
+  const settle = settleHall(before, now.getTime(), getKoinonContent().lesche.upkeepPerDay);
+  const after = settle.state;
+  if (settle.spent === 0 && after.shut === before.shut && after.paidUntil === before.paidUntil) return { k, settle };
+  const updated = await tx
+    .update(koina)
+    .set({ treasury: sql`${koina.treasury} - ${settle.spent}`, leschePaidUntil: after.paidUntil === null ? null : new Date(after.paidUntil), lescheShut: after.shut })
+    .where(and(eq(koina.id, k.id), gte(koina.treasury, settle.spent)))
+    .returning();
+  if (!updated[0]) throw new Error(`koinon: upkeep of ${settle.spent} failed its guard under the koinon lock`);
+  return { k: updated[0], settle };
+}
+
+// The locked body every member write shares: lock the caller's koinon, drop
+// the members whose accounts are gone, settle the hall, confirm the caller
+// still sits in it, then run `fn` with the row, the caller's role and the
+// settle. `fn` checks before it writes, so a refusal it returns leaves nothing
+// half done. The caller owns the transaction (and any player lock, taken
+// before this).
+async function inOwnKoinon<T>(tx: DbTx, ctx: ActingContext, now: Date, fn: (tx: DbTx, k: KoinonRow, role: KoinonRole, settle: HallSettle) => Promise<T | KoinonError>): Promise<T | KoinonError> {
+  const mine = await memberRow(tx, ctx.playerId, ctx.worldId);
   if (!mine) return NOT_MEMBER;
-  return db.transaction(async (tx) => {
-    const locked = await lockKoinon(tx, mine.koinonId);
-    const k = locked ? await purgeInactive(tx, locked, now) : null;
-    if (!k) return NOT_MEMBER;
-    const still = await memberRow(tx, ctx.playerId, ctx.worldId);
-    if (!still || still.koinonId !== k.id) return NOT_MEMBER;
-    return fn(tx, k, roleOf(k, ctx.playerId));
-  });
+  const locked = await lockKoinon(tx, mine.koinonId);
+  const purged = locked ? await purgeInactive(tx, locked, now) : null;
+  if (!purged) return NOT_MEMBER;
+  const { k, settle } = await settleHallLocked(tx, purged, now);
+  const still = await memberRow(tx, ctx.playerId, ctx.worldId);
+  if (!still || still.koinonId !== k.id) return NOT_MEMBER;
+  return fn(tx, k, roleOf(k, ctx.playerId), settle);
+}
+
+// One locked transaction on the caller's own koinon, around inOwnKoinon.
+async function withOwnKoinon<T>(ctx: ActingContext, now: Date, fn: (tx: DbTx, k: KoinonRow, role: KoinonRole, settle: HallSettle) => Promise<T | KoinonError>): Promise<T | KoinonError> {
+  return db.transaction((tx) => inOwnKoinon(tx, ctx, now, fn));
 }
 
 async function cooldownUntil(exec: Exec, playerId: string, now: Date): Promise<Date | null> {
@@ -524,8 +556,9 @@ export async function acceptInvite(ctx: ActingContext, inviteId: string, now: Da
     const seen = await ownInvite(tx, ctx, inviteId);
     if (!seen) return INVITE_GONE;
     const locked = await lockKoinon(tx, seen.koinonId);
-    const k = locked ? await purgeInactive(tx, locked, now) : null;
-    if (!k) return fail(404, "That koinon is no more.");
+    const purged = locked ? await purgeInactive(tx, locked, now) : null;
+    if (!purged) return fail(404, "That koinon is no more.");
+    const { k } = await settleHallLocked(tx, purged, now);
     // Read again under the lock: a withdraw or a dissolve may have run first.
     const invite = await ownInvite(tx, ctx, inviteId);
     if (!invite) return INVITE_GONE;
