@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { ApiError, api, type AdminCharacter, type AdminCluster, type AdminLogRow, type AdminSheet, type AdminStat, type AdminUser } from "./api.js";
+import { ApiError, api, type AdminCharacter, type AdminCluster, type AdminKoinon, type AdminLogRow, type AdminSheet, type AdminStat, type AdminUser } from "./api.js";
 
 // ---------------------------------------------------------------------------
 // /admin — a plain operator page (no styling work by design). Gated by the API:
@@ -37,6 +37,7 @@ export function AdminPage() {
   const [cluster, setCluster] = useState<AdminCluster | null>(null);
   const [log, setLog] = useState<{ title: string; rows: AdminLogRow[] } | null>(null);
   const [sheet, setSheet] = useState<AdminSheet | null>(null);
+  const [koina, setKoina] = useState<AdminKoinon[] | null>(null);
   const [status, setStatus] = useState("");
 
   useEffect(() => {
@@ -65,6 +66,7 @@ export function AdminPage() {
       await work();
       await search();
       if (sheet) setSheet(await api.adminSheet(sheet.characterId));
+      if (koina) setKoina((await api.adminKoina()).koina);
       setStatus(done);
     } catch (error) {
       setStatus(errorText(error));
@@ -126,6 +128,29 @@ export function AdminPage() {
     } catch (error) {
       setStatus(errorText(error));
     }
+  };
+
+  // The active world's live koina: name, leader, members, founded. No posts.
+  const loadKoina = async () => {
+    try {
+      const result = await api.adminKoina();
+      setKoina(result.koina);
+      setStatus(`${result.koina.length} koina`);
+    } catch (error) {
+      setStatus(errorText(error));
+    }
+  };
+  const renameKoinon = (koinon: AdminKoinon) => {
+    const name = window.prompt(`Rename the koinon ${koinon.name} to:`);
+    if (!name?.trim()) return;
+    const reason = window.prompt("Reason (audited):");
+    if (!reason?.trim()) return;
+    void act(`Rename the koinon ${koinon.name} to "${name.trim()}"?`, () => api.adminKoinonRename(koinon.id, name.trim(), reason.trim()), `Renamed the koinon to ${name.trim()}.`);
+  };
+  const dissolveKoinon = (koinon: AdminKoinon) => {
+    const reason = window.prompt(`Dissolve the koinon ${koinon.name}. Reason (audited):`);
+    if (!reason?.trim()) return;
+    void act(`Dissolve the koinon ${koinon.name}? Its ${koinon.members} member(s) are removed, with no cooldown.`, () => api.adminKoinonDissolve(koinon.id, reason.trim()), `Dissolved the koinon ${koinon.name}.`);
   };
 
   if (allowed === "pending") return <main><p>Checking access…</p></main>;
@@ -268,6 +293,29 @@ export function AdminPage() {
           <button type="button" onClick={() => setCluster(null)}>Close</button>
         </section>
       ) : null}
+
+      <section data-admin="koina">
+        <h2>Koina</h2>
+        <button type="button" onClick={() => void loadKoina()}>Load koina</button>
+        {koina ? (
+          koina.length ? (
+            <table border={1} cellPadding={4}>
+              <thead><tr><th>Name</th><th>Leader</th><th>Members</th><th>Founded</th><th>Actions</th></tr></thead>
+              <tbody>
+                {koina.map((koinon) => (
+                  <tr key={koinon.id}>
+                    <td>{koinon.name}</td><td>{koinon.leaderName}</td><td>{koinon.members}</td><td>{fmt(koinon.foundedAt)}</td>
+                    <td>
+                      <button type="button" onClick={() => renameKoinon(koinon)}>Rename</button>{" "}
+                      <button type="button" onClick={() => dissolveKoinon(koinon)}>Dissolve</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : <p>No koina in the active world.</p>
+        ) : null}
+      </section>
 
       {log ? (
         <section>
