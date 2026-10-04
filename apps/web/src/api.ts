@@ -154,8 +154,9 @@ export type AdminCluster = {
   related: { userId: string; email: string; bannedAt: string | null; sharedIps: string[]; lastSeenAt: string }[];
 };
 export type AdminLogRow = Record<string, unknown> & { id: string; createdAt: string };
-// GET /admin/koina: the active world's live koina. No posts.
-export type AdminKoinon = { id: string; name: string; leaderName: string; members: number; foundedAt: string };
+// GET /admin/koina: the active world's live koina, each with its treasury and
+// its Lesche's phase as they stand now. No posts.
+export type AdminKoinon = { id: string; name: string; leaderName: string; members: number; foundedAt: string; treasury: number; hall: "none" | "building" | "open" | "shut" };
 
 export type CreationRequest = {
   classSlug: string;

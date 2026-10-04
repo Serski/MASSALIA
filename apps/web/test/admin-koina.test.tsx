@@ -23,15 +23,15 @@ const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 20)
 const clickButton = (el: ParentNode, text: string) => fireEvent.click([...el.querySelectorAll("button")].find((b) => b.textContent === text)!);
 const section = () => document.querySelector<HTMLElement>('[data-admin="koina"]')!;
 const rowOf = (name: string) => [...section().querySelectorAll("tbody tr")].find((tr) => tr.textContent?.includes(name))!;
-const cells = (tr: Element) => [...tr.querySelectorAll("td")].slice(0, 4).map((td) => td.textContent);
+const cells = (tr: Element) => [...tr.querySelectorAll("td")].slice(0, 6).map((td) => td.textContent);
 
 beforeEach(() => {
   for (const mock of [adminUsers, adminKoina, adminKoinonRename, adminKoinonDissolve]) mock.mockReset();
   adminUsers.mockResolvedValue({ users: [] });
   adminKoina.mockResolvedValue({
     koina: [
-      { id: "k1", name: "The Sacred Band", leaderName: "Kallias", members: 3, foundedAt: "2026-10-01T09:30:00.000Z" },
-      { id: "k2", name: "The Elders", leaderName: "Deon", members: 1, foundedAt: "2026-10-02T18:00:00.000Z" },
+      { id: "k1", name: "The Sacred Band", leaderName: "Kallias", members: 3, foundedAt: "2026-10-01T09:30:00.000Z", treasury: 245, hall: "open" },
+      { id: "k2", name: "The Elders", leaderName: "Deon", members: 1, foundedAt: "2026-10-02T18:00:00.000Z", treasury: 0, hall: "none" },
     ],
   });
   adminKoinonRename.mockResolvedValue({ ok: true, name: "The Holy Band" });
@@ -46,8 +46,9 @@ describe("AdminPage koina", () => {
     expect(section().querySelector("table")).toBeNull();
     clickButton(section(), "Load koina");
     await flush();
-    expect(cells(rowOf("The Sacred Band"))).toEqual(["The Sacred Band", "Kallias", "3", "2026-10-01 09:30"]);
-    expect(cells(rowOf("The Elders"))).toEqual(["The Elders", "Deon", "1", "2026-10-02 18:00"]);
+    expect([...section().querySelectorAll("thead th")].map((th) => th.textContent)).toEqual(["Name", "Leader", "Members", "Founded", "Treasury", "Lesche", "Actions"]);
+    expect(cells(rowOf("The Sacred Band"))).toEqual(["The Sacred Band", "Kallias", "3", "2026-10-01 09:30", "245", "open"]);
+    expect(cells(rowOf("The Elders"))).toEqual(["The Elders", "Deon", "1", "2026-10-02 18:00", "0", "none"]);
 
     // No reason, no call.
     const prompt = vi.spyOn(window, "prompt").mockReturnValue("");
@@ -59,7 +60,7 @@ describe("AdminPage koina", () => {
     prompt.mockReturnValue("abandoned");
     clickButton(rowOf("The Sacred Band"), "Dissolve");
     await flush();
-    expect(confirm).toHaveBeenLastCalledWith("Dissolve the koinon The Sacred Band? Its 3 member(s) are removed, with no cooldown.");
+    expect(confirm).toHaveBeenLastCalledWith("Dissolve the koinon The Sacred Band? Its 3 member(s) are removed, with no cooldown. Its treasury of 245 drachmae goes to the city.");
     expect(adminKoinonDissolve).toHaveBeenCalledWith("k1", "abandoned");
     expect(adminKoina).toHaveBeenCalledTimes(2); // the list is read again after the action
     expect(document.querySelector('[role="status"]')!.textContent).toBe("Dissolved the koinon The Sacred Band.");

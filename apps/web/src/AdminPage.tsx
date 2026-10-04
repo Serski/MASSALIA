@@ -150,7 +150,7 @@ export function AdminPage() {
   const dissolveKoinon = (koinon: AdminKoinon) => {
     const reason = window.prompt(`Dissolve the koinon ${koinon.name}. Reason (audited):`);
     if (!reason?.trim()) return;
-    void act(`Dissolve the koinon ${koinon.name}? Its ${koinon.members} member(s) are removed, with no cooldown.`, () => api.adminKoinonDissolve(koinon.id, reason.trim()), `Dissolved the koinon ${koinon.name}.`);
+    void act(`Dissolve the koinon ${koinon.name}? Its ${koinon.members} member(s) are removed, with no cooldown. Its treasury of ${koinon.treasury} drachmae goes to the city.`, () => api.adminKoinonDissolve(koinon.id, reason.trim()), `Dissolved the koinon ${koinon.name}.`);
   };
 
   if (allowed === "pending") return <main><p>Checking access…</p></main>;
@@ -300,11 +300,11 @@ export function AdminPage() {
         {koina ? (
           koina.length ? (
             <table border={1} cellPadding={4}>
-              <thead><tr><th>Name</th><th>Leader</th><th>Members</th><th>Founded</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Name</th><th>Leader</th><th>Members</th><th>Founded</th><th>Treasury</th><th>Lesche</th><th>Actions</th></tr></thead>
               <tbody>
                 {koina.map((koinon) => (
                   <tr key={koinon.id}>
-                    <td>{koinon.name}</td><td>{koinon.leaderName}</td><td>{koinon.members}</td><td>{fmt(koinon.foundedAt)}</td>
+                    <td>{koinon.name}</td><td>{koinon.leaderName}</td><td>{koinon.members}</td><td>{fmt(koinon.foundedAt)}</td><td>{koinon.treasury}</td><td>{koinon.hall}</td>
                     <td>
                       <button type="button" onClick={() => renameKoinon(koinon)}>Rename</button>{" "}
                       <button type="button" onClick={() => dissolveKoinon(koinon)}>Dissolve</button>
