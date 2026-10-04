@@ -1,0 +1,664 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { and, asc, count, desc, eq, gt, isNull, lte, max, ne, notInArray, sql } from "drizzle-orm";
+import { createDb, dailyDecisions, effectLog, houses, koina, koinonInvites, koinonMembers, koinonPosts, playerCharacters, players } from "@massalia/db";
+import { cleanKoinonName, cleanKoinonPost, formatGameDate, gameDate, parseKoinonContent, sanitizeDisplayName, type KoinonChronicle, type KoinonContent, type KoinonEvent } from "@massalia/shared";
+import { agedPortraitFor } from "./age.js";
+import { creditWorldTreasury, debitDrachmae, spendTransaction, SpendRejected, type ActingContext } from "./buildings.js";
+import { findCharacterRow } from "./character.js";
+import { lockPlayer } from "./lock.js";
+
+// ---------------------------------------------------------------------------
+// The koinon (koinon prompt 1): a player-made company of citizens. One leader,
+// at most one vice, up to `memberCap` members; the leader and the vice invite by
+// name and post to a board the members read. Numbers live in
+// content/koinon/koinon.json.
+//
+// Concurrency. Every write that changes a koinon's membership, roles, invites or
+// posts runs in one transaction that first locks the koinon row (lockKoinon:
+// SELECT … FOR UPDATE on the live row), so two accepts for the last seat, a
+// leave against an expel, or a post against a dissolve run one after another.
+// Founding spends, so it runs in spendTransaction (lockPlayer first). Accepting
+// takes the caller's player lock and then the koinon row: the player lock is
+// what serialises one player accepting two koina at once. No transaction takes
+// a player lock after a koinon lock, and none holds two koinon locks.
+//
+// A member whose account was deleted (players.is_active = false) is removed
+// under the same koinon lock at the start of every read and write, as if he had
+// left: the lead passes, with no cooldown and no line for him.
+// ---------------------------------------------------------------------------
+
+const db = createDb();
+type DbTx = Parameters<Parameters<ReturnType<typeof createDb>["transaction"]>[0]>[0];
+type Exec = DbTx | typeof db;
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, "../../../..");
+const koinonFile = path.join(repoRoot, "content/koinon/koinon.json");
+
+const MS_PER_HOUR = 3_600_000;
+const MS_PER_DAY = 86_400_000;
+
+let content: KoinonContent | null = null;
+
+export async function loadKoinonContent(): Promise<KoinonContent> {
+  content = parseKoinonContent(JSON.parse(await fs.readFile(koinonFile, "utf8")));
+  return content;
+}
+
+export function getKoinonContent(): KoinonContent {
+  if (!content) throw new Error("Koinon content not loaded. Call loadKoinonContent() at boot.");
+  return content;
+}
+
+export type KoinonError = { ok: false; code: number; error: string };
+type KoinonRow = typeof koina.$inferSelect;
+export type KoinonRole = "leader" | "vice" | "member";
+
+const fail = (code: number, error: string): KoinonError => ({ ok: false, code, error });
+const NOT_MEMBER = fail(403, "You are not in a koinon.");
+const INVITE_GONE = fail(404, "That invitation is gone.");
+const NO_MEMBER = fail(404, "No such member.");
+
+// A wait, for refusal messages: "22h 14m", "45m", or "less than a minute".
+function remainingText(ms: number): string {
+  const minutes = Math.ceil(ms / 60_000);
+  if (minutes < 1) return "less than a minute";
+  const h = Math.floor(minutes / 60);
+  const mm = minutes % 60;
+  return h > 0 ? `${h}h ${mm}m` : `${mm}m`;
+}
+
+function roleOf(k: KoinonRow, playerId: string): KoinonRole {
+  return k.leaderPlayerId === playerId ? "leader" : k.vicePlayerId === playerId ? "vice" : "member";
+}
+
+function gameLabel(at: Date, ctx: ActingContext): string {
+  return formatGameDate(gameDate(at.getTime(), ctx.worldStartedMs));
+}
+
+// --- Locks and shared steps --------------------------------------------------
+
+// The koinon lock: the live row, FOR UPDATE. null when the koinon is unknown or
+// dissolved. Emits
+//   SELECT … FROM koina WHERE id = $1 AND dissolved_at IS NULL FOR UPDATE
+async function lockKoinon(tx: DbTx, koinonId: string): Promise<KoinonRow | null> {
+  const rows = await tx.select().from(koina).where(and(eq(koina.id, koinonId), isNull(koina.dissolvedAt))).for("update");
+  return rows[0] ?? null;
+}
+
+// The seats taken: SELECT count(*) FROM koinon_members WHERE koinon_id = $1.
+// Read under the koinon lock, so it cannot move before the caller's own write.
+async function seatCount(exec: Exec, koinonId: string): Promise<number> {
+  const rows = await exec.select({ n: count() }).from(koinonMembers).where(eq(koinonMembers.koinonId, koinonId));
+  return rows[0]?.n ?? 0;
+}
+
+async function memberRow(exec: Exec, playerId: string, worldId: string) {
+  const rows = await exec
+    .select()
+    .from(koinonMembers)
+    .where(and(eq(koinonMembers.worldId, worldId), eq(koinonMembers.playerId, playerId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+// The members in standing order: earliest joined_at, then player id.
+async function membersInOrder(exec: Exec, koinonId: string) {
+  return exec
+    .select({ playerId: koinonMembers.playerId, joinedAt: koinonMembers.joinedAt })
+    .from(koinonMembers)
+    .where(eq(koinonMembers.koinonId, koinonId))
+    .orderBy(asc(koinonMembers.joinedAt), asc(koinonMembers.playerId));
+}
+
+// One Chronicle line on the player's own current character (effect_log kind
+// "koinon", read through detail.chronicle).
+async function logKoinon(tx: DbTx, playerId: string, worldId: string, event: KoinonEvent, koinonName: string, now: Date): Promise<void> {
+  const character = await findCharacterRow(playerId, worldId, tx);
+  if (!character) return;
+  const chronicle: KoinonChronicle = { event, koinonName };
+  await tx.insert(effectLog).values({ characterId: character.id, kind: "koinon", detail: { chronicle, source: "koinon" }, createdAt: now });
+}
+
+// Take a member out (ruling 7). The vice seat empties with its holder. When the
+// leader goes the lead passes to the vice, else to the longest-standing member,
+// who gets the Chronicle line. When no one is left the koinon is dissolved: its
+// invites and posts go and its name is free again. Returns the row as it stands.
+async function removeMember(tx: DbTx, k: KoinonRow, playerId: string, now: Date): Promise<KoinonRow> {
+  await tx.delete(koinonMembers).where(and(eq(koinonMembers.koinonId, k.id), eq(koinonMembers.playerId, playerId)));
+  const rest = await membersInOrder(tx, k.id);
+  if (rest.length === 0) return dissolve(tx, k, now);
+  let vice = k.vicePlayerId === playerId ? null : k.vicePlayerId;
+  if (k.leaderPlayerId !== playerId) {
+    if (vice === k.vicePlayerId) return k;
+    return (await tx.update(koina).set({ vicePlayerId: vice }).where(eq(koina.id, k.id)).returning())[0]!;
+  }
+  const successor = vice ?? rest[0]!.playerId;
+  if (successor === vice) vice = null;
+  const updated = (await tx.update(koina).set({ leaderPlayerId: successor, vicePlayerId: vice, leaderSince: now }).where(eq(koina.id, k.id)).returning())[0]!;
+  await logKoinon(tx, successor, k.worldId, "leader", k.name, now);
+  return updated;
+}
+
+// End a koinon: every member row, invite and post goes; the row stays, marked.
+async function dissolve(tx: DbTx, k: KoinonRow, now: Date): Promise<KoinonRow> {
+  await tx.delete(koinonMembers).where(eq(koinonMembers.koinonId, k.id));
+  await tx.delete(koinonInvites).where(eq(koinonInvites.koinonId, k.id));
+  await tx.delete(koinonPosts).where(eq(koinonPosts.koinonId, k.id));
+  return (await tx.update(koina).set({ dissolvedAt: now, vicePlayerId: null }).where(eq(koina.id, k.id)).returning())[0]!;
+}
+
+// Ruling 9, under the koinon lock: members whose account is gone leave, in
+// standing order. Returns the row as it stands, or null once it is dissolved.
+async function purgeInactive(tx: DbTx, k: KoinonRow, now: Date): Promise<KoinonRow | null> {
+  const gone = await tx
+    .select({ playerId: koinonMembers.playerId })
+    .from(koinonMembers)
+    .innerJoin(players, eq(players.id, koinonMembers.playerId))
+    .where(and(eq(koinonMembers.koinonId, k.id), eq(players.isActive, false)))
+    .orderBy(asc(koinonMembers.joinedAt), asc(koinonMembers.playerId));
+  let row = k;
+  for (const g of gone) {
+    row = await removeMember(tx, row, g.playerId, now);
+    if (row.dissolvedAt !== null) return null;
+  }
+  return row;
+}
+
+// The same for every koinon of the world that holds such a member, each under
+// its own lock. The reads call it first; a koinon whose only members are gone
+// has nobody left to read it, so the sweep is by world and not by caller.
+async function sweepInactive(worldId: string, now: Date): Promise<void> {
+  const stale = await db
+    .selectDistinct({ koinonId: koinonMembers.koinonId })
+    .from(koinonMembers)
+    .innerJoin(players, eq(players.id, koinonMembers.playerId))
+    .where(and(eq(koinonMembers.worldId, worldId), eq(players.isActive, false)));
+  for (const { koinonId } of stale) {
+    await db.transaction(async (tx) => {
+      const k = await lockKoinon(tx, koinonId);
+      if (k) await purgeInactive(tx, k, now);
+    });
+  }
+}
+
+// One locked transaction on the caller's own koinon: lock, drop the members
+// whose accounts are gone, confirm the caller still sits in it, then run `fn`
+// with the row and the caller's role. `fn` checks before it writes, so a
+// refusal it returns leaves nothing half done.
+async function withOwnKoinon<T>(ctx: ActingContext, now: Date, fn: (tx: DbTx, k: KoinonRow, role: KoinonRole) => Promise<T | KoinonError>): Promise<T | KoinonError> {
+  const mine = await memberRow(db, ctx.playerId, ctx.worldId);
+  if (!mine) return NOT_MEMBER;
+  return db.transaction(async (tx) => {
+    const locked = await lockKoinon(tx, mine.koinonId);
+    const k = locked ? await purgeInactive(tx, locked, now) : null;
+    if (!k) return NOT_MEMBER;
+    const still = await memberRow(tx, ctx.playerId, ctx.worldId);
+    if (!still || still.koinonId !== k.id) return NOT_MEMBER;
+    return fn(tx, k, roleOf(k, ctx.playerId));
+  });
+}
+
+async function cooldownUntil(exec: Exec, playerId: string, now: Date): Promise<Date | null> {
+  const rows = await exec.select({ until: players.koinonCooldownUntil }).from(players).where(eq(players.id, playerId)).limit(1);
+  const until = rows[0]?.until ?? null;
+  return until && until.getTime() > now.getTime() ? until : null;
+}
+
+async function liveNameTaken(exec: Exec, worldId: string, name: string, exceptKoinonId: string | null): Promise<boolean> {
+  const rows = await exec
+    .select({ id: koina.id })
+    .from(koina)
+    .where(and(eq(koina.worldId, worldId), isNull(koina.dissolvedAt), sql`lower(${koina.name}) = lower(${name})`, ...(exceptKoinonId ? [ne(koina.id, exceptKoinonId)] : [])))
+    .limit(1);
+  return rows.length > 0;
+}
+
+// Ruling 8: the leader has led for the content's days and his current character
+// has had no daily hand dealt in as long (the dashboard deals it on every load).
+async function leaderIsAbsent(exec: Exec, k: KoinonRow, now: Date): Promise<boolean> {
+  if (!k.leaderPlayerId) return false;
+  const windowMs = getKoinonContent().absentLeaderDays * MS_PER_DAY;
+  if (now.getTime() - k.leaderSince.getTime() < windowMs) return false;
+  const rows = await exec
+    .select({ last: max(dailyDecisions.createdAt) })
+    .from(dailyDecisions)
+    .innerJoin(playerCharacters, eq(playerCharacters.id, dailyDecisions.characterId))
+    .where(and(eq(playerCharacters.playerId, k.leaderPlayerId), eq(playerCharacters.worldId, k.worldId)));
+  const last = rows[0]?.last ?? null;
+  return last === null || now.getTime() - last.getTime() >= windowMs;
+}
+
+// Who may take an absent leader's place: the vice; with no vice, the
+// longest-standing member other than the leader.
+async function leadClaimant(exec: Exec, k: KoinonRow): Promise<string | null> {
+  if (k.vicePlayerId) return k.vicePlayerId;
+  return (await membersInOrder(exec, k.id)).find((m) => m.playerId !== k.leaderPlayerId)?.playerId ?? null;
+}
+
+// --- The page ------------------------------------------------------------------
+
+export type KoinonMemberView = {
+  playerId: string;
+  name: string;
+  houseSlug: string;
+  houseName: string;
+  professionSlug: string | null;
+  faceId: string | null;
+  portrait: string | null;
+  party: string;
+  joinedLabel: string;
+  role: KoinonRole;
+};
+
+export type KoinonView = {
+  now: string;
+  rules: { foundCost: number; foundPrestige: number; memberCap: number; nameMin: number; nameMax: number; postMaxChars: number; cooldownHours: number };
+  me: { playerId: string; role: KoinonRole | null; cooldownUntil: string | null; prestige: number; drachmae: number };
+  koina: { id: string; name: string; leaderName: string; members: number; cap: number }[];
+  invites: { id: string; koinonId: string; koinonName: string; inviterName: string; expiresAt: string }[];
+  koinon: null | {
+    id: string;
+    name: string;
+    foundedLabel: string;
+    cap: number;
+    leaderPlayerId: string | null;
+    vicePlayerId: string | null;
+    leaderAbsent: boolean;
+    canTakeLead: boolean;
+    members: KoinonMemberView[];
+    pending: { id: string; playerName: string; expiresAt: string }[];
+    posts: { id: string; authorName: string; body: string; label: string; canDelete: boolean }[];
+    unread: number;
+  };
+};
+
+// The members of one koinon with their display facts, in the page's order:
+// leader, vice, then by standing.
+async function memberViews(exec: Exec, k: KoinonRow, ctx: ActingContext, now: Date): Promise<KoinonMemberView[]> {
+  const rows = await exec
+    .select({ member: koinonMembers, player: players, character: playerCharacters, houseName: houses.name })
+    .from(koinonMembers)
+    .innerJoin(players, eq(players.id, koinonMembers.playerId))
+    .leftJoin(playerCharacters, and(eq(playerCharacters.playerId, players.id), eq(playerCharacters.worldId, koinonMembers.worldId)))
+    .leftJoin(houses, eq(houses.slug, sql`coalesce(${playerCharacters.houseSlug}, ${players.houseSlug})`))
+    .where(eq(koinonMembers.koinonId, k.id))
+    .orderBy(asc(koinonMembers.joinedAt), asc(koinonMembers.playerId));
+  const rank = (playerId: string) => (playerId === k.leaderPlayerId ? 0 : playerId === k.vicePlayerId ? 1 : 2);
+  return rows
+    .map((r, index) => ({ r, index }))
+    .sort((a, b) => rank(a.r.member.playerId) - rank(b.r.member.playerId) || a.index - b.index)
+    .map(({ r }) => {
+      const houseSlug = r.character?.houseSlug ?? r.player.houseSlug ?? "";
+      return {
+        playerId: r.member.playerId,
+        name: r.player.name,
+        houseSlug,
+        houseName: r.houseName ?? houseSlug,
+        professionSlug: r.player.professionSlug,
+        faceId: r.player.faceId,
+        portrait: agedPortraitFor(r.character, now.getTime()),
+        party: r.character?.party ?? "none",
+        joinedLabel: gameLabel(r.member.joinedAt, ctx),
+        role: roleOf(k, r.member.playerId),
+      };
+    });
+}
+
+// A member's unread posts: other players' posts newer than his last_read_at.
+async function unreadPosts(exec: Exec, playerId: string, worldId: string): Promise<number> {
+  const rows = await exec
+    .select({ n: count() })
+    .from(koinonPosts)
+    .innerJoin(koinonMembers, eq(koinonMembers.koinonId, koinonPosts.koinonId))
+    .where(and(eq(koinonMembers.worldId, worldId), eq(koinonMembers.playerId, playerId), ne(koinonPosts.authorPlayerId, playerId), gt(koinonPosts.createdAt, koinonMembers.lastReadAt)));
+  return rows[0]?.n ?? 0;
+}
+
+// GET /api/koinon — the page: the rules, the caller's standing, every live
+// koinon of the world, and either his invitations or his own koinon.
+export async function koinonView(ctx: ActingContext, now: Date): Promise<KoinonView> {
+  const c = getKoinonContent();
+  await sweepInactive(ctx.worldId, now);
+
+  const character = await findCharacterRow(ctx.playerId, ctx.worldId);
+  const mine = await memberRow(db, ctx.playerId, ctx.worldId);
+  const own = mine ? ((await db.select().from(koina).where(and(eq(koina.id, mine.koinonId), isNull(koina.dissolvedAt))).limit(1))[0] ?? null) : null;
+  const cooldown = await cooldownUntil(db, ctx.playerId, now);
+
+  const live = await db
+    .select({ id: koina.id, name: koina.name, leaderName: players.name, members: sql<number>`(SELECT count(*)::int FROM koinon_members m WHERE m.koinon_id = ${koina.id})` })
+    .from(koina)
+    .leftJoin(players, eq(players.id, koina.leaderPlayerId))
+    .where(and(eq(koina.worldId, ctx.worldId), isNull(koina.dissolvedAt)))
+    .orderBy(sql`lower(${koina.name})`, asc(koina.id));
+
+  const invites = own
+    ? []
+    : await db
+        .select({ id: koinonInvites.id, koinonId: koina.id, koinonName: koina.name, inviterName: players.name, expiresAt: koinonInvites.expiresAt })
+        .from(koinonInvites)
+        .innerJoin(koina, eq(koina.id, koinonInvites.koinonId))
+        .innerJoin(players, eq(players.id, koinonInvites.inviterPlayerId))
+        .where(and(eq(koinonInvites.worldId, ctx.worldId), eq(koinonInvites.playerId, ctx.playerId), gt(koinonInvites.expiresAt, now), isNull(koina.dissolvedAt)))
+        .orderBy(asc(koinonInvites.createdAt), asc(koinonInvites.id));
+
+  let koinon: KoinonView["koinon"] = null;
+  if (own) {
+    const role = roleOf(own, ctx.playerId);
+    const leads = role === "leader" || role === "vice";
+    const absent = await leaderIsAbsent(db, own, now);
+    const pending = leads
+      ? await db
+          .select({ id: koinonInvites.id, playerName: players.name, expiresAt: koinonInvites.expiresAt })
+          .from(koinonInvites)
+          .innerJoin(players, eq(players.id, koinonInvites.playerId))
+          .where(and(eq(koinonInvites.koinonId, own.id), gt(koinonInvites.expiresAt, now)))
+          .orderBy(asc(koinonInvites.createdAt), asc(koinonInvites.id))
+      : [];
+    const posts = await db
+      .select({ id: koinonPosts.id, authorPlayerId: koinonPosts.authorPlayerId, authorName: players.name, body: koinonPosts.body, createdAt: koinonPosts.createdAt })
+      .from(koinonPosts)
+      .innerJoin(players, eq(players.id, koinonPosts.authorPlayerId))
+      .where(eq(koinonPosts.koinonId, own.id))
+      .orderBy(desc(koinonPosts.createdAt), desc(koinonPosts.id));
+    koinon = {
+      id: own.id,
+      name: own.name,
+      foundedLabel: gameLabel(own.foundedAt, ctx),
+      cap: c.memberCap,
+      leaderPlayerId: own.leaderPlayerId,
+      vicePlayerId: own.vicePlayerId,
+      leaderAbsent: absent,
+      canTakeLead: absent && role !== "leader" && (await leadClaimant(db, own)) === ctx.playerId,
+      members: await memberViews(db, own, ctx, now),
+      pending: pending.map((p) => ({ id: p.id, playerName: p.playerName, expiresAt: p.expiresAt.toISOString() })),
+      posts: posts.map((p) => ({ id: p.id, authorName: p.authorName, body: p.body, label: gameLabel(p.createdAt, ctx), canDelete: role === "leader" || p.authorPlayerId === ctx.playerId })),
+      unread: await unreadPosts(db, ctx.playerId, ctx.worldId),
+    };
+  }
+
+  return {
+    now: now.toISOString(),
+    rules: { foundCost: c.foundCost, foundPrestige: c.foundPrestige, memberCap: c.memberCap, nameMin: c.name.min, nameMax: c.name.max, postMaxChars: c.post.maxChars, cooldownHours: c.cooldownHours },
+    me: { playerId: ctx.playerId, role: own ? roleOf(own, ctx.playerId) : null, cooldownUntil: cooldown?.toISOString() ?? null, prestige: character?.prestige ?? 0, drachmae: character?.drachmae ?? 0 },
+    koina: live.map((k) => ({ id: k.id, name: k.name, leaderName: k.leaderName ?? "—", members: Number(k.members), cap: c.memberCap })),
+    invites: invites.map((i) => ({ id: i.id, koinonId: i.koinonId, koinonName: i.koinonName, inviterName: i.inviterName, expiresAt: i.expiresAt.toISOString() })),
+    koinon,
+  };
+}
+
+// The Politics nav count (ruling 11), for /me/state: two lean counts and nothing
+// else. A member's unread posts; a non-member's unexpired invites.
+export async function koinonPendingCount(playerId: string, worldId: string, now: Date): Promise<number> {
+  const unread = await unreadPosts(db, playerId, worldId);
+  const invited = await db
+    .select({ n: count() })
+    .from(koinonInvites)
+    .innerJoin(koina, eq(koina.id, koinonInvites.koinonId))
+    .where(
+      and(
+        eq(koinonInvites.worldId, worldId),
+        eq(koinonInvites.playerId, playerId),
+        gt(koinonInvites.expiresAt, now),
+        isNull(koina.dissolvedAt),
+        sql`NOT EXISTS (SELECT 1 FROM koinon_members m WHERE m.world_id = ${worldId} AND m.player_id = ${playerId})`,
+      ),
+    );
+  return unread + (invited[0]?.n ?? 0);
+}
+
+// --- Founding ------------------------------------------------------------------
+
+export type FoundResult = KoinonError | { ok: true; koinonId: string; name: string; wallet: number };
+
+// POST /api/koinon/found — ruling 2. Prestige is checked, not spent; the fee is
+// a guarded debit paid into the world treasury. A refusal after the debit
+// throws SpendRejected so nothing is written.
+export async function foundKoinon(ctx: ActingContext, rawName: unknown, now: Date): Promise<FoundResult> {
+  const c = getKoinonContent();
+  return spendTransaction(ctx.playerId, async (tx) => {
+    const character = await findCharacterRow(ctx.playerId, ctx.worldId, tx);
+    if (!character) return fail(404, "No active character found.");
+    if (character.classId === "slave") return fail(403, "The unfree may not found a koinon.");
+    if (character.prestige < c.foundPrestige) return fail(403, `Founding a koinon needs prestige ${c.foundPrestige}.`);
+    if (await memberRow(tx, ctx.playerId, ctx.worldId)) return fail(409, "You are already in a koinon.");
+    const cooldown = await cooldownUntil(tx, ctx.playerId, now);
+    if (cooldown) return fail(409, `You left a koinon too recently. You may found another in ${remainingText(cooldown.getTime() - now.getTime())}.`);
+    const name = cleanKoinonName(rawName, c);
+    if (!name) return fail(400, `A koinon's name runs ${c.name.min} to ${c.name.max} characters and needs a letter.`);
+    const taken = fail(409, "A koinon already bears that name.");
+    if (await liveNameTaken(tx, ctx.worldId, name, null)) return taken;
+
+    const wallet = await debitDrachmae(tx, ctx.playerId, c.foundCost);
+    if (wallet === null) throw new SpendRejected(fail(402, `You need ${c.foundCost} drachmae to found a koinon.`));
+    await creditWorldTreasury(tx, ctx.worldId, c.foundCost);
+    // Two founders racing for one name: the live-name index lets one row in.
+    const founded = (await tx.insert(koina).values({ worldId: ctx.worldId, name, leaderPlayerId: ctx.playerId, leaderSince: now, foundedAt: now }).onConflictDoNothing().returning())[0];
+    if (!founded) throw new SpendRejected(taken);
+    const seated = await tx.insert(koinonMembers).values({ worldId: ctx.worldId, playerId: ctx.playerId, koinonId: founded.id, joinedAt: now, lastReadAt: now }).onConflictDoNothing().returning();
+    if (!seated[0]) throw new SpendRejected(fail(409, "You are already in a koinon."));
+    await tx.delete(koinonInvites).where(and(eq(koinonInvites.worldId, ctx.worldId), eq(koinonInvites.playerId, ctx.playerId)));
+    await logKoinon(tx, ctx.playerId, ctx.worldId, "founded", name, now);
+    return { ok: true as const, koinonId: founded.id, name, wallet };
+  });
+}
+
+// --- Invites -------------------------------------------------------------------
+
+export type InviteResult = KoinonError | { ok: true; invite: { id: string; playerName: string; expiresAt: string } };
+
+// POST /api/koinon/invite — ruling 5: by exact name (ignoring case) in the world.
+export async function invite(ctx: ActingContext, rawName: unknown, now: Date): Promise<InviteResult> {
+  const c = getKoinonContent();
+  const name = sanitizeDisplayName(rawName);
+  if (!name) return fail(400, "Name the citizen to invite.");
+  return withOwnKoinon(ctx, now, async (tx, k, role) => {
+    if (role === "member") return fail(403, "Only the leader and the vice may invite.");
+    const target = (
+      await tx
+        .select({ id: players.id, name: players.name })
+        .from(players)
+        .where(and(eq(players.worldId, ctx.worldId), eq(players.isActive, true), sql`lower(${players.name}) = lower(${name})`))
+        .limit(1)
+    )[0];
+    const character = target ? await findCharacterRow(target.id, ctx.worldId, tx) : null;
+    if (!target || !character) return fail(404, "No citizen bears that name.");
+    if (character.classId === "slave") return fail(409, "The unfree cannot join a koinon.");
+    if (await memberRow(tx, target.id, ctx.worldId)) return fail(409, "That citizen is already in a koinon.");
+    // An expired invite still holds the (koinon, player) pair: clear it first.
+    await tx.delete(koinonInvites).where(and(eq(koinonInvites.koinonId, k.id), eq(koinonInvites.playerId, target.id), lte(koinonInvites.expiresAt, now)));
+    const standing = await tx.select({ playerId: koinonInvites.playerId }).from(koinonInvites).where(and(eq(koinonInvites.koinonId, k.id), gt(koinonInvites.expiresAt, now)));
+    if (standing.some((s) => s.playerId === target.id)) return fail(409, "That citizen already holds your invitation.");
+    if ((await seatCount(tx, k.id)) + standing.length >= c.memberCap) {
+      return fail(409, `The koinon is full: its members and standing invitations already number ${c.memberCap}.`);
+    }
+    const expiresAt = new Date(now.getTime() + c.inviteHours * MS_PER_HOUR);
+    const row = (await tx.insert(koinonInvites).values({ worldId: ctx.worldId, koinonId: k.id, playerId: target.id, inviterPlayerId: ctx.playerId, createdAt: now, expiresAt }).returning())[0]!;
+    return { ok: true as const, invite: { id: row.id, playerName: target.name, expiresAt: expiresAt.toISOString() } };
+  });
+}
+
+export type OkResult = KoinonError | { ok: true };
+
+// POST /api/koinon/withdraw — the leader or the vice takes back a pending invite.
+export async function withdrawInvite(ctx: ActingContext, inviteId: string, now: Date): Promise<OkResult> {
+  return withOwnKoinon(ctx, now, async (tx, k, role) => {
+    if (role === "member") return fail(403, "Only the leader and the vice may withdraw an invitation.");
+    const gone = await tx.delete(koinonInvites).where(and(eq(koinonInvites.id, inviteId), eq(koinonInvites.koinonId, k.id))).returning({ id: koinonInvites.id });
+    return gone[0] ? { ok: true as const } : INVITE_GONE;
+  });
+}
+
+async function ownInvite(exec: Exec, ctx: ActingContext, inviteId: string) {
+  const rows = await exec
+    .select()
+    .from(koinonInvites)
+    .where(and(eq(koinonInvites.id, inviteId), eq(koinonInvites.playerId, ctx.playerId), eq(koinonInvites.worldId, ctx.worldId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export type AcceptResult = KoinonError | { ok: true; koinonId: string; name: string };
+
+// POST /api/koinon/accept — ruling 5. The caller's player lock first (one player
+// accepting two koina at once runs one after the other), then the koinon lock
+// (two players accepting the last seat run one after the other). Under both the
+// invite is read again, the seats are counted and the member row goes in; the
+// (world_id, player_id) primary key is the last guard on one koinon per player.
+export async function acceptInvite(ctx: ActingContext, inviteId: string, now: Date): Promise<AcceptResult> {
+  const c = getKoinonContent();
+  return db.transaction(async (tx) => {
+    await lockPlayer(tx, ctx.playerId);
+    const seen = await ownInvite(tx, ctx, inviteId);
+    if (!seen) return INVITE_GONE;
+    const locked = await lockKoinon(tx, seen.koinonId);
+    const k = locked ? await purgeInactive(tx, locked, now) : null;
+    if (!k) return fail(404, "That koinon is no more.");
+    // Read again under the lock: a withdraw or a dissolve may have run first.
+    const invite = await ownInvite(tx, ctx, inviteId);
+    if (!invite) return INVITE_GONE;
+    if (invite.expiresAt.getTime() <= now.getTime()) return fail(409, "That invitation has expired.");
+    const cooldown = await cooldownUntil(tx, ctx.playerId, now);
+    if (cooldown) return fail(409, `You left a koinon too recently. You may join another in ${remainingText(cooldown.getTime() - now.getTime())}.`);
+    if (await memberRow(tx, ctx.playerId, ctx.worldId)) return fail(409, "You are already in a koinon.");
+    if ((await seatCount(tx, k.id)) >= c.memberCap) return fail(409, "That koinon is full.");
+    const seated = await tx.insert(koinonMembers).values({ worldId: ctx.worldId, playerId: ctx.playerId, koinonId: k.id, joinedAt: now, lastReadAt: now }).onConflictDoNothing().returning();
+    if (!seated[0]) return fail(409, "You are already in a koinon.");
+    // Every invite of this player goes, this one and the others.
+    await tx.delete(koinonInvites).where(and(eq(koinonInvites.worldId, ctx.worldId), eq(koinonInvites.playerId, ctx.playerId)));
+    await logKoinon(tx, ctx.playerId, ctx.worldId, "joined", k.name, now);
+    return { ok: true as const, koinonId: k.id, name: k.name };
+  });
+}
+
+// POST /api/koinon/decline — the invitee turns an invite down.
+export async function declineInvite(ctx: ActingContext, inviteId: string): Promise<OkResult> {
+  const seen = await ownInvite(db, ctx, inviteId);
+  if (!seen) return INVITE_GONE;
+  return db.transaction(async (tx) => {
+    if (!(await lockKoinon(tx, seen.koinonId))) return INVITE_GONE;
+    const gone = await tx.delete(koinonInvites).where(and(eq(koinonInvites.id, inviteId), eq(koinonInvites.playerId, ctx.playerId))).returning({ id: koinonInvites.id });
+    return gone[0] ? { ok: true as const } : INVITE_GONE;
+  });
+}
+
+// --- Leaving, expulsion and the lead -------------------------------------------
+
+async function startCooldown(tx: DbTx, playerId: string, now: Date): Promise<Date> {
+  const until = new Date(now.getTime() + getKoinonContent().cooldownHours * MS_PER_HOUR);
+  await tx.update(players).set({ koinonCooldownUntil: until }).where(eq(players.id, playerId));
+  return until;
+}
+
+export type LeaveResult = KoinonError | { ok: true; dissolved: boolean; cooldownUntil: string };
+
+// POST /api/koinon/leave — rulings 6 and 7.
+export async function leave(ctx: ActingContext, now: Date): Promise<LeaveResult> {
+  return withOwnKoinon(ctx, now, async (tx, k) => {
+    const after = await removeMember(tx, k, ctx.playerId, now);
+    const until = await startCooldown(tx, ctx.playerId, now);
+    await logKoinon(tx, ctx.playerId, ctx.worldId, "left", k.name, now);
+    return { ok: true as const, dissolved: after.dissolvedAt !== null, cooldownUntil: until.toISOString() };
+  });
+}
+
+// POST /api/koinon/expel — the leader removes another member.
+export async function expel(ctx: ActingContext, playerId: string, now: Date): Promise<OkResult> {
+  return withOwnKoinon(ctx, now, async (tx, k, role) => {
+    if (role !== "leader") return fail(403, "Only the leader may expel.");
+    if (playerId === ctx.playerId) return fail(409, "The leader cannot expel himself.");
+    const target = await memberRow(tx, playerId, ctx.worldId);
+    if (!target || target.koinonId !== k.id) return NO_MEMBER;
+    await removeMember(tx, k, playerId, now);
+    await startCooldown(tx, playerId, now);
+    await logKoinon(tx, playerId, ctx.worldId, "expelled", k.name, now);
+    return { ok: true as const };
+  });
+}
+
+// POST /api/koinon/vice — the leader names a member vice, or clears the seat.
+export async function setVice(ctx: ActingContext, playerId: string | null, now: Date): Promise<OkResult> {
+  return withOwnKoinon(ctx, now, async (tx, k, role) => {
+    if (role !== "leader") return fail(403, "Only the leader names the vice.");
+    if (playerId !== null) {
+      if (playerId === ctx.playerId) return fail(409, "The leader cannot be his own vice.");
+      const target = await memberRow(tx, playerId, ctx.worldId);
+      if (!target || target.koinonId !== k.id) return NO_MEMBER;
+    }
+    await tx.update(koina).set({ vicePlayerId: playerId }).where(eq(koina.id, k.id));
+    return { ok: true as const };
+  });
+}
+
+// POST /api/koinon/handover — the leader makes another member the leader and
+// stays on as a member.
+export async function handOver(ctx: ActingContext, playerId: string, now: Date): Promise<OkResult> {
+  return withOwnKoinon(ctx, now, async (tx, k, role) => {
+    if (role !== "leader") return fail(403, "Only the leader may hand over the lead.");
+    if (playerId === ctx.playerId) return fail(409, "You already lead.");
+    const target = await memberRow(tx, playerId, ctx.worldId);
+    if (!target || target.koinonId !== k.id) return NO_MEMBER;
+    await tx.update(koina).set({ leaderPlayerId: playerId, vicePlayerId: k.vicePlayerId === playerId ? null : k.vicePlayerId, leaderSince: now }).where(eq(koina.id, k.id));
+    await logKoinon(tx, playerId, ctx.worldId, "leader", k.name, now);
+    return { ok: true as const };
+  });
+}
+
+// POST /api/koinon/take-lead — ruling 8: the vice (with no vice, the
+// longest-standing other member) replaces a leader absent for the content's days.
+export async function takeLead(ctx: ActingContext, now: Date): Promise<OkResult> {
+  return withOwnKoinon(ctx, now, async (tx, k, role) => {
+    if (role === "leader" || (await leadClaimant(tx, k)) !== ctx.playerId) return fail(403, "The lead is not yours to take.");
+    if (!(await leaderIsAbsent(tx, k, now))) return fail(409, "The leader has been seen too recently.");
+    await tx.update(koina).set({ leaderPlayerId: ctx.playerId, vicePlayerId: k.vicePlayerId === ctx.playerId ? null : k.vicePlayerId, leaderSince: now }).where(eq(koina.id, k.id));
+    await logKoinon(tx, ctx.playerId, ctx.worldId, "leader", k.name, now);
+    return { ok: true as const };
+  });
+}
+
+// --- The board -----------------------------------------------------------------
+
+export type PostResult = KoinonError | { ok: true; postId: string };
+
+// POST /api/koinon/post — ruling 10. The koinon keeps its newest `post.kept`.
+export async function post(ctx: ActingContext, rawBody: unknown, now: Date): Promise<PostResult> {
+  const c = getKoinonContent();
+  const body = cleanKoinonPost(rawBody, c);
+  return withOwnKoinon(ctx, now, async (tx, k, role) => {
+    if (role === "member") return fail(403, "Only the leader and the vice may post.");
+    if (!body) return fail(400, `A post runs 1 to ${c.post.maxChars} characters.`);
+    const row = (await tx.insert(koinonPosts).values({ koinonId: k.id, authorPlayerId: ctx.playerId, body, createdAt: now }).returning({ id: koinonPosts.id }))[0]!;
+    const kept = await tx
+      .select({ id: koinonPosts.id })
+      .from(koinonPosts)
+      .where(eq(koinonPosts.koinonId, k.id))
+      .orderBy(desc(koinonPosts.createdAt), desc(koinonPosts.id))
+      .limit(c.post.kept);
+    await tx.delete(koinonPosts).where(and(eq(koinonPosts.koinonId, k.id), notInArray(koinonPosts.id, kept.map((p) => p.id))));
+    return { ok: true as const, postId: row.id };
+  });
+}
+
+// POST /api/koinon/post/delete — an author deletes his own post; the leader any.
+export async function deletePost(ctx: ActingContext, postId: string, now: Date): Promise<OkResult> {
+  return withOwnKoinon(ctx, now, async (tx, k, role) => {
+    const found = (await tx.select().from(koinonPosts).where(and(eq(koinonPosts.id, postId), eq(koinonPosts.koinonId, k.id))).limit(1))[0];
+    if (!found) return fail(404, "That post is gone.");
+    if (role !== "leader" && found.authorPlayerId !== ctx.playerId) return fail(403, "That post is not yours to delete.");
+    await tx.delete(koinonPosts).where(eq(koinonPosts.id, postId));
+    return { ok: true as const };
+  });
+}
+
+// POST /api/koinon/read — the caller has read the board up to now.
+export async function markRead(ctx: ActingContext, now: Date): Promise<OkResult> {
+  const stamped = await db
+    .update(koinonMembers)
+    .set({ lastReadAt: now })
+    .where(and(eq(koinonMembers.worldId, ctx.worldId), eq(koinonMembers.playerId, ctx.playerId)))
+    .returning({ playerId: koinonMembers.playerId });
+  return stamped[0] ? { ok: true as const } : NOT_MEMBER;
+}
