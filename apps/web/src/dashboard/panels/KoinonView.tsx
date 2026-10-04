@@ -2,7 +2,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { api, ApiError, type KoinonArmies, type KoinonArmyRow, type KoinonMember, type KoinonMissionKind, type KoinonPage } from "../../api.js";
 import { professions } from "../../data/league.js";
 import { LobbyPortrait } from "../../lobby/LobbyPortrait.js";
-import { AssetIcon, BuildProgress, DashboardCard, formatDuration, HouseCrest, type PanelProps, titleCase } from "../shared.js";
+import { AssetIcon, BuildProgress, DashboardCard, formatDuration, HouseCrest, onDeviceClock, type PanelProps, titleCase } from "../shared.js";
 
 // --- The koinon (koinon prompt 1) — a Politics tab ---------------------------
 // A player-made company of citizens. The page comes from GET /api/koinon and is
@@ -185,16 +185,21 @@ export function KoinonView({ onRefresh }: PanelProps) {
   }, [unread, onRefresh]);
 
   // Server clock minus device clock, taken once per payload: the build bar
-  // counts down on it, and the page is read once more when the Lesche stands.
+  // counts down on it.
   const offset = useMemo(() => (page ? Date.parse(page.now) - Date.now() : 0), [page]);
-  const hallPhase = page?.koinon?.hall.phase ?? "none";
-  const hallCompletesAt = page?.koinon?.hall.completesAt ?? null;
+  // One read when the Lesche stands. It belongs to the payload that armed it:
+  // the instant is the payload's completesAt moved onto the device clock by
+  // that payload's own offset (never the device clock alone), and every new
+  // payload, and the unmount, clear it. A payload that still says building
+  // arms the next read from its own `now`; any other phase arms nothing.
   useEffect(() => {
-    if (hallPhase !== "building" || !hallCompletesAt) return;
-    const wait = Date.parse(hallCompletesAt) - offset - Date.now() + 1000;
-    const timer = setTimeout(() => void load().catch(() => {}), Math.max(1000, wait));
+    const hall = page?.koinon?.hall;
+    if (!hall || hall.phase !== "building") return;
+    const standsAt = onDeviceClock(hall.completesAt, offset);
+    if (!standsAt) return;
+    const timer = setTimeout(() => void load().catch(() => {}), Math.max(1000, Date.parse(standsAt) - Date.now() + 1000));
     return () => clearTimeout(timer);
-  }, [hallPhase, hallCompletesAt, offset, load]);
+  }, [page, offset, load]);
 
   const run = async (work: () => Promise<unknown>, after?: () => void) => {
     setBusy(true);

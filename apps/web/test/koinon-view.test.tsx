@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, type KoinonArmies, type KoinonMember, type KoinonPage, type KoinonRole } from "../src/api.js";
 import { awayLine, KoinonView } from "../src/dashboard/panels/KoinonView.js";
 
@@ -402,6 +402,90 @@ describe("KoinonView · the treasury and the Lesche", () => {
       expect(section(container, "lesche")!.querySelector(sign), phase).not.toBeNull();
     }
     expect(errors).not.toHaveBeenCalled();
+  });
+});
+
+// The one read when the Lesche stands, on a device whose clock runs 10 minutes
+// ahead of the server. Fake timers drive the device clock; each payload carries
+// the server's `now`.
+describe("KoinonView · the read when the Lesche stands", () => {
+  const MIN = 60_000;
+  const DEVICE = Date.parse("2026-10-04T12:10:00.000Z");
+  const iso = (ms: number) => new Date(ms).toISOString();
+  // The server's clock when the device reads `deviceMs`.
+  const server = (deviceMs: number) => deviceMs - 10 * MIN;
+  const building = (serverNowMs: number, completesAtMs: number): KoinonPage => ({
+    ...inside("kallias", { hall: hall("building", { startedAt: iso(completesAtMs - 48 * 60 * MIN), completesAt: iso(completesAtMs), paidUntil: iso(completesAtMs) }) }),
+    now: iso(serverNowMs),
+  });
+  const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(DEVICE);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("is armed from the payload's server clock, and re-arms only from the next payload's own now", async () => {
+    // By the server the hall stands in 5 minutes. By the device clock alone it
+    // stood 5 minutes ago, so a timer armed from Date.now() would fire at once.
+    const completes = server(DEVICE) + 5 * MIN;
+    const page = vi.spyOn(api, "koinon").mockResolvedValue(building(server(DEVICE), completes));
+    vi.spyOn(api, "koinonArmies").mockResolvedValue(armies);
+    const { container } = render(<KoinonView {...props} onRefresh={() => {}} />);
+    await tick(0);
+    expect(page).toHaveBeenCalledTimes(1);
+    expect(section(container, "lesche")!.querySelector(".build-progress")).not.toBeNull();
+
+    await tick(2 * MIN);
+    expect(page).toHaveBeenCalledTimes(1);
+    await tick(3 * MIN - 1000); // 4:59 after the payload
+    expect(page).toHaveBeenCalledTimes(1);
+
+    // The read comes a second after the hall stands. This payload still says
+    // building, with 30 seconds left by its own now.
+    page.mockResolvedValue(building(completes - 30_000, completes));
+    await tick(2000);
+    expect(page).toHaveBeenCalledTimes(2);
+    // Re-armed from that payload: 30 seconds and one more, and not before.
+    await tick(29_000);
+    expect(page).toHaveBeenCalledTimes(2);
+    page.mockResolvedValue(inside("kallias", { cap: 12, hall: hall("open", { completesAt: iso(completes), paidUntil: iso(completes + 24 * 60 * MIN), daysCovered: 23 }) }));
+    await tick(3000);
+    expect(page).toHaveBeenCalledTimes(3);
+    expect(section(container, "lesche")!.textContent).toContain("Open. Up to 12 members.");
+    // An open hall arms nothing.
+    await tick(60 * MIN);
+    expect(page).toHaveBeenCalledTimes(3);
+  });
+
+  it("is cleared by every new payload and by the unmount", async () => {
+    const completes = server(DEVICE) + 5 * MIN;
+    const page = vi.spyOn(api, "koinon").mockResolvedValue(building(server(DEVICE), completes));
+    vi.spyOn(api, "koinonArmies").mockResolvedValue(armies);
+    vi.spyOn(api, "koinonPost").mockResolvedValue({ ok: true, postId: "p9" });
+    const view = render(<KoinonView {...props} onRefresh={() => {}} />);
+    await tick(0);
+    expect(page).toHaveBeenCalledTimes(1);
+
+    // A minute on, an action reloads the page. The new payload says the hall
+    // stands an hour later: the first payload's timer must not fire at 5:01.
+    await tick(MIN);
+    const later = completes + 60 * MIN;
+    page.mockResolvedValue(building(server(DEVICE + MIN), later));
+    fireEvent.change(view.container.querySelector("textarea")!, { target: { value: "Word." } });
+    fireEvent.click(button(section(view.container, "board")!, "Post")!);
+    await tick(0);
+    expect(page).toHaveBeenCalledTimes(2);
+    await tick(10 * MIN);
+    expect(page).toHaveBeenCalledTimes(2);
+
+    // Unmounted before the hall stands: no read ever comes.
+    view.unmount();
+    await tick(3 * 60 * MIN);
+    expect(page).toHaveBeenCalledTimes(2);
   });
 });
 
