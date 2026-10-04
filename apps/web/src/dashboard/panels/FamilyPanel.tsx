@@ -807,6 +807,24 @@ const chronicleRenderers: Record<ChronicleEntry["type"], (payload: Record<string
   // The one kind whose payload is already prose: the story authored the line and
   // the server filled its token, because the web ships no story content.
   story_line: (p) => String(p.line ?? ""),
+  // Koinon prompt 1: one line per event; an event this build does not know
+  // renders nothing.
+  koinon: (p) => {
+    switch (p.event) {
+      case "founded":
+        return `Founded the koinon ${p.koinonName}.`;
+      case "joined":
+        return `Joined the koinon ${p.koinonName}.`;
+      case "left":
+        return `Left the koinon ${p.koinonName}.`;
+      case "expelled":
+        return `Was expelled from the koinon ${p.koinonName}.`;
+      case "leader":
+        return `Took the lead of the koinon ${p.koinonName}.`;
+      default:
+        return "";
+    }
+  },
 };
 
 export function renderChronicleEntry(entry: ChronicleEntry): string {

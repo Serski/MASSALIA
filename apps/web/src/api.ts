@@ -294,7 +294,8 @@ export type ChronicleType =
   | "map_action"
   | "holding_reverted"
   | "holding_tribute"
-  | "story_line";
+  | "story_line"
+  | "koinon";
 
 export type ChronicleEntry = {
   seasonIndex: number;

@@ -323,10 +323,42 @@ describe("buildChronicle — story lines (story engine)", () => {
   });
 });
 
+describe("buildChronicle — koinon lines (koinon prompt 1)", () => {
+  const base = { startedMs: 0, successionBoundariesMs: [] as number[], marriages: [], births: [], choregos: [], festivals: [], olympics: [] };
+
+  it("stages each row as a koinon entry carrying its event and the name", () => {
+    const entries = buildChronicle({
+      ...base,
+      koina: [
+        { id: "k2", at: 9 * S, payload: { event: "left", koinonName: "The Sacred Band" } },
+        { id: "k1", at: 8 * S, payload: { event: "founded", koinonName: "The Sacred Band" } },
+      ],
+    });
+    expect(entries.map((e) => [e.type, e.seasonIndex, e.payload.event, e.payload.koinonName])).toEqual([
+      ["koinon", 8, "founded", "The Sacred Band"],
+      ["koinon", 9, "left", "The Sacred Band"],
+    ]);
+  });
+
+  it("sorts after a tribute line and before a story line in one season", () => {
+    const entries = buildChronicle({
+      ...base,
+      stories: [{ id: "s1", at: 8 * S, payload: { storyId: "house-of-roses", line: "A line." } }],
+      koina: [{ id: "k1", at: 8 * S + 5, payload: { event: "joined", koinonName: "The Sacred Band" } }],
+      campaigns: [{ id: "c1", at: 8 * S + 9, kind: "holding_tribute", payload: { regionId: "R032", tribute: [] } }],
+    });
+    expect(entries.map((e) => e.type)).toEqual(["holding_tribute", "koinon", "story_line"]);
+  });
+
+  it("no koinon rows → no koinon entries", () => {
+    expect(buildChronicle(base).some((e) => e.type === "koinon")).toBe(false);
+  });
+});
+
 describe("CHRONICLE_EFFECT_LOG_KINDS", () => {
   // Market prompt 2: player-market sales and purchases are not Chronicle lines.
-  it("reads the campaign kinds and story lines, and no market kind", () => {
-    expect(CHRONICLE_EFFECT_LOG_KINDS).toEqual(["map_action", "holding_reverted", "holding_tribute", "story_line"]);
+  it("reads the campaign kinds, story lines and koinon lines, and no market kind", () => {
+    expect(CHRONICLE_EFFECT_LOG_KINDS).toEqual(["map_action", "holding_reverted", "holding_tribute", "story_line", "koinon"]);
   });
 });
 

@@ -6,7 +6,8 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 // against a REAL Postgres, guarded to a *_test database (mirrors pops.test.ts).
 // Proves story_line rows reach the chronicle through their nested
 // detail.chronicle block, that a row without the block is skipped, and that
-// market_sale and market_purchase rows no longer do (market prompt 2).
+// market_sale and market_purchase rows no longer do (market prompt 2). Koinon
+// rows (koinon prompt 1) arrive the same way, each as its own entry.
 // ---------------------------------------------------------------------------
 
 const dbUrl = process.env.DATABASE_URL ?? "";
@@ -82,5 +83,19 @@ suite("chronicle effect_log kinds (integration)", () => {
     const entries = await chronicle.gatherChronicleForCharacter(characterId);
     expect(entries.map((e) => e.type)).toEqual(["story_line"]);
     expect(entries[0]!.payload).toEqual(payload);
+  });
+
+  it("reads a koinon line through detail.chronicle and skips one without it", async () => {
+    const founded = { event: "founded", koinonName: "The Sacred Band" };
+    const left = { event: "left", koinonName: "The Sacred Band" };
+    await db.insert(dbPkg.effectLog).values([
+      { characterId, kind: "koinon", detail: { chronicle: founded, source: "koinon" }, createdAt: new Date(T0 + 3 * DAY) },
+      { characterId, kind: "koinon", detail: { chronicle: left, source: "koinon" }, createdAt: new Date(T0 + 4 * DAY) },
+      { characterId, kind: "koinon", detail: { source: "koinon" }, createdAt: new Date(T0 + 5 * DAY) }, // no chronicle block
+    ]);
+
+    const entries = await chronicle.gatherChronicleForCharacter(characterId);
+    expect(entries.map((e) => [e.type, e.seasonIndex])).toEqual([["koinon", 3], ["koinon", 4]]);
+    expect(entries.map((e) => e.payload)).toEqual([founded, left]);
   });
 });

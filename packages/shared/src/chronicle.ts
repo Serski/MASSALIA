@@ -12,6 +12,7 @@
 
 import { z } from "zod";
 import { formatGameDate, gameDate } from "./calendar.js";
+import type { KoinonChronicle } from "./koinon.js";
 
 // How a character died, recorded on the succession handoff (see successions.cause,
 // migration 0047). A NULL/unknown cause (legacy rows, regent maturation) reads as a
@@ -63,7 +64,10 @@ export type ChronicleType =
   // Story engine: a line an authored story wrote when it ended. The ONE kind whose
   // payload is prose — the authored line with its token already filled — because
   // the web ships no story content to render from.
-  | "story_line";
+  | "story_line"
+  // Koinon prompt 1: founding, joining, leaving, being expelled from, or taking
+  // the lead of a koinon. Sourced from effect_log; one flat line in the web register.
+  | "koinon";
 
 export type ChronicleEntry = {
   // Sort key, from gameDate(timestamp, startedMs).seasonIndex.
@@ -155,22 +159,37 @@ export type ChronicleInput = {
   // Story engine: the lines a finished story wrote, from effect_log.
   // Optional — pre-existing fixtures need not supply it.
   stories?: ChronicleStoryRow[];
+  // Koinon prompt 1: the character's koinon lines, from effect_log.
+  // Optional — pre-existing fixtures need not supply it.
+  koina?: ChronicleKoinonRow[];
 };
 
 // A map action or a holding reversion, dated at the effect_log instant. The
 // payload is the structured summary the action wrote (see CampaignPayload).
 export type ChronicleCampaignKind = "map_action" | "holding_reverted" | "holding_tribute";
 // Every effect_log kind the chronicle reads (each through detail.chronicle).
-export type ChronicleEffectLogKind = ChronicleCampaignKind | "story_line";
+export type ChronicleEffectLogKind = ChronicleCampaignKind | "story_line" | "koinon";
 export const CHRONICLE_EFFECT_LOG_KINDS: readonly ChronicleEffectLogKind[] = [
   "map_action",
   "holding_reverted",
   "holding_tribute",
   "story_line",
+  "koinon",
 ];
 export function isChronicleStoryKind(kind: string): kind is "story_line" {
   return kind === "story_line";
 }
+export function isChronicleKoinonKind(kind: string): kind is "koinon" {
+  return kind === "koinon";
+}
+
+// A koinon line, dated at the effect_log instant: which event, and the
+// koinon's name as it stood then.
+export type ChronicleKoinonRow = {
+  id: string;
+  at: number;
+  payload: KoinonChronicle;
+};
 
 // A line a finished story wrote, dated at the effect_log instant. Unlike every
 // other payload this one is already prose: the story's authored line, with its
@@ -340,6 +359,7 @@ const TYPE_ORDER: Record<ChronicleType, number> = {
   map_action: 15,
   holding_reverted: 16,
   holding_tribute: 17,
+  koinon: 18,
   story_line: 20,
 };
 
@@ -426,6 +446,9 @@ export function buildChronicle(input: ChronicleInput): ChronicleEntry[] {
   }
   for (const st of input.stories ?? []) {
     staged.push(stage(st.id, st.at, "story_line", { ...st.payload }, input));
+  }
+  for (const k of input.koina ?? []) {
+    staged.push(stage(k.id, k.at, "koinon", { ...k.payload }, input));
   }
   for (const d of input.deaths ?? []) {
     // The succession instant is a generation boundary, so a death dated exactly on it

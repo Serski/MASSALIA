@@ -34,3 +34,15 @@ describe("renderChronicleEntry · story lines", () => {
     expect(renderChronicleEntry(entry("story_line", { storyId: "house-of-roses" }))).toBe("");
   });
 });
+
+describe("renderChronicleEntry · koinon lines", () => {
+  it("renders the five events, and an empty string for one it does not know", () => {
+    const line = (event: string) => renderChronicleEntry(entry("koinon", { event, koinonName: "The Sacred Band" }));
+    expect(line("founded")).toBe("Founded the koinon The Sacred Band.");
+    expect(line("joined")).toBe("Joined the koinon The Sacred Band.");
+    expect(line("left")).toBe("Left the koinon The Sacred Band.");
+    expect(line("expelled")).toBe("Was expelled from the koinon The Sacred Band.");
+    expect(line("leader")).toBe("Took the lead of the koinon The Sacred Band.");
+    expect(line("renamed")).toBe("");
+  });
+});
