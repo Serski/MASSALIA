@@ -32,7 +32,7 @@ const dashboardNav: DashboardNavItem[] = [
   { id: "market", label: "Market", icon: "market" },
   { id: "family", label: "Family", icon: "family" }, // badge is player.familyPending (dynamic)
   { id: "barracks", label: "Barracks", icon: "barracks" },
-  { id: "politics", label: "Politics", icon: "politics" },
+  { id: "politics", label: "Politics", icon: "politics" }, // badge is player.koinonPending (dynamic)
   { id: "atlas", label: "Atlas", icon: "atlas" },
   { id: "standings", label: "Standings", icon: "standings" },
 ];
@@ -185,7 +185,8 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
   const ActivePanel = panelComponents[activeSection];
   const courtBadgeCount = courtRemaining;
   const isMoreActive = mobileMoreNav.some((item) => item.id === activeSection);
-  const hiddenBadgeCount = mobileMoreNav.reduce((total, item) => total + (item.badge ?? 0), 0);
+  // The More button's dot: Politics sits under More, so its koinon count shows here.
+  const hiddenBadgeCount = mobileMoreNav.reduce((total, item) => total + (item.badge ?? 0), 0) + player.koinonPending;
 
   const selectMobileSection = (section: DashboardSection) => {
     setActiveSection(section);
@@ -356,6 +357,7 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
                 {item.label}
                 {item.id === "court" && courtBadgeCount ? <strong className="nav-badge">{courtBadgeCount}</strong> : null}
                 {item.id === "family" && player.familyPending ? <strong className="nav-badge subtle">{player.familyPending}</strong> : null}
+                {item.id === "politics" && player.koinonPending ? <strong className="nav-badge subtle">{player.koinonPending}</strong> : null}
               </button>
             ))}
           </nav>
@@ -461,6 +463,7 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
                 <SvgIcon icon={item.icon} />
                 <span>{item.label}</span>
                 {item.badge ? <strong className="nav-badge subtle">{item.badge}</strong> : null}
+                {item.id === "politics" && player.koinonPending ? <strong className="nav-badge subtle">{player.koinonPending}</strong> : null}
               </button>
             ))}
             <button

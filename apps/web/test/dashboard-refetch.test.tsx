@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PlayerState } from "../src/api.js";
 
@@ -114,5 +114,31 @@ describe("dashboard refetch triggers", () => {
     view.unmount();
     await advance(2 * HOUR);
     expect(state).toHaveBeenCalledTimes(1);
+  });
+});
+
+// The Politics nav count (koinon prompt 1): unread koinon posts, or standing
+// invites, from the payload's koinonPending. Politics sits under More on mobile,
+// so the More button shows its dot and the sheet shows the number.
+describe("koinon count on the Politics nav", () => {
+  const politics = (root: ParentNode) => [...root.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Politics"))!;
+
+  it("koinonPending 2 shows 2 on the Politics nav, the More dot, and in the More sheet", async () => {
+    state.mockImplementation(() => Promise.resolve({ ...payload(), koinonPending: 2 }));
+    const { container } = mount();
+    await settle();
+
+    expect(politics(container.querySelector(".dashboard-nav")!).querySelector(".nav-badge")!.textContent).toBe("2");
+    const more = container.querySelector<HTMLButtonElement>('.dashboard-mobile-tabs button[aria-controls="dashboard-mobile-more"]')!;
+    expect(more.querySelector(".nav-badge.dot")).not.toBeNull();
+    fireEvent.click(more);
+    expect(politics(container.querySelector(".mobile-more-sheet")!).querySelector(".nav-badge")!.textContent).toBe("2");
+  });
+
+  it("no count, no badge and no dot", async () => {
+    const { container } = mount();
+    await settle();
+    expect(politics(container.querySelector(".dashboard-nav")!).querySelector(".nav-badge")).toBeNull();
+    expect(container.querySelector(".dashboard-mobile-tabs .nav-badge.dot")).toBeNull();
   });
 });
