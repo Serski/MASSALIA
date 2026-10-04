@@ -971,7 +971,31 @@ export const koina = pgTable("koina", {
   leaderSince: timestamp("leader_since", { withTimezone: true }).notNull().defaultNow(),
   foundedAt: timestamp("founded_at", { withTimezone: true }).notNull().defaultNow(),
   dissolvedAt: timestamp("dissolved_at", { withTimezone: true }),
-});
+  // The treasury and the Lesche (migration 0063). Members give into the
+  // treasury; only the koinon's buildings draw from it. The hall: when it was
+  // ordered, when it stands, the end of its last paid day of upkeep, and
+  // whether it is shut for want of upkeep.
+  treasury: integer("treasury").notNull().default(0),
+  lescheStartedAt: timestamp("lesche_started_at", { withTimezone: true }),
+  lescheCompletesAt: timestamp("lesche_completes_at", { withTimezone: true }),
+  leschePaidUntil: timestamp("lesche_paid_until", { withTimezone: true }),
+  lescheShut: boolean("lesche_shut").notNull().default(false),
+}, (table) => ({
+  treasuryCheck: check("koina_treasury_check", sql`${table.treasury} >= 0`),
+}));
+
+// One row per gift to a koinon's treasury (migration 0063). Gifts stay when the
+// giver leaves.
+export const koinonDeposits = pgTable("koinon_deposits", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  koinonId: uuid("koinon_id").references(() => koina.id).notNull(),
+  playerId: uuid("player_id").references(() => players.id).notNull(),
+  amount: integer("amount").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  amountCheck: check("koinon_deposits_amount_check", sql`${table.amount} > 0`),
+  koinonIdx: index("koinon_deposits_koinon_idx").on(table.koinonId, table.createdAt.desc()),
+}));
 
 // One row per player per world: the primary key keeps a player in one koinon at
 // a time. Keyed on players.id, so an heir keeps the membership.
