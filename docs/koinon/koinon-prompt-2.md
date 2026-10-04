@@ -290,3 +290,22 @@ RULINGS FOR ARGIRIS: every departure from this prompt, with the reason
 Committed: <SHA> <subject>, one line per commit, in order
 GATE: the gate's last line at HEAD
 ```
+
+## STOP 1 ruling
+
+STOP 1 ruling (koinon prompt 2)
+
+Append this ruling verbatim at the end of docs/koinon/koinon-prompt-2.md under "## STOP 1 ruling", as its own commit `docs: koinon prompt 2 STOP 1 ruling`, then go on to Phase 3.
+
+1. Copy fix, one commit `koinon: a shut Lesche says why the koinon is full`. When the hall's phase is `shut`, the invite refusal reads "The Lesche is shut, so the koinon takes no one new past {memberCap}." In every other case the existing sentence stands, with the number from the cap in force. The accept refusal "That koinon is full." is unchanged. Add the shut case to the cap test.
+2. Accepted. dissolve returns the row and treasuryToCity.
+3. Accepted. Gift rows stay when a koinon is dissolved, as the record.
+4. Accepted. A no-op settle writes nothing, and a guarded debit that misses under the lock throws.
+5. Accepted. inOwnKoinon reads the caller's membership inside the transaction.
+6. Accepted. The amount is checked first (400), then membership (403).
+7. Accepted, both 409s and all four new strings as written.
+8. Accepted. The admin columns stay in the Lesche commit, and adminKoinaList takes now. Phase 3's client commit for the admin list stays as planned.
+9. Accepted. The amend stands, since ffd4720 is the last commit and nothing follows it. From here on, read every test command's exit code directly before committing (AGENTS.md, commit discipline). A commit made on a red run is a deviation to report, even when it is fixed before the report.
+10. Accepted. HallPhase is exported.
+
+Phase 3 goes ahead as written. Run the full `pnpm gate` at HEAD before STOP 2. Captures as named at STOP 2. Do not push.
