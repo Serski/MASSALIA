@@ -167,3 +167,20 @@ Push: <not pushed | remote HEAD, CI, Pages, Railway, live shasum, live og:image>
 ```
 
 END OF PROMPT
+
+## STOP 1 ruling (4 Oct 2026)
+
+STOP 1 ruling (4 Oct 2026)
+
+1. Accepted as drawn. The fade stops in the prompt are the spec and the card
+   matches the preview I approved. "Undimmed" in the checklist was loose
+   wording. No change to the overlays.
+2. The economy STOP 1 ruling stays parked. No action in this batch.
+3. This ruling is appended verbatim to docs/art/art-prompt-3.md in the first
+   commit of the next prompt, not now.
+
+Push: go, as the prompt's Push section says. Fast-forward only, plain
+git push, the two commits b32c96d and 342827c. Report remote HEAD, the CI
+run and its Gate step, the Pages run, Railway server and worker, then the
+live og-image.jpg shasum against the repo file and the live og:image line
+showing ?v=2. Close-out after that.
