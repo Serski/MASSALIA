@@ -5,6 +5,8 @@ import { hasLetter, sanitizeDisplayName, type PopType } from "@massalia/shared";
 import { requireAdmin } from "../services/auth.js";
 import { buildingContext, creditResource, debitResource, getBuildingsContent, getOrCreateResource, getPopsContent, settleAll } from "../services/buildings.js";
 import { applyComposureDelta } from "../services/composure.js";
+import { getActiveWorldId } from "../services/character.js";
+import { adminDissolveKoinon, adminKoinaList, adminRenameKoinon } from "../services/koinon.js";
 import { lockPlayer } from "../services/lock.js";
 import { nameTaken } from "../services/playerNames.js";
 
@@ -459,5 +461,35 @@ export async function adminRoutes(app: FastifyInstance) {
       return after;
     });
     return { ok: true, characterId, popType, count };
+  });
+
+  // --- Koina -------------------------------------------------------------------
+  // The active world's live koina: name, leader, members, founded. No posts.
+  app.get("/koina", async (request) => {
+    const admin = await requireAdmin(request);
+    const worldId = await getActiveWorldId();
+    const list = worldId ? await adminKoinaList(worldId) : [];
+    await audit(db, admin.id, "koina.list", null, { worldId, returned: list.length });
+    return { koina: list };
+  });
+
+  // Rename: the same cleaning and uniqueness as founding, under the koinon lock.
+  app.post("/koina/:id/rename", { schema: uuidParam("id") }, async (request) => {
+    const admin = await requireAdmin(request);
+    const { id } = request.params as { id: string };
+    const reason = reasonOf(request, true);
+    const result = await adminRenameKoinon(id, bodyText(request, "name"), (tx, detail) => audit(tx, admin.id, "koina.rename", null, { koinonId: id, ...detail, reason }));
+    if (!result.ok) httpError(result.error, result.code);
+    return { ok: true, id, name: result.to };
+  });
+
+  // Dissolve: every member is removed, with no cooldown and no Chronicle line.
+  app.post("/koina/:id/dissolve", { schema: uuidParam("id") }, async (request) => {
+    const admin = await requireAdmin(request);
+    const { id } = request.params as { id: string };
+    const reason = reasonOf(request, true);
+    const result = await adminDissolveKoinon(id, new Date(), (tx, detail) => audit(tx, admin.id, "koina.dissolve", null, { koinonId: id, ...detail, reason }));
+    if (!result.ok) httpError(result.error, result.code);
+    return { ok: true, id, name: result.name, members: result.memberIds.length };
   });
 }

@@ -25,7 +25,8 @@ async function loadModules() {
   const interactionsSvc = await import("../services/interactions.js");
   const buildings = await import("../services/buildings.js");
   const barracks = await import("../services/barracks.js");
-  return { dbPkg, authRoutes, adminRoutes, characterRoutes, interactionRoutes, errorHandler, age, interactionsSvc, buildings, barracks };
+  const koinon = await import("../services/koinon.js");
+  return { dbPkg, authRoutes, adminRoutes, characterRoutes, interactionRoutes, errorHandler, age, interactionsSvc, buildings, barracks, koinon };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -50,6 +51,7 @@ suite("admin tooling and account gates (integration)", () => {
     await m.buildings.loadBuildingsContent();
     await m.buildings.loadPopsContent();
     await m.barracks.loadBarracksContent();
+    await m.koinon.loadKoinonContent(); // the koina rename cleans a name by the content's bounds
     app = Fastify({ trustProxy: true });
     app.setErrorHandler(m.errorHandler);
     await app.register(cookie, { secret: "test-session-secret-at-least-32-chars-long" });
@@ -338,5 +340,74 @@ suite("admin tooling and account gates (integration)", () => {
     // A non-admin reaches none of it.
     expect((await call("GET", `/admin/characters/${characterId}/sheet`, { cookie: target.cookie })).statusCode).toBe(403);
     expect((await call("POST", `/admin/characters/${characterId}/stats`, { cookie: target.cookie, payload: { stat: "prestige", delta: -1, reason: "x" } })).statusCode).toBe(403);
+  });
+
+  // --- koina -------------------------------------------------------------------------------
+  it("koina: the list, a rename and a dissolve, each audited; a non-admin reaches none of it", async () => {
+    const { koina, koinonMembers, koinonInvites, koinonPosts, effectLog, players } = m.dbPkg;
+    const a = await admin();
+    const H = { cookie: a.cookie };
+    const plain = await register("plain@t");
+    const leader = await characterFor((await register("leader@t")).id, "Kallias");
+    const member = await characterFor((await register("member@t")).id, "Deon");
+    const invited = await characterFor((await register("invited@t")).id, "Xenon");
+    const rival = await characterFor((await register("rival@t")).id, "Nikias");
+    const foundedAt = new Date(Date.now() - 3 * 86_400_000);
+    const band = (await db.insert(koina).values({ worldId, name: "The Sacred Band", leaderPlayerId: leader.playerId, foundedAt }).returning())[0]!;
+    const elders = (await db.insert(koina).values({ worldId, name: "The Elders", leaderPlayerId: rival.playerId }).returning())[0]!;
+    await db.insert(koinonMembers).values([
+      { worldId, playerId: leader.playerId, koinonId: band.id, joinedAt: foundedAt },
+      { worldId, playerId: member.playerId, koinonId: band.id },
+      { worldId, playerId: rival.playerId, koinonId: elders.id },
+    ]);
+    await db.insert(koinonInvites).values({ worldId, koinonId: band.id, playerId: invited.playerId, inviterPlayerId: leader.playerId, expiresAt: new Date(Date.now() + 3_600_000) });
+    await db.insert(koinonPosts).values({ koinonId: band.id, authorPlayerId: leader.playerId, body: "Muster at dawn." });
+
+    // A non-admin (and nobody) reaches none of it.
+    expect((await call("GET", "/admin/koina")).statusCode).toBe(401);
+    expect((await call("GET", "/admin/koina", { cookie: plain.cookie })).statusCode).toBe(403);
+    expect((await call("POST", `/admin/koina/${band.id}/rename`, { cookie: plain.cookie, payload: { name: "Mine Now", reason: "x" } })).statusCode).toBe(403);
+    expect((await call("POST", `/admin/koina/${band.id}/dissolve`, { cookie: plain.cookie, payload: { reason: "x" } })).statusCode).toBe(403);
+    expect(await auditRows()).toHaveLength(0);
+
+    // The list: name, leader, members, founded. No posts.
+    const list = await call("GET", "/admin/koina", H);
+    expect(list.statusCode).toBe(200);
+    expect(list.json()).toEqual({
+      koina: [
+        { id: elders.id, name: "The Elders", leaderName: "Nikias", members: 1, foundedAt: expect.any(String) },
+        { id: band.id, name: "The Sacred Band", leaderName: "Kallias", members: 2, foundedAt: foundedAt.toISOString() },
+      ],
+    });
+
+    // Rename: a reason, the founding's cleaning, and uniqueness ignoring case.
+    expect((await call("POST", `/admin/koina/${band.id}/rename`, { ...H, payload: { name: "The Holy Band" } })).statusCode).toBe(400);
+    expect((await call("POST", `/admin/koina/${band.id}/rename`, { ...H, payload: { name: "ab", reason: "too short" } })).statusCode).toBe(400);
+    const taken = await call("POST", `/admin/koina/${band.id}/rename`, { ...H, payload: { name: "the ELDERS", reason: "clash" } });
+    expect(taken.statusCode).toBe(409);
+    expect(taken.json()).toEqual({ error: "A koinon already bears that name." });
+    expect((await call("POST", `/admin/koina/${crypto.randomUUID()}/rename`, { ...H, payload: { name: "Nowhere", reason: "x" } })).statusCode).toBe(404);
+    const renamed = await call("POST", `/admin/koina/${band.id}/rename`, { ...H, payload: { name: "  The Holy\u200B  Band ", reason: "offensive name" } });
+    expect(renamed.json()).toEqual({ ok: true, id: band.id, name: "The Holy Band" });
+    expect((await db.select().from(koina).where(eq(koina.id, band.id)))[0]!.name).toBe("The Holy Band");
+
+    // Dissolve: every member goes, with no cooldown and no Chronicle line.
+    expect((await call("POST", `/admin/koina/${band.id}/dissolve`, { ...H, payload: {} })).statusCode).toBe(400);
+    const dissolved = await call("POST", `/admin/koina/${band.id}/dissolve`, { ...H, payload: { reason: "abandoned" } });
+    expect(dissolved.json()).toEqual({ ok: true, id: band.id, name: "The Holy Band", members: 2 });
+    expect((await db.select().from(koina).where(eq(koina.id, band.id)))[0]!.dissolvedAt).not.toBeNull();
+    expect(await db.select().from(koinonMembers).where(eq(koinonMembers.koinonId, band.id))).toHaveLength(0);
+    expect(await db.select().from(koinonInvites)).toHaveLength(0);
+    expect(await db.select().from(koinonPosts)).toHaveLength(0);
+    expect((await db.select().from(players).where(eq(players.worldId, worldId))).every((p) => p.koinonCooldownUntil === null)).toBe(true);
+    expect(await db.select().from(effectLog)).toHaveLength(0);
+    expect((await call("POST", `/admin/koina/${band.id}/dissolve`, { ...H, payload: { reason: "again" } })).statusCode).toBe(404);
+    expect((await call("GET", "/admin/koina", H)).json().koina.map((k: { name: string }) => k.name)).toEqual(["The Elders"]);
+
+    // One audit row per successful call; refused calls write none.
+    const rows = await auditRows();
+    expect(rows.map((r) => r.action)).toEqual(["koina.list", "koina.rename", "koina.dissolve", "koina.list"]);
+    expect(rows[1]!.detail).toEqual({ koinonId: band.id, from: "The Sacred Band", to: "The Holy Band", reason: "offensive name" });
+    expect(rows[2]!.detail).toEqual({ koinonId: band.id, name: "The Holy Band", memberIds: [leader.playerId, member.playerId], reason: "abandoned" });
   });
 });

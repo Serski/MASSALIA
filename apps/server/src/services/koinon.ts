@@ -672,6 +672,70 @@ export async function markRead(ctx: ActingContext, now: Date): Promise<OkResult>
   return stamped[0] ? { ok: true as const } : NOT_MEMBER;
 }
 
+// --- Admin (routes/admin.ts) ---------------------------------------------------
+// The list, a rename and a dissolve. `record` writes the admin_audit row inside
+// the same transaction as the change. Admin sees no posts.
+
+export type AdminKoinonRow = { id: string; name: string; leaderName: string; members: number; foundedAt: string };
+
+// GET /admin/koina — the world's live koina, by name.
+export async function adminKoinaList(worldId: string): Promise<AdminKoinonRow[]> {
+  const rows = await db
+    .select({ id: koina.id, name: koina.name, leaderName: players.name, foundedAt: koina.foundedAt, members: sql<number>`(SELECT count(*)::int FROM koinon_members m WHERE m.koinon_id = ${koina.id})` })
+    .from(koina)
+    .leftJoin(players, eq(players.id, koina.leaderPlayerId))
+    .where(and(eq(koina.worldId, worldId), isNull(koina.dissolvedAt)))
+    .orderBy(sql`lower(${koina.name})`, asc(koina.id));
+  return rows.map((r) => ({ id: r.id, name: r.name, leaderName: r.leaderName ?? "—", members: Number(r.members), foundedAt: r.foundedAt.toISOString() }));
+}
+
+const NO_KOINON = fail(404, "No such koinon.");
+const NAME_TAKEN = fail(409, "A koinon already bears that name.");
+
+// Postgres unique_violation, bare or wrapped by the driver layer.
+function isUniqueViolation(error: unknown): boolean {
+  const e = error as { code?: string; cause?: { code?: string } } | null;
+  return e?.code === "23505" || e?.cause?.code === "23505";
+}
+
+export type AdminRenameResult = KoinonError | { ok: true; from: string; to: string };
+
+// POST /admin/koina/:id/rename — the founding's cleaning and uniqueness, under
+// the koinon lock. Two renames racing for one name: the live-name index lets one in.
+export async function adminRenameKoinon(koinonId: string, rawName: unknown, record: (tx: DbTx, detail: { from: string; to: string }) => Promise<void>): Promise<AdminRenameResult> {
+  const c = getKoinonContent();
+  const name = cleanKoinonName(rawName, c);
+  if (!name) return fail(400, `A koinon's name runs ${c.name.min} to ${c.name.max} characters and needs a letter.`);
+  try {
+    return await db.transaction(async (tx) => {
+      const k = await lockKoinon(tx, koinonId);
+      if (!k) return NO_KOINON;
+      if (await liveNameTaken(tx, k.worldId, name, k.id)) return NAME_TAKEN;
+      await tx.update(koina).set({ name }).where(eq(koina.id, k.id));
+      await record(tx, { from: k.name, to: name });
+      return { ok: true as const, from: k.name, to: name };
+    });
+  } catch (error) {
+    if (isUniqueViolation(error)) return NAME_TAKEN;
+    throw error;
+  }
+}
+
+export type AdminDissolveResult = KoinonError | { ok: true; name: string; memberIds: string[] };
+
+// POST /admin/koina/:id/dissolve — ruling 15: every member goes, with no
+// cooldown and no Chronicle line.
+export async function adminDissolveKoinon(koinonId: string, now: Date, record: (tx: DbTx, detail: { name: string; memberIds: string[] }) => Promise<void>): Promise<AdminDissolveResult> {
+  return db.transaction(async (tx) => {
+    const k = await lockKoinon(tx, koinonId);
+    if (!k) return NO_KOINON;
+    const memberIds = (await membersInOrder(tx, k.id)).map((m) => m.playerId);
+    await dissolve(tx, k, now);
+    await record(tx, { name: k.name, memberIds });
+    return { ok: true as const, name: k.name, memberIds };
+  });
+}
+
 // --- The leader's view of the members' soldiers --------------------------------
 // Ruling 12: live and read-only. Nothing here settles another player or writes
 // a row; what the member's own next settle would do (an arrival, a finished
