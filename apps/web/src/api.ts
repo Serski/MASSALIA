@@ -581,6 +581,8 @@ export const api = {
   koinonPost: (body: string) => apiFetch<{ ok: true; postId: string }>("/api/koinon/post", { method: "POST", body: { body } }),
   koinonPostDelete: (postId: string) => apiFetch<{ ok: true }>("/api/koinon/post/delete", { method: "POST", body: { postId } }),
   koinonRead: () => apiFetch<{ ok: true }>("/api/koinon/read", { method: "POST" }),
+  koinonGive: (amount: number) => apiFetch<{ ok: true; wallet: number; treasury: number }>("/api/koinon/give", { method: "POST", body: { amount } }),
+  koinonBuildLesche: () => apiFetch<{ ok: true; completesAt: string; treasury: number }>("/api/koinon/lesche", { method: "POST" }),
   // The Barracks (military prompt 2). GET settles and returns the view; every POST
   // returns the same BarracksView so the tab re-renders from one payload. Errors
   // are the server's one-line message via ApiError.
@@ -1289,7 +1291,22 @@ export type KoinonMember = {
 };
 export type KoinonPage = {
   now: string;
-  rules: { foundCost: number; foundPrestige: number; memberCap: number; nameMin: number; nameMax: number; postMaxChars: number; cooldownHours: number; absentLeaderDays: number };
+  rules: {
+    foundCost: number;
+    foundPrestige: number;
+    memberCap: number;
+    nameMin: number;
+    nameMax: number;
+    postMaxChars: number;
+    cooldownHours: number;
+    absentLeaderDays: number;
+    // Koinon prompt 2: the most one gift may be, and the Lesche's numbers.
+    depositMax: number;
+    lescheCost: number;
+    lescheBuildDays: number;
+    lescheUpkeep: number;
+    lescheCap: number;
+  };
   me: { playerId: string; role: KoinonRole | null; cooldownUntil: string | null; prestige: number; drachmae: number };
   koina: { id: string; name: string; leaderName: string; members: number; cap: number }[];
   invites: { id: string; koinonId: string; koinonName: string; inviterName: string; expiresAt: string }[];
@@ -1306,8 +1323,15 @@ export type KoinonPage = {
     pending: { id: string; playerName: string; expiresAt: string }[];
     posts: { id: string; authorName: string; body: string; label: string; canDelete: boolean }[];
     unread: number;
+    // The treasury, the Lesche as it stands at `now`, every giver's total and
+    // the 10 newest gifts. `daysCovered` counts for an open hall only.
+    treasury: number;
+    hall: { phase: KoinonHallPhase; startedAt: string | null; completesAt: string | null; paidUntil: string | null; daysCovered: number };
+    givers: { playerId: string; name: string; total: number }[];
+    gifts: { id: string; name: string; amount: number; label: string }[];
   };
 };
+export type KoinonHallPhase = "none" | "building" | "open" | "shut";
 // GET /api/koinon/armies — leader only; mirrors ArmiesView. Read-only and derived
 // at read time. `return` is a party on its way back (from targetName, when named).
 export type KoinonArmyRow = { unitId: string; label: string; plural: string; icon: string; source: "trained" | "band"; count: number };

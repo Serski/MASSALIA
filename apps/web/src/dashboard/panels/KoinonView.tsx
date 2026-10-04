@@ -1,8 +1,8 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, type KoinonArmies, type KoinonArmyRow, type KoinonMember, type KoinonMissionKind, type KoinonPage } from "../../api.js";
 import { professions } from "../../data/league.js";
 import { LobbyPortrait } from "../../lobby/LobbyPortrait.js";
-import { AssetIcon, DashboardCard, formatDuration, HouseCrest, type PanelProps, titleCase } from "../shared.js";
+import { AssetIcon, BuildProgress, DashboardCard, formatDuration, HouseCrest, type PanelProps, titleCase } from "../shared.js";
 
 // --- The koinon (koinon prompt 1) — a Politics tab ---------------------------
 // A player-made company of citizens. The page comes from GET /api/koinon and is
@@ -152,6 +152,7 @@ export function KoinonView({ onRefresh }: PanelProps) {
   const [foundName, setFoundName] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [postBody, setPostBody] = useState("");
+  const [giveAmount, setGiveAmount] = useState(1);
   const reading = useRef(false);
 
   // The page, and for the leader the soldiers; read on mount and after every action.
@@ -182,6 +183,18 @@ export function KoinonView({ onRefresh }: PanelProps) {
         reading.current = false;
       });
   }, [unread, onRefresh]);
+
+  // Server clock minus device clock, taken once per payload: the build bar
+  // counts down on it, and the page is read once more when the Lesche stands.
+  const offset = useMemo(() => (page ? Date.parse(page.now) - Date.now() : 0), [page]);
+  const hallPhase = page?.koinon?.hall.phase ?? "none";
+  const hallCompletesAt = page?.koinon?.hall.completesAt ?? null;
+  useEffect(() => {
+    if (hallPhase !== "building" || !hallCompletesAt) return;
+    const wait = Date.parse(hallCompletesAt) - offset - Date.now() + 1000;
+    const timer = setTimeout(() => void load().catch(() => {}), Math.max(1000, wait));
+    return () => clearTimeout(timer);
+  }, [hallPhase, hallCompletesAt, offset, load]);
 
   const run = async (work: () => Promise<unknown>, after?: () => void) => {
     setBusy(true);
@@ -284,7 +297,11 @@ export function KoinonView({ onRefresh }: PanelProps) {
   };
   const leaveText =
     `Leave ${koinon.name}? You cannot join or found another koinon for ${rules.cooldownHours} hours.` +
-    (leads ? (successor ? ` The lead passes to ${successor.name}.` : " No one is left to take it: the koinon ends.") : "");
+    (leads ? (successor ? ` The lead passes to ${successor.name}.` : ` No one is left to take it: the koinon ends, and its treasury of ${koinon.treasury} drachmae goes to the city.`) : "");
+  // A gift is a whole number from 1 to the smaller of the rule's cap and the purse.
+  const giveMax = Math.min(rules.depositMax, me.drachmae);
+  const giving = Math.max(1, Math.min(giveAmount, giveMax));
+  const hall = koinon.hall;
 
   return (
     <div className="pol-page koinon-page">
@@ -347,6 +364,87 @@ export function KoinonView({ onRefresh }: PanelProps) {
             ) : null}
           </div>
         ))}
+      </KoinonCard>
+
+      <KoinonCard title="Treasury" section="treasury" note={`${koinon.treasury} drachmae`}>
+        <p className="koinon-hint">Members give drachmae to the koinon. Nothing comes back out: the treasury pays only for the koinon's buildings.</p>
+        <form
+          className="koinon-form koinon-give"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void run(() => api.koinonGive(giving), () => setGiveAmount(1));
+          }}
+        >
+          <input
+            className="koinon-input koinon-amount"
+            type="number"
+            inputMode="numeric"
+            aria-label="Drachmae to give"
+            min={1}
+            max={Math.max(1, giveMax)}
+            step={1}
+            value={giving}
+            disabled={giveMax < 1}
+            onChange={(event) => setGiveAmount(Math.max(1, Math.min(Math.floor(Number(event.target.value)) || 1, Math.max(1, giveMax))))}
+          />
+          <button type="submit" className="panel-btn" data-action="give" disabled={busy || giveMax < 1}>
+            Give
+          </button>
+        </form>
+        {koinon.givers.length === 0 ? (
+          <p className="koinon-empty">No gifts yet.</p>
+        ) : (
+          <>
+            <div className="koinon-subhead">Givers</div>
+            {koinon.givers.map((giver) => (
+              <div key={giver.playerId} className="koinon-line" data-giver={giver.playerId}>
+                {giver.name} <span className="koinon-dim">· {giver.total}</span>
+              </div>
+            ))}
+            <div className="koinon-subhead">Recent gifts</div>
+            {koinon.gifts.map((gift) => (
+              <div key={gift.id} className="koinon-line" data-gift={gift.id}>
+                {gift.name} gave {gift.amount} <span className="koinon-dim">· {gift.label}</span>
+              </div>
+            ))}
+          </>
+        )}
+      </KoinonCard>
+
+      <KoinonCard title="Lesche" section="lesche">
+        {hall.phase === "none" ? (
+          <>
+            <p className="koinon-hint">
+              A hall for the koinon. While it stands open the koinon holds up to {rules.lescheCap} members. It costs {rules.lescheCost} drachmae from the treasury, takes {rules.lescheBuildDays} days to build, and {rules.lescheUpkeep} drachmae a day to keep.
+            </p>
+            {leads ? (
+              <>
+                <div className="koinon-actions koinon-actions-start">
+                  <button
+                    type="button"
+                    className="panel-btn"
+                    data-action="lesche"
+                    disabled={busy || koinon.treasury < rules.lescheCost}
+                    onClick={() => confirmThen(`Build the Lesche for ${rules.lescheCost} drachmae from the treasury? It cannot be cancelled.`, () => api.koinonBuildLesche())}
+                  >
+                    Build the Lesche · {rules.lescheCost}
+                  </button>
+                </div>
+                {koinon.treasury < rules.lescheCost ? <p className="koinon-reason">The treasury holds {koinon.treasury} drachmae.</p> : null}
+              </>
+            ) : null}
+          </>
+        ) : hall.phase === "building" ? (
+          <BuildProgress label="Building the Lesche" startedAt={hall.startedAt} completesAt={hall.completesAt} offset={offset} />
+        ) : hall.phase === "open" ? (
+          <p className="koinon-hint">
+            Open. Up to {rules.lescheCap} members. Upkeep {rules.lescheUpkeep} drachmae a day; the treasury covers {hall.daysCovered} more days.
+          </p>
+        ) : (
+          <p className="koinon-hint">
+            Shut: the treasury could not pay its upkeep. No one new joins past {rules.memberCap} until it reopens. It reopens when the treasury holds {rules.lescheUpkeep} drachmae.
+          </p>
+        )}
       </KoinonCard>
 
       <KoinonCard title="Members" section="members" note={`${koinon.members.length} of ${koinon.cap}`}>
