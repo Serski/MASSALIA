@@ -1,0 +1,10 @@
+{
+  "foundCost": 50,
+  "foundPrestige": 20,
+  "memberCap": 8,
+  "inviteHours": 48,
+  "cooldownHours": 24,
+  "absentLeaderDays": 5,
+  "name": { "min": 3, "max": 32 },
+  "post": { "maxChars": 300, "kept": 20 }
+}

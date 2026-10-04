@@ -33,3 +33,4 @@ export * from "./battle.js";
 export * from "./names.js";
 export * from "./news.js";
 export * from "./market.js";
+export * from "./koinon.js";
