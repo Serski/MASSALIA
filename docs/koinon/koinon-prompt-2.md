@@ -350,3 +350,16 @@ The red is timeout-only, in two suites this work does not touch, under a measure
 7. After the push, CI's Gate is the arbiter. If CI is red only on timeouts, STOP and report. Do not push a fix forward without a ruling.
 
 Report every new commit as `Committed: <SHA> <subject>` and quote the gate's last line.
+
+## Push ruling
+
+Push ruling (koinon prompt 2, after the second red at 6015d31)
+
+One-time exception to the local-gate rule, recorded as such. Every suite has passed at this code in some run (shared, server, db in the run at 6015d31; web alone at 2f07d62 with only a docs commit since; worker at f6df237, unchanged since), no assertion failed in either red, and both reds were timeouts under a load that climbed to 326 during a run that started at 14.78. CI's Gate on a clean runner is the arbiter for this push.
+
+1. Append this ruling verbatim at the end of docs/koinon/koinon-prompt-2.md under "## Push ruling", as its own commit `docs: koinon prompt 2 push ruling`. No local gate after it.
+2. Push: plain `git push`, fast-forward only.
+3. Wait for CI. If its Gate step on postgres:16 is green, report: remote HEAD, the CI run with suite counts, the Railway server deploy with migration 0063 confirmed read-only in __massalia_migrations, the Railway worker deploy, the Pages run, /health, and GET /api/koinon answering 401 without a session. Then stop the throwaway Postgres on 5433.
+4. If CI is red on anything, timeouts included: STOP with the log. Railway and Pages skip red commits, so production stays at 6880e82. No fix forward without a ruling.
+
+Report every new commit as `Committed: <SHA> <subject>`.
