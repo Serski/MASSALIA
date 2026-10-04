@@ -568,6 +568,8 @@ export async function invite(ctx: ActingContext, rawName: unknown, now: Date): P
     // The cap in force: the Lesche's while the hall stands open (ruling 6).
     const cap = hallCap(settle.phase, c);
     if ((await seatCount(tx, k.id)) + standing.length >= cap) {
+      // A shut hall may hold more than the plain cap: say why no one new is taken.
+      if (settle.phase === "shut") return fail(409, `The Lesche is shut, so the koinon takes no one new past ${c.memberCap}.`);
       return fail(409, `The koinon is full: its members and standing invitations already number ${cap}.`);
     }
     const expiresAt = new Date(now.getTime() + c.inviteHours * MS_PER_HOUR);

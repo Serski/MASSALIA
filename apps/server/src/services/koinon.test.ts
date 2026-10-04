@@ -801,12 +801,18 @@ suite("Koinon (integration)", () => {
     // expelled, and no one new joins while the count is not below 8.
     await setTreasury(k, 0);
     const dry = at(3 * DAY);
-    expect(await m.koinon.invite(c, "Joiner5", dry)).toEqual({ ok: false, code: 409, error: "The koinon is full: its members and standing invitations already number 8." });
+    expect(await m.koinon.invite(c, "Joiner5", dry)).toEqual({ ok: false, code: 409, error: "The Lesche is shut, so the koinon takes no one new past 8." });
     expect(await m.koinon.acceptInvite(await ctx(joiners[4]!), late, dry)).toEqual({ ok: false, code: 409, error: "That koinon is full." });
     expect(await koinonRow(k)).toMatchObject({ treasury: 0, lescheShut: true });
     expect((await memberIds(k)).length).toBe(12);
     expect((await m.koinon.koinonView(c, dry)).koinon).toMatchObject({ cap: 8, treasury: 0, hall: { phase: "shut", daysCovered: 0 } });
     expect((await m.koinon.koinonView(c, dry)).koinon!.members.length).toBe(12);
+    // A shut hall with room under the plain cap takes an invite as usual.
+    const small = await freshPlayer("Lykos");
+    const k2 = await found(small, "The Elders", dry);
+    await setHall(k2, at(DAY), { treasury: 0 });
+    expect(await m.koinon.invite(await ctx(small), "Joiner5", dry)).toMatchObject({ ok: true });
+    expect(await koinonRow(k2)).toMatchObject({ lescheShut: true });
   });
 
   it("upkeep is paid through a write: a post 3 days after completion with 100 in the treasury leaves 80", async () => {
