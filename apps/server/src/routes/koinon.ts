@@ -13,6 +13,7 @@ import {
   koinonView,
   leave,
   markRead,
+  memberArmies,
   post,
   setVice,
   takeLead,
@@ -76,6 +77,22 @@ export async function koinonRoutes(app: FastifyInstance) {
       return { error: a.error };
     }
     return koinonView(a.ctx, new Date());
+  });
+
+  // Leader only: every member's soldiers, levy and fleet, live and read-only.
+  app.get("/armies", async (request, reply) => {
+    const user = await requireAuth(request);
+    const a = await acting(user.id);
+    if ("error" in a) {
+      reply.code(a.code);
+      return { error: a.error };
+    }
+    const result = await memberArmies(a.ctx, new Date());
+    if ("error" in result) {
+      reply.code(result.code);
+      return { error: result.error };
+    }
+    return result;
   });
 
   // Body: { name }. Costs the founding fee; the founder leads.

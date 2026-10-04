@@ -1,13 +1,16 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { and, asc, count, desc, eq, gt, isNull, lte, max, ne, notInArray, sql } from "drizzle-orm";
-import { createDb, dailyDecisions, effectLog, houses, koina, koinonInvites, koinonMembers, koinonPosts, playerCharacters, players } from "@massalia/db";
-import { cleanKoinonName, cleanKoinonPost, formatGameDate, gameDate, parseKoinonContent, sanitizeDisplayName, type KoinonChronicle, type KoinonContent, type KoinonEvent } from "@massalia/shared";
+import { and, asc, count, desc, eq, gt, inArray, isNull, lte, max, ne, notInArray, sql } from "drizzle-orm";
+import { createDb, dailyDecisions, effectLog, houses, koina, koinonInvites, koinonMembers, koinonPosts, playerCharacters, playerLevy, playerUnits, players, resources } from "@massalia/db";
+import { bandDef, cleanKoinonName, cleanKoinonPost, formatGameDate, gameDate, parseKoinonContent, sanitizeDisplayName, seasonIndexAt, unitDef, type KoinonChronicle, type KoinonContent, type KoinonEvent } from "@massalia/shared";
 import { agedPortraitFor } from "./age.js";
+import { getBandsContent, getUnitsContent } from "./barracks.js";
 import { creditWorldTreasury, debitDrachmae, spendTransaction, SpendRejected, type ActingContext } from "./buildings.js";
 import { findCharacterRow } from "./character.js";
 import { lockPlayer } from "./lock.js";
+import { getTopology } from "./mapGraph.js";
+import { regionDisplayName, townDisplayName } from "./mapNames.js";
 
 // ---------------------------------------------------------------------------
 // The koinon (koinon prompt 1): a player-made company of citizens. One leader,
@@ -661,4 +664,141 @@ export async function markRead(ctx: ActingContext, now: Date): Promise<OkResult>
     .where(and(eq(koinonMembers.worldId, ctx.worldId), eq(koinonMembers.playerId, ctx.playerId)))
     .returning({ playerId: koinonMembers.playerId });
   return stamped[0] ? { ok: true as const } : NOT_MEMBER;
+}
+
+// --- The leader's view of the members' soldiers --------------------------------
+// Ruling 12: live and read-only. Nothing here settles another player or writes
+// a row; what the member's own next settle would do (an arrival, a finished
+// training, a contract run out, a year of levy growth) is derived at read time.
+// A row disbanded for unpaid upkeep stays visible until its owner next opens
+// the game: that gap is accepted.
+
+type UnitRow = typeof playerUnits.$inferSelect;
+export type ArmyUnitRow = Pick<UnitRow, "source" | "unitId" | "count" | "readyAt" | "contractEndAt" | "basedAt" | "movingTo" | "arrivesAt" | "mission">;
+
+export type DerivedArmyRow =
+  | { state: "gone" }
+  | { state: "home"; placeId: string }
+  | { state: "away"; movingTo: string; arrivesAt: Date }
+  | { state: "training"; readyAt: Date | null };
+
+// Where a row stands at `now`, from its own timers:
+//   - a band whose contract_end_at has passed is gone (left out);
+//   - a row still short of arrives_at is away;
+//   - a row whose arrives_at has passed stands at moving_to;
+//   - a trained row short of ready_at is in training;
+//   - anything else stands at home, at its place.
+export function deriveArmyRow(row: ArmyUnitRow, now: Date): DerivedArmyRow {
+  const t = now.getTime();
+  if (row.count <= 0) return { state: "gone" };
+  if (row.source === "band" && row.contractEndAt !== null && row.contractEndAt.getTime() <= t) return { state: "gone" };
+  const marching = row.movingTo !== null && row.arrivesAt !== null;
+  if (marching && row.arrivesAt!.getTime() > t) return { state: "away", movingTo: row.movingTo!, arrivesAt: row.arrivesAt! };
+  if (row.source === "trained" && (row.readyAt === null || row.readyAt.getTime() > t)) return { state: "training", readyAt: row.readyAt };
+  return { state: "home", placeId: marching ? row.movingTo! : row.basedAt };
+}
+
+// The levy as the member's next settle would leave it: `men` plus the whole
+// years of base growth since last_growth_season (ensureLevy's step, without the
+// held-region bonus); with no row yet, what ensureLevy would insert.
+export function projectLevy(row: { men: number; lastGrowthSeason: number } | null, season: number, levy: { startMen: number; growthPerYear: number; seasonsPerYear: number }): number {
+  if (!row) return levy.startMen + levy.growthPerYear * Math.floor(season / levy.seasonsPerYear);
+  const years = Math.floor((season - row.lastGrowthSeason) / levy.seasonsPerYear);
+  return row.men + Math.max(0, years) * levy.growthPerYear;
+}
+
+export type ArmyRow = { unitId: string; label: string; plural: string; icon: string; source: "trained" | "band"; count: number };
+// What an away row is doing, in the Barracks' own terms: bound for its target
+// (scout, raid, attack, move) or on the way back (`return`, from targetName
+// when the mission names one).
+export type ArmyMissionKind = "scout" | "raid" | "attack" | "move" | "return";
+export type ArmiesView = {
+  now: string;
+  members: {
+    playerId: string;
+    name: string;
+    levy: number;
+    fleet: { pentekonters: number; triremes: number };
+    home: { placeId: string; placeName: string; rows: ArmyRow[] }[];
+    away: (ArmyRow & { missionKind: ArmyMissionKind; targetName: string | null; arrivesAt: string })[];
+    training: (ArmyRow & { readyAt: string | null })[];
+  }[];
+};
+
+// GET /api/koinon/armies — leader only.
+export async function memberArmies(ctx: ActingContext, now: Date): Promise<KoinonError | ArmiesView> {
+  await sweepInactive(ctx.worldId, now);
+  const mine = await memberRow(db, ctx.playerId, ctx.worldId);
+  if (!mine) return NOT_MEMBER;
+  const k = (await db.select().from(koina).where(and(eq(koina.id, mine.koinonId), isNull(koina.dissolvedAt))).limit(1))[0];
+  if (!k) return NOT_MEMBER;
+  if (k.leaderPlayerId !== ctx.playerId) return fail(403, "Only the leader sees the soldiers.");
+
+  const unitsC = getUnitsContent();
+  const bandsC = getBandsContent();
+  const topology = getTopology();
+  const massalia = topology.massaliaRegion;
+  const season = seasonIndexAt(now.getTime(), ctx.worldStartedMs);
+  const names = new Map<string, string>();
+  const nameOf = async (id: string) => {
+    if (!names.has(id)) names.set(id, topology.townRegion.has(id) ? await townDisplayName(id) : await regionDisplayName(id));
+    return names.get(id)!;
+  };
+  const armyRow = (r: ArmyUnitRow): ArmyRow => {
+    const def = r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId);
+    const label = def?.label ?? r.unitId;
+    return { unitId: r.unitId, label, plural: r.source === "trained" ? (unitDef(unitsC, r.unitId)?.plural ?? `${label}s`) : label, icon: def?.icon ?? "", source: r.source, count: r.count };
+  };
+
+  const members: ArmiesView["members"] = [];
+  for (const m of await memberViews(db, k, ctx, now)) {
+    const rows = await db
+      .select()
+      .from(playerUnits)
+      .where(and(eq(playerUnits.worldId, ctx.worldId), eq(playerUnits.ownerPlayerId, m.playerId)))
+      .orderBy(asc(playerUnits.createdAt), asc(playerUnits.id));
+    const levyRow = (await db.select().from(playerLevy).where(and(eq(playerLevy.worldId, ctx.worldId), eq(playerLevy.ownerPlayerId, m.playerId))).limit(1))[0] ?? null;
+    const stock = await db
+      .select({ type: resources.type, amount: resources.amount })
+      .from(resources)
+      .where(and(eq(resources.scope, "player"), eq(resources.scopeId, m.playerId), inArray(resources.type, ["trade-ship", "galley"])));
+    const hulls = (type: string) => Math.max(0, Math.floor(Number(stock.find((s) => s.type === type)?.amount ?? 0)));
+
+    const places = new Map<string, ArmyRow[]>();
+    const away: ArmiesView["members"][number]["away"] = [];
+    const training: ArmiesView["members"][number]["training"] = [];
+    for (const r of rows) {
+      const d = deriveArmyRow(r, now);
+      if (d.state === "gone") continue;
+      if (d.state === "training") {
+        training.push({ ...armyRow(r), readyAt: d.readyAt?.toISOString() ?? null });
+      } else if (d.state === "away") {
+        const targetId = r.mission ? (r.mission.townId ?? r.mission.regionId) : null;
+        const outbound = r.mission !== null && targetId === d.movingTo;
+        away.push({ ...armyRow(r), missionKind: outbound ? r.mission!.kind : "return", targetName: targetId ? await nameOf(targetId) : null, arrivesAt: d.arrivesAt.toISOString() });
+      } else {
+        // One line per unit at a place, as the owner's settle folds trained rows.
+        const here = places.get(d.placeId) ?? [];
+        const same = r.source === "trained" ? here.find((x) => x.source === "trained" && x.unitId === r.unitId) : undefined;
+        if (same) same.count += r.count;
+        else here.push(armyRow(r));
+        places.set(d.placeId, here);
+      }
+    }
+    const home: ArmiesView["members"][number]["home"] = [];
+    for (const [placeId, placeRows] of places) home.push({ placeId, placeName: await nameOf(placeId), rows: placeRows });
+    // Massalia first, then the rest by name: the Barracks' At home order.
+    home.sort((a, b) => Number(b.placeId === massalia) - Number(a.placeId === massalia) || a.placeName.localeCompare(b.placeName) || a.placeId.localeCompare(b.placeId));
+
+    members.push({
+      playerId: m.playerId,
+      name: m.name,
+      levy: projectLevy(levyRow, season, unitsC.levy),
+      fleet: { pentekonters: hulls("trade-ship"), triremes: hulls("galley") },
+      home,
+      away,
+      training,
+    });
+  }
+  return { now: now.toISOString(), members };
 }
