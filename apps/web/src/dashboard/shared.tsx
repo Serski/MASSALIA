@@ -60,6 +60,8 @@ export type PlayerDashboardState = {
   scandal: { name: string } | null;
   // The honest Family nav badge count (unnamed newborns + in-window family notices).
   familyPending: number;
+  // The Politics nav badge count: unread koinon posts, or standing invites.
+  koinonPending: number;
   // Manumission: { eligible } when a slave holds the freedman trait, else null.
   manumission: { eligible: boolean } | null;
   // Onboarding first-seen flags: the welcome overlay shows while introSeen is false;
@@ -125,6 +127,7 @@ export function playerFromState(state: PlayerState): PlayerDashboardView {
     olympiad: state.olympiad ?? null,
     scandal: state.scandal ?? null,
     familyPending: state.familyPending ?? 0,
+    koinonPending: state.koinonPending ?? 0,
     manumission: state.manumission ?? null,
     introSeen: state.introSeen ?? true,
     sheetSeen: state.sheetSeen ?? true,

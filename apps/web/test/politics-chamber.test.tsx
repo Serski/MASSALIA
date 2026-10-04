@@ -45,8 +45,8 @@ function chamber(holdsSeat: boolean): ChamberView {
   };
 }
 
-const player = (party: "Dynatoi" | "Unaligned") =>
-  ({ party, professionSlug: "trader", censured: false, censureExpiresAt: null, house: { name: "Herakleides" } }) as unknown as Parameters<typeof PoliticsPanel>[0]["player"];
+const player = (party: "Dynatoi" | "Unaligned", koinonPending = 0) =>
+  ({ party, professionSlug: "trader", censured: false, censureExpiresAt: null, house: { name: "Herakleides" }, koinonPending }) as unknown as Parameters<typeof PoliticsPanel>[0]["player"];
 
 const never = () => new Promise<never>(() => {});
 const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
@@ -57,13 +57,13 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function mount(view: ChamberView, party: "Dynatoi" | "Unaligned") {
+async function mount(view: ChamberView, party: "Dynatoi" | "Unaligned", koinonPending = 0) {
   vi.spyOn(api, "oligarchyChamber").mockResolvedValue(view);
   vi.spyOn(api, "chamberVotes").mockResolvedValue({ open: null, past: [] } as unknown as Awaited<ReturnType<typeof api.chamberVotes>>);
   vi.spyOn(api, "agenda").mockImplementation(never);
   vi.spyOn(api, "offices").mockImplementation(never);
   vi.spyOn(api, "elections").mockImplementation(never);
-  const utils = render(<PoliticsPanel player={player(party)} onRefresh={() => {}} />);
+  const utils = render(<PoliticsPanel player={player(party, koinonPending)} onRefresh={() => {}} />);
   await flush();
   return utils;
 }
@@ -110,7 +110,8 @@ describe("council tab", () => {
     const { container } = await mount(chamber(true), "Dynatoi");
 
     expect(container.querySelector(".cs-tabs.pottery")).not.toBeNull();
-    expect(container.querySelectorAll(".cs-tab").length).toBe(4);
+    expect([...container.querySelectorAll(".cs-tab")].map((t) => t.textContent!.trim().split(" ")[0])).toEqual(["Oligarchy", "Your", "Koinon", "Cities", "Diplomacy"]);
+    expect(container.querySelector(".koinon-tab-count")).toBeNull();
     expect(text(container, ".chamber-head-label")).toBe("Seats · 300 · 118 filled");
     expect(container.querySelectorAll(".meander").length).toBe(2);
 
@@ -147,6 +148,21 @@ describe("council tab", () => {
 
     fireEvent.mouseEnter(container.querySelector('[data-seat="115"]')!);
     expect(focusLabel(container)).toEqual(["Seat", "115", "Citizen 115 · Dynatoi"]);
+  });
+
+  it("the Koinon tab is the third of five, carries its pending count as a number, and opens the koinon view", async () => {
+    const { container } = await mount(chamber(true), "Dynatoi", 3);
+    const tabs = [...container.querySelectorAll<HTMLButtonElement>(".cs-tab")];
+    expect(tabs.length).toBe(5);
+    expect(tabs[2]!.textContent).toBe("Koinon3");
+    expect(tabs[2]!.querySelector(".koinon-tab-count")!.textContent).toBe("3");
+    expect(EMOJI.test(text(container, ".cs-tabs"))).toBe(false);
+
+    vi.spyOn(api, "koinon").mockImplementation(never);
+    fireEvent.click(tabs[2]!);
+    expect(tabs[2]!.getAttribute("aria-selected")).toBe("true");
+    expect(container.querySelector(".chamber-card")).toBeNull();
+    expect(container.textContent).toContain("Reading the koinon");
   });
 
   it("with no seat and no party the label shows the chamber's fill and no tile is yours", async () => {

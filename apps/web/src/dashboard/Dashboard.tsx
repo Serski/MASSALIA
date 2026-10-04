@@ -80,6 +80,7 @@ const placeholderPlayerState: PlayerDashboardState = {
   olympiad: null,
   scandal: null,
   familyPending: 0,
+  koinonPending: 0,
   manumission: null,
   // The placeholder is "already onboarded" so neither the overlay nor the pulse
   // flashes before real /me/state loads and reports the true flags.

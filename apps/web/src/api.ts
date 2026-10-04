@@ -154,6 +154,8 @@ export type AdminCluster = {
   related: { userId: string; email: string; bannedAt: string | null; sharedIps: string[]; lastSeenAt: string }[];
 };
 export type AdminLogRow = Record<string, unknown> & { id: string; createdAt: string };
+// GET /admin/koina: the active world's live koina. No posts.
+export type AdminKoinon = { id: string; name: string; leaderName: string; members: number; foundedAt: string };
 
 export type CreationRequest = {
   classSlug: string;
@@ -225,6 +227,9 @@ export type PlayerState = {
   scandal: { name: string } | null;
   // The honest Family nav badge count (unnamed newborns + in-window family notices).
   familyPending: number;
+  // The Politics nav badge count: a member's unread koinon posts, or a
+  // non-member's unexpired invites.
+  koinonPending?: number;
   // Manumission: { eligible } when a slave holds the freedman trait, else flag false.
   manumission: { eligible: boolean } | null;
   // Onboarding first-seen flags: the welcome intro overlay and the character-sheet
@@ -428,6 +433,9 @@ export const api = {
     apiFetch<{ ok: true; count: number }>(`/admin/characters/${characterId}/pops`, { method: "POST", body: { popType, delta, reason } }),
   adminEffects: (characterId: string) => apiFetch<{ effects: AdminLogRow[] }>(`/admin/characters/${characterId}/effects`),
   adminInteractions: (characterId: string) => apiFetch<{ interactions: AdminLogRow[] }>(`/admin/characters/${characterId}/interactions`),
+  adminKoina: () => apiFetch<{ koina: AdminKoinon[] }>("/admin/koina"),
+  adminKoinonRename: (id: string, name: string, reason: string) => apiFetch<{ ok: true; name: string }>(`/admin/koina/${id}/rename`, { method: "POST", body: { name, reason } }),
+  adminKoinonDissolve: (id: string, reason: string) => apiFetch<{ ok: true; name: string; members: number }>(`/admin/koina/${id}/dissolve`, { method: "POST", body: { reason } }),
   createCharacter: (payload: CreationRequest) => apiFetch("/characters", { method: "POST", body: payload }),
   state: () => apiFetch<PlayerState>("/me/state"),
   // The Player Chronicle (Timeline): the house's dated, generation-tagged history.
@@ -557,6 +565,22 @@ export const api = {
     apiFetch<MarketListResult>("/api/market/list", { method: "POST", body: { good, qty, price } }),
   marketBuy: (listingId: string, qty: number) => apiFetch<MarketBuyResult>("/api/market/buy", { method: "POST", body: { listingId, qty } }),
   marketCancel: (listingId: string) => apiFetch<MarketCancelResult>("/api/market/cancel", { method: "POST", body: { listingId } }),
+  // The koinon (koinon prompt 1): a player-made company of citizens.
+  koinon: () => apiFetch<KoinonPage>("/api/koinon"),
+  koinonArmies: () => apiFetch<KoinonArmies>("/api/koinon/armies"),
+  koinonFound: (name: string) => apiFetch<{ ok: true; koinonId: string; name: string; wallet: number }>("/api/koinon/found", { method: "POST", body: { name } }),
+  koinonInvite: (name: string) => apiFetch<{ ok: true }>("/api/koinon/invite", { method: "POST", body: { name } }),
+  koinonWithdraw: (inviteId: string) => apiFetch<{ ok: true }>("/api/koinon/withdraw", { method: "POST", body: { inviteId } }),
+  koinonAccept: (inviteId: string) => apiFetch<{ ok: true }>("/api/koinon/accept", { method: "POST", body: { inviteId } }),
+  koinonDecline: (inviteId: string) => apiFetch<{ ok: true }>("/api/koinon/decline", { method: "POST", body: { inviteId } }),
+  koinonLeave: () => apiFetch<{ ok: true; dissolved: boolean }>("/api/koinon/leave", { method: "POST" }),
+  koinonExpel: (playerId: string) => apiFetch<{ ok: true }>("/api/koinon/expel", { method: "POST", body: { playerId } }),
+  koinonVice: (playerId: string | null) => apiFetch<{ ok: true }>("/api/koinon/vice", { method: "POST", body: { playerId } }),
+  koinonHandOver: (playerId: string) => apiFetch<{ ok: true }>("/api/koinon/handover", { method: "POST", body: { playerId } }),
+  koinonTakeLead: () => apiFetch<{ ok: true }>("/api/koinon/take-lead", { method: "POST" }),
+  koinonPost: (body: string) => apiFetch<{ ok: true; postId: string }>("/api/koinon/post", { method: "POST", body: { body } }),
+  koinonPostDelete: (postId: string) => apiFetch<{ ok: true }>("/api/koinon/post/delete", { method: "POST", body: { postId } }),
+  koinonRead: () => apiFetch<{ ok: true }>("/api/koinon/read", { method: "POST" }),
   // The Barracks (military prompt 2). GET settles and returns the view; every POST
   // returns the same BarracksView so the tab re-renders from one payload. Errors
   // are the server's one-line message via ApiError.
@@ -1246,6 +1270,60 @@ export type MarketView = { listings: MarketListing[]; open: number; cap: number;
 export type MarketListResult = { ok: true; listing: { id: string; good: string; remaining: number; price: number; createdAt: string }; balance: number };
 export type MarketBuyResult = { ok: true; qty: number; total: number; tax: number; wallet: number; balance: number; remaining: number };
 export type MarketCancelResult = { ok: true; returned: number; balance: number };
+
+// GET /api/koinon — mirrors services/koinon.ts (KoinonView) by hand. `invites`
+// is the caller's own and empty for a member; `koinon` is null for a non-member;
+// `pending` is filled for the leader and the vice only.
+export type KoinonRole = "leader" | "vice" | "member";
+export type KoinonMember = {
+  playerId: string;
+  name: string;
+  houseSlug: string;
+  houseName: string;
+  professionSlug: string | null;
+  faceId: string | null;
+  portrait: string | null;
+  party: string;
+  joinedLabel: string;
+  role: KoinonRole;
+};
+export type KoinonPage = {
+  now: string;
+  rules: { foundCost: number; foundPrestige: number; memberCap: number; nameMin: number; nameMax: number; postMaxChars: number; cooldownHours: number };
+  me: { playerId: string; role: KoinonRole | null; cooldownUntil: string | null; prestige: number; drachmae: number };
+  koina: { id: string; name: string; leaderName: string; members: number; cap: number }[];
+  invites: { id: string; koinonId: string; koinonName: string; inviterName: string; expiresAt: string }[];
+  koinon: null | {
+    id: string;
+    name: string;
+    foundedLabel: string;
+    cap: number;
+    leaderPlayerId: string | null;
+    vicePlayerId: string | null;
+    leaderAbsent: boolean;
+    canTakeLead: boolean;
+    members: KoinonMember[];
+    pending: { id: string; playerName: string; expiresAt: string }[];
+    posts: { id: string; authorName: string; body: string; label: string; canDelete: boolean }[];
+    unread: number;
+  };
+};
+// GET /api/koinon/armies — leader only; mirrors ArmiesView. Read-only and derived
+// at read time. `return` is a party on its way back (from targetName, when named).
+export type KoinonArmyRow = { unitId: string; label: string; plural: string; icon: string; source: "trained" | "band"; count: number };
+export type KoinonMissionKind = "scout" | "raid" | "attack" | "move" | "return";
+export type KoinonArmies = {
+  now: string;
+  members: {
+    playerId: string;
+    name: string;
+    levy: number;
+    fleet: { pentekonters: number; triremes: number };
+    home: { placeId: string; placeName: string; rows: KoinonArmyRow[] }[];
+    away: (KoinonArmyRow & { missionKind: KoinonMissionKind; targetName: string | null; arrivesAt: string })[];
+    training: (KoinonArmyRow & { readyAt: string | null })[];
+  }[];
+};
 
 export type BuildingsCatalog = {
   season: string;
