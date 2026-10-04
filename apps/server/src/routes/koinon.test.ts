@@ -96,7 +96,7 @@ suite("/api/koinon (integration)", () => {
     for (const [path, field] of [["withdraw", "inviteId"], ["accept", "inviteId"], ["decline", "inviteId"], ["expel", "playerId"], ["handover", "playerId"], ["post/delete", "postId"]] as const) {
       const res = await post(a.token, path, { [field]: "not-a-uuid" });
       expect(res.statusCode, path).toBe(400);
-      expect(res.json()).toEqual({ error: `A ${field} is required.` });
+      expect(res.json()).toEqual({ error: `${field === "inviteId" ? "An" : "A"} ${field} is required.` });
       expect((await post(a.token, path, {})).statusCode, path).toBe(400);
     }
     expect((await post(a.token, "vice", { playerId: "nope" })).statusCode).toBe(400);

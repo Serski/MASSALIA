@@ -57,7 +57,7 @@ export async function koinonRoutes(app: FastifyInstance) {
       const body = (request.body ?? {}) as Record<string, unknown>;
       if (field !== null && (typeof body[field] !== "string" || !UUID.test(body[field] as string))) {
         reply.code(400);
-        return { error: `A ${field} is required.` };
+        return { error: `${field === "inviteId" ? "An" : "A"} ${field} is required.` };
       }
       const result = await run(a.ctx, body, new Date());
       if (!result.ok) {
