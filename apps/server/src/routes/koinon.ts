@@ -8,6 +8,7 @@ import {
   deletePost,
   expel,
   foundKoinon,
+  giveToKoinon,
   handOver,
   invite,
   koinonView,
@@ -136,4 +137,7 @@ export async function koinonRoutes(app: FastifyInstance) {
   // Body: { postId }.
   write("/post/delete", (ctx, body, now) => deletePost(ctx, body.postId as string, now), "postId");
   write("/read", (ctx, _body, now) => markRead(ctx, now));
+
+  // Body: { amount }. A member gives drachmae into the koinon's treasury.
+  write("/give", (ctx, body, now) => giveToKoinon(ctx, body.amount, now));
 }

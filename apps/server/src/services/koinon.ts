@@ -2,8 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, asc, count, desc, eq, gt, gte, inArray, isNull, lte, max, ne, notInArray, sql } from "drizzle-orm";
-import { createDb, dailyDecisions, effectLog, houses, koina, koinonInvites, koinonMembers, koinonPosts, playerCharacters, playerLevy, playerUnits, players, resources } from "@massalia/db";
-import { bandDef, cleanKoinonName, cleanKoinonPost, formatGameDate, gameDate, parseKoinonContent, sanitizeDisplayName, seasonIndexAt, settleHall, unitDef, type HallSettle, type HallState, type KoinonChronicle, type KoinonContent, type KoinonEvent } from "@massalia/shared";
+import { createDb, dailyDecisions, effectLog, houses, koina, koinonDeposits, koinonInvites, koinonMembers, koinonPosts, playerCharacters, playerLevy, playerUnits, players, resources } from "@massalia/db";
+import { bandDef, cleanKoinonName, cleanKoinonPost, formatGameDate, gameDate, parseKoinonContent, sanitizeDisplayName, seasonIndexAt, settleHall, unitDef, type HallSettle, type HallState, type KoinonChronicle, type KoinonContent, type KoinonDepositDetail, type KoinonEvent } from "@massalia/shared";
 import { agedPortraitFor } from "./age.js";
 import { getBandsContent, getUnitsContent } from "./barracks.js";
 import { creditWorldTreasury, debitDrachmae, spendTransaction, SpendRejected, type ActingContext } from "./buildings.js";
@@ -42,6 +42,8 @@ const koinonFile = path.join(repoRoot, "content/koinon/koinon.json");
 
 const MS_PER_HOUR = 3_600_000;
 const MS_PER_DAY = 86_400_000;
+// How many of the newest gifts the page lists.
+const RECENT_GIFTS = 10;
 
 let content: KoinonContent | null = null;
 
@@ -296,7 +298,7 @@ export type KoinonMemberView = {
 
 export type KoinonView = {
   now: string;
-  rules: { foundCost: number; foundPrestige: number; memberCap: number; nameMin: number; nameMax: number; postMaxChars: number; cooldownHours: number; absentLeaderDays: number };
+  rules: { foundCost: number; foundPrestige: number; memberCap: number; nameMin: number; nameMax: number; postMaxChars: number; cooldownHours: number; absentLeaderDays: number; depositMax: number };
   me: { playerId: string; role: KoinonRole | null; cooldownUntil: string | null; prestige: number; drachmae: number };
   koina: { id: string; name: string; leaderName: string; members: number; cap: number }[];
   invites: { id: string; koinonId: string; koinonName: string; inviterName: string; expiresAt: string }[];
@@ -313,6 +315,11 @@ export type KoinonView = {
     pending: { id: string; playerName: string; expiresAt: string }[];
     posts: { id: string; authorName: string; body: string; label: string; canDelete: boolean }[];
     unread: number;
+    // The treasury as a settle at `now` would leave it, every giver with his
+    // total (largest first), and the 10 newest gifts. Members only.
+    treasury: number;
+    givers: { playerId: string; name: string; total: number }[];
+    gifts: { id: string; name: string; amount: number; label: string }[];
   };
 };
 
@@ -405,6 +412,25 @@ export async function koinonView(ctx: ActingContext, now: Date): Promise<KoinonV
       .innerJoin(players, eq(players.id, koinonPosts.authorPlayerId))
       .where(eq(koinonPosts.koinonId, own.id))
       .orderBy(desc(koinonPosts.createdAt), desc(koinonPosts.id));
+    // Read-only: the hall is derived with the pure settle, never written here.
+    // Every change to the treasury settles first, so this is what a locked
+    // settle at `now` would store.
+    const hall = settleHall(hallStateOf(own), now.getTime(), c.lesche.upkeepPerDay);
+    const total = sql<number>`sum(${koinonDeposits.amount})::int`;
+    const givers = await db
+      .select({ playerId: koinonDeposits.playerId, name: players.name, total })
+      .from(koinonDeposits)
+      .innerJoin(players, eq(players.id, koinonDeposits.playerId))
+      .where(eq(koinonDeposits.koinonId, own.id))
+      .groupBy(koinonDeposits.playerId, players.name)
+      .orderBy(desc(total), asc(players.name), asc(koinonDeposits.playerId));
+    const gifts = await db
+      .select({ id: koinonDeposits.id, name: players.name, amount: koinonDeposits.amount, createdAt: koinonDeposits.createdAt })
+      .from(koinonDeposits)
+      .innerJoin(players, eq(players.id, koinonDeposits.playerId))
+      .where(eq(koinonDeposits.koinonId, own.id))
+      .orderBy(desc(koinonDeposits.createdAt), desc(koinonDeposits.id))
+      .limit(RECENT_GIFTS);
     koinon = {
       id: own.id,
       name: own.name,
@@ -418,12 +444,15 @@ export async function koinonView(ctx: ActingContext, now: Date): Promise<KoinonV
       pending: pending.map((p) => ({ id: p.id, playerName: p.playerName, expiresAt: p.expiresAt.toISOString() })),
       posts: posts.map((p) => ({ id: p.id, authorName: p.authorName, body: p.body, label: gameLabel(p.createdAt, ctx), canDelete: role === "leader" || p.authorPlayerId === ctx.playerId })),
       unread: await unreadPosts(db, ctx.playerId, ctx.worldId),
+      treasury: hall.state.treasury,
+      givers: givers.map((g) => ({ playerId: g.playerId, name: g.name, total: Number(g.total) })),
+      gifts: gifts.map((g) => ({ id: g.id, name: g.name, amount: g.amount, label: gameLabel(g.createdAt, ctx) })),
     };
   }
 
   return {
     now: now.toISOString(),
-    rules: { foundCost: c.foundCost, foundPrestige: c.foundPrestige, memberCap: c.memberCap, nameMin: c.name.min, nameMax: c.name.max, postMaxChars: c.post.maxChars, cooldownHours: c.cooldownHours, absentLeaderDays: c.absentLeaderDays },
+    rules: { foundCost: c.foundCost, foundPrestige: c.foundPrestige, memberCap: c.memberCap, nameMin: c.name.min, nameMax: c.name.max, postMaxChars: c.post.maxChars, cooldownHours: c.cooldownHours, absentLeaderDays: c.absentLeaderDays, depositMax: c.deposit.max },
     me: { playerId: ctx.playerId, role: own ? roleOf(own, ctx.playerId) : null, cooldownUntil: cooldown?.toISOString() ?? null, prestige: character?.prestige ?? 0, drachmae: character?.drachmae ?? 0 },
     koina: live.map((k) => ({ id: k.id, name: k.name, leaderName: k.leaderName ?? "—", members: Number(k.members), cap: c.memberCap })),
     invites: invites.map((i) => ({ id: i.id, koinonId: i.koinonId, koinonName: i.koinonName, inviterName: i.inviterName, expiresAt: i.expiresAt.toISOString() })),
@@ -693,6 +722,43 @@ export async function deletePost(ctx: ActingContext, postId: string, now: Date):
     await tx.delete(koinonPosts).where(eq(koinonPosts.id, postId));
     return { ok: true as const };
   });
+}
+
+// --- The treasury --------------------------------------------------------------
+
+export type GiveResult = KoinonError | { ok: true; wallet: number; treasury: number };
+
+// POST /api/koinon/give — ruling 1: a member gives drachmae from his own wallet
+// into the treasury. Nothing ever comes back out. The giver's player lock
+// first (spendTransaction), then the koinon lock (inOwnKoinon): the order the
+// rule above lockKoinon allows. The hall settles before the credit and again
+// after it, so a hall that ran dry pays nothing for the days it stood shut and
+// reopens on the gift that refills it. A short wallet throws, so nothing is
+// written. The gift is a koinon_deposits row and a plain effect_log row with no
+// chronicle block, as a market trade is.
+export async function giveToKoinon(ctx: ActingContext, amount: unknown, now: Date): Promise<GiveResult> {
+  const c = getKoinonContent();
+  if (typeof amount !== "number" || !Number.isInteger(amount) || amount < 1 || amount > c.deposit.max) {
+    return fail(400, `Give a whole amount from 1 to ${c.deposit.max.toLocaleString("en-US")} drachmae.`);
+  }
+  return spendTransaction(ctx.playerId, (tx) =>
+    inOwnKoinon(tx, ctx, now, async (tx, k) => {
+      const wallet = await debitDrachmae(tx, ctx.playerId, amount);
+      if (wallet === null) {
+        const held = (await findCharacterRow(ctx.playerId, ctx.worldId, tx))?.drachmae ?? 0;
+        throw new SpendRejected(fail(402, `You hold only ${held} drachmae.`));
+      }
+      const credited = (await tx.update(koina).set({ treasury: sql`${koina.treasury} + ${amount}` }).where(eq(koina.id, k.id)).returning())[0]!;
+      const { k: after } = await settleHallLocked(tx, credited, now);
+      await tx.insert(koinonDeposits).values({ koinonId: k.id, playerId: ctx.playerId, amount, createdAt: now });
+      const character = await findCharacterRow(ctx.playerId, ctx.worldId, tx);
+      if (character) {
+        const detail: KoinonDepositDetail = { koinonId: k.id, koinonName: k.name, amount, treasuryAfter: after.treasury };
+        await tx.insert(effectLog).values({ characterId: character.id, kind: "koinon_deposit", detail, createdAt: now });
+      }
+      return { ok: true as const, wallet, treasury: after.treasury };
+    }),
+  );
 }
 
 // POST /api/koinon/read — the caller has read the board up to now.
