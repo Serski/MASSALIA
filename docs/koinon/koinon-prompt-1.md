@@ -351,3 +351,28 @@ Append this ruling verbatim at the end of docs/koinon/koinon-prompt-1.md under "
 Copy: all the server copy is accepted as written, with one fix. "A inviteId is required." becomes "An inviteId is required." The playerId and postId lines stay as they are.
 
 Phase 3 and Phase 4 go ahead as written. Run the full `pnpm gate` at HEAD before STOP 2. Captures as named at STOP 2. Do not push.
+
+## STOP 2 ruling (4 Oct 2026)
+
+STOP 2 ruling (4 Oct 2026)
+
+Append this ruling verbatim at the end of docs/koinon/koinon-prompt-1.md under "## STOP 2 ruling (4 Oct 2026)", as its own commit `docs: koinon prompt 1 STOP 2 ruling`.
+
+Accepted as reported: "Returning from" (the roster's wording, as you read it); one meander band per card, at the top; admin audit rows with no target user, the list audited as koina.list, no sweep on the admin list; the two existing tests changed (shared chronicle.test.ts, me-state.test.ts); AssetIcon with no emoji fallback; the lock-order consequence (another koinon may count one invite too many for an instant, which can only refuse, never overfill); the admin section verified by render and route tests only; all client copy as listed.
+
+Three commits, one item each:
+
+1. `web: the pottery tab row wraps on a phone`. The scope fence widens to the `.cs-tabs.pottery` rules in dashboard.css. At widths of 600px and below the row wraps onto as many lines as it needs and never scrolls sideways; tabs keep their look and the count after the Koinon label stays on the same line as the label. Desktop unchanged. The plain `.cs-tabs` rule used by Standings, Family and the sheets is untouched.
+2. `koinon: the absent-leader days in the rules block`. `absentLeaderDays` joins the rules block of GET /api/koinon, and the take-the-lead copy reads "{leaderName} has not been seen for {absentLeaderDays} days. You may take the lead." Update the test that quotes it.
+3. `web: members see the koina of the city`. The "Koina of the city" list renders for members too, at the bottom of the member layout, above Leave. Their own koinon is in the list like any other.
+
+Then the full `pnpm gate` at HEAD. If it ends GATE GREEN at HEAD, tree clean, push without a further STOP:
+
+- plain `git push`, fast-forward only;
+- report remote HEAD, the CI run with its Gate step on postgres:16 and its suite counts, the Railway server deploy with migration 0062 confirmed by a read of __massalia_migrations through `railway run --service Postgres --environment production`, the Railway worker deploy, the Pages run, and /health;
+- captures of the Politics tab row at 390px and at desktop width from the local build before the push;
+- stop the throwaway Postgres on 5433 after the report.
+
+If the gate is red, STOP with the log. A red caused only by a timeout in a suite this work does not touch is still a STOP, not a rerun.
+
+Report with every new commit as `Committed: <SHA> <subject>` and the gate's last line.
