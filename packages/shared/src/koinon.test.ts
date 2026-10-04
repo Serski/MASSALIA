@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanKoinonName, cleanKoinonPost, KOINON_EVENTS, parseKoinonContent, type KoinonContent } from "./koinon.js";
+import { cleanKoinonName, cleanKoinonPost, hallCap, KOINON_EVENTS, parseKoinonContent, settleHall, type HallState, type KoinonContent } from "./koinon.js";
 
 const content: KoinonContent = {
   foundCost: 50,
@@ -10,6 +10,8 @@ const content: KoinonContent = {
   absentLeaderDays: 5,
   name: { min: 3, max: 32 },
   post: { maxChars: 300, kept: 20 },
+  deposit: { max: 10000 },
+  lesche: { cost: 500, buildDays: 2, upkeepPerDay: 5, memberCap: 12 },
 };
 
 describe("koinon content", () => {
@@ -29,6 +31,20 @@ describe("koinon content", () => {
     expect(() => parseKoinonContent({ ...content, inviteHours: 1.5 })).toThrow();
     expect(() => parseKoinonContent({ ...content, name: { min: 0, max: 32 } })).toThrow();
     expect(() => parseKoinonContent({ ...content, absentLeaderDays: "5" })).toThrow();
+  });
+
+  it("refuses a lesche.memberCap that is not above memberCap", () => {
+    expect(() => parseKoinonContent({ ...content, lesche: { ...content.lesche, memberCap: 8 } })).toThrow(/lesche\.memberCap/);
+    expect(() => parseKoinonContent({ ...content, lesche: { ...content.lesche, memberCap: 7 } })).toThrow(/lesche\.memberCap/);
+    expect(parseKoinonContent({ ...content, lesche: { ...content.lesche, memberCap: 9 } }).lesche.memberCap).toBe(9);
+  });
+
+  it("rejects a missing or non-positive deposit or lesche number", () => {
+    const { deposit: _deposit, ...noDeposit } = content;
+    expect(() => parseKoinonContent(noDeposit)).toThrow();
+    expect(() => parseKoinonContent({ ...content, deposit: { max: 0 } })).toThrow();
+    expect(() => parseKoinonContent({ ...content, lesche: { ...content.lesche, upkeepPerDay: 0 } })).toThrow();
+    expect(() => parseKoinonContent({ ...content, lesche: { cost: 500, buildDays: 2, memberCap: 12 } })).toThrow();
   });
 
   it("rejects a name range that runs backwards", () => {
@@ -75,7 +91,72 @@ describe("cleanKoinonPost", () => {
 });
 
 describe("KOINON_EVENTS", () => {
-  it("names the five Chronicle events", () => {
-    expect([...KOINON_EVENTS]).toEqual(["founded", "joined", "left", "expelled", "leader"]);
+  it("names the six Chronicle events", () => {
+    expect([...KOINON_EVENTS]).toEqual(["founded", "joined", "left", "expelled", "leader", "lesche"]);
+  });
+});
+
+describe("settleHall", () => {
+  const DAY = 86_400_000;
+  const HOUR = 3_600_000;
+  const C = 1_000 * DAY; // the instant the hall stands
+  const UPKEEP = 5;
+  const standing = (over: Partial<HallState> = {}): HallState => ({ completesAt: C, paidUntil: C, shut: false, treasury: 100, ...over });
+
+  it("no hall, and a hall still building, spend nothing", () => {
+    const none: HallState = { completesAt: null, paidUntil: null, shut: false, treasury: 100 };
+    expect(settleHall(none, C, UPKEEP)).toEqual({ state: none, spent: 0, open: false, phase: "none" });
+    expect(settleHall(standing(), C - 1, UPKEEP)).toEqual({ state: standing(), spent: 0, open: false, phase: "building" });
+  });
+
+  it("pays the first day at the exact completion instant", () => {
+    expect(settleHall(standing(), C, UPKEEP)).toEqual({ state: standing({ paidUntil: C + DAY, treasury: 95 }), spent: 5, open: true, phase: "open" });
+    // Inside a paid day there is nothing to pay.
+    expect(settleHall(standing({ paidUntil: C + DAY, treasury: 95 }), C + DAY - 1, UPKEEP)).toMatchObject({ spent: 0, open: true, phase: "open" });
+    // A paidUntil never written reads as completesAt.
+    expect(settleHall(standing({ paidUntil: null }), C, UPKEEP).state).toEqual(standing({ paidUntil: C + DAY, treasury: 95 }));
+  });
+
+  it("3 days unsettled with a full purse pays 4 days", () => {
+    expect(settleHall(standing(), C + 3 * DAY, UPKEEP)).toEqual({ state: standing({ paidUntil: C + 4 * DAY, treasury: 80 }), spent: 20, open: true, phase: "open" });
+    expect(settleHall(standing(), C + 3 * DAY + HOUR, UPKEEP).spent).toBe(20);
+  });
+
+  it("3 days unsettled with 12 in the purse pays 2 days and shuts", () => {
+    expect(settleHall(standing({ treasury: 12 }), C + 3 * DAY, UPKEEP)).toEqual({ state: standing({ paidUntil: C + 2 * DAY, shut: true, treasury: 2 }), spent: 10, open: false, phase: "shut" });
+  });
+
+  it("a shut hall with 2 stays shut and owes nothing, however long", () => {
+    const shut = standing({ paidUntil: C + 2 * DAY, shut: true, treasury: 2 });
+    expect(settleHall(shut, C + 3 * DAY, UPKEEP)).toEqual({ state: shut, spent: 0, open: false, phase: "shut" });
+    expect(settleHall(shut, C + 300 * DAY, UPKEEP)).toEqual({ state: shut, spent: 0, open: false, phase: "shut" });
+  });
+
+  it("a shut hall with 5 reopens with one day paid, a day from now", () => {
+    const now = C + 30 * DAY + HOUR;
+    expect(settleHall(standing({ paidUntil: C + 2 * DAY, shut: true, treasury: 5 }), now, UPKEEP)).toEqual({ state: standing({ paidUntil: now + DAY, shut: false, treasury: 0 }), spent: 5, open: true, phase: "open" });
+  });
+
+  it("is path independent: settling every hour equals settling once, over 10 days with no gifts", () => {
+    const start = C - DAY; // a day before the hall stands
+    const end = start + 10 * DAY;
+    for (const treasury of [0, 4, 5, 12, 37, 45, 50, 1000]) {
+      let hourly = standing({ treasury });
+      let hourlySpent = 0;
+      for (let t = start; t <= end; t += HOUR) {
+        const step = settleHall(hourly, t, UPKEEP);
+        hourly = step.state;
+        hourlySpent += step.spent;
+      }
+      const once = settleHall(standing({ treasury }), end, UPKEEP);
+      expect(hourly, `treasury ${treasury}`).toEqual(once.state);
+      expect(hourlySpent, `treasury ${treasury}`).toBe(once.spent);
+      expect(once.state.treasury + once.spent).toBe(treasury);
+    }
+  });
+
+  it("hallCap is the Lesche's cap only while the hall is open", () => {
+    expect(hallCap("open", content)).toBe(12);
+    for (const phase of ["none", "building", "shut"] as const) expect(hallCap(phase, content)).toBe(8);
   });
 });
