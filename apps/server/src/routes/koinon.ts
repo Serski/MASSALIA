@@ -4,6 +4,7 @@ import { ensureCharacterRow, getActivePlayer, getActiveWorldId, type CharacterRo
 import { buildingContext, type ActingContext } from "../services/buildings.js";
 import {
   acceptInvite,
+  buildLesche,
   declineInvite,
   deletePost,
   expel,
@@ -140,4 +141,6 @@ export async function koinonRoutes(app: FastifyInstance) {
 
   // Body: { amount }. A member gives drachmae into the koinon's treasury.
   write("/give", (ctx, body, now) => giveToKoinon(ctx, body.amount, now));
+  // The leader orders the Lesche, paid from the treasury.
+  write("/lesche", (ctx, _body, now) => buildLesche(ctx, now));
 }

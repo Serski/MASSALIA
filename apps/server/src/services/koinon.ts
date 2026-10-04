@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, asc, count, desc, eq, gt, gte, inArray, isNull, lte, max, ne, notInArray, sql } from "drizzle-orm";
 import { createDb, dailyDecisions, effectLog, houses, koina, koinonDeposits, koinonInvites, koinonMembers, koinonPosts, playerCharacters, playerLevy, playerUnits, players, resources } from "@massalia/db";
-import { bandDef, cleanKoinonName, cleanKoinonPost, formatGameDate, gameDate, parseKoinonContent, sanitizeDisplayName, seasonIndexAt, settleHall, unitDef, type HallSettle, type HallState, type KoinonChronicle, type KoinonContent, type KoinonDepositDetail, type KoinonEvent } from "@massalia/shared";
+import { bandDef, cleanKoinonName, cleanKoinonPost, formatGameDate, gameDate, hallCap, parseKoinonContent, sanitizeDisplayName, seasonIndexAt, settleHall, unitDef, type HallPhase, type HallSettle, type HallState, type KoinonChronicle, type KoinonContent, type KoinonDepositDetail, type KoinonEvent } from "@massalia/shared";
 import { agedPortraitFor } from "./age.js";
 import { getBandsContent, getUnitsContent } from "./barracks.js";
 import { creditWorldTreasury, debitDrachmae, spendTransaction, SpendRejected, type ActingContext } from "./buildings.js";
@@ -200,6 +200,11 @@ function hallStateOf(k: KoinonRow): HallState {
   return { completesAt: k.lescheCompletesAt?.getTime() ?? null, paidUntil: k.leschePaidUntil?.getTime() ?? null, shut: k.lescheShut, treasury: k.treasury };
 }
 
+// The hall's phase at `now`, read-only: what a locked settle would find.
+function hallPhaseAt(k: KoinonRow, now: Date): HallPhase {
+  return settleHall(hallStateOf(k), now.getTime(), getKoinonContent().lesche.upkeepPerDay).phase;
+}
+
 // The Lesche's upkeep, applied to a locked koinon row (koinon prompt 2): the
 // whole days due are paid from the treasury, the hall shuts when a day cannot
 // be paid and reopens when one can. The debit is relative and guarded, with
@@ -298,7 +303,7 @@ export type KoinonMemberView = {
 
 export type KoinonView = {
   now: string;
-  rules: { foundCost: number; foundPrestige: number; memberCap: number; nameMin: number; nameMax: number; postMaxChars: number; cooldownHours: number; absentLeaderDays: number; depositMax: number };
+  rules: { foundCost: number; foundPrestige: number; memberCap: number; nameMin: number; nameMax: number; postMaxChars: number; cooldownHours: number; absentLeaderDays: number; depositMax: number; lescheCost: number; lescheBuildDays: number; lescheUpkeep: number; lescheCap: number };
   me: { playerId: string; role: KoinonRole | null; cooldownUntil: string | null; prestige: number; drachmae: number };
   koina: { id: string; name: string; leaderName: string; members: number; cap: number }[];
   invites: { id: string; koinonId: string; koinonName: string; inviterName: string; expiresAt: string }[];
@@ -318,6 +323,9 @@ export type KoinonView = {
     // The treasury as a settle at `now` would leave it, every giver with his
     // total (largest first), and the 10 newest gifts. Members only.
     treasury: number;
+    // The Lesche as it stands at `now`: `daysCovered` is the whole days of
+    // upkeep the treasury still holds for an open hall, 0 otherwise.
+    hall: { phase: HallPhase; startedAt: string | null; completesAt: string | null; paidUntil: string | null; daysCovered: number };
     givers: { playerId: string; name: string; total: number }[];
     gifts: { id: string; name: string; amount: number; label: string }[];
   };
@@ -377,7 +385,7 @@ export async function koinonView(ctx: ActingContext, now: Date): Promise<KoinonV
   const cooldown = await cooldownUntil(db, ctx.playerId, now);
 
   const live = await db
-    .select({ id: koina.id, name: koina.name, leaderName: players.name, members: sql<number>`(SELECT count(*)::int FROM koinon_members m WHERE m.koinon_id = ${koina.id})` })
+    .select({ row: koina, leaderName: players.name, members: sql<number>`(SELECT count(*)::int FROM koinon_members m WHERE m.koinon_id = ${koina.id})` })
     .from(koina)
     .leftJoin(players, eq(players.id, koina.leaderPlayerId))
     .where(and(eq(koina.worldId, ctx.worldId), isNull(koina.dissolvedAt)))
@@ -435,7 +443,7 @@ export async function koinonView(ctx: ActingContext, now: Date): Promise<KoinonV
       id: own.id,
       name: own.name,
       foundedLabel: gameLabel(own.foundedAt, ctx),
-      cap: c.memberCap,
+      cap: hallCap(hall.phase, c),
       leaderPlayerId: own.leaderPlayerId,
       vicePlayerId: own.vicePlayerId,
       leaderAbsent: absent,
@@ -445,6 +453,13 @@ export async function koinonView(ctx: ActingContext, now: Date): Promise<KoinonV
       posts: posts.map((p) => ({ id: p.id, authorName: p.authorName, body: p.body, label: gameLabel(p.createdAt, ctx), canDelete: role === "leader" || p.authorPlayerId === ctx.playerId })),
       unread: await unreadPosts(db, ctx.playerId, ctx.worldId),
       treasury: hall.state.treasury,
+      hall: {
+        phase: hall.phase,
+        startedAt: own.lescheStartedAt?.toISOString() ?? null,
+        completesAt: own.lescheCompletesAt?.toISOString() ?? null,
+        paidUntil: hall.state.paidUntil === null ? null : new Date(hall.state.paidUntil).toISOString(),
+        daysCovered: hall.phase === "open" ? Math.floor(hall.state.treasury / c.lesche.upkeepPerDay) : 0,
+      },
       givers: givers.map((g) => ({ playerId: g.playerId, name: g.name, total: Number(g.total) })),
       gifts: gifts.map((g) => ({ id: g.id, name: g.name, amount: g.amount, label: gameLabel(g.createdAt, ctx) })),
     };
@@ -452,9 +467,10 @@ export async function koinonView(ctx: ActingContext, now: Date): Promise<KoinonV
 
   return {
     now: now.toISOString(),
-    rules: { foundCost: c.foundCost, foundPrestige: c.foundPrestige, memberCap: c.memberCap, nameMin: c.name.min, nameMax: c.name.max, postMaxChars: c.post.maxChars, cooldownHours: c.cooldownHours, absentLeaderDays: c.absentLeaderDays, depositMax: c.deposit.max },
+    rules: { foundCost: c.foundCost, foundPrestige: c.foundPrestige, memberCap: c.memberCap, nameMin: c.name.min, nameMax: c.name.max, postMaxChars: c.post.maxChars, cooldownHours: c.cooldownHours, absentLeaderDays: c.absentLeaderDays, depositMax: c.deposit.max, lescheCost: c.lesche.cost, lescheBuildDays: c.lesche.buildDays, lescheUpkeep: c.lesche.upkeepPerDay, lescheCap: c.lesche.memberCap },
     me: { playerId: ctx.playerId, role: own ? roleOf(own, ctx.playerId) : null, cooldownUntil: cooldown?.toISOString() ?? null, prestige: character?.prestige ?? 0, drachmae: character?.drachmae ?? 0 },
-    koina: live.map((k) => ({ id: k.id, name: k.name, leaderName: k.leaderName ?? "—", members: Number(k.members), cap: c.memberCap })),
+    // Each koinon's cap as it stands now (ruling 8): the Lesche's with an open hall.
+    koina: live.map((k) => ({ id: k.row.id, name: k.row.name, leaderName: k.leaderName ?? "—", members: Number(k.members), cap: hallCap(hallPhaseAt(k.row, now), c) })),
     invites: invites.map((i) => ({ id: i.id, koinonId: i.koinonId, koinonName: i.koinonName, inviterName: i.inviterName, expiresAt: i.expiresAt.toISOString() })),
     koinon,
   };
@@ -525,7 +541,7 @@ export async function invite(ctx: ActingContext, rawName: unknown, now: Date): P
   const c = getKoinonContent();
   const name = sanitizeDisplayName(rawName);
   if (!name) return fail(400, "Name the citizen to invite.");
-  return withOwnKoinon(ctx, now, async (tx, k, role) => {
+  return withOwnKoinon(ctx, now, async (tx, k, role, settle) => {
     if (role === "member") return fail(403, "Only the leader and the vice may invite.");
     const target = (
       await tx
@@ -542,8 +558,10 @@ export async function invite(ctx: ActingContext, rawName: unknown, now: Date): P
     await tx.delete(koinonInvites).where(and(eq(koinonInvites.koinonId, k.id), eq(koinonInvites.playerId, target.id), lte(koinonInvites.expiresAt, now)));
     const standing = await tx.select({ playerId: koinonInvites.playerId }).from(koinonInvites).where(and(eq(koinonInvites.koinonId, k.id), gt(koinonInvites.expiresAt, now)));
     if (standing.some((s) => s.playerId === target.id)) return fail(409, "That citizen already holds your invitation.");
-    if ((await seatCount(tx, k.id)) + standing.length >= c.memberCap) {
-      return fail(409, `The koinon is full: its members and standing invitations already number ${c.memberCap}.`);
+    // The cap in force: the Lesche's while the hall stands open (ruling 6).
+    const cap = hallCap(settle.phase, c);
+    if ((await seatCount(tx, k.id)) + standing.length >= cap) {
+      return fail(409, `The koinon is full: its members and standing invitations already number ${cap}.`);
     }
     const expiresAt = new Date(now.getTime() + c.inviteHours * MS_PER_HOUR);
     const row = (await tx.insert(koinonInvites).values({ worldId: ctx.worldId, koinonId: k.id, playerId: target.id, inviterPlayerId: ctx.playerId, createdAt: now, expiresAt }).returning())[0]!;
@@ -587,7 +605,7 @@ export async function acceptInvite(ctx: ActingContext, inviteId: string, now: Da
     const locked = await lockKoinon(tx, seen.koinonId);
     const purged = locked ? await purgeInactive(tx, locked, now) : null;
     if (!purged) return fail(404, "That koinon is no more.");
-    const { k } = await settleHallLocked(tx, purged, now);
+    const { k, settle } = await settleHallLocked(tx, purged, now);
     // Read again under the lock: a withdraw or a dissolve may have run first.
     const invite = await ownInvite(tx, ctx, inviteId);
     if (!invite) return INVITE_GONE;
@@ -595,7 +613,7 @@ export async function acceptInvite(ctx: ActingContext, inviteId: string, now: Da
     const cooldown = await cooldownUntil(tx, ctx.playerId, now);
     if (cooldown) return fail(409, `You left a koinon too recently. You may join another in ${remainingText(cooldown.getTime() - now.getTime())}.`);
     if (await memberRow(tx, ctx.playerId, ctx.worldId)) return fail(409, "You are already in a koinon.");
-    if ((await seatCount(tx, k.id)) >= c.memberCap) return fail(409, "That koinon is full.");
+    if ((await seatCount(tx, k.id)) >= hallCap(settle.phase, c)) return fail(409, "That koinon is full.");
     const seated = await tx.insert(koinonMembers).values({ worldId: ctx.worldId, playerId: ctx.playerId, koinonId: k.id, joinedAt: now, lastReadAt: now }).onConflictDoNothing().returning();
     if (!seated[0]) return fail(409, "You are already in a koinon.");
     // Every invite of this player goes, this one and the others.
@@ -761,6 +779,32 @@ export async function giveToKoinon(ctx: ActingContext, amount: unknown, now: Dat
   );
 }
 
+export type BuildLescheResult = KoinonError | { ok: true; completesAt: string; treasury: number };
+
+// POST /api/koinon/lesche — ruling 3: the leader orders the koinon's hall. Paid
+// from the treasury at the order (a guarded debit; the money is spent, it goes
+// nowhere), standing `buildDays` later. One per koinon, no cancel, no refund.
+// Upkeep starts when it stands: lesche_paid_until begins at lesche_completes_at.
+export async function buildLesche(ctx: ActingContext, now: Date): Promise<BuildLescheResult> {
+  const c = getKoinonContent();
+  return withOwnKoinon(ctx, now, async (tx, k, role, settle) => {
+    if (role !== "leader") return fail(403, "Only the leader may order the Lesche.");
+    if (settle.phase === "building") return fail(409, "The Lesche is already being built.");
+    if (settle.phase !== "none") return fail(409, "The koinon already has its Lesche.");
+    const short = fail(409, `The treasury holds ${k.treasury} drachmae. The Lesche costs ${c.lesche.cost}.`);
+    if (k.treasury < c.lesche.cost) return short;
+    const completesAt = new Date(now.getTime() + c.lesche.buildDays * MS_PER_DAY);
+    const built = await tx
+      .update(koina)
+      .set({ treasury: sql`${koina.treasury} - ${c.lesche.cost}`, lescheStartedAt: now, lescheCompletesAt: completesAt, leschePaidUntil: completesAt, lescheShut: false })
+      .where(and(eq(koina.id, k.id), gte(koina.treasury, c.lesche.cost)))
+      .returning();
+    if (!built[0]) return short;
+    await logKoinon(tx, ctx.playerId, ctx.worldId, "lesche", k.name, now);
+    return { ok: true as const, completesAt: completesAt.toISOString(), treasury: built[0].treasury };
+  });
+}
+
 // POST /api/koinon/read — the caller has read the board up to now.
 export async function markRead(ctx: ActingContext, now: Date): Promise<OkResult> {
   const stamped = await db
@@ -775,17 +819,22 @@ export async function markRead(ctx: ActingContext, now: Date): Promise<OkResult>
 // The list, a rename and a dissolve. `record` writes the admin_audit row inside
 // the same transaction as the change. Admin sees no posts.
 
-export type AdminKoinonRow = { id: string; name: string; leaderName: string; members: number; foundedAt: string };
+export type AdminKoinonRow = { id: string; name: string; leaderName: string; members: number; foundedAt: string; treasury: number; hall: HallPhase };
 
 // GET /admin/koina — the world's live koina, by name.
-export async function adminKoinaList(worldId: string): Promise<AdminKoinonRow[]> {
+export async function adminKoinaList(worldId: string, now: Date = new Date()): Promise<AdminKoinonRow[]> {
+  const upkeep = getKoinonContent().lesche.upkeepPerDay;
   const rows = await db
-    .select({ id: koina.id, name: koina.name, leaderName: players.name, foundedAt: koina.foundedAt, members: sql<number>`(SELECT count(*)::int FROM koinon_members m WHERE m.koinon_id = ${koina.id})` })
+    .select({ row: koina, leaderName: players.name, members: sql<number>`(SELECT count(*)::int FROM koinon_members m WHERE m.koinon_id = ${koina.id})` })
     .from(koina)
     .leftJoin(players, eq(players.id, koina.leaderPlayerId))
     .where(and(eq(koina.worldId, worldId), isNull(koina.dissolvedAt)))
     .orderBy(sql`lower(${koina.name})`, asc(koina.id));
-  return rows.map((r) => ({ id: r.id, name: r.name, leaderName: r.leaderName ?? "—", members: Number(r.members), foundedAt: r.foundedAt.toISOString() }));
+  // The treasury and the hall's phase as a settle at `now` would leave them; read-only.
+  return rows.map((r) => {
+    const hall = settleHall(hallStateOf(r.row), now.getTime(), upkeep);
+    return { id: r.row.id, name: r.row.name, leaderName: r.leaderName ?? "—", members: Number(r.members), foundedAt: r.row.foundedAt.toISOString(), treasury: hall.state.treasury, hall: hall.phase };
+  });
 }
 
 const NO_KOINON = fail(404, "No such koinon.");

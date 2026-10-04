@@ -375,8 +375,8 @@ suite("admin tooling and account gates (integration)", () => {
     expect(list.statusCode).toBe(200);
     expect(list.json()).toEqual({
       koina: [
-        { id: elders.id, name: "The Elders", leaderName: "Nikias", members: 1, foundedAt: expect.any(String) },
-        { id: band.id, name: "The Sacred Band", leaderName: "Kallias", members: 2, foundedAt: foundedAt.toISOString() },
+        { id: elders.id, name: "The Elders", leaderName: "Nikias", members: 1, foundedAt: expect.any(String), treasury: 0, hall: "none" },
+        { id: band.id, name: "The Sacred Band", leaderName: "Kallias", members: 2, foundedAt: foundedAt.toISOString(), treasury: 0, hall: "none" },
       ],
     });
 
