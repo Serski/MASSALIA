@@ -34,7 +34,10 @@ function inside(as: "kallias" | "deon" | "nikias", over: Partial<NonNullable<Koi
     now: NOW,
     rules,
     me: { playerId: as, role, cooldownUntil: null, prestige: 30, drachmae: 200 },
-    koina: [],
+    koina: [
+      { id: "k2", name: "Sons of Protis", leaderName: "Lykos", members: 1, cap: 8 },
+      { id: "k1", name: "The Sacred Band", leaderName: "Kallias", members: 3, cap: 8 },
+    ],
     invites: [],
     koinon: {
       id: "k1",
@@ -160,6 +163,11 @@ describe("KoinonView · in a koinon", () => {
     const rows = [...container.querySelectorAll(".koinon-member")];
     expect(rows.map((r) => r.querySelector(".koinon-row-title")!.textContent)).toEqual(["Kallias of House Iason Leader", "Deon of House Iason Vice", "Nikias of House Iason "]);
     expect(rows[1]!.querySelector(".koinon-row-sub")!.textContent).toBe("Trader · Dynatoi · Joined Winter, 300 BC");
+    // A member sees the koina of the city too, his own among them, above Leave.
+    const koina = section(container, "koina")!;
+    expect([...koina.querySelectorAll(".koinon-row-title")].map((r) => r.textContent)).toEqual(["Sons of Protis · led by Lykos · 1 of 8", "The Sacred Band · led by Kallias · 3 of 8"]);
+    const order = [...container.querySelectorAll("[data-koinon], .koinon-leave")].map((el) => el.getAttribute("data-koinon") ?? "leave");
+    expect(order).toEqual(["header", "board", "members", "koina", "leave"]);
     // Leave is the only button a member has.
     expect(buttons(container)).toEqual(["Leave"]);
     expect(button(container, "Leave")!.classList.contains("danger")).toBe(true);
@@ -201,6 +209,8 @@ describe("KoinonView · in a koinon", () => {
     expect(button(rows[2]!, "Expel")!.classList.contains("danger")).toBe(true);
     expect(buttons(section(container, "board")!)).toEqual(["Post", "Delete"]);
 
+    // The leader's layout ends the same way: soldiers, the koina of the city, Leave.
+    expect([...container.querySelectorAll("[data-koinon], .koinon-leave")].map((el) => el.getAttribute("data-koinon") ?? "leave")).toEqual(["header", "board", "members", "invite", "soldiers", "koina", "leave"]);
     const soldiers = section(container, "soldiers")!;
     const summaries = [...soldiers.querySelectorAll("summary")].map((s) => s.textContent);
     expect(summaries).toEqual(["Kallias · 0 men · levy 120", "Nikias · 30 men · levy 80"]);

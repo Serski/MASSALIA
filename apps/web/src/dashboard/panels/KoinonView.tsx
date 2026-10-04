@@ -107,6 +107,25 @@ function MemberSoldiers({ member, now }: { member: KoinonArmies["members"][numbe
   );
 }
 
+// Every live koinon of the city: name, leader, members. Shown to everyone, a
+// member's own koinon among the rest.
+function KoinaOfTheCity({ koina }: { koina: KoinonPage["koina"] }) {
+  return (
+    <KoinonCard title="Koina of the city" section="koina">
+      {koina.length === 0 ? <p className="koinon-empty">No koina yet.</p> : null}
+      {koina.map((k) => (
+        <div key={k.id} className="koinon-row">
+          <div className="koinon-row-body">
+            <div className="koinon-row-title">
+              {k.name} <span className="koinon-dim">· led by {k.leaderName} · {k.members} of {k.cap}</span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </KoinonCard>
+  );
+}
+
 function MemberRow({ member, children }: { member: KoinonMember; children?: ReactNode }) {
   const facts = [className(member.professionSlug), member.party !== "none" ? titleCase(member.party) : "", `Joined ${member.joinedLabel}`].filter(Boolean);
   return (
@@ -246,18 +265,7 @@ export function KoinonView({ onRefresh }: PanelProps) {
           {foundReason ? <p className="koinon-reason">{foundReason}</p> : null}
         </KoinonCard>
 
-        <KoinonCard title="Koina of the city" section="koina">
-          {page.koina.length === 0 ? <p className="koinon-empty">No koina yet.</p> : null}
-          {page.koina.map((k) => (
-            <div key={k.id} className="koinon-row">
-              <div className="koinon-row-body">
-                <div className="koinon-row-title">
-                  {k.name} <span className="koinon-dim">· led by {k.leaderName} · {k.members} of {k.cap}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </KoinonCard>
+        <KoinaOfTheCity koina={page.koina} />
       </div>
     );
   }
@@ -410,6 +418,8 @@ export function KoinonView({ onRefresh }: PanelProps) {
           ))}
         </KoinonCard>
       ) : null}
+
+      <KoinaOfTheCity koina={page.koina} />
 
       <div className="koinon-leave">
         <button type="button" className="panel-btn danger" data-action="leave" disabled={busy} onClick={() => confirmThen(leaveText, () => api.koinonLeave())}>
