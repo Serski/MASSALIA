@@ -12,6 +12,7 @@ import { closeDueFestivals, fireFestivalsForCharacter, liveFestivalForCharacter 
 import { availableStories } from "../services/story.js";
 import { olympiadStatus, syncOlympiadForCharacter } from "../services/olympiad.js";
 import { familyPendingCount, scandalHeadline } from "../services/family.js";
+import { koinonPendingCount } from "../services/koinon.js";
 import { manumissionStatus } from "../services/manumission.js";
 import { syncAgenda } from "../services/agenda.js";
 import { syncElections } from "../services/elections.js";
@@ -109,6 +110,9 @@ export async function meRoutes(app: FastifyInstance) {
     // Family nav badge: the honest count of pending family items (replaces the old
     // placeholder ①). Lean count queries — never the full family payload.
     const familyPending = await familyPendingCount(character);
+    // Politics nav badge: a member's unread koinon posts, or a non-member's
+    // unexpired invites. Two lean counts, as above.
+    const koinonPending = await koinonPendingCount(state.player.id, world.id, new Date());
 
     // Elections (Politics Prompt 2): open due declarations, advance phases, and
     // reconcile office vacancies (death cascade + defection forfeit) on the same
@@ -237,6 +241,8 @@ export async function meRoutes(app: FastifyInstance) {
       scandal,
       // The Family nav badge count (unnamed newborns + in-window family notices).
       familyPending,
+      // The Politics nav badge count (unread koinon posts, or standing invites).
+      koinonPending,
       // Manumission: { eligible } when a slave holds the freedman trait — the
       // signal for the client's "Claim Your Freedom" panel.
       manumission,

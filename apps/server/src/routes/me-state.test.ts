@@ -167,6 +167,20 @@ suite("GET /me/state settles the player (integration)", () => {
     expect((seasonEndsAt - worldStartedAt.getTime()) % DAY).toBe(0);
   });
 
+  it("koinonPending counts a non-member's standing invites, and is zero with none", async () => {
+    const { koina, koinonInvites, koinonMembers } = m.dbPkg;
+    const leader = await shipbuilder();
+    const invited = await shipbuilder();
+    expect((await getState(invited.token)).json().koinonPending).toBe(0);
+
+    const koinon = (await db.insert(koina).values({ worldId, name: "The Sacred Band", leaderPlayerId: leader.playerId }).returning())[0]!;
+    await db.insert(koinonMembers).values({ worldId, playerId: leader.playerId, koinonId: koinon.id });
+    await db.insert(koinonInvites).values({ worldId, koinonId: koinon.id, playerId: invited.playerId, inviterPlayerId: leader.playerId, expiresAt: new Date(Date.now() + HOUR) });
+
+    expect((await getState(invited.token)).json().koinonPending).toBe(1);
+    expect((await getState(leader.token)).json().koinonPending).toBe(0);
+  });
+
   it("a second GET /me/state settles nothing new: the balance holds and the markers sit at the last read", async () => {
     const { token, playerId } = await shipbuilder();
     const ctx = (await m.buildings.buildingContext(playerId, worldId))!;
