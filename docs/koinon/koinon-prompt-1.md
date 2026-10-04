@@ -329,3 +329,25 @@ RULINGS FOR ARGIRIS: every departure from this prompt, with the reason
 Committed: <SHA> <subject>, one line per commit, in order
 GATE: the gate's last line at HEAD
 ```
+
+## STOP 1 ruling (4 Oct 2026)
+
+STOP 1 ruling (4 Oct 2026)
+
+Append this ruling verbatim at the end of docs/koinon/koinon-prompt-1.md under "## STOP 1 ruling (4 Oct 2026)", as its own commit `docs: koinon prompt 1 STOP 1 ruling`, then go on to Phase 3.
+
+1. Accepted. The art prompt 3 ruling stays in bcd6178. The economy prompt 1 ruling stays parked.
+2. Accepted. The player lock comes first in acceptInvite. Put the order rule in a comment above lockKoinon: a player lock may be taken before a koinon lock, never after one. Confirm in the final report that no path breaks it.
+3. Accepted. Deleted accounts are swept across the world on the two reads. One query finds the affected koinon ids, and only those koina are locked.
+4. Accepted. The successor of a removed leader gets the `leader` line.
+5. Accepted. Line breaks and tabs in a post become spaces.
+6. Accepted. markRead takes no koinon lock.
+7. Accepted. The result shape is { ok: false, code, error }.
+8. Accepted, both additions. In the client, every Away line uses the wording the Barracks roster already uses for that mission kind, `return` included ("Returning to …", "Marching to …" and the rest), followed by " · back in {duration}". Do not write new mission wording. List the strings you reused in the report.
+9. Accepted. routes/koinon.test.ts joins the scope fence.
+10. Accepted. A dissolved koinon keeps leader_player_id, and its vice is cleared.
+11. Accepted, both.
+
+Copy: all the server copy is accepted as written, with one fix. "A inviteId is required." becomes "An inviteId is required." The playerId and postId lines stay as they are.
+
+Phase 3 and Phase 4 go ahead as written. Run the full `pnpm gate` at HEAD before STOP 2. Captures as named at STOP 2. Do not push.
