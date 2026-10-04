@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, type ChamberSeat, type ChamberView } from "../src/api.js";
 import PoliticsPanel, { hemicycleLayout, hemicycleRows } from "../src/dashboard/panels/PoliticsPanel.js";
@@ -171,5 +173,22 @@ describe("council tab", () => {
     expect(container.querySelector(".seat-ring-you")).toBeNull();
     expect(container.querySelector(".chamber-tile.is-yours")).toBeNull();
     expect(text(container, ".party-tab-lock")).toBe("· Unaligned");
+  });
+});
+
+// jsdom lays nothing out, so the phone rule is read from the stylesheet itself:
+// at 600px and below the pottery row wraps and does not scroll, each tab stays
+// one unbroken block, and the plain tab row keeps its sideways scroll.
+describe("pottery tab row on a phone", () => {
+  // The suite runs from apps/web (the gate and CI both use `pnpm --filter`).
+  const css = readFileSync(resolve(process.cwd(), "src/dashboard/dashboard.css"), "utf8");
+
+  it("wraps at 600px and below, and only the pottery row", () => {
+    const phone = css.match(/@media \(max-width: 600px\) \{\s*\.dashboard-shell \.cs-tabs\.pottery\{([^}]*)\}\s*\}/);
+    expect(phone).not.toBeNull();
+    expect(phone![1]).toContain("flex-wrap: wrap");
+    expect(phone![1]).toContain("overflow-x: visible");
+    expect(css).toContain(".dashboard-shell .cs-tabs{ overflow-x: auto; scrollbar-width: none; }");
+    expect(css).toContain(".dashboard-shell .cs-tab{ white-space: nowrap; flex: none; }");
   });
 });

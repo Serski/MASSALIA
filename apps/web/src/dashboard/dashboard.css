@@ -3665,6 +3665,12 @@
 .dashboard-shell .cs-tabs.pottery .cs-tab.on{ color: var(--on-accent); background: var(--accent); }
 .dashboard-shell .cs-tabs.pottery .cs-tab.on::before,
 .dashboard-shell .cs-tabs.pottery .cs-tab.on .party-tab-tag{ color: inherit; }
+/* On a phone the pottery row wraps onto as many lines as it needs and never
+   scrolls sideways. Each tab stays one unbroken block (nowrap above), so a count
+   after a label stays on the label's line. */
+@media (max-width: 600px) {
+  .dashboard-shell .cs-tabs.pottery{ flex-wrap: wrap; overflow-x: visible; }
+}
 
 /* Buttons: hover/active life for the gold button and the ghost variant. */
 .dashboard-shell .panel-btn{
