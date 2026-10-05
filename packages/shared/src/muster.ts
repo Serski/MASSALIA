@@ -1,4 +1,4 @@
-import { campaignSeason } from "./buildings.js";
+import { campaignSeason, seasonIndexAt } from "./buildings.js";
 import { renderForce, type CampaignForcePart } from "./chronicle.js";
 import type { KoinonContent } from "./koinon.js";
 
@@ -25,6 +25,19 @@ export function musterLaunch(nowMs: number, leadMinutes: unknown, worldStartedMs
   const launchAtMs = nowMs + leadMinutes * MINUTE_MS;
   if (!campaignSeason(launchAtMs, worldStartedMs).open) return { ok: false, reason: "winter" };
   return { ok: true, launchAtMs };
+}
+
+// The Winter a launch chosen now could land in: the first Winter season that
+// begins before the longest lead runs out, or null. The launch picker greys
+// out the leads that fall inside it; musterLaunch is still the judge.
+const SEASON_MS = 86_400_000;
+export function musterWinter(nowMs: number, worldStartedMs: number, content: KoinonContent): { fromMs: number; untilMs: number } | null {
+  const horizonMs = nowMs + content.muster.maxLeadHours * 60 * MINUTE_MS;
+  for (let i = seasonIndexAt(nowMs, worldStartedMs); worldStartedMs + i * SEASON_MS <= horizonMs; i++) {
+    const fromMs = worldStartedMs + i * SEASON_MS;
+    if (!campaignSeason(fromMs, worldStartedMs).open) return { fromMs, untilMs: fromMs + SEASON_MS };
+  }
+  return null;
 }
 
 // One owner's pledge of one hull type, as it counts at launch.

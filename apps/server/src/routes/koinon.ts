@@ -164,7 +164,7 @@ export async function koinonRoutes(app: FastifyInstance) {
     });
   }
   // ?gather=<place>: every legal target reachable in principle from there, and the gathering places.
-  read("/muster/targets", (ctx, query) => musterTargets(ctx, query.gather));
+  read("/muster/targets", (ctx, query, now) => musterTargets(ctx, query.gather, now));
   // The caller's rows at the gathering place and his hulls. Settles him, as GET /api/barracks does.
   read("/muster/mine", (ctx, _query, now) => myMusterPledge(ctx, now));
   // Body: { regionId | townId, gatherId, leadMinutes }. Any member.

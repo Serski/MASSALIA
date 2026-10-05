@@ -14,6 +14,7 @@ import {
   loadMusterHulls,
   musterLaunch,
   musterShares,
+  musterWinter,
   REACH_REASON,
   renderMusterLine,
   renderMusterReportLine,
@@ -320,12 +321,14 @@ export async function cancelMuster(ctx: ActingContext, now: Date): Promise<Ok> {
 // --- Reads ---------------------------------------------------------------------
 
 export type MusterTargetView = { regionId: string; townId: string | null; name: string; kind: "town" | "region"; route: "land" | "sea"; steps: number };
-export type MusterTargetsView = { gathers: { id: string; name: string }[]; gatherId: string; targets: MusterTargetView[] };
+// `winter` is the Winter a launch chosen now could land in (server clock), so
+// the launch picker can grey out the leads that fall inside it.
+export type MusterTargetsView = { now: string; winter: { from: string; until: string } | null; gathers: { id: string; name: string }[]; gatherId: string; targets: MusterTargetView[] };
 
 // GET /api/koinon/muster/targets?gather= — every legal target reachable in
 // principle from that gathering place, by name. No garrison, warband or fleet
 // numbers: only where it is and how far.
-export async function musterTargets(ctx: ActingContext, gatherId: unknown): Promise<KoinonError | MusterTargetsView> {
+export async function musterTargets(ctx: ActingContext, gatherId: unknown, now: Date): Promise<KoinonError | MusterTargetsView> {
   if (!(await memberRow(db, ctx.playerId, ctx.worldId))) return fail(403, "You are not in a koinon.");
   const gathers = await gatherPlaces();
   const gather = gatherId === undefined ? gathers[0]! : await gatherPlace(gatherId);
@@ -351,7 +354,14 @@ export async function musterTargets(ctx: ActingContext, gatherId: unknown): Prom
     await consider(regionId, null);
   }
   targets.sort((a, b) => a.name.localeCompare(b.name) || (a.townId ?? a.regionId).localeCompare(b.townId ?? b.regionId));
-  return { gathers: gathers.map((g) => ({ id: g.id, name: g.name })), gatherId: gather.id, targets };
+  const winter = musterWinter(now.getTime(), ctx.worldStartedMs, getKoinonContent());
+  return {
+    now: now.toISOString(),
+    winter: winter ? { from: new Date(winter.fromMs).toISOString(), until: new Date(winter.untilMs).toISOString() } : null,
+    gathers: gathers.map((g) => ({ id: g.id, name: g.name })),
+    gatherId: gather.id,
+    targets,
+  };
 }
 
 export type MyPledgeView = {

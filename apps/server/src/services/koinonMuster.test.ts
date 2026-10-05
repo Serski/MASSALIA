@@ -133,7 +133,7 @@ suite("Koinon muster (integration)", () => {
 
   // The targets from Massalia, read through the service once a member exists.
   async function geography(memberId: string) {
-    const view = await m.muster.musterTargets(await ctx(memberId), massalia);
+    const view = await m.muster.musterTargets(await ctx(memberId), massalia, NOW);
     if ("error" in view) throw new Error(view.error);
     const town = view.targets.find((t) => t.kind === "town" && t.route === "sea")!;
     seaTown = { townId: town.townId!, regionId: town.regionId, steps: town.steps };
@@ -177,6 +177,9 @@ suite("Koinon muster (integration)", () => {
     await koinonOf("The Sacred Band", [leader]);
     const view = await geography(leader);
     expect(view.gathers[0]).toMatchObject({ id: massalia });
+    // Summer, and the next day is Autumn: no Winter within the longest lead. In Autumn the next Winter is named.
+    expect(view).toMatchObject({ now: NOW.toISOString(), winter: null });
+    expect(await m.muster.musterTargets(await ctx(leader), massalia, at(DAY))).toMatchObject({ winter: { from: new Date(T0 + 12 * DAY).toISOString(), until: new Date(T0 + 13 * DAY).toISOString() } });
     expect(view.targets.find((t) => t.regionId === landRegion && t.townId === null)).toMatchObject({ kind: "region", route: "land", steps: 1 });
     // Only where it is and how far: no garrison, warband or fleet numbers.
     expect(Object.keys(view.targets[0]!).sort()).toEqual(["kind", "name", "regionId", "route", "steps", "townId"]);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { seededRoll } from "./barracks.js";
 import type { KoinonContent } from "./koinon.js";
-import { loadMusterHulls, musterLaunch, musterShares, renderMusterLine, renderMusterReportLine, splitByShares, type MusterChronicle, type MusterHull, type MusterReportLine } from "./muster.js";
+import { loadMusterHulls, musterLaunch, musterShares, musterWinter, renderMusterLine, renderMusterReportLine, splitByShares, type MusterChronicle, type MusterHull, type MusterReportLine } from "./muster.js";
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -98,6 +98,26 @@ describe("musterShares and splitByShares", () => {
       const sum = Object.values(shares).reduce((n, s) => n + s, 0);
       expect(Object.values(parts).reduce((n, p) => n + p, 0), `case ${i}`).toBe(total);
       for (const [id, part] of Object.entries(parts)) expect(Math.abs(part - (total * shares[id]!) / sum), `case ${i} ${id}`).toBeLessThan(1);
+    }
+  });
+});
+
+describe("musterWinter", () => {
+  it("is the Winter a launch could land in: the one running now, the one that starts within the longest lead, or none", () => {
+    // Day 0 is Winter: it runs until day 1.
+    expect(musterWinter(WORLD + 20 * HOUR, WORLD, content)).toEqual({ fromMs: WORLD, untilMs: WORLD + DAY });
+    // Spring and Summer: no Winter within a day.
+    expect(musterWinter(WORLD + DAY + HOUR, WORLD, content)).toBeNull();
+    expect(musterWinter(WORLD + 2 * DAY + 23 * HOUR, WORLD, content)).toBeNull();
+    // Autumn: the next Winter starts within the longest lead.
+    expect(musterWinter(WORLD + 3 * DAY + HOUR, WORLD, content)).toEqual({ fromMs: WORLD + 4 * DAY, untilMs: WORLD + 5 * DAY });
+    // It agrees with musterLaunch on both sides of the boundary.
+    const autumn = WORLD + 3 * DAY + 20 * HOUR;
+    const winter = musterWinter(autumn, WORLD, content)!;
+    for (const lead of [3 * 60, 4 * 60 - 1, 4 * 60, 5 * 60, 24 * 60]) {
+      const launch = musterLaunch(autumn, lead, WORLD, content);
+      const inWinter = autumn + lead * MIN >= winter.fromMs && autumn + lead * MIN < winter.untilMs;
+      expect(launch.ok, String(lead)).toBe(!inWinter);
     }
   });
 });
