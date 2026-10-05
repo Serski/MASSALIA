@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import type { FastifyInstance } from "fastify";
 import { and, asc, desc, eq, inArray, isNull, lte, ne, sql } from "drizzle-orm";
 import { createDb, effectLog, koinonMembers, koinonMusterHulls, koinonMusters, playerCharacters, players, playerUnits, resources, worlds, type UnitMission } from "@massalia/db";
 import {
@@ -59,8 +60,9 @@ import { townStats } from "./townStats.js";
 // one's rows: each owner's own settle releases them (barracks.ts).
 //
 // The resolve is lazy and lives here, not in the worker (which cannot reach the
-// economy): resolveMuster computes everything as of the launch instant, never
-// the clock of whoever triggers it.
+// economy): resolveMuster computes everything as of the launch instant, and a
+// preHandler hook runs it before any request that could see or change its
+// inputs, so the result is the one a job at launch would have given.
 // ---------------------------------------------------------------------------
 
 const db = createDb();
@@ -848,4 +850,54 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
       if (!(err instanceof OwnersChanged) || attempt >= 5) throw err;
     }
   }
+}
+
+// --- The hook: due musters resolve before any request ---------------------------------
+
+const RESOLVE_BACKOFF_MS = 60_000;
+// When a muster's resolve last threw, by muster id, in this process: it is not
+// tried again for a minute, so a muster in trouble cannot slow every request.
+const failedAt = new Map<string, number>();
+
+export type MusterResolverDeps = {
+  resolve?: (musterId: string, now: Date) => Promise<unknown>;
+  onError?: (musterId: string, err: unknown) => void;
+};
+
+// Every open muster whose launch instant has passed, oldest first: one indexed
+// query when nothing is due. A resolve that throws is reported once and left
+// open for a later request; it never throws from here.
+export async function resolveDueMusters(now: Date, deps: MusterResolverDeps = {}): Promise<void> {
+  const due = await db.select({ id: koinonMusters.id }).from(koinonMusters).where(and(eq(koinonMusters.status, "open"), lte(koinonMusters.launchAt, now))).orderBy(asc(koinonMusters.launchAt), asc(koinonMusters.id));
+  for (const { id } of due) {
+    const failed = failedAt.get(id);
+    if (failed !== undefined && now.getTime() - failed < RESOLVE_BACKOFF_MS) continue;
+    try {
+      await (deps.resolve ?? resolveMuster)(id, now);
+      failedAt.delete(id);
+    } catch (err) {
+      failedAt.set(id, now.getTime());
+      (deps.onError ?? ((musterId, error) => console.error(`[muster] resolve of ${musterId} failed`, error)))(id, err);
+    }
+  }
+}
+
+// Between a muster's launch and its resolve only time passes, because every
+// write in the game happens inside a request. So the resolve runs before the
+// handler of any request under /api, /me or /admin (never /health or static
+// content), and the handler then sees the muster already marched. The hook
+// never fails a request.
+export function registerMusterResolver(app: FastifyInstance, deps: MusterResolverDeps & { now?: () => Date } = {}): void {
+  app.addHook("preHandler", async (req) => {
+    const path = req.url.split("?")[0]!;
+    if (!path.startsWith("/api/") && path !== "/me" && !path.startsWith("/me/") && path !== "/admin" && !path.startsWith("/admin/")) return;
+    try {
+      await resolveDueMusters(deps.now ? deps.now() : new Date(), {
+        resolve: deps.resolve,
+        onError: deps.onError ?? ((musterId, err) => req.log.error({ err, musterId }, "muster resolve failed")),
+      });
+    } catch (err) {
+      req.log.error({ err }, "muster resolver failed");
+    }
+  });
 }
