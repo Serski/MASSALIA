@@ -184,7 +184,7 @@ suite("Koinon (integration)", () => {
     expect(view.me).toMatchObject({ role: "leader", prestige: 20, drachmae: 50 });
     expect(view.koinon).toMatchObject({ name: "The Sacred Band", leaderPlayerId: a, members: [{ playerId: a, name: "Kallias", role: "leader", houseName: expect.any(String) }] });
     expect(view.koina.map((k) => [k.name, k.leaderName, k.members, k.cap])).toEqual([["The Elders", "Deon", 1, 8], ["The Sacred Band", "Kallias", 1, 8]]);
-    expect(view.rules).toEqual({ foundCost: 50, foundPrestige: 20, memberCap: 8, nameMin: 3, nameMax: 32, postMaxChars: 300, cooldownHours: 24, absentLeaderDays: 5, depositMax: 10000, lescheCost: 500, lescheBuildDays: 2, lescheUpkeep: 5, lescheCap: 12 });
+    expect(view.rules).toEqual({ foundCost: 50, foundPrestige: 20, memberCap: 8, nameMin: 3, nameMax: 32, postMaxChars: 300, cooldownHours: 24, absentLeaderDays: 5, depositMax: 10000, lescheCost: m.koinon.getKoinonContent().lesche.cost, lescheBuildDays: 2, lescheUpkeep: 5, lescheCap: 12 });
   });
 
   // --- invite -----------------------------------------------------------------
@@ -739,20 +739,22 @@ suite("Koinon (integration)", () => {
 
   // --- the Lesche -----------------------------------------------------------------
 
-  it("build: the vice gets 403, a treasury of 499 is 409, success spends 500 and sets the three instants, a second build is 409", async () => {
+  it("build: the vice gets 403, a treasury one drachma short is 409, success spends the cost and sets the three instants, a second build is 409", async () => {
+    // The price is a balance number: read it from content, never pin it here.
+    const cost = m.koinon.getKoinonContent().lesche.cost;
     const leader = await freshPlayer("Kallias");
     const vice = await freshPlayer("Deon");
     // Founded an hour earlier, so the founding line sorts before the Lesche line.
     const k = await found(leader, "The Sacred Band", at(-HOUR));
     await seat(k, vice);
     await setVice(k, vice);
-    await setTreasury(k, 499);
+    await setTreasury(k, cost - 1);
 
     expect(await m.koinon.buildLesche(await ctx(vice), NOW)).toEqual({ ok: false, code: 403, error: "Only the leader may order the Lesche." });
-    expect(await m.koinon.buildLesche(await ctx(leader), NOW)).toEqual({ ok: false, code: 409, error: "The treasury holds 499 drachmae. The Lesche costs 500." });
-    expect(await koinonRow(k)).toMatchObject({ treasury: 499, lescheStartedAt: null, lescheCompletesAt: null });
+    expect(await m.koinon.buildLesche(await ctx(leader), NOW)).toEqual({ ok: false, code: 409, error: `The treasury holds ${cost - 1} drachmae. The Lesche costs ${cost}.` });
+    expect(await koinonRow(k)).toMatchObject({ treasury: cost - 1, lescheStartedAt: null, lescheCompletesAt: null });
 
-    await setTreasury(k, 500);
+    await setTreasury(k, cost);
     expect(await m.koinon.buildLesche(await ctx(leader), NOW)).toEqual({ ok: true, completesAt: at(2 * DAY).toISOString(), treasury: 0 });
     const row = await koinonRow(k);
     expect(row).toMatchObject({ treasury: 0, lescheShut: false });
@@ -760,7 +762,7 @@ suite("Koinon (integration)", () => {
     expect(await lines(leader)).toEqual([{ event: "founded", koinonName: "The Sacred Band" }, { event: "lesche", koinonName: "The Sacred Band" }]);
     expect((await m.koinon.koinonView(await ctx(vice), at(DAY))).koinon).toMatchObject({ cap: 8, hall: { phase: "building", startedAt: NOW.toISOString(), completesAt: at(2 * DAY).toISOString(), daysCovered: 0 } });
 
-    await setTreasury(k, 500);
+    await setTreasury(k, cost);
     expect(await m.koinon.buildLesche(await ctx(leader), at(DAY))).toEqual({ ok: false, code: 409, error: "The Lesche is already being built." });
     expect(await m.koinon.buildLesche(await ctx(leader), at(3 * DAY))).toEqual({ ok: false, code: 409, error: "The koinon already has its Lesche." });
   });

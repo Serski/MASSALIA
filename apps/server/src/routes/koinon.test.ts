@@ -191,17 +191,20 @@ suite("/api/koinon (integration)", () => {
 
     const short = await post(a.token, "lesche");
     expect(short.statusCode).toBe(409);
-    expect(short.json()).toEqual({ error: "The treasury holds 50 drachmae. The Lesche costs 500." });
+    // The price is a balance number: read it from content, never pin it here.
+    const cost = m.koinon.getKoinonContent().lesche.cost;
+    expect(cost).toBeGreaterThan(50);
+    expect(short.json()).toEqual({ error: `The treasury holds 50 drachmae. The Lesche costs ${cost}.` });
     expect((await post(b.token, "lesche")).statusCode).toBe(403);
 
-    await db.update(m.dbPkg.koina).set({ treasury: 600 });
+    await db.update(m.dbPkg.koina).set({ treasury: cost + 100 });
     const built = await post(a.token, "lesche");
     expect(built.statusCode).toBe(200);
     expect(built.json()).toMatchObject({ ok: true, treasury: 100 });
     expect((await post(a.token, "lesche")).statusCode).toBe(409);
 
     const view = (await get(a.token)).json<{ rules: Record<string, number>; koinon: { treasury: number; cap: number; hall: { phase: string }; givers: { name: string; total: number }[]; gifts: { name: string; amount: number }[] } }>();
-    expect(view.rules).toMatchObject({ depositMax: 10000, lescheCost: 500, lescheBuildDays: 2, lescheUpkeep: 5, lescheCap: 12 });
+    expect(view.rules).toMatchObject({ depositMax: 10000, lescheCost: cost, lescheBuildDays: 2, lescheUpkeep: 5, lescheCap: 12 });
     expect(view.koinon).toMatchObject({ treasury: 100, cap: 8, hall: { phase: "building" }, givers: [{ name: "Kallias", total: 50 }], gifts: [{ name: "Kallias", amount: 50 }] });
   });
 });
