@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, asc, eq, gte, sql, inArray } from "drizzle-orm";
-import { bandOffers, createDb, effectLog, playerCharacters, playerLevy, playerUnits, resources, type UnitMission } from "@massalia/db";
+import { bandOffers, createDb, effectLog, koinonMembers, koinonMusters, playerCharacters, playerLevy, playerUnits, resources, type UnitMission } from "@massalia/db";
 import {
   bandDef,
   goodCategoryFor,
@@ -119,6 +119,15 @@ export type LevyRow = typeof playerLevy.$inferSelect;
 export function isActive(row: Pick<UnitRow, "source" | "readyAt">, now: Date): boolean {
   if (row.source === "band") return true;
   return row.readyAt !== null && now.getTime() >= row.readyAt.getTime();
+}
+
+// A row pledged to a koinon's muster (koinon prompt 3): it carries a "muster"
+// mission and stands still at the gathering place. It is locked: no map action,
+// no move, no disband, and the settle does not fold it into its neighbours.
+// Once the muster marches the row is on a "raid" mission like any other.
+export const PLEDGED_REFUSAL = "These men are pledged to the koinon's muster.";
+export function isPledged(row: Pick<UnitRow, "mission" | "movingTo">): boolean {
+  return row.mission?.kind === "muster" && row.movingTo === null;
 }
 
 // A wait, for refusal messages: "22h 14m", "45m", or "less than a minute".
@@ -402,6 +411,33 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
   await ensureLevy(exec, ctx, season, heldRegions * getBattleContent().regionTribute.levyPerYear);
 
   let rows = await ownedUnitRows(exec, ctx);
+
+  // 1b. Pledges that no longer hold. Calling a muster off, leaving a koinon or
+  // being expelled never writes another player's rows (they hold no lock on
+  // him), so his own settle releases them here: a "muster" mission is cleared
+  // when its muster was called off or stood down, or is gone, or he is no
+  // longer a member of its koinon. A muster being resolved keeps its rows: the
+  // resolve holds this player's lock and writes them itself. One query, and
+  // only when the player has such a row.
+  const pledged = rows.filter(isPledged);
+  if (pledged.length > 0) {
+    const musterIds = [...new Set(pledged.map((r) => r.mission?.musterId).filter((id): id is string => typeof id === "string"))];
+    const standing =
+      musterIds.length === 0
+        ? []
+        : await exec
+            .select({ id: koinonMusters.id })
+            .from(koinonMusters)
+            .innerJoin(koinonMembers, and(eq(koinonMembers.koinonId, koinonMusters.koinonId), eq(koinonMembers.playerId, ctx.playerId)))
+            .where(and(inArray(koinonMusters.id, musterIds), inArray(koinonMusters.status, ["open", "resolved"])));
+    const holds = new Set(standing.map((m) => m.id));
+    for (const r of pledged) {
+      if (r.mission?.musterId && holds.has(r.mission.musterId)) continue;
+      await exec.update(playerUnits).set({ mission: null }).where(eq(playerUnits.id, r.id));
+      r.mission = null;
+    }
+  }
+
   const marker = (
     await exec.select().from(resources).where(and(eq(resources.scope, "player"), eq(resources.scopeId, ctx.playerId), eq(resources.type, UPKEEP_TYPE))).limit(1)
   )[0];
@@ -568,7 +604,8 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
   rows = await ownedUnitRows(exec, ctx);
   const groups = new Map<string, UnitRow[]>();
   for (const r of rows) {
-    if (r.source !== "trained" || r.movingTo !== null || !isActive(r, now)) continue;
+    // A pledged row keeps its own id until its muster marches or releases it.
+    if (r.source !== "trained" || r.movingTo !== null || !isActive(r, now) || isPledged(r)) continue;
     const key = `${r.basedAt}\u0000${r.unitId}`;
     groups.set(key, [...(groups.get(key) ?? []), r]);
   }
@@ -743,6 +780,7 @@ export async function disbandRow(ctx: ActingContext, rowId: string, now: Date): 
     const fail = (code: number, error: string): Outcome<DisbandResult> => ({ composureDays, result: { ok: false, code, error } });
     const row = (await ownedUnitRows(tx, ctx)).find((r) => r.id === rowId);
     if (!row) return fail(404, "No such unit.");
+    if (isPledged(row)) return fail(409, PLEDGED_REFUSAL);
     // Service gates are elapsed time from the row's creation (the recruit / hire
     // instant): minServiceSeasons days for trained men, the first termSeasons days
     // for a band (the original contract_end_at, before any renewal).

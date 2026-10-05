@@ -15,7 +15,7 @@ import {
   type ReachSteps,
   type Topology,
 } from "@massalia/shared";
-import { fleetInStock, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, type FleetStripView, type UnitRow } from "./barracks.js";
+import { fleetInStock, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, type FleetStripView, type UnitRow } from "./barracks.js";
 export { fleetInStock };
 import type { ActingContext } from "./buildings.js";
 import { garrisonCount, holdingBaseId, listHoldings, tributeRateOf } from "./holdings.js";
@@ -159,7 +159,8 @@ export async function reachView(exec: Exec, ctx: ActingContext, now: Date, opts:
   const allBases = await basesOf(exec, ctx, now, all);
   const bases = opts.bases ? allBases.filter((b) => opts.bases!.includes(b.id)) : allBases;
   const baseIds = new Set(bases.map((b) => b.id));
-  const rows = opts.rows ?? all.filter((r) => isActive(r, now) && r.movingTo === null && baseIds.has(r.basedAt));
+  // Men pledged to a koinon's muster are not the player's to send, so they are not in his force.
+  const rows = opts.rows ?? all.filter((r) => isActive(r, now) && r.movingTo === null && !isPledged(r) && baseIds.has(r.basedAt));
   const force: ReachForceRow[] = [];
   for (const r of rows) {
     const f = forceRowOf(r);

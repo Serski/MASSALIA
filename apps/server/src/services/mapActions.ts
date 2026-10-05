@@ -21,7 +21,7 @@ import {
   type ReachShip,
 } from "@massalia/shared";
 import { applyComposureDelta } from "./composure.js";
-import { barracksView, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, type BarracksView, type UnitRow } from "./barracks.js";
+import { barracksView, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, PLEDGED_REFUSAL, type BarracksView, type UnitRow } from "./barracks.js";
 import { settleAll, type ActingContext } from "./buildings.js";
 import { creditDrachmae, creditGood, insertConquest, insertTownConquest, listHoldings } from "./holdings.js";
 import { lockPlayer } from "./lock.js";
@@ -162,8 +162,8 @@ function verdictFor(entry: ReachEntry, type: MapActionType) {
 // whole. Returns the rows as they would march (count = sent) beside the whole
 // rows; the split itself waits until every check has passed, so a refusal
 // never leaves a row divided.
-type Selection = { owned: UnitRow[]; rows: UnitRow[]; base: string };
-async function selectForce(tx: DbTx, ctx: ActingContext, sentRows: { rowId: string; count: number }[], now: Date): Promise<Failure | ({ ok: true } & Selection)> {
+export type Selection = { owned: UnitRow[]; rows: UnitRow[]; base: string };
+export async function selectForce(tx: DbTx, ctx: ActingContext, sentRows: { rowId: string; count: number }[], now: Date): Promise<Failure | ({ ok: true } & Selection)> {
   const unitsC = getUnitsContent();
   const bandsC = getBandsContent();
   const fail = (code: number, error: string): Failure => ({ ok: false, code, error });
@@ -180,6 +180,7 @@ async function selectForce(tx: DbTx, ctx: ActingContext, sentRows: { rowId: stri
   for (const r of owned) {
     if (!isActive(r, now)) return fail(409, `${labelOf(r)} are still training.`);
     if (r.movingTo !== null) return fail(409, `${labelOf(r)} are still on the march.`);
+    if (isPledged(r)) return fail(409, PLEDGED_REFUSAL);
     const n = sent.get(r.id)!;
     if (!Number.isInteger(n) || n < 1 || n > r.count) return fail(400, `Send a whole number of men, up to the ${r.count} in the row.`);
     if (r.source === "band" && n !== r.count) return fail(409, "A band marches as one.");
@@ -196,7 +197,7 @@ async function selectForce(tx: DbTx, ctx: ActingContext, sentRows: { rowId: stri
 // its count becomes two rows — the sent men as a new row (the one that marches),
 // the rest staying home in the original, both reduced by the men that left.
 // `rows` is updated in place to the rows that march.
-async function splitRows(tx: DbTx, characterId: string, sel: Selection, now: Date): Promise<void> {
+export async function splitRows(tx: DbTx, characterId: string, sel: Selection, now: Date): Promise<void> {
   const { owned, rows } = sel;
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i]!;
