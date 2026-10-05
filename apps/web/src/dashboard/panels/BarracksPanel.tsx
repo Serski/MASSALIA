@@ -88,7 +88,11 @@ function releaseAtIso(row: BarracksRosterRow, view: BarracksView): string | null
 // "Raiding Salyes", "Scouting Salyes", "Marching on Salyes" (an attack still
 // bound for its target), "Marching to Salyes" (a move), or, once the party is
 // bound home from a target, "Returning from Salyes". No mission: "Returning".
-const MISSION_TAG: Record<NonNullable<BarracksRosterRow["mission"]>["kind"], string> = { scout: "SCOUT", raid: "RAID", attack: "ATTACK", move: "MOVE" };
+const MISSION_TAG: Record<NonNullable<BarracksRosterRow["mission"]>["kind"], string> = { scout: "SCOUT", raid: "RAID", attack: "ATTACK", move: "MOVE", muster: "MUSTER" };
+// A row standing at home with a muster mission is pledged to the koinon's raid
+// (koinon prompt 3): it cannot be moved or disbanded until the muster is over.
+export const PLEDGED_LINE = "Pledged to the koinon's muster.";
+export const isPledgedRow = (row: BarracksRosterRow) => row.mission?.kind === "muster" && row.movingTo === null;
 export function missionLine(row: BarracksRosterRow, names: Record<string, string>): string {
   const m = row.mission;
   if (!m) return "Returning";
@@ -211,7 +215,9 @@ export function HomeRow({
       ? `contract ${formatDuration(contractLeft)}`
       : "";
   const service = row.canDisband ? "May be released." : serviceTarget && serviceLeft > 0 ? `${SERVICE_REASON} ${formatDuration(serviceLeft)} to go.` : SERVICE_REASON;
-  const disabledReason = locked ? lockReason : row.canDisband ? null : service;
+  const pledged = isPledgedRow(row);
+  const moveReason = locked ? lockReason : pledged ? PLEDGED_LINE : null;
+  const disabledReason = locked ? lockReason : pledged ? PLEDGED_LINE : row.canDisband ? null : service;
 
   let action: ReactNode;
   if (confirming) {
@@ -226,7 +232,7 @@ export function HomeRow({
   } else {
     action = (
       <span className="barracks-actions">
-        <button type="button" className="panel-btn ghost barracks-small" disabled={busy || locked} title={locked ? lockReason : undefined} onClick={onMove}>
+        <button type="button" className="panel-btn ghost barracks-small" disabled={busy || moveReason !== null} title={moveReason ?? undefined} onClick={onMove}>
           Move
         </button>
         <button type="button" className="panel-btn ghost barracks-small" disabled={busy || disabledReason !== null} title={disabledReason ?? undefined} onClick={() => onConfirmChange(true)}>
@@ -240,9 +246,12 @@ export function HomeRow({
       <div className="barracks-row-grid">
         <span className="barracks-row-ic"><UnitGlyph file={row.icon} fallback={row.source === "band" ? "⚔️" : "🛡️"} /></span>
         <div className="barracks-row-body">
-          <div className="barracks-row-name">{row.label} <span className="barracks-row-count">· {countText(row)}</span></div>
+          <div className="barracks-row-name">
+            {row.label} <span className="barracks-row-count">· {countText(row)}</span>
+            {pledged ? <span className="barracks-tag barracks-tag-muster">{MISSION_TAG.muster}</span> : null}
+          </div>
           {eats ? <div className="barracks-row-sub">{eats}</div> : null}
-          <div className="barracks-row-service">{service}</div>
+          <div className="barracks-row-service">{pledged ? PLEDGED_LINE : service}</div>
         </div>
         {action}
       </div>

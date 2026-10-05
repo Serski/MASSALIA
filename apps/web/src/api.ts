@@ -1666,7 +1666,9 @@ export type BarracksRosterRow = {
   basedAt: string; // region id the row stands in
   movingTo: string | null; // region id of a relocation or recovery in flight
   arrivesAt: string | null; // ISO; when that movement completes
-  mission: { kind: "scout" | "raid" | "attack" | "move"; regionId: string; townId?: string; departedAt: string } | null; // what a moving row is doing (townId when the target or destination is a town)
+  // What a moving row is doing (townId when the target or destination is a town).
+  // A standing row whose kind is "muster" is pledged to its koinon's muster.
+  mission: { kind: "scout" | "raid" | "attack" | "move" | "muster"; regionId: string; townId?: string; musterId?: string; departedAt: string } | null;
   createdAt: string; // ISO; training progress runs from here to readyAt
   stats: Record<string, number>; // the unit's or band's stat block (for the force picker)
   active: boolean;

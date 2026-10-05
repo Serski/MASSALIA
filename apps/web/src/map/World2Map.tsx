@@ -1636,7 +1636,8 @@ export function ForcePicker({
   const targetName = isMove ? (dest?.name ?? names[destId] ?? destId) : target.name;
 
   const rows = roster ?? [];
-  const eligible = rows.filter((r) => r.active && r.movingTo === null);
+  // Men pledged to the koinon's muster are not listed: they cannot be sent.
+  const eligible = rows.filter((r) => r.active && r.movingTo === null && r.mission?.kind !== "muster");
   const byBase = new Map<string, BarracksRosterRow[]>();
   for (const r of eligible) byBase.set(r.basedAt, [...(byBase.get(r.basedAt) ?? []), r]);
   // Rows still training are not listed at all; rows recovering stay, greyed.

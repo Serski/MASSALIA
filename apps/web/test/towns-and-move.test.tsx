@@ -128,6 +128,21 @@ describe("action picker · sea route", () => {
   });
 });
 
+describe("action picker · pledged men", () => {
+  it("leaves out a row pledged to the koinon's muster, and lists the free row beside it", () => {
+    const entry = { landSteps: 1, seaSteps: null, byBase: { R060: { landSteps: 1, seaSteps: null } }, attack: { ok: true }, raid: { ok: true }, colonise: { ok: true } };
+    const roster = [
+      row({ id: "free-1", unitId: "peltast", label: "Peltast", plural: "Peltasts", count: 20, stats }),
+      row({ id: "pledged-1", count: 30, mission: { kind: "muster", musterId: "m1", regionId: "R046", departedAt: iso(NOW - H) } }),
+    ];
+    const { container } = render(<ForcePicker type="raid" target={{ kind: "region", id: "R046", regionId: "R046", name: "Salyes" }} names={names} entry={entry} fleet={fleet} roster={roster} onClose={noop} onActed={noop} />);
+    const boxes = container.querySelectorAll("input[type=checkbox]");
+    expect(boxes.length).toBe(1);
+    expect(container.textContent).toContain("Peltast");
+    expect(container.textContent).not.toContain("Hoplite");
+  });
+});
+
 describe("action picker · ships section", () => {
   const hulls = [
     { id: "trade-ship", label: "Pentekonter", role: "transport" as const, count: 3, troopSpace: 20, range: 7, naval: 1 },

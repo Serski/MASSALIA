@@ -217,6 +217,25 @@ describe("BarracksPanel", () => {
     expect(countText({ source: "band", count: 35, startCount: 40 })).toBe("35 of 40");
   });
 
+  it("a row pledged to the koinon's muster stays At Home with the MUSTER tag and its line, Move and Disband disabled", async () => {
+    const pledged = row({ id: "home-pledged", unitId: "hoplite", label: "Hoplite", plural: "Hoplites", icon: "HOPLITE.webp", count: 12, startCount: 12, mission: { kind: "muster", musterId: "m1", regionId: "R046", departedAt: iso(NOW - H) } });
+    const { container } = await mount(payload({ roster: [homeLevy, pledged] }));
+    const home = container.querySelector('[data-section="home"]') as HTMLElement;
+    const el = home.querySelector('[data-row="home-pledged"]') as HTMLElement;
+    expect(el).not.toBeNull();
+    expect(container.querySelector('[data-section="away"] [data-row="home-pledged"]')).toBeNull();
+    expect(el.querySelector(".barracks-tag")!.textContent).toBe("MUSTER");
+    expect(el.querySelector(".barracks-row-service")!.textContent).toBe("Pledged to the koinon's muster.");
+    const [move, disband] = [...el.querySelectorAll("button")] as HTMLButtonElement[];
+    expect([move!.textContent, move!.disabled, move!.title]).toEqual(["Move", true, "Pledged to the koinon's muster."]);
+    expect([disband!.textContent, disband!.disabled, disband!.title]).toEqual(["Disband", true, "Pledged to the koinon's muster."]);
+    // The free row beside it is untouched.
+    const free = home.querySelector('[data-row="home-hoplites"]') as HTMLElement;
+    expect(free.querySelector(".barracks-tag")).toBeNull();
+    expect([...free.querySelectorAll("button")].map((b) => (b as HTMLButtonElement).disabled)).toEqual([false, false]);
+    expect(hookWarnings).toEqual([]);
+  });
+
   it("an action's server error lands under the row that asked", async () => {
     const { container } = await mount(payload());
     const { ApiError } = await import("../src/api.js");
