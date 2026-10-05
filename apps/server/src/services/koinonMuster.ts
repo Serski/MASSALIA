@@ -1,17 +1,34 @@
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
-import { createDb, koinonMusterHulls, koinonMusters, playerCharacters, playerUnits, type UnitMission } from "@massalia/db";
-import { bandDef, distancesFrom, HOME_POLITY_ID, musterLaunch, routeFor, stepsTo, unitDef, type ReachSteps } from "@massalia/shared";
+import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { createDb, koinonMembers, koinonMusterHulls, koinonMusters, playerCharacters, players, playerUnits, resources, type UnitMission } from "@massalia/db";
+import {
+  bandDef,
+  distancesFrom,
+  fleetSpaceAt,
+  fleetStats,
+  forceStats,
+  formatGameDate,
+  gameDate,
+  HOME_POLITY_ID,
+  musterLaunch,
+  routeFor,
+  stepsTo,
+  unitDef,
+  verdictsFor,
+  type MusterHull,
+  type ReachForceRow,
+  type ReachSteps,
+} from "@massalia/shared";
 import { fleetInStock, getBandsContent, getShipsContent, getUnitsContent, isActive, isPledged, type UnitRow } from "./barracks.js";
 import { applyComposureDelta } from "./composure.js";
 import { settleAll, type ActingContext } from "./buildings.js";
 import { listHoldings } from "./holdings.js";
-import { getKoinonContent, inOwnKoinon, memberRow, type KoinonError } from "./koinon.js";
+import { getKoinonContent, inOwnKoinon, memberRow, type KoinonError, type KoinonRole, type KoinonRow } from "./koinon.js";
 import { lockPlayer } from "./lock.js";
 import { selectForce, splitRows } from "./mapActions.js";
 import { getTopology } from "./mapGraph.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
 import { townContentOwner } from "./mapPools.js";
-import { homePlaces, homeRegions } from "./mapReach.js";
+import { forceRowOf, homePlaces, homeRegions } from "./mapReach.js";
 
 // ---------------------------------------------------------------------------
 // The koinon's Raid muster (koinon prompt 3). Any member opens one: a target, a
@@ -361,4 +378,133 @@ export async function myMusterPledge(ctx: ActingContext, now: Date): Promise<Koi
   });
   await applyShrine(ctx, outcome.composureDays, now);
   return outcome.view;
+}
+
+// --- The muster as it stands ---------------------------------------------------
+// Who has pledged what, read from the rows and the hull counts. Only current
+// members count (P10), a row counts while it stands ready at the gathering
+// place, and a hull pledge counts as the smaller of the pledge and the owner's
+// stock (P5). The read-only page and the locked resolve both start from this.
+
+export type MusterOwner = { playerId: string; name: string; rows: UnitRow[]; hulls: MusterHull[] };
+export type MusterState = { owners: MusterOwner[]; rows: UnitRow[]; hulls: MusterHull[] };
+
+export async function musterState(exec: Exec, muster: Pick<MusterRow, "id" | "koinonId" | "gatherId">, now: Date): Promise<MusterState> {
+  const shipsC = getShipsContent();
+  const members = await exec
+    .select({ playerId: koinonMembers.playerId, name: players.name })
+    .from(koinonMembers)
+    .innerJoin(players, eq(players.id, koinonMembers.playerId))
+    .where(eq(koinonMembers.koinonId, muster.koinonId))
+    .orderBy(asc(koinonMembers.joinedAt), asc(koinonMembers.playerId));
+  const memberIds = new Set(members.map((m) => m.playerId));
+  const rows = (await pledgedRows(exec, muster.id)).filter((r) => memberIds.has(r.ownerPlayerId) && r.basedAt === muster.gatherId && isActive(r, now) && r.count > 0);
+  const pledges = (await exec.select().from(koinonMusterHulls).where(eq(koinonMusterHulls.musterId, muster.id))).filter((h) => memberIds.has(h.ownerPlayerId));
+  const owners = [...new Set(pledges.map((h) => h.ownerPlayerId))];
+  const stock =
+    owners.length === 0
+      ? []
+      : await exec
+          .select({ scopeId: resources.scopeId, type: resources.type, amount: resources.amount })
+          .from(resources)
+          .where(and(eq(resources.scope, "player"), inArray(resources.scopeId, owners), inArray(resources.type, Object.keys(shipsC.ships))));
+  const inStock = (ownerId: string, shipId: string) => Math.max(0, Math.floor(Number(stock.find((s) => s.scopeId === ownerId && s.type === shipId)?.amount ?? 0)));
+  const hulls: MusterHull[] = [];
+  for (const h of pledges) {
+    const def = shipsC.ships[h.shipId];
+    const count = Math.min(h.count, inStock(h.ownerPlayerId, h.shipId));
+    if (def && count > 0) hulls.push({ ownerId: h.ownerPlayerId, shipId: h.shipId, count, range: def.range, troopSpace: def.troopSpace, naval: def.naval, pledgedAtMs: h.pledgedAt.getTime() });
+  }
+  return {
+    owners: members
+      .map((m) => ({ playerId: m.playerId, name: m.name, rows: rows.filter((r) => r.ownerPlayerId === m.playerId), hulls: hulls.filter((h) => h.ownerId === m.playerId) }))
+      .filter((o) => o.rows.length > 0 || o.hulls.length > 0),
+    rows,
+    hulls,
+  };
+}
+
+const forceOf = (rows: UnitRow[]): ReachForceRow[] => rows.map((r) => forceRowOf(r)).filter((f): f is ReachForceRow => f !== null);
+
+// The launch verdict for a force and a fleet, from the gathering place: the
+// same pure rules `act` uses, computed once at launch and shown on the page as
+// the pledges stand. `space` is the room the men need, `hullSpace` the seats on
+// the hulls that can make the crossing (0 by land).
+export type MusterOutlook = { route: "land" | "sea" | null; steps: number | null; ok: boolean; reason: string | null; space: number; hullSpace: number };
+export function musterOutlook(muster: Pick<MusterRow, "gatherRegionId" | "regionId">, state: Pick<MusterState, "rows" | "hulls">): MusterOutlook {
+  const steps = musterSteps(muster.gatherRegionId, muster.regionId);
+  const force = forceStats(forceOf(state.rows));
+  const fleet = fleetStats(state.hulls.map((h) => ({ shipId: h.shipId, count: h.count, range: h.range, troopSpace: h.troopSpace })));
+  const verdict = verdictsFor(steps, force, fleet).raid;
+  const route = routeFor("raid", steps);
+  return { route: route?.route ?? null, steps: route?.steps ?? null, ok: verdict.ok, reason: verdict.reason ?? null, space: force.space, hullSpace: route?.route === "sea" ? fleetSpaceAt(fleet, route.steps) : 0 };
+}
+
+// --- The muster on the koinon page (read-only) -----------------------------------
+
+export type MusterView = {
+  id: string;
+  kind: "raid";
+  openerName: string;
+  canCancel: boolean;
+  target: { regionId: string; townId: string | null; name: string };
+  gather: { id: string; name: string };
+  openedLabel: string;
+  launchAt: string;
+  pledges: { playerId: string; name: string; men: number; space: number; pentekonters: number; triremes: number }[];
+  outlook: MusterOutlook;
+};
+export type LastMusterView = { id: string; targetName: string; gatherName: string; launchLabel: string; status: "resolved" | "stood_down" | "cancelled"; reason: string | null; report: Record<string, unknown> | null };
+
+const gameLabel = (at: Date, ctx: ActingContext) => formatGameDate(gameDate(at.getTime(), ctx.worldStartedMs));
+
+// The open muster and the most recent closed one, for a member. It writes
+// nothing: the outlook is derived from the pledges as they stand.
+export async function musterBlocks(exec: Exec, k: KoinonRow, role: KoinonRole, ctx: ActingContext, now: Date): Promise<{ muster: MusterView | null; lastMuster: LastMusterView | null }> {
+  const open = await openMusterOf(exec, k.id);
+  let muster: MusterView | null = null;
+  if (open) {
+    const state = await musterState(exec, open, now);
+    const opener = (await exec.select({ name: players.name }).from(players).where(eq(players.id, open.openerPlayerId)).limit(1))[0];
+    const hullCount = (o: MusterOwner, shipId: string) => o.hulls.filter((h) => h.shipId === shipId).reduce((n, h) => n + h.count, 0);
+    muster = {
+      id: open.id,
+      kind: open.kind,
+      openerName: opener?.name ?? "—",
+      canCancel: role === "leader" || open.openerPlayerId === ctx.playerId,
+      target: { regionId: open.regionId, townId: open.townId, name: await musterTargetName(open) },
+      gather: { id: open.gatherId, name: await musterGatherName(open) },
+      openedLabel: gameLabel(open.openedAt, ctx),
+      launchAt: open.launchAt.toISOString(),
+      pledges: state.owners.map((o) => {
+        const force = forceStats(forceOf(o.rows));
+        return { playerId: o.playerId, name: o.name, men: force.men, space: force.space, pentekonters: hullCount(o, "trade-ship"), triremes: hullCount(o, "galley") };
+      }),
+      outlook: musterOutlook(open, state),
+    };
+  }
+  const closed = (await exec.select().from(koinonMusters).where(and(eq(koinonMusters.koinonId, k.id), ne(koinonMusters.status, "open"))).orderBy(desc(koinonMusters.closedAt), desc(koinonMusters.openedAt)).limit(1))[0];
+  const lastMuster: LastMusterView | null = closed
+    ? {
+        id: closed.id,
+        targetName: await musterTargetName(closed),
+        gatherName: await musterGatherName(closed),
+        launchLabel: gameLabel(closed.launchAt, ctx),
+        status: closed.status as LastMusterView["status"],
+        reason: typeof closed.report?.reason === "string" ? closed.report.reason : null,
+        report: closed.report ?? null,
+      }
+    : null;
+  return { muster, lastMuster };
+}
+
+// P12: an open muster the member has not seen (opened after his last read, and
+// not by him). One lean count, beside the posts' unread count.
+export async function unseenMuster(exec: Exec, playerId: string, worldId: string): Promise<number> {
+  const rows = await exec
+    .select({ n: sql<number>`count(*)::int` })
+    .from(koinonMusters)
+    .innerJoin(koinonMembers, eq(koinonMembers.koinonId, koinonMusters.koinonId))
+    .where(and(eq(koinonMembers.worldId, worldId), eq(koinonMembers.playerId, playerId), eq(koinonMusters.status, "open"), ne(koinonMusters.openerPlayerId, playerId), sql`${koinonMusters.openedAt} > ${koinonMembers.lastReadAt}`));
+  return Number(rows[0]?.n ?? 0);
 }

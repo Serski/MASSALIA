@@ -184,7 +184,7 @@ suite("Koinon (integration)", () => {
     expect(view.me).toMatchObject({ role: "leader", prestige: 20, drachmae: 50 });
     expect(view.koinon).toMatchObject({ name: "The Sacred Band", leaderPlayerId: a, members: [{ playerId: a, name: "Kallias", role: "leader", houseName: expect.any(String) }] });
     expect(view.koina.map((k) => [k.name, k.leaderName, k.members, k.cap])).toEqual([["The Elders", "Deon", 1, 8], ["The Sacred Band", "Kallias", 1, 8]]);
-    expect(view.rules).toEqual({ foundCost: 50, foundPrestige: 20, memberCap: 8, nameMin: 3, nameMax: 32, postMaxChars: 300, cooldownHours: 24, absentLeaderDays: 5, depositMax: 10000, lescheCost: m.koinon.getKoinonContent().lesche.cost, lescheBuildDays: 2, lescheUpkeep: 5, lescheCap: 12 });
+    expect(view.rules).toEqual({ foundCost: 50, foundPrestige: 20, memberCap: 8, nameMin: 3, nameMax: 32, postMaxChars: 300, cooldownHours: 24, absentLeaderDays: 5, depositMax: 10000, lescheCost: m.koinon.getKoinonContent().lesche.cost, lescheBuildDays: 2, lescheUpkeep: 5, lescheCap: 12, musterMinLeadMinutes: 30, musterMaxLeadHours: 24 });
   });
 
   // --- invite -----------------------------------------------------------------

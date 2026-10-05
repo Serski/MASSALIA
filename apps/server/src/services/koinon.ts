@@ -8,6 +8,7 @@ import { agedPortraitFor } from "./age.js";
 import { getBandsContent, getUnitsContent } from "./barracks.js";
 import { creditWorldTreasury, debitDrachmae, spendTransaction, SpendRejected, type ActingContext } from "./buildings.js";
 import { findCharacterRow } from "./character.js";
+import { musterBlocks, unseenMuster, type LastMusterView, type MusterView } from "./koinonMuster.js";
 import { lockPlayer } from "./lock.js";
 import { getTopology } from "./mapGraph.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
@@ -320,7 +321,7 @@ export type KoinonMemberView = {
 
 export type KoinonView = {
   now: string;
-  rules: { foundCost: number; foundPrestige: number; memberCap: number; nameMin: number; nameMax: number; postMaxChars: number; cooldownHours: number; absentLeaderDays: number; depositMax: number; lescheCost: number; lescheBuildDays: number; lescheUpkeep: number; lescheCap: number };
+  rules: { foundCost: number; foundPrestige: number; memberCap: number; nameMin: number; nameMax: number; postMaxChars: number; cooldownHours: number; absentLeaderDays: number; depositMax: number; lescheCost: number; lescheBuildDays: number; lescheUpkeep: number; lescheCap: number; musterMinLeadMinutes: number; musterMaxLeadHours: number };
   me: { playerId: string; role: KoinonRole | null; cooldownUntil: string | null; prestige: number; drachmae: number };
   koina: { id: string; name: string; leaderName: string; members: number; cap: number }[];
   invites: { id: string; koinonId: string; koinonName: string; inviterName: string; expiresAt: string }[];
@@ -345,6 +346,11 @@ export type KoinonView = {
     hall: { phase: HallPhase; startedAt: string | null; completesAt: string | null; paidUntil: string | null; daysCovered: number };
     givers: { playerId: string; name: string; total: number }[];
     gifts: { id: string; name: string; amount: number; label: string }[];
+    // The Raid muster (koinon prompt 3): the open one, and the most recent
+    // closed one with its report. `unread` above also counts an open muster the
+    // member has not seen, so opening the tab stamps it read.
+    muster: MusterView | null;
+    lastMuster: LastMusterView | null;
   };
 };
 
@@ -468,7 +474,7 @@ export async function koinonView(ctx: ActingContext, now: Date): Promise<KoinonV
       members: await memberViews(db, own, ctx, now),
       pending: pending.map((p) => ({ id: p.id, playerName: p.playerName, expiresAt: p.expiresAt.toISOString() })),
       posts: posts.map((p) => ({ id: p.id, authorName: p.authorName, body: p.body, label: gameLabel(p.createdAt, ctx), canDelete: role === "leader" || p.authorPlayerId === ctx.playerId })),
-      unread: await unreadPosts(db, ctx.playerId, ctx.worldId),
+      unread: (await unreadPosts(db, ctx.playerId, ctx.worldId)) + (await unseenMuster(db, ctx.playerId, ctx.worldId)),
       treasury: hall.state.treasury,
       hall: {
         phase: hall.phase,
@@ -479,12 +485,13 @@ export async function koinonView(ctx: ActingContext, now: Date): Promise<KoinonV
       },
       givers: givers.map((g) => ({ playerId: g.playerId, name: g.name, total: Number(g.total) })),
       gifts: gifts.map((g) => ({ id: g.id, name: g.name, amount: g.amount, label: gameLabel(g.createdAt, ctx) })),
+      ...(await musterBlocks(db, own, role, ctx, now)),
     };
   }
 
   return {
     now: now.toISOString(),
-    rules: { foundCost: c.foundCost, foundPrestige: c.foundPrestige, memberCap: c.memberCap, nameMin: c.name.min, nameMax: c.name.max, postMaxChars: c.post.maxChars, cooldownHours: c.cooldownHours, absentLeaderDays: c.absentLeaderDays, depositMax: c.deposit.max, lescheCost: c.lesche.cost, lescheBuildDays: c.lesche.buildDays, lescheUpkeep: c.lesche.upkeepPerDay, lescheCap: c.lesche.memberCap },
+    rules: { foundCost: c.foundCost, foundPrestige: c.foundPrestige, memberCap: c.memberCap, nameMin: c.name.min, nameMax: c.name.max, postMaxChars: c.post.maxChars, cooldownHours: c.cooldownHours, absentLeaderDays: c.absentLeaderDays, depositMax: c.deposit.max, lescheCost: c.lesche.cost, lescheBuildDays: c.lesche.buildDays, lescheUpkeep: c.lesche.upkeepPerDay, lescheCap: c.lesche.memberCap, musterMinLeadMinutes: c.muster.minLeadMinutes, musterMaxLeadHours: c.muster.maxLeadHours },
     me: { playerId: ctx.playerId, role: own ? roleOf(own, ctx.playerId) : null, cooldownUntil: cooldown?.toISOString() ?? null, prestige: character?.prestige ?? 0, drachmae: character?.drachmae ?? 0 },
     // Each koinon's cap as it stands now (ruling 8): the Lesche's with an open hall.
     koina: live.map((k) => ({ id: k.row.id, name: k.row.name, leaderName: k.leaderName ?? "—", members: Number(k.members), cap: hallCap(hallPhaseAt(k.row, now), c) })),
@@ -493,8 +500,9 @@ export async function koinonView(ctx: ActingContext, now: Date): Promise<KoinonV
   };
 }
 
-// The Politics nav count (ruling 11), for /me/state: two lean counts and nothing
-// else. A member's unread posts; a non-member's unexpired invites.
+// The Politics nav count (ruling 11), for /me/state: three lean counts and
+// nothing else. A member's unread posts and an open muster he has not seen
+// (koinon prompt 3, P12); a non-member's unexpired invites.
 export async function koinonPendingCount(playerId: string, worldId: string, now: Date): Promise<number> {
   const unread = await unreadPosts(db, playerId, worldId);
   const invited = await db
@@ -510,7 +518,7 @@ export async function koinonPendingCount(playerId: string, worldId: string, now:
         sql`NOT EXISTS (SELECT 1 FROM koinon_members m WHERE m.world_id = ${worldId} AND m.player_id = ${playerId})`,
       ),
     );
-  return unread + (invited[0]?.n ?? 0);
+  return unread + (await unseenMuster(db, playerId, worldId)) + (invited[0]?.n ?? 0);
 }
 
 // --- Founding ------------------------------------------------------------------
