@@ -581,7 +581,8 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
     }
     if (!stays) {
       await exec.delete(playerUnits).where(eq(playerUnits.id, r.id));
-      await logEffect(exec, characterId, "barracks_disband", { unitId: r.unitId, count: r.count, source: "contract_end" });
+      // On the settle's own clock, as the unpaid-upkeep disband is.
+      await logEffect(exec, characterId, "barracks_disband", { unitId: r.unitId, count: r.count, source: "contract_end" }, now);
       out.departed.push({ rowId: r.id, unitId: r.unitId, source: "band", count: r.count });
     } else if (end !== startMs) {
       await exec.update(playerUnits).set({ contractEndAt: new Date(end) }).where(eq(playerUnits.id, r.id));

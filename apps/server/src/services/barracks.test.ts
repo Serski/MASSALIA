@@ -579,6 +579,20 @@ suite("Barracks (integration)", () => {
       const seed = String(at(11).getTime());
       expect(m.shared.seededRoll([renewId, seed])).toBe(m.shared.seededRoll([renewId, seed]));
     });
+
+    it("the contract-end disband log carries the settle's clock, not the database's", async () => {
+      const { ctx, characterId } = await makePlayer({ drachmae: 100_000 });
+      await giveAll(ctx, { wine: 1000, chicken: 1000, herbal: 1000 });
+      const leaveId = uuidWhere(11, (r) => r >= m.barracks.getBandsContent().bands["volcae-irregulars"]!.renew!);
+      await insertRow(ctx, { id: leaveId, source: "band", unitId: "volcae-irregulars", count: 40, recruitedSeason: 9, contractEndAt: 11 });
+      // The settle's clock is the year 2000: far earlier than the database's now().
+      const s = await settle(ctx, 11.5);
+      expect(s.departed.map((d) => d.rowId)).toEqual([leaveId]);
+      const l = await logs(characterId, "barracks_disband");
+      expect(l).toHaveLength(1);
+      expect(l[0]!.detail).toMatchObject({ source: "contract_end" });
+      expect(l[0]!.createdAt.getTime()).toBe(at(11.5).getTime());
+    });
   });
 
   describe("cancel training", () => {
