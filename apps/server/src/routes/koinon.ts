@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { requireAuth } from "../services/auth.js";
 import { ensureCharacterRow, getActivePlayer, getActiveWorldId, type CharacterRow } from "../services/character.js";
 import { buildingContext, type ActingContext } from "../services/buildings.js";
+import { cancelMuster, musterTargets, myMusterPledge, openMuster, pledge, withdrawPledge } from "../services/koinonMuster.js";
 import {
   acceptInvite,
   buildLesche,
@@ -143,4 +144,33 @@ export async function koinonRoutes(app: FastifyInstance) {
   write("/give", (ctx, body, now) => giveToKoinon(ctx, body.amount, now));
   // The leader orders the Lesche, paid from the treasury.
   write("/lesche", (ctx, _body, now) => buildLesche(ctx, now));
+
+  // --- The Raid muster ---------------------------------------------------------
+  // One read: resolve the caller, run the service, answer its view or its refusal.
+  function read<T extends object>(url: string, run: (ctx: ActingContext, query: Record<string, unknown>, now: Date) => Promise<KoinonError | T>) {
+    app.get(url, async (request, reply) => {
+      const user = await requireAuth(request);
+      const a = await acting(user.id);
+      if ("error" in a) {
+        reply.code(a.code);
+        return { error: a.error };
+      }
+      const result = await run(a.ctx, (request.query ?? {}) as Record<string, unknown>, new Date());
+      if ("error" in result) {
+        reply.code(result.code);
+        return { error: result.error };
+      }
+      return result;
+    });
+  }
+  // ?gather=<place>: every legal target reachable in principle from there, and the gathering places.
+  read("/muster/targets", (ctx, query) => musterTargets(ctx, query.gather));
+  // The caller's rows at the gathering place and his hulls. Settles him, as GET /api/barracks does.
+  read("/muster/mine", (ctx, _query, now) => myMusterPledge(ctx, now));
+  // Body: { regionId | townId, gatherId, leadMinutes }. Any member.
+  write("/muster/open", (ctx, body, now) => openMuster(ctx, body, now));
+  // Body: { rows: [{ rowId, count }], ships: { <shipId>: n } }. Men, hulls, or both.
+  write("/muster/pledge", (ctx, body, now) => pledge(ctx, body, now));
+  write("/muster/withdraw", (ctx, _body, now) => withdrawPledge(ctx, now));
+  write("/muster/cancel", (ctx, _body, now) => cancelMuster(ctx, now));
 }

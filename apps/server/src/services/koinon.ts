@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, asc, count, desc, eq, gt, gte, inArray, isNull, lte, max, ne, notInArray, sql } from "drizzle-orm";
-import { createDb, dailyDecisions, effectLog, houses, koina, koinonDeposits, koinonInvites, koinonMembers, koinonPosts, playerCharacters, playerLevy, playerUnits, players, resources } from "@massalia/db";
+import { createDb, dailyDecisions, effectLog, houses, koina, koinonDeposits, koinonInvites, koinonMembers, koinonMusterHulls, koinonMusters, koinonPosts, playerCharacters, playerLevy, playerUnits, players, resources } from "@massalia/db";
 import { bandDef, cleanKoinonName, cleanKoinonPost, formatGameDate, gameDate, hallCap, parseKoinonContent, sanitizeDisplayName, seasonIndexAt, settleHall, unitDef, type HallPhase, type HallSettle, type HallState, type KoinonChronicle, type KoinonContent, type KoinonDepositDetail, type KoinonEvent } from "@massalia/shared";
 import { agedPortraitFor } from "./age.js";
 import { getBandsContent, getUnitsContent } from "./barracks.js";
@@ -58,7 +58,7 @@ export function getKoinonContent(): KoinonContent {
 }
 
 export type KoinonError = { ok: false; code: number; error: string };
-type KoinonRow = typeof koina.$inferSelect;
+export type KoinonRow = typeof koina.$inferSelect;
 export type KoinonRole = "leader" | "vice" | "member";
 
 const fail = (code: number, error: string): KoinonError => ({ ok: false, code, error });
@@ -94,7 +94,7 @@ function gameLabel(at: Date, ctx: ActingContext): string {
 // The koinon lock: the live row, FOR UPDATE. null when the koinon is unknown or
 // dissolved. Emits
 //   SELECT … FROM koina WHERE id = $1 AND dissolved_at IS NULL FOR UPDATE
-async function lockKoinon(tx: DbTx, koinonId: string): Promise<KoinonRow | null> {
+export async function lockKoinon(tx: DbTx, koinonId: string): Promise<KoinonRow | null> {
   const rows = await tx.select().from(koina).where(and(eq(koina.id, koinonId), isNull(koina.dissolvedAt))).for("update");
   return rows[0] ?? null;
 }
@@ -106,7 +106,7 @@ async function seatCount(exec: Exec, koinonId: string): Promise<number> {
   return rows[0]?.n ?? 0;
 }
 
-async function memberRow(exec: Exec, playerId: string, worldId: string) {
+export async function memberRow(exec: Exec, playerId: string, worldId: string) {
   const rows = await exec
     .select()
     .from(koinonMembers)
@@ -139,6 +139,12 @@ async function logKoinon(tx: DbTx, playerId: string, worldId: string, event: Koi
 // invites and posts go and its name is free again. Returns the row as it stands.
 async function removeMember(tx: DbTx, k: KoinonRow, playerId: string, now: Date): Promise<KoinonRow> {
   await tx.delete(koinonMembers).where(and(eq(koinonMembers.koinonId, k.id), eq(koinonMembers.playerId, playerId)));
+  // A member who goes loses his hull pledges to the koinon's open muster. His
+  // pledged men are not touched here (no lock on him is held): his own next
+  // settle releases them.
+  await tx
+    .delete(koinonMusterHulls)
+    .where(and(eq(koinonMusterHulls.ownerPlayerId, playerId), sql`${koinonMusterHulls.musterId} IN (SELECT id FROM koinon_musters WHERE koinon_id = ${k.id} AND status = 'open')`));
   const rest = await membersInOrder(tx, k.id);
   if (rest.length === 0) return (await dissolve(tx, k, now)).row;
   let vice = k.vicePlayerId === playerId ? null : k.vicePlayerId;
@@ -159,6 +165,10 @@ async function removeMember(tx: DbTx, k: KoinonRow, playerId: string, now: Date)
 // and its gifts stay on record. Returns the row and what the city received.
 async function dissolve(tx: DbTx, k: KoinonRow, now: Date): Promise<{ row: KoinonRow; treasuryToCity: number }> {
   const { k: settled } = await settleHallLocked(tx, k, now);
+  // A koinon that ends has its open muster called off. The pledged men are
+  // released by each owner's own next settle.
+  await tx.delete(koinonMusterHulls).where(sql`${koinonMusterHulls.musterId} IN (SELECT id FROM koinon_musters WHERE koinon_id = ${k.id} AND status = 'open')`);
+  await tx.update(koinonMusters).set({ status: "cancelled", closedAt: now }).where(and(eq(koinonMusters.koinonId, k.id), eq(koinonMusters.status, "open")));
   const treasuryToCity = settled.treasury;
   await creditWorldTreasury(tx, settled.worldId, treasuryToCity);
   await tx.delete(koinonMembers).where(eq(koinonMembers.koinonId, k.id));
@@ -239,7 +249,7 @@ async function settleHallLocked(tx: DbTx, k: KoinonRow, now: Date): Promise<{ k:
 // settle. `fn` checks before it writes, so a refusal it returns leaves nothing
 // half done. The caller owns the transaction (and any player lock, taken
 // before this).
-async function inOwnKoinon<T>(tx: DbTx, ctx: ActingContext, now: Date, fn: (tx: DbTx, k: KoinonRow, role: KoinonRole, settle: HallSettle) => Promise<T | KoinonError>): Promise<T | KoinonError> {
+export async function inOwnKoinon<T>(tx: DbTx, ctx: ActingContext, now: Date, fn: (tx: DbTx, k: KoinonRow, role: KoinonRole, settle: HallSettle) => Promise<T | KoinonError>): Promise<T | KoinonError> {
   const mine = await memberRow(tx, ctx.playerId, ctx.worldId);
   if (!mine) return NOT_MEMBER;
   const locked = await lockKoinon(tx, mine.koinonId);
