@@ -142,3 +142,21 @@ RULINGS FOR ARGIRIS: every departure from this prompt or the brief, with the rea
 Committed: <SHA> <subject>, one line per commit, in order
 GATE: the gate's last line at HEAD, with the starting load
 ```
+
+## STOP 1 ruling
+
+STOP 1 ruling (koinon redesign prompt 1)
+
+Append this ruling verbatim at the end of docs/koinon/koinon-redesign-prompt-1.md under "## STOP 1 ruling", as its own commit `docs: koinon redesign prompt 1 STOP 1 ruling`.
+
+Accepted as reported: items 2 to 12, and the two new strings (the singular muster note, `Build · {cost}`).
+
+Item 1, one commit `web: the Lesche details in one line`. In phase `none`, the details line under the progress bar reads `Holds {lescheCap} · {lescheBuildDays} days to build · {lescheUpkeep} dr a day`, every number from the rules block. The existing sentence goes from that phase only; the open and shut lines are unchanged. Update the render test that quotes it.
+
+Then the full `pnpm gate` at HEAD, starting below a 1-minute load of 20, with the starting figure reported. If it ends GATE GREEN at HEAD, tree clean, push without a further STOP:
+- plain `git push`, fast-forward only;
+- report remote HEAD, the CI run with its Gate step and suite counts, the Railway server and worker deploys (SUCCESS lines; no migration), the Pages run with the live Politics chunk carrying the hero strip, and /health.
+
+If the gate is red, STOP with the log. A red caused only by timeouts is a STOP, never a rerun.
+
+Report every new commit as `Committed: <SHA> <subject>` and quote the gate's last line.
