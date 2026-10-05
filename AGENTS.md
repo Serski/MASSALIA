@@ -80,7 +80,7 @@ pnpm dev:web                    # Vite on :5174
 
 - `react-hooks/rules-of-hooks` is a lint error in `apps/web`: every hook sits above the first early return. Never disable it inline. A hook placed after an early return in `World2Map.tsx` blacked out the map for every player on 10 Sept 2026.
 - A change to the map or the dashboard needs a render test in `apps/web/test` before push. "Not verified in the browser" is not an acceptable report line.
-- Render tests stay cheap: the web suite runs at vitest's 5 s default with files in parallel. Use plain DOM selectors, not role queries with regex names over long lists, and wait for real state (a button enabling), never a fixed delay.
+- Render tests stay cheap: the web suite runs at a 15 s test budget, two files at a time. Use plain DOM selectors, not role queries with regex names over long lists, and wait for real state (a button enabling), never a fixed delay.
 - Routes that settle (`GET /api/barracks`, `GET /api/map/reach`) run `settleAll` under the player lock: fetch on open and after an action, never on an interval.
 - Check `apps/web/public` for an existing brand asset before creating one.
 
