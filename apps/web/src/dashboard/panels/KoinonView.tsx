@@ -1,14 +1,18 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, ApiError, type KoinonArmies, type KoinonArmyRow, type KoinonMember, type KoinonMissionKind, type KoinonPage } from "../../api.js";
+import { api, ApiError, type KoinonArmies, type KoinonArmyRow, type KoinonLastMuster, type KoinonMember, type KoinonMissionKind, type KoinonMuster, type KoinonMusterMine, type KoinonMusterTargets, type KoinonPage } from "../../api.js";
 import { professions } from "../../data/league.js";
 import { LobbyPortrait } from "../../lobby/LobbyPortrait.js";
-import { AssetIcon, BuildProgress, DashboardCard, formatDuration, HouseCrest, onDeviceClock, type PanelProps, titleCase } from "../shared.js";
+import { AssetIcon, BuildProgress, ChoicePicker, DashboardCard, formatDuration, HouseCrest, onDeviceClock, type PanelProps, titleCase, useCountdownSeconds } from "../shared.js";
 
 // --- The koinon (koinon prompt 1) — a Politics tab ---------------------------
 // A player-made company of citizens. The page comes from GET /api/koinon and is
 // read again after every action; every number shown comes from its `rules`
 // block. The leader also reads GET /api/koinon/armies: the members' soldiers,
 // read-only. Durations count from the payload's `now` and do not tick.
+//
+// The Raid muster (koinon prompt 3) is a card of its own between the Board and
+// the Treasury: the form that calls one, or the open muster with its pledges,
+// the member's own pledge, and the last muster's report.
 
 type Koinon = NonNullable<KoinonPage["koinon"]>;
 
@@ -143,6 +147,283 @@ function MemberRow({ member, children }: { member: KoinonMember; children?: Reac
   );
 }
 
+// --- The Raid muster ---------------------------------------------------------
+
+type Run = (work: () => Promise<unknown>, after?: () => void) => Promise<void>;
+
+// The leads the launch picker offers, in minutes, held to the rules' bounds
+// (the bounds themselves are always offered).
+const MUSTER_LEADS = [30, 60, 120, 180, 360, 720, 1080, 1440];
+const leadLabel = (minutes: number) => (minutes < 60 ? `In ${minutes} minutes` : minutes === 60 ? "In 1 hour" : minutes % 60 === 0 ? `In ${minutes / 60} hours` : `In ${formatDuration(minutes * 60)}`);
+const targetKey = (t: { regionId: string; townId: string | null }) => (t.townId ? `t:${t.townId}` : `r:${t.regionId}`);
+const hullsText = (n: number) => `${n} ${n === 1 ? "hull" : "hulls"}`;
+
+// The last muster: its report line and each member's part, why it stood down,
+// or that it was called off.
+function LastMuster({ last }: { last: KoinonLastMuster }) {
+  const report = last.report;
+  return (
+    <div className="koinon-muster-last" data-muster-last={last.status}>
+      <div className="koinon-subhead">Last muster</div>
+      <div className="koinon-line">
+        Raid on {last.targetName} <span className="koinon-dim">· {last.launchLabel}</span>
+      </div>
+      {last.status === "cancelled" ? <p className="koinon-hint">Called off.</p> : null}
+      {last.status === "stood_down" ? <p className="koinon-hint">Stood down: {last.reason ?? "it could not march."}</p> : null}
+      {last.status === "resolved" && report ? (
+        <>
+          {report.line ? <p className="koinon-hint">{report.line}</p> : null}
+          {report.parts.map((part) => {
+            const sent = part.men > 0 && part.hulls > 0 ? `${menText(part.men)} and ${hullsText(part.hulls)}` : part.hulls > 0 ? hullsText(part.hulls) : menText(part.men);
+            return (
+              <div key={part.playerId} className="koinon-line" data-part={part.playerId}>
+                {part.name} <span className="koinon-dim">· sent {sent} · lost {part.lost}{report.outcome === "won" ? ` · ${part.drachmae} drachmae and ${part.grain} grain` : ""}</span>
+              </div>
+            );
+          })}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+// No muster open: the form that calls one. The targets are read for the chosen
+// gathering place; the launch is a lead on the server's clock, and a lead that
+// would land in Winter is greyed out (the server refuses it either way).
+function MusterForm({ rules, offset, busy, run }: { rules: KoinonPage["rules"]; offset: number; busy: boolean; run: Run }) {
+  const [targets, setTargets] = useState<KoinonMusterTargets | null>(null);
+  const [gatherId, setGatherId] = useState<string | undefined>(undefined);
+  const [target, setTarget] = useState("");
+  const [lead, setLead] = useState<number | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .koinonMusterTargets(gatherId)
+      .then((next) => {
+        if (cancelled) return;
+        setTargets(next);
+        setTarget((held) => (next.targets.some((t) => targetKey(t) === held) ? held : next.targets[0] ? targetKey(next.targets[0]) : ""));
+      })
+      .catch((e) => !cancelled && setError(e instanceof ApiError ? e.message : "The muster's targets could not be read."));
+    return () => {
+      cancelled = true;
+    };
+  }, [gatherId]);
+
+  const minLead = rules.musterMinLeadMinutes;
+  const maxLead = rules.musterMaxLeadHours * 60;
+  const leads = useMemo(() => [...new Set([minLead, ...MUSTER_LEADS.filter((m) => m > minLead && m < maxLead), maxLead])], [minLead, maxLead]);
+  if (error) return <p className="koinon-reason">{error}</p>;
+  if (!targets) return <p className="koinon-empty">Reading the roads…</p>;
+
+  // A lead lands in Winter when the server's clock plus the lead falls inside the window the server named.
+  const serverNow = Date.now() + offset;
+  const inWinter = (minutes: number) => {
+    if (!targets.winter) return false;
+    const at = serverNow + minutes * 60_000;
+    return at >= Date.parse(targets.winter.from) && at < Date.parse(targets.winter.until);
+  };
+  const chosenLead = lead !== null && leads.includes(lead) && !inWinter(lead) ? lead : (leads.find((m) => !inWinter(m)) ?? null);
+  const chosenTarget = targets.targets.find((t) => targetKey(t) === target) ?? null;
+  const open = () => {
+    if (!chosenTarget || chosenLead === null) return;
+    void run(() => api.koinonMusterOpen({ ...(chosenTarget.townId ? { townId: chosenTarget.townId } : { regionId: chosenTarget.regionId }), gatherId: targets.gatherId, leadMinutes: chosenLead }));
+  };
+
+  return (
+    <div className="koinon-muster-form" data-muster="form">
+      <div className="koinon-muster-field">
+        <span className="koinon-muster-label">Gathering place</span>
+        <ChoicePicker ariaLabel="gathering place" value={targets.gatherId} options={targets.gathers.map((g) => ({ id: g.id, label: g.name }))} onSelect={setGatherId} disabled={busy} />
+      </div>
+      <div className="koinon-muster-field">
+        <span className="koinon-muster-label">Target</span>
+        <ChoicePicker
+          ariaLabel="target of the raid"
+          value={target}
+          options={targets.targets.map((t) => ({ id: targetKey(t), label: t.name, note: t.route === "land" ? "by land" : `${t.steps} ${t.steps === 1 ? "sea" : "seas"}` }))}
+          onSelect={setTarget}
+          disabled={busy || targets.targets.length === 0}
+        />
+      </div>
+      <div className="koinon-muster-field">
+        <span className="koinon-muster-label">Launch</span>
+        <ChoicePicker
+          ariaLabel="launch of the raid"
+          value={chosenLead === null ? "" : String(chosenLead)}
+          options={leads.map((m) => ({ id: String(m), label: leadLabel(m), ...(inWinter(m) ? { note: "Winter", disabled: true } : {}) }))}
+          onSelect={(id) => setLead(Number(id))}
+          disabled={busy || chosenLead === null}
+        />
+      </div>
+      {targets.targets.length === 0 ? <p className="koinon-reason">Nothing can be reached from {targets.gathers.find((g) => g.id === targets.gatherId)?.name ?? "there"}.</p> : null}
+      {chosenLead === null ? <p className="koinon-reason">The passes are closed in winter: no launch can be set yet.</p> : null}
+      <div className="koinon-actions koinon-actions-start">
+        <button type="button" className="panel-btn" data-action="muster-open" disabled={busy || !chosenTarget || chosenLead === null} onClick={open}>
+          Call the muster
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// The member's own pledge: his rows at the gathering place and his hulls, read
+// from GET /muster/mine. That read settles him, so it runs on open and after
+// an action (a new page payload), never on a timer.
+function YourPledge({ muster, stamp, busy, run }: { muster: KoinonMuster; stamp: KoinonPage; busy: boolean; run: Run }) {
+  const [mine, setMine] = useState<KoinonMusterMine | null>(null);
+  const [error, setError] = useState("");
+  const [men, setMen] = useState<Record<string, number>>({});
+  const [hulls, setHulls] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .koinonMusterMine()
+      .then((next) => {
+        if (cancelled) return;
+        setMine(next);
+        setError("");
+        setMen({});
+        setHulls(Object.fromEntries(next.ships.map((s) => [s.id, s.pledged])));
+      })
+      .catch((e) => !cancelled && setError(e instanceof ApiError ? e.message : "Your men could not be read."));
+    return () => {
+      cancelled = true;
+    };
+  }, [stamp, muster.id]);
+
+  if (error) return <p className="koinon-reason">{error}</p>;
+  if (!mine) return <p className="koinon-empty">Reading your men…</p>;
+
+  const free = mine.rows.filter((r) => !r.pledged);
+  const pledged = mine.rows.filter((r) => r.pledged);
+  const ships = mine.ships.filter((s) => s.inStock > 0 || s.pledged > 0);
+  const hasPledge = pledged.length > 0 || mine.ships.some((s) => s.pledged > 0);
+  const clamp = (value: string, max: number) => Math.max(0, Math.min(Math.floor(Number(value)) || 0, max));
+  const rows = free.flatMap((r) => ((men[r.rowId] ?? 0) > 0 ? [{ rowId: r.rowId, count: men[r.rowId]! }] : []));
+  const hullsChanged = ships.some((s) => (hulls[s.id] ?? 0) !== s.pledged);
+  const pledge = () =>
+    void run(() => api.koinonMusterPledge({ ...(rows.length > 0 ? { rows } : {}), ...(hullsChanged ? { ships: Object.fromEntries(ships.map((s) => [s.id, hulls[s.id] ?? 0])) } : {}) }));
+
+  return (
+    <div className="koinon-muster-mine" data-muster="mine">
+      <div className="koinon-subhead">Your pledge</div>
+      {mine.rows.length === 0 ? <p className="koinon-hint">Move men to {mine.gather.name} from the Barracks or the map, then pledge them.</p> : null}
+      {pledged.map((r) => (
+        <div key={r.rowId} className="koinon-line" data-pledged={r.rowId}>
+          {r.count} {r.count === 1 ? r.label : r.plural} <span className="koinon-tag">Pledged</span>
+        </div>
+      ))}
+      {free.map((r) => (
+        <label key={r.rowId} className="koinon-muster-pick" data-row={r.rowId}>
+          <span className="koinon-muster-pick-name">
+            {r.count === 1 ? r.label : r.plural} <span className="koinon-dim">· {r.count} at {mine.gather.name}{r.source === "band" ? " · a band marches as one" : ""}</span>
+          </span>
+          <input
+            className="koinon-input koinon-amount"
+            type="number"
+            inputMode="numeric"
+            aria-label={`${r.plural} to pledge`}
+            min={0}
+            max={r.count}
+            step={r.source === "band" ? r.count : 1}
+            value={men[r.rowId] ?? 0}
+            disabled={busy}
+            onChange={(event) => {
+              const n = clamp(event.target.value, r.count);
+              setMen((held) => ({ ...held, [r.rowId]: r.source === "band" && n > 0 ? r.count : n }));
+            }}
+          />
+        </label>
+      ))}
+      {ships.map((s) => (
+        <label key={s.id} className="koinon-muster-pick" data-ship={s.id}>
+          <span className="koinon-muster-pick-name">
+            {s.label} <span className="koinon-dim">· {s.inStock} in port · carries {s.troopSpace} · sails {s.range} {s.range === 1 ? "sea" : "seas"}</span>
+          </span>
+          <input
+            className="koinon-input koinon-amount"
+            type="number"
+            inputMode="numeric"
+            aria-label={`${s.label} hulls to pledge`}
+            min={0}
+            max={s.inStock}
+            step={1}
+            value={hulls[s.id] ?? 0}
+            disabled={busy}
+            onChange={(event) => {
+              const n = clamp(event.target.value, s.inStock);
+              setHulls((held) => ({ ...held, [s.id]: n }));
+            }}
+          />
+        </label>
+      ))}
+      <div className="koinon-actions koinon-actions-start">
+        <button type="button" className="panel-btn" data-action="muster-pledge" disabled={busy || (rows.length === 0 && !hullsChanged)} onClick={pledge}>
+          Pledge
+        </button>
+        {hasPledge ? (
+          <button type="button" className="panel-btn ghost" data-action="muster-withdraw" disabled={busy} onClick={() => void run(() => api.koinonMusterWithdraw())}>
+            Withdraw my pledge
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+// An open muster: where and when, what has been pledged and whether it would
+// march as it stands, the member's own pledge, and the call-off.
+function MusterOpen({ muster, stamp, offset, busy, run }: { muster: KoinonMuster; stamp: KoinonPage; offset: number; busy: boolean; run: Run }) {
+  // The countdown runs on the payload's server clock, never the device's alone.
+  const left = useCountdownSeconds(onDeviceClock(muster.launchAt, offset));
+  const outlook = muster.outlook;
+  return (
+    <div className="koinon-muster-open" data-muster="open">
+      <p className="koinon-muster-head">
+        Raid on {muster.target.name} · gathering at {muster.gather.name} · {left > 0 ? `marches in ${formatDuration(left)}` : "marching"}
+      </p>
+      <p className="koinon-hint">Called by {muster.openerName}</p>
+      {outlook.route === "land" ? <p className="koinon-hint" data-outlook="land">As pledged: by land.</p> : null}
+      {outlook.route === "sea" ? (
+        <p className="koinon-hint" data-outlook="sea">
+          As pledged: by sea, {outlook.steps} {outlook.steps === 1 ? "sea" : "seas"}, {Math.min(outlook.space, outlook.hullSpace)} of {outlook.hullSpace} seats filled.
+        </p>
+      ) : null}
+      {!outlook.ok && outlook.reason ? <p className="koinon-reason" data-outlook="reason">{outlook.reason}</p> : null}
+
+      <div className="koinon-subhead">Pledges</div>
+      {muster.pledges.length === 0 ? <p className="koinon-empty">No one has pledged yet.</p> : null}
+      {muster.pledges.map((p) => (
+        <div key={p.playerId} className="koinon-line" data-pledge={p.playerId}>
+          {p.name} <span className="koinon-dim">· {menText(p.men)} · {p.pentekonters} {p.pentekonters === 1 ? "pentekonter" : "pentekonters"} · {p.triremes} {p.triremes === 1 ? "trireme" : "triremes"}</span>
+        </div>
+      ))}
+
+      <YourPledge muster={muster} stamp={stamp} busy={busy} run={run} />
+
+      {muster.canCancel ? (
+        <div className="koinon-actions koinon-actions-start">
+          <button
+            type="button"
+            className="panel-btn danger"
+            data-action="muster-cancel"
+            disabled={busy}
+            onClick={() => {
+              if (window.confirm(`Call off the raid on ${muster.target.name}? Every pledge falls with it.`)) void run(() => api.koinonMusterCancel());
+            }}
+          >
+            Call it off
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function KoinonView({ onRefresh }: PanelProps) {
   const [page, setPage] = useState<KoinonPage | null>(null);
   const [armies, setArmies] = useState<KoinonArmies | null>(null);
@@ -201,7 +482,21 @@ export function KoinonView({ onRefresh }: PanelProps) {
     return () => clearTimeout(timer);
   }, [page, offset, load]);
 
-  const run = async (work: () => Promise<unknown>, after?: () => void) => {
+  // One read a second after an open muster's launch, armed and cleared exactly
+  // as the Lesche's is: from the payload's own clock, keyed on the payload. A
+  // payload already past the launch that still shows the muster open (its
+  // resolve is in hand elsewhere, or failed) looks again in a minute.
+  useEffect(() => {
+    const muster = page?.koinon?.muster;
+    if (!page || !muster) return;
+    const marchesAt = onDeviceClock(muster.launchAt, offset);
+    if (!marchesAt) return;
+    const past = Date.parse(muster.launchAt) <= Date.parse(page.now);
+    const timer = setTimeout(() => void load().catch(() => {}), past ? 60_000 : Math.max(1000, Date.parse(marchesAt) - Date.now() + 1000));
+    return () => clearTimeout(timer);
+  }, [page, offset, load]);
+
+  const run: Run = async (work, after) => {
     setBusy(true);
     setNote("");
     try {
@@ -369,6 +664,18 @@ export function KoinonView({ onRefresh }: PanelProps) {
             ) : null}
           </div>
         ))}
+      </KoinonCard>
+
+      <KoinonCard title="Muster" section="muster">
+        {koinon.muster ? (
+          <MusterOpen muster={koinon.muster} stamp={page} offset={offset} busy={busy} run={run} />
+        ) : (
+          <>
+            <p className="koinon-hint">Any member may call the koinon to a raid. Members bring men to the gathering place and pledge them. At the hour they march as one.</p>
+            <MusterForm rules={rules} offset={offset} busy={busy} run={run} />
+            {koinon.lastMuster ? <LastMuster last={koinon.lastMuster} /> : null}
+          </>
+        )}
       </KoinonCard>
 
       <KoinonCard title="Treasury" section="treasury" note={`${koinon.treasury} drachmae`}>

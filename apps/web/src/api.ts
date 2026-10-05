@@ -585,6 +585,15 @@ export const api = {
   koinonRead: () => apiFetch<{ ok: true }>("/api/koinon/read", { method: "POST" }),
   koinonGive: (amount: number) => apiFetch<{ ok: true; wallet: number; treasury: number }>("/api/koinon/give", { method: "POST", body: { amount } }),
   koinonBuildLesche: () => apiFetch<{ ok: true; completesAt: string; treasury: number }>("/api/koinon/lesche", { method: "POST" }),
+  // The Raid muster (koinon prompt 3). `mine` settles the caller, as the Barracks
+  // read does: fetch it on open and after an action, never on an interval.
+  koinonMusterTargets: (gatherId?: string) => apiFetch<KoinonMusterTargets>(`/api/koinon/muster/targets${gatherId ? `?gather=${encodeURIComponent(gatherId)}` : ""}`),
+  koinonMusterMine: () => apiFetch<KoinonMusterMine>("/api/koinon/muster/mine"),
+  koinonMusterOpen: (input: { regionId?: string; townId?: string; gatherId: string; leadMinutes: number }) =>
+    apiFetch<{ ok: true; musterId: string; launchAt: string }>("/api/koinon/muster/open", { method: "POST", body: input }),
+  koinonMusterPledge: (input: { rows?: { rowId: string; count: number }[]; ships?: Record<string, number> }) => apiFetch<{ ok: true }>("/api/koinon/muster/pledge", { method: "POST", body: input }),
+  koinonMusterWithdraw: () => apiFetch<{ ok: true }>("/api/koinon/muster/withdraw", { method: "POST" }),
+  koinonMusterCancel: () => apiFetch<{ ok: true }>("/api/koinon/muster/cancel", { method: "POST" }),
   // The Barracks (military prompt 2). GET settles and returns the view; every POST
   // returns the same BarracksView so the tab re-renders from one payload. Errors
   // are the server's one-line message via ApiError.
@@ -1308,6 +1317,9 @@ export type KoinonPage = {
     lescheBuildDays: number;
     lescheUpkeep: number;
     lescheCap: number;
+    // Koinon prompt 3: the bounds of a muster's lead.
+    musterMinLeadMinutes: number;
+    musterMaxLeadHours: number;
   };
   me: { playerId: string; role: KoinonRole | null; cooldownUntil: string | null; prestige: number; drachmae: number };
   koina: { id: string; name: string; leaderName: string; members: number; cap: number }[];
@@ -1331,9 +1343,56 @@ export type KoinonPage = {
     hall: { phase: KoinonHallPhase; startedAt: string | null; completesAt: string | null; paidUntil: string | null; daysCovered: number };
     givers: { playerId: string; name: string; total: number }[];
     gifts: { id: string; name: string; amount: number; label: string }[];
+    // Koinon prompt 3: the open Raid muster and the most recent closed one.
+    muster: KoinonMuster | null;
+    lastMuster: KoinonLastMuster | null;
   };
 };
 export type KoinonHallPhase = "none" | "building" | "open" | "shut";
+// The open muster: mirrors services/koinonMuster.ts (MusterView). `outlook` is
+// the launch verdict as the pledges stand: `space` is the room the men need,
+// `hullSpace` the seats on the hulls that can make the crossing (0 by land).
+export type KoinonMuster = {
+  id: string;
+  kind: "raid";
+  openerName: string;
+  canCancel: boolean;
+  target: { regionId: string; townId: string | null; name: string };
+  gather: { id: string; name: string };
+  openedLabel: string;
+  launchAt: string;
+  pledges: { playerId: string; name: string; men: number; space: number; pentekonters: number; triremes: number }[];
+  outlook: { route: "land" | "sea" | null; steps: number | null; ok: boolean; reason: string | null; space: number; hullSpace: number };
+};
+// One member's part in a marched muster, and the report every member sees.
+export type KoinonMusterPart = { playerId: string; name: string; men: number; lost: number; hulls: number; seats: number; shares: number; drachmae: number; grain: number };
+export type KoinonMusterReport = {
+  outcome: "won" | "driven_off" | "repulsed" | "stood_down";
+  reason: string | null;
+  line: string | null;
+  men: number;
+  lost: number;
+  killed: number;
+  plunder: { drachmae: number; grain: number } | null;
+  parts: KoinonMusterPart[];
+};
+export type KoinonLastMuster = { id: string; targetName: string; gatherName: string; launchLabel: string; status: "resolved" | "stood_down" | "cancelled"; reason: string | null; report: KoinonMusterReport | null };
+// GET /api/koinon/muster/targets: the gathering places, the targets reachable in
+// principle from the chosen one, and the Winter a launch chosen now could land in.
+export type KoinonMusterTargets = {
+  now: string;
+  winter: { from: string; until: string } | null;
+  gathers: { id: string; name: string }[];
+  gatherId: string;
+  targets: { regionId: string; townId: string | null; name: string; kind: "town" | "region"; route: "land" | "sea"; steps: number }[];
+};
+// GET /api/koinon/muster/mine: the caller's rows at the gathering place and his hulls.
+export type KoinonMusterMine = {
+  now: string;
+  gather: { id: string; name: string };
+  rows: { rowId: string; unitId: string; label: string; plural: string; icon: string; source: "trained" | "band"; count: number; pledged: boolean }[];
+  ships: { id: string; label: string; inStock: number; pledged: number; range: number; troopSpace: number }[];
+};
 // GET /api/koinon/armies — leader only; mirrors ArmiesView. Read-only and derived
 // at read time. `return` is a party on its way back (from targetName, when named).
 export type KoinonArmyRow = { unitId: string; label: string; plural: string; icon: string; source: "trained" | "band"; count: number };
