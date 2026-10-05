@@ -24,7 +24,6 @@ import {
   unitDef,
   verdictsFor,
   type BattleRow,
-  type CampaignForcePart,
   type MusterChronicle,
   type MusterHull,
   type ReachForceRow,
@@ -36,7 +35,7 @@ import { settleAll, type ActingContext } from "./buildings.js";
 import { creditDrachmae, creditGood, listHoldings } from "./holdings.js";
 import { getKoinonContent, inOwnKoinon, lockKoinon, memberRow, type KoinonError, type KoinonRole, type KoinonRow } from "./koinon.js";
 import { lockPlayer } from "./lock.js";
-import { selectForce, splitRows } from "./mapActions.js";
+import { describeForce, selectForce, splitRows } from "./mapActions.js";
 import { getTopology } from "./mapGraph.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
 import { readRegionWarband, readTownFleet, readTownGarrison, townContentOwner, writeRegionWarband, writeTownGarrison } from "./mapPools.js";
@@ -581,21 +580,6 @@ async function pledgingOwners(exec: Exec, musterId: string): Promise<string[]> {
 // and take the locks again.
 class OwnersChanged extends Error {}
 
-// A participant's own rows as the Chronicle names them (mapActions' describeForce).
-function forceParts(rows: UnitRow[]): CampaignForcePart[] {
-  const merged = new Map<string, CampaignForcePart>();
-  for (const r of rows) {
-    const key = `${r.source}:${r.unitId}`;
-    const m = merged.get(key);
-    if (m) m.count += r.count;
-    else if (r.source === "trained") {
-      const def = unitDef(getUnitsContent(), r.unitId);
-      merged.set(key, { count: r.count, label: def?.label ?? r.unitId, plural: def?.plural ?? `${def?.label ?? r.unitId}s`, source: "trained" });
-    } else merged.set(key, { count: r.count, label: bandDef(getBandsContent(), r.unitId)?.label ?? r.unitId, source: "band" });
-  }
-  return [...merged.values()];
-}
-
 // The muster marches (rulings 4 and 5, P5 to P10). One transaction, and every
 // clock in it is the muster's launch instant, never `now`: `now` only decides
 // whether the muster is due. Resolved 30 minutes or 3 days after launch, the
@@ -803,7 +787,7 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
             regionId: muster.regionId,
             regionName,
             ...(muster.townId !== null ? { townId: muster.townId, townName: townName! } : {}),
-            force: forceParts(o.rows),
+            force: describeForce(o.rows),
             hulls: hullsOf[o.playerId] ?? 0,
             winner: outcome === "won" ? "attacker" : outcome === "repulsed" ? "repulsed" : "defender",
             killed,

@@ -106,7 +106,7 @@ export type MapActResult = Failure | { ok: true; report: MapActReport; reach: Re
 // ("21 peltasts", not "7 peltasts, 7 peltasts and 7 peltasts"), in first-seen
 // order; a trained part carries label and plural, a band its label. The
 // sentence itself comes from renderForce, shared with the web register.
-function describeForce(rows: UnitRow[]): CampaignForcePart[] {
+export function describeForce(rows: UnitRow[]): CampaignForcePart[] {
   const merged = new Map<string, CampaignForcePart>();
   for (const r of rows) {
     const key = `${r.source}:${r.unitId}`;
