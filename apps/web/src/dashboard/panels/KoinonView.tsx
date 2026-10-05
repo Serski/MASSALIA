@@ -157,6 +157,9 @@ const MUSTER_LEADS = [30, 60, 120, 180, 360, 720, 1080, 1440];
 const leadLabel = (minutes: number) => (minutes < 60 ? `In ${minutes} minutes` : minutes === 60 ? "In 1 hour" : minutes % 60 === 0 ? `In ${minutes / 60} hours` : `In ${formatDuration(minutes * 60)}`);
 const targetKey = (t: { regionId: string; townId: string | null }) => (t.townId ? `t:${t.townId}` : `r:${t.regionId}`);
 const hullsText = (n: number) => `${n} ${n === 1 ? "hull" : "hulls"}`;
+// Nearest first: land targets by steps, then sea targets by steps, then by name.
+type MusterTarget = KoinonMusterTargets["targets"][number];
+const nearestFirst = (a: MusterTarget, b: MusterTarget) => Number(a.route === "sea") - Number(b.route === "sea") || a.steps - b.steps || a.name.localeCompare(b.name);
 
 // The last muster: its report line and each member's part, why it stood down,
 // or that it was called off.
@@ -201,8 +204,10 @@ function MusterForm({ rules, offset, busy, run }: { rules: KoinonPage["rules"]; 
     let cancelled = false;
     api
       .koinonMusterTargets(gatherId)
-      .then((next) => {
+      .then((read) => {
         if (cancelled) return;
+        // The list is shown nearest first, and the form opens on the first of them.
+        const next = { ...read, targets: [...read.targets].sort(nearestFirst) };
         setTargets(next);
         setTarget((held) => (next.targets.some((t) => targetKey(t) === held) ? held : next.targets[0] ? targetKey(next.targets[0]) : ""));
       })

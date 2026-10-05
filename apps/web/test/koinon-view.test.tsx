@@ -96,8 +96,9 @@ const button = (el: ParentNode, text: string) => [...el.querySelectorAll("button
 const section = (c: HTMLElement, name: string) => c.querySelector<HTMLElement>(`[data-koinon="${name}"]`);
 const props = { player: {} as Parameters<typeof KoinonView>[0]["player"] };
 
-// The muster's two reads, as the server answers them. From Massalia: a land
-// region and a town three seas off; from Arelate: one land region.
+// The muster's two reads, as the server answers them (targets in name order).
+// From Massalia: a town three seas off and a land region; from Arelate: one
+// land region.
 const targetsFrom = (gatherId: string, over: Partial<KoinonMusterTargets> = {}): KoinonMusterTargets => ({
   now: NOW,
   winter: null,
@@ -105,7 +106,7 @@ const targetsFrom = (gatherId: string, over: Partial<KoinonMusterTargets> = {}):
   gatherId,
   targets:
     gatherId === "R060"
-      ? [{ regionId: "R046", townId: null, name: "Salyes", kind: "region", route: "land", steps: 1 }, { regionId: "R031", townId: "reii", name: "Reii", kind: "town", route: "sea", steps: 3 }]
+      ? [{ regionId: "R031", townId: "reii", name: "Reii", kind: "town", route: "sea", steps: 3 }, { regionId: "R046", townId: null, name: "Salyes", kind: "region", route: "land", steps: 1 }]
       : [{ regionId: "R050", townId: null, name: "Volcae", kind: "region", route: "land", steps: 1 }],
   ...over,
 });
@@ -587,6 +588,22 @@ describe("KoinonView · the muster", () => {
     await tick(0);
     expect(open).toHaveBeenCalledWith({ regionId: "R050", gatherId: "arelate", leadMinutes: 120 });
     expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it("the targets are listed nearest first: land by steps, then sea by steps, then by name, and the form opens on the first", async () => {
+    const target = (name: string, route: "land" | "sea", steps: number, townId: string | null = null) => ({ regionId: `R-${name}`, townId, name, kind: townId ? ("town" as const) : ("region" as const), route, steps });
+    // As the server sends them: by name.
+    const byName = [target("Abdera", "sea", 3, "abdera"), target("Albici", "land", 1), target("Emporion", "sea", 1, "emporion"), target("Reii", "sea", 3, "reii"), target("Salyes", "land", 1), target("Tauroention", "sea", 1, "tauroention")];
+    vi.spyOn(api, "koinonMusterTargets").mockImplementation(async (gatherId) => targetsFrom(gatherId ?? "R060", { targets: byName }));
+    const open = vi.spyOn(api, "koinonMusterOpen").mockResolvedValue({ ok: true, musterId: "m1", launchAt: inHours(1) });
+    const { card } = await show(inside("nikias"));
+    expect(picked(card(), "target of the raid")).toBe("Albici · by land");
+    fireEvent.click(picker(card(), "target of the raid"));
+    expect(optionTexts(card())).toEqual(["Albici · by land", "Salyes · by land", "Emporion · 1 sea", "Tauroention · 1 sea", "Abdera · 3 seas", "Reii · 3 seas"]);
+    fireEvent.click(picker(card(), "target of the raid"));
+    fireEvent.click(button(card(), "Call the muster")!);
+    await tick(0);
+    expect(open).toHaveBeenCalledWith({ regionId: "R-Albici", gatherId: "R060", leadMinutes: 30 });
   });
 
   it("a town is opened by its town id; a lead that lands in Winter is greyed out and the first open one is chosen", async () => {
