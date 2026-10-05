@@ -881,10 +881,13 @@ export const playerUnits = pgTable("player_units", {
   ownerIdx: index("player_units_owner_idx").on(table.worldId, table.ownerPlayerId),
 }));
 
-export const UNIT_MISSION_KINDS = ["scout", "raid", "attack", "move"] as const;
+// "muster" (0064): the row is pledged to a koinon's muster and stands at the
+// gathering place (moving_to NULL) until the muster marches or releases it.
+export const UNIT_MISSION_KINDS = ["scout", "raid", "attack", "move", "muster"] as const;
 export type UnitMissionKind = (typeof UNIT_MISSION_KINDS)[number];
 // regionId is always the region; townId is set when the target or destination is a town.
-export type UnitMission = { kind: UnitMissionKind; regionId: string; townId?: string; departedAt: string };
+// `musterId` is set on a "muster" mission only; its departedAt is the pledge instant.
+export type UnitMission = { kind: UnitMissionKind; regionId: string; townId?: string; departedAt: string; musterId?: string };
 
 export const HOLDING_KINDS = ["colony", "conquest"] as const;
 export type HoldingKind = (typeof HOLDING_KINDS)[number];
@@ -1035,6 +1038,46 @@ export const koinonPosts = pgTable("koinon_posts", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   koinonIdx: index("koinon_posts_koinon_idx").on(table.koinonId, table.createdAt.desc()),
+}));
+
+// The koinon's Raid muster (migration 0064): one raid a koinon marches on
+// together. One open muster per koinon (partial unique index). Pledged men are
+// player_units rows with a "muster" mission; pledged hulls are counts below.
+export const MUSTER_STATUSES = ["open", "resolved", "stood_down", "cancelled"] as const;
+export type MusterStatus = (typeof MUSTER_STATUSES)[number];
+export const koinonMusters = pgTable("koinon_musters", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  koinonId: uuid("koinon_id").references(() => koina.id).notNull(),
+  openerPlayerId: uuid("opener_player_id").references(() => players.id).notNull(),
+  kind: text("kind").$type<"raid">().notNull().default("raid"),
+  regionId: text("region_id").notNull(),
+  townId: text("town_id"),
+  // The gathering place as rows are based at it (a region id, or a town slug),
+  // and the region it stands in.
+  gatherId: text("gather_id").notNull(),
+  gatherRegionId: text("gather_region_id").notNull(),
+  openedAt: timestamp("opened_at", { withTimezone: true }).notNull().defaultNow(),
+  launchAt: timestamp("launch_at", { withTimezone: true }).notNull(),
+  status: text("status").$type<MusterStatus>().notNull().default("open"),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+  report: jsonb("report").$type<Record<string, unknown> | null>(),
+}, (table) => ({
+  kindCheck: check("koinon_musters_kind_check", sql`${table.kind} IN ('raid')`),
+  statusCheck: check("koinon_musters_status_check", sql`${table.status} IN ('open', 'resolved', 'stood_down', 'cancelled')`),
+  oneOpen: uniqueIndex("koinon_musters_one_open_idx").on(table.koinonId).where(sql`status = 'open'`),
+  dueIdx: index("koinon_musters_due_idx").on(table.launchAt).where(sql`status = 'open'`),
+}));
+
+export const koinonMusterHulls = pgTable("koinon_muster_hulls", {
+  musterId: uuid("muster_id").references(() => koinonMusters.id).notNull(),
+  ownerPlayerId: uuid("owner_player_id").references(() => players.id).notNull(),
+  shipId: text("ship_id").notNull(),
+  count: integer("count").notNull(),
+  pledgedAt: timestamp("pledged_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.musterId, table.ownerPlayerId, table.shipId] }),
+  countCheck: check("koinon_muster_hulls_count_check", sql`${table.count} > 0`),
 }));
 
 export const resources = pgTable("resources", {

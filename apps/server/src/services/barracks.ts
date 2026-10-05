@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, asc, eq, gte, sql, inArray } from "drizzle-orm";
-import { bandOffers, createDb, effectLog, playerCharacters, playerLevy, playerUnits, resources } from "@massalia/db";
+import { bandOffers, createDb, effectLog, playerCharacters, playerLevy, playerUnits, resources, type UnitMission } from "@massalia/db";
 import {
   bandDef,
   goodCategoryFor,
@@ -783,7 +783,7 @@ export type RosterView = {
   basedAt: string; // region id the row stands in
   movingTo: string | null; // region id of a relocation in flight
   arrivesAt: string | null; // ISO; when that relocation completes
-  mission: { kind: "scout" | "raid" | "attack" | "move"; regionId: string; departedAt: string } | null; // what a moving row is doing
+  mission: UnitMission | null; // what a moving row is doing; kind "muster" (with musterId) on a row pledged to a koinon's muster, which stands still
   createdAt: string; // ISO; for training progress ((now − createdAt) / (readyAt − createdAt))
   stats: Record<string, number>; // the unit's or band's stat block (for the force picker)
   active: boolean;

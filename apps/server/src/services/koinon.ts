@@ -1001,8 +1001,11 @@ export async function memberArmies(ctx: ActingContext, now: Date): Promise<Koino
         training.push({ ...armyRow(r), readyAt: d.readyAt?.toISOString() ?? null });
       } else if (d.state === "away") {
         const targetId = r.mission ? (r.mission.townId ?? r.mission.regionId) : null;
-        const outbound = r.mission !== null && targetId === d.movingTo;
-        away.push({ ...armyRow(r), missionKind: outbound ? r.mission!.kind : "return", targetName: targetId ? await nameOf(targetId) : null, arrivesAt: d.arrivesAt.toISOString() });
+        // A row on the march never carries a "muster" mission (a pledged row
+        // stands still); it reads as a return if one ever did.
+        const kind = r.mission?.kind;
+        const outbound = kind !== undefined && kind !== "muster" && targetId === d.movingTo;
+        away.push({ ...armyRow(r), missionKind: outbound ? kind : "return", targetName: targetId ? await nameOf(targetId) : null, arrivesAt: d.arrivesAt.toISOString() });
       } else {
         // One line per unit at a place, as the owner's settle folds trained rows.
         const here = places.get(d.placeId) ?? [];
