@@ -42,6 +42,10 @@ export default defineConfig(({ command, mode }) => {
     test: {
       testTimeout: 15_000,
       hookTimeout: 30_000,
+      // Two test files at a time. Every render test file boots its own jsdom, and
+      // vitest's default (a worker for every core but one) overloaded a laptop
+      // during the gate until the suite went red on timeouts alone.
+      maxWorkers: 2,
     },
   };
 });
