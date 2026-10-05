@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { createDb, loadRegionMilitaryContent, loadTownMilitaryContent, regionMilitary, townMilitary } from "@massalia/db";
 import { getBattleContent } from "./barracks.js";
 
@@ -53,11 +53,13 @@ export async function readRegionWarband(exec: Exec, worldId: string, regionId: s
   return regenerated;
 }
 
+// The marker never moves backwards (GREATEST in SQL): a muster's resolve writes
+// at its launch instant, which may be earlier than the pool's last write.
 export async function writeRegionWarband(exec: Exec, worldId: string, regionId: string, value: number, now: Date): Promise<void> {
   const v = Math.max(0, Math.floor(value));
   const updated = await exec
     .update(regionMilitary)
-    .set({ warband: v, updatedAt: now })
+    .set({ warband: v, updatedAt: sql`GREATEST(${regionMilitary.updatedAt}, ${now.toISOString()}::timestamptz)` })
     .where(and(eq(regionMilitary.worldId, worldId), eq(regionMilitary.regionId, regionId)))
     .returning({ regionId: regionMilitary.regionId });
   if (!updated.length) await exec.insert(regionMilitary).values({ worldId, regionId, warband: v, updatedAt: now }).onConflictDoNothing();
@@ -110,7 +112,11 @@ export async function readTownGarrison(exec: Exec, worldId: string, townId: stri
 export async function writeTownGarrison(exec: Exec, worldId: string, townId: string, value: number, now: Date): Promise<void> {
   const v = Math.max(0, Math.floor(value));
   await townRow(exec, worldId, townId, now);
-  await exec.update(townMilitary).set({ garrison: v, updatedAt: now }).where(and(eq(townMilitary.worldId, worldId), eq(townMilitary.townId, townId)));
+  // Never backwards, as writeRegionWarband.
+  await exec
+    .update(townMilitary)
+    .set({ garrison: v, updatedAt: sql`GREATEST(${townMilitary.updatedAt}, ${now.toISOString()}::timestamptz)` })
+    .where(and(eq(townMilitary.worldId, worldId), eq(townMilitary.townId, townId)));
 }
 
 // The town's fleet as it stands (unchanged by battle in v1).
