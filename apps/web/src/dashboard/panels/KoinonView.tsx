@@ -771,8 +771,8 @@ export function KoinonView({ onRefresh }: PanelProps) {
                   <div className="koinon-bar" role="progressbar" aria-label="Toward the Lesche" aria-valuemin={0} aria-valuemax={rules.lescheCost} aria-valuenow={Math.min(koinon.treasury, rules.lescheCost)}>
                     <div className="koinon-bar-fill" style={{ width: `${rules.lescheCost > 0 ? Math.min(100, (100 * koinon.treasury) / rules.lescheCost) : 100}%` }} />
                   </div>
-                  <p className="koinon-hint">
-                    A hall for the koinon. While it stands open the koinon holds up to {rules.lescheCap} members. It costs {rules.lescheCost} drachmae from the treasury, takes {rules.lescheBuildDays} days to build, and {rules.lescheUpkeep} drachmae a day to keep.
+                  <p className="koinon-hint" data-lesche-details>
+                    Holds {rules.lescheCap} · {rules.lescheBuildDays} days to build · {rules.lescheUpkeep} dr a day
                   </p>
                 </>
               ) : hall.phase === "building" ? (

@@ -424,7 +424,9 @@ describe("KoinonView · the treasury and the Lesche", () => {
     const bar = block.querySelector('[role="progressbar"]')!;
     expect([bar.getAttribute("aria-valuenow"), bar.getAttribute("aria-valuemax")]).toEqual(["140", "200"]);
     expect(bar.querySelector<HTMLElement>(".koinon-bar-fill")!.style.width).toBe("70%");
-    expect(block.textContent).toContain("A hall for the koinon. While it stands open the koinon holds up to 12 members. It costs 200 drachmae from the treasury, takes 2 days to build, and 5 drachmae a day to keep.");
+    // One line of details under the bar, every number from the rules block.
+    expect(block.querySelector("[data-lesche-details]")!.textContent).toBe("Holds 12 · 2 days to build · 5 dr a day");
+    expect(block.textContent).not.toContain("A hall for the koinon.");
     // One row: the amount, Give, and Build.
     expect(buttons(card.querySelector("form.koinon-give")!)).toEqual(["Give", "Build · 200"]);
     const build = card.querySelector<HTMLButtonElement>('[data-action="lesche"]')!;
@@ -452,7 +454,7 @@ describe("KoinonView · the treasury and the Lesche", () => {
 
     for (const viewer of ["deon", "nikias"] as const) {
       const plain = await mount(at(viewer, 900));
-      expect(lesche(plain.container)!.textContent).toContain("A hall for the koinon.");
+      expect(lesche(plain.container)!.querySelector("[data-lesche-details]")!.textContent).toBe("Holds 12 · 2 days to build · 5 dr a day");
       expect(lesche(plain.container)!.querySelector(".koinon-bar")).not.toBeNull();
       expect(buttons(section(plain.container, "treasury")!)).toEqual(["Give"]);
       expect(section(plain.container, "treasury")!.querySelector(".koinon-reason")).toBeNull();
