@@ -511,6 +511,18 @@ suite("Barracks (integration)", () => {
       expect(await wallet(ctx)).toBe(0);
     });
 
+    it("the unpaid-upkeep disband log carries the settle's clock, not the database's", async () => {
+      const { ctx, characterId } = await makePlayer({ drachmae: 0 });
+      await insertRow(ctx, { source: "trained", unitId: "hoplite", count: 10, recruitedSeason: 7, readyAt: 9, createdSeason: 9 });
+      // The settle's clock is the year 2000: far earlier than the database's now().
+      const s = await settle(ctx, 10);
+      expect(s.insolvent.map((d) => d.unitId)).toEqual(["hoplite"]);
+      const l = await logs(characterId, "barracks_disband");
+      expect(l).toHaveLength(1);
+      expect(l[0]!.detail).toMatchObject({ source: "insolvency" });
+      expect(l[0]!.createdAt.getTime()).toBe(at(10).getTime());
+    });
+
     it("a row still in training is never an insolvency victim: only rows that owe something are removed", async () => {
       const { ctx } = await makePlayer({ drachmae: 0 });
       await insertRow(ctx, { source: "band", unitId: "volcae-irregulars", count: 40, recruitedSeason: 9, contractEndAt: 20 }); // 40 dr

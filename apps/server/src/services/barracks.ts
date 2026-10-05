@@ -216,8 +216,10 @@ async function debitResource(exec: Exec, rowId: string, qty: number): Promise<bo
   return rows.length > 0;
 }
 
-async function logEffect(exec: Exec, characterId: string, kind: string, detail: Record<string, unknown>): Promise<void> {
-  await exec.insert(effectLog).values({ characterId, kind, detail });
+// `createdAt` stamps the row with the caller's own clock; without it the row
+// takes the database's.
+async function logEffect(exec: Exec, characterId: string, kind: string, detail: Record<string, unknown>, createdAt?: Date): Promise<void> {
+  await exec.insert(effectLog).values({ characterId, kind, detail, ...(createdAt ? { createdAt } : {}) });
 }
 
 // The militia gate, on the militia the character sheet shows: base plus trait
@@ -528,7 +530,9 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
       live = live.filter((r) => r.id !== victim.id);
       await exec.delete(playerUnits).where(eq(playerUnits.id, victim.id));
       if (victim.source === "trained") await levyReturn(exec, ctx, victim.count);
-      await logEffect(exec, characterId, "barracks_disband", { unitId: victim.unitId, count: victim.count, source: "insolvency" });
+      // On the settle's own clock: a muster's resolve settles at its launch
+      // instant, and the men walked then, not when the request came.
+      await logEffect(exec, characterId, "barracks_disband", { unitId: victim.unitId, count: victim.count, source: "insolvency" }, now);
       out.insolvent.push({ rowId: victim.id, unitId: victim.unitId, source: victim.source, count: victim.count });
       p = plan(live);
     }

@@ -796,7 +796,9 @@ suite("Koinon muster (integration)", () => {
     expect(report.parts.map((p) => p.playerId)).toEqual([leader]);
     // The unpaid men walked at the launch settle; the expelled member's row is exactly as it was.
     expect(await unitRow(unpaid)).toBeUndefined();
-    expect((await logs(broke, "barracks_disband")).length).toBe(1);
+    const walked = await logs(broke, "barracks_disband");
+    expect(walked.length).toBe(1);
+    expect(walked[0]!.createdAt.getTime()).toBe(LAUNCH.getTime());
     expect(JSON.stringify(await unitRow(outside))).toBe(untouched);
     for (const p of [broke, expelled]) {
       expect((await logs(p, "koinon_muster")).length).toBe(0);
