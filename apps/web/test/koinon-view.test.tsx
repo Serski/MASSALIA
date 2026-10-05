@@ -94,6 +94,8 @@ const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0))
 const buttons = (el: ParentNode) => [...el.querySelectorAll("button")].map((b) => b.textContent);
 const button = (el: ParentNode, text: string) => [...el.querySelectorAll("button")].find((b) => b.textContent === text) as HTMLButtonElement | undefined;
 const section = (c: HTMLElement, name: string) => c.querySelector<HTMLElement>(`[data-koinon="${name}"]`);
+// The Lesche's block inside the Treasury panel.
+const lesche = (c: HTMLElement) => c.querySelector<HTMLElement>('[data-koinon="treasury"] [data-lesche]');
 // A hero stat's value, by its key; null when the stat is not shown.
 const stat = (c: HTMLElement, name: string) => c.querySelector(`.koinon-hero [data-stat="${name}"] .koinon-stat-value`)?.textContent ?? null;
 const props = { player: {} as Parameters<typeof KoinonView>[0]["player"] };
@@ -220,7 +222,7 @@ describe("KoinonView · in a koinon", () => {
     const koina = section(container, "koina")!;
     expect([...koina.querySelectorAll(".koinon-row-title")].map((r) => r.textContent)).toEqual(["Sons of Protis · led by Lykos · 1 of 8", "The Sacred Band · led by Kallias · 3 of 8"]);
     const order = [...container.querySelectorAll("[data-koinon], .koinon-leave")].map((el) => el.getAttribute("data-koinon") ?? "leave");
-    expect(order).toEqual(["hero", "board", "muster", "treasury", "lesche", "members", "koina", "leave"]);
+    expect(order).toEqual(["hero", "board", "muster", "treasury", "members", "koina", "leave"]);
     // The muster's form (any member may call one), Give and Leave are all a member has.
     expect(buttons(container)).toEqual(["Massalia▾", "Salyes · by land▾", "In 30 minutes▾", "Call the muster", "Give", "Leave"]);
     expect(button(container, "Leave")!.classList.contains("danger")).toBe(true);
@@ -263,7 +265,7 @@ describe("KoinonView · in a koinon", () => {
     expect(buttons(section(container, "board")!)).toEqual(["Post", "Delete"]);
 
     // The leader's layout ends the same way: soldiers, the koina of the city, Leave.
-    expect([...container.querySelectorAll("[data-koinon], .koinon-leave")].map((el) => el.getAttribute("data-koinon") ?? "leave")).toEqual(["hero", "board", "muster", "treasury", "lesche", "members", "invite", "soldiers", "koina", "leave"]);
+    expect([...container.querySelectorAll("[data-koinon], .koinon-leave")].map((el) => el.getAttribute("data-koinon") ?? "leave")).toEqual(["hero", "board", "muster", "treasury", "members", "invite", "soldiers", "koina", "leave"]);
     const soldiers = section(container, "soldiers")!;
     const summaries = [...soldiers.querySelectorAll("summary")].map((s) => s.textContent);
     expect(summaries).toEqual(["Kallias · 0 men · levy 120", "Nikias · 30 men · levy 80"]);
@@ -342,9 +344,14 @@ describe("KoinonView · the treasury and the Lesche", () => {
     const card = section(container, "treasury")!;
     expect(card.querySelector(".koinon-head-note")!.textContent).toBe("120 drachmae");
     expect(card.textContent).toContain("Members give drachmae to the koinon. Nothing comes back out: the treasury pays only for the koinon's buildings.");
-    expect([...card.querySelectorAll("[data-giver]")].map((r) => r.textContent)).toEqual(["Kallias · 100", "Nikias · 20"]);
-    expect([...card.querySelectorAll("[data-gift]")].map((r) => r.textContent)).toEqual(["Nikias gave 20 · Spring, 300 BC", "Kallias gave 100 · Winter, 300 BC"]);
-    expect([...card.querySelectorAll(".koinon-subhead")].map((h) => h.textContent)).toEqual(["Givers", "Recent gifts"]);
+    // The most recent gift sits under the give row; All gifts holds every giver's total and the recent gifts.
+    expect(card.querySelector("form.koinon-give + [data-latest-gift]")!.textContent).toBe("Nikias gave 20 · Spring, 300 BC");
+    const all = card.querySelector("details")!;
+    expect(all.open).toBe(false);
+    expect(all.querySelector("summary")!.textContent).toBe("All gifts");
+    expect([...all.querySelectorAll("[data-giver]")].map((r) => r.textContent)).toEqual(["Kallias · 100", "Nikias · 20"]);
+    expect([...all.querySelectorAll("[data-gift]")].map((r) => r.textContent)).toEqual(["Nikias gave 20 · Spring, 300 BC", "Kallias gave 100 · Winter, 300 BC"]);
+    expect([...all.querySelectorAll(".koinon-subhead")].map((h) => h.textContent)).toEqual(["Givers", "Recent gifts"]);
 
     // A whole number, clamped to 1..min(depositMax, wallet): the wallet holds 200.
     const input = card.querySelector<HTMLInputElement>("input")!;
@@ -367,63 +374,86 @@ describe("KoinonView · the treasury and the Lesche", () => {
     const card = section(container, "treasury")!;
     expect(card.textContent).toContain("No gifts yet.");
     expect(card.querySelector(".koinon-subhead")).toBeNull();
+    expect(card.querySelector("details")).toBeNull();
+    expect(card.querySelector("[data-latest-gift]")).toBeNull();
     expect(button(card, "Give")!.disabled).toBe(true);
   });
 
-  it("no hall: the leader's Build is disabled with the reason at 499 and enabled at 500; a member sees no Build", async () => {
-    const short = await mount(inside("kallias", { treasury: 499 }));
-    const card = section(short.container, "lesche")!;
-    expect(card.textContent).toContain("A hall for the koinon. While it stands open the koinon holds up to 12 members. It costs 500 drachmae from the treasury, takes 2 days to build, and 5 drachmae a day to keep.");
+  it("no hall: the bar reads the way toward the Lesche; the leader's Build is in the give row, disabled with the reason while short and enabled at the cost; a member sees no Build", async () => {
+    // A Lesche of 200, as in content, with 140 in the treasury.
+    const at = (as: "kallias" | "deon" | "nikias", treasury: number): KoinonPage => ({ ...inside(as, { treasury }), rules: { ...rules, lescheCost: 200 } });
+    const short = await mount(at("kallias", 140));
+    const card = section(short.container, "treasury")!;
+    expect(section(short.container, "lesche")).toBeNull();
+    const block = lesche(short.container)!;
+    expect(block.getAttribute("data-lesche")).toBe("none");
+    expect(block.querySelector(".koinon-bar-label")!.textContent).toBe("Toward the Lesche140 / 200");
+    expect(block.querySelector(".koinon-bar-count")!.textContent).toBe("140 / 200");
+    const bar = block.querySelector('[role="progressbar"]')!;
+    expect([bar.getAttribute("aria-valuenow"), bar.getAttribute("aria-valuemax")]).toEqual(["140", "200"]);
+    expect(bar.querySelector<HTMLElement>(".koinon-bar-fill")!.style.width).toBe("70%");
+    expect(block.textContent).toContain("A hall for the koinon. While it stands open the koinon holds up to 12 members. It costs 200 drachmae from the treasury, takes 2 days to build, and 5 drachmae a day to keep.");
+    // One row: the amount, Give, and Build.
+    expect(buttons(card.querySelector("form.koinon-give")!)).toEqual(["Give", "Build · 200"]);
     const build = card.querySelector<HTMLButtonElement>('[data-action="lesche"]')!;
-    expect(build.textContent).toBe("Build the Lesche · 500");
     expect(build.disabled).toBe(true);
-    expect(card.querySelector(".koinon-reason")!.textContent).toBe("The treasury holds 499 drachmae.");
+    expect(build.title).toBe("The treasury holds 140 drachmae.");
+    expect(card.querySelector(".koinon-reason")!.textContent).toBe("The treasury holds 140 drachmae.");
     cleanup();
 
-    const funded = await mount(inside("kallias", { treasury: 500 }));
-    const ready = section(funded.container, "lesche")!.querySelector<HTMLButtonElement>('[data-action="lesche"]')!;
-    expect(ready.disabled).toBe(false);
-    expect(section(funded.container, "lesche")!.querySelector(".koinon-reason")).toBeNull();
+    // Past the cost the bar is full and reads the cost.
+    const funded = await mount(at("kallias", 260));
+    expect(lesche(funded.container)!.querySelector(".koinon-bar-count")!.textContent).toBe("200 / 200");
+    expect(lesche(funded.container)!.querySelector<HTMLElement>(".koinon-bar-fill")!.style.width).toBe("100%");
+    cleanup();
+    const ready = await mount(at("kallias", 200));
+    const go = section(ready.container, "treasury")!.querySelector<HTMLButtonElement>('[data-action="lesche"]')!;
+    expect(go.disabled).toBe(false);
+    expect(section(ready.container, "treasury")!.querySelector(".koinon-reason")).toBeNull();
     const order = vi.spyOn(api, "koinonBuildLesche").mockResolvedValue({ ok: true, completesAt: inHours(48), treasury: 0 });
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
-    fireEvent.click(ready);
+    fireEvent.click(go);
     await flush();
-    expect(confirm).toHaveBeenLastCalledWith("Build the Lesche for 500 drachmae from the treasury? It cannot be cancelled.");
+    expect(confirm).toHaveBeenLastCalledWith("Build the Lesche for 200 drachmae from the treasury? It cannot be cancelled.");
     expect(order).toHaveBeenCalledTimes(1);
     cleanup();
 
     for (const viewer of ["deon", "nikias"] as const) {
-      const plain = await mount(inside(viewer, { treasury: 900 }));
-      const text = section(plain.container, "lesche")!;
-      expect(text.textContent).toContain("A hall for the koinon.");
-      expect(text.querySelector("button")).toBeNull();
+      const plain = await mount(at(viewer, 900));
+      expect(lesche(plain.container)!.textContent).toContain("A hall for the koinon.");
+      expect(lesche(plain.container)!.querySelector(".koinon-bar")).not.toBeNull();
+      expect(buttons(section(plain.container, "treasury")!)).toEqual(["Give"]);
+      expect(section(plain.container, "treasury")!.querySelector(".koinon-reason")).toBeNull();
       cleanup();
     }
   });
 
   it("building shows the build bar and no Build", async () => {
     const { container } = await mount(inside("kallias", { hall: hall("building") }));
-    const card = section(container, "lesche")!;
+    const card = lesche(container)!;
+    expect(card.getAttribute("data-lesche")).toBe("building");
     expect(card.querySelector(".build-progress")).not.toBeNull();
     expect(card.querySelector(".build-progress-head")!.textContent).toContain("Building the Lesche");
-    expect(card.querySelector("button")).toBeNull();
+    // No way-toward bar and no Build while it is going up.
+    expect(card.querySelector(".koinon-bar")).toBeNull();
+    expect(buttons(section(container, "treasury")!)).toEqual(["Give"]);
     expect(stat(container, "members")).toBe("3 / 8");
   });
 
   it("open shows the covered-days line and the hero reads 9 / 12", async () => {
     const nine = ["kallias", "deon", "nikias", "m4", "m5", "m6", "m7", "m8", "m9"].map((id, i) => member(id, id, i === 0 ? "leader" : i === 1 ? "vice" : "member"));
     const { container } = await mount(inside("nikias", { cap: 12, members: nine, hall: hall("open", { completesAt: inHours(-48), paidUntil: inHours(12), daysCovered: 24 }) }));
-    expect(section(container, "lesche")!.textContent).toContain("Open. Up to 12 members. Upkeep 5 drachmae a day; the treasury covers 24 more days.");
+    expect(lesche(container)!.textContent).toBe("Open. Up to 12 members. Upkeep 5 drachmae a day; the treasury covers 24 more days.");
     expect(stat(container, "members")).toBe("9 / 12");
     expect(section(container, "members")!.querySelector(".koinon-head-note")!.textContent).toBe("9 of 12");
-    expect(section(container, "lesche")!.querySelector(".build-progress")).toBeNull();
+    expect(lesche(container)!.querySelector(".build-progress")).toBeNull();
   });
 
   it("shut shows the reopen line", async () => {
     const { container } = await mount(inside("kallias", { treasury: 3, hall: hall("shut", { completesAt: inHours(-96), paidUntil: inHours(-48) }) }));
-    const card = section(container, "lesche")!;
-    expect(card.textContent).toContain("Shut: the treasury could not pay its upkeep. No one new joins past 8 until it reopens. It reopens when the treasury holds 5 drachmae.");
-    expect(card.querySelector("button")).toBeNull();
+    const card = lesche(container)!;
+    expect(card.textContent).toBe("Shut: the treasury could not pay its upkeep. No one new joins past 8 until it reopens. It reopens when the treasury holds 5 drachmae.");
+    expect(buttons(section(container, "treasury")!)).toEqual(["Give"]);
   });
 
   it("keeps its hook order through none, building, open and shut", async () => {
@@ -433,14 +463,14 @@ describe("KoinonView · the treasury and the Lesche", () => {
     vi.spyOn(api, "koinonPost").mockResolvedValue({ ok: true, postId: "p9" });
     const { container } = render(<KoinonView {...props} onRefresh={() => {}} />);
     await flush();
-    expect(section(container, "lesche")!.querySelector('[data-action="lesche"]')).not.toBeNull();
+    expect(section(container, "treasury")!.querySelector('[data-action="lesche"]')).not.toBeNull();
     // Each action reloads the page; the same component walks the hall's phases.
     for (const [phase, sign] of [["building", ".build-progress"], ["open", ".koinon-hint"], ["shut", ".koinon-hint"]] as const) {
       page.mockResolvedValue(inside("kallias", { hall: hall(phase) }));
       fireEvent.change(container.querySelector("textarea")!, { target: { value: "Word." } });
       fireEvent.click(button(section(container, "board")!, "Post")!);
       await flush();
-      expect(section(container, "lesche")!.querySelector(sign), phase).not.toBeNull();
+      expect(lesche(container)!.querySelector(sign), phase).not.toBeNull();
     }
     expect(errors).not.toHaveBeenCalled();
   });
@@ -478,7 +508,7 @@ describe("KoinonView · the read when the Lesche stands", () => {
     const { container } = render(<KoinonView {...props} onRefresh={() => {}} />);
     await tick(0);
     expect(page).toHaveBeenCalledTimes(1);
-    expect(section(container, "lesche")!.querySelector(".build-progress")).not.toBeNull();
+    expect(lesche(container)!.querySelector(".build-progress")).not.toBeNull();
 
     await tick(2 * MIN);
     expect(page).toHaveBeenCalledTimes(1);
@@ -496,7 +526,7 @@ describe("KoinonView · the read when the Lesche stands", () => {
     page.mockResolvedValue(inside("kallias", { cap: 12, hall: hall("open", { completesAt: iso(completes), paidUntil: iso(completes + 24 * 60 * MIN), daysCovered: 23 }) }));
     await tick(3000);
     expect(page).toHaveBeenCalledTimes(3);
-    expect(section(container, "lesche")!.textContent).toContain("Open. Up to 12 members.");
+    expect(lesche(container)!.textContent).toContain("Open. Up to 12 members.");
     // An open hall arms nothing.
     await tick(60 * MIN);
     expect(page).toHaveBeenCalledTimes(3);

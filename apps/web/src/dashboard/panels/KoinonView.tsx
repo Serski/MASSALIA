@@ -730,8 +730,38 @@ export function KoinonView({ onRefresh }: PanelProps) {
         </div>
 
         <aside className="koinon-rail">
+          {/* The treasury and the Lesche it pays for. The hall's four phases
+              all show here: the way toward it, the build, open, or shut. */}
           <KoinonCard title="Treasury" section="treasury" note={`${koinon.treasury} drachmae`}>
             <p className="koinon-hint">Members give drachmae to the koinon. Nothing comes back out: the treasury pays only for the koinon's buildings.</p>
+            <div className="koinon-lesche" data-lesche={hall.phase}>
+              {hall.phase === "none" ? (
+                <>
+                  <div className="koinon-bar-label">
+                    <span>Toward the Lesche</span>
+                    <span className="koinon-bar-count">
+                      {Math.min(koinon.treasury, rules.lescheCost)} / {rules.lescheCost}
+                    </span>
+                  </div>
+                  <div className="koinon-bar" role="progressbar" aria-label="Toward the Lesche" aria-valuemin={0} aria-valuemax={rules.lescheCost} aria-valuenow={Math.min(koinon.treasury, rules.lescheCost)}>
+                    <div className="koinon-bar-fill" style={{ width: `${rules.lescheCost > 0 ? Math.min(100, (100 * koinon.treasury) / rules.lescheCost) : 100}%` }} />
+                  </div>
+                  <p className="koinon-hint">
+                    A hall for the koinon. While it stands open the koinon holds up to {rules.lescheCap} members. It costs {rules.lescheCost} drachmae from the treasury, takes {rules.lescheBuildDays} days to build, and {rules.lescheUpkeep} drachmae a day to keep.
+                  </p>
+                </>
+              ) : hall.phase === "building" ? (
+                <BuildProgress label="Building the Lesche" startedAt={hall.startedAt} completesAt={hall.completesAt} offset={offset} />
+              ) : hall.phase === "open" ? (
+                <p className="koinon-hint">
+                  Open. Up to {rules.lescheCap} members. Upkeep {rules.lescheUpkeep} drachmae a day; the treasury covers {hall.daysCovered} more days.
+                </p>
+              ) : (
+                <p className="koinon-hint">
+                  Shut: the treasury could not pay its upkeep. No one new joins past {rules.memberCap} until it reopens. It reopens when the treasury holds {rules.lescheUpkeep} drachmae.
+                </p>
+              )}
+            </div>
             <form
               className="koinon-form koinon-give"
               onSubmit={(event) => {
@@ -754,60 +784,47 @@ export function KoinonView({ onRefresh }: PanelProps) {
               <button type="submit" className="panel-btn" data-action="give" disabled={busy || giveMax < 1}>
                 Give
               </button>
+              {leads && hall.phase === "none" ? (
+                <button
+                  type="button"
+                  className="panel-btn"
+                  data-action="lesche"
+                  disabled={busy || koinon.treasury < rules.lescheCost}
+                  title={koinon.treasury < rules.lescheCost ? `The treasury holds ${koinon.treasury} drachmae.` : undefined}
+                  onClick={() => confirmThen(`Build the Lesche for ${rules.lescheCost} drachmae from the treasury? It cannot be cancelled.`, () => api.koinonBuildLesche())}
+                >
+                  Build · {rules.lescheCost}
+                </button>
+              ) : null}
             </form>
-            {koinon.givers.length === 0 ? (
+            {leads && hall.phase === "none" && koinon.treasury < rules.lescheCost ? <p className="koinon-reason">The treasury holds {koinon.treasury} drachmae.</p> : null}
+            {koinon.gifts.length === 0 && koinon.givers.length === 0 ? (
               <p className="koinon-empty">No gifts yet.</p>
             ) : (
               <>
-                <div className="koinon-subhead">Givers</div>
-                {koinon.givers.map((giver) => (
-                  <div key={giver.playerId} className="koinon-line" data-giver={giver.playerId}>
-                    {giver.name} <span className="koinon-dim">· {giver.total}</span>
+                {koinon.gifts[0] ? (
+                  <div className="koinon-line" data-latest-gift={koinon.gifts[0].id}>
+                    {koinon.gifts[0].name} gave {koinon.gifts[0].amount} <span className="koinon-dim">· {koinon.gifts[0].label}</span>
                   </div>
-                ))}
-                <div className="koinon-subhead">Recent gifts</div>
-                {koinon.gifts.map((gift) => (
-                  <div key={gift.id} className="koinon-line" data-gift={gift.id}>
-                    {gift.name} gave {gift.amount} <span className="koinon-dim">· {gift.label}</span>
-                  </div>
-                ))}
-              </>
-            )}
-          </KoinonCard>
-
-          <KoinonCard title="Lesche" section="lesche">
-            {hall.phase === "none" ? (
-              <>
-                <p className="koinon-hint">
-                  A hall for the koinon. While it stands open the koinon holds up to {rules.lescheCap} members. It costs {rules.lescheCost} drachmae from the treasury, takes {rules.lescheBuildDays} days to build, and {rules.lescheUpkeep} drachmae a day to keep.
-                </p>
-                {leads ? (
-                  <>
-                    <div className="koinon-actions koinon-actions-start">
-                      <button
-                        type="button"
-                        className="panel-btn"
-                        data-action="lesche"
-                        disabled={busy || koinon.treasury < rules.lescheCost}
-                        onClick={() => confirmThen(`Build the Lesche for ${rules.lescheCost} drachmae from the treasury? It cannot be cancelled.`, () => api.koinonBuildLesche())}
-                      >
-                        Build the Lesche · {rules.lescheCost}
-                      </button>
-                    </div>
-                    {koinon.treasury < rules.lescheCost ? <p className="koinon-reason">The treasury holds {koinon.treasury} drachmae.</p> : null}
-                  </>
                 ) : null}
+                <details className="koinon-more" data-koinon-more="gifts">
+                  <summary>All gifts</summary>
+                  <div className="koinon-more-body">
+                    <div className="koinon-subhead">Givers</div>
+                    {koinon.givers.map((giver) => (
+                      <div key={giver.playerId} className="koinon-line" data-giver={giver.playerId}>
+                        {giver.name} <span className="koinon-dim">· {giver.total}</span>
+                      </div>
+                    ))}
+                    <div className="koinon-subhead">Recent gifts</div>
+                    {koinon.gifts.map((gift) => (
+                      <div key={gift.id} className="koinon-line" data-gift={gift.id}>
+                        {gift.name} gave {gift.amount} <span className="koinon-dim">· {gift.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
               </>
-            ) : hall.phase === "building" ? (
-              <BuildProgress label="Building the Lesche" startedAt={hall.startedAt} completesAt={hall.completesAt} offset={offset} />
-            ) : hall.phase === "open" ? (
-              <p className="koinon-hint">
-                Open. Up to {rules.lescheCap} members. Upkeep {rules.lescheUpkeep} drachmae a day; the treasury covers {hall.daysCovered} more days.
-              </p>
-            ) : (
-              <p className="koinon-hint">
-                Shut: the treasury could not pay its upkeep. No one new joins past {rules.memberCap} until it reopens. It reopens when the treasury holds {rules.lescheUpkeep} drachmae.
-              </p>
             )}
           </KoinonCard>
 
