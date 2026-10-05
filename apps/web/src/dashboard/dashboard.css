@@ -4266,7 +4266,13 @@
 .dashboard-shell .koinon-unit-name{ color: var(--dash-parchment); font-size: 13px; }
 .dashboard-shell .koinon-unit-sub{ color: var(--dash-stone-dim); font-size: 11.5px; }
 .dashboard-shell .koinon-fleet{ margin: 0; color: var(--dash-stone); font-size: 12.5px; }
-.dashboard-shell .koinon-leave{ display: flex; justify-content: flex-end; }
+.dashboard-shell .koinon-leave{ display: flex; justify-content: flex-end; min-width: 0; }
+.dashboard-shell .koinon-leave .koinon-link{ color: var(--danger-text); text-align: right; overflow-wrap: anywhere; }
+.dashboard-shell .koinon-leave .koinon-link:not(:disabled):hover{ color: var(--cream); }
+/* Koina of the city: compact rows under thin dividers, the seats at the right. */
+.dashboard-shell .koinon-city-row{ padding: 7px 0; border-top-color: var(--line); }
+.dashboard-shell .koinon-city-row .koinon-row-title{ font-size: 13px; }
+.dashboard-shell .koinon-city-seats{ flex: none; color: var(--dash-stone); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* The treasury and the Lesche (koinon prompt 2). */
 .dashboard-shell .koinon-give{ flex-wrap: wrap; }
 .dashboard-shell .koinon-give .koinon-amount{ flex: 1 1 90px; font-variant-numeric: tabular-nums; }

@@ -110,19 +110,23 @@ function MemberSoldiers({ member, now }: { member: KoinonArmies["members"][numbe
   );
 }
 
-// Every live koinon of the city: name, leader, members. Shown to everyone, a
-// member's own koinon among the rest.
+// Every live koinon of the city, one compact row each: the name and who leads
+// it on the left, its seats on the right. Shown to everyone, a member's own
+// koinon among the rest.
 function KoinaOfTheCity({ koina }: { koina: KoinonPage["koina"] }) {
   return (
     <KoinonCard title="Koina of the city" section="koina">
       {koina.length === 0 ? <p className="koinon-empty">No koina yet.</p> : null}
       {koina.map((k) => (
-        <div key={k.id} className="koinon-row">
+        <div key={k.id} className="koinon-row koinon-city-row" data-city={k.id}>
           <div className="koinon-row-body">
             <div className="koinon-row-title">
-              {k.name} <span className="koinon-dim">· led by {k.leaderName} · {k.members} of {k.cap}</span>
+              {k.name} <span className="koinon-dim">· led by {k.leaderName}</span>
             </div>
           </div>
+          <span className="koinon-city-seats">
+            {k.members} of {k.cap}
+          </span>
         </div>
       ))}
     </KoinonCard>
@@ -912,9 +916,10 @@ export function KoinonView({ onRefresh }: PanelProps) {
 
           <KoinaOfTheCity koina={page.koina} />
 
+          {/* A quiet link under the rail, not a boxed button; the confirm is unchanged. */}
           <div className="koinon-leave">
-            <button type="button" className="panel-btn danger" data-action="leave" disabled={busy} onClick={() => confirmThen(leaveText, () => api.koinonLeave())}>
-              Leave
+            <button type="button" className="koinon-link" data-action="leave" disabled={busy} onClick={() => confirmThen(leaveText, () => api.koinonLeave())}>
+              Leave {koinon.name}
             </button>
           </div>
         </aside>

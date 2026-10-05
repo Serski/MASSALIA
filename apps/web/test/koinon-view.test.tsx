@@ -96,6 +96,9 @@ const button = (el: ParentNode, text: string) => [...el.querySelectorAll("button
 const section = (c: HTMLElement, name: string) => c.querySelector<HTMLElement>(`[data-koinon="${name}"]`);
 // The Lesche's block inside the Treasury panel.
 const lesche = (c: HTMLElement) => c.querySelector<HTMLElement>('[data-koinon="treasury"] [data-lesche]');
+// Koina of the city: each row's left text and its seats at the right.
+const cityRows = (c: HTMLElement) => [...c.querySelectorAll('[data-koinon="koina"] [data-city]')].map((r) => [r.querySelector(".koinon-row-title")!.textContent, r.querySelector(".koinon-city-seats")!.textContent]);
+const leaveButton = (c: HTMLElement) => c.querySelector<HTMLButtonElement>('[data-action="leave"]')!;
 // The inline invite at the bottom of the Members panel (leader and vice).
 const invite = (c: HTMLElement) => c.querySelector<HTMLElement>('[data-koinon="members"] [data-members="invite"]');
 // A hero stat's value, by its key; null when the stat is not shown.
@@ -161,7 +164,7 @@ describe("KoinonView · not in a koinon", () => {
     expect(invitations.textContent).toContain("The Sacred Band · invited by Kallias · 48h left");
     expect(invitations.textContent).toContain("Accepting lets its leader see your soldiers.");
     expect(buttons(invitations)).toEqual(["Accept", "Decline"]);
-    expect(section(container, "koina")!.textContent).toContain("The Sacred Band · led by Kallias · 3 of 8");
+    expect(cityRows(container)).toEqual([["The Sacred Band · led by Kallias", "3 of 8"]]);
 
     fireEvent.click(button(invitations, "Accept")!);
     await flush();
@@ -223,13 +226,15 @@ describe("KoinonView · in a koinon", () => {
     expect(rows.map((r) => r.querySelector(".koinon-row-title")!.textContent)).toEqual(["Kallias of House Iason Leader", "Deon of House Iason Vice", "Nikias of House Iason "]);
     expect(rows[1]!.querySelector(".koinon-row-sub")!.textContent).toBe("Trader · Dynatoi · Joined Winter, 300 BC");
     // A member sees the koina of the city too, his own among them, above Leave.
-    const koina = section(container, "koina")!;
-    expect([...koina.querySelectorAll(".koinon-row-title")].map((r) => r.textContent)).toEqual(["Sons of Protis · led by Lykos · 1 of 8", "The Sacred Band · led by Kallias · 3 of 8"]);
+    expect(cityRows(container)).toEqual([["Sons of Protis · led by Lykos", "1 of 8"], ["The Sacred Band · led by Kallias", "3 of 8"]]);
     const order = [...container.querySelectorAll("[data-koinon], .koinon-leave")].map((el) => el.getAttribute("data-koinon") ?? "leave");
     expect(order).toEqual(["hero", "board", "muster", "treasury", "members", "koina", "leave"]);
     // The muster's form (any member may call one), Give and Leave are all a member has.
-    expect(buttons(container)).toEqual(["Massalia▾", "Salyes · by land▾", "In 30 minutes▾", "Call the muster", "Give", "Leave"]);
-    expect(button(container, "Leave")!.classList.contains("danger")).toBe(true);
+    expect(buttons(container)).toEqual(["Massalia▾", "Salyes · by land▾", "In 30 minutes▾", "Call the muster", "Give", "Leave The Sacred Band"]);
+    // Leave is a quiet text button at the end of the rail, not a boxed one.
+    const leave = leaveButton(container);
+    expect(leave.className).toBe("koinon-link");
+    expect(container.querySelector(".koinon-rail")!.lastElementChild!.contains(leave)).toBe(true);
   });
 
   it("the vice has the post form and Invite with the pending list, but no soldiers", async () => {
@@ -321,20 +326,21 @@ describe("KoinonView · in a koinon", () => {
     expect(expel).toHaveBeenCalledWith("nikias");
     expect(onRefresh).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(button(container, "Leave")!);
+    fireEvent.click(leaveButton(container));
     expect(confirm).toHaveBeenLastCalledWith("Leave The Sacred Band? You cannot join or found another koinon for 24 hours. The lead passes to Deon.");
   });
 
   it("the last member's Leave says the koinon ends; a member's says nothing of the lead", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     const alone = await mount(inside("kallias", { members: [member("kallias", "Kallias", "leader")], vicePlayerId: null }));
-    fireEvent.click(button(alone.container, "Leave")!);
+    fireEvent.click(leaveButton(alone.container));
     // The last member's leave names the treasury that goes to the city.
     expect(confirm).toHaveBeenLastCalledWith("Leave The Sacred Band? You cannot join or found another koinon for 24 hours. No one is left to take it: the koinon ends, and its treasury of 120 drachmae goes to the city.");
     cleanup();
 
     const plain = await mount(inside("nikias"));
-    fireEvent.click(button(plain.container, "Leave")!);
+    expect(leaveButton(plain.container).textContent).toBe("Leave The Sacred Band");
+    fireEvent.click(leaveButton(plain.container));
     expect(confirm).toHaveBeenLastCalledWith("Leave The Sacred Band? You cannot join or found another koinon for 24 hours.");
   });
 
@@ -1038,6 +1044,10 @@ describe("KoinonView · the page's panels", () => {
   it("a non-member's panels take the same titles and no band", async () => {
     const { container } = await mount(outsider({}, [{ id: "i1", koinonId: "k1", koinonName: "The Sacred Band", inviterName: "Kallias", expiresAt: inHours(40) }]));
     expect([...container.querySelectorAll(".koinon-title")].map((t) => t.textContent)).toEqual(["Your invitations", "Found a koinon", "Koina of the city"]);
+    expect([...container.querySelectorAll("[data-koinon]")].map((el) => el.getAttribute("data-koinon"))).toEqual(["invitations", "found", "koina"]);
+    // No hero, no grid and no Leave for someone who is in no koinon.
+    expect(container.querySelector(".koinon-hero, .koinon-grid, .koinon-leave")).toBeNull();
+    expect(cityRows(container)).toEqual([["The Sacred Band · led by Kallias", "3 of 8"]]);
     expect(container.querySelector(".meander")).toBeNull();
     expect(container.querySelector(".koinon-card.warm")).toBeNull();
   });
