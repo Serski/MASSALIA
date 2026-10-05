@@ -2,7 +2,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { api, ApiError, type KoinonArmies, type KoinonArmyRow, type KoinonLastMuster, type KoinonMember, type KoinonMissionKind, type KoinonMuster, type KoinonMusterMine, type KoinonMusterTargets, type KoinonPage } from "../../api.js";
 import { professions } from "../../data/league.js";
 import { LobbyPortrait } from "../../lobby/LobbyPortrait.js";
-import { AssetIcon, BuildProgress, ChoicePicker, DashboardCard, formatDuration, HouseCrest, onDeviceClock, type PanelProps, titleCase, useCountdownSeconds } from "../shared.js";
+import { AssetIcon, BuildProgress, ChoicePicker, formatDuration, HouseCrest, onDeviceClock, type PanelProps, titleCase, useCountdownSeconds } from "../shared.js";
 
 // --- The koinon (koinon prompt 1) — a Politics tab ---------------------------
 // A player-made company of citizens. The page comes from GET /api/koinon and is
@@ -29,21 +29,22 @@ export function awayLine(row: { missionKind: KoinonMissionKind; targetName: stri
   return `${MISSION_VERB[row.missionKind]} ${row.targetName}`;
 }
 
-// A framed card in the council tab's look: the Greek-key band, a spaced label
-// over a ruled line, then the body.
-function KoinonCard({ title, note, section, children }: { title: string; note?: ReactNode; section: string; children: ReactNode }) {
+// A framed panel: the title in bright Cinzel, one thin rule after it (the
+// head's note, when there is one, at the right of that row), then the body.
+// `warm` is the Muster's border; `band` puts the Greek-key band on top.
+function KoinonCard({ title, note, section, warm = false, band = false, children }: { title: string; note?: ReactNode; section: string; warm?: boolean; band?: boolean; children: ReactNode }) {
   return (
-    <DashboardCard className="chamber-card koinon-card">
-      <div className="meander" aria-hidden="true" />
+    <section className={`koinon-card${warm ? " warm" : ""}`}>
+      {band ? <div className="meander" aria-hidden="true" /> : null}
       <div className="koinon-body" data-koinon={section}>
-        <div className="chamber-head">
-          <span className="chamber-head-label">{title}</span>
-          <span className="chamber-rule" aria-hidden="true" />
+        <div className="koinon-head">
+          <span className="koinon-title">{title}</span>
+          <span className="koinon-rule" aria-hidden="true" />
           {note ? <span className="koinon-head-note">{note}</span> : null}
         </div>
         {children}
       </div>
-    </DashboardCard>
+    </section>
   );
 }
 
@@ -612,7 +613,7 @@ export function KoinonView({ onRefresh }: PanelProps) {
     <div className="pol-page koinon-page">
       {status}
 
-      <KoinonCard title={koinon.name} section="header" note={`${koinon.members.length} of ${koinon.cap}`}>
+      <KoinonCard title={koinon.name} section="header" band note={`${koinon.members.length} of ${koinon.cap}`}>
         <p className="koinon-facts">
           Founded {koinon.foundedLabel}
           {leader ? <> · Leader {leader.name}</> : null}
@@ -671,7 +672,7 @@ export function KoinonView({ onRefresh }: PanelProps) {
         ))}
       </KoinonCard>
 
-      <KoinonCard title="Muster" section="muster">
+      <KoinonCard title="Muster" section="muster" warm>
         {koinon.muster ? (
           <MusterOpen muster={koinon.muster} stamp={page} offset={offset} busy={busy} run={run} />
         ) : (

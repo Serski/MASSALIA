@@ -859,6 +859,29 @@ describe("KoinonView · the muster", () => {
   });
 });
 
+describe("KoinonView · the page's panels", () => {
+  it("every panel is headed by its title and one thin rule; only the Muster's border is warm; the Greek-key band appears once", async () => {
+    const { container } = await mount(inside("kallias"));
+    const cards = [...container.querySelectorAll(".koinon-card")];
+    expect(cards.length).toBeGreaterThan(5);
+    for (const card of cards) {
+      expect(card.querySelector(".koinon-head .koinon-title"), card.textContent ?? "").not.toBeNull();
+      expect(card.querySelectorAll(".koinon-head .koinon-rule").length).toBe(1);
+    }
+    expect(cards.filter((c) => c.classList.contains("warm")).map((c) => c.querySelector("[data-koinon]")!.getAttribute("data-koinon"))).toEqual(["muster"]);
+    expect(container.querySelectorAll(".meander").length).toBe(1);
+    // Nothing is left of the council tab's card dress.
+    expect(container.querySelector(".chamber-card, .chamber-head, .chamber-rule")).toBeNull();
+  });
+
+  it("a non-member's panels take the same titles and no band", async () => {
+    const { container } = await mount(outsider({}, [{ id: "i1", koinonId: "k1", koinonName: "The Sacred Band", inviterName: "Kallias", expiresAt: inHours(40) }]));
+    expect([...container.querySelectorAll(".koinon-title")].map((t) => t.textContent)).toEqual(["Your invitations", "Found a koinon", "Koina of the city"]);
+    expect(container.querySelector(".meander")).toBeNull();
+    expect(container.querySelector(".koinon-card.warm")).toBeNull();
+  });
+});
+
 describe("KoinonView · hooks and wording", () => {
   it("keeps its hook order from loading to a non-member to a leader", async () => {
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});

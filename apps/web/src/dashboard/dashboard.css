@@ -13,6 +13,8 @@
   --dash-bad: var(--danger-text);
   --dash-ref: #7fa6b3;
   --dash-line: rgba(var(--accent-rgb), 0.22);
+  /* The Koinon page's warmer panel border (its Muster panel). */
+  --line-warm: #6b3a1c;
 
   position: relative;
   min-height: 100vh;
@@ -4174,12 +4176,17 @@
   .dashboard-shell .barracks-stepper .panel-btn:last-child{ margin-left: auto; }
 }
 
-/* The Koinon tab (koinon prompt 1): the council tab's kiln-black cards under a
-   Greek-key band. Square corners, flat buttons, cream and stone text; the
-   terracotta stays in frames and rules. */
+/* The Koinon tab (koinon prompt 1; laid out anew in koinon redesign prompt 1):
+   kiln-black panels with a quiet border, each headed by its title in bright
+   Cinzel and one thin rule. Square corners, flat buttons, cream and stone text.
+   The Greek-key band is the top panel's alone; the Muster's border is warmer. */
 .dashboard-shell .koinon-tab-count{ display: inline-grid; min-width: 16px; height: 16px; margin-left: 2px; padding: 0 4px; place-items: center; color: var(--cream); font-family: var(--font-body); font-size: 10px; font-weight: 600; letter-spacing: 0; background: rgba(125, 135, 148, 0.36); border: 1px solid rgba(125, 135, 148, 0.58); }
 .dashboard-shell .koinon-page{ display: grid; gap: 14px; }
-.dashboard-shell .koinon-page .koinon-card{ margin-bottom: 0; }
+.dashboard-shell .koinon-card{ min-width: 0; background: var(--card); border: 1px solid var(--line); }
+.dashboard-shell .koinon-card.warm{ border-color: var(--line-warm); }
+.dashboard-shell .koinon-head{ display: flex; align-items: center; gap: 12px; min-width: 0; }
+.dashboard-shell .koinon-title{ flex: 0 1 auto; min-width: 0; color: var(--accent-bright); font-family: var(--font-display); font-size: 12px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; overflow-wrap: anywhere; }
+.dashboard-shell .koinon-rule{ flex: 1; min-width: 16px; height: 1px; background: var(--line); }
 .dashboard-shell .koinon-lede{ margin: 0; color: var(--dash-parchment); font-size: 14px; line-height: 1.5; }
 .dashboard-shell .koinon-note{ margin: 0; }
 .dashboard-shell .koinon-body{ display: grid; gap: 10px; padding: 14px 18px 16px; }
@@ -4190,8 +4197,8 @@
 .dashboard-shell .koinon-empty{ margin: 0; color: var(--dash-stone-dim); font-size: 12.5px; font-style: italic; }
 .dashboard-shell .koinon-dim{ color: var(--dash-stone); font-weight: 400; }
 .dashboard-shell .koinon-row{ display: flex; align-items: center; gap: 12px; min-width: 0; padding: 9px 0; border-top: 1px solid var(--dash-line); }
-.dashboard-shell .koinon-body > .chamber-head + .koinon-row,
-.dashboard-shell .koinon-body > .chamber-head + .koinon-army{ border-top: none; }
+.dashboard-shell .koinon-body > .koinon-head + .koinon-row,
+.dashboard-shell .koinon-body > .koinon-head + .koinon-army{ border-top: none; }
 .dashboard-shell .koinon-row-body{ flex: 1; min-width: 0; }
 .dashboard-shell .koinon-row-title{ color: var(--dash-parchment); font-size: 13.5px; line-height: 1.35; overflow-wrap: anywhere; }
 .dashboard-shell .koinon-row-title .crest-icon{ margin: 0 0 0 4px; vertical-align: -3px; }
