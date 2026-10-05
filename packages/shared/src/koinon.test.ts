@@ -12,6 +12,7 @@ const content: KoinonContent = {
   post: { maxChars: 300, kept: 20 },
   deposit: { max: 10000 },
   lesche: { cost: 500, buildDays: 2, upkeepPerDay: 5, memberCap: 12 },
+  muster: { minLeadMinutes: 30, maxLeadHours: 24 },
 };
 
 describe("koinon content", () => {
@@ -45,6 +46,13 @@ describe("koinon content", () => {
     expect(() => parseKoinonContent({ ...content, deposit: { max: 0 } })).toThrow();
     expect(() => parseKoinonContent({ ...content, lesche: { ...content.lesche, upkeepPerDay: 0 } })).toThrow();
     expect(() => parseKoinonContent({ ...content, lesche: { cost: 500, buildDays: 2, memberCap: 12 } })).toThrow();
+  });
+
+  it("refuses a muster lead whose minimum is longer than its maximum, and a missing muster block", () => {
+    expect(() => parseKoinonContent({ ...content, muster: { minLeadMinutes: 121, maxLeadHours: 2 } })).toThrow(/muster\.minLeadMinutes/);
+    expect(parseKoinonContent({ ...content, muster: { minLeadMinutes: 120, maxLeadHours: 2 } }).muster.minLeadMinutes).toBe(120);
+    const { muster: _muster, ...noMuster } = content;
+    expect(() => parseKoinonContent(noMuster)).toThrow();
   });
 
   it("rejects a name range that runs backwards", () => {

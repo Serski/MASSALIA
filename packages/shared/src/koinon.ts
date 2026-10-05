@@ -26,9 +26,13 @@ export const koinonContentSchema = z
     // the member cap while it stands open.
     deposit: z.object({ max: positiveInt }),
     lesche: z.object({ cost: positiveInt, buildDays: positiveInt, upkeepPerDay: positiveInt, memberCap: positiveInt }),
+    // Koinon prompt 3: how far ahead a muster may be set to march. One season
+    // is 24 hours, so maxLeadHours 24 is "at most one season ahead".
+    muster: z.object({ minLeadMinutes: positiveInt, maxLeadHours: positiveInt }),
   })
   .refine((c) => c.name.min <= c.name.max, { path: ["name"], message: "name.min must not exceed name.max" })
-  .refine((c) => c.lesche.memberCap > c.memberCap, { path: ["lesche", "memberCap"], message: "lesche.memberCap must be above memberCap" });
+  .refine((c) => c.lesche.memberCap > c.memberCap, { path: ["lesche", "memberCap"], message: "lesche.memberCap must be above memberCap" })
+  .refine((c) => c.muster.minLeadMinutes <= c.muster.maxLeadHours * 60, { path: ["muster", "minLeadMinutes"], message: "muster.minLeadMinutes must not exceed maxLeadHours" });
 
 export type KoinonContent = z.infer<typeof koinonContentSchema>;
 
