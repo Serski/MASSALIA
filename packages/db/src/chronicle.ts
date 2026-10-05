@@ -3,6 +3,7 @@ import {
   buildChronicle,
   CHRONICLE_EFFECT_LOG_KINDS,
   isChronicleKoinonKind,
+  isChronicleMusterKind,
   isChronicleStoryKind,
   OLYMPIAD_GAMES_FESTIVAL_ID,
   type ChronicleAfflictionRow,
@@ -11,6 +12,7 @@ import {
   type ChronicleEntry,
   type ChronicleInput,
   type ChronicleKoinonRow,
+  type ChronicleMusterRow,
   type ChronicleStoryRow,
   type DeathCause,
 } from "@massalia/shared";
@@ -254,6 +256,7 @@ export async function gatherChronicleForCharacter(characterId: string): Promise<
   const campaigns: ChronicleCampaignRow[] = [];
   const storyLines: ChronicleStoryRow[] = [];
   const koinonLines: ChronicleKoinonRow[] = [];
+  const musterLines: ChronicleMusterRow[] = [];
   for (const row of effectRows) {
     const chronicle = (row.detail as { chronicle?: unknown }).chronicle;
     if (!chronicle) continue;
@@ -262,6 +265,8 @@ export async function gatherChronicleForCharacter(characterId: string): Promise<
       storyLines.push({ id: row.id, at, payload: chronicle as ChronicleStoryRow["payload"] });
     } else if (isChronicleKoinonKind(row.kind)) {
       koinonLines.push({ id: row.id, at, payload: chronicle as ChronicleKoinonRow["payload"] });
+    } else if (isChronicleMusterKind(row.kind)) {
+      musterLines.push({ id: row.id, at, payload: chronicle as ChronicleMusterRow["payload"] });
     } else {
       campaigns.push({ id: row.id, at, kind: row.kind as ChronicleCampaignRow["kind"], payload: chronicle as ChronicleCampaignRow["payload"] });
     }
@@ -282,5 +287,6 @@ export async function gatherChronicleForCharacter(characterId: string): Promise<
     campaigns,
     stories: storyLines,
     koina: koinonLines,
+    musters: musterLines,
   });
 }

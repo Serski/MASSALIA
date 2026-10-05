@@ -98,4 +98,16 @@ suite("chronicle effect_log kinds (integration)", () => {
     expect(entries.map((e) => [e.type, e.seasonIndex])).toEqual([["koinon", 3], ["koinon", 4]]);
     expect(entries.map((e) => e.payload)).toEqual([founded, left]);
   });
+
+  it("reads a muster line through detail.chronicle and skips one without it", async () => {
+    const won = { koinonName: "The Sacred Band", regionId: "R047", regionName: "Vocontii", force: [{ count: 20, label: "Peltast", plural: "Peltasts", source: "trained" }], hulls: 1, winner: "attacker", killed: 12, lost: 3, share: { drachmae: 240, grain: 30 } };
+    await db.insert(dbPkg.effectLog).values([
+      { characterId, kind: "koinon_muster", detail: { chronicle: won, musterId: "m", source: "koinon" }, createdAt: new Date(T0 + 3 * DAY) },
+      { characterId, kind: "koinon_muster", detail: { source: "koinon" }, createdAt: new Date(T0 + 4 * DAY) }, // no chronicle block
+    ]);
+
+    const entries = await chronicle.gatherChronicleForCharacter(characterId);
+    expect(entries.map((e) => [e.type, e.seasonIndex])).toEqual([["koinon_muster", 3]]);
+    expect(entries[0]!.payload).toEqual(won);
+  });
 });

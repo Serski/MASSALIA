@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { renderCampaignLine, type CampaignPayload } from "@massalia/shared";
+import { renderCampaignLine, renderMusterLine, type CampaignPayload, type MusterChronicle } from "@massalia/shared";
 import { api, ApiError, webAssetUrl, type ChronicleEntry, type FamilyState, type FamilyCandidate, type MarriageCandidate, type FamilyChild, type BirthEvent, type SpouseDeathNotice, type DivorceNotice, type TragedyNotice } from "../../api.js";
 import { assetPath } from "../../data/league.js";
 import { DashboardCard, type FourStats, PanelBanner, type PanelProps, PersonFace, PersonRow, StatPips, festivalName, titleCase } from "../shared.js";
@@ -827,6 +827,8 @@ const chronicleRenderers: Record<ChronicleEntry["type"], (payload: Record<string
         return "";
     }
   },
+  // Koinon prompt 3: a muster line shares its wording with the server's report.
+  koinon_muster: (p) => renderMusterLine(p as unknown as MusterChronicle),
 };
 
 export function renderChronicleEntry(entry: ChronicleEntry): string {

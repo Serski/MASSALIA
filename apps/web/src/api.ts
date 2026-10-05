@@ -301,7 +301,8 @@ export type ChronicleType =
   | "holding_reverted"
   | "holding_tribute"
   | "story_line"
-  | "koinon";
+  | "koinon"
+  | "koinon_muster";
 
 export type ChronicleEntry = {
   seasonIndex: number;

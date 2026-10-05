@@ -323,6 +323,27 @@ describe("buildChronicle — story lines (story engine)", () => {
   });
 });
 
+describe("buildChronicle — muster lines (koinon prompt 3)", () => {
+  const base = { startedMs: 0, successionBoundariesMs: [] as number[], marriages: [], births: [], choregos: [], festivals: [], olympics: [] };
+  const payload = { koinonName: "The Sacred Band", regionId: "R047", regionName: "Vocontii", force: [{ count: 20, label: "Peltast", plural: "Peltasts", source: "trained" as const }], hulls: 0, winner: "attacker" as const, killed: 12, lost: 3, share: { drachmae: 240, grain: 30 } };
+
+  it("stages each row as a koinon_muster entry carrying its payload", () => {
+    const entries = buildChronicle({ ...base, musters: [{ id: "m1", at: 8 * S, payload }] });
+    expect(entries.map((e) => [e.type, e.seasonIndex])).toEqual([["koinon_muster", 8]]);
+    expect(entries[0]!.payload).toEqual(payload);
+  });
+
+  it("sorts after a koinon line and before a story line in one season", () => {
+    const entries = buildChronicle({
+      ...base,
+      stories: [{ id: "s1", at: 8 * S, payload: { storyId: "x", line: "A line." } }],
+      musters: [{ id: "m1", at: 8 * S, payload }],
+      koina: [{ id: "k1", at: 8 * S, payload: { event: "joined", koinonName: "The Sacred Band" } }],
+    });
+    expect(entries.map((e) => e.type)).toEqual(["koinon", "koinon_muster", "story_line"]);
+  });
+});
+
 describe("buildChronicle — koinon lines (koinon prompt 1)", () => {
   const base = { startedMs: 0, successionBoundariesMs: [] as number[], marriages: [], births: [], choregos: [], festivals: [], olympics: [] };
 
@@ -357,8 +378,8 @@ describe("buildChronicle — koinon lines (koinon prompt 1)", () => {
 
 describe("CHRONICLE_EFFECT_LOG_KINDS", () => {
   // Market prompt 2: player-market sales and purchases are not Chronicle lines.
-  it("reads the campaign kinds, story lines and koinon lines, and no market kind", () => {
-    expect(CHRONICLE_EFFECT_LOG_KINDS).toEqual(["map_action", "holding_reverted", "holding_tribute", "story_line", "koinon"]);
+  it("reads the campaign kinds, story lines, koinon lines and muster lines, and no market kind", () => {
+    expect(CHRONICLE_EFFECT_LOG_KINDS).toEqual(["map_action", "holding_reverted", "holding_tribute", "story_line", "koinon", "koinon_muster"]);
   });
 });
 

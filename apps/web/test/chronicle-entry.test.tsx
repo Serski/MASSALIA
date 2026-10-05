@@ -47,3 +47,30 @@ describe("renderChronicleEntry · koinon lines", () => {
     expect(line("renamed")).toBe("");
   });
 });
+
+describe("renderChronicleEntry · muster lines", () => {
+  const peltasts = [{ count: 20, label: "Peltast", plural: "Peltasts", source: "trained" }];
+  const base = { koinonName: "The Sacred Band", regionId: "R047", regionName: "Vocontii", force: peltasts, hulls: 0, winner: "attacker", killed: 12, lost: 3, share: { drachmae: 240, grain: 30 } };
+  const line = (over: Record<string, unknown>) => renderChronicleEntry(entry("koinon_muster", { ...base, ...over }));
+
+  it("a won raid with men only, hulls only, and both", () => {
+    expect(line({})).toBe("Raided Vocontii with the koinon The Sacred Band: sent 20 peltasts, 12 tribesmen slain, 3 of ours lost, 240 drachmae and 30 grain for our share.");
+    expect(line({ force: [], hulls: 2, lost: 0 })).toBe("Raided Vocontii with the koinon The Sacred Band: sent 2 hulls, 12 tribesmen slain, none of ours lost, 240 drachmae and 30 grain for our share.");
+    expect(line({ hulls: 1 })).toBe("Raided Vocontii with the koinon The Sacred Band: sent 20 peltasts and 1 hull, 12 tribesmen slain, 3 of ours lost, 240 drachmae and 30 grain for our share.");
+  });
+
+  it("driven off with men only, hulls only, and both", () => {
+    const off = { townId: "reii", townName: "Reii", winner: "defender", killed: 1, share: null };
+    expect(line(off)).toBe("Raided Reii with the koinon The Sacred Band and were driven off: sent 20 peltasts, 1 soldier slain, 3 of ours lost.");
+    expect(line({ ...off, force: [], hulls: 2, lost: 0 })).toBe("Raided Reii with the koinon The Sacred Band and were driven off: sent 2 hulls, 1 soldier slain, none of ours lost.");
+    expect(line({ ...off, hulls: 2 })).toBe("Raided Reii with the koinon The Sacred Band and were driven off: sent 20 peltasts and 2 hulls, 1 soldier slain, 3 of ours lost.");
+  });
+
+  it("repulsed at sea reads the same whatever was sent", () => {
+    const repulsed = { townId: "reii", townName: "Reii", winner: "repulsed", killed: 0, lost: 0, share: null };
+    const expected = "Sailed against Reii with the koinon The Sacred Band and were driven off by its fleet before landing.";
+    expect(line(repulsed)).toBe(expected);
+    expect(line({ ...repulsed, force: [], hulls: 2 })).toBe(expected);
+    expect(line({ ...repulsed, hulls: 2 })).toBe(expected);
+  });
+});
