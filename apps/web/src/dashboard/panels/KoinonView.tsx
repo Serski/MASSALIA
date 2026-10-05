@@ -47,6 +47,9 @@ function KoinonCard({ title, note, section, warm = false, children }: { title: s
   );
 }
 
+// A member's men under arms: at home, away and in training (the leader's read).
+const menOf = (member: KoinonArmies["members"][number]) => [...member.home.flatMap((p) => p.rows), ...member.away, ...member.training].reduce((n, r) => n + r.count, 0);
+
 function UnitLine({ row, sub }: { row: KoinonArmyRow; sub?: string }) {
   return (
     <div className="koinon-unit">
@@ -61,53 +64,49 @@ function UnitLine({ row, sub }: { row: KoinonArmyRow; sub?: string }) {
   );
 }
 
+// One member's soldiers, as the leader reads them: at home by place, away, in
+// training, and the fleet. It opens under the member's own row.
 function MemberSoldiers({ member, now }: { member: KoinonArmies["members"][number]; now: string }) {
   const rows = [...member.home.flatMap((p) => p.rows), ...member.away, ...member.training];
-  const men = rows.reduce((n, r) => n + r.count, 0);
   const ships = member.fleet.pentekonters > 0 || member.fleet.triremes > 0;
   return (
-    <details className="koinon-army" data-member={member.playerId}>
-      <summary>
-        {member.name} · {menText(men)} · levy {member.levy}
-      </summary>
-      <div className="koinon-army-body">
-        {rows.length === 0 ? <p className="koinon-empty">No soldiers.</p> : null}
-        {member.home.length > 0 ? (
-          <div className="koinon-army-group" data-group="home">
-            <div className="koinon-army-head">At home</div>
-            {member.home.map((place) => (
-              <div key={place.placeId} className="koinon-army-place">
-                <div className="koinon-army-place-name">{place.placeName}</div>
-                {place.rows.map((row, i) => (
-                  <UnitLine key={`${row.source}:${row.unitId}:${i}`} row={row} />
-                ))}
-              </div>
-            ))}
-          </div>
-        ) : null}
-        {member.away.length > 0 ? (
-          <div className="koinon-army-group" data-group="away">
-            <div className="koinon-army-head">Away</div>
-            {member.away.map((row, i) => (
-              <UnitLine key={`${row.unitId}:${i}`} row={row} sub={`${awayLine(row)} · back in ${formatDuration(secondsBetween(now, row.arrivesAt))}`} />
-            ))}
-          </div>
-        ) : null}
-        {member.training.length > 0 ? (
-          <div className="koinon-army-group" data-group="training">
-            <div className="koinon-army-head">In training</div>
-            {member.training.map((row, i) => (
-              <UnitLine key={`${row.unitId}:${i}`} row={row} sub={row.readyAt ? `ready in ${formatDuration(secondsBetween(now, row.readyAt))}` : undefined} />
-            ))}
-          </div>
-        ) : null}
-        {ships ? (
-          <p className="koinon-fleet">
-            {member.fleet.pentekonters} pentekonters · {member.fleet.triremes} triremes
-          </p>
-        ) : null}
-      </div>
-    </details>
+    <div className="koinon-army-body" data-soldiers={member.playerId}>
+      {rows.length === 0 ? <p className="koinon-empty">No soldiers.</p> : null}
+      {member.home.length > 0 ? (
+        <div className="koinon-army-group" data-group="home">
+          <div className="koinon-army-head">At home</div>
+          {member.home.map((place) => (
+            <div key={place.placeId} className="koinon-army-place">
+              <div className="koinon-army-place-name">{place.placeName}</div>
+              {place.rows.map((row, i) => (
+                <UnitLine key={`${row.source}:${row.unitId}:${i}`} row={row} />
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {member.away.length > 0 ? (
+        <div className="koinon-army-group" data-group="away">
+          <div className="koinon-army-head">Away</div>
+          {member.away.map((row, i) => (
+            <UnitLine key={`${row.unitId}:${i}`} row={row} sub={`${awayLine(row)} · back in ${formatDuration(secondsBetween(now, row.arrivesAt))}`} />
+          ))}
+        </div>
+      ) : null}
+      {member.training.length > 0 ? (
+        <div className="koinon-army-group" data-group="training">
+          <div className="koinon-army-head">In training</div>
+          {member.training.map((row, i) => (
+            <UnitLine key={`${row.unitId}:${i}`} row={row} sub={row.readyAt ? `ready in ${formatDuration(secondsBetween(now, row.readyAt))}` : undefined} />
+          ))}
+        </div>
+      ) : null}
+      {ships ? (
+        <p className="koinon-fleet">
+          {member.fleet.pentekonters} pentekonters · {member.fleet.triremes} triremes
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -130,10 +129,15 @@ function KoinaOfTheCity({ koina }: { koina: KoinonPage["koina"] }) {
   );
 }
 
-function MemberRow({ member, children }: { member: KoinonMember; children?: ReactNode }) {
+// A member's row: portrait, name and house, the role tag, class and party.
+// For the leader it is a disclosure: the summary is the row with the member's
+// men and levy at the right, and opened it shows his soldiers and the leader's
+// actions on him. Everyone else sees the plain row: only the leader can read
+// the soldiers, so no one else is shown a figure.
+function MemberRow({ member, soldiers, now, children }: { member: KoinonMember; soldiers?: KoinonArmies["members"][number] | null; now?: string; children?: ReactNode }) {
   const facts = [className(member.professionSlug), member.party !== "none" ? titleCase(member.party) : "", `Joined ${member.joinedLabel}`].filter(Boolean);
-  return (
-    <div className="koinon-row koinon-member" data-member={member.playerId}>
+  const row = (
+    <>
       <LobbyPortrait portrait={member.portrait} faceId={member.faceId} professionSlug={member.professionSlug} name={member.name} size={32} />
       <div className="koinon-row-body">
         <div className="koinon-row-title">
@@ -142,8 +146,28 @@ function MemberRow({ member, children }: { member: KoinonMember; children?: Reac
         </div>
         <div className="koinon-row-sub">{facts.join(" · ")}</div>
       </div>
-      {children ? <div className="koinon-actions">{children}</div> : null}
-    </div>
+      {soldiers ? (
+        <span className="koinon-member-men">
+          {menText(menOf(soldiers))} · levy {soldiers.levy}
+        </span>
+      ) : null}
+    </>
+  );
+  if (!soldiers && !children) {
+    return (
+      <div className="koinon-member" data-member={member.playerId}>
+        <div className="koinon-row koinon-member-row">{row}</div>
+      </div>
+    );
+  }
+  return (
+    <details className="koinon-member koinon-member-more" data-member={member.playerId}>
+      <summary className="koinon-row koinon-member-row">{row}</summary>
+      <div className="koinon-member-open">
+        {soldiers && now ? <MemberSoldiers member={soldiers} now={now} /> : null}
+        {children ? <div className="koinon-actions koinon-actions-start">{children}</div> : null}
+      </div>
+    </details>
   );
 }
 
@@ -451,9 +475,6 @@ function HeroStat({ stat, label, value, bright = false }: { stat: string; label:
     </div>
   );
 }
-// A member's men under arms: at home, away and in training (the leader's read).
-const menOf = (member: KoinonArmies["members"][number]) => [...member.home.flatMap((p) => p.rows), ...member.away, ...member.training].reduce((n, r) => n + r.count, 0);
-
 export function KoinonView({ onRefresh }: PanelProps) {
   const [page, setPage] = useState<KoinonPage | null>(null);
   const [armies, setArmies] = useState<KoinonArmies | null>(null);
@@ -828,9 +849,11 @@ export function KoinonView({ onRefresh }: PanelProps) {
             )}
           </KoinonCard>
 
+          {/* The members. The leader opens a row to read that member's soldiers
+              and to act on him; the leader and the vice invite at the bottom. */}
           <KoinonCard title="Members" section="members" note={`${koinon.members.length} of ${koinon.cap}`}>
             {koinon.members.map((member) => (
-              <MemberRow key={member.playerId} member={member}>
+              <MemberRow key={member.playerId} member={member} soldiers={leads ? (armies?.members.find((m) => m.playerId === member.playerId) ?? null) : null} now={armies?.now}>
                 {leads && member.playerId !== me.playerId ? (
                   <>
                     {member.role === "vice" ? (
@@ -857,46 +880,35 @@ export function KoinonView({ onRefresh }: PanelProps) {
                 ) : null}
               </MemberRow>
             ))}
-          </KoinonCard>
-
-          {posts ? (
-            <KoinonCard title="Invite" section="invite">
-              <form
-                className="koinon-form"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void run(() => api.koinonInvite(inviteName), () => setInviteName(""));
-                }}
-              >
-                <input className="koinon-input" aria-label="The citizen's name" value={inviteName} onChange={(event) => setInviteName(event.target.value)} />
-                <button type="submit" className="panel-btn" data-action="invite" disabled={busy || inviteName.trim().length === 0}>
-                  Invite
-                </button>
-              </form>
-              {koinon.pending.map((invite) => (
-                <div key={invite.id} className="koinon-row" data-pending={invite.id}>
-                  <div className="koinon-row-body">
-                    <div className="koinon-row-title">
-                      {invite.playerName} <span className="koinon-dim">· {hoursLeft(now, invite.expiresAt)}h left</span>
+            {posts ? (
+              <div className="koinon-invite" data-members="invite">
+                <form
+                  className="koinon-form"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void run(() => api.koinonInvite(inviteName), () => setInviteName(""));
+                  }}
+                >
+                  <input className="koinon-input" aria-label="The citizen's name" value={inviteName} onChange={(event) => setInviteName(event.target.value)} />
+                  <button type="submit" className="panel-btn" data-action="invite" disabled={busy || inviteName.trim().length === 0}>
+                    Invite
+                  </button>
+                </form>
+                {koinon.pending.map((invite) => (
+                  <div key={invite.id} className="koinon-row" data-pending={invite.id}>
+                    <div className="koinon-row-body">
+                      <div className="koinon-row-title">
+                        {invite.playerName} <span className="koinon-dim">· {hoursLeft(now, invite.expiresAt)}h left</span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="koinon-actions">
-                    <button type="button" className="panel-btn ghost" disabled={busy} onClick={() => void run(() => api.koinonWithdraw(invite.id))}>
+                    <button type="button" className="koinon-link" disabled={busy} onClick={() => void run(() => api.koinonWithdraw(invite.id))}>
                       Withdraw
                     </button>
                   </div>
-                </div>
-              ))}
-            </KoinonCard>
-          ) : null}
-
-          {leads && armies ? (
-            <KoinonCard title="Soldiers of the koinon" section="soldiers">
-              {armies.members.map((member) => (
-                <MemberSoldiers key={member.playerId} member={member} now={armies.now} />
-              ))}
-            </KoinonCard>
-          ) : null}
+                ))}
+              </div>
+            ) : null}
+          </KoinonCard>
 
           <KoinaOfTheCity koina={page.koina} />
 

@@ -4220,12 +4220,23 @@
 .dashboard-shell .koinon-dim{ color: var(--dash-stone); font-weight: 400; }
 .dashboard-shell .koinon-row{ display: flex; align-items: center; gap: 12px; min-width: 0; padding: 9px 0; border-top: 1px solid var(--dash-line); }
 .dashboard-shell .koinon-body > .koinon-head + .koinon-row,
-.dashboard-shell .koinon-body > .koinon-head + .koinon-army{ border-top: none; }
+.dashboard-shell .koinon-body > .koinon-head + .koinon-member > .koinon-row{ border-top: none; }
 .dashboard-shell .koinon-row-body{ flex: 1; min-width: 0; }
 .dashboard-shell .koinon-row-title{ color: var(--dash-parchment); font-size: 13.5px; line-height: 1.35; overflow-wrap: anywhere; }
 .dashboard-shell .koinon-row-title .crest-icon{ margin: 0 0 0 4px; vertical-align: -3px; }
 .dashboard-shell .koinon-row-sub{ color: var(--dash-stone-dim); font-size: 11.5px; line-height: 1.4; }
 .dashboard-shell .koinon-member .lobby-portrait{ flex: none; border-radius: 0; object-fit: cover; }
+/* A member's row. For the leader it is a disclosure's summary, with the men and
+   levy at the right; opened, the soldiers and the leader's actions sit under it. */
+.dashboard-shell .koinon-member-row{ border-top-color: var(--line); }
+.dashboard-shell .koinon-member-more > summary{ list-style: none; cursor: pointer; }
+.dashboard-shell .koinon-member-more > summary::-webkit-details-marker{ display: none; }
+.dashboard-shell .koinon-member-more > summary:hover .koinon-row-title{ color: var(--cream); }
+.dashboard-shell .koinon-member-more > summary:focus-visible{ outline: 2px solid rgba(var(--accent-bright-rgb), 0.82); outline-offset: 2px; }
+.dashboard-shell .koinon-member-men{ flex: none; color: var(--dash-stone); font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.dashboard-shell .koinon-member-open{ display: grid; gap: 10px; padding: 0 0 12px 44px; }
+.dashboard-shell .koinon-invite{ display: grid; gap: 4px; padding-top: 12px; border-top: 1px solid var(--line); }
+.dashboard-shell .koinon-invite .koinon-row{ border-top: none; padding: 6px 0 0; }
 .dashboard-shell .koinon-tag{ display: inline-block; margin-left: 8px; padding: 1px 6px; color: var(--dash-parchment); font-family: var(--font-display); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; border: 1px solid var(--accent); }
 .dashboard-shell .koinon-actions{ display: flex; flex: none; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .dashboard-shell .koinon-form{ display: flex; gap: 8px; align-items: stretch; }
@@ -4246,9 +4257,7 @@
 .dashboard-shell .koinon-link:focus-visible{ outline: 2px solid rgba(var(--accent-bright-rgb), 0.82); outline-offset: 2px; }
 .dashboard-shell .koinon-link:disabled{ cursor: default; opacity: 0.6; }
 .dashboard-shell .koinon-post-body{ margin-top: 2px; color: var(--dash-parchment); font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; }
-.dashboard-shell .koinon-army{ border-top: 1px solid var(--dash-line); }
-.dashboard-shell .koinon-army > summary{ padding: 9px 0; color: var(--dash-parchment); font-size: 13.5px; cursor: pointer; }
-.dashboard-shell .koinon-army-body{ display: grid; gap: 10px; padding: 2px 0 12px 14px; }
+.dashboard-shell .koinon-army-body{ display: grid; gap: 10px; }
 .dashboard-shell .koinon-army-head{ color: var(--dash-stone-dim); font-family: var(--font-display); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; }
 .dashboard-shell .koinon-army-place-name{ margin-top: 6px; color: var(--dash-parchment); font-size: 12px; letter-spacing: 0.08em; }
 .dashboard-shell .koinon-unit{ display: flex; align-items: center; gap: 10px; padding: 5px 0; }
@@ -4302,8 +4311,9 @@
   .dashboard-shell .koinon-stat:last-child{ padding: 0 12px 0 0; }
   .dashboard-shell .koinon-stat + .koinon-stat{ border-left: none; }
   .dashboard-shell .koinon-stat-value{ font-size: 20px; white-space: normal; }
-  .dashboard-shell .koinon-member{ flex-wrap: wrap; }
-  .dashboard-shell .koinon-member .koinon-actions{ flex-basis: 100%; justify-content: flex-start; }
+  .dashboard-shell .koinon-member-row{ flex-wrap: wrap; }
+  .dashboard-shell .koinon-member-men{ flex-basis: 100%; padding-left: 44px; text-align: left; }
+  .dashboard-shell .koinon-member-open{ padding-left: 0; }
   .dashboard-shell .koinon-form{ flex-wrap: wrap; }
   .dashboard-shell .koinon-form .koinon-input{ flex-basis: 100%; }
   .dashboard-shell .koinon-page,

@@ -96,6 +96,8 @@ const button = (el: ParentNode, text: string) => [...el.querySelectorAll("button
 const section = (c: HTMLElement, name: string) => c.querySelector<HTMLElement>(`[data-koinon="${name}"]`);
 // The Lesche's block inside the Treasury panel.
 const lesche = (c: HTMLElement) => c.querySelector<HTMLElement>('[data-koinon="treasury"] [data-lesche]');
+// The inline invite at the bottom of the Members panel (leader and vice).
+const invite = (c: HTMLElement) => c.querySelector<HTMLElement>('[data-koinon="members"] [data-members="invite"]');
 // A hero stat's value, by its key; null when the stat is not shown.
 const stat = (c: HTMLElement, name: string) => c.querySelector(`.koinon-hero [data-stat="${name}"] .koinon-stat-value`)?.textContent ?? null;
 const props = { player: {} as Parameters<typeof KoinonView>[0]["player"] };
@@ -210,10 +212,12 @@ describe("KoinonView · in a koinon", () => {
     expect(section(container, "board")!.textContent).toContain("Kallias · Spring, 300 BC");
     expect(section(container, "board")!.textContent).toContain("Muster at dawn.");
     expect(container.querySelector("textarea")).toBeNull();
-    expect(section(container, "invite")).toBeNull();
-    expect(section(container, "soldiers")).toBeNull();
+    expect(invite(container)).toBeNull();
     expect(section(container, "take-lead")).toBeNull();
     expect(armiesCall).not.toHaveBeenCalled();
+    // Plain rows: no disclosure, no soldiers and no men or levy figure.
+    expect(section(container, "members")!.querySelector("details, summary, .koinon-member-men, [data-soldiers]")).toBeNull();
+    expect(section(container, "members")!.textContent).not.toMatch(/levy|\d+ men/);
 
     const rows = [...container.querySelectorAll(".koinon-member")];
     expect(rows.map((r) => r.querySelector(".koinon-row-title")!.textContent)).toEqual(["Kallias of House Iason Leader", "Deon of House Iason Vice", "Nikias of House Iason "]);
@@ -237,45 +241,67 @@ describe("KoinonView · in a koinon", () => {
     expect(board.querySelector(".koinon-counter")!.textContent).toBe("13 / 300");
     expect(buttons(board)).toEqual(["Post"]);
 
-    const invite = section(container, "invite")!;
-    expect(invite.textContent).toContain("Xenon · 30h left");
-    expect(buttons(invite)).toEqual(["Invite", "Withdraw"]);
+    // The invite is inline at the bottom of the Members panel, its pending list under it.
+    const inline = invite(container)!;
+    expect(section(container, "members")!.lastElementChild).toBe(inline);
+    expect(inline.textContent).toContain("Xenon · 30h left");
+    expect(buttons(inline)).toEqual(["Invite", "Withdraw"]);
+    const withdraw = vi.spyOn(api, "koinonWithdraw").mockResolvedValue({ ok: true });
+    fireEvent.click(button(inline, "Withdraw")!);
+    await flush();
+    expect(withdraw).toHaveBeenCalledWith("i1");
+    // The vice's member rows are plain: no actions, no disclosure, no figures.
     expect([...container.querySelectorAll(".koinon-member button")]).toEqual([]);
-    expect(section(container, "soldiers")).toBeNull();
+    expect(section(container, "members")!.querySelector("details, .koinon-member-men, [data-soldiers]")).toBeNull();
     expect(armiesCall).not.toHaveBeenCalled();
 
     // A refusal shows as it comes, in the note line.
     vi.spyOn(api, "koinonInvite").mockRejectedValue(new ApiError("That citizen is already in a koinon.", 409));
-    fireEvent.change(invite.querySelector("input")!, { target: { value: "Timon" } });
-    fireEvent.click(button(invite, "Invite")!);
+    fireEvent.change(invite(container)!.querySelector("input")!, { target: { value: "Timon" } });
+    fireEvent.click(button(invite(container)!, "Invite")!);
     await flush();
     expect(api.koinonInvite).toHaveBeenCalledWith("Timon");
     expect(container.querySelector('[role="status"]')!.textContent).toBe("That citizen is already in a koinon.");
   });
 
-  it("the leader has the controls on every other member and the soldiers of the koinon", async () => {
+  it("the leader's member rows open to that member's soldiers and the actions on him; there is no Soldiers card and no Invite card", async () => {
     const { container, armiesCall } = await mount(inside("kallias"));
     expect(armiesCall).toHaveBeenCalledTimes(1);
-
-    const rows = [...container.querySelectorAll<HTMLElement>(".koinon-member")];
-    expect(buttons(rows[0]!)).toEqual([]);
-    expect(buttons(rows[1]!)).toEqual(["Clear vice", "Hand over the lead", "Expel"]);
-    expect(buttons(rows[2]!)).toEqual(["Make vice", "Hand over the lead", "Expel"]);
-    expect(button(rows[2]!, "Expel")!.classList.contains("danger")).toBe(true);
     expect(buttons(section(container, "board")!)).toEqual(["Post", "Delete"]);
+    expect([...container.querySelectorAll("[data-koinon], .koinon-leave")].map((el) => el.getAttribute("data-koinon") ?? "leave")).toEqual(["hero", "board", "muster", "treasury", "members", "koina", "leave"]);
+    expect(section(container, "soldiers")).toBeNull();
+    expect(section(container, "invite")).toBeNull();
+    expect(container.textContent).not.toContain("Soldiers of the koinon");
 
-    // The leader's layout ends the same way: soldiers, the koina of the city, Leave.
-    expect([...container.querySelectorAll("[data-koinon], .koinon-leave")].map((el) => el.getAttribute("data-koinon") ?? "leave")).toEqual(["hero", "board", "muster", "treasury", "members", "invite", "soldiers", "koina", "leave"]);
-    const soldiers = section(container, "soldiers")!;
-    const summaries = [...soldiers.querySelectorAll("summary")].map((s) => s.textContent);
-    expect(summaries).toEqual(["Kallias · 0 men · levy 120", "Nikias · 30 men · levy 80"]);
-    const [mine, his] = [...soldiers.querySelectorAll<HTMLElement>(".koinon-army")];
-    expect(mine!.textContent).toContain("No soldiers.");
-    expect(his!.querySelector('[data-group="home"]')!.textContent).toBe("At homeMassaliaHoplite · 15");
-    expect(his!.querySelector('[data-group="away"]')!.textContent).toBe("AwayEkdromos · 8Raiding Salyes · back in 2h 0m");
-    expect(his!.querySelector('[data-group="training"]')!.textContent).toBe("In trainingPeltast · 7ready in 5h 0m");
-    expect(his!.querySelector(".koinon-fleet")!.textContent).toBe("2 pentekonters · 1 triremes");
-    expect(his!.querySelector<HTMLImageElement>(".koinon-glyph")!.getAttribute("src")).toContain("HOPLITE.webp");
+    // Every row is a disclosure, closed until opened; the summary is the row.
+    const rows = [...container.querySelectorAll<HTMLDetailsElement>(".koinon-member")];
+    expect(rows.map((r) => [r.tagName, r.open])).toEqual([["DETAILS", false], ["DETAILS", false], ["DETAILS", false]]);
+    expect(rows.map((r) => r.querySelector("summary .koinon-row-title")!.textContent)).toEqual(["Kallias of House Iason Leader", "Deon of House Iason Vice", "Nikias of House Iason "]);
+    // Men and levy at the right of the row, from the armies payload; Deon is not in it.
+    expect(rows.map((r) => r.querySelector("summary .koinon-member-men")?.textContent ?? null)).toEqual(["0 men · levy 120", null, "30 men · levy 80"]);
+
+    // His own row: his soldiers, no actions on himself.
+    expect(buttons(rows[0]!)).toEqual([]);
+    expect(rows[0]!.querySelector("[data-soldiers]")!.textContent).toContain("No soldiers.");
+    // The vice: the three actions, with Clear vice.
+    expect(buttons(rows[1]!)).toEqual(["Clear vice", "Hand over the lead", "Expel"]);
+    expect(rows[1]!.querySelector("[data-soldiers]")).toBeNull();
+
+    // Opening Nikias's row shows his soldiers and the three actions.
+    const nikias = rows[2]!;
+    fireEvent.click(nikias.querySelector("summary")!);
+    nikias.open = true;
+    const his = nikias.querySelector<HTMLElement>('[data-soldiers="nikias"]')!;
+    expect(his.querySelector('[data-group="home"]')!.textContent).toBe("At homeMassaliaHoplite · 15");
+    expect(his.querySelector('[data-group="away"]')!.textContent).toBe("AwayEkdromos · 8Raiding Salyes · back in 2h 0m");
+    expect(his.querySelector('[data-group="training"]')!.textContent).toBe("In trainingPeltast · 7ready in 5h 0m");
+    expect(his.querySelector(".koinon-fleet")!.textContent).toBe("2 pentekonters · 1 triremes");
+    expect(his.querySelector<HTMLImageElement>(".koinon-glyph")!.getAttribute("src")).toContain("HOPLITE.webp");
+    expect(buttons(nikias.querySelector(".koinon-member-open")!)).toEqual(["Make vice", "Hand over the lead", "Expel"]);
+    expect(button(nikias, "Expel")!.classList.contains("danger")).toBe(true);
+
+    // The leader invites inline too, with Withdraw on the pending invite.
+    expect(buttons(invite(container)!)).toEqual(["Invite", "Withdraw"]);
     expect(/\p{Extended_Pictographic}/u.test(container.textContent ?? "")).toBe(false);
   });
 
@@ -959,7 +985,7 @@ describe("KoinonView · the page's panels", () => {
   it("every panel is headed by its title and one thin rule; only the Muster's border is warm; the Greek-key band appears once", async () => {
     const { container } = await mount(inside("kallias"));
     const cards = [...container.querySelectorAll(".koinon-card")];
-    expect(cards.length).toBeGreaterThan(5);
+    expect(cards.map((c) => c.querySelector("[data-koinon]")!.getAttribute("data-koinon"))).toEqual(["board", "muster", "treasury", "members", "koina"]);
     for (const card of cards) {
       expect(card.querySelector(".koinon-head .koinon-title"), card.textContent ?? "").not.toBeNull();
       expect(card.querySelectorAll(".koinon-head .koinon-rule").length).toBe(1);
@@ -1033,7 +1059,7 @@ describe("KoinonView · hooks and wording", () => {
     fireEvent.click(container.querySelector<HTMLButtonElement>('[data-action="found"]')!);
     await flush();
     expect(found).toHaveBeenCalledWith("The Sacred Band");
-    expect(section(container, "soldiers")).not.toBeNull();
+    expect(section(container, "members")!.querySelector("details [data-soldiers]")).not.toBeNull();
     expect(errors.mock.calls.flat().some((arg) => /hook/i.test(String(arg)))).toBe(false);
     expect(errors).not.toHaveBeenCalled();
   });
