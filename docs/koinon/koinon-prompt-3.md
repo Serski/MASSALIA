@@ -376,3 +376,24 @@ An owner already settled past launchAt fights with his roster as it stands after
 Append this ruling verbatim at the end of docs/koinon/koinon-prompt-3.md under "## STOP 0 ruling", inside the docs commit, since nothing is committed yet. Then go on with Phase 1.
 
 Tooling prompt 2 still has to be on main before the Phase 4 gate; that STOP stands.
+
+## STOP 1 ruling
+
+STOP 1 ruling (koinon prompt 3)
+
+Append this ruling verbatim at the end of docs/koinon/koinon-prompt-3.md under "## STOP 1 ruling", as its own commit `docs: koinon prompt 3 STOP 1 ruling`.
+
+Accepted as reported: items 1 to 8, 11 and 12; the outlook's space and hullSpace; an unseen muster in unread; "transports before warships" as the roomier hull first. The step 4 retry path stays untested, but log each retry with the muster id and the attempt number.
+
+Three commits before Phase 4, one item each:
+
+1. `map: a pool write never moves its marker backwards`. writeRegionWarband and writeTownGarrison (mapPools.ts:56, :110) write updated_at as GREATEST(updated_at, now), computed in SQL. Leave the read-time regeneration unchanged: it already writes only when days > 0. Add a DB test: a write at T, then a write at T minus 1 hour, leaves updated_at at T. The fence widens to those two writes and their test.
+2. `koinon: forceParts is mapActions' describeForce`. Export describeForce from mapActions.ts, delete the copy in koinonMuster.ts, and change nothing else in mapActions.ts.
+3. `barracks: the unpaid-upkeep disband log carries the settle's clock`. The barracks_disband effect_log row takes createdAt from the settle's now. Add a test: a settle at an earlier clock that disbands a row writes its log at that clock.
+
+Then Phase 4. Before its gate:
+- `git fetch`. Tooling prompt 2 is now on origin/main (0284ae0); if your fetch does not show it, STOP.
+- Rebase the local commits onto origin/main. Verify with `git patch-id` that every rebased commit's diff is unchanged, and report the old and new SHA of each.
+- Run the full `pnpm gate` at the new HEAD, starting below a 1-minute load of 20, and report the starting figure. A red caused only by timeouts is a STOP with the log, never a rerun.
+
+STOP 2 as written. Do not push.
