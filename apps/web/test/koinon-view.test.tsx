@@ -608,6 +608,30 @@ describe("KoinonView · the muster", () => {
     expect(open).toHaveBeenCalledWith({ regionId: "R-Albici", gatherId: "R060", leadMinutes: 30 });
   });
 
+  it("the three fields sit in one row; the leader sees the men standing at the chosen gathering place, a plain member sees no note", async () => {
+    // Kallias has 12 peltasts at Arelate; Nikias 15 hoplites at Massalia (and men away and in training, who do not count).
+    const withArelate: KoinonArmies = { ...armies, members: [{ ...armies.members[0]!, home: [{ placeId: "arelate", placeName: "Arelate", rows: [unit("peltast", "Peltast", 12)] }] }, armies.members[1]!] };
+    vi.spyOn(api, "koinon").mockResolvedValue(inside("kallias"));
+    vi.spyOn(api, "koinonArmies").mockResolvedValue(withArelate);
+    const leader = render(<KoinonView {...props} onRefresh={() => {}} />);
+    await tick(0);
+    const card = () => section(leader.container, "muster")!;
+    expect([...card().querySelectorAll(".koinon-muster-fields > .koinon-muster-field .koinon-muster-label")].map((l) => l.textContent)).toEqual(["Gathering place", "Target", "Launch"]);
+    const note = () => card().querySelector('[data-muster="standing"]')?.textContent ?? null;
+    expect(note()).toBe("15 men stand at Massalia across members");
+    expect(card().querySelector(".koinon-muster-call")!.contains(button(card(), "Call the muster")!)).toBe(true);
+    await choose(card(), "gathering place", "Arelate");
+    expect(note()).toBe("12 men stand at Arelate across members");
+    leader.unmount();
+
+    const plain = await show(inside("nikias"));
+    expect(plain.card().querySelector('[data-muster="standing"]')).toBeNull();
+    expect(plain.card().textContent).not.toContain("across members");
+    plain.unmount();
+    const vice = await show(inside("deon"));
+    expect(vice.card().querySelector('[data-muster="standing"]')).toBeNull();
+  });
+
   it("a town is opened by its town id; a lead that lands in Winter is greyed out and the first open one is chosen", async () => {
     const open = vi.spyOn(api, "koinonMusterOpen").mockResolvedValue({ ok: true, musterId: "m1", launchAt: inHours(1) });
     // Winter starts in an hour and lasts a day: only 30 minutes is open.
@@ -915,6 +939,44 @@ describe("KoinonView · the page's panels", () => {
     expect(container.querySelector(".koinon-hero > .meander")).not.toBeNull();
     // Nothing is left of the council tab's card dress.
     expect(container.querySelector(".chamber-card, .chamber-head, .chamber-rule")).toBeNull();
+  });
+
+  it("under the hero the page is two columns: the lead, the Board and the Muster on the left, the rest in the rail", async () => {
+    const keys = (root: Element) => [...root.querySelectorAll("[data-koinon], .koinon-leave")].map((el) => el.getAttribute("data-koinon") ?? "leave");
+    const { container, unmount } = await mount(inside("deon", { canTakeLead: true, leaderAbsent: true }));
+    expect(container.querySelector(".koinon-page > .koinon-hero")).not.toBeNull();
+    expect(container.querySelector(".koinon-hero + .koinon-grid")).not.toBeNull();
+    expect(keys(container.querySelector(".koinon-grid > .koinon-main")!)).toEqual(["take-lead", "board", "muster"]);
+    expect(keys(container.querySelector(".koinon-grid > .koinon-rail")!).slice(0, 1)).toEqual(["treasury"]);
+    expect(keys(container.querySelector(".koinon-grid > .koinon-rail")!).slice(-2)).toEqual(["koina", "leave"]);
+    unmount();
+    // Without the lead to take, the Board comes first.
+    const plain = await mount(inside("nikias"));
+    expect(keys(plain.container.querySelector(".koinon-main")!)).toEqual(["board", "muster"]);
+  });
+
+  it("the Board: the message and Post on one row with the counter; a post has its author's initial, who and when, the text and a quiet Delete", async () => {
+    const { container, unmount } = await mount(inside("kallias"));
+    const board = section(container, "board")!;
+    const form = board.querySelector(".koinon-post-form")!;
+    expect([...form.children].map((el) => el.tagName)).toEqual(["TEXTAREA", "DIV"]);
+    expect(form.querySelector(".koinon-post-side button")!.textContent).toBe("Post");
+    expect(form.querySelector(".koinon-post-side .koinon-counter")!.textContent).toBe("0 / 300");
+    const post = board.querySelector('[data-post="p1"]')!;
+    expect(post.querySelector(".koinon-initial")!.textContent).toBe("K");
+    expect(post.querySelector(".koinon-row-sub")!.textContent).toBe("Kallias · Spring, 300 BC");
+    expect(post.querySelector(".koinon-post-body")!.textContent).toBe("Muster at dawn.");
+    const del = post.querySelector("button")!;
+    expect([del.textContent, del.className]).toEqual(["Delete", "koinon-link"]);
+    const remove = vi.spyOn(api, "koinonPostDelete").mockResolvedValue({ ok: true });
+    fireEvent.click(del);
+    await flush();
+    expect(remove).toHaveBeenCalledWith("p1");
+    unmount();
+    // A plain member reads the post and has no Delete.
+    const plain = await mount(inside("nikias"));
+    expect(section(plain.container, "board")!.querySelector(".koinon-initial")!.textContent).toBe("K");
+    expect(section(plain.container, "board")!.querySelector("button")).toBeNull();
   });
 
   it("a non-member's panels take the same titles and no band", async () => {

@@ -193,7 +193,9 @@ function LastMuster({ last }: { last: KoinonLastMuster }) {
 // No muster open: the form that calls one. The targets are read for the chosen
 // gathering place; the launch is a lead on the server's clock, and a lead that
 // would land in Winter is greyed out (the server refuses it either way).
-function MusterForm({ rules, offset, busy, run }: { rules: KoinonPage["rules"]; offset: number; busy: boolean; run: Run }) {
+// `armies` is the leader's read (null for anyone else): it feeds the note
+// beside the button, the men standing at the chosen gathering place.
+function MusterForm({ rules, offset, busy, run, armies }: { rules: KoinonPage["rules"]; offset: number; busy: boolean; run: Run; armies: KoinonArmies | null }) {
   const [targets, setTargets] = useState<KoinonMusterTargets | null>(null);
   const [gatherId, setGatherId] = useState<string | undefined>(undefined);
   const [target, setTarget] = useState("");
@@ -237,38 +239,48 @@ function MusterForm({ rules, offset, busy, run }: { rules: KoinonPage["rules"]; 
     void run(() => api.koinonMusterOpen({ ...(chosenTarget.townId ? { townId: chosenTarget.townId } : { regionId: chosenTarget.regionId }), gatherId: targets.gatherId, leadMinutes: chosenLead }));
   };
 
+  const gatherName = targets.gathers.find((g) => g.id === targets.gatherId)?.name ?? "there";
+  const standing = armies ? armies.members.reduce((n, m) => n + m.home.filter((place) => place.placeId === targets.gatherId).reduce((sum, place) => sum + place.rows.reduce((k, r) => k + r.count, 0), 0), 0) : null;
+
   return (
     <div className="koinon-muster-form" data-muster="form">
-      <div className="koinon-muster-field">
-        <span className="koinon-muster-label">Gathering place</span>
-        <ChoicePicker ariaLabel="gathering place" value={targets.gatherId} options={targets.gathers.map((g) => ({ id: g.id, label: g.name }))} onSelect={setGatherId} disabled={busy} />
+      <div className="koinon-muster-fields">
+        <div className="koinon-muster-field">
+          <span className="koinon-muster-label">Gathering place</span>
+          <ChoicePicker ariaLabel="gathering place" value={targets.gatherId} options={targets.gathers.map((g) => ({ id: g.id, label: g.name }))} onSelect={setGatherId} disabled={busy} />
+        </div>
+        <div className="koinon-muster-field">
+          <span className="koinon-muster-label">Target</span>
+          <ChoicePicker
+            ariaLabel="target of the raid"
+            value={target}
+            options={targets.targets.map((t) => ({ id: targetKey(t), label: t.name, note: t.route === "land" ? "by land" : `${t.steps} ${t.steps === 1 ? "sea" : "seas"}` }))}
+            onSelect={setTarget}
+            disabled={busy || targets.targets.length === 0}
+          />
+        </div>
+        <div className="koinon-muster-field">
+          <span className="koinon-muster-label">Launch</span>
+          <ChoicePicker
+            ariaLabel="launch of the raid"
+            value={chosenLead === null ? "" : String(chosenLead)}
+            options={leads.map((m) => ({ id: String(m), label: leadLabel(m), ...(inWinter(m) ? { note: "Winter", disabled: true } : {}) }))}
+            onSelect={(id) => setLead(Number(id))}
+            disabled={busy || chosenLead === null}
+          />
+        </div>
       </div>
-      <div className="koinon-muster-field">
-        <span className="koinon-muster-label">Target</span>
-        <ChoicePicker
-          ariaLabel="target of the raid"
-          value={target}
-          options={targets.targets.map((t) => ({ id: targetKey(t), label: t.name, note: t.route === "land" ? "by land" : `${t.steps} ${t.steps === 1 ? "sea" : "seas"}` }))}
-          onSelect={setTarget}
-          disabled={busy || targets.targets.length === 0}
-        />
-      </div>
-      <div className="koinon-muster-field">
-        <span className="koinon-muster-label">Launch</span>
-        <ChoicePicker
-          ariaLabel="launch of the raid"
-          value={chosenLead === null ? "" : String(chosenLead)}
-          options={leads.map((m) => ({ id: String(m), label: leadLabel(m), ...(inWinter(m) ? { note: "Winter", disabled: true } : {}) }))}
-          onSelect={(id) => setLead(Number(id))}
-          disabled={busy || chosenLead === null}
-        />
-      </div>
-      {targets.targets.length === 0 ? <p className="koinon-reason">Nothing can be reached from {targets.gathers.find((g) => g.id === targets.gatherId)?.name ?? "there"}.</p> : null}
+      {targets.targets.length === 0 ? <p className="koinon-reason">Nothing can be reached from {gatherName}.</p> : null}
       {chosenLead === null ? <p className="koinon-reason">The passes are closed in winter: no launch can be set yet.</p> : null}
-      <div className="koinon-actions koinon-actions-start">
+      <div className="koinon-actions koinon-actions-start koinon-muster-call">
         <button type="button" className="panel-btn" data-action="muster-open" disabled={busy || !chosenTarget || chosenLead === null} onClick={open}>
           Call the muster
         </button>
+        {standing !== null ? (
+          <span className="koinon-muster-note" data-muster="standing">
+            {standing} {standing === 1 ? "man stands" : "men stand"} at {gatherName} across members
+          </span>
+        ) : null}
       </div>
     </div>
   );
@@ -648,226 +660,235 @@ export function KoinonView({ onRefresh }: PanelProps) {
         </div>
       </section>
 
-      {koinon.canTakeLead ? (
-        <KoinonCard title="The lead" section="take-lead">
-          <p className="koinon-hint">{leader?.name ?? "The leader"} has not been seen for {rules.absentLeaderDays} days. You may take the lead.</p>
-          <div className="koinon-actions">
-            <button type="button" className="panel-btn" data-action="take-lead" disabled={busy} onClick={() => void run(() => api.koinonTakeLead())}>
-              Take the lead
-            </button>
-          </div>
-        </KoinonCard>
-      ) : null}
+      {/* Two columns: what a member does on the left, what he reads on the
+          right. Below 1100px the rail stacks under the main column. */}
+      <div className="koinon-grid">
+        <div className="koinon-main">
+          {koinon.canTakeLead ? (
+            <KoinonCard title="The lead" section="take-lead">
+              <p className="koinon-hint">{leader?.name ?? "The leader"} has not been seen for {rules.absentLeaderDays} days. You may take the lead.</p>
+              <div className="koinon-actions">
+                <button type="button" className="panel-btn" data-action="take-lead" disabled={busy} onClick={() => void run(() => api.koinonTakeLead())}>
+                  Take the lead
+                </button>
+              </div>
+            </KoinonCard>
+          ) : null}
 
-      <KoinonCard title="Board" section="board">
-        {posts ? (
-          <form
-            className="koinon-post-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void run(() => api.koinonPost(postBody), () => setPostBody(""));
-            }}
-          >
-            <textarea className="koinon-input koinon-textarea" aria-label="A message for the board" rows={3} value={postBody} maxLength={rules.postMaxChars} onChange={(event) => setPostBody(event.target.value)} />
-            <div className="koinon-post-bar">
-              <span className="koinon-counter">
-                {postBody.length} / {rules.postMaxChars}
-              </span>
-              <button type="submit" className="panel-btn" data-action="post" disabled={busy || postBody.trim().length === 0}>
-                Post
+          <KoinonCard title="Board" section="board">
+            {posts ? (
+              <form
+                className="koinon-post-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void run(() => api.koinonPost(postBody), () => setPostBody(""));
+                }}
+              >
+                <textarea className="koinon-input koinon-textarea" aria-label="A message for the board" rows={2} value={postBody} maxLength={rules.postMaxChars} onChange={(event) => setPostBody(event.target.value)} />
+                <div className="koinon-post-side">
+                  <button type="submit" className="panel-btn" data-action="post" disabled={busy || postBody.trim().length === 0}>
+                    Post
+                  </button>
+                  <span className="koinon-counter">
+                    {postBody.length} / {rules.postMaxChars}
+                  </span>
+                </div>
+              </form>
+            ) : null}
+            {koinon.posts.length === 0 ? <p className="koinon-empty">No word from the leaders yet.</p> : null}
+            {koinon.posts.map((p) => (
+              <div key={p.id} className="koinon-row koinon-post" data-post={p.id}>
+                {/* The post carries its author's name only: the badge is his initial. */}
+                <span className="koinon-initial" aria-hidden="true">{p.authorName.trim().charAt(0).toUpperCase()}</span>
+                <div className="koinon-row-body">
+                  <div className="koinon-row-sub">
+                    {p.authorName} · {p.label}
+                  </div>
+                  <div className="koinon-post-body">{p.body}</div>
+                </div>
+                {p.canDelete ? (
+                  <button type="button" className="koinon-link" disabled={busy} onClick={() => void run(() => api.koinonPostDelete(p.id))}>
+                    Delete
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </KoinonCard>
+
+          <KoinonCard title="Muster" section="muster" warm>
+            {koinon.muster ? (
+              <MusterOpen muster={koinon.muster} stamp={page} offset={offset} busy={busy} run={run} />
+            ) : (
+              <>
+                <p className="koinon-hint">Any member may call the koinon to a raid. Members bring men to the gathering place and pledge them. At the hour they march as one.</p>
+                <MusterForm rules={rules} offset={offset} busy={busy} run={run} armies={leads ? armies : null} />
+                {koinon.lastMuster ? <LastMuster last={koinon.lastMuster} /> : null}
+              </>
+            )}
+          </KoinonCard>
+
+        </div>
+
+        <aside className="koinon-rail">
+          <KoinonCard title="Treasury" section="treasury" note={`${koinon.treasury} drachmae`}>
+            <p className="koinon-hint">Members give drachmae to the koinon. Nothing comes back out: the treasury pays only for the koinon's buildings.</p>
+            <form
+              className="koinon-form koinon-give"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void run(() => api.koinonGive(giving), () => setGiveAmount(1));
+              }}
+            >
+              <input
+                className="koinon-input koinon-amount"
+                type="number"
+                inputMode="numeric"
+                aria-label="Drachmae to give"
+                min={1}
+                max={Math.max(1, giveMax)}
+                step={1}
+                value={giving}
+                disabled={giveMax < 1}
+                onChange={(event) => setGiveAmount(Math.max(1, Math.min(Math.floor(Number(event.target.value)) || 1, Math.max(1, giveMax))))}
+              />
+              <button type="submit" className="panel-btn" data-action="give" disabled={busy || giveMax < 1}>
+                Give
               </button>
-            </div>
-          </form>
-        ) : null}
-        {koinon.posts.length === 0 ? <p className="koinon-empty">No word from the leaders yet.</p> : null}
-        {koinon.posts.map((p) => (
-          <div key={p.id} className="koinon-row koinon-post" data-post={p.id}>
-            <div className="koinon-row-body">
-              <div className="koinon-row-sub">
-                {p.authorName} · {p.label}
-              </div>
-              <div className="koinon-post-body">{p.body}</div>
-            </div>
-            {p.canDelete ? (
-              <div className="koinon-actions">
-                <button type="button" className="panel-btn ghost" disabled={busy} onClick={() => void run(() => api.koinonPostDelete(p.id))}>
-                  Delete
-                </button>
-              </div>
-            ) : null}
-          </div>
-        ))}
-      </KoinonCard>
-
-      <KoinonCard title="Muster" section="muster" warm>
-        {koinon.muster ? (
-          <MusterOpen muster={koinon.muster} stamp={page} offset={offset} busy={busy} run={run} />
-        ) : (
-          <>
-            <p className="koinon-hint">Any member may call the koinon to a raid. Members bring men to the gathering place and pledge them. At the hour they march as one.</p>
-            <MusterForm rules={rules} offset={offset} busy={busy} run={run} />
-            {koinon.lastMuster ? <LastMuster last={koinon.lastMuster} /> : null}
-          </>
-        )}
-      </KoinonCard>
-
-      <KoinonCard title="Treasury" section="treasury" note={`${koinon.treasury} drachmae`}>
-        <p className="koinon-hint">Members give drachmae to the koinon. Nothing comes back out: the treasury pays only for the koinon's buildings.</p>
-        <form
-          className="koinon-form koinon-give"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void run(() => api.koinonGive(giving), () => setGiveAmount(1));
-          }}
-        >
-          <input
-            className="koinon-input koinon-amount"
-            type="number"
-            inputMode="numeric"
-            aria-label="Drachmae to give"
-            min={1}
-            max={Math.max(1, giveMax)}
-            step={1}
-            value={giving}
-            disabled={giveMax < 1}
-            onChange={(event) => setGiveAmount(Math.max(1, Math.min(Math.floor(Number(event.target.value)) || 1, Math.max(1, giveMax))))}
-          />
-          <button type="submit" className="panel-btn" data-action="give" disabled={busy || giveMax < 1}>
-            Give
-          </button>
-        </form>
-        {koinon.givers.length === 0 ? (
-          <p className="koinon-empty">No gifts yet.</p>
-        ) : (
-          <>
-            <div className="koinon-subhead">Givers</div>
-            {koinon.givers.map((giver) => (
-              <div key={giver.playerId} className="koinon-line" data-giver={giver.playerId}>
-                {giver.name} <span className="koinon-dim">· {giver.total}</span>
-              </div>
-            ))}
-            <div className="koinon-subhead">Recent gifts</div>
-            {koinon.gifts.map((gift) => (
-              <div key={gift.id} className="koinon-line" data-gift={gift.id}>
-                {gift.name} gave {gift.amount} <span className="koinon-dim">· {gift.label}</span>
-              </div>
-            ))}
-          </>
-        )}
-      </KoinonCard>
-
-      <KoinonCard title="Lesche" section="lesche">
-        {hall.phase === "none" ? (
-          <>
-            <p className="koinon-hint">
-              A hall for the koinon. While it stands open the koinon holds up to {rules.lescheCap} members. It costs {rules.lescheCost} drachmae from the treasury, takes {rules.lescheBuildDays} days to build, and {rules.lescheUpkeep} drachmae a day to keep.
-            </p>
-            {leads ? (
+            </form>
+            {koinon.givers.length === 0 ? (
+              <p className="koinon-empty">No gifts yet.</p>
+            ) : (
               <>
-                <div className="koinon-actions koinon-actions-start">
-                  <button
-                    type="button"
-                    className="panel-btn"
-                    data-action="lesche"
-                    disabled={busy || koinon.treasury < rules.lescheCost}
-                    onClick={() => confirmThen(`Build the Lesche for ${rules.lescheCost} drachmae from the treasury? It cannot be cancelled.`, () => api.koinonBuildLesche())}
-                  >
-                    Build the Lesche · {rules.lescheCost}
-                  </button>
+                <div className="koinon-subhead">Givers</div>
+                {koinon.givers.map((giver) => (
+                  <div key={giver.playerId} className="koinon-line" data-giver={giver.playerId}>
+                    {giver.name} <span className="koinon-dim">· {giver.total}</span>
+                  </div>
+                ))}
+                <div className="koinon-subhead">Recent gifts</div>
+                {koinon.gifts.map((gift) => (
+                  <div key={gift.id} className="koinon-line" data-gift={gift.id}>
+                    {gift.name} gave {gift.amount} <span className="koinon-dim">· {gift.label}</span>
+                  </div>
+                ))}
+              </>
+            )}
+          </KoinonCard>
+
+          <KoinonCard title="Lesche" section="lesche">
+            {hall.phase === "none" ? (
+              <>
+                <p className="koinon-hint">
+                  A hall for the koinon. While it stands open the koinon holds up to {rules.lescheCap} members. It costs {rules.lescheCost} drachmae from the treasury, takes {rules.lescheBuildDays} days to build, and {rules.lescheUpkeep} drachmae a day to keep.
+                </p>
+                {leads ? (
+                  <>
+                    <div className="koinon-actions koinon-actions-start">
+                      <button
+                        type="button"
+                        className="panel-btn"
+                        data-action="lesche"
+                        disabled={busy || koinon.treasury < rules.lescheCost}
+                        onClick={() => confirmThen(`Build the Lesche for ${rules.lescheCost} drachmae from the treasury? It cannot be cancelled.`, () => api.koinonBuildLesche())}
+                      >
+                        Build the Lesche · {rules.lescheCost}
+                      </button>
+                    </div>
+                    {koinon.treasury < rules.lescheCost ? <p className="koinon-reason">The treasury holds {koinon.treasury} drachmae.</p> : null}
+                  </>
+                ) : null}
+              </>
+            ) : hall.phase === "building" ? (
+              <BuildProgress label="Building the Lesche" startedAt={hall.startedAt} completesAt={hall.completesAt} offset={offset} />
+            ) : hall.phase === "open" ? (
+              <p className="koinon-hint">
+                Open. Up to {rules.lescheCap} members. Upkeep {rules.lescheUpkeep} drachmae a day; the treasury covers {hall.daysCovered} more days.
+              </p>
+            ) : (
+              <p className="koinon-hint">
+                Shut: the treasury could not pay its upkeep. No one new joins past {rules.memberCap} until it reopens. It reopens when the treasury holds {rules.lescheUpkeep} drachmae.
+              </p>
+            )}
+          </KoinonCard>
+
+          <KoinonCard title="Members" section="members" note={`${koinon.members.length} of ${koinon.cap}`}>
+            {koinon.members.map((member) => (
+              <MemberRow key={member.playerId} member={member}>
+                {leads && member.playerId !== me.playerId ? (
+                  <>
+                    {member.role === "vice" ? (
+                      <button type="button" className="panel-btn ghost" disabled={busy} onClick={() => confirmThen(`Clear ${member.name} as vice?`, () => api.koinonVice(null))}>
+                        Clear vice
+                      </button>
+                    ) : (
+                      <button type="button" className="panel-btn ghost" disabled={busy} onClick={() => confirmThen(`Make ${member.name} the vice?`, () => api.koinonVice(member.playerId))}>
+                        Make vice
+                      </button>
+                    )}
+                    <button type="button" className="panel-btn ghost" disabled={busy} onClick={() => confirmThen(`Hand over the lead to ${member.name}? You stay as a member.`, () => api.koinonHandOver(member.playerId))}>
+                      Hand over the lead
+                    </button>
+                    <button
+                      type="button"
+                      className="panel-btn danger"
+                      disabled={busy}
+                      onClick={() => confirmThen(`Expel ${member.name}? They cannot join or found another koinon for ${rules.cooldownHours} hours.`, () => api.koinonExpel(member.playerId))}
+                    >
+                      Expel
+                    </button>
+                  </>
+                ) : null}
+              </MemberRow>
+            ))}
+          </KoinonCard>
+
+          {posts ? (
+            <KoinonCard title="Invite" section="invite">
+              <form
+                className="koinon-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void run(() => api.koinonInvite(inviteName), () => setInviteName(""));
+                }}
+              >
+                <input className="koinon-input" aria-label="The citizen's name" value={inviteName} onChange={(event) => setInviteName(event.target.value)} />
+                <button type="submit" className="panel-btn" data-action="invite" disabled={busy || inviteName.trim().length === 0}>
+                  Invite
+                </button>
+              </form>
+              {koinon.pending.map((invite) => (
+                <div key={invite.id} className="koinon-row" data-pending={invite.id}>
+                  <div className="koinon-row-body">
+                    <div className="koinon-row-title">
+                      {invite.playerName} <span className="koinon-dim">· {hoursLeft(now, invite.expiresAt)}h left</span>
+                    </div>
+                  </div>
+                  <div className="koinon-actions">
+                    <button type="button" className="panel-btn ghost" disabled={busy} onClick={() => void run(() => api.koinonWithdraw(invite.id))}>
+                      Withdraw
+                    </button>
+                  </div>
                 </div>
-                {koinon.treasury < rules.lescheCost ? <p className="koinon-reason">The treasury holds {koinon.treasury} drachmae.</p> : null}
-              </>
-            ) : null}
-          </>
-        ) : hall.phase === "building" ? (
-          <BuildProgress label="Building the Lesche" startedAt={hall.startedAt} completesAt={hall.completesAt} offset={offset} />
-        ) : hall.phase === "open" ? (
-          <p className="koinon-hint">
-            Open. Up to {rules.lescheCap} members. Upkeep {rules.lescheUpkeep} drachmae a day; the treasury covers {hall.daysCovered} more days.
-          </p>
-        ) : (
-          <p className="koinon-hint">
-            Shut: the treasury could not pay its upkeep. No one new joins past {rules.memberCap} until it reopens. It reopens when the treasury holds {rules.lescheUpkeep} drachmae.
-          </p>
-        )}
-      </KoinonCard>
+              ))}
+            </KoinonCard>
+          ) : null}
 
-      <KoinonCard title="Members" section="members" note={`${koinon.members.length} of ${koinon.cap}`}>
-        {koinon.members.map((member) => (
-          <MemberRow key={member.playerId} member={member}>
-            {leads && member.playerId !== me.playerId ? (
-              <>
-                {member.role === "vice" ? (
-                  <button type="button" className="panel-btn ghost" disabled={busy} onClick={() => confirmThen(`Clear ${member.name} as vice?`, () => api.koinonVice(null))}>
-                    Clear vice
-                  </button>
-                ) : (
-                  <button type="button" className="panel-btn ghost" disabled={busy} onClick={() => confirmThen(`Make ${member.name} the vice?`, () => api.koinonVice(member.playerId))}>
-                    Make vice
-                  </button>
-                )}
-                <button type="button" className="panel-btn ghost" disabled={busy} onClick={() => confirmThen(`Hand over the lead to ${member.name}? You stay as a member.`, () => api.koinonHandOver(member.playerId))}>
-                  Hand over the lead
-                </button>
-                <button
-                  type="button"
-                  className="panel-btn danger"
-                  disabled={busy}
-                  onClick={() => confirmThen(`Expel ${member.name}? They cannot join or found another koinon for ${rules.cooldownHours} hours.`, () => api.koinonExpel(member.playerId))}
-                >
-                  Expel
-                </button>
-              </>
-            ) : null}
-          </MemberRow>
-        ))}
-      </KoinonCard>
+          {leads && armies ? (
+            <KoinonCard title="Soldiers of the koinon" section="soldiers">
+              {armies.members.map((member) => (
+                <MemberSoldiers key={member.playerId} member={member} now={armies.now} />
+              ))}
+            </KoinonCard>
+          ) : null}
 
-      {posts ? (
-        <KoinonCard title="Invite" section="invite">
-          <form
-            className="koinon-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void run(() => api.koinonInvite(inviteName), () => setInviteName(""));
-            }}
-          >
-            <input className="koinon-input" aria-label="The citizen's name" value={inviteName} onChange={(event) => setInviteName(event.target.value)} />
-            <button type="submit" className="panel-btn" data-action="invite" disabled={busy || inviteName.trim().length === 0}>
-              Invite
+          <KoinaOfTheCity koina={page.koina} />
+
+          <div className="koinon-leave">
+            <button type="button" className="panel-btn danger" data-action="leave" disabled={busy} onClick={() => confirmThen(leaveText, () => api.koinonLeave())}>
+              Leave
             </button>
-          </form>
-          {koinon.pending.map((invite) => (
-            <div key={invite.id} className="koinon-row" data-pending={invite.id}>
-              <div className="koinon-row-body">
-                <div className="koinon-row-title">
-                  {invite.playerName} <span className="koinon-dim">· {hoursLeft(now, invite.expiresAt)}h left</span>
-                </div>
-              </div>
-              <div className="koinon-actions">
-                <button type="button" className="panel-btn ghost" disabled={busy} onClick={() => void run(() => api.koinonWithdraw(invite.id))}>
-                  Withdraw
-                </button>
-              </div>
-            </div>
-          ))}
-        </KoinonCard>
-      ) : null}
-
-      {leads && armies ? (
-        <KoinonCard title="Soldiers of the koinon" section="soldiers">
-          {armies.members.map((member) => (
-            <MemberSoldiers key={member.playerId} member={member} now={armies.now} />
-          ))}
-        </KoinonCard>
-      ) : null}
-
-      <KoinaOfTheCity koina={page.koina} />
-
-      <div className="koinon-leave">
-        <button type="button" className="panel-btn danger" data-action="leave" disabled={busy} onClick={() => confirmThen(leaveText, () => api.koinonLeave())}>
-          Leave
-        </button>
+          </div>
+        </aside>
       </div>
     </div>
   );
