@@ -94,6 +94,8 @@ const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0))
 const buttons = (el: ParentNode) => [...el.querySelectorAll("button")].map((b) => b.textContent);
 const button = (el: ParentNode, text: string) => [...el.querySelectorAll("button")].find((b) => b.textContent === text) as HTMLButtonElement | undefined;
 const section = (c: HTMLElement, name: string) => c.querySelector<HTMLElement>(`[data-koinon="${name}"]`);
+// A hero stat's value, by its key; null when the stat is not shown.
+const stat = (c: HTMLElement, name: string) => c.querySelector(`.koinon-hero [data-stat="${name}"] .koinon-stat-value`)?.textContent ?? null;
 const props = { player: {} as Parameters<typeof KoinonView>[0]["player"] };
 
 // The muster's two reads, as the server answers them (targets in name order).
@@ -201,8 +203,8 @@ describe("KoinonView · not in a koinon", () => {
 describe("KoinonView · in a koinon", () => {
   it("a plain member reads the board and the members: no post form, no leader controls, no soldiers", async () => {
     const { container, armiesCall } = await mount(inside("nikias"));
-    expect(section(container, "header")!.textContent).toContain("The Sacred Band");
-    expect(section(container, "header")!.textContent).toContain("Founded Winter, 300 BC · Leader Kallias · Vice Deon");
+    expect(section(container, "hero")!.querySelector(".koinon-hero-name")!.textContent).toBe("The Sacred Band");
+    expect(section(container, "hero")!.querySelector(".koinon-facts")!.textContent).toBe("Founded Winter, 300 BC · Led by Kallias · Vice Deon");
     expect(section(container, "board")!.textContent).toContain("Kallias · Spring, 300 BC");
     expect(section(container, "board")!.textContent).toContain("Muster at dawn.");
     expect(container.querySelector("textarea")).toBeNull();
@@ -218,7 +220,7 @@ describe("KoinonView · in a koinon", () => {
     const koina = section(container, "koina")!;
     expect([...koina.querySelectorAll(".koinon-row-title")].map((r) => r.textContent)).toEqual(["Sons of Protis · led by Lykos · 1 of 8", "The Sacred Band · led by Kallias · 3 of 8"]);
     const order = [...container.querySelectorAll("[data-koinon], .koinon-leave")].map((el) => el.getAttribute("data-koinon") ?? "leave");
-    expect(order).toEqual(["header", "board", "muster", "treasury", "lesche", "members", "koina", "leave"]);
+    expect(order).toEqual(["hero", "board", "muster", "treasury", "lesche", "members", "koina", "leave"]);
     // The muster's form (any member may call one), Give and Leave are all a member has.
     expect(buttons(container)).toEqual(["Massalia▾", "Salyes · by land▾", "In 30 minutes▾", "Call the muster", "Give", "Leave"]);
     expect(button(container, "Leave")!.classList.contains("danger")).toBe(true);
@@ -261,7 +263,7 @@ describe("KoinonView · in a koinon", () => {
     expect(buttons(section(container, "board")!)).toEqual(["Post", "Delete"]);
 
     // The leader's layout ends the same way: soldiers, the koina of the city, Leave.
-    expect([...container.querySelectorAll("[data-koinon], .koinon-leave")].map((el) => el.getAttribute("data-koinon") ?? "leave")).toEqual(["header", "board", "muster", "treasury", "lesche", "members", "invite", "soldiers", "koina", "leave"]);
+    expect([...container.querySelectorAll("[data-koinon], .koinon-leave")].map((el) => el.getAttribute("data-koinon") ?? "leave")).toEqual(["hero", "board", "muster", "treasury", "lesche", "members", "invite", "soldiers", "koina", "leave"]);
     const soldiers = section(container, "soldiers")!;
     const summaries = [...soldiers.querySelectorAll("summary")].map((s) => s.textContent);
     expect(summaries).toEqual(["Kallias · 0 men · levy 120", "Nikias · 30 men · levy 80"]);
@@ -405,14 +407,14 @@ describe("KoinonView · the treasury and the Lesche", () => {
     expect(card.querySelector(".build-progress")).not.toBeNull();
     expect(card.querySelector(".build-progress-head")!.textContent).toContain("Building the Lesche");
     expect(card.querySelector("button")).toBeNull();
-    expect(section(container, "header")!.querySelector(".koinon-head-note")!.textContent).toBe("3 of 8");
+    expect(stat(container, "members")).toBe("3 / 8");
   });
 
-  it("open shows the covered-days line and the header reads 9 of 12", async () => {
+  it("open shows the covered-days line and the hero reads 9 / 12", async () => {
     const nine = ["kallias", "deon", "nikias", "m4", "m5", "m6", "m7", "m8", "m9"].map((id, i) => member(id, id, i === 0 ? "leader" : i === 1 ? "vice" : "member"));
     const { container } = await mount(inside("nikias", { cap: 12, members: nine, hall: hall("open", { completesAt: inHours(-48), paidUntil: inHours(12), daysCovered: 24 }) }));
     expect(section(container, "lesche")!.textContent).toContain("Open. Up to 12 members. Upkeep 5 drachmae a day; the treasury covers 24 more days.");
-    expect(section(container, "header")!.querySelector(".koinon-head-note")!.textContent).toBe("9 of 12");
+    expect(stat(container, "members")).toBe("9 / 12");
     expect(section(container, "members")!.querySelector(".koinon-head-note")!.textContent).toBe("9 of 12");
     expect(section(container, "lesche")!.querySelector(".build-progress")).toBeNull();
   });
@@ -859,6 +861,46 @@ describe("KoinonView · the muster", () => {
   });
 });
 
+describe("KoinonView · the hero strip", () => {
+  const labels = (c: HTMLElement) => [...c.querySelectorAll(".koinon-hero .koinon-stat-label")].map((l) => l.textContent);
+
+  it("the leader sees the eyebrow, the name, who leads, and four stats including the men of every member", async () => {
+    const { container } = await mount(inside("kallias"));
+    const hero = section(container, "hero")!;
+    expect(hero.querySelector(".koinon-eyebrow")!.textContent).toBe("Koinon");
+    expect(hero.querySelector("h2")!.textContent).toBe("The Sacred Band");
+    expect(hero.querySelector(".koinon-facts")!.textContent).toBe("Founded Winter, 300 BC · Led by Kallias · Vice Deon");
+    expect(labels(container)).toEqual(["Members", "Treasury", "Men", "Lesche"]);
+    expect(stat(container, "members")).toBe("3 / 8");
+    expect(stat(container, "treasury")).toBe("120 dr");
+    expect(hero.querySelector('[data-stat="treasury"] .koinon-stat-value')!.classList.contains("bright")).toBe(true);
+    // Nikias: 15 at home, 8 away, 7 in training; Kallias has none.
+    expect(stat(container, "men")).toBe("30");
+    expect(stat(container, "lesche")).toBe("Not built");
+  });
+
+  it("a plain member and the vice see three stats, with no men", async () => {
+    for (const who of ["nikias", "deon"] as const) {
+      const { container, armiesCall, unmount } = await mount(inside(who));
+      expect(labels(container), who).toEqual(["Members", "Treasury", "Lesche"]);
+      expect(stat(container, "men"), who).toBeNull();
+      expect(armiesCall).not.toHaveBeenCalled();
+      unmount();
+    }
+  });
+
+  it("with no vice the line names the leader alone; the Lesche stat reads each of its four words", async () => {
+    const lone = await mount(inside("nikias", { vicePlayerId: null }));
+    expect(section(lone.container, "hero")!.querySelector(".koinon-facts")!.textContent).toBe("Founded Winter, 300 BC · Led by Kallias");
+    lone.unmount();
+    for (const [phase, word] of [["none", "Not built"], ["building", "Building"], ["open", "Open"], ["shut", "Shut"]] as const) {
+      const { container, unmount } = await mount(inside("nikias", { hall: hall(phase) }));
+      expect(stat(container, "lesche"), phase).toBe(word);
+      unmount();
+    }
+  });
+});
+
 describe("KoinonView · the page's panels", () => {
   it("every panel is headed by its title and one thin rule; only the Muster's border is warm; the Greek-key band appears once", async () => {
     const { container } = await mount(inside("kallias"));
@@ -870,6 +912,7 @@ describe("KoinonView · the page's panels", () => {
     }
     expect(cards.filter((c) => c.classList.contains("warm")).map((c) => c.querySelector("[data-koinon]")!.getAttribute("data-koinon"))).toEqual(["muster"]);
     expect(container.querySelectorAll(".meander").length).toBe(1);
+    expect(container.querySelector(".koinon-hero > .meander")).not.toBeNull();
     // Nothing is left of the council tab's card dress.
     expect(container.querySelector(".chamber-card, .chamber-head, .chamber-rule")).toBeNull();
   });

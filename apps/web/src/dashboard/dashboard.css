@@ -4182,6 +4182,21 @@
    The Greek-key band is the top panel's alone; the Muster's border is warmer. */
 .dashboard-shell .koinon-tab-count{ display: inline-grid; min-width: 16px; height: 16px; margin-left: 2px; padding: 0 4px; place-items: center; color: var(--cream); font-family: var(--font-body); font-size: 10px; font-weight: 600; letter-spacing: 0; background: rgba(125, 135, 148, 0.36); border: 1px solid rgba(125, 135, 148, 0.58); }
 .dashboard-shell .koinon-page{ display: grid; gap: 14px; }
+/* The hero strip: the koinon's name large on the left, its stats in a row on
+   the right, split by thin vertical rules. The only panel under the band. */
+.dashboard-shell .koinon-hero{ min-width: 0; background: var(--card); border: 1px solid var(--line); }
+.dashboard-shell .koinon-hero-body{ display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 18px 32px; padding: 22px 24px 24px; }
+.dashboard-shell .koinon-hero-id{ display: grid; gap: 6px; min-width: 0; }
+.dashboard-shell .koinon-eyebrow{ color: var(--accent-bright); font-family: var(--font-display); font-size: 11px; font-weight: 600; letter-spacing: 0.28em; text-transform: uppercase; }
+.dashboard-shell .koinon-hero-name{ margin: 0; color: var(--dash-parchment); font-family: var(--font-display); font-size: clamp(28px, 4.4vw, 52px); font-weight: 600; line-height: 1.05; letter-spacing: 0.02em; overflow-wrap: anywhere; }
+.dashboard-shell .koinon-stats{ display: flex; flex-wrap: wrap; row-gap: 14px; }
+.dashboard-shell .koinon-stat{ display: grid; gap: 4px; align-content: end; padding: 0 22px; }
+.dashboard-shell .koinon-stat:first-child{ padding-left: 0; }
+.dashboard-shell .koinon-stat:last-child{ padding-right: 0; }
+.dashboard-shell .koinon-stat + .koinon-stat{ border-left: 1px solid var(--line); }
+.dashboard-shell .koinon-stat-label{ color: var(--dash-stone); font-family: var(--font-display); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; white-space: nowrap; }
+.dashboard-shell .koinon-stat-value{ color: var(--dash-parchment); font-family: var(--font-display); font-size: 24px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dashboard-shell .koinon-stat-value.bright{ color: var(--accent-bright); }
 .dashboard-shell .koinon-card{ min-width: 0; background: var(--card); border: 1px solid var(--line); }
 .dashboard-shell .koinon-card.warm{ border-color: var(--line-warm); }
 .dashboard-shell .koinon-head{ display: flex; align-items: center; gap: 12px; min-width: 0; }
@@ -4249,6 +4264,13 @@
 
 @media (max-width: 620px) {
   .dashboard-shell .koinon-body{ padding: 12px 12px 14px; }
+  .dashboard-shell .koinon-hero-body{ padding: 16px 12px 18px; }
+  .dashboard-shell .koinon-stats{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 0; width: 100%; }
+  .dashboard-shell .koinon-stat,
+  .dashboard-shell .koinon-stat:first-child,
+  .dashboard-shell .koinon-stat:last-child{ padding: 0 12px 0 0; }
+  .dashboard-shell .koinon-stat + .koinon-stat{ border-left: none; }
+  .dashboard-shell .koinon-stat-value{ font-size: 20px; white-space: normal; }
   .dashboard-shell .koinon-member{ flex-wrap: wrap; }
   .dashboard-shell .koinon-member .koinon-actions{ flex-basis: 100%; justify-content: flex-start; }
   .dashboard-shell .koinon-form{ flex-wrap: wrap; }

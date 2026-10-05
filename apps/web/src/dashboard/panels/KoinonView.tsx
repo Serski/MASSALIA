@@ -31,11 +31,10 @@ export function awayLine(row: { missionKind: KoinonMissionKind; targetName: stri
 
 // A framed panel: the title in bright Cinzel, one thin rule after it (the
 // head's note, when there is one, at the right of that row), then the body.
-// `warm` is the Muster's border; `band` puts the Greek-key band on top.
-function KoinonCard({ title, note, section, warm = false, band = false, children }: { title: string; note?: ReactNode; section: string; warm?: boolean; band?: boolean; children: ReactNode }) {
+// `warm` is the Muster's border. The Greek-key band is the hero's alone.
+function KoinonCard({ title, note, section, warm = false, children }: { title: string; note?: ReactNode; section: string; warm?: boolean; children: ReactNode }) {
   return (
     <section className={`koinon-card${warm ? " warm" : ""}`}>
-      {band ? <div className="meander" aria-hidden="true" /> : null}
       <div className="koinon-body" data-koinon={section}>
         <div className="koinon-head">
           <span className="koinon-title">{title}</span>
@@ -430,6 +429,19 @@ function MusterOpen({ muster, stamp, offset, busy, run }: { muster: KoinonMuster
   );
 }
 
+// The hero strip's stats: a small label over a large value.
+const HALL_WORD: Record<Koinon["hall"]["phase"], string> = { none: "Not built", building: "Building", open: "Open", shut: "Shut" };
+function HeroStat({ stat, label, value, bright = false }: { stat: string; label: string; value: ReactNode; bright?: boolean }) {
+  return (
+    <div className="koinon-stat" data-stat={stat}>
+      <span className="koinon-stat-label">{label}</span>
+      <span className={`koinon-stat-value${bright ? " bright" : ""}`}>{value}</span>
+    </div>
+  );
+}
+// A member's men under arms: at home, away and in training (the leader's read).
+const menOf = (member: KoinonArmies["members"][number]) => [...member.home.flatMap((p) => p.rows), ...member.away, ...member.training].reduce((n, r) => n + r.count, 0);
+
 export function KoinonView({ onRefresh }: PanelProps) {
   const [page, setPage] = useState<KoinonPage | null>(null);
   const [armies, setArmies] = useState<KoinonArmies | null>(null);
@@ -613,13 +625,28 @@ export function KoinonView({ onRefresh }: PanelProps) {
     <div className="pol-page koinon-page">
       {status}
 
-      <KoinonCard title={koinon.name} section="header" band note={`${koinon.members.length} of ${koinon.cap}`}>
-        <p className="koinon-facts">
-          Founded {koinon.foundedLabel}
-          {leader ? <> · Leader {leader.name}</> : null}
-          {vice ? <> · Vice {vice.name}</> : null}
-        </p>
-      </KoinonCard>
+      {/* The hero strip: the one panel under the Greek-key band. MEN is the
+          leader's alone, since only he can read the members' soldiers. */}
+      <section className="koinon-hero" data-koinon="hero">
+        <div className="meander" aria-hidden="true" />
+        <div className="koinon-hero-body">
+          <div className="koinon-hero-id">
+            <span className="koinon-eyebrow">Koinon</span>
+            <h2 className="koinon-hero-name">{koinon.name}</h2>
+            <p className="koinon-facts">
+              Founded {koinon.foundedLabel}
+              {leader ? <> · Led by {leader.name}</> : null}
+              {vice ? <> · Vice {vice.name}</> : null}
+            </p>
+          </div>
+          <div className="koinon-stats">
+            <HeroStat stat="members" label="Members" value={`${koinon.members.length} / ${koinon.cap}`} />
+            <HeroStat stat="treasury" label="Treasury" value={`${koinon.treasury} dr`} bright />
+            {leads && armies ? <HeroStat stat="men" label="Men" value={armies.members.reduce((n, m) => n + menOf(m), 0)} /> : null}
+            <HeroStat stat="lesche" label="Lesche" value={HALL_WORD[hall.phase]} />
+          </div>
+        </div>
+      </section>
 
       {koinon.canTakeLead ? (
         <KoinonCard title="The lead" section="take-lead">
