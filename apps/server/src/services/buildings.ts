@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { createDb, effectLog, playerBuildings, playerCharacters, playerPops, resources, worldTreasury, worlds } from "@massalia/db";
 import {
   buildingCost,
@@ -497,10 +497,17 @@ export async function settleGoods(exec: Exec, ctx: ActingContext, rows: Building
   const banked: Record<string, number> = {};
   for (const [good, { banked: amount, baseRatePerSec }] of accrual) {
     const rowRes = byType.get(good) ?? (await getOrCreateResource(exec, ctx.playerId, good, now));
+    // The goods marker never moves backwards: GREATEST in SQL, and a settle
+    // whose clock is before the marker leaves the row alone (it banks nothing
+    // then: goodUnitsAccrued only counts a stretch that ends after it starts).
     await exec
       .update(resources)
-      .set({ amount: sql`${resources.amount} + ${String(amount)}::numeric`, ratePerSecond: String(baseRatePerSec), lastUpdatedAt: now })
-      .where(eq(resources.id, rowRes.id));
+      .set({
+        amount: sql`${resources.amount} + ${String(amount)}::numeric`,
+        ratePerSecond: String(baseRatePerSec),
+        lastUpdatedAt: sql`GREATEST(${resources.lastUpdatedAt}, ${now.toISOString()}::timestamptz)`,
+      })
+      .where(and(eq(resources.id, rowRes.id), lte(resources.lastUpdatedAt, now)));
     if (amount > 0) banked[good] = amount;
   }
   return banked;
@@ -591,7 +598,13 @@ async function settleWallet(exec: Exec, ctx: ActingContext, rows: BuildingRow[],
     .set({ drachmae: sql`GREATEST(0, ${playerCharacters.drachmae} + ${Math.round(net)})` })
     .where(eq(playerCharacters.playerId, ctx.playerId));
   if (existing) {
-    await exec.update(resources).set({ amount: "0", lastUpdatedAt: now }).where(eq(resources.id, existing.id));
+    // The income marker never moves backwards either (GREATEST in SQL). With a
+    // clock at or before it the stretch above is empty: incomeAccrued and
+    // continuousUpkeep both clamp at zero.
+    await exec
+      .update(resources)
+      .set({ amount: "0", lastUpdatedAt: sql`GREATEST(${resources.lastUpdatedAt}, ${now.toISOString()}::timestamptz)` })
+      .where(eq(resources.id, existing.id));
   } else {
     await exec.insert(resources).values({ scope: "player", scopeId: ctx.playerId, type: INCOME_TYPE, amount: "0", ratePerSecond: "0", lastUpdatedAt: now }).onConflictDoNothing({ target: [resources.scope, resources.scopeId, resources.type] });
   }

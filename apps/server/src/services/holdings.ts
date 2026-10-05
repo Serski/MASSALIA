@@ -80,7 +80,11 @@ export async function settleHoldings(exec: Exec, ctx: ActingContext, now: Date):
   for (const h of holdings) {
     const men = await garrisonCount(exec, ctx, holdingBaseId(h), now);
     if (men > 0) {
-      await exec.update(playerHoldings).set({ lastGarrisonedAt: now }).where(holdingKey(h));
+      // Never backwards: a settle with an earlier clock leaves the stamp where it was.
+      await exec
+        .update(playerHoldings)
+        .set({ lastGarrisonedAt: sql`GREATEST(${playerHoldings.lastGarrisonedAt}, ${now.toISOString()}::timestamptz)` })
+        .where(holdingKey(h));
       continue;
     }
     if (now.getTime() - h.lastGarrisonedAt.getTime() < MS_PER_DAY) continue;
