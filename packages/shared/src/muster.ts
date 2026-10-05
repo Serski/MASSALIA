@@ -124,3 +124,16 @@ export function renderMusterLine(p: MusterChronicle): string {
   }
   return `Raided ${place} ${koinon} and were driven off: sent ${sent}, ${killed}, ${lost}.`;
 }
+
+// The koinon's own line for a marched muster, on the Koinon tab's last-muster
+// report: the whole army's outcome, where renderMusterLine tells one member's.
+export type MusterReportLine = { regionId: string; regionName?: string; townId?: string | null; townName?: string | null; outcome: "won" | "driven_off" | "repulsed"; men: number; killed: number; lost: number; plunder: { drachmae: number; grain: number } | null };
+export function renderMusterReportLine(p: MusterReportLine): string {
+  const place = p.townName ?? p.regionName ?? p.regionId;
+  if (p.outcome === "repulsed") return `Sailed against ${place} and were driven off by its fleet before landing.`;
+  const isTown = p.townId !== undefined && p.townId !== null;
+  const defenders = isTown ? (p.killed === 1 ? "soldier" : "soldiers") : p.killed === 1 ? "tribesman" : "tribesmen";
+  const sent = `${p.men} ${p.men === 1 ? "man" : "men"} sent, ${p.killed} ${defenders} slain, ${p.lost === 0 ? "none lost" : `${p.lost} lost`}`;
+  if (p.outcome === "won") return `Raided ${place}: ${sent}, ${p.plunder?.drachmae ?? 0} drachmae and ${p.plunder?.grain ?? 0} grain taken.`;
+  return `Raided ${place} and were driven off: ${sent}.`;
+}

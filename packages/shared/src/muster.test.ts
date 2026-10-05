@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { seededRoll } from "./barracks.js";
 import type { KoinonContent } from "./koinon.js";
-import { loadMusterHulls, musterLaunch, musterShares, renderMusterLine, splitByShares, type MusterChronicle, type MusterHull } from "./muster.js";
+import { loadMusterHulls, musterLaunch, musterShares, renderMusterLine, renderMusterReportLine, splitByShares, type MusterChronicle, type MusterHull, type MusterReportLine } from "./muster.js";
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -117,5 +117,16 @@ describe("renderMusterLine", () => {
 
   it("repulsed at sea", () => {
     expect(renderMusterLine({ ...base, townId: "reii", townName: "Reii", winner: "repulsed", killed: 0, lost: 0, share: null })).toBe("Sailed against Reii with the koinon The Sacred Band and were driven off by its fleet before landing.");
+  });
+});
+
+describe("renderMusterReportLine", () => {
+  const base: MusterReportLine = { regionId: "R047", regionName: "Vocontii", townId: null, townName: null, outcome: "won", men: 60, killed: 12, lost: 3, plunder: { drachmae: 240, grain: 30 } };
+
+  it("the army's line: won, driven off against a town, repulsed at sea", () => {
+    expect(renderMusterReportLine(base)).toBe("Raided Vocontii: 60 men sent, 12 tribesmen slain, 3 lost, 240 drachmae and 30 grain taken.");
+    expect(renderMusterReportLine({ ...base, men: 1, killed: 1, lost: 0 })).toBe("Raided Vocontii: 1 man sent, 1 tribesman slain, none lost, 240 drachmae and 30 grain taken.");
+    expect(renderMusterReportLine({ ...base, townId: "reii", townName: "Reii", outcome: "driven_off", killed: 1, plunder: null })).toBe("Raided Reii and were driven off: 60 men sent, 1 soldier slain, 3 lost.");
+    expect(renderMusterReportLine({ ...base, townId: "reii", townName: "Reii", outcome: "repulsed", killed: 0, lost: 0, plunder: null })).toBe("Sailed against Reii and were driven off by its fleet before landing.");
   });
 });

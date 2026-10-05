@@ -1,5 +1,6 @@
-import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
-import { createDb, koinonMembers, koinonMusterHulls, koinonMusters, playerCharacters, players, playerUnits, resources, type UnitMission } from "@massalia/db";
+import crypto from "node:crypto";
+import { and, asc, desc, eq, inArray, isNull, lte, ne, sql } from "drizzle-orm";
+import { createDb, effectLog, koinonMembers, koinonMusterHulls, koinonMusters, playerCharacters, players, playerUnits, resources, worlds, type UnitMission } from "@massalia/db";
 import {
   bandDef,
   distancesFrom,
@@ -9,26 +10,37 @@ import {
   formatGameDate,
   gameDate,
   HOME_POLITY_ID,
+  loadMusterHulls,
   musterLaunch,
+  musterShares,
+  REACH_REASON,
+  renderMusterLine,
+  renderMusterReportLine,
+  resolveBattle,
   routeFor,
+  splitByShares,
   stepsTo,
   unitDef,
   verdictsFor,
+  type BattleRow,
+  type CampaignForcePart,
+  type MusterChronicle,
   type MusterHull,
   type ReachForceRow,
   type ReachSteps,
 } from "@massalia/shared";
-import { fleetInStock, getBandsContent, getShipsContent, getUnitsContent, isActive, isPledged, type UnitRow } from "./barracks.js";
+import { fleetInStock, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, type UnitRow } from "./barracks.js";
 import { applyComposureDelta } from "./composure.js";
 import { settleAll, type ActingContext } from "./buildings.js";
-import { listHoldings } from "./holdings.js";
-import { getKoinonContent, inOwnKoinon, memberRow, type KoinonError, type KoinonRole, type KoinonRow } from "./koinon.js";
+import { creditDrachmae, creditGood, listHoldings } from "./holdings.js";
+import { getKoinonContent, inOwnKoinon, lockKoinon, memberRow, type KoinonError, type KoinonRole, type KoinonRow } from "./koinon.js";
 import { lockPlayer } from "./lock.js";
 import { selectForce, splitRows } from "./mapActions.js";
 import { getTopology } from "./mapGraph.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
-import { townContentOwner } from "./mapPools.js";
+import { readRegionWarband, readTownFleet, readTownGarrison, townContentOwner, writeRegionWarband, writeTownGarrison } from "./mapPools.js";
 import { forceRowOf, homePlaces, homeRegions } from "./mapReach.js";
+import { townStats } from "./townStats.js";
 
 // ---------------------------------------------------------------------------
 // The koinon's Raid muster (koinon prompt 3). Any member opens one: a target, a
@@ -45,6 +57,10 @@ import { forceRowOf, homePlaces, homeRegions } from "./mapReach.js";
 // lock first and settles him. The order is the one koinon.ts sets: a player
 // lock before the koinon lock, never after. Calling a muster off writes no
 // one's rows: each owner's own settle releases them (barracks.ts).
+//
+// The resolve is lazy and lives here, not in the worker (which cannot reach the
+// economy): resolveMuster computes everything as of the launch instant, never
+// the clock of whoever triggers it.
 // ---------------------------------------------------------------------------
 
 const db = createDb();
@@ -454,7 +470,7 @@ export type MusterView = {
   pledges: { playerId: string; name: string; men: number; space: number; pentekonters: number; triremes: number }[];
   outlook: MusterOutlook;
 };
-export type LastMusterView = { id: string; targetName: string; gatherName: string; launchLabel: string; status: "resolved" | "stood_down" | "cancelled"; reason: string | null; report: Record<string, unknown> | null };
+export type LastMusterView = { id: string; targetName: string; gatherName: string; launchLabel: string; status: "resolved" | "stood_down" | "cancelled"; reason: string | null; report: MusterReport | null };
 
 const gameLabel = (at: Date, ctx: ActingContext) => formatGameDate(gameDate(at.getTime(), ctx.worldStartedMs));
 
@@ -492,7 +508,7 @@ export async function musterBlocks(exec: Exec, k: KoinonRow, role: KoinonRole, c
         launchLabel: gameLabel(closed.launchAt, ctx),
         status: closed.status as LastMusterView["status"],
         reason: typeof closed.report?.reason === "string" ? closed.report.reason : null,
-        report: closed.report ?? null,
+        report: (closed.report as MusterReport | null) ?? null,
       }
     : null;
   return { muster, lastMuster };
@@ -507,4 +523,329 @@ export async function unseenMuster(exec: Exec, playerId: string, worldId: string
     .innerJoin(koinonMembers, eq(koinonMembers.koinonId, koinonMusters.koinonId))
     .where(and(eq(koinonMembers.worldId, worldId), eq(koinonMembers.playerId, playerId), eq(koinonMusters.status, "open"), ne(koinonMusters.openerPlayerId, playerId), sql`${koinonMusters.openedAt} > ${koinonMembers.lastReadAt}`));
   return Number(rows[0]?.n ?? 0);
+}
+
+// --- The resolve ------------------------------------------------------------------
+
+// One member's part in a marched muster: the men he sent and lost, the hulls of
+// his that sailed, the seats of them that were filled, his shares and his part
+// of the plunder.
+export type MusterPart = { playerId: string; name: string; men: number; lost: number; hulls: number; seats: number; shares: number; drachmae: number; grain: number };
+// The report stored on the muster and shown to every member as the last muster.
+export type MusterReport = {
+  outcome: "won" | "driven_off" | "repulsed" | "stood_down";
+  reason: string | null;
+  line: string | null;
+  regionId: string;
+  regionName: string;
+  townId: string | null;
+  townName: string | null;
+  gatherId: string;
+  gatherName: string;
+  launchAt: string;
+  route: "land" | "sea" | null;
+  steps: number | null;
+  recoveryHours: number | null;
+  arrivesAt: string | null;
+  rounds: number;
+  men: number;
+  lost: number;
+  killed: number;
+  defender: { label: string; start: number; end: number } | null;
+  fleet: { hulls: Record<string, number>; naval: number; space: number; filled: number; defender: { pentekonters: number; triremes: number; naval: number } | null; held: boolean } | null;
+  plunder: { drachmae: number; grain: number } | null;
+  parts: MusterPart[];
+};
+
+// "busy": another transaction is resolving this muster. "not_due": there is
+// nothing to resolve (unknown, already closed, or not yet at its launch).
+export type MusterResolved = { outcome: "busy" | "not_due" | "resolved" | "stood_down" };
+
+const MS_PER_HOUR = 3_600_000;
+// The muster's own advisory key, in the two-int keyspace so it can never meet a
+// player lock (lock.ts uses the single-key form).
+const musterLockKey = (musterId: string) => sql`hashtext('koinon_muster'), hashtext(${musterId}::text)`;
+const ownsMusterRow = (musterId: string) => and(sql`${playerUnits.mission}->>'kind' = 'muster'`, sql`${playerUnits.mission}->>'musterId' = ${musterId}`);
+
+// Everyone with a pledge to the muster, in ascending id order: owners of rows
+// that carry its mission, and owners of hull pledges.
+async function pledgingOwners(exec: Exec, musterId: string): Promise<string[]> {
+  const men = await exec.selectDistinct({ id: playerUnits.ownerPlayerId }).from(playerUnits).where(ownsMusterRow(musterId));
+  const hulls = await exec.selectDistinct({ id: koinonMusterHulls.ownerPlayerId }).from(koinonMusterHulls).where(eq(koinonMusterHulls.musterId, musterId));
+  return [...new Set([...men, ...hulls].map((r) => r.id))].sort();
+}
+
+// Step 4 found a pledger whose lock this transaction does not hold: roll back
+// and take the locks again.
+class OwnersChanged extends Error {}
+
+// A participant's own rows as the Chronicle names them (mapActions' describeForce).
+function forceParts(rows: UnitRow[]): CampaignForcePart[] {
+  const merged = new Map<string, CampaignForcePart>();
+  for (const r of rows) {
+    const key = `${r.source}:${r.unitId}`;
+    const m = merged.get(key);
+    if (m) m.count += r.count;
+    else if (r.source === "trained") {
+      const def = unitDef(getUnitsContent(), r.unitId);
+      merged.set(key, { count: r.count, label: def?.label ?? r.unitId, plural: def?.plural ?? `${def?.label ?? r.unitId}s`, source: "trained" });
+    } else merged.set(key, { count: r.count, label: bandDef(getBandsContent(), r.unitId)?.label ?? r.unitId, source: "band" });
+  }
+  return [...merged.values()];
+}
+
+// The muster marches (rulings 4 and 5, P5 to P10). One transaction, and every
+// clock in it is the muster's launch instant, never `now`: `now` only decides
+// whether the muster is due. Resolved 30 minutes or 3 days after launch, the
+// result is the same.
+export async function resolveMuster(musterId: string, now: Date): Promise<MusterResolved> {
+  const unitsC = getUnitsContent();
+  const bandsC = getBandsContent();
+  const battleC = getBattleContent();
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const done = await db.transaction(async (tx): Promise<MusterResolved & { launchAt?: Date; shrine?: { ctx: ActingContext; composureDays: number }[] }> => {
+        // 0. A muster being resolved elsewhere is skipped, not waited on.
+        const lock = await tx.execute(sql`SELECT pg_try_advisory_xact_lock(${musterLockKey(musterId)}) AS granted`);
+        if (!(lock.rows as { granted: boolean }[])[0]?.granted) return { outcome: "busy" };
+
+        // 1. The muster and its pledging owners, unlocked.
+        const due = (await tx.select().from(koinonMusters).where(eq(koinonMusters.id, musterId)).limit(1))[0];
+        if (!due || due.status !== "open" || due.launchAt.getTime() > now.getTime()) return { outcome: "not_due" };
+        const before = await pledgingOwners(tx, musterId);
+
+        // 2. Every owner's player lock in ascending id order, then the koinon
+        // lock: player locks first, the koinon lock last (the rule above lockKoinon).
+        for (const id of before) await lockPlayer(tx, id);
+        const k = await lockKoinon(tx, due.koinonId);
+
+        // 3. Claim first. A lost claim applies nothing.
+        const launchAt = due.launchAt;
+        const muster = (
+          await tx
+            .update(koinonMusters)
+            .set({ status: "resolved", closedAt: launchAt })
+            .where(and(eq(koinonMusters.id, musterId), eq(koinonMusters.status, "open"), lte(koinonMusters.launchAt, now)))
+            .returning()
+        )[0];
+        if (!muster) return { outcome: "not_due" };
+
+        // 4. The owners again, under the locks. A pledge that landed between
+        // step 1 and the koinon lock belongs to a player this transaction has
+        // not locked: start again.
+        const owners = await pledgingOwners(tx, musterId);
+        if (owners.length !== before.length || owners.some((id, i) => id !== before[i])) throw new OwnersChanged();
+
+        // 5. Only owners who are still members (P10). A dissolved koinon has none.
+        const members = k ? await tx.select({ playerId: koinonMembers.playerId, name: players.name }).from(koinonMembers).innerJoin(players, eq(players.id, koinonMembers.playerId)).where(eq(koinonMembers.koinonId, k.id)) : [];
+        const nameOf = new Map(members.map((m) => [m.playerId, m.name]));
+        const world = (await tx.select({ startedAt: worlds.startedAt }).from(worlds).where(eq(worlds.id, muster.worldId)).limit(1))[0]!;
+        const characterOf = new Map<string, string>();
+        for (const id of owners) {
+          const characterId = nameOf.has(id) ? await characterIdOf(tx, id) : null;
+          if (characterId) characterOf.set(id, characterId);
+        }
+        const marching = owners.filter((id) => characterOf.has(id));
+
+        // 6. Each owner's own settle at the launch instant: upkeep to that
+        // instant is charged on the roster that stood, and men he can no longer
+        // pay are gone before they fight.
+        const shrine: { ctx: ActingContext; composureDays: number }[] = [];
+        for (const id of marching) {
+          const ctx: ActingContext = { playerId: id, worldId: muster.worldId, worldStartedMs: world.startedAt.getTime() };
+          const settled = await settleAll(tx, ctx, launchAt);
+          if (settled.composureDays > 0) shrine.push({ ctx, composureDays: settled.composureDays });
+        }
+
+        // 7. The army: every row still standing with this muster's mission at
+        // the gathering place, active. The fleet: each hull pledge at the
+        // smaller of the pledge and the owner's stock (P5).
+        const state = await musterState(tx, muster, launchAt);
+        // Owners in the koinon's standing order, each one's rows oldest first: the
+        // order the battle sees is fixed by the data, not by who asked.
+        const sides = state.owners.filter((o) => characterOf.has(o.playerId));
+        const army = sides.flatMap((o) => o.rows);
+        const hulls = sides.flatMap((o) => o.hulls);
+        const force = forceStats(forceOf(army));
+
+        const isTown = muster.townId !== null;
+        const regionName = await regionDisplayName(muster.regionId);
+        const townName = muster.townId !== null ? await townDisplayName(muster.townId) : null;
+        const place = { regionId: muster.regionId, regionName, townId: muster.townId, townName };
+        const blank = { ...place, gatherId: muster.gatherId, gatherName: await musterGatherName(muster), launchAt: launchAt.toISOString() };
+        // Whatever still carries the muster's mission on a locked member is
+        // freed here; rows of a player who left are his own settle's to free.
+        const release = async () => {
+          const locked = owners.filter((id) => nameOf.has(id));
+          if (locked.length > 0) await tx.update(playerUnits).set({ mission: null }).where(and(ownsMusterRow(muster.id), inArray(playerUnits.ownerPlayerId, locked)));
+        };
+        const close = async (status: "resolved" | "stood_down", report: MusterReport) => {
+          await tx.delete(koinonMusterHulls).where(eq(koinonMusterHulls.musterId, muster.id));
+          await tx.update(koinonMusters).set({ status, report }).where(eq(koinonMusters.id, muster.id));
+        };
+        // P9: a muster that cannot march stands down. Rows are free at once, with no recovery.
+        const standDown = async (reason: string): Promise<MusterResolved & { launchAt: Date; shrine: typeof shrine }> => {
+          await release();
+          await close("stood_down", { ...blank, outcome: "stood_down", reason, line: null, route: null, steps: null, recoveryHours: null, arrivesAt: null, rounds: 0, men: 0, lost: 0, killed: 0, defender: null, fleet: null, plunder: null, parts: [] });
+          return { outcome: "stood_down", launchAt, shrine };
+        };
+
+        // 8. No men.
+        if (army.length === 0 || force.men === 0) return standDown(REACH_REASON.noMen);
+
+        // 9. Reach, once, from the gathering place with the pooled fleet.
+        const outlook = musterOutlook(muster, { rows: army, hulls });
+        if (!outlook.ok || outlook.route === null || outlook.steps === null) return standDown(outlook.reason ?? "Out of reach.");
+        const { route, steps } = outlook;
+
+        // 10. By sea: the hulls that sail (P6) and the seats loaded (P7).
+        const load = route === "sea" ? loadMusterHulls(force.space, steps, hulls) : null;
+        const recoveryHours = Math.max(1, steps) * battleC.recovery.hoursPerStep;
+        const arrivesAt = new Date(launchAt.getTime() + recoveryHours * MS_PER_HOUR);
+        const sum = (rows: { ownerPlayerId: string; count: number }[]) => rows.reduce<Record<string, number>>((out, r) => ({ ...out, [r.ownerPlayerId]: (out[r.ownerPlayerId] ?? 0) + r.count }), {});
+        const menOf = sum(army);
+        const hullsOf: Record<string, number> = {};
+        const sailed: Record<string, number> = {};
+        for (const h of load?.sailing ?? []) {
+          hullsOf[h.ownerId] = (hullsOf[h.ownerId] ?? 0) + h.count;
+          sailed[h.shipId] = (sailed[h.shipId] ?? 0) + h.count;
+        }
+        // Against a town, the pooled naval power must match its fleet.
+        let fleet: MusterReport["fleet"] = null;
+        if (load) {
+          const townFleet = muster.townId !== null ? await readTownFleet(tx, muster.worldId, muster.townId, launchAt) : null;
+          const defender = townFleet && townFleet.pentekonters + townFleet.triremes > 0 ? { ...townFleet, naval: townFleet.pentekonters * 1 + townFleet.triremes * 5 } : null;
+          fleet = { hulls: sailed, naval: load.naval, space: load.space, filled: load.filled, defender, held: defender === null || load.naval >= defender.naval };
+        }
+
+        const shares = musterShares(menOf, load?.seats ?? {});
+        const lostOf: Record<string, number> = {};
+        let drachmaeOf: Record<string, number> = {};
+        let grainOf: Record<string, number> = {};
+        let outcome: "won" | "driven_off" | "repulsed";
+        let killed = 0;
+        let rounds = 0;
+        let defender: MusterReport["defender"] = null;
+        let plunder: MusterReport["plunder"] = null;
+        let survivors: UnitRow[] = army;
+
+        if (fleet && !fleet.held) {
+          // Repulsed at sea: no battle, no losses, home with recovery.
+          outcome = "repulsed";
+        } else {
+          // 11. The defender as it stood at the launch instant: the region's
+          // warband, or the town's garrison behind its walls, as in `act`.
+          const stats = muster.townId !== null ? await townStats(muster.townId) : null;
+          const npc = isTown ? battleC.npc.garrison : battleC.npc.warband;
+          const npcStats = { ...npc.stats, def: npc.stats.def + (stats ? Math.min(stats.walls, battleC.town.wallsDefCap) : 0) };
+          const pool = muster.townId !== null ? await readTownGarrison(tx, muster.worldId, muster.townId, launchAt) : await readRegionWarband(tx, muster.worldId, muster.regionId, launchAt);
+
+          // 12. One army: every pledged row is its own row in the battle.
+          const seed = crypto.createHash("sha256").update([muster.worldId, muster.id, muster.townId ?? muster.regionId, launchAt.toISOString()].join("|")).digest("hex");
+          const attacker: BattleRow[] = army.map((r) => {
+            const def = r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId);
+            return { id: r.id, label: def?.label ?? r.unitId, count: r.count, stats: def!.stats };
+          });
+          const result = resolveBattle({ attacker, defender: [{ id: isTown ? "garrison" : "warband", label: npc.label, count: pool, stats: npcStats }], seed, config: battleC, mode: "raid" });
+
+          // 13. Losses per row, on its owner: shrink or delete, one battle_loss
+          // log each, as `act` writes them. The pool is written back.
+          survivors = [];
+          for (const r of army) {
+            const side = result.attacker.rows.find((x) => x.id === r.id)!;
+            const lost = side.start - side.end;
+            if (lost > 0) {
+              lostOf[r.ownerPlayerId] = (lostOf[r.ownerPlayerId] ?? 0) + lost;
+              await tx.insert(effectLog).values({ characterId: characterOf.get(r.ownerPlayerId)!, kind: "battle_loss", detail: { rowId: r.id, unitId: r.unitId, source: r.source, lost, regionId: muster.regionId, townId: muster.townId, action: "raid", musterId: muster.id }, createdAt: launchAt });
+            }
+            if (side.end <= 0) await tx.delete(playerUnits).where(eq(playerUnits.id, r.id));
+            else {
+              if (lost > 0) await tx.update(playerUnits).set({ count: side.end }).where(eq(playerUnits.id, r.id));
+              survivors.push({ ...r, count: side.end });
+            }
+          }
+          killed = result.defender.losses;
+          rounds = result.rounds.length;
+          const remaining = Math.max(0, pool - killed);
+          if (muster.townId !== null) await writeTownGarrison(tx, muster.worldId, muster.townId, remaining, launchAt);
+          else await writeRegionWarband(tx, muster.worldId, muster.regionId, remaining, launchAt);
+          defender = { label: npc.label, start: pool, end: remaining };
+          outcome = result.winner === "attacker" ? "won" : "driven_off";
+
+          // 14. On a win: the plunder by `act`'s formula, split by shares
+          // (ruling 5, P7, P8) and credited to each owner.
+          if (result.winner === "attacker") {
+            const mult = isTown ? battleC.raid.townPlunderMultiplier : 1;
+            plunder = { drachmae: Math.round(killed * battleC.raid.plunderPerKill * mult), grain: Math.round(killed * battleC.raid.grainPerKill * mult) };
+            drachmaeOf = splitByShares(plunder.drachmae, shares);
+            grainOf = splitByShares(plunder.grain, shares);
+            for (const id of Object.keys(shares).sort()) {
+              await creditDrachmae(tx, id, drachmaeOf[id] ?? 0);
+              await creditGood(tx, id, "grain", grainOf[id] ?? 0, launchAt);
+            }
+          }
+        }
+
+        // 15. Recovery: every surviving row is bound for the gathering place,
+        // counted from the launch instant.
+        const mission: UnitMission = { kind: "raid", regionId: muster.regionId, ...(muster.townId !== null ? { townId: muster.townId } : {}), departedAt: launchAt.toISOString() };
+        for (const r of survivors) await tx.update(playerUnits).set({ movingTo: muster.gatherId, arrivesAt, mission }).where(eq(playerUnits.id, r.id));
+        await release();
+
+        // 16. One line per participant, with his own part, and the report on the muster.
+        const lost = Object.values(lostOf).reduce((n, v) => n + v, 0);
+        const participants = sides.filter((o) => (menOf[o.playerId] ?? 0) > 0 || (hullsOf[o.playerId] ?? 0) > 0);
+        for (const o of participants) {
+          const chronicle: MusterChronicle = {
+            koinonName: k?.name ?? "",
+            regionId: muster.regionId,
+            regionName,
+            ...(muster.townId !== null ? { townId: muster.townId, townName: townName! } : {}),
+            force: forceParts(o.rows),
+            hulls: hullsOf[o.playerId] ?? 0,
+            winner: outcome === "won" ? "attacker" : outcome === "repulsed" ? "repulsed" : "defender",
+            killed,
+            lost: lostOf[o.playerId] ?? 0,
+            share: outcome === "won" ? { drachmae: drachmaeOf[o.playerId] ?? 0, grain: grainOf[o.playerId] ?? 0 } : null,
+          };
+          await tx.insert(effectLog).values({ characterId: characterOf.get(o.playerId)!, kind: "koinon_muster", detail: { chronicle, musterId: muster.id, line: renderMusterLine(chronicle), source: "koinon" }, createdAt: launchAt });
+        }
+        await close("resolved", {
+          ...blank,
+          outcome,
+          reason: null,
+          line: renderMusterReportLine({ ...place, outcome, men: force.men, killed, lost, plunder }),
+          route,
+          steps,
+          recoveryHours,
+          arrivesAt: arrivesAt.toISOString(),
+          rounds,
+          men: force.men,
+          lost,
+          killed,
+          defender,
+          fleet,
+          plunder,
+          parts: participants.map((o) => ({
+            playerId: o.playerId,
+            name: o.name,
+            men: menOf[o.playerId] ?? 0,
+            lost: lostOf[o.playerId] ?? 0,
+            hulls: hullsOf[o.playerId] ?? 0,
+            seats: load?.seats[o.playerId] ?? 0,
+            shares: shares[o.playerId] ?? 0,
+            drachmae: drachmaeOf[o.playerId] ?? 0,
+            grain: grainOf[o.playerId] ?? 0,
+          })),
+        });
+        return { outcome: "resolved", launchAt, shrine };
+      });
+
+      // Shrine composure banked by the owners' settles, after the commit, as `act` does.
+      for (const s of done.shrine ?? []) await applyShrine(s.ctx, s.composureDays, done.launchAt!);
+      return { outcome: done.outcome };
+    } catch (err) {
+      if (!(err instanceof OwnersChanged) || attempt >= 5) throw err;
+    }
+  }
 }
