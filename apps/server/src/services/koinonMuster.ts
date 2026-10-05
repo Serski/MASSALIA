@@ -832,6 +832,8 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
       return { outcome: done.outcome };
     } catch (err) {
       if (!(err instanceof OwnersChanged) || attempt >= 5) throw err;
+      // Logged every time: this path has no test, so a retry must be visible.
+      console.warn(`[muster] resolve of ${musterId}: attempt ${attempt} of 5 found the pledging owners changed under the locks; retrying`);
     }
   }
 }
