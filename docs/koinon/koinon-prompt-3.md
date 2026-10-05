@@ -397,3 +397,26 @@ Then Phase 4. Before its gate:
 - Run the full `pnpm gate` at the new HEAD, starting below a 1-minute load of 20, and report the starting figure. A red caused only by timeouts is a STOP with the log, never a rerun.
 
 STOP 2 as written. Do not push.
+
+## STOP 2 ruling
+
+STOP 2 ruling (koinon prompt 3)
+
+Append this ruling verbatim at the end of docs/koinon/koinon-prompt-3.md under "## STOP 2 ruling", as its own commit `docs: koinon prompt 3 STOP 2 ruling`.
+
+Accepted as reported: items 1 to 7, 10 and 11; P1 to P12 as built; all new copy as listed.
+
+Two commits, one item each:
+
+1. `barracks: the contract-end disband log carries the settle's clock`. The contract-end disband effect_log row takes createdAt from the settle's now, as the unpaid-upkeep one does. Add a test: a settle at an earlier clock that ends a band's contract writes its log at that clock.
+2. `web: muster targets nearest first`. The target list orders land targets first by steps, then sea targets by steps, then by name within the same distance. The form opens on the first of them. Update the render test that pins the order.
+
+Then the full `pnpm gate` at HEAD, starting below a 1-minute load of 20, with the starting figure reported. If it ends GATE GREEN at HEAD, tree clean, push without a further STOP:
+- plain `git push`, fast-forward only;
+- report remote HEAD, the CI run with its Gate step on postgres:16 and its suite counts, the Railway server deploy with migration 0064 confirmed by a read-only read of __massalia_migrations through `railway run --service Postgres --environment production`, the Railway worker deploy, the Pages run, /health, and GET /api/koinon answering 401 without a session;
+- read the Railway server log for the first 10 minutes after the deploy and report any line containing "muster";
+- then stop the throwaway Postgres on 5433.
+
+If the gate is red, STOP with the log. A red caused only by timeouts is a STOP, never a rerun.
+
+Report every new commit as `Committed: <SHA> <subject>` and quote the gate's last line.
