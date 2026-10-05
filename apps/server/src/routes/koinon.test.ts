@@ -15,7 +15,7 @@ const dbUrl = process.env.DATABASE_URL ?? "";
 const suite = describe.runIf(dbUrl.includes("_test"));
 
 const DAY = 86_400_000;
-const POSTS = ["found", "invite", "withdraw", "accept", "decline", "leave", "expel", "vice", "handover", "take-lead", "post", "post/delete", "read", "give", "lesche"];
+const POSTS = ["found", "invite", "withdraw", "accept", "decline", "leave", "expel", "vice", "handover", "take-lead", "post", "post/delete", "read", "give", "lesche", "muster/open", "muster/pledge", "muster/withdraw", "muster/cancel"];
 
 function hashToken(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
@@ -86,6 +86,8 @@ suite("/api/koinon (integration)", () => {
   it("requires a session on every endpoint", async () => {
     expect((await app.inject({ method: "GET", url: "/api/koinon" })).statusCode).toBe(401);
     expect((await app.inject({ method: "GET", url: "/api/koinon/armies" })).statusCode).toBe(401);
+    expect((await app.inject({ method: "GET", url: "/api/koinon/muster/targets" })).statusCode).toBe(401);
+    expect((await app.inject({ method: "GET", url: "/api/koinon/muster/mine" })).statusCode).toBe(401);
     for (const path of POSTS) {
       expect((await app.inject({ method: "POST", url: `/api/koinon/${path}`, payload: {} })).statusCode, path).toBe(401);
     }
@@ -206,5 +208,54 @@ suite("/api/koinon (integration)", () => {
     const view = (await get(a.token)).json<{ rules: Record<string, number>; koinon: { treasury: number; cap: number; hall: { phase: string }; givers: { name: string; total: number }[]; gifts: { name: string; amount: number }[] } }>();
     expect(view.rules).toMatchObject({ depositMax: 10000, lescheCost: cost, lescheBuildDays: 2, lescheUpkeep: 5, lescheCap: 12 });
     expect(view.koinon).toMatchObject({ treasury: 100, cap: 8, hall: { phase: "building" }, givers: [{ name: "Kallias", total: 50 }], gifts: [{ name: "Kallias", amount: 50 }] });
+  });
+
+  it("muster: targets → open → mine → pledge → withdraw → cancel", async () => {
+    const a = await freshPlayer("Kallias");
+    const b = await freshPlayer("Deon");
+    // Not in a koinon: every muster route answers 403.
+    expect((await get(a.token, "/muster/targets")).statusCode).toBe(403);
+    expect((await get(a.token, "/muster/mine")).statusCode).toBe(403);
+    for (const path of ["muster/open", "muster/pledge", "muster/withdraw", "muster/cancel"]) expect((await post(a.token, path, { gatherId: "x", rows: [], ships: { "trade-ship": 1 } })).statusCode, path).not.toBe(200);
+
+    expect((await post(a.token, "found", { name: "The Sacred Band" })).statusCode).toBe(200);
+    const invited = await post(a.token, "invite", { name: "Deon" });
+    expect((await post(b.token, "accept", { inviteId: invited.json<{ invite: { id: string } }>().invite.id })).statusCode).toBe(200);
+
+    const targets = await get(a.token, "/muster/targets");
+    expect(targets.statusCode).toBe(200);
+    const list = targets.json<{ gathers: { id: string; name: string }[]; gatherId: string; targets: { regionId: string; townId: string | null; kind: string; route: string }[] }>();
+    expect(list.gathers.length).toBeGreaterThan(1);
+    expect(list.gatherId).toBe(list.gathers[0]!.id);
+    expect((await get(a.token, "/muster/targets?gather=nowhere")).statusCode).toBe(400);
+    const land = list.targets.find((t) => t.kind === "region" && t.route === "land")!;
+
+    expect((await get(a.token, "/muster/mine")).statusCode).toBe(409);
+    expect((await post(a.token, "muster/open", { regionId: land.regionId, gatherId: list.gatherId, leadMinutes: 10 })).statusCode).toBe(400);
+    const opened = await post(b.token, "muster/open", { regionId: land.regionId, gatherId: list.gatherId, leadMinutes: 60 });
+    // The world of this suite starts a day ago: day 1 is Spring, and an hour on is still Spring or Summer.
+    expect(opened.statusCode).toBe(200);
+    expect(opened.json()).toMatchObject({ ok: true, musterId: expect.any(String), launchAt: expect.any(String) });
+    expect((await post(a.token, "muster/open", { regionId: land.regionId, gatherId: list.gatherId, leadMinutes: 60 })).statusCode).toBe(409);
+
+    const page = (await get(a.token)).json<{ rules: Record<string, number>; koinon: { muster: { openerName: string; canCancel: boolean; outlook: { route: string } }; unread: number } }>();
+    expect(page.rules).toMatchObject({ musterMinLeadMinutes: 30, musterMaxLeadHours: 24 });
+    expect(page.koinon.muster).toMatchObject({ openerName: "Deon", canCancel: true, outlook: { route: "land" } });
+    expect(page.koinon.unread).toBe(1);
+
+    await db.insert(m.dbPkg.resources).values({ scope: "player", scopeId: a.playerId, type: "trade-ship", amount: "2", ratePerSecond: "0", lastUpdatedAt: now });
+    const mine = await get(a.token, "/muster/mine");
+    expect(mine.statusCode).toBe(200);
+    expect(mine.json<{ rows: unknown[]; ships: { id: string; inStock: number; pledged: number }[] }>().ships.find((s) => s.id === "trade-ship")).toMatchObject({ inStock: 2, pledged: 0 });
+    expect((await post(a.token, "muster/pledge", {})).statusCode).toBe(400);
+    expect((await post(a.token, "muster/pledge", { ships: { "trade-ship": 3 } })).statusCode).toBe(409);
+    expect((await post(a.token, "muster/pledge", { ships: { "trade-ship": 2 } })).statusCode).toBe(200);
+    expect((await post(a.token, "muster/pledge", { rows: [{ rowId: "not-a-uuid", count: 1 }] })).statusCode).toBe(400);
+    expect((await post(a.token, "muster/withdraw")).statusCode).toBe(200);
+    expect(await db.select().from(m.dbPkg.koinonMusterHulls)).toEqual([]);
+
+    expect((await post(a.token, "muster/cancel")).statusCode).toBe(200);
+    expect((await post(a.token, "muster/cancel")).statusCode).toBe(409);
+    expect((await get(a.token)).json<{ koinon: { muster: unknown; lastMuster: { status: string } } }>().koinon).toMatchObject({ muster: null, lastMuster: { status: "cancelled" } });
   });
 });
