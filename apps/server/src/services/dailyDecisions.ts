@@ -41,8 +41,9 @@ export type AppliedDefault = { cardId: string; eventId: string; choiceId: string
 // defaultChoiceId: charge composure exactly as a live resolve would, apply the
 // choice's effects (which also records the event in history) and mark the card
 // resolved-by-default. Lazy by design — runs on the first access of a new day
-// (see ensureDailySet), never from a worker tick. Cards whose event has no
-// default keep today's behaviour: expired, no effect.
+// (see ensureDailySet), never from a worker tick. A card whose event has no
+// default is closed as lapsed instead: resolved, resolvedChoiceId "expired",
+// resolvedByDefault false, and nothing applied.
 // `events` is injectable for tests; production passes the loaded content.
 export async function applyExpiredDefaults(characterId: string, now: Date, events?: EventDefinition[]): Promise<AppliedDefault[]> {
   const expired = await db
@@ -61,7 +62,18 @@ export async function applyExpiredDefaults(characterId: string, now: Date, event
       continue;
     }
     const choice = defaultChoiceFor(event);
-    if (!choice) continue;
+    if (!choice) {
+      // No default to settle to: the card simply lapsed. Close it so it stops
+      // coming back on every new day, with nothing applied — no effects, no
+      // composure, no event history, no Chronicle line. Guarded on resolved =
+      // false exactly as the claim is, so a racing first access cannot close a
+      // card the other access just resolved.
+      await db
+        .update(dailyDecisions)
+        .set({ resolved: true, resolvedChoiceId: "expired" })
+        .where(and(eq(dailyDecisions.id, row.id), eq(dailyDecisions.resolved, false)));
+      continue;
+    }
 
     // Traits/spouse are read BEFORE the claim (the composure preview is judged
     // against them, exactly as the resolve route reads them before resolving).

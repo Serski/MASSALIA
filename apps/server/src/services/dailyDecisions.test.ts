@@ -209,15 +209,17 @@ suite("daily decisions — lazy default for expired cards (integration)", () => 
     expect(general!.resolvedByDefault).toBe(false);
   });
 
-  it("(b) yesterday's unresolved card WITHOUT a default stays unresolved with no effects", async () => {
+  it("(b) yesterday's unresolved card WITHOUT a default is closed as expired, with no effects", async () => {
     const c = await createCharacter("Amelesteros", 500);
     const stale = await insertCard(c.id, yesterday, NO_DEFAULT.id);
 
     await m.daily.ensureDailySet(c.id, ctx, now, startedMs, pool);
 
+    // Closed as lapsed, not settled: resolved with the "expired" marker, and NOT
+    // resolved-by-default, since no choice was taken on the player's behalf.
     const after = await card(stale.id);
-    expect(after.resolved).toBe(false);
-    expect(after.resolvedChoiceId).toBeNull();
+    expect(after.resolved).toBe(true);
+    expect(after.resolvedChoiceId).toBe("expired");
     expect(after.resolvedByDefault).toBe(false);
     expect(await drachmaeOf(c.id)).toBe(500);
     // No choice was applied: nothing in the effect log for this character.
