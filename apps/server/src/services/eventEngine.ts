@@ -63,7 +63,25 @@ export async function getFactionDefaults() {
 
 // Load every event file. Files may be a single event or an array of events
 // (category packs). Validated against the Zod schema — fail loudly at boot.
-export async function listEvents(): Promise<EventDefinition[]> {
+//
+// Content changes only with a deploy, so the parsed events are loaded once per
+// process and every caller shares the one array (nobody mutates it: the routes
+// spread copies for previews, the draw filters). The PROMISE is cached, so
+// concurrent first callers share a single read; a failed load clears it, so the
+// boot check in index.ts still throws and a later call retries instead of
+// handing back the same rejection forever.
+let eventsPromise: Promise<EventDefinition[]> | null = null;
+export function listEvents(): Promise<EventDefinition[]> {
+  if (!eventsPromise) {
+    eventsPromise = loadEvents().catch((error: unknown) => {
+      eventsPromise = null;
+      throw error;
+    });
+  }
+  return eventsPromise;
+}
+
+async function loadEvents(): Promise<EventDefinition[]> {
   const files = (await fs.readdir(eventsDir)).filter((file) => file.endsWith(".json"));
   const groups = await Promise.all(
     files.map(async (file) => {
