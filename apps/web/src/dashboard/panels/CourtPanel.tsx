@@ -157,7 +157,8 @@ const LADDER_LABELS: Record<string, string> = {
 // The proactive half of the daily loop: pick ONE routine per day. Mirrors the
 // CourtDecisions resolve/preview pattern; locks after a pick and shows the four
 // upbringing-ladder progress bars.
-function RoutinesCard({ onRefresh }: PanelProps) {
+// Exported for the render test; mounted only by CourtPanel.
+export function RoutinesCard({ player, onRefresh }: PanelProps) {
   const [set, setSet] = useState<RoutineSet | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -246,19 +247,32 @@ function RoutinesCard({ onRefresh }: PanelProps) {
             // chip, reusing the same requires.fee the resolve path consumes. Waived
             // fees (building-covered) show nothing.
             const fee = card.requires && !card.requires.waived ? card.requires.fee : undefined;
+            // The good a routine needs, when not waived: spent ("−1 wine") or kept
+            // ("Needs 1 horse", cost-neutral). Short of it, the chip says so and the
+            // button is disabled, so the server's refusal is never the first word.
+            const good = card.requires && !card.requires.waived ? card.requires.good : undefined;
+            const short = good ? (player.balances[good.type] ?? 0) < good.qty : false;
+            const goodChip = !good
+              ? null
+              : short
+                ? { text: `Needs ${good.qty} ${good.type}, you have none`, tone: "negative" }
+                : good.keep
+                  ? { text: `Needs ${good.qty} ${good.type}`, tone: "neutral" }
+                  : { text: `−${good.qty} ${good.type}`, tone: "negative" };
             return (
               <button
                 className="event-choice-button"
                 type="button"
                 key={card.id}
-                disabled={busy}
+                disabled={busy || short}
                 title={card.scene}
                 onClick={() => pick(card.id)}
               >
                 <strong>{card.label}</strong>
-                {card.costs.length > 0 || card.composureDelta !== 0 || fee ? (
+                {card.costs.length > 0 || card.composureDelta !== 0 || fee || goodChip ? (
                   <span className="choice-costs">
                     {fee ? <span className="cost-chip cost-negative">−{fee} drachmae</span> : null}
+                    {goodChip ? <span className={`cost-chip cost-${goodChip.tone}`}>{goodChip.text}</span> : null}
                     {card.costs.map((cost, i) => (
                       <span key={i} className={`cost-chip cost-${cost.tone}`}>{cost.label}</span>
                     ))}
