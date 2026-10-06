@@ -32,7 +32,7 @@
       "role": "line",
       "trainSeasons": 2,
       "gear": { "timber": 1, "iron": 1, "tin": 2 },
-      "upkeepPerDay": { "grain": 2, "oliveoil": 1 },
+      "upkeepPerDay": { "grain": 1, "chicken": 1, "oliveoil": 1 },
       "stats": { "atk": 7, "def": 8, "msl": 0, "mor": 7, "spd": 3, "space": 1 }
     },
     "hippeis": {
@@ -42,7 +42,7 @@
       "role": "mounted",
       "trainSeasons": 2,
       "gear": { "leather": 2, "iron": 1, "wool": 2, "horse": 1 },
-      "upkeepPerDay": { "grain": 3, "oliveoil": 1 },
+      "upkeepPerDay": { "grain": 2, "chicken": 1, "oliveoil": 1 },
       "stats": { "atk": 6, "def": 4, "msl": 2, "mor": 6, "spd": 10, "space": 3 }
     }
   }

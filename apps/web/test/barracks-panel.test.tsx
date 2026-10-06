@@ -28,7 +28,7 @@ const awayRaid = row({ id: "away-raid", unitId: "hippeis", label: "Hippeis", plu
 const awayNoMission = row({ id: "away-plain", count: 7, startCount: 7, movingTo: "R060", arrivesAt: iso(NOW + 5 * H), mission: null });
 const trainingRow = row({ id: "training-ekdromoi", unitId: "ekdromos", label: "Ekdromos", plural: "Ekdromoi", count: 4, startCount: 4, active: false, readyAt: iso(NOW + 18 * H), createdAt: iso(NOW - 6 * H) });
 
-const unit = (id: string, label: string, plural: string, trainSeasons: number) => ({ id, label, plural, icon: `${id.toUpperCase()}.webp`, role: "line", trainSeasons, gear: { timber: 1, iron: 1 }, upkeepPerDay: { grain: 2, oliveoil: 1 }, stats });
+const unit = (id: string, label: string, plural: string, trainSeasons: number, upkeepPerDay: Record<string, number> = { grain: 2, oliveoil: 1 }) => ({ id, label, plural, icon: `${id.toUpperCase()}.webp`, role: "line", trainSeasons, gear: { timber: 1, iron: 1 }, upkeepPerDay, stats });
 const offer = (id: string, label: string, hired: boolean) => ({ id, label, icon: "BAND.webp", role: "line", men: 20, upkeepPerDay: { drachmae: 90, wine: 3, chicken: 3, herbal: 2 }, stats, hired });
 
 function payload(over: Partial<BarracksView> = {}): BarracksView {
@@ -39,7 +39,7 @@ function payload(over: Partial<BarracksView> = {}): BarracksView {
     now: iso(NOW),
     levy: { men: 3 },
     config: { minServiceSeasons: 2, maxActiveBands: 2, termSeasons: 2 },
-    units: [unit("peltast", "Peltast", "Peltasts", 1), unit("hoplite", "Hoplite", "Hoplites", 2)],
+    units: [unit("peltast", "Peltast", "Peltasts", 1), unit("hoplite", "Hoplite", "Hoplites", 2, { grain: 1, chicken: 1, oliveoil: 1 })],
     roster,
     offers: [offer("etruscan-hoplites", "Etruscan hoplites", true), offer("syracusan-hoplites", "Syracusan hoplites", false), offer("volcae-irregulars", "Volcae irregulars", true)],
     activeBands: 2,
@@ -119,7 +119,7 @@ describe("BarracksPanel", () => {
     expect(home.textContent).toContain("Mercenaries · 40 men");
     expect(home.textContent).toContain("Hoplite · 26"); // a levy row shows the plain count, never "of"
     expect(home.textContent).not.toContain("26 of 30");
-    expect(home.textContent).toContain("2 grain · 1 oil a day per man · 52 grain · 26 oil for the row");
+    expect(home.textContent).toContain("1 grain · 1 oil · 1 chicken a day per man · 52 grain · 26 oil for the row");
     expect(home.textContent).toContain("May be released.");
     expect(home.textContent).toMatch(/4 wine · 4 chicken · 2 herbs · 40 drachmae a day · contract 1d 1[56]h/);
     expect(home.querySelectorAll("button").length).toBe(4); // Move and Disband on each row
@@ -152,6 +152,8 @@ describe("BarracksPanel", () => {
     expect(ground.querySelectorAll(".barracks-card")).toHaveLength(2);
     expect(ground.querySelectorAll(".barracks-chip")).toHaveLength(12);
     expect(ground.textContent).toContain("Trains 24h");
+    // The unit card lists every good the content charges, chicken included.
+    expect(ground.querySelector('[data-unit="hoplite"]')!.textContent).toContain("Upkeep 1 grain · 1 oil · 1 chicken a day");
     const card = ground.querySelector('[data-unit="peltast"]')!;
     const minus = within(card as HTMLElement).getByLabelText("fewer Peltasts");
     const plus = within(card as HTMLElement).getByLabelText("more Peltasts");

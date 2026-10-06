@@ -62,6 +62,7 @@ suite("Map actions (integration)", () => {
     // row is disbanded for insolvency on the way in.
     await give(ctx, "grain", 5000);
     await give(ctx, "oliveoil", 5000);
+    await give(ctx, "chicken", 5000);
     return { ctx, characterId: ch.id, dynastyId: dynasty.id };
   }
   const give = (ctx: Ctx, type: string, amount: number) =>
@@ -560,7 +561,7 @@ suite("Map actions (integration)", () => {
 
   it("town tribute: whole days only, only while the garrison meets the population minimum, and never after reversion", async () => {
     const { ctx, characterId } = await makePlayer({ drachmae: 1000 });
-    await giveAll(ctx, { wine: 1000, chicken: 1000, herbal: 1000 });
+    await giveAll(ctx, { wine: 1000, herbal: 1000 }); // chicken is already stocked by makePlayer
     // Vienna (R032, population 3,000): 240 dr a day, 30 men needed.
     await m.holdings.insertTownConquest(db, ctx, "R032", "vienna", "cavares", at(9));
     const men = await insertRow(ctx, { unitId: "hoplite", count: 30, basedAt: "vienna", season: 8 });

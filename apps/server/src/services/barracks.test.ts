@@ -290,13 +290,13 @@ suite("Barracks (integration)", () => {
     it("charges a trained row's grain and oil from stock per man per day; buys the shortfall at the seasonal price", async () => {
       const { ctx } = await makePlayer({ drachmae: 1000 });
       await giveAll(ctx, { grain: 5, oliveoil: 100 });
-      // 10 hoplites, ready: grain 2 + oil 1 per man per day.
+      // 10 hoplites, ready: grain 1 + chicken 1 + oil 1 per man per day; no chicken in stock.
       await insertRow(ctx, { source: "trained", unitId: "hoplite", count: 10, recruitedSeason: 7, readyAt: 9, createdSeason: 9 });
       const s = await settle(ctx, 10);
       expect(s.days).toBe(1);
       expect(s.drawn).toEqual({ grain: 5, oliveoil: 10 });
-      expect(s.bought).toEqual({ grain: 15 });
-      const expected = Math.round(15 * buyPrice("grain", 10));
+      expect(s.bought).toEqual({ grain: 5, chicken: 10 });
+      const expected = Math.round(5 * buyPrice("grain", 10) + 10 * buyPrice("chicken", 10));
       expect(s.cost).toBe(expected);
       expect(s.drachmaeDirect).toBe(0);
       expect(await stock(ctx, "grain")).toBe(0);
@@ -340,7 +340,7 @@ suite("Barracks (integration)", () => {
       // The first whole day after ready_at is charged.
       const s3 = await settle(ctx, 12);
       expect(s3.days).toBe(1);
-      expect(s3.drawn).toEqual({ grain: 20, oliveoil: 10 });
+      expect(s3.drawn).toEqual({ grain: 10, oliveoil: 10 });
     });
 
     it("a row that became ready mid-gap is charged for the post-ready days only; a band for the whole gap", async () => {
@@ -353,7 +353,7 @@ suite("Barracks (integration)", () => {
       // ready for two ([10, 11) and [11, 12)).
       const s = await settle(ctx, 12);
       expect(s.days).toBe(3);
-      expect(s.drawn).toEqual({ grain: 40, oliveoil: 20, wine: 12, chicken: 12, herbal: 6 });
+      expect(s.drawn).toEqual({ grain: 20, oliveoil: 20, wine: 12, chicken: 32, herbal: 6 });
       expect(s.bought).toEqual({});
       expect(s.drachmaeDirect).toBe(120);
       expect(s.cost).toBe(120);
@@ -362,7 +362,7 @@ suite("Barracks (integration)", () => {
       await insertRow(ctx, { source: "trained", unitId: "peltast", count: 10, recruitedSeason: 12, readyAt: 13, createdSeason: 12 });
       const s2 = await settle(ctx, 13);
       expect(s2.days).toBe(1);
-      expect(s2.drawn).toEqual({ grain: 20, oliveoil: 10, wine: 4, chicken: 4, herbal: 2 });
+      expect(s2.drawn).toEqual({ grain: 10, oliveoil: 10, wine: 4, chicken: 14, herbal: 2 });
     });
 
     it("a relocation whose arrives_at has passed lands the row at moving_to; one still in flight is untouched", async () => {
@@ -406,8 +406,8 @@ suite("Barracks (integration)", () => {
       expect(view.upkeep.note).toBe("Shortfalls are bought at the market's seasonal price.");
       expect(view.upkeep.rows[training.id]).toBeUndefined();
       expect(Object.keys(view.upkeep.rows)).toHaveLength(2);
-      // hoplite 2 grain + 1 oil per man × 30; Salluvii 75 dr, 4 wine, 4 chicken, 2 herbs per band.
-      expect(view.upkeep.perDay).toEqual({ grain: 60, oliveoil: 30, drachmae: 75, wine: 4, chicken: 4, herbal: 2 });
+      // hoplite 1 grain + 1 chicken + 1 oil per man × 30; Salluvii 75 dr, 4 wine, 4 chicken, 2 herbs per band.
+      expect(view.upkeep.perDay).toEqual({ grain: 30, oliveoil: 30, drachmae: 75, wine: 4, chicken: 34, herbal: 2 });
       // One day later the settle draws exactly those goods and that pay.
       const s = await settle(ctx, 10);
       expect(s.days).toBe(1);
@@ -426,7 +426,7 @@ suite("Barracks (integration)", () => {
       const view = await m.barracks.barracksView(ctx, at(9));
       const mine = await m.buildings.mine("hoplite", ctx, at(9));
       expect(mine.army.perDay).toEqual(view.upkeep.perDay);
-      expect(mine.army.perDay).toEqual({ grain: 60, oliveoil: 30, drachmae: 75, wine: 4, chicken: 4, herbal: 2 });
+      expect(mine.army.perDay).toEqual({ grain: 30, oliveoil: 30, drachmae: 75, wine: 4, chicken: 34, herbal: 2 });
     });
 
     it("a returning party merges into the same-unit rows at its base even when two already stand there, keeping the latest created_at; a lone row just lands; bands never merge", async () => {
@@ -545,7 +545,7 @@ suite("Barracks (integration)", () => {
       expect(await wallet(ctx)).toBe(20);
       expect((await rows(ctx)).map((r) => r.unitId)).toEqual(["volcae-irregulars", "hoplite"]);
       // Only the kept rows' goods were drawn.
-      expect(s.drawn).toEqual({ wine: 4, chicken: 4, herbal: 2, grain: 20, oliveoil: 10 });
+      expect(s.drawn).toEqual({ wine: 4, chicken: 14, herbal: 2, grain: 10, oliveoil: 10 });
     });
   });
 

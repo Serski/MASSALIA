@@ -46,9 +46,9 @@ function upkeepGoods(map: Record<string, number>): [string, number][] {
   return keys.map((g) => [g, map[g]!]);
 }
 
-// Unit upkeep for the catalogue: "1 grain, 1 oil a day".
+// Unit upkeep for the catalogue, every good the content lists: "1 grain · 1 oil · 1 chicken a day".
 function unitUpkeep(upkeep: Record<string, number>): string {
-  return `${upkeep.grain ?? 0} grain, ${upkeep.oliveoil ?? 0} oil a day`;
+  return `${upkeepLine(upkeep)} a day`;
 }
 // Band upkeep for the market: "40 dr, 4 wine, 4 chicken, 2 herbs a day" (+ grain for mounted bands).
 function bandUpkeep(upkeep: Record<string, number>): string {

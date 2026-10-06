@@ -97,6 +97,7 @@ suite("/api/map/reach (integration)", () => {
     // Upkeep for the settle the route runs first.
     await db.insert(m.dbPkg.resources).values({ scope: "player", scopeId: p.playerId, type: "grain", amount: "1000", ratePerSecond: "0", lastUpdatedAt: startedAt });
     await db.insert(m.dbPkg.resources).values({ scope: "player", scopeId: p.playerId, type: "oliveoil", amount: "1000", ratePerSecond: "0", lastUpdatedAt: startedAt });
+    await db.insert(m.dbPkg.resources).values({ scope: "player", scopeId: p.playerId, type: "chicken", amount: "1000", ratePerSecond: "0", lastUpdatedAt: startedAt });
     const res = await get(p.token);
     expect(res.statusCode).toBe(200);
     const v = res.json<ReachView>();
