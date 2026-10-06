@@ -146,9 +146,11 @@ afterEach(() => {
 });
 
 async function mount(page: KoinonPage, onRefresh = vi.fn()) {
-  vi.spyOn(api, "koinon").mockResolvedValue(page);
-  const armiesCall = vi.spyOn(api, "koinonArmies").mockResolvedValue(armies);
-  const read = vi.spyOn(api, "koinonRead").mockResolvedValue({ ok: true });
+  // Vitest 4 returns the same spy on a re-spy, so a second mount in one test
+  // would inherit the first mount's calls; clear each spy so it counts from zero.
+  vi.spyOn(api, "koinon").mockResolvedValue(page).mockClear();
+  const armiesCall = vi.spyOn(api, "koinonArmies").mockResolvedValue(armies).mockClear();
+  const read = vi.spyOn(api, "koinonRead").mockResolvedValue({ ok: true }).mockClear();
   const utils = render(<KoinonView {...props} onRefresh={onRefresh} />);
   await flush();
   return { ...utils, armiesCall, read, onRefresh };
@@ -609,8 +611,8 @@ describe("KoinonView · the muster", () => {
     await tick(0);
   }
   async function show(page: KoinonPage) {
-    const read = vi.spyOn(api, "koinon").mockResolvedValue(page);
-    vi.spyOn(api, "koinonArmies").mockResolvedValue(armies);
+    const read = vi.spyOn(api, "koinon").mockResolvedValue(page).mockClear();
+    vi.spyOn(api, "koinonArmies").mockResolvedValue(armies).mockClear();
     const view = render(<KoinonView {...props} onRefresh={() => {}} />);
     await tick(0);
     return { ...view, read, card: () => section(view.container, "muster")! };

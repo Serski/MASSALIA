@@ -1,10 +1,13 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 // The server's integration suites (oligarchy, elections) run against ONE real
 // Postgres and truncate it between tests. Run test files serially so two suites
 // never stomp the same database concurrently.
 export default defineConfig({
   test: {
+    // Vitest 4 excludes only node_modules and .git by default; tsc compiles the
+    // test files into dist, so exclude that or every suite runs twice.
+    exclude: [...configDefaults.exclude, "**/dist/**"],
     fileParallelism: false,
     // These suites each do real bcrypt hashing (cost 12) plus several DB
     // round-trips per test; on a loaded machine a single case can exceed the 5s
