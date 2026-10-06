@@ -56,14 +56,16 @@ const classModSchema = z
 // if the player owns it (any tier), the cost is zeroed (shown as a waiver). NO
 // free variants: without the good (and without a waiver) the card cannot be run.
 export type RoutineRequirement = {
-  good?: { type: string; qty: number };
+  // `keep`: the good must be in stock (qty or more) but is not spent — Ride the
+  // hills needs a horse and keeps it.
+  good?: { type: string; qty: number; keep?: boolean };
   fee?: number;
   waivedBy?: string;
 };
 
 const routineRequirementSchema = z
   .object({
-    good: z.object({ type: z.string(), qty: z.number().int().positive() }).strict().optional(),
+    good: z.object({ type: z.string(), qty: z.number().int().positive(), keep: z.boolean().optional() }).strict().optional(),
     fee: z.number().int().positive().optional(),
     waivedBy: z.string().optional(),
   })

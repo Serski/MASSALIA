@@ -158,7 +158,8 @@ function costChips(effects: RoutineEffect[]): ChoiceCost[] {
 }
 
 export type RoutineRequirementView = {
-  good?: { type: string; qty: number };
+  // `keep`: needed in stock, not spent (the client draws it as "Needs", not "−").
+  good?: { type: string; qty: number; keep?: boolean };
   fee?: number;
   waivedBy?: string;
   // True when the player owns the waivedBy building (cost is zeroed).

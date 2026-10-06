@@ -238,6 +238,23 @@ suite("Ledger / building engine (integration)", () => {
     expect(await goodBalance("horse")).toBe(0); // waived → nothing consumed
   });
 
+  it("a kept good (Ride the hills' horse) must be in stock but is not spent; without one the ride is refused", async () => {
+    const c = await ctx();
+    const ride = { good: { type: "horse", qty: 1, keep: true } };
+    // No horse → the same refusal as a spent good, and nothing changes.
+    const none = await m.buildings.consumeRoutineRequirement(playerId, worldId, ride, new Date(T0));
+    expect(none).toEqual({ ok: false, code: 409, error: "You have no horse for this — the agora sells them." });
+    expect(await goodBalance("horse")).toBe(0);
+
+    // One horse in the stable: the ride goes ahead and the horse is still there.
+    await setWallet(1000);
+    await m.buildings.vendorTrade(c, "buy", "horse", 1, new Date(T0));
+    expect(await goodBalance("horse")).toBe(1);
+    const kept = await m.buildings.consumeRoutineRequirement(playerId, worldId, ride, new Date(T0));
+    expect(kept).toEqual({ ok: true, waived: false });
+    expect(await goodBalance("horse")).toBe(1);
+  });
+
   it("a PRIEST builds the Sanctuary; collect banks BOTH offering drachmae (wallet) and herbal (resources); upgrade raises both", async () => {
     // The priest path rides the exact same generic engine as the landowner.
     playerId = await freshPlayer(100, "priest");

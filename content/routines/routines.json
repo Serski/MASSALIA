@@ -53,7 +53,8 @@
     "requires": {
       "good": {
         "type": "horse",
-        "qty": 1
+        "qty": 1,
+        "keep": true
       },
       "waivedBy": "horse-farm"
     },

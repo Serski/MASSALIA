@@ -1178,7 +1178,8 @@ export function portraitUrl(configPath: string | null | undefined): string | und
 // --- Daily Routines (proactive half of the daily loop) ---------------------
 
 export type RoutineRequirementView = {
-  good?: { type: string; qty: number };
+  // `keep`: needed in stock, not spent (drawn as "Needs", not "−").
+  good?: { type: string; qty: number; keep?: boolean };
   fee?: number;
   waivedBy?: string;
   // True when the player owns the waivedBy building (cost is zeroed).

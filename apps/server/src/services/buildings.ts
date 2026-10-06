@@ -1405,7 +1405,7 @@ export async function grantPops(tx: Exec, ctx: ActingContext, popType: string, c
 // transaction that already holds lockPlayer (the routine resolve uses it so the
 // debit and the day's claim commit together); a shortfall throws SpendRejected.
 
-export type ConsumeRequirement = { good?: { type: string; qty: number }; fee?: number; waivedBy?: string };
+export type ConsumeRequirement = { good?: { type: string; qty: number; keep?: boolean }; fee?: number; waivedBy?: string };
 export type ConsumeResult = { ok: false; code: number; error: string } | { ok: true; waived: boolean };
 
 export async function consumeRoutineRequirementInTx(tx: Exec, ctx: ActingContext, req: ConsumeRequirement, now: Date): Promise<{ ok: true; waived: boolean }> {
@@ -1416,8 +1416,16 @@ export async function consumeRoutineRequirementInTx(tx: Exec, ctx: ActingContext
   if (req.good) {
     await settleGoods(tx, ctx, await flipActivations(tx, rows, now), now);
     const goodRow = await getOrCreateResource(tx, ctx.playerId, req.good.type, now);
-    const left = await debitResource(tx, goodRow.id, req.good.qty);
-    if (left === null) throw new SpendRejected({ ok: false, code: 409, error: `You have no ${req.good.type} for this — the agora sells them.` });
+    const refused = () => new SpendRejected({ ok: false, code: 409, error: `You have no ${req.good!.type} for this — the agora sells them.` });
+    if (req.good.keep) {
+      // Needed, not spent (Ride the hills keeps its horse): the settled stock must
+      // cover qty, and nothing is debited. The row was read under the caller's
+      // player lock, so the check is as safe as the guarded debit below.
+      if (Number(goodRow.amount) < req.good.qty) throw refused();
+    } else {
+      const left = await debitResource(tx, goodRow.id, req.good.qty);
+      if (left === null) throw refused();
+    }
   }
   if (req.fee) {
     const wallet = await debitDrachmae(tx, ctx.playerId, req.fee);
