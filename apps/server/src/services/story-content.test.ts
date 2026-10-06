@@ -772,4 +772,18 @@ suite("loadStories seed (integration)", () => {
 
     expect(m.story.STORY_TRIGGERS["guest-gift"]).toEqual({ kind: "seat" });
   });
+
+  it("34. News from Rome is seeded, and its trigger offers it to every class in Summer 295 BC only", async () => {
+    await m.story.loadStories();
+
+    const rows = await db.select().from(m.dbPkg.stories).where(eq(m.dbPkg.stories.id, "sentinum"));
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.version).toBe(1);
+    expect((rows[0]!.tree as { nodes: unknown[] }).nodes.length).toBe(3);
+
+    expect(m.story.STORY_TRIGGERS["sentinum"]).toEqual({
+      kind: "dated",
+      date: { yearBC: 295, season: 3 },
+    });
+  });
 });

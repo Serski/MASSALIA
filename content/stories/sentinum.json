@@ -1,0 +1,56 @@
+{
+  "id": "sentinum",
+  "version": 1,
+  "tree": {
+    "title": "News from Rome",
+    "start": "OPEN",
+    "nodes": [
+      {
+        "type": "scene",
+        "id": "OPEN",
+        "body": {
+          "paragraphs": [
+            "A Tyrrhenian trader is in with wine and Campanian ware, and he is giving away a tale before he has sold a single jar: the Romans have fought the greatest battle anyone can remember, at a place called Sentinum, in the hills on the far side of Italy.",
+            "Samnites and Gauls stood together against two consular armies, forty thousand men on a side, he says, and holds up his hands for the size of it."
+          ]
+        },
+        "image": "/stories/story-samnite-00-news.webp",
+        "choices": [
+          {
+            "id": "cup",
+            "text": "Buy him a cup",
+            "requires": { "drachmae": 1 },
+            "rewards": [{ "type": "change_drachmae", "amount": -1 }],
+            "next": "END"
+          },
+          {
+            "id": "walk",
+            "text": "Walk on",
+            "next": "END-walk"
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "id": "END",
+        "body": {
+          "paragraphs": [
+            "For the price of a cup he gives you the whole of it. The Senones, the same Gauls who burned Rome in our great-grandfathers' time, came down with their chariots and broke the Roman left. The consul Decius, seeing his line go, spoke the old vow that gives a man's own life to the gods below together with the enemy's host, and rode into the Gauls to die.",
+            "The other consul, Fabius, held, turned the Samnites and stormed their camp; their general Gellius Egnatius fell at its gate. The trader swears to twenty-five thousand of the enemy dead. The old men on the quay say only this: the Gauls have been beaten in the open field, and every Gaul from the Rhodanos to the Alps will hear of it before the grapes are in."
+          ]
+        },
+        "image": "/stories/story-samnite-01-wine.webp",
+        "rewards": [],
+        "chronicle": ["A trader up from the Tyrrhenian Sea brought word of Rome's victory over the Samnites and the Gauls at Sentinum."]
+      },
+      {
+        "type": "terminal",
+        "id": "END-walk",
+        "body": {
+          "paragraphs": ["You leave him to his audience. By evening every wine-shop on the Lakydon has the Romans winning the battle twice over."]
+        },
+        "rewards": []
+      }
+    ]
+  }
+}
