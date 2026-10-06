@@ -93,3 +93,7 @@ Report:
 - Captures: creation step 1 and step 3 at 393, creation at 1280, header at 320, 393, 430, 768, 1280
 - Any horizontal overflow you see elsewhere at these widths: report it, do not fix it
 - Deviations, each as a ruling request
+
+## STOP 1 ruling (21 Sept 2026), summary
+
+The agent's browser pane draws the coin and amphora emoji about 16px wide against iOS Safari's 20px, so its chip measurements run about 4px short and the phone is the wider case. 'Pytheas' at Dashboard.tsx:50 is the client's placeholder painted while the payload is absent, not a server rename.

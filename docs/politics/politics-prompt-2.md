@@ -162,3 +162,5 @@ Deviations: <none, or one line each>
 Ruling items: <none, or one line each>
 
 ```
+
+No STOP 1 ruling was recorded. The work shipped as 1585bc5.

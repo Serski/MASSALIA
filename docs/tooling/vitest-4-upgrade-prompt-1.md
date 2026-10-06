@@ -61,3 +61,49 @@ STOP 1. Report:
 ## Push
 
 Only after Argiris replies "push". Plain fast-forward push to main. Report CI (Gate and Audit steps), Railway server and worker on the new SHA, Pages green.
+
+## STOP rulings (6 Oct 2026)
+
+### The agent's final report, verbatim
+
+Everything is done and confirmed. Nothing went red after the fix.
+
+**Committed and pushed:** bffc37c deps: vitest 4, the tinypool audit ignore removed. One commit, amended as approved, fast-forwarded onto main at 19:32 UTC.
+
+**Gate:** `GATE GREEN: HEAD bffc37c, tree clean`. **Audit:** exits 0 with no ignore in place, four moderate findings left under the threshold.
+
+**Test file counts, Vitest 4 against the Vitest 3 baseline.** Every package matches, and the gate log shows no compiled file under dist was collected.
+
+| Package | Vitest 3 | Vitest 4 |
+|---|---|---|
+| shared | 36 files, 646 tests | 36 files, 646 tests |
+| server | 49 files, 594 tests | 49 files, 594 tests |
+| db | 10 files, 40 tests | 10 files, 40 tests |
+| web | 27 files, 135 tests | 27 files, 135 tests |
+| worker | 1 file, 10 tests | 1 file, 10 tests |
+
+**Changed files:** root package.json, the shared package.json, pnpm-lock.yaml, the db and server vitest configs, new vitest configs in shared and worker, and the two helpers in the koinon view test. Tinypool is gone from the lockfile, the whole pnpm block is deleted, and no assertion changed.
+
+**Deploy confirmation**
+
+| Check | Result |
+|---|---|
+| CI run 37519766680 | success, Gate and Audit both green |
+| Railway server | SUCCESS on bffc37c at 19:40 UTC |
+| Railway worker | SUCCESS on bffc37c at 19:39 UTC |
+| Pages | success on bffc37c, site answers 200 |
+| API health | ok, db ok, redis ok |
+
+**Dependabot.** Alerts 9 and 10, the two critical tinypool advisories, and 2 to 5, the four vitest and mocker entries for GHSA-82fw-gwwq-j7x9, all show as fixed at 19:32 UTC, the minute of the push. Four moderate alerts remain open, all transitive: esbuild 0.18 under drizzle-kit, and fast-uri three times under fastify. None reaches the audit's high threshold.
+
+Both earlier pushes tonight are also still live: the Sentinum story sits in the production stories table and opens with Summer 295 BC at 00:00 UTC, about two hours and twenty minutes from now.
+
+### Argiris's two rulings, verbatim
+
+Ruling 1 (go):
+
+> go. Approved: new vitest configs in shared and worker with the dist exclude. After the gate, confirm the test file count for each package matches the Vitest 3 count from before the upgrade, so nothing runs twice and nothing is dropped.
+
+Ruling 2 (the two red koinon-view tests):
+
+> Approved: add .mockClear() to the spies in the two koinon-view helpers, no assertion changes. Amend into the unpushed commit and rerun the full gate. If GATE GREEN and the audit exits 0, push, then confirm CI, Railway, Pages, and that Dependabot alerts 9 and 10 plus 2 to 5 are closed. If anything else goes red, stop and report.

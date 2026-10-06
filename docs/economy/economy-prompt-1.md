@@ -204,3 +204,7 @@ Post-deploy check: the Ledger's class ladder shows the doubled tier figures (a F
 Do not touch: goods yields; any vendor band other than `trade-ship` and `galley`; craft recipes; `seasonal` (coefficients, `goodCategory`, the guard days); materials, staffing and `content/people/pops.json`; `COST_TABLE`, `UPKEEP`, `YIELD_GROWTH`, build days; the commons; rank gates and the militia trickle; contract gates, terms, risk, traits and `merc-cards.json`; Barracks units and bands; everything in `content/military/battle.json` other than `plunderPerKill` and `perPopulation` (`grainPerKill`, `townPlunderMultiplier`, `minGarrisonPerPopulation`, `regionTribute` and the rest); the plunder and tribute code in `services/mapActions.ts` and `services/holdings.ts`; starting drachmae; any event, story or dated card payout; the Slave's card and its routines; the settle and accrual code in `services/buildings.ts`, `services/service.ts` and `services/merc.ts`; the craft and vendor code; `packages/db/src/seed.ts`; any web source file; `content/news/news.json` and the guides; `AGENTS.md`. No migration. No production write. No new endpoint. No refactors along the way.
 
 END OF PROMPT
+
+## STOP 1 ruling (4 Oct 2026)
+
+The verbatim text was not kept. The work as shipped in the commits ending 7152e21 is the record.
