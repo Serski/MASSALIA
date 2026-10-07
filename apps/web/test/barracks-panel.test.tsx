@@ -246,8 +246,8 @@ describe("BarracksPanel", () => {
     expect(altar.querySelector(".barracks-head-note")!.textContent).toBe("A beast burned here steadies every man you field for 2 seasons.");
     const buttons = [...altar.querySelectorAll("button")] as HTMLButtonElement[];
     expect(buttons.map((b) => [b.textContent, b.disabled])).toEqual([
-      ["Sacrifice a bull · +3 morale · you have 1", false],
-      ["Sacrifice a chicken · +1 morale · none in stock", true],
+      ["Sacrifice · you have 1", false],
+      ["Sacrifice · none in stock", true],
     ]);
     const lit = payload({ altar: { good: "bull", mor: 3, until: iso(NOW + 30.5 * H) } });
     vi.spyOn(api, "barracksSacrifice").mockResolvedValue(lit);

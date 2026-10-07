@@ -459,7 +459,8 @@ export function OfferCard({
 
 // --- The Altar ---------------------------------------------------------------
 // A beast burned here steadies every man the player fields for altar.seasons
-// seasons. One button per content good, bull first. The countdown runs on the
+// seasons. One card per content good, bull first: the beast and its bonus on
+// the card, the button reads "Sacrifice · you have N". The countdown runs on the
 // server clock in a component of its own (the panel returns early while the
 // view loads), keyed on the blessing's end so a fresh offering mounts it anew
 // with its clock set (a stale zero would refetch at once); at zero it asks the
@@ -527,7 +528,7 @@ export function AltarSection({
                   title={reason ?? undefined}
                   onClick={() => onSacrifice(good)}
                 >
-                  Sacrifice a {goodName(good)} · +{goods[good]} morale · {have === 0 ? "none in stock" : `you have ${have}`}
+                  Sacrifice · {have === 0 ? "none in stock" : `you have ${have}`}
                 </button>
               </div>
               <RowError message={errorFor(`sacrifice:${good}`)} />
