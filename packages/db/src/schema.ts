@@ -179,6 +179,10 @@ export const players = pgTable("players", {
   // Koinon (migration 0062): set on leaving or being expelled; until it passes
   // the player can neither accept an invite nor found a koinon.
   koinonCooldownUntil: timestamp("koinon_cooldown_until", { withTimezone: true }),
+  // The Barracks altar (migration 0065): the instant the blessing ends and the
+  // good burned for it; both NULL while the altar is cold.
+  altarUntil: timestamp("altar_until", { withTimezone: true }),
+  altarGood: text("altar_good"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   oneActivePlayerPerWorld: uniqueIndex("players_one_active_user_world_idx").on(table.worldId, table.userId),
