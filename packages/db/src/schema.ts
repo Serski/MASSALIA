@@ -36,6 +36,10 @@ export const users = pgTable("users", {
   // who created a character in World 1; a stamped user's characters are granted
   // the Beta trait at creation in every later world.
   betaAt: timestamp("beta_at", { withTimezone: true }),
+  // The invite promo (migration 0066): each account's code for its invite link,
+  // playmassalia.com/?invite=CODE. Ten upper-case hex characters from the column
+  // default, which also filled every existing row. Unique (users_referral_code_idx).
+  referralCode: text("referral_code").notNull().default(sql`upper(substr(md5(random()::text || clock_timestamp()::text), 1, 10))`),
 });
 
 export const sessions = pgTable("sessions", {
@@ -1355,4 +1359,22 @@ export const regionIntel = pgTable("region_intel", {
   scoutedGameDate: text("scouted_game_date").notNull(),
 }, (table) => ({
   pk: primaryKey({ columns: [table.worldId, table.dynastyId, table.regionId] }),
+}));
+
+// The invite promo (migration 0066): one row per account that signed up through
+// an invite link, keyed by the invitee (an account signs up once): who invited
+// it and the world active at sign-up. paid_at / paid_character_id are stamped
+// when the invited player first takes a seat in that world and the inviter's
+// character there is paid. Identifiers say referral so nothing reads like the
+// koinon's invitations (koinon_invites).
+export const referrals = pgTable("referrals", {
+  inviteeUserId: uuid("invitee_user_id").primaryKey().references(() => users.id),
+  inviterUserId: uuid("inviter_user_id").references(() => users.id).notNull(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  paidCharacterId: uuid("paid_character_id").references(() => playerCharacters.id),
+}, (table) => ({
+  notSelf: check("referrals_not_self_check", sql`${table.inviteeUserId} <> ${table.inviterUserId}`),
+  inviterWorldIdx: index("referrals_inviter_world_idx").on(table.inviterUserId, table.worldId),
 }));
