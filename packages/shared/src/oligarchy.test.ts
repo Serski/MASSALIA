@@ -42,6 +42,13 @@ describe("politics-config.json", () => {
     bad.chamber.npcSeats.palaioi = 291;
     expect(() => parsePoliticsConfig(bad)).toThrow();
   });
+
+  it("carries the invite promo's numbers, and rejects a stray key inside them", () => {
+    expect(politics.referrals).toEqual({ reward: 200, perWorld: 10 });
+    const raw = JSON.parse(readFileSync(resolve(root, "content/politics/politics-config.json"), "utf8"));
+    const bad = { ...raw, referrals: { ...raw.referrals, extra: 1 } };
+    expect(() => parsePoliticsConfig(bad)).toThrow();
+  });
 });
 
 describe("npcBlocVotes", () => {

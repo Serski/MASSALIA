@@ -62,5 +62,6 @@
   },
   "endorsement": {
     "swingVotes": 8
-  }
+  },
+  "referrals": { "reward": 200, "perWorld": 10 }
 }

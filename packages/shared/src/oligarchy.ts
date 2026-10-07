@@ -86,6 +86,10 @@ export const politicsConfigSchema = z
     partyDues: partyDuesConfigSchema,
     agenda: agendaConfigSchema,
     endorsement: endorsementConfigSchema,
+    // The invite promo (invite prompt 1): what an inviter's character receives
+    // when an invited player first takes a seat, and how many invited sign-ups
+    // count per inviter per world. Balance lives here, never in code.
+    referrals: z.object({ reward: z.number().int().positive(), perWorld: z.number().int().positive() }).strict(),
   })
   .passthrough(); // election cadence lives in calendar-config; future packs ride along
 
