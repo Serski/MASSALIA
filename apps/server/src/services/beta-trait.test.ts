@@ -25,11 +25,12 @@ async function loadModules() {
   const traits = await import("./traits.js");
   const composure = await import("./composure.js");
   const age = await import("./age.js");
+  const oligarchy = await import("./oligarchy.js");
   const { characterSheetRoutes } = await import("../routes/character.js");
   const { characterRoutes } = await import("../routes/characters.js");
   const { lobbyRoutes } = await import("../routes/lobby.js");
   const { errorHandler } = await import("../errorHandler.js");
-  return { dbPkg, character, traits, composure, age, characterSheetRoutes, characterRoutes, lobbyRoutes, errorHandler };
+  return { dbPkg, character, traits, composure, age, oligarchy, characterSheetRoutes, characterRoutes, lobbyRoutes, errorHandler };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -46,6 +47,8 @@ suite("the Beta trait (integration)", () => {
     await m.traits.loadTraitDefs();
     await m.composure.loadComposureConfig();
     await m.age.loadAgeConfig();
+    // The Lobby route reads the politics config for the Invite box.
+    await m.oligarchy.loadPoliticsConfig();
     app = Fastify();
     app.setErrorHandler(m.errorHandler);
     await app.register(cookie, { secret: "test-session-secret-at-least-32-chars-long" });
