@@ -115,3 +115,17 @@ Not in the hour before the 00:00 UTC season rollover. Fast-forward only, plain `
 A red run is a STOP with the log. Anything off in the comparison or the log is a STOP too: report it and wait. Do not revert on your own.
 
 Then close #26 and #9, each with a one-line comment naming the commit that took it, unless Dependabot has already closed it. Leave #8 open. Report each PR's final state.
+
+## Part 2 ruling (7 Oct 2026)
+
+Reading 1, with the rule restated. The rule in step 3 was too tight: a lockfile cannot take 21 bumps without their dependency trees. The rule is now: every lockfile change is a minor or patch within the ranges our manifests already declare (prettier's specifier is the one manifest change), or part of the dependency tree of a bumped package within its parent's range. I checked #26's head 52ca6db against main myself: 88 packages move, Fastify itself stays at 5.12.5, and three direct dependencies move beyond the 21: eslint and @eslint/js to 9.39.5 (#9's purpose) and @types/node to 22.20.5 (types only). All accepted, as is @aws-sdk/client-s3 at 3.1147.0 from the rebase.
+
+Two of these change live behaviour, both accepted:
+- @fastify/cookie 11.1.2 now loads cookie 2.0.1, which is ESM only and needs Node 22.12 or later to be required from CommonJS. Production runs 22.23.3 and CI the latest 22. Report your local `node -v` with the gate. A one-time ExperimentalWarning at boot about require() of an ES module is harmless: report it, it is not a STOP.
+- @fastify/rate-limit 11.2.0 fixes CVE-2026-15144: IPv6 clients are now keyed by their normalised /64 instead of the raw address string.
+
+Report the CI run on #26's head 52ca6db (Gate and Audit) beside your own gate; read it, do not re-run it.
+
+Push 2 adds two checks, since the tests never touch Redis or the S3 client: the worker's boot line after the deploy with all its schedulers registered, and, the next time I start you after 03:30 UTC, the result of that night's backup from the worker log. A failed backup is a STOP.
+
+Go ahead: commit 3 as it stands, then this ruling appended to docs/tooling/deps-prompt-1.md in its own docs commit, then the gate at HEAD, the local browser check and STOP 2 as written. No push until I say push. This replaces any earlier Part 2 ruling.
