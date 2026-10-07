@@ -105,7 +105,7 @@ export function getBattleContent(): BattleContent {
 }
 
 // Where recruits and hires stand: the Massalia region, from the topology.
-function massaliaRegionId(): string {
+export function massaliaRegionId(): string {
   return getTopology().massaliaRegion;
 }
 

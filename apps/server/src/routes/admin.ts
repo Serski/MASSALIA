@@ -1,9 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { and, desc, eq, ilike, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
-import { adminAudit, authEvents, createDb, effectLog, interactions, playerCharacters, playerPops, players, resources, sessions, users, type DbExec } from "@massalia/db";
-import { hasLetter, sanitizeDisplayName, type PopType } from "@massalia/shared";
+import { adminAudit, authEvents, createDb, effectLog, interactions, playerCharacters, playerLevy, playerPops, playerUnits, players, resources, sessions, users, type DbExec } from "@massalia/db";
+import { bandDef, hasLetter, sanitizeDisplayName, unitDef, type PopType } from "@massalia/shared";
 import { requireAdmin } from "../services/auth.js";
-import { buildingContext, creditResource, debitResource, getBuildingsContent, getOrCreateResource, getPopsContent, settleAll } from "../services/buildings.js";
+import { gateFor, getBandsContent, getBattleContent, getUnitsContent, isPledged, massaliaRegionId, PLEDGED_REFUSAL, seasonFor } from "../services/barracks.js";
+import { buildingContext, creditResource, debitResource, getBuildingsContent, getOrCreateResource, getPopsContent, settleAll, type ActingContext } from "../services/buildings.js";
 import { applyComposureDelta } from "../services/composure.js";
 import { getActiveWorldId } from "../services/character.js";
 import { adminDissolveKoinon, adminKoinaList, adminRenameKoinon } from "../services/koinon.js";
@@ -41,6 +42,9 @@ async function audit(exec: DbExec, adminUserId: string, action: string, targetUs
 
 const uuidParam = (name: string) => ({
   params: { type: "object", required: [name], properties: { [name]: { type: "string", format: "uuid" } } },
+}) as const;
+const uuidParams = (...names: string[]) => ({
+  params: { type: "object", required: names, properties: Object.fromEntries(names.map((name) => [name, { type: "string", format: "uuid" }])) },
 }) as const;
 
 type UserRow = typeof users.$inferSelect;
@@ -153,16 +157,62 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 // wages and food are charged at the pre-edit counts; the edit applies on top, in the
 // same transaction. Shrine composure banked by the settle is applied after the
 // transaction, break-aware, as collect does.
-async function settledEdit<T>(owner: Owner, edit: (tx: Tx, now: Date) => Promise<T>): Promise<T> {
+async function settledEdit<T>(owner: Owner, edit: (tx: Tx, now: Date, ctx: ActingContext) => Promise<T>): Promise<T> {
   const ctx = (await buildingContext(owner.playerId, owner.worldId)) ?? httpError("No such world.", 404);
   const now = new Date();
   const outcome = await db.transaction(async (tx) => {
     await lockPlayer(tx, owner.playerId);
     const settled = await settleAll(tx, ctx, now);
-    return { composureDays: settled.composureDays, result: await edit(tx, now) };
+    return { composureDays: settled.composureDays, result: await edit(tx, now, ctx) };
   });
   if (outcome.composureDays > 0) await applyComposureDelta(owner.characterId, outcome.composureDays, "building:shrine", now);
   return outcome.result;
+}
+
+// The sheet's Military block, as stored (no settle): the levy, the altar and every
+// unit row with its state in a fixed precedence. A row that has arrived since the
+// player's last load reads as home and editable, standing where it was bound; the
+// edit's own settle lands it first. A muster mission is "pledged"; every other
+// mission travels with movingTo until the settle clears both.
+async function militaryBlock(owner: Owner, now: Date) {
+  const unitsC = getUnitsContent();
+  const bandsC = getBandsContent();
+  const rows = await db
+    .select()
+    .from(playerUnits)
+    .where(and(eq(playerUnits.worldId, owner.worldId), eq(playerUnits.ownerPlayerId, owner.playerId)))
+    .orderBy(playerUnits.createdAt);
+  const units = rows.map((r) => {
+    const def = r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId);
+    const marching = r.movingTo !== null && r.arrivesAt !== null && r.arrivesAt.getTime() > now.getTime();
+    const state: "pledged" | "moving" | "training" | "ready" = isPledged(r)
+      ? "pledged"
+      : marching
+        ? "moving"
+        : r.source === "trained" && r.readyAt !== null && r.readyAt.getTime() > now.getTime()
+          ? "training"
+          : "ready";
+    return {
+      id: r.id,
+      source: r.source,
+      unitId: r.unitId,
+      label: def?.label ?? r.unitId,
+      count: r.count,
+      startCount: r.startCount,
+      state,
+      readyAt: r.readyAt?.toISOString() ?? null,
+      contractEndAt: r.contractEndAt?.toISOString() ?? null,
+      basedAt: !marching && r.movingTo !== null ? r.movingTo : r.basedAt,
+      movingTo: r.movingTo,
+      arrivesAt: r.arrivesAt?.toISOString() ?? null,
+      editable: state !== "pledged" && state !== "moving",
+    };
+  });
+  const [levy] = await db.select({ men: playerLevy.men }).from(playerLevy).where(and(eq(playerLevy.worldId, owner.worldId), eq(playerLevy.ownerPlayerId, owner.playerId))).limit(1);
+  const [player] = await db.select({ altarUntil: players.altarUntil, altarGood: players.altarGood }).from(players).where(eq(players.id, owner.playerId)).limit(1);
+  const lit = player?.altarUntil && player.altarGood && player.altarUntil.getTime() > now.getTime();
+  const altar = lit ? { good: player.altarGood!, mor: getBattleContent().altar.goods[player.altarGood!] ?? 0, until: player.altarUntil!.toISOString() } : null;
+  return { levy: { men: levy?.men ?? 0 }, altar, units };
 }
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -371,9 +421,10 @@ export async function adminRoutes(app: FastifyInstance) {
       .map((type) => ({ type, label: goodLabel(type), amount: amounts.get(type) ?? 0 }))
       .sort((a, b) => a.label.localeCompare(b.label));
     const pops = Object.entries(getPopsContent().pops).map(([type, def]) => ({ type, label: def.label, count: counts.get(type) ?? 0, max: def.max ?? null }));
+    const military = await militaryBlock(owner, new Date());
     await audit(db, admin.id, "characters.sheet", owner.userId, { characterId });
     const { drachmae, ...stats } = character!;
-    return { characterId, name: owner.name, drachmae, stats, goods, pops };
+    return { characterId, name: owner.name, drachmae, stats, goods, pops, military };
   });
 
   // Relative stat adjustment under the player lock, refused (not clamped) when it
@@ -461,6 +512,153 @@ export async function adminRoutes(app: FastifyInstance) {
       return after;
     });
     return { ok: true, characterId, popType, count };
+  });
+
+  // --- Military --------------------------------------------------------------------
+  // Each edit settles first (settledEdit), so an arrived row has been landed and a
+  // stale pledge released before the row is read. Adding men (a grant, a positive
+  // count) is refused below the militia gate: a player under it could neither
+  // move nor disband them (ruling, 4 Oct 2026). Pledged and marching rows are
+  // refused for every edit: another player's muster, or the settle, owns them.
+  const unitRowOf = async (tx: Tx, owner: Owner, unitRowId: string) => {
+    const rows = await tx
+      .select()
+      .from(playerUnits)
+      .where(and(eq(playerUnits.id, unitRowId), eq(playerUnits.worldId, owner.worldId), eq(playerUnits.ownerPlayerId, owner.playerId)))
+      .limit(1);
+    const row = rows[0] ?? httpError("No such unit row.", 404);
+    if (isPledged(row)) httpError(PLEDGED_REFUSAL, 409);
+    if (row.movingTo !== null) httpError("These men are on the march; wait until they arrive.", 409);
+    return row;
+  };
+  const requireGate = async (tx: Tx, ctx: ActingContext) => {
+    const gate = await gateFor(tx, ctx);
+    if (!gate.met) httpError(`Militia ${gate.required} required.`, 409);
+  };
+
+  // Relative count on a trained row; a row brought to zero is deleted, as a battle
+  // deletes a row it wipes out. startCount rises with a positive delta so the
+  // progress arithmetic never exceeds 100%.
+  app.post("/characters/:characterId/units/:unitRowId/count", { schema: uuidParams("characterId", "unitRowId") }, async (request) => {
+    const admin = await requireAdmin(request);
+    const { characterId, unitRowId } = request.params as { characterId: string; unitRowId: string };
+    const delta = deltaOf(request, 10_000);
+    const reason = reasonOf(request, true);
+    const owner = await characterOwner(characterId);
+    const result = await settledEdit(owner, async (tx, _now, ctx) => {
+      const row = await unitRowOf(tx, owner, unitRowId);
+      if (row.source !== "trained") httpError("A band is a fixed company; remove it or leave it.", 409);
+      if (delta > 0) await requireGate(tx, ctx);
+      const plural = unitDef(getUnitsContent(), row.unitId)?.plural ?? row.unitId;
+      if (row.count + delta < 0) httpError(`They field only ${row.count} ${plural}.`, 409);
+      let count: number;
+      let removed = false;
+      if (row.count + delta === 0) {
+        await tx.delete(playerUnits).where(eq(playerUnits.id, row.id));
+        count = 0;
+        removed = true;
+      } else {
+        const updated = await tx
+          .update(playerUnits)
+          .set({ count: sql`${playerUnits.count} + ${delta}`, ...(delta > 0 ? { startCount: sql`${playerUnits.startCount} + ${delta}` } : {}) })
+          .where(and(eq(playerUnits.id, row.id), sql`${playerUnits.count} + ${delta} >= 0`))
+          .returning({ count: playerUnits.count });
+        if (!updated.length) httpError(`They field only ${row.count} ${plural}.`, 409);
+        count = updated[0]!.count;
+      }
+      await tx.insert(effectLog).values({ characterId, kind: "admin_adjust_units", detail: { unitRowId: row.id, unitId: row.unitId, delta, reason, adminUserId: admin.id } });
+      await audit(tx, admin.id, "characters.units.count", owner.userId, { characterId, unitRowId: row.id, unitId: row.unitId, delta, reason, count, removed });
+      return { count, removed, unitId: row.unitId };
+    });
+    return { ok: true, characterId, unitRowId, ...result };
+  });
+
+  // Remove a row outright, trained or band, regardless of the player's release rule.
+  app.post("/characters/:characterId/units/:unitRowId/remove", { schema: uuidParams("characterId", "unitRowId") }, async (request) => {
+    const admin = await requireAdmin(request);
+    const { characterId, unitRowId } = request.params as { characterId: string; unitRowId: string };
+    const reason = reasonOf(request, true);
+    const owner = await characterOwner(characterId);
+    const result = await settledEdit(owner, async (tx) => {
+      const row = await unitRowOf(tx, owner, unitRowId);
+      await tx.delete(playerUnits).where(eq(playerUnits.id, row.id));
+      await tx.insert(effectLog).values({ characterId, kind: "admin_remove_units", detail: { unitRowId: row.id, unitId: row.unitId, source: row.source, count: row.count, reason, adminUserId: admin.id } });
+      await audit(tx, admin.id, "characters.units.remove", owner.userId, { characterId, unitRowId: row.id, unitId: row.unitId, source: row.source, count: row.count, reason });
+      return { removed: true as const, unitId: row.unitId, count: row.count };
+    });
+    return { ok: true, characterId, unitRowId, ...result };
+  });
+
+  // Grant trained men: ready at once, at Massalia, drawing nothing from the levy
+  // and costing no gear. Bands come from the market only.
+  app.post("/characters/:characterId/units/grant", { schema: uuidParam("characterId") }, async (request) => {
+    const admin = await requireAdmin(request);
+    const { characterId } = request.params as { characterId: string };
+    const unitId = bodyText(request, "unitId");
+    const unitsC = getUnitsContent();
+    if (!Object.hasOwn(unitsC.units, unitId)) httpError("No such trained unit.", 400);
+    const count = (request.body as { count?: unknown } | undefined)?.count;
+    if (typeof count !== "number" || !Number.isInteger(count) || count <= 0 || count > 10_000) httpError("count must be a whole number from 1 to 10,000.", 400);
+    const reason = reasonOf(request, true);
+    const owner = await characterOwner(characterId);
+    const result = await settledEdit(owner, async (tx, now, ctx) => {
+      await requireGate(tx, ctx);
+      const inserted = (
+        await tx
+          .insert(playerUnits)
+          .values({ worldId: owner.worldId, ownerPlayerId: owner.playerId, source: "trained", unitId, count, startCount: count, recruitedSeason: seasonFor(ctx, now), readyAt: now, contractEndAt: null, basedAt: massaliaRegionId(), createdAt: now })
+          .returning({ id: playerUnits.id })
+      )[0]!;
+      await tx.insert(effectLog).values({ characterId, kind: "admin_grant_units", detail: { unitRowId: inserted.id, unitId, count, reason, adminUserId: admin.id } });
+      await audit(tx, admin.id, "characters.units.grant", owner.userId, { characterId, unitRowId: inserted.id, unitId, count, reason });
+      return { unitRowId: inserted.id, unitId, count };
+    });
+    return { ok: true, characterId, ...result };
+  });
+
+  // Relative levy. The settle has already made the levy row, so this is the
+  // guarded update alone.
+  app.post("/characters/:characterId/levy", { schema: uuidParam("characterId") }, async (request) => {
+    const admin = await requireAdmin(request);
+    const { characterId } = request.params as { characterId: string };
+    const delta = deltaOf(request, 10_000);
+    const reason = reasonOf(request, true);
+    const owner = await characterOwner(characterId);
+    const men = await settledEdit(owner, async (tx) => {
+      const mine = and(eq(playerLevy.worldId, owner.worldId), eq(playerLevy.ownerPlayerId, owner.playerId));
+      const [current] = await tx.select({ men: playerLevy.men }).from(playerLevy).where(mine).limit(1);
+      const have = current?.men ?? 0;
+      if (have + delta < 0) httpError(`The levy holds only ${have} men.`, 409);
+      const updated = await tx
+        .update(playerLevy)
+        .set({ men: sql`${playerLevy.men} + ${delta}` })
+        .where(and(mine, sql`${playerLevy.men} + ${delta} >= 0`))
+        .returning({ men: playerLevy.men });
+      if (!updated.length) httpError(`The levy holds only ${have} men.`, 409);
+      await tx.insert(effectLog).values({ characterId, kind: "admin_adjust_levy", detail: { delta, reason, adminUserId: admin.id } });
+      await audit(tx, admin.id, "characters.levy", owner.userId, { characterId, delta, reason, men: updated[0]!.men });
+      return updated[0]!.men;
+    });
+    return { ok: true, characterId, men };
+  });
+
+  // Cool a lit altar. An expired altar is already cold, as the sheet shows it.
+  app.post("/characters/:characterId/altar/cool", { schema: uuidParam("characterId") }, async (request) => {
+    const admin = await requireAdmin(request);
+    const { characterId } = request.params as { characterId: string };
+    const reason = reasonOf(request, true);
+    const owner = await characterOwner(characterId);
+    await settledEdit(owner, async (tx, now) => {
+      const cooled = await tx
+        .update(players)
+        .set({ altarUntil: null, altarGood: null })
+        .where(and(eq(players.id, owner.playerId), sql`${players.altarUntil} > ${now}`))
+        .returning({ id: players.id });
+      if (!cooled.length) httpError("The altar is already cold.", 409);
+      await tx.insert(effectLog).values({ characterId, kind: "admin_cool_altar", detail: { reason, adminUserId: admin.id } });
+      await audit(tx, admin.id, "characters.altar.cool", owner.userId, { characterId, reason });
+    });
+    return { ok: true, characterId, altar: null };
   });
 
   // --- Koina -------------------------------------------------------------------

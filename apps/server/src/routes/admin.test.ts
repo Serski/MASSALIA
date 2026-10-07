@@ -26,7 +26,8 @@ async function loadModules() {
   const buildings = await import("../services/buildings.js");
   const barracks = await import("../services/barracks.js");
   const koinon = await import("../services/koinon.js");
-  return { dbPkg, authRoutes, adminRoutes, characterRoutes, interactionRoutes, errorHandler, age, interactionsSvc, buildings, barracks, koinon };
+  const mapGraph = await import("../services/mapGraph.js");
+  return { dbPkg, authRoutes, adminRoutes, characterRoutes, interactionRoutes, errorHandler, age, interactionsSvc, buildings, barracks, koinon, mapGraph };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -51,6 +52,7 @@ suite("admin tooling and account gates (integration)", () => {
     await m.buildings.loadBuildingsContent();
     await m.buildings.loadPopsContent();
     await m.barracks.loadBarracksContent();
+    await m.mapGraph.loadMapGraph(); // a granted row stands at the Massalia region, read from the topology
     await m.koinon.loadKoinonContent(); // the koina rename cleans a name by the content's bounds
     app = Fastify({ trustProxy: true });
     app.setErrorHandler(m.errorHandler);
@@ -340,6 +342,119 @@ suite("admin tooling and account gates (integration)", () => {
     // A non-admin reaches none of it.
     expect((await call("GET", `/admin/characters/${characterId}/sheet`, { cookie: target.cookie })).statusCode).toBe(403);
     expect((await call("POST", `/admin/characters/${characterId}/stats`, { cookie: target.cookie, payload: { stat: "prestige", delta: -1, reason: "x" } })).statusCode).toBe(403);
+  });
+
+  // --- military -------------------------------------------------------------------------
+  it("the Military block lists the levy, the altar and every row; each edit settles, guards, logs and audits", async () => {
+    const a = await admin();
+    const target = await register("units@t");
+    const { playerId, characterId } = await characterFor(target.id, "Pytheas");
+    const { playerUnits, playerLevy, players, playerCharacters, koina, koinonMembers, koinonMusters, effectLog } = m.dbPkg;
+    const now = new Date();
+    const DAY = 86_400_000;
+    const H = { cookie: a.cookie };
+    const post = (path: string, payload: Record<string, unknown>, cookie = a.cookie) => call("POST", `/admin/characters/${characterId}/${path}`, { cookie, payload });
+    const rowOf = async (id: string) => (await db.select().from(playerUnits).where(eq(playerUnits.id, id)))[0];
+    // Seeded so the settle every edit runs first leaves the fixture alone: rows created
+    // now (no upkeep day owed), a real open muster behind the pledge (the settle
+    // releases any other), the levy anchored on season 0.
+    const unit = (over: Record<string, unknown>) => ({ worldId, ownerPlayerId: playerId, source: "trained" as const, unitId: "hoplite", count: 10, startCount: 10, recruitedSeason: 0, readyAt: new Date(now.getTime() - 3_600_000), contractEndAt: null, basedAt: "R060", movingTo: null, arrivesAt: null, mission: null, createdAt: now, ...over });
+    const koinon = (await db.insert(koina).values({ worldId, name: "The Sacred Band", leaderPlayerId: playerId }).returning())[0]!;
+    await db.insert(koinonMembers).values({ worldId, playerId, koinonId: koinon.id });
+    const muster = (await db.insert(koinonMusters).values({ worldId, koinonId: koinon.id, openerPlayerId: playerId, regionId: "R046", townId: null, gatherId: "R060", gatherRegionId: "R060", launchAt: new Date(now.getTime() + DAY), status: "open" }).returning())[0]!;
+    const hoplites = (await db.insert(playerUnits).values(unit({})).returning())[0]!;
+    const band = (await db.insert(playerUnits).values(unit({ source: "band", unitId: "volcae-irregulars", count: 40, startCount: 40, readyAt: null, contractEndAt: new Date(now.getTime() + DAY) })).returning())[0]!;
+    const pledged = (await db.insert(playerUnits).values(unit({ count: 5, startCount: 5, mission: { kind: "muster", musterId: muster.id, regionId: "R046", departedAt: now.toISOString() } })).returning())[0]!;
+    const moving = (await db.insert(playerUnits).values(unit({ unitId: "peltast", count: 5, startCount: 5, movingTo: "R046", arrivesAt: new Date(now.getTime() + 3_600_000) })).returning())[0]!;
+    await db.insert(playerLevy).values({ worldId, ownerPlayerId: playerId, men: 50, lastGrowthSeason: 0 });
+    await db.update(players).set({ altarUntil: new Date(now.getTime() + DAY), altarGood: "bull" }).where(eq(players.id, playerId));
+
+    // The sheet: four rows with their states, the levy and the altar.
+    const sheet = (await call("GET", `/admin/characters/${characterId}/sheet`, H)).json();
+    const byId = Object.fromEntries(sheet.military.units.map((u: { id: string }) => [u.id, u]));
+    expect(sheet.military.levy).toEqual({ men: 50 });
+    expect(sheet.military.altar).toMatchObject({ good: "bull", mor: 3 });
+    expect(byId[hoplites.id]).toMatchObject({ source: "trained", unitId: "hoplite", label: "Hoplite", count: 10, startCount: 10, state: "ready", basedAt: "R060", editable: true });
+    expect(byId[band.id]).toMatchObject({ source: "band", unitId: "volcae-irregulars", label: "Volcae irregulars", count: 40, state: "ready", editable: true });
+    expect(byId[pledged.id]).toMatchObject({ state: "pledged", editable: false });
+    expect(byId[moving.id]).toMatchObject({ state: "moving", movingTo: "R046", editable: false });
+
+    // Below the militia gate, adding men is refused.
+    const gated = await post("units/grant", { unitId: "peltast", count: 20, reason: "x" });
+    expect(gated.statusCode).toBe(409);
+    expect(gated.json()).toEqual({ error: "Militia 20 required." });
+    await db.update(playerCharacters).set({ militia: 20 }).where(eq(playerCharacters.id, characterId));
+
+    // Count: relative and guarded on a trained row; startCount follows a rise.
+    expect((await post(`units/${hoplites.id}/count`, { delta: 5, reason: "event bug" })).json()).toMatchObject({ ok: true, unitRowId: hoplites.id, count: 15, removed: false });
+    expect(await rowOf(hoplites.id)).toMatchObject({ count: 15, startCount: 15 });
+    const short = await post(`units/${hoplites.id}/count`, { delta: -20, reason: "x" });
+    expect(short.statusCode).toBe(409);
+    expect(short.json()).toEqual({ error: "They field only 15 Hoplites." });
+    const fixed = await post(`units/${band.id}/count`, { delta: -1, reason: "x" });
+    expect(fixed.statusCode).toBe(409);
+    expect(fixed.json()).toEqual({ error: "A band is a fixed company; remove it or leave it." });
+    const held = await post(`units/${pledged.id}/count`, { delta: -1, reason: "x" });
+    expect(held.statusCode).toBe(409);
+    expect(held.json()).toEqual({ error: m.barracks.PLEDGED_REFUSAL });
+    const march = await post(`units/${moving.id}/count`, { delta: -1, reason: "x" });
+    expect(march.statusCode).toBe(409);
+    expect(march.json()).toEqual({ error: "These men are on the march; wait until they arrive." });
+    expect((await post(`units/${hoplites.id}/count`, { delta: -15, reason: "deserted" })).json()).toMatchObject({ ok: true, count: 0, removed: true });
+    expect(await rowOf(hoplites.id)).toBeUndefined();
+
+    // Remove: the band goes whole, regardless of the player's release rule.
+    expect((await post(`units/${band.id}/remove`, { reason: "dupe contract" })).json()).toMatchObject({ ok: true, removed: true, unitId: "volcae-irregulars", count: 40 });
+    expect(await rowOf(band.id)).toBeUndefined();
+    expect((await post(`units/${pledged.id}/remove`, { reason: "x" })).statusCode).toBe(409);
+
+    // Grant: ready at once at Massalia, nothing drawn from the levy, no gear.
+    const granted = (await post("units/grant", { unitId: "peltast", count: 20, reason: "lost in a bug" })).json();
+    expect(granted).toMatchObject({ ok: true, unitId: "peltast", count: 20 });
+    expect(await rowOf(granted.unitRowId)).toMatchObject({ source: "trained", unitId: "peltast", count: 20, startCount: 20, basedAt: "R060", movingTo: null, mission: null });
+    expect((await rowOf(granted.unitRowId))!.readyAt!.getTime()).toBeLessThanOrEqual(Date.now());
+    expect((await post("units/grant", { unitId: "volcae-irregulars", count: 1, reason: "x" })).statusCode).toBe(400);
+    expect((await post("units/grant", { unitId: "constructor", count: 1, reason: "x" })).statusCode).toBe(400);
+    expect((await post("units/grant", { unitId: "peltast", count: 0, reason: "x" })).statusCode).toBe(400);
+
+    // Levy: relative, never below zero.
+    const levyShort = await post("levy", { delta: -60, reason: "x" });
+    expect(levyShort.statusCode).toBe(409);
+    expect(levyShort.json()).toEqual({ error: "The levy holds only 50 men." });
+    expect((await post("levy", { delta: 10, reason: "census" })).json()).toMatchObject({ ok: true, men: 60 });
+
+    // Altar: cooled once, then already cold.
+    expect((await post("altar/cool", { reason: "exploit" })).json()).toMatchObject({ ok: true, altar: null });
+    expect((await db.select({ altarUntil: players.altarUntil, altarGood: players.altarGood }).from(players).where(eq(players.id, playerId)))[0]).toEqual({ altarUntil: null, altarGood: null });
+    const cold = await post("altar/cool", { reason: "x" });
+    expect(cold.statusCode).toBe(409);
+    expect(cold.json()).toEqual({ error: "The altar is already cold." });
+
+    const after = (await call("GET", `/admin/characters/${characterId}/sheet`, H)).json();
+    expect(after.military).toMatchObject({ levy: { men: 60 }, altar: null });
+    expect(after.military.units.map((u: { unitId: string; state: string }) => [u.unitId, u.state])).toEqual([["hoplite", "pledged"], ["peltast", "moving"], ["peltast", "ready"]]);
+
+    // One effect_log row per applied edit, of its own kind; refused edits write nothing.
+    const effects = await db.select().from(effectLog).where(eq(effectLog.characterId, characterId)).orderBy(effectLog.createdAt);
+    expect(effects.map((e) => e.kind)).toEqual(["admin_adjust_units", "admin_adjust_units", "admin_remove_units", "admin_grant_units", "admin_adjust_levy", "admin_cool_altar"]);
+    expect(effects[0]!.detail).toEqual({ unitRowId: hoplites.id, unitId: "hoplite", delta: 5, reason: "event bug", adminUserId: a.id });
+    // One admin_audit row per applied call, reads included.
+    const rows = await auditRows();
+    expect(rows.map((r) => r.action)).toEqual([
+      "characters.sheet", "characters.units.count", "characters.units.count", "characters.units.remove", "characters.units.grant", "characters.levy", "characters.altar.cool", "characters.sheet",
+    ]);
+    expect(rows.find((r) => r.action === "characters.units.grant")!).toMatchObject({ targetUserId: target.id, detail: { characterId, unitId: "peltast", count: 20, reason: "lost in a bug" } });
+
+    // A non-admin reaches none of it.
+    for (const [path, payload] of [
+      [`units/${pledged.id}/count`, { delta: 1, reason: "x" }],
+      [`units/${pledged.id}/remove`, { reason: "x" }],
+      ["units/grant", { unitId: "peltast", count: 1, reason: "x" }],
+      ["levy", { delta: 1, reason: "x" }],
+      ["altar/cool", { reason: "x" }],
+    ] as const) {
+      expect((await post(path, payload, target.cookie)).statusCode).toBe(403);
+    }
   });
 
   // --- koina -------------------------------------------------------------------------------
