@@ -16,7 +16,7 @@ const read = (rel: string) => JSON.parse(readFileSync(path.join(root, rel), "utf
 const goods = Object.keys(parseBuildingsContent(read("content/buildings/buildings.json")).vendor);
 const units = parseUnitsContent(read("content/military/units.json"), goods);
 const bands = parseBandsContent(read("content/military/bands.json"), goods);
-const battle = parseBattleContent(read("content/military/battle.json"));
+const battle = parseBattleContent(read("content/military/battle.json"), goods);
 
 const unit = (id: string, count: number): BattleRow => ({ id, label: units.units[id]!.label, count, stats: units.units[id]!.stats });
 const band = (id: string, count: number): BattleRow => ({ id, label: bands.bands[id]!.label, count, stats: bands.bands[id]!.stats });

@@ -10,7 +10,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const read = (rel: string) => JSON.parse(readFileSync(resolve(root, rel), "utf8"));
 const goods = Object.keys(parseBuildingsContent(read("content/buildings/buildings.json")).vendor);
 const units = parseUnitsContent(read("content/military/units.json"), goods);
-const battle = parseBattleContent(read("content/military/battle.json"));
+const battle = parseBattleContent(read("content/military/battle.json"), goods);
 
 const unit = (id: string, count: number): BattleRow => ({ id, label: id, count, stats: units.units[id]!.stats });
 const warband = (count: number): BattleRow => ({ id: "warband", label: "warband", count, stats: battle.npc.warband.stats });
@@ -31,10 +31,14 @@ describe("battle content", () => {
     expect(battle.tribute).toEqual({ perPopulation: 0.08, minGarrisonPerPopulation: 0.01 });
     expect(battle.regionTribute).toEqual({ grainPerWarband: 0.05, timberPerWarband: 0.025, minGrain: 15, minTimber: 8, levyPerYear: 5 });
     expect(battle.move).toEqual({ minutesPerStep: 30, minutesWithinRegion: 10 });
-    expect(() => parseBattleContent({ ...read("content/military/battle.json"), move: { minutesPerStep: 0, minutesWithinRegion: 10 } })).toThrow();
-    expect(() => parseBattleContent({ ...read("content/military/battle.json"), recovery: { hoursPerStep: 0 } })).toThrow();
-    expect(() => parseBattleContent({ ...read("content/military/battle.json"), extra: 1 })).toThrow();
-    expect(() => parseBattleContent({ ...read("content/military/battle.json"), pursuitLoss: 2 })).toThrow();
+    // The altar: two seasons, a bull +3 and a chicken +1; every good a vendor good.
+    expect(battle.altar.seasons).toBe(2);
+    expect(battle.altar.goods).toEqual({ bull: 3, chicken: 1 });
+    expect(() => parseBattleContent({ ...read("content/military/battle.json"), move: { minutesPerStep: 0, minutesWithinRegion: 10 } }, goods)).toThrow();
+    expect(() => parseBattleContent({ ...read("content/military/battle.json"), recovery: { hoursPerStep: 0 } }, goods)).toThrow();
+    expect(() => parseBattleContent({ ...read("content/military/battle.json"), extra: 1 }, goods)).toThrow();
+    expect(() => parseBattleContent({ ...read("content/military/battle.json"), pursuitLoss: 2 }, goods)).toThrow();
+    expect(() => parseBattleContent({ ...read("content/military/battle.json"), altar: { seasons: 2, goods: { unicorn: 3 } } }, goods)).toThrow(/altar\.goods: unknown good/);
   });
 });
 

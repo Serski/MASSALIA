@@ -55,6 +55,10 @@ export type BattleContent = {
   regionTribute: { grainPerWarband: number; timberPerWarband: number; minGrain: number; minTimber: number; levyPerYear: number };
   // Moving men between bases: minutes per land or sea step, or within one region.
   move: { minutesPerStep: number; minutesWithinRegion: number };
+  // The Barracks altar: a vendor good burned there raises the morale of every
+  // row the player fields for `seasons` seasons (real days) from the act, by the
+  // bonus its entry in `goods` gives. Keys must be vendor goods.
+  altar: { seasons: number; goods: Record<string, number> };
   npc: Record<NpcKind, NpcDef>;
 };
 
@@ -227,7 +231,8 @@ export function parseBandsContent(data: unknown, knownGoods: Iterable<string>): 
   return parsed;
 }
 
-const battleContentSchema = z
+function battleContentSchema(goods: ReadonlySet<string>) {
+  return z
   .object({
     version: z.number().int().positive(),
     source: z.string(),
@@ -253,6 +258,7 @@ const battleContentSchema = z
       })
       .strict(),
     move: z.object({ minutesPerStep: z.number().positive(), minutesWithinRegion: z.number().positive() }).strict(),
+    altar: z.object({ seasons: z.number().int().positive(), goods: goodsSchema(goods, "altar.goods") }).strict(),
     npc: z
       .object({
         warband: z.object({ label: z.string().min(1), stats: statsSchema }).strict(),
@@ -261,9 +267,11 @@ const battleContentSchema = z
       .strict(),
   })
   .strict();
+}
 
-export function parseBattleContent(data: unknown): BattleContent {
-  return battleContentSchema.parse(data) as BattleContent;
+// Altar goods must be vendor goods (the player's stock is what burns).
+export function parseBattleContent(data: unknown, knownGoods: Iterable<string>): BattleContent {
+  return battleContentSchema(new Set(knownGoods)).parse(data) as BattleContent;
 }
 
 // Ship ids must be vendor goods (the player's stock is the fleet).

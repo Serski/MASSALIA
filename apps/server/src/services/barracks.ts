@@ -80,7 +80,7 @@ export async function loadBarracksContent(): Promise<{ units: UnitsContent; band
   units = parseUnitsContent(JSON.parse(await fs.readFile(unitsFile, "utf8")), goods);
   bands = parseBandsContent(JSON.parse(await fs.readFile(bandsFile, "utf8")), goods);
   ships = parseShipsContent(JSON.parse(await fs.readFile(shipsFile, "utf8")), goods);
-  battle = parseBattleContent(JSON.parse(await fs.readFile(battleFile, "utf8")));
+  battle = parseBattleContent(JSON.parse(await fs.readFile(battleFile, "utf8")), goods);
   return { units, bands, ships, battle };
 }
 
