@@ -17,6 +17,8 @@ import {
 } from "../services/auth.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../services/email.js";
 import { deleteAccount } from "../services/account.js";
+import { getPoliticsConfig } from "../services/oligarchy.js";
+import { recordReferral } from "../services/referrals.js";
 import { byIp, tooManyRequests } from "../rateLimit.js";
 
 const db = createDb();
@@ -39,6 +41,8 @@ type AuthPayload = {
   password?: string;
   newsletterOptIn?: boolean;
   termsAccepted?: boolean;
+  // The invite promo: the code from the invite link the browser kept until sign-up.
+  referralCode?: string;
 };
 
 function normalizeEmail(email: string) {
@@ -117,6 +121,19 @@ export async function authRoutes(app: FastifyInstance) {
     const user = created[0]!;
     await createSession(request, reply, user.id);
     await recordAuthEvent(user.id, "register", request);
+
+    // The invite promo: a code from the invite link the browser kept. The politics
+    // config is read only when a code is present (suites that register without
+    // one never load it). It never fails or delays registration, and the response
+    // never says whether the code counted.
+    const referralCode = (request.body as AuthPayload).referralCode;
+    if (referralCode !== undefined) {
+      try {
+        await recordReferral(user.id, referralCode, getPoliticsConfig().referrals.perWorld);
+      } catch (error) {
+        console.error(`Referral on register failed for ${user.id}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
 
     // Soft verification is non-blocking: a token/email problem must never fail or
     // delay registration. Create the token (fast, local) then fire-and-forget the
