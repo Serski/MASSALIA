@@ -127,6 +127,22 @@ export type AuthResponse = {
 export type AdminStat = "prestige" | "devotion" | "militia" | "intelligence";
 export type AdminCharacter = { characterId: string; playerId: string; worldId: string; name: string; drachmae: number; status: string; isActive: boolean } & Record<AdminStat, number>;
 // A character's stats and inventory: every content good and pop type, held or not.
+export type AdminUnitRow = {
+  id: string;
+  source: "trained" | "band";
+  unitId: string;
+  label: string;
+  count: number;
+  startCount: number;
+  // In that precedence; pledged and moving rows are not editable.
+  state: "pledged" | "moving" | "training" | "ready";
+  readyAt: string | null;
+  contractEndAt: string | null;
+  basedAt: string;
+  movingTo: string | null;
+  arrivesAt: string | null;
+  editable: boolean;
+};
 export type AdminSheet = {
   characterId: string;
   name: string;
@@ -134,6 +150,11 @@ export type AdminSheet = {
   stats: Record<AdminStat, number>;
   goods: { type: string; label: string; amount: number }[];
   pops: { type: string; label: string; count: number; max: number | null }[];
+  military: {
+    levy: { men: number };
+    altar: { good: string; mor: number; until: string } | null; // null when cold or expired
+    units: AdminUnitRow[];
+  };
 };
 export type AdminUser = {
   id: string;
@@ -433,6 +454,16 @@ export const api = {
     apiFetch<{ ok: true; amount: number }>(`/admin/characters/${characterId}/goods`, { method: "POST", body: { good, delta, reason } }),
   adminAdjustPops: (characterId: string, popType: string, delta: number, reason: string) =>
     apiFetch<{ ok: true; count: number }>(`/admin/characters/${characterId}/pops`, { method: "POST", body: { popType, delta, reason } }),
+  adminAdjustUnits: (characterId: string, unitRowId: string, delta: number, reason: string) =>
+    apiFetch<{ ok: true; count: number; removed: boolean }>(`/admin/characters/${characterId}/units/${unitRowId}/count`, { method: "POST", body: { delta, reason } }),
+  adminRemoveUnits: (characterId: string, unitRowId: string, reason: string) =>
+    apiFetch<{ ok: true; removed: true; unitId: string; count: number }>(`/admin/characters/${characterId}/units/${unitRowId}/remove`, { method: "POST", body: { reason } }),
+  adminGrantUnits: (characterId: string, unitId: string, count: number, reason: string) =>
+    apiFetch<{ ok: true; unitRowId: string; unitId: string; count: number }>(`/admin/characters/${characterId}/units/grant`, { method: "POST", body: { unitId, count, reason } }),
+  adminAdjustLevy: (characterId: string, delta: number, reason: string) =>
+    apiFetch<{ ok: true; men: number }>(`/admin/characters/${characterId}/levy`, { method: "POST", body: { delta, reason } }),
+  adminCoolAltar: (characterId: string, reason: string) =>
+    apiFetch<{ ok: true; altar: null }>(`/admin/characters/${characterId}/altar/cool`, { method: "POST", body: { reason } }),
   adminEffects: (characterId: string) => apiFetch<{ effects: AdminLogRow[] }>(`/admin/characters/${characterId}/effects`),
   adminInteractions: (characterId: string) => apiFetch<{ interactions: AdminLogRow[] }>(`/admin/characters/${characterId}/interactions`),
   adminKoina: () => apiFetch<{ koina: AdminKoinon[] }>("/admin/koina"),

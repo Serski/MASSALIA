@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { ApiError, api, type AdminCharacter, type AdminCluster, type AdminKoinon, type AdminLogRow, type AdminSheet, type AdminStat, type AdminUser } from "./api.js";
+import { ApiError, api, type AdminCharacter, type AdminCluster, type AdminKoinon, type AdminLogRow, type AdminSheet, type AdminStat, type AdminUnitRow, type AdminUser } from "./api.js";
 
 // ---------------------------------------------------------------------------
 // /admin — a plain operator page (no styling work by design). Gated by the API:
@@ -101,6 +101,30 @@ export function AdminPage() {
     if (!input) return;
     const { delta, reason } = input;
     void act(`${delta > 0 ? "Add" : "Remove"} ${Math.abs(delta)} ${what} ${delta > 0 ? "to" : "from"} ${open.name}?`, () => work(delta, reason), `${capitalise(what)} adjusted for ${open.name}.`);
+  };
+  // The Military block: a row is removed whole; men are granted by unit id, count
+  // and reason; a lit altar is cooled. Each confirms through act, as the rest.
+  const unitState = (row: AdminUnitRow) =>
+    row.state === "pledged" ? "pledged to a muster" : row.state === "moving" ? "on the march" : row.state === "training" ? "training" : row.source === "band" ? "under contract" : "ready";
+  const removeUnits = (open: AdminSheet, row: AdminUnitRow) => {
+    const reason = window.prompt(`Remove ${row.count} ${row.label} from ${open.name}. Reason (audited):`)?.trim();
+    if (!reason) return;
+    void act(`Remove ${row.count} ${row.label} from ${open.name}?`, () => api.adminRemoveUnits(open.characterId, row.id, reason), `${row.label} removed from ${open.name}.`);
+  };
+  const grantUnits = (open: AdminSheet) => {
+    const unitId = window.prompt(`Grant ${open.name} trained men. Unit id (peltast, ekdromos, hoplite, hippeis):`)?.trim();
+    if (!unitId) return;
+    const raw = window.prompt(`How many ${unitId}? A whole number, 1 to 10000:`);
+    const count = Number(raw);
+    if (!raw || !Number.isInteger(count) || count <= 0) return;
+    const reason = window.prompt("Reason (audited):")?.trim();
+    if (!reason) return;
+    void act(`Grant ${count} ${unitId} to ${open.name}, ready at once at Massalia?`, () => api.adminGrantUnits(open.characterId, unitId, count, reason), `${count} ${unitId} granted to ${open.name}.`);
+  };
+  const coolAltar = (open: AdminSheet) => {
+    const reason = window.prompt(`Cool ${open.name}'s altar. Reason (audited):`)?.trim();
+    if (!reason) return;
+    void act(`Cool ${open.name}'s altar? The blessing ends now.`, () => api.adminCoolAltar(open.characterId, reason), `Altar cooled for ${open.name}.`);
   };
   const showSheet = async (character: AdminCharacter) => {
     try {
@@ -227,6 +251,38 @@ export function AdminPage() {
               ))}
             </tbody>
           </table>
+          <h3>Military</h3>
+          <p data-admin="levy">
+            Levy: {sheet.military.levy.men} men{" "}
+            <button type="button" onClick={() => adjustLine(sheet, "levy", String(sheet.military.levy.men), (delta, reason) => api.adminAdjustLevy(sheet.characterId, delta, reason))}>Adjust</button>
+          </p>
+          <p data-admin="altar">
+            {sheet.military.altar ? (
+              <>
+                Altar: {sheet.military.altar.good} · +{sheet.military.altar.mor} morale until {new Date(sheet.military.altar.until).toUTCString()}{" "}
+                <button type="button" onClick={() => coolAltar(sheet)}>Cool</button>
+              </>
+            ) : (
+              "Altar: cold"
+            )}
+          </p>
+          <table border={1} cellPadding={4} data-admin="units">
+            <thead><tr><th>Unit</th><th>Men</th><th>State</th><th>Base</th><th></th></tr></thead>
+            <tbody>
+              {sheet.military.units.map((row) => (
+                <tr key={row.id}>
+                  <td>{row.label}</td><td>{row.count} of {row.startCount}</td><td>{unitState(row)}</td><td>{row.basedAt}</td>
+                  <td>
+                    {row.editable && row.source === "trained" ? (
+                      <button type="button" onClick={() => adjustLine(sheet, row.label, String(row.count), (delta, reason) => api.adminAdjustUnits(sheet.characterId, row.id, delta, reason))}>Adjust</button>
+                    ) : null}
+                    {row.editable ? <button type="button" onClick={() => removeUnits(sheet, row)}>Remove</button> : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <button type="button" onClick={() => grantUnits(sheet)}>Grant men</button>{" "}
           <button type="button" onClick={() => setSheet(null)}>Close</button>
         </section>
       ) : null}
