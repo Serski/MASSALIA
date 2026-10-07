@@ -114,3 +114,13 @@ STOP 1. Report:
 ## Push (only after I reply "push")
 
 Fast-forward only, plain `git push`. Report remote HEAD, the CI run with its Gate and Audit steps, Railway server and worker on the new SHA with the deploy log's `Applying 0065_altar.sql` line, Pages green, API health, and in production a read-only select confirming 0065 in `__massalia_migrations`.
+
+## STOP 1 ruling (7 Oct 2026)
+
+1. Keying the Altar section on the blessing's end instant: accepted.
+2. The card's name column: accepted. The button stops repeating it and reads "Sacrifice · you have 1", or "Sacrifice · none in stock" when the floored stock is 0. The card's line stays "+3 morale · 2 seasons". Disabled rules and titles unchanged.
+3. `until` as an ISO string in the effect_log detail: accepted.
+4. No browser pass: the render tests cover the section, and I check it live after the deploy.
+All other wording stands as rendered.
+
+Two commits: first this ruling appended verbatim to docs/barracks/altar-prompt-1.md under its heading, then the button text in BarracksPanel.tsx with the render test's expected strings updated and no other assertion changed. Run the gate at the new HEAD, then the audit. STOP 2: a Committed line for each new commit, the gate's last line with suite counts, the audit exit code, and the two button texts as rendered. No push until I say push.
