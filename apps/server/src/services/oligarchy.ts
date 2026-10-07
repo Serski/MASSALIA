@@ -18,6 +18,8 @@ import {
 } from "@massalia/db";
 import { parsePoliticsConfig, type ChamberChoice, type NpcParty, type PoliticsConfig } from "@massalia/shared";
 import type { CharacterRow } from "./character.js";
+import { lockPlayer } from "./lock.js";
+import { payReferralInTx, referralPayoutFor } from "./referrals.js";
 import { broadcastState } from "./worldState.js";
 
 const db = createDb();
@@ -80,9 +82,17 @@ export async function buySeat(row: CharacterRow, now: Date = new Date()): Promis
   if (await seatOf(row.id)) return { ok: false, code: 409, error: "Your dynasty already holds a seat in the chamber." };
   if (row.drachmae < price) return { ok: false, code: 409, error: `A seat costs ${price} drachmae — you cannot afford it.` };
 
+  // The invite promo: the buyer's unpaid referral and the inviter's living
+  // character in this world, read before the transaction; null means no payout.
+  const payout = await referralPayoutFor(row, getPoliticsConfig().referrals.reward);
+
   let seatIndex: number;
   try {
     seatIndex = await db.transaction(async (tx) => {
+      // The buyer's lock, and the inviter's when there is a payout, in id order
+      // as giveDrachmae takes them, so two purchases in flight never deadlock.
+      for (const playerId of [...new Set([row.playerId, ...(payout ? [payout.inviterPlayerId] : [])])].sort()) await lockPlayer(tx, playerId);
+
       // Conditional deduction: re-checks the balance inside the transaction.
       const paid = await tx
         .update(playerCharacters)
@@ -111,11 +121,16 @@ export async function buySeat(row: CharacterRow, now: Date = new Date()): Promis
 
       await tx.update(playerCharacters).set({ isCouncilor: true }).where(eq(playerCharacters.id, row.id));
       await tx.insert(effectLog).values({ characterId: row.id, kind: "oligarch_seat", detail: { seatIndex: seat.seat_index, price } });
+      // The invite promo: the inviter is paid in the same transaction as the seat.
+      if (payout) await payReferralInTx(tx, payout, row, now);
       return seat.seat_index;
     });
   } catch (error) {
     const message = (error as Error).message;
     if (message === "chamber_full") return { ok: false, code: 409, error: "No empty seats remain in the chamber." };
+    // A claimed referral that could not be credited: let the error handler answer
+    // 500 (the transaction rolled back) rather than the double-buy message.
+    if (message === "referral_credit_failed") throw error;
     if (message === "cannot_afford") return { ok: false, code: 409, error: `A seat costs ${price} drachmae — you cannot afford it.` };
     // The unique partial index fired (a concurrent double-buy).
     return { ok: false, code: 409, error: "Your dynasty already holds a seat in the chamber." };

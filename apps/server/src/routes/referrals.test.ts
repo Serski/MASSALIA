@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import Fastify, { type FastifyInstance, type LightMyRequestResponse } from "fastify";
 import cookie from "@fastify/cookie";
 
@@ -84,6 +84,26 @@ suite("the invite promo (integration)", () => {
   }
   const codeOf = async (userId: string) => (await db.select({ code: m.dbPkg.users.referralCode }).from(m.dbPkg.users).where(eq(m.dbPkg.users.id, userId)))[0]!.code;
   const referralRows = () => db.select().from(m.dbPkg.referrals).orderBy(m.dbPkg.referrals.createdAt);
+  async function characterFor(userId: string, name: string, drachmae = 500, world = worldId) {
+    const player = (await db.insert(m.dbPkg.players).values({ worldId: world, userId, name, color: "#123456", houseSlug: "test-house" }).returning())[0]!;
+    const character = (
+      await db.insert(m.dbPkg.playerCharacters).values({ playerId: player.id, worldId: world, houseSlug: "test-house", classId: "trader", drachmae, party: "none", startAge: 30, deathAge: 90 }).returning()
+    )[0]!;
+    return { playerId: player.id, characterId: character.id };
+  }
+  const charRow = async (id: string) => (await db.select().from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.id, id)))[0]!;
+  const drachmaeOf = async (id: string) => (await charRow(id)).drachmae;
+  const rewardRows = (characterId: string) =>
+    db.select().from(m.dbPkg.effectLog).where(and(eq(m.dbPkg.effectLog.characterId, characterId), eq(m.dbPkg.effectLog.kind, "referral_reward")));
+  // An inviter and an invitee who signed up through the inviter's link, both with
+  // a character at 500 drachmae in the active world.
+  async function pair(opts: { inviterCharacter?: boolean } = {}) {
+    const inviter = await register("inviter@t");
+    const invitee = await register("invitee@t", await codeOf(inviter.id));
+    const inviterChar = opts.inviterCharacter === false ? null : await characterFor(inviter.id, "Inviter");
+    const inviteeChar = await characterFor(invitee.id, "Invitee");
+    return { inviter, invitee, inviterChar, inviteeChar };
+  }
 
   // --- recording a referral at sign-up (commit 3) ------------------------------
   it("a sign-up with the inviter's code in lower case records one referral, and the response says nothing of it", async () => {
@@ -149,5 +169,78 @@ suite("the invite promo (integration)", () => {
     for (let i = 1; i <= 9; i++) await register(`invitee${i}@t`, code);
     await Promise.all([register("race-a@t", code), register("race-b@t", code)]);
     expect((await referralRows()).filter((r) => r.worldId === worldId)).toHaveLength(10);
+  });
+
+  // --- the payout when the invited player takes a seat (commit 4) ---------------
+  it("the invitee buys a seat: the inviter's character is paid 200 once, the referral is stamped, one referral_reward row", async () => {
+    const { inviterChar, inviteeChar, invitee } = await pair();
+    const bought = await m.oligarchy.buySeat(await charRow(inviteeChar.characterId), now);
+    expect(bought).toMatchObject({ ok: true, price: 200 });
+    expect(await drachmaeOf(inviteeChar.characterId)).toBe(300);
+    expect(await drachmaeOf(inviterChar!.characterId)).toBe(700);
+    const [referral] = await referralRows();
+    expect(referral).toMatchObject({ inviteeUserId: invitee.id, paidCharacterId: inviterChar!.characterId });
+    expect(referral!.paidAt).not.toBeNull();
+    const rewards = await rewardRows(inviterChar!.characterId);
+    expect(rewards).toHaveLength(1);
+    expect(rewards[0]!.detail).toEqual({ inviteeCharacterId: inviteeChar.characterId, amount: 200 });
+  });
+
+  it("a referral already paid pays nothing again", async () => {
+    const { inviterChar, inviteeChar, invitee } = await pair();
+    await db.update(m.dbPkg.referrals).set({ paidAt: now, paidCharacterId: inviterChar!.characterId }).where(eq(m.dbPkg.referrals.inviteeUserId, invitee.id));
+    expect(await m.oligarchy.buySeat(await charRow(inviteeChar.characterId), now)).toMatchObject({ ok: true });
+    expect(await drachmaeOf(inviteeChar.characterId)).toBe(300);
+    expect(await drachmaeOf(inviterChar!.characterId)).toBe(500);
+    expect(await rewardRows(inviterChar!.characterId)).toHaveLength(0);
+  });
+
+  it("no payout when the inviter has no character here, is dead, is banned, is deleted, or the referral is from another world", async () => {
+    const unpaid = async (inviteeCharacterId: string, inviterCharacterId: string | null, inviteeUserId: string) => {
+      expect(await m.oligarchy.buySeat(await charRow(inviteeCharacterId), now)).toMatchObject({ ok: true, price: 200 });
+      expect(await drachmaeOf(inviteeCharacterId)).toBe(300);
+      if (inviterCharacterId) {
+        expect(await drachmaeOf(inviterCharacterId)).toBe(500);
+        expect(await rewardRows(inviterCharacterId)).toHaveLength(0);
+      }
+      const referral = (await referralRows()).find((r) => r.inviteeUserId === inviteeUserId);
+      expect(referral?.paidAt ?? null).toBeNull();
+    };
+    // The truncate cascades into oligarch_seats (it references player_characters),
+    // so the chamber is seeded again for the next purchase.
+    const reset = async () => {
+      await db.execute(sql`TRUNCATE TABLE password_reset_tokens, email_verification_tokens, sessions, player_characters, players, dynasties, users CASCADE`);
+      await m.dbPkg.ensureChamberSeats(worldId, politics.chamber);
+    };
+
+    // No character in this world.
+    let p = await pair({ inviterCharacter: false });
+    await unpaid(p.inviteeChar.characterId, null, p.invitee.id);
+    await reset();
+    // Deceased.
+    p = await pair();
+    await db.update(m.dbPkg.playerCharacters).set({ status: "deceased" }).where(eq(m.dbPkg.playerCharacters.id, p.inviterChar!.characterId));
+    await unpaid(p.inviteeChar.characterId, p.inviterChar!.characterId, p.invitee.id);
+    await reset();
+    // Banned.
+    p = await pair();
+    await db.update(m.dbPkg.users).set({ bannedAt: now, banReason: "x" }).where(eq(m.dbPkg.users.id, p.inviter.id));
+    await unpaid(p.inviteeChar.characterId, p.inviterChar!.characterId, p.invitee.id);
+    await reset();
+    // Deleted.
+    p = await pair();
+    await db.update(m.dbPkg.users).set({ deletedAt: now }).where(eq(m.dbPkg.users.id, p.inviter.id));
+    await unpaid(p.inviteeChar.characterId, p.inviterChar!.characterId, p.invitee.id);
+    await reset();
+    // The referral was made in another world.
+    const inviter = await register("inviter@t");
+    const invitee = await register("invitee@t");
+    const old = (
+      await db.insert(m.dbPkg.worlds).values({ name: "Old World", seed: "old", startedAt: new Date(now.getTime() - 400 * DAY), endsAt: new Date(now.getTime() - 200 * DAY), status: "ended" }).returning()
+    )[0]!;
+    await db.insert(m.dbPkg.referrals).values({ inviteeUserId: invitee.id, inviterUserId: inviter.id, worldId: old.id });
+    const inviterChar = await characterFor(inviter.id, "Inviter");
+    const inviteeChar = await characterFor(invitee.id, "Invitee");
+    await unpaid(inviteeChar.characterId, inviterChar.characterId, invitee.id);
   });
 });
