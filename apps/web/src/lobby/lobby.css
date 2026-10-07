@@ -1336,3 +1336,66 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* --- The invite promo's box (invite prompt 1) -------------------------------
+   Under the theme's rules: the terracotta accent is a fill and border colour,
+   never a text colour; corners stay square; the button stays flat; the field
+   shrinks so the link row fits a 360px phone. */
+.lobby-referrals-copy {
+  margin: 0;
+  padding: 0 18px 12px;
+  color: rgba(236, 224, 204, 0.8);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.lobby-referrals-link {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding: 0 18px 12px;
+}
+
+.lobby-referrals-field {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--lobby-gold);
+  border-radius: 0;
+  background: rgba(12, 8, 7, 0.5);
+  color: var(--cream);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.lobby-referrals-field:focus {
+  outline: none;
+  border-color: var(--lobby-gold-bright);
+}
+
+.lobby-referrals-note {
+  margin: 0;
+  padding: 0 18px 12px;
+  color: rgba(236, 224, 204, 0.7);
+  font-size: 12.5px;
+}
+
+.lobby-referrals-list {
+  margin: 0;
+  padding: 0 18px 16px;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.lobby-referrals-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.lobby-referrals-list li span {
+  color: rgba(236, 224, 204, 0.6);
+  white-space: nowrap;
+}

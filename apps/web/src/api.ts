@@ -348,6 +348,14 @@ export type LobbyCitizen = {
   portrait: string | null;
 };
 
+// The invite promo's box in the Lobby: the viewer's code, the content numbers
+// and who they invited in this world, each with a state.
+export type LobbyReferrals = {
+  code: string;
+  reward: number;
+  perWorld: number;
+  invited: Array<{ name: string | null; status: "signed-up" | "playing" | "seated" | "paid" }>;
+};
 export type LobbyResponse = {
   // beta: the user created a character in World 1 (the Lobby record shows a line).
   user: { email: string; emailVerified: boolean; newsletterOptIn: boolean; isAdmin: boolean; memberSince: string; beta: boolean };
@@ -362,6 +370,7 @@ export type LobbyResponse = {
       seasonEndsIn: number;
       playerCount: number;
       citizens: LobbyCitizen[];
+      referrals: LobbyReferrals;
       you: null | {
         characterId: string | null;
         name: string;

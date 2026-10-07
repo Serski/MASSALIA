@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api, ApiError, type LobbyCitizen, type LobbyResponse, type NewsEntry } from "../api.js";
+import { api, ApiError, type LobbyCitizen, type LobbyReferrals, type LobbyResponse, type NewsEntry } from "../api.js";
 import { maskEmail } from "../dashboard/sheets.js";
 import { OFFICE_LABEL, bcYear } from "../dashboard/panels/PoliticsPanel.js";
 import { navigateTo } from "../navigate.js";
@@ -180,7 +180,7 @@ export function LobbyPage({ view, onEnterGame, onCreateCharacter, onRequireLogin
               onCreateCharacter={onCreateCharacter}
             />
           </div>
-          <RightColumn news={news} citizens={lobby.worlds.active?.citizens ?? []} youCharacterId={lobby.worlds.active?.you?.characterId ?? null} />
+          <RightColumn news={news} citizens={lobby.worlds.active?.citizens ?? []} youCharacterId={lobby.worlds.active?.you?.characterId ?? null} referrals={lobby.worlds.active?.referrals ?? null} />
         </div>
       )}
     </LobbyFrame>
@@ -282,10 +282,74 @@ function go(path: string) {
   };
 }
 
-function RightColumn({ news, citizens, youCharacterId }: { news: NewsEntry[] | null; citizens: LobbyCitizen[]; youCharacterId: string | null }) {
+// The invite promo's box: the viewer's link, the numbers and who they invited in
+// this world. Null (no active world) renders nothing. Hooks sit above the early
+// return (rules-of-hooks is an error here).
+const REFERRAL_STATE_LABEL: Record<LobbyReferrals["invited"][number]["status"], string> = {
+  "signed-up": "Signed up",
+  playing: "In the city",
+  seated: "Seated",
+  paid: "Seated · paid",
+};
+export function ReferralsBox({ referrals }: { referrals: LobbyReferrals | null }) {
+  const [copied, setCopied] = useState(false);
+  const [note, setNote] = useState("");
+  const field = useRef<HTMLInputElement>(null);
+  if (!referrals) return null;
+  const link = `${window.location.origin}/?invite=${referrals.code}`;
+  const full = referrals.invited.length >= referrals.perWorld;
+  const stateLabel = (status: LobbyReferrals["invited"][number]["status"]) =>
+    status === "paid" ? `Seated · ${referrals.reward} paid` : REFERRAL_STATE_LABEL[status];
+  const copy = async () => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("no clipboard");
+      await navigator.clipboard.writeText(link);
+      setNote("");
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      field.current?.focus();
+      field.current?.select();
+      setNote("Copy the link by hand.");
+    }
+  };
+  return (
+    <section className="lobby-panel lobby-referrals" aria-labelledby="lobby-referrals-title">
+      <div className="lobby-panel-head">
+        <p className="lobby-eyebrow" id="lobby-referrals-title">Invite a citizen</p>
+        <span className="lobby-panel-head-note">{referrals.invited.length} of {referrals.perWorld}</span>
+      </div>
+      <p className="lobby-referrals-copy">
+        When someone you invite takes a seat among the Three Hundred, your character receives {referrals.reward} drachmae. Up to {referrals.perWorld} invitations this world.
+      </p>
+      <div className="lobby-referrals-link">
+        <input ref={field} className="lobby-referrals-field" type="text" readOnly value={link} aria-label="Your invite link" onFocus={(event) => event.currentTarget.select()} />
+        <button type="button" className="lobby-btn lobby-btn-small" onClick={() => void copy()}>{copied ? "Copied" : "Copy"}</button>
+      </div>
+      {note ? <p className="lobby-referrals-note">{note}</p> : null}
+      {full ? <p className="lobby-referrals-note">All {referrals.perWorld} invitations are used this world. New sign-ups through your link do not count.</p> : null}
+      {referrals.invited.length ? (
+        <ol className="lobby-referrals-list">
+          {referrals.invited.map((invited, index) => (
+            <li key={index}>
+              <strong>{invited.name ?? "A new citizen"}</strong>
+              <span>{stateLabel(invited.status)}</span>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="lobby-empty lobby-panel-empty">No one yet.</p>
+      )}
+    </section>
+  );
+}
+
+function RightColumn({ news, citizens, youCharacterId, referrals }: { news: NewsEntry[] | null; citizens: LobbyCitizen[]; youCharacterId: string | null; referrals: LobbyReferrals | null }) {
   const latest = news ? news.slice(0, 3) : [];
   return (
     <aside className="lobby-aside-right">
+      <ReferralsBox referrals={referrals} />
+
       <section className="lobby-panel lobby-guides-box" aria-label="Guides">
         <img className="lobby-guides-thumb" src={GUIDES_THUMB} alt="" width={56} height={56} loading="lazy" />
         <div className="lobby-guides-copy">
