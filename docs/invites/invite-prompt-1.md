@@ -219,3 +219,11 @@ Not in the hour before the 00:00 UTC season rollover. Fast-forward only, plain `
 - in production, read only: 0066 in `__massalia_migrations`; `SELECT count(*), count(DISTINCT referral_code) FROM users` with the two numbers equal; `SELECT count(*) FROM referrals` at 0
 
 A red run is a STOP with the log. Do not revert on your own.
+
+## Gate ruling (7 Oct 2026)
+
+1. The tenth commit is approved: apps/server/src/services/beta-trait.test.ts imports the oligarchy service in its module loader and awaits `loadPoliticsConfig()` in its `beforeAll` beside `loadAgeConfig()`. No assertion changes. Subject: "test: the Beta trait suite loads the politics config". The scope fence widens by this one file for this one change. The miss was the prompt's: on 756248b, lobby.test.ts and beta-trait.test.ts are the only suites that mount the Lobby route, and the recon named only the first.
+2. lobby.test.ts's module loader importing the oligarchy service: accepted.
+3. The referrals suite truncating and reseeding the chamber between the no-payout sub-cases: accepted.
+
+Two commits: first the test fix above, then this ruling appended verbatim to docs/invites/invite-prompt-1.md under its heading ("docs: the invite prompt's gate ruling"). Then the full gate at the new HEAD and the audit. No other suite mounts the Lobby route, so any red now is a STOP with the log. Then STOP 1 as the prompt writes it, with the two new Committed lines and the accepted deviations listed. No push until I say push.
