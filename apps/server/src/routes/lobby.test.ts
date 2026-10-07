@@ -29,7 +29,8 @@ async function loadModules() {
   const { standingsRoutes } = await import("./standings.js");
   const { errorHandler } = await import("../errorHandler.js");
   const age = await import("../services/age.js");
-  return { dbPkg, lobbyRoutes, standingsRoutes, errorHandler, age };
+  const oligarchy = await import("../services/oligarchy.js");
+  return { dbPkg, lobbyRoutes, standingsRoutes, errorHandler, age, oligarchy };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -61,6 +62,8 @@ suite("GET /api/lobby (integration)", () => {
     db = m.dbPkg.createDb();
     // The aged portrait needs the age config, loaded at boot in production.
     await m.age.loadAgeConfig();
+    // The Invite box reads the promo's numbers from the politics config.
+    await m.oligarchy.loadPoliticsConfig();
     app = Fastify();
     app.setErrorHandler(m.errorHandler);
     await app.register(cookie, { secret: "test-session-secret-at-least-32-chars-long" });

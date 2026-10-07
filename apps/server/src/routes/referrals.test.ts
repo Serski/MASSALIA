@@ -243,4 +243,52 @@ suite("the invite promo (integration)", () => {
     const inviteeChar = await characterFor(invitee.id, "Invitee");
     await unpaid(inviteeChar.characterId, inviterChar.characterId, invitee.id);
   });
+
+  // --- the Lobby's Invite box (commit 5) -----------------------------------------
+  it("GET /api/lobby carries the inviter's code, the numbers and each invited player's state, in sign-up order, and no raw metric key", async () => {
+    const inviter = await register("inviter@t");
+    await characterFor(inviter.id, "Inviter");
+    const code = await codeOf(inviter.id);
+    const H = 3_600_000;
+    // a: signed up, no character. b: a character. c: seated before the referral
+    // row existed (so unpaid). d: paid through buySeat. Explicit created_at fixes
+    // the order; a, b and c are inserted directly, d signs up through the link.
+    const a = await register("a@t");
+    const b = await register("b@t");
+    const c = await register("c@t");
+    await characterFor(b.id, "Beta");
+    const cChar = await characterFor(c.id, "Gamma");
+    expect(await m.oligarchy.buySeat(await charRow(cChar.characterId), now)).toMatchObject({ ok: true });
+    await db.insert(m.dbPkg.referrals).values([
+      { inviteeUserId: a.id, inviterUserId: inviter.id, worldId, createdAt: new Date(now.getTime() - 4 * H) },
+      { inviteeUserId: b.id, inviterUserId: inviter.id, worldId, createdAt: new Date(now.getTime() - 3 * H) },
+      { inviteeUserId: c.id, inviterUserId: inviter.id, worldId, createdAt: new Date(now.getTime() - 2 * H) },
+    ]);
+    const d = await register("d@t", code);
+    const dChar = await characterFor(d.id, "Delta");
+    expect(await m.oligarchy.buySeat(await charRow(dChar.characterId), now)).toMatchObject({ ok: true });
+
+    const res = await app.inject({ method: "GET", url: "/api/lobby", headers: { cookie: inviter.cookie, "x-forwarded-for": nextIp() } });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.worlds.active.referrals).toEqual({
+      code,
+      reward: 200,
+      perWorld: 10,
+      invited: [
+        { name: null, status: "signed-up" },
+        { name: "Beta", status: "playing" },
+        { name: "Gamma", status: "seated" },
+        { name: "Delta", status: "paid" },
+      ],
+    });
+    // As lobby.test.ts guards: the JSON never carries a raw metric key.
+    const keys = new Set<string>();
+    const collect = (value: unknown) => {
+      if (Array.isArray(value)) value.forEach(collect);
+      else if (value && typeof value === "object") for (const [k, v] of Object.entries(value as Record<string, unknown>)) { keys.add(k); collect(v); }
+    };
+    collect(body);
+    for (const forbidden of ["prestige", "drachmae", "wealth", "devotion", "militia", "intelligence"]) expect(keys.has(forbidden), forbidden).toBe(false);
+  });
 });

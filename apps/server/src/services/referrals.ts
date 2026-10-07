@@ -1,5 +1,5 @@
-import { and, count, eq, isNull, sql } from "drizzle-orm";
-import { createDb, effectLog, playerCharacters, players, referrals, users, type DbTx } from "@massalia/db";
+import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
+import { createDb, effectLog, oligarchSeats, playerCharacters, players, referrals, users, type DbTx } from "@massalia/db";
 import { findCharacterRow, getActivePlayer, getActiveWorldId, type CharacterRow } from "./character.js";
 
 // ---------------------------------------------------------------------------
@@ -99,4 +99,38 @@ export async function payReferralInTx(tx: DbTx, payout: ReferralPayout, buyer: C
   if (!credited.length) throw new Error("referral_credit_failed");
   await tx.insert(effectLog).values({ characterId: payout.inviterCharacterId, kind: "referral_reward", detail: { inviteeCharacterId: buyer.id, amount: payout.reward } });
   return true;
+}
+
+// --- The Lobby's Invite box (commit 5) ------------------------------------------
+
+export type ReferralsSection = {
+  code: string;
+  reward: number;
+  perWorld: number;
+  invited: Array<{ name: string | null; status: "signed-up" | "playing" | "seated" | "paid" }>;
+};
+
+// The user's code and the people they invited in one world, in sign-up order,
+// each with the invitee's active player name there (null without one) and a
+// state: paid, else seated (their character holds a seat), else playing (an
+// active player there), else signed-up. One query with left joins. Read only.
+export async function referralsSection(userId: string, worldId: string, numbers: { reward: number; perWorld: number }): Promise<ReferralsSection> {
+  const [me] = await db.select({ code: users.referralCode }).from(users).where(eq(users.id, userId)).limit(1);
+  const rows = await db
+    .select({ paidAt: referrals.paidAt, playerId: players.id, name: players.name, seatCharacterId: oligarchSeats.characterId })
+    .from(referrals)
+    .leftJoin(players, and(eq(players.userId, referrals.inviteeUserId), eq(players.worldId, referrals.worldId), eq(players.isActive, true)))
+    .leftJoin(playerCharacters, and(eq(playerCharacters.playerId, players.id), eq(playerCharacters.worldId, referrals.worldId)))
+    .leftJoin(oligarchSeats, eq(oligarchSeats.characterId, playerCharacters.id))
+    .where(and(eq(referrals.inviterUserId, userId), eq(referrals.worldId, worldId)))
+    .orderBy(asc(referrals.createdAt));
+  return {
+    code: me?.code ?? "",
+    reward: numbers.reward,
+    perWorld: numbers.perWorld,
+    invited: rows.map((r) => ({
+      name: r.playerId ? r.name : null,
+      status: r.paidAt ? "paid" : r.seatCharacterId ? "seated" : r.playerId ? "playing" : "signed-up",
+    })),
+  };
 }

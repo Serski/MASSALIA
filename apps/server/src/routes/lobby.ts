@@ -5,6 +5,8 @@ import { formatGameDate, gameDate } from "@massalia/shared";
 import { agedPortraitFor } from "../services/age.js";
 import { requireAuth } from "../services/auth.js";
 import { findCharacterRow, getActivePlayer, getActiveWorld, type PlayerRow } from "../services/character.js";
+import { getPoliticsConfig } from "../services/oligarchy.js";
+import { referralsSection, type ReferralsSection } from "../services/referrals.js";
 import { loadStandingsRoster } from "../services/standings.js";
 import { rankStandings, type StandingRow } from "./standings.js";
 
@@ -42,6 +44,9 @@ export type LobbyResponse = {
       playerCount: number;
       // The first five rows of the prestige board, in board order.
       citizens: LobbyCitizen[];
+      // The invite promo: the viewer's code, the content numbers and who they
+      // invited in this world (the Lobby's Invite box).
+      referrals: ReferralsSection;
       you: null | {
         characterId: string | null;
         name: string;
@@ -98,6 +103,7 @@ async function activeWorldSection(userId: string, now: number): Promise<LobbyRes
     seasonEndsIn: Math.max(0, Math.ceil((world.endsAt.getTime() - now) / 86_400_000)),
     playerCount,
     citizens: await citizensSection(prestigeBoard.slice(0, 5), world.id, now),
+    referrals: await referralsSection(userId, world.id, getPoliticsConfig().referrals),
     you: viewer ? await youSection(viewer, world.id, prestigeBoard, now) : null,
   };
 }
