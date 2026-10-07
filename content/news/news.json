@@ -1,5 +1,25 @@
 [
   {
+    "id": "2026-10-first-elections",
+    "date": "2026-10-07",
+    "tag": "world",
+    "title": "Elections are coming",
+    "body": [
+      "Candidacy for Archon and Ephor opens on Saturday 10 October. Voting is on Tuesday 13 October, and the winners take office on Wednesday 14 October. Each step begins at the daily rollover, 00:00 UTC.",
+      "Only the Three Hundred may stand, so take your seat in the chamber now. Everyone votes."
+    ]
+  },
+  {
+    "id": "2026-10-invite-a-citizen",
+    "date": "2026-10-07",
+    "tag": "update",
+    "title": "Invite a citizen",
+    "body": [
+      "You now have your own invite link in the Lobby, under Invite a citizen. Copy it and send it to a friend.",
+      "When they take a seat among the Three Hundred, your character receives 200 drachmae. Up to 10 friends count in this world."
+    ]
+  },
+  {
     "id": "2026-09-lobby-opens",
     "date": "2026-09-09",
     "tag": "notice",
