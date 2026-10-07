@@ -11,8 +11,13 @@ updates:
           - "minor"
           - "patch"
 
-  # The actions used by the workflows in .github/workflows.
+  # The actions used by the workflows in .github/workflows: one weekly PR for
+  # every action bump, since they share a cause (the action runtime) and a gate.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      actions:
+        patterns:
+          - "*"
