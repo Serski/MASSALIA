@@ -83,3 +83,11 @@ STOP 1. Report:
 ## Push (only after I reply "push")
 
 Fast-forward only, plain `git push`. Report remote HEAD, the CI run with its Gate and Audit steps, Railway server and worker on the new SHA, Pages green, API health. No migration: confirm the deploy log shows every migration skipped.
+
+## STOP 1 ruling (7 Oct 2026)
+
+1. Loading the map topology in the admin suite's setup: accepted.
+2. The trained unit ids as a literal in the grant prompt: accepted. The server checks every id, so the hint cannot grant a wrong unit. When a trained unit is added to units.json, its id goes into that hint in the same commit.
+3. The Military block's wording stands as rendered, "under contract" for a band at home included.
+
+Append this ruling verbatim to docs/admin/admin-units-prompt-1.md as one docs commit. Run the gate at the new HEAD and read its exit code; on GATE GREEN with the tree clean, push as the prompt's push section says and report. Any red is a STOP with the log.
