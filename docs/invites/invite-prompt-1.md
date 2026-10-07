@@ -227,3 +227,12 @@ A red run is a STOP with the log. Do not revert on your own.
 3. The referrals suite truncating and reseeding the chamber between the no-payout sub-cases: accepted.
 
 Two commits: first the test fix above, then this ruling appended verbatim to docs/invites/invite-prompt-1.md under its heading ("docs: the invite prompt's gate ruling"). Then the full gate at the new HEAD and the audit. No other suite mounts the Lobby route, so any red now is a STOP with the log. Then STOP 1 as the prompt writes it, with the two new Committed lines and the accepted deviations listed. No push until I say push.
+
+## STOP 1 ruling (7 Oct 2026)
+
+1. The Invite box's wording, as rendered: accepted, with the "Your invite link" label on the field.
+2. The admin line ("Invited by …", "Invited n", each only when there is something to say): accepted.
+3. "Deceased": accepted. The prompt's "dead" meant that status; the payout checks for "alive" as written.
+4. The three deviations stand as ruled at the gate.
+
+One commit: this ruling appended verbatim to docs/invites/invite-prompt-1.md under its heading ("docs: the invite prompt's STOP 1 ruling"). Then the full gate at the new HEAD and the audit. If both are clean, this ruling is the push: push and report exactly as the prompt's Push section writes it, not in the hour before the 00:00 UTC rollover. A red gate or a red CI run is a STOP with the log, and nothing is reverted.
