@@ -168,6 +168,9 @@ export type AdminUser = {
   lastSeenAt: string | null;
   lastIp: string | null;
   characters: AdminCharacter[];
+  // The invite promo: who invited this account, and how many it invited.
+  referredBy: string | null;
+  referralsMade: number;
 };
 export type AdminCluster = {
   user: { id: string; email: string };

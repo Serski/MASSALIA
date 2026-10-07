@@ -296,7 +296,11 @@ export function AdminPage() {
         <tbody>
           {users.map((user) => (
             <tr key={user.id}>
-              <td>{user.email}{user.isAdmin ? " (admin)" : ""}</td>
+              <td>
+                {user.email}{user.isAdmin ? " (admin)" : ""}
+                {user.referredBy ? <div><small>Invited by {user.referredBy}</small></div> : null}
+                {user.referralsMade > 0 ? <div><small>Invited {user.referralsMade}</small></div> : null}
+              </td>
               <td>{user.emailVerifiedAt ? "yes" : "no"}</td>
               <td>{user.bannedAt ? `${fmt(user.bannedAt)} — ${user.banReason ?? ""}` : "no"}</td>
               <td>{fmt(user.lastSeenAt)}</td>
