@@ -8,6 +8,7 @@ import { AdminPage } from "./AdminPage.js";
 import { assetPath, nobleHouses, professions, type Alignment, type House, type Profession } from "./data/league.js";
 import { navigateTo } from "./navigate.js";
 import { lobbyViewFor } from "./lobby/routes.js";
+import { captureReferralFromUrl } from "./referral.js";
 // The Lobby is lazy: strangers on the landing never pay for it (it pulls the
 // Politics panel in for its office formatters).
 const LobbyPage = lazy(() => import("./lobby/LobbyPage.js").then((module) => ({ default: module.LobbyPage })));
@@ -767,6 +768,12 @@ export function App() {
   );
   const detailEntry = getDetailEntry(pathname);
   const authRouteMode: AuthMode | undefined = pathname === "/login" ? "login" : pathname === "/signup" ? "signup" : undefined;
+
+  // The invite promo: keep an invite link's code until sign-up (never for a
+  // visitor who already has an account) and take the parameter off the address.
+  useEffect(() => {
+    captureReferralFromUrl(hasSessionHint());
+  }, []);
 
   useEffect(() => {
     const handleRoute = () => setPathname(window.location.pathname);

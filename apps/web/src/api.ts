@@ -7,6 +7,7 @@ if (import.meta.env.PROD && !configuredApiUrl) {
 export const apiBaseUrl = (configuredApiUrl ?? (import.meta.env.DEV ? "http://localhost:3001" : "")).replace(/\/$/, "");
 
 import { sortNews, type AgeConfig, type CharacterSheet, type DeathCause, type GameDate, type NewsEntry } from "@massalia/shared";
+import { clearStoredReferral, storedReferral } from "./referral.js";
 
 export type { CharacterSheet } from "@massalia/shared";
 export type { AgeConfig } from "@massalia/shared";
@@ -396,8 +397,16 @@ function authenticate(path: string, body: Record<string, unknown>): Promise<Auth
 }
 
 export const api = {
-  register: (email: string, password: string, newsletterOptIn = false, termsAccepted = false) =>
-    authenticate("/auth/register", { email, password, newsletterOptIn, termsAccepted }),
+  // The invite promo: a stored invite code rides along, and is cleared only after
+  // a successful sign-up, so a refused one (an email already registered) keeps it
+  // for the retry. The signature is unchanged for both sign-up paths.
+  register: (email: string, password: string, newsletterOptIn = false, termsAccepted = false) => {
+    const referralCode = storedReferral();
+    return authenticate("/auth/register", { email, password, newsletterOptIn, termsAccepted, ...(referralCode ? { referralCode } : {}) }).then((result) => {
+      clearStoredReferral();
+      return result;
+    });
+  },
   login: (email: string, password: string) => authenticate("/auth/login", { email, password }),
   // Always resolves to the same generic message (enumeration-safe on the server).
   forgotPassword: (email: string) =>
