@@ -1,4 +1,4 @@
-import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { createDb, effectLog, oligarchSeats, playerCharacters, players, referrals, users, type DbTx } from "@massalia/db";
 import { findCharacterRow, getActivePlayer, getActiveWorldId, type CharacterRow } from "./character.js";
 
@@ -133,4 +133,28 @@ export async function referralsSection(userId: string, worldId: string, numbers:
       status: r.paidAt ? "paid" : r.seatCharacterId ? "seated" : r.playerId ? "playing" : "signed-up",
     })),
   };
+}
+
+// --- /admin: who invited each account (commit 6) --------------------------------
+
+// For a batch of users: the inviter's email (null when they signed up without a
+// link) and how many accounts they invited across every world. Two queries for
+// the whole batch, never one per user.
+export async function referralsOf(userIds: string[]): Promise<Map<string, { referredBy: string | null; referralsMade: number }>> {
+  const out = new Map<string, { referredBy: string | null; referralsMade: number }>();
+  for (const id of userIds) out.set(id, { referredBy: null, referralsMade: 0 });
+  if (!userIds.length) return out;
+  const invitedBy = await db
+    .select({ inviteeUserId: referrals.inviteeUserId, email: users.email })
+    .from(referrals)
+    .innerJoin(users, eq(users.id, referrals.inviterUserId))
+    .where(inArray(referrals.inviteeUserId, userIds));
+  for (const row of invitedBy) out.get(row.inviteeUserId)!.referredBy = row.email;
+  const made = await db
+    .select({ inviterUserId: referrals.inviterUserId, n: count() })
+    .from(referrals)
+    .where(inArray(referrals.inviterUserId, userIds))
+    .groupBy(referrals.inviterUserId);
+  for (const row of made) out.get(row.inviterUserId)!.referralsMade = Number(row.n);
+  return out;
 }

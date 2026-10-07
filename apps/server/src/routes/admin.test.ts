@@ -457,6 +457,18 @@ suite("admin tooling and account gates (integration)", () => {
     }
   });
 
+  // --- referrals --------------------------------------------------------------------------
+  it("the users list says who invited each account and how many each invited", async () => {
+    const a = await admin();
+    const inviter = await register("inviter@t");
+    const invitee = await register("invitee@t");
+    await db.insert(m.dbPkg.referrals).values({ inviteeUserId: invitee.id, inviterUserId: inviter.id, worldId });
+    const list = (await call("GET", "/admin/users?q=@t", { cookie: a.cookie })).json();
+    const byEmail = Object.fromEntries(list.users.map((u: { email: string }) => [u.email, u]));
+    expect(byEmail["invitee@t"]).toMatchObject({ referredBy: "inviter@t", referralsMade: 0 });
+    expect(byEmail["inviter@t"]).toMatchObject({ referredBy: null, referralsMade: 1 });
+  });
+
   // --- koina -------------------------------------------------------------------------------
   it("koina: the list, a rename and a dissolve, each audited; a non-admin reaches none of it", async () => {
     const { koina, koinonMembers, koinonInvites, koinonPosts, effectLog, players } = m.dbPkg;

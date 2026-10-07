@@ -4,6 +4,7 @@ import { adminAudit, authEvents, createDb, effectLog, interactions, playerCharac
 import { bandDef, hasLetter, sanitizeDisplayName, unitDef, type PopType } from "@massalia/shared";
 import { requireAdmin } from "../services/auth.js";
 import { gateFor, getBandsContent, getBattleContent, getUnitsContent, isPledged, massaliaRegionId, PLEDGED_REFUSAL, seasonFor } from "../services/barracks.js";
+import { referralsOf } from "../services/referrals.js";
 import { buildingContext, creditResource, debitResource, getBuildingsContent, getOrCreateResource, getPopsContent, settleAll, type ActingContext } from "../services/buildings.js";
 import { applyComposureDelta } from "../services/composure.js";
 import { getActiveWorldId } from "../services/character.js";
@@ -235,10 +236,18 @@ export async function adminRoutes(app: FastifyInstance) {
     }
     const rows = await db.select().from(users).where(and(...filters)).orderBy(desc(users.createdAt)).limit(limit);
     const ids = rows.map((row) => row.id);
-    const [chars, seen] = await Promise.all([charactersOf(ids), lastSeenOf(ids)]);
+    const [chars, seen, referred] = await Promise.all([charactersOf(ids), lastSeenOf(ids), referralsOf(ids)]);
     await audit(db, admin.id, "users.list", null, { q, banned: query.banned ?? null, verified: query.verified ?? null, returned: rows.length });
     return {
-      users: rows.map((row) => ({ ...publicUser(row), lastSeenAt: seen.get(row.id)?.at ?? null, lastIp: seen.get(row.id)?.ip ?? null, characters: chars.get(row.id) ?? [] })),
+      users: rows.map((row) => ({
+        ...publicUser(row),
+        lastSeenAt: seen.get(row.id)?.at ?? null,
+        lastIp: seen.get(row.id)?.ip ?? null,
+        characters: chars.get(row.id) ?? [],
+        // The invite promo: who invited this account, and how many it invited.
+        referredBy: referred.get(row.id)?.referredBy ?? null,
+        referralsMade: referred.get(row.id)?.referralsMade ?? 0,
+      })),
     };
   });
 
