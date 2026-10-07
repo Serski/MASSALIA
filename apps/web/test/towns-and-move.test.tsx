@@ -251,7 +251,8 @@ describe("move picker", () => {
       season: 93,
       now: iso(NOW),
       levy: { men: 3 },
-      config: { minServiceSeasons: 2, maxActiveBands: 2, termSeasons: 2 },
+      config: { minServiceSeasons: 2, maxActiveBands: 2, termSeasons: 2, altar: { seasons: 2, goods: { bull: 3, chicken: 1 } } },
+      altar: null,
       units: [],
       roster: [hoplites],
       offers: [],
@@ -271,7 +272,7 @@ describe("move picker", () => {
       fleet,
       roster: [{ ...hoplites, movingTo: "R046", arrivesAt: iso(NOW + H / 2), mission: { kind: "move", regionId: "R046", departedAt: iso(NOW) } }],
     });
-    const player = { gameDateLabel: "Spring, 277 BC" } as unknown as Parameters<typeof BarracksPanel>[0]["player"];
+    const player = { gameDateLabel: "Spring, 277 BC", balances: {} } as unknown as Parameters<typeof BarracksPanel>[0]["player"];
     const { container, getByText } = render(<BarracksPanel player={player} onRefresh={noop} />);
     await act(async () => {
       await new Promise((r) => setTimeout(r, 30));

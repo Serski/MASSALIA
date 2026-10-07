@@ -38,7 +38,8 @@ function payload(over: Partial<BarracksView> = {}): BarracksView {
     season: 93,
     now: iso(NOW),
     levy: { men: 3 },
-    config: { minServiceSeasons: 2, maxActiveBands: 2, termSeasons: 2 },
+    config: { minServiceSeasons: 2, maxActiveBands: 2, termSeasons: 2, altar: { seasons: 2, goods: { bull: 3, chicken: 1 } } },
+    altar: null,
     units: [unit("peltast", "Peltast", "Peltasts", 1), unit("hoplite", "Hoplite", "Hoplites", 2, { grain: 1, chicken: 1, oliveoil: 1 })],
     roster,
     offers: [offer("etruscan-hoplites", "Etruscan hoplites", true), offer("syracusan-hoplites", "Syracusan hoplites", false), offer("volcae-irregulars", "Volcae irregulars", true)],
@@ -49,7 +50,7 @@ function payload(over: Partial<BarracksView> = {}): BarracksView {
     ...over,
   };
 }
-const player = { gameDateLabel: "Spring, 277 BC" } as unknown as Parameters<typeof BarracksPanel>[0]["player"];
+const player = { gameDateLabel: "Spring, 277 BC", balances: { bull: 1, chicken: 0.5 } } as unknown as Parameters<typeof BarracksPanel>[0]["player"];
 
 const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 30)); });
 const rowsIn = (c: HTMLElement, section: string) => within(c.querySelector(`[data-section="${section}"]`) as HTMLElement).queryAllByText((_, el) => el?.classList.contains("barracks-row") ?? false, { selector: ".barracks-row" });
@@ -235,6 +236,66 @@ describe("BarracksPanel", () => {
     const free = home.querySelector('[data-row="home-hoplites"]') as HTMLElement;
     expect(free.querySelector(".barracks-tag")).toBeNull();
     expect([...free.querySelectorAll("button")].map((b) => (b as HTMLButtonElement).disabled)).toEqual([false, false]);
+    expect(hookWarnings).toEqual([]);
+  });
+
+  it("the altar, cold: one button per content beast, bull first; a whole bull is offered, half a chicken is none in stock; the click burns it and re-renders from the returned view", async () => {
+    const { container } = await mount(payload());
+    const altar = container.querySelector('[data-section="altar"]') as HTMLElement;
+    expect(altar.getAttribute("aria-label")).toBe("Altar");
+    expect(altar.querySelector(".barracks-head-note")!.textContent).toBe("A beast burned here steadies every man you field for 2 seasons.");
+    const buttons = [...altar.querySelectorAll("button")] as HTMLButtonElement[];
+    expect(buttons.map((b) => [b.textContent, b.disabled])).toEqual([
+      ["Sacrifice a bull · +3 morale · you have 1", false],
+      ["Sacrifice a chicken · +1 morale · none in stock", true],
+    ]);
+    const lit = payload({ altar: { good: "bull", mor: 3, until: iso(NOW + 30.5 * H) } });
+    vi.spyOn(api, "barracksSacrifice").mockResolvedValue(lit);
+    fireEvent.click(buttons[0]!);
+    await flush();
+    expect(api.barracksSacrifice).toHaveBeenCalledTimes(1);
+    expect(api.barracksSacrifice).toHaveBeenCalledWith("bull");
+    // The section is keyed on the blessing's end: a fresh offering mounts it anew.
+    const smoking = container.querySelector('[data-section="altar"]') as HTMLElement;
+    expect(smoking.querySelector(".barracks-head-note")!.textContent).toMatch(/^The altar smokes · \+3 morale to every man you field · 1d 6h$/);
+    expect([...smoking.querySelectorAll("button")].every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
+    expect(container.textContent).toContain("The altar is lit.");
+    expect(hookWarnings).toEqual([]);
+  });
+
+  it("the altar, lit: the smoking note with the bonus and the countdown, both buttons disabled with the reason", async () => {
+    const { container } = await mount(payload({ altar: { good: "bull", mor: 3, until: iso(NOW + 30.5 * H) } }));
+    const altar = container.querySelector('[data-section="altar"]') as HTMLElement;
+    expect(altar.querySelector(".barracks-head-note")!.textContent).toMatch(/^The altar smokes · \+3 morale to every man you field · 1d 6h$/);
+    const buttons = [...altar.querySelectorAll("button")] as HTMLButtonElement[];
+    expect(buttons.map((b) => [b.disabled, b.title])).toEqual([
+      [true, "The altar still smokes from the last offering."],
+      [true, "The altar still smokes from the last offering."],
+    ]);
+    expect(hookWarnings).toEqual([]);
+  });
+
+  it("the altar, below the gate: both buttons disabled with the lock reason", async () => {
+    const { container } = await mount(payload({ gate: { stat: "militia", required: 20, current: 4, met: false } }));
+    const altar = container.querySelector('[data-section="altar"]') as HTMLElement;
+    const buttons = [...altar.querySelectorAll("button")] as HTMLButtonElement[];
+    expect(buttons).toHaveLength(2);
+    expect(buttons.map((b) => [b.disabled, b.title])).toEqual([
+      [true, "The barracks admit men of militia 20. You stand at 4."],
+      [true, "The barracks admit men of militia 20. You stand at 4."],
+    ]);
+    expect(hookWarnings).toEqual([]);
+  });
+
+  it("the altar's server error lands under the beast that asked", async () => {
+    const { container } = await mount(payload());
+    const { ApiError } = await import("../src/api.js");
+    vi.spyOn(api, "barracksSacrifice").mockRejectedValue(new ApiError("The altar still smokes from the last offering.", 409));
+    const card = container.querySelector('[data-altar="bull"]') as HTMLElement;
+    fireEvent.click(card.querySelector("button")!);
+    await flush();
+    expect(card.querySelector(".barracks-row-error")!.textContent).toBe("The altar still smokes from the last offering.");
+    expect((container.querySelector('[data-altar="chicken"]') as HTMLElement).querySelector(".barracks-row-error")).toBeNull();
     expect(hookWarnings).toEqual([]);
   });
 

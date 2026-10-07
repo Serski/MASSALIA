@@ -601,6 +601,7 @@ export const api = {
   barracksRecruit: (unitId: string, count: number) =>
     apiFetch<BarracksView>("/api/barracks/recruit", { method: "POST", body: { unitId, count } }),
   barracksHire: (bandId: string) => apiFetch<BarracksView>("/api/barracks/hire", { method: "POST", body: { bandId } }),
+  barracksSacrifice: (good: string) => apiFetch<BarracksView>("/api/barracks/sacrifice", { method: "POST", body: { good } }),
   barracksDisband: (rowId: string) => apiFetch<BarracksView>("/api/barracks/disband", { method: "POST", body: { rowId } }),
   barracksCancel: (rowId: string) => apiFetch<BarracksView>("/api/barracks/cancel", { method: "POST", body: { rowId } }),
   // Map reach (military prompt 3a): which land provinces the player's force can
@@ -1694,7 +1695,8 @@ export type BarracksView = {
   season: number;
   now: string; // server time (ISO); countdowns anchor to this, not the device clock
   levy: { men: number };
-  config: { minServiceSeasons: number; maxActiveBands: number; termSeasons: number };
+  // config.altar: the blessing's length in seasons and the morale bonus per good (one button each).
+  config: { minServiceSeasons: number; maxActiveBands: number; termSeasons: number; altar: { seasons: number; goods: Record<string, number> } };
   units: BarracksUnit[];
   roster: BarracksRosterRow[];
   offers: BarracksOffer[];
@@ -1707,6 +1709,8 @@ export type BarracksView = {
   summary: { underArms: number; levyMen: number; growthPerYear: number; baseGrowthPerYear?: number; heldRegions?: number; seasonsPerYear: number };
   // The ships in stock for the strip's FLEET cell: labels from ships.json, troop space summed, range the farthest hull.
   fleet: { ships: { id: string; label: string; role: "transport" | "warship"; count: number; troopSpace: number; range: number; naval: number }[]; space: number; range: number };
+  // The altar while lit (the good burned, its morale bonus, the instant it goes cold), else null.
+  altar: { good: string; mor: number; until: string } | null;
 };
 
 // --- Map reach (GET /api/map/reach; mirrors packages/shared/src/reach.ts) ---

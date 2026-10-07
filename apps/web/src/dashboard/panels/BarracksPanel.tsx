@@ -457,6 +457,88 @@ export function OfferCard({
   );
 }
 
+// --- The Altar ---------------------------------------------------------------
+// A beast burned here steadies every man the player fields for altar.seasons
+// seasons. One button per content good, bull first. The countdown runs on the
+// server clock in a component of its own (the panel returns early while the
+// view loads), keyed on the blessing's end so a fresh offering mounts it anew
+// with its clock set (a stale zero would refetch at once); at zero it asks the
+// panel to refetch under altar:<until>, as the roster timers do, and the altar
+// goes cold.
+const ALTAR_ORDER = ["bull", "chicken"];
+const ALTAR_LIT_REASON = "The altar still smokes from the last offering.";
+const altarRank = (good: string) => (ALTAR_ORDER.includes(good) ? ALTAR_ORDER.indexOf(good) : ALTAR_ORDER.length);
+const beastName = (good: string) => goodName(good).replace(/^./, (c) => c.toUpperCase());
+
+export function AltarSection({
+  view,
+  balances,
+  locked,
+  lockReason,
+  busy,
+  busyKey,
+  offset,
+  errorFor,
+  onSacrifice,
+  onZero,
+}: {
+  view: BarracksView;
+  balances: Record<string, number>;
+  locked: boolean;
+  lockReason: string;
+  busy: boolean;
+  busyKey: string | null;
+  offset: number;
+  errorFor: (key: string) => string | null;
+  onSacrifice: (good: string) => void;
+  onZero: (key: string) => void;
+}) {
+  const until = view.altar?.until ?? null;
+  const left = useCountdownSeconds(onDeviceClock(until, offset));
+  useEffect(() => {
+    if (until && left <= 0) onZero(`altar:${until}`);
+  }, [until, left, onZero]);
+  const { seasons, goods } = view.config.altar;
+  const lit = view.altar !== null && left > 0;
+  const note = lit ? `The altar smokes · +${view.altar!.mor} morale to every man you field · ${formatDuration(left)}` : `A beast burned here steadies every man you field for ${seasons} seasons.`;
+  const order = Object.keys(goods).sort((a, b) => altarRank(a) - altarRank(b));
+  return (
+    <section className="barracks-section" data-section="altar" aria-label="Altar">
+      <SectionHead title="Altar" note={note} />
+      <div className="barracks-list">
+        {order.map((good) => {
+          // Balances are fractional (the Bull Farm yields half a bull a day); whole beasts only.
+          const have = Math.floor(balances[good] ?? 0);
+          const reason = locked ? lockReason : lit ? ALTAR_LIT_REASON : null;
+          return (
+            <div key={good} className="barracks-card" data-altar={good}>
+              <div className="barracks-card-id wide">
+                <span className="barracks-row-ic"><GoodGlyph good={good} fallback="🔥" /></span>
+                <div>
+                  <div className="barracks-card-name">{beastName(good)}</div>
+                  <div className="barracks-card-role">+{goods[good]} morale · {seasons} seasons</div>
+                </div>
+              </div>
+              <div className="barracks-actions barracks-card-actions">
+                <button
+                  type="button"
+                  className={btnClass("panel-btn", `sacrifice:${good}`, busyKey)}
+                  disabled={busy || reason !== null || have === 0}
+                  title={reason ?? undefined}
+                  onClick={() => onSacrifice(good)}
+                >
+                  Sacrifice a {goodName(good)} · +{goods[good]} morale · {have === 0 ? "none in stock" : `you have ${have}`}
+                </button>
+              </div>
+              <RowError message={errorFor(`sacrifice:${good}`)} />
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 // --- The panel ---------------------------------------------------------------
 
 export default function BarracksPanel({ player, onRefresh }: PanelProps) {
@@ -776,6 +858,20 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
           ))}
         </div>
       </section>
+
+      <AltarSection
+        key={view.altar?.until ?? "cold"}
+        view={view}
+        balances={player.balances}
+        locked={locked}
+        lockReason={lockReason}
+        busy={busy}
+        busyKey={busyKey}
+        offset={offset}
+        errorFor={errorFor}
+        onSacrifice={(good) => act(`sacrifice:${good}`, () => api.barracksSacrifice(good), "The altar is lit.")}
+        onZero={onZero}
+      />
 
       {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
 
