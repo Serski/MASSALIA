@@ -618,6 +618,40 @@ suite("Koinon muster (integration)", () => {
     expect((await rowsOf(a)).map((r) => [r.movingTo, r.mission])).toEqual([[null, null]]);
   });
 
+  it("the altar: a member's bull lit before the launch steadies his own rows and nobody else's; a blessing cold at the launch or lit after it counts for nothing", async () => {
+    // Two members, 60 hoplites each, against a warband of 660: on every seed the
+    // cold owner loses 27 to 30 men and the blessed one 24 to 26.
+    const [a, b] = [await freshPlayer("Kallias", 100_000, 1), await freshPlayer("Nikias", 100_000, 2)];
+    const k = await koinonOf("The Sacred Band", [a, b], uid(800));
+    const musterId = await musterRow(k, a);
+    await setWarband(landRegion, 660);
+    await pledgedMen(a, "hoplite", 60, musterId, 501);
+    await pledgedMen(b, "hoplite", 60, musterId, 502);
+    // Kallias burns a bull an hour before the launch: lit until two days on.
+    await db.insert(m.dbPkg.resources).values({ scope: "player", scopeId: a, type: "bull", amount: "1", ratePerSecond: "0", lastUpdatedAt: NOW });
+    expect(await m.barracks.sacrifice(await ctx(a), "bull", at(HOUR))).toEqual({ ok: true, good: "bull", mor: 3, until: at(HOUR + 2 * DAY) });
+
+    expect(await m.muster.resolveMuster(musterId, at(2 * HOUR + 30 * MIN))).toEqual({ outcome: "resolved" });
+    const report = await reportOf();
+    const part = (id: string) => report.parts.find((p) => p.playerId === id)!;
+    expect(part(a).men).toBe(60);
+    expect(part(b).men).toBe(60);
+    expect(part(b).lost).toBeGreaterThanOrEqual(27);
+    expect(part(a).lost).toBeLessThanOrEqual(26);
+    expect(part(a).lost).toBeGreaterThan(0);
+
+    // Through altarBonusFor at the launch instant: Kallias's bull counts; a bull
+    // that went cold at the launch, and one lit a minute after it, give nothing.
+    const { players } = m.dbPkg;
+    expect(await m.barracks.altarBonusFor(db, [a, b], LAUNCH)).toEqual(new Map([[a, 3], [b, 0]]));
+    await db.update(players).set({ altarUntil: LAUNCH, altarGood: "bull" }).where(eq(players.id, b));
+    expect(await m.barracks.altarBonusFor(db, [a, b], LAUNCH)).toEqual(new Map([[a, 3], [b, 0]]));
+    await db.update(players).set({ altarUntil: at(2 * HOUR + MIN + 2 * DAY), altarGood: "bull" }).where(eq(players.id, b));
+    expect(await m.barracks.altarBonusFor(db, [a, b], LAUNCH)).toEqual(new Map([[a, 3], [b, 0]]));
+    expect(await m.barracks.altarBonusFor(db, [b], at(2 * HOUR + MIN))).toEqual(new Map([[b, 3]]));
+    expect(await m.barracks.altarBonusFor(db, [], LAUNCH)).toEqual(new Map());
+  });
+
   it("deterministic: resolved 30 minutes after launch and 3 days after, the reports, rows, wallets and pool are identical", async () => {
     const { regionMilitary, townMilitary, playerUnits, playerCharacters, resources, effectLog, koinonMusterHulls } = m.dbPkg;
     const snapshot = async () =>

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../services/auth.js";
 import { buildingContext, type ActingContext } from "../services/buildings.js";
-import { barracksView, cancelTraining, disbandRow, hireBand, recruitUnits } from "../services/barracks.js";
+import { barracksView, cancelTraining, disbandRow, hireBand, recruitUnits, sacrifice } from "../services/barracks.js";
 import { ensureCharacterRow, getActivePlayer, getActiveWorldId } from "../services/character.js";
 
 // The Barracks: the player's army (trained units from the levy, hired bands on
@@ -67,6 +67,28 @@ export async function barracksRoutes(app: FastifyInstance) {
     }
     const now = new Date();
     const result = await hireBand(ctx, bandId, now);
+    if (!result.ok) {
+      reply.code(result.code);
+      return { error: result.error };
+    }
+    return barracksView(ctx, now);
+  });
+
+  // The altar: burn one unit of a content good for the morale blessing.
+  app.post("/sacrifice", async (request, reply) => {
+    const user = await requireAuth(request);
+    const ctx = await acting(user.id);
+    if ("error" in ctx) {
+      reply.code(ctx.code);
+      return { error: ctx.error };
+    }
+    const good = (request.body as { good?: unknown } | undefined)?.good;
+    if (typeof good !== "string" || !good) {
+      reply.code(400);
+      return { error: "A good is required." };
+    }
+    const now = new Date();
+    const result = await sacrifice(ctx, good, now);
     if (!result.ok) {
       reply.code(result.code);
       return { error: result.error };

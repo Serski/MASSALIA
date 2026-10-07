@@ -30,7 +30,7 @@ import {
   type ReachForceRow,
   type ReachSteps,
 } from "@massalia/shared";
-import { fleetInStock, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, type UnitRow } from "./barracks.js";
+import { altarBonusFor, fleetInStock, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, type UnitRow } from "./barracks.js";
 import { applyComposureDelta } from "./composure.js";
 import { settleAll, type ActingContext } from "./buildings.js";
 import { creditDrachmae, creditGood, listHoldings } from "./holdings.js";
@@ -738,9 +738,14 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
 
           // 12. One army: every pledged row is its own row in the battle.
           const seed = crypto.createHash("sha256").update([muster.worldId, muster.id, muster.townId ?? muster.regionId, launchAt.toISOString()].join("|")).digest("hex");
+          // The altar: each owner's blessing, as lit at the launch instant (not
+          // the request time), raises his own rows' morale on a copy of the
+          // content stats. Every owner is locked above. No clamp.
+          const altar = await altarBonusFor(tx, sides.map((o) => o.playerId), launchAt);
           const attacker: BattleRow[] = army.map((r) => {
             const def = r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId);
-            return { id: r.id, label: def?.label ?? r.unitId, count: r.count, stats: def!.stats };
+            const bonus = altar.get(r.ownerPlayerId) ?? 0;
+            return { id: r.id, label: def?.label ?? r.unitId, count: r.count, stats: bonus ? { ...def!.stats, mor: def!.stats.mor + bonus } : def!.stats };
           });
           const result = resolveBattle({ attacker, defender: [{ id: isTown ? "garrison" : "warband", label: npc.label, count: pool, stats: npcStats }], seed, config: battleC, mode: "raid" });
 

@@ -21,7 +21,7 @@ import {
   type ReachShip,
 } from "@massalia/shared";
 import { applyComposureDelta } from "./composure.js";
-import { barracksView, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, PLEDGED_REFUSAL, type BarracksView, type UnitRow } from "./barracks.js";
+import { altarBonusFor, barracksView, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, PLEDGED_REFUSAL, type BarracksView, type UnitRow } from "./barracks.js";
 import { settleAll, type ActingContext } from "./buildings.js";
 import { creditDrachmae, creditGood, insertConquest, insertTownConquest, listHoldings } from "./holdings.js";
 import { lockPlayer } from "./lock.js";
@@ -440,9 +440,12 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
     } else {
       // 7. Raid / Attack: the pure battle, then its consequences.
       const seed = crypto.createHash("sha256").update([ctx.worldId, ctx.playerId, townId ?? regionId, now.toISOString()].join("|")).digest("hex");
+      // The altar: a blessing lit now raises every row's morale, on a copy of
+      // the content stats (def.stats is the shared content object). No clamp.
+      const bonus = (await altarBonusFor(tx, [ctx.playerId], now)).get(ctx.playerId) ?? 0;
       const attacker: BattleRow[] = rows.map((r) => {
         const def = r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId);
-        return { id: r.id, label: labelOf(r), count: r.count, stats: def!.stats };
+        return { id: r.id, label: labelOf(r), count: r.count, stats: bonus ? { ...def!.stats, mor: def!.stats.mor + bonus } : def!.stats };
       });
       const defender: BattleRow[] = [{ id: isTown ? "garrison" : "warband", label: npc.label, count: warband, stats: npcStats }];
       const result: BattleResult = resolveBattle({ attacker, defender, seed, config: battleC, mode: input.type });

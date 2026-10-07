@@ -249,6 +249,38 @@ suite("Map actions (integration)", () => {
     await recordChronicle(characterId);
   });
 
+  it("the altar: a bull lit before the fight raises every row's morale; a blessing that went cold before it gives nothing", async () => {
+    // 40 hoplites against a warband of 90. Unblessed they are broken on every
+    // seed; with a bull lit (+3 morale: 15 more points of losses before a row
+    // breaks) both sides stand and the attack withdraws, on every seed.
+    const fight = async (prep: (ctx: Ctx) => Promise<void>) => {
+      const { ctx } = await makePlayer();
+      await prep(ctx);
+      await setWarband("R046", 90, at(9));
+      const hoplites = await insertRow(ctx, { unitId: "hoplite", count: 40 });
+      const r = await act(ctx, "attack", "R046", [hoplites.id]);
+      if (!r.ok) throw new Error(r.error);
+      return r.report;
+    };
+    const cold = await fight(async () => {});
+    expect(cold.winner).toBe("defender");
+    expect(cold.line).toMatch(/^Attacked Salyes with 40 hoplites and were broken/);
+    // A bull burned at season 8 burns until season 10: lit at the fight.
+    const blessed = await fight(async (ctx) => {
+      await give(ctx, "bull", 1);
+      expect(await m.barracks.sacrifice(ctx, "bull", at(8))).toEqual({ ok: true, good: "bull", mor: 3, until: at(10) });
+    });
+    expect(blessed.winner).toBe("stand");
+    expect(blessed.line).toMatch(/^Attacked Salyes with 40 hoplites and withdrew/);
+    // A bull burned at season 6 went cold at season 8: nothing at the fight.
+    const expired = await fight(async (ctx) => {
+      await give(ctx, "bull", 1);
+      expect(await m.barracks.sacrifice(ctx, "bull", at(6))).toMatchObject({ ok: true, until: at(8) });
+    });
+    expect(expired.winner).toBe("defender");
+    expect(expired.line).toMatch(/^Attacked Salyes with 40 hoplites and were broken/);
+  });
+
   it("selection: a moving row, rows from two bases, a row still training, and an empty force are refused", async () => {
     const { ctx } = await makePlayer();
     const moving = await insertRow(ctx, { unitId: "hoplite", count: 5, movingTo: "R060" });

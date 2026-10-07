@@ -621,6 +621,65 @@ suite("Barracks (integration)", () => {
     });
   });
 
+  describe("altar", () => {
+    it("burns one bull for +3 morale for two days, logged; a chicken gives +1", async () => {
+      const { ctx, characterId } = await makePlayer();
+      await giveAll(ctx, { bull: 1 });
+      expect((await m.barracks.barracksView(ctx, at(9))).altar).toBeNull();
+      expect(await m.barracks.sacrifice(ctx, "bull", at(9))).toEqual({ ok: true, good: "bull", mor: 3, until: at(11) });
+      expect(await stock(ctx, "bull")).toBe(0);
+      const view = await m.barracks.barracksView(ctx, at(9));
+      expect(view.altar).toEqual({ good: "bull", mor: 3, until: at(11).toISOString() });
+      expect(view.config.altar).toEqual({ seasons: 2, goods: { bull: 3, chicken: 1 } });
+      // Audit only: an effect_log row, not a Chronicle kind.
+      expect((await logs(characterId, "barracks_sacrifice")).map((e) => e.detail)).toEqual([{ good: "bull", mor: 3, until: at(11).toISOString() }]);
+
+      const hen = await makePlayer();
+      await giveAll(hen.ctx, { chicken: 2 });
+      expect(await m.barracks.sacrifice(hen.ctx, "chicken", at(9))).toEqual({ ok: true, good: "chicken", mor: 1, until: at(11) });
+      expect(await stock(hen.ctx, "chicken")).toBe(1);
+      expect((await m.barracks.barracksView(hen.ctx, at(9))).altar).toEqual({ good: "chicken", mor: 1, until: at(11).toISOString() });
+    });
+
+    it("with no bull the offering is refused and the altar stays cold; a second offering while lit is refused with the stock untouched", async () => {
+      const { ctx } = await makePlayer();
+      expect(await m.barracks.sacrifice(ctx, "bull", at(9))).toEqual({ ok: false, code: 409, error: "You have no bull for this — the agora sells them." });
+      const me = async () => (await db.select().from(m.dbPkg.players).where(eq(m.dbPkg.players.id, ctx.playerId)))[0]!;
+      expect((await me()).altarUntil).toBeNull();
+      expect((await m.barracks.barracksView(ctx, at(9))).altar).toBeNull();
+      // The failed debit rolled the claim and the empty stock row back: the give below would otherwise collide.
+      await giveAll(ctx, { bull: 2 });
+      expect(await m.barracks.sacrifice(ctx, "bull", at(9))).toMatchObject({ ok: true });
+      expect(await m.barracks.sacrifice(ctx, "bull", at(10))).toEqual({ ok: false, code: 409, error: "The altar still smokes from the last offering." });
+      expect(await stock(ctx, "bull")).toBe(1);
+      expect((await me()).altarUntil).toEqual(at(11));
+    });
+
+    it("after two days the altar is cold and takes an offering again", async () => {
+      const { ctx } = await makePlayer();
+      await giveAll(ctx, { bull: 2 });
+      expect(await m.barracks.sacrifice(ctx, "bull", at(9))).toMatchObject({ ok: true, until: at(11) });
+      expect((await m.barracks.barracksView(ctx, at(10.5))).altar).toEqual({ good: "bull", mor: 3, until: at(11).toISOString() });
+      expect((await m.barracks.barracksView(ctx, at(11))).altar).toBeNull();
+      expect(await m.barracks.sacrifice(ctx, "bull", at(11))).toEqual({ ok: true, good: "bull", mor: 3, until: at(13) });
+      expect(await stock(ctx, "bull")).toBe(0);
+    });
+
+    it("below the militia gate the offering is refused like recruit; a good the altar does not take is 400", async () => {
+      const low = await makePlayer({ militia: 19 });
+      await giveAll(low.ctx, { bull: 1 });
+      expect(await m.barracks.sacrifice(low.ctx, "bull", at(9))).toMatchObject({ ok: false, code: 403 });
+      expect(await stock(low.ctx, "bull")).toBe(1);
+      const { ctx } = await makePlayer();
+      await giveAll(ctx, { bull: 1, grain: 1 });
+      expect(await m.barracks.sacrifice(ctx, "grain", at(9))).toEqual({ ok: false, code: 400, error: "The altar takes a bull or a chicken." });
+      expect(await m.barracks.sacrifice(ctx, "constructor", at(9))).toMatchObject({ ok: false, code: 400 });
+      expect(await stock(ctx, "bull")).toBe(1);
+      expect(await stock(ctx, "grain")).toBe(1);
+      expect((await m.barracks.barracksView(ctx, at(9))).altar).toBeNull();
+    });
+  });
+
   describe("disband", () => {
     it("trained: refused before minServiceSeasons days have elapsed, allowed after, men restored to the levy", async () => {
       const { ctx, characterId } = await makePlayer({ drachmae: 100_000 });

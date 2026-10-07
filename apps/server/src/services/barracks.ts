@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { and, asc, eq, gte, sql, inArray } from "drizzle-orm";
-import { bandOffers, createDb, effectLog, koinonMembers, koinonMusters, playerCharacters, playerLevy, playerUnits, resources, type UnitMission } from "@massalia/db";
+import { and, asc, eq, gte, isNull, lte, or, sql, inArray } from "drizzle-orm";
+import { bandOffers, createDb, effectLog, koinonMembers, koinonMusters, playerCharacters, playerLevy, playerUnits, players, resources, type UnitMission } from "@massalia/db";
 import {
   bandDef,
   goodCategoryFor,
@@ -740,6 +740,75 @@ export async function hireBand(ctx: ActingContext, bandId: string, now: Date): P
   });
 }
 
+// --- The altar ---------------------------------------------------------------
+// A bull or a chicken burned at the Barracks altar raises the morale of every
+// row the player fields for altar.seasons seasons (real days) from the act:
+// a duration, as training and contracts are. The bonus is applied by the two
+// battle sites (mapActions, koinonMuster) on a copy of the content stats; the
+// resolver stays pure. A plain Barracks action: no Chronicle line, and no
+// "offering" tag through the composure pipeline.
+
+export type SacrificeResult = Failure | { ok: true; good: string; mor: number; until: Date };
+
+// A failed debit under the lock: the transaction (and the claim with it) rolls
+// back, and sacrifice answers 409 with the routine's wording.
+class ShortOfGood extends Error {
+  constructor(readonly good: string) {
+    super(`barracks: altar debit of 1 ${good} failed under lock`);
+  }
+}
+
+export async function sacrifice(ctx: ActingContext, good: string, now: Date): Promise<SacrificeResult> {
+  const altar = getBattleContent().altar;
+  try {
+    return await mutate<SacrificeResult>(ctx, now, async (tx, composureDays) => {
+      const fail = (code: number, error: string): Outcome<SacrificeResult> => ({ composureDays, result: { ok: false, code, error } });
+      const gate = await gateFor(tx, ctx);
+      if (!gate.met) return fail(403, `Militia ${gate.required} required.`);
+      // An own key only: `in` would let "constructor" through.
+      if (!Object.hasOwn(altar.goods, good)) return fail(400, "The altar takes a bull or a chicken.");
+      const mor = altar.goods[good]!;
+      const until = new Date(now.getTime() + altar.seasons * MS_PER_DAY);
+      // Claim first, before the debit, so a double click cannot burn two beasts:
+      // conditional on a cold or expired altar, row count checked.
+      const claimed = await tx
+        .update(players)
+        .set({ altarUntil: until, altarGood: good })
+        .where(and(eq(players.id, ctx.playerId), or(isNull(players.altarUntil), lte(players.altarUntil, now))))
+        .returning({ id: players.id });
+      if (!claimed.length) return fail(409, "The altar still smokes from the last offering.");
+      const row = await getOrCreateResource(tx, ctx.playerId, good, now);
+      if (!(await debitResource(tx, row.id, 1))) throw new ShortOfGood(good);
+      // Audit only: not a Chronicle kind.
+      await logEffect(tx, await characterIdFor(tx, ctx.playerId), "barracks_sacrifice", { good, mor, until: until.toISOString() });
+      return { composureDays, result: { ok: true, good, mor, until } };
+    });
+  } catch (err) {
+    if (err instanceof ShortOfGood) return { ok: false, code: 409, error: `You have no ${err.good} for this — the agora sells them.` };
+    throw err;
+  }
+}
+
+// The morale bonus each of `playerIds` carries into a battle fought at `at`:
+// the good's bonus while the blessing was lit at that instant (altar_until
+// after `at`, and lit — altar_until minus the content span — at or before it),
+// else 0. The second condition is for the muster, which resolves lazily: a
+// beast burned after the launch must not count. One query. The caller holds
+// the lock on those players (both battle sites already do).
+export async function altarBonusFor(exec: Exec, playerIds: string[], at: Date): Promise<Map<string, number>> {
+  const out = new Map<string, number>(playerIds.map((id) => [id, 0]));
+  if (!playerIds.length) return out;
+  const altar = getBattleContent().altar;
+  const span = altar.seasons * MS_PER_DAY;
+  const rows = await exec.select({ id: players.id, until: players.altarUntil, good: players.altarGood }).from(players).where(inArray(players.id, playerIds));
+  for (const r of rows) {
+    if (!r.until || !r.good) continue;
+    const untilMs = r.until.getTime();
+    if (untilMs > at.getTime() && untilMs - span <= at.getTime()) out.set(r.id, altar.goods[r.good] ?? 0);
+  }
+  return out;
+}
+
 // The instant a row may be released: created_at + minServiceSeasons days (trained)
 // or + termSeasons days (band). Shared by disbandRow and the view's canDisband.
 function releaseAtMs(row: Pick<UnitRow, "source" | "createdAt">, unitsC: UnitsContent, bandsC: BandsContent): number {
@@ -877,7 +946,7 @@ export type BarracksView = {
   season: number;
   now: string; // server time (ISO) — countdowns anchor to this, not the device clock
   levy: { men: number };
-  config: { minServiceSeasons: number; maxActiveBands: number; termSeasons: number };
+  config: { minServiceSeasons: number; maxActiveBands: number; termSeasons: number; altar: { seasons: number; goods: Record<string, number> } };
   units: UnitView[];
   roster: RosterView[];
   offers: OfferView[];
@@ -885,6 +954,9 @@ export type BarracksView = {
   upkeep: UpkeepView;
   summary: SummaryView;
   fleet: FleetStripView;
+  // The altar while lit at `now` (the good burned, its morale bonus, the
+  // instant it goes cold), else null.
+  altar: { good: string; mor: number; until: string } | null;
 };
 
 // The army's upkeep per day for the Ledger's Economy view and the Barracks
@@ -956,6 +1028,9 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
       for (const id of [r.basedAt, r.movingTo, r.mission?.regionId, r.mission?.townId]) if (id && !(id in places)) places[id] = await nameOf(id);
     }
     const { strip: fleet } = await fleetInStock(tx, ctx);
+    const battleC = getBattleContent();
+    const me = (await tx.select({ until: players.altarUntil, good: players.altarGood }).from(players).where(eq(players.id, ctx.playerId)).limit(1))[0];
+    const altar = me?.until && me.good && me.until.getTime() > now.getTime() ? { good: me.good, mor: battleC.altar.goods[me.good] ?? 0, until: me.until.toISOString() } : null;
     const result: BarracksView = {
       gate,
       places,
@@ -963,7 +1038,8 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
       season,
       now: now.toISOString(),
       levy: { men: levy.men },
-      config: { minServiceSeasons: unitsC.minServiceSeasons, maxActiveBands: bandsC.market.maxActiveBands, termSeasons: bandsC.contract.termSeasons },
+      config: { minServiceSeasons: unitsC.minServiceSeasons, maxActiveBands: bandsC.market.maxActiveBands, termSeasons: bandsC.contract.termSeasons, altar: { seasons: battleC.altar.seasons, goods: battleC.altar.goods } },
+      altar,
       units: Object.entries(unitsC.units).map(([id, u]) => ({ id, label: u.label, plural: u.plural, icon: u.icon, role: u.role, trainSeasons: u.trainSeasons, gear: u.gear, upkeepPerDay: u.upkeepPerDay, stats: u.stats })),
       roster,
       offers: offers.flatMap((o) => {

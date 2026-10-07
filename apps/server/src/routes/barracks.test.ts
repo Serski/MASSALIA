@@ -39,7 +39,8 @@ type View = {
   season: number;
   now: string;
   levy: { men: number };
-  config: { minServiceSeasons: number; maxActiveBands: number; termSeasons: number };
+  config: { minServiceSeasons: number; maxActiveBands: number; termSeasons: number; altar: { seasons: number; goods: Record<string, number> } };
+  altar: { good: string; mor: number; until: string } | null;
   summary: { underArms: number; levyMen: number; growthPerYear: number; baseGrowthPerYear: number; heldRegions: number; seasonsPerYear: number };
   places: Record<string, string>;
   fleet: { ships: { id: string; label: string; role: string; count: number; troopSpace: number; range: number; naval: number }[]; space: number; range: number };
@@ -118,7 +119,8 @@ suite("/api/barracks (integration)", () => {
     // Server time, ISO, within a few seconds of the request.
     expect(Math.abs(Date.parse(v.now) - Date.now())).toBeLessThan(10_000);
     expect(v.levy).toEqual({ men: 120 });
-    expect(v.config).toEqual({ minServiceSeasons: 2, maxActiveBands: 2, termSeasons: 2 });
+    expect(v.config).toEqual({ minServiceSeasons: 2, maxActiveBands: 2, termSeasons: 2, altar: { seasons: 2, goods: { bull: 3, chicken: 1 } } });
+    expect(v.altar).toBeNull();
     expect(v.summary).toEqual({ underArms: 0, levyMen: 120, growthPerYear: 10, baseGrowthPerYear: 10, heldRegions: 0, seasonsPerYear: 4 });
     expect(v.units.map((u) => u.id)).toEqual(["peltast", "ekdromos", "hoplite", "hippeis"]);
     expect(v.units.map((u) => (u as { plural?: string }).plural)).toEqual(["Peltasts", "Ekdromoi", "Hoplites", "Hippeis"]);
@@ -179,6 +181,24 @@ suite("/api/barracks (integration)", () => {
     expect(Math.abs(Date.parse(v.roster[0]!.contractEndAt!) - (Date.parse(v.now) + 2 * DAY))).toBeLessThan(1_000);
     expect(v.offers.find((o) => o.id === offers[0]!.id)!.hired).toBe(true);
     expect((await post(p.token, "hire", {})).statusCode).toBe(400);
+  });
+
+  it("POST /sacrifice: a bull in stock lights the altar and returns the view; a second offering while lit is 409; a missing or unknown good is 400", async () => {
+    const p = await freshPlayer({ goods: { bull: 1 } });
+    expect((await get(p.token)).json<View>().altar).toBeNull();
+    const ok = await post(p.token, "sacrifice", { good: "bull" });
+    expect(ok.statusCode).toBe(200);
+    const v = ok.json<View>();
+    expect(v.altar).toMatchObject({ good: "bull", mor: 3 });
+    // The blessing runs altar.seasons = two days from the act.
+    expect(Math.abs(Date.parse(v.altar!.until) - (Date.parse(v.now) + 2 * DAY))).toBeLessThan(1_000);
+    const bull = (await db.select().from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scopeId, p.playerId), eq(m.dbPkg.resources.type, "bull"))))[0]!;
+    expect(Number(bull.amount)).toBe(0);
+    const again = await post(p.token, "sacrifice", { good: "bull" });
+    expect(again.statusCode).toBe(409);
+    expect(again.json<{ error: string }>().error).toBe("The altar still smokes from the last offering.");
+    expect((await post(p.token, "sacrifice", {})).statusCode).toBe(400);
+    expect((await post(p.token, "sacrifice", { good: "unicorn" })).statusCode).toBe(400);
   });
 
   it("POST /cancel: a batch in training is stood down with its men and gear returned; a trained row is 409; a bad body is 400", async () => {
