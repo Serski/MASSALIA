@@ -79,6 +79,8 @@ suite("Map actions (integration)", () => {
     db.select().from(m.dbPkg.effectLog).where(and(eq(m.dbPkg.effectLog.characterId, characterId), eq(m.dbPkg.effectLog.kind, kind))).orderBy(asc(m.dbPkg.effectLog.createdAt));
   const warband = async (regionId: string) => (await db.select().from(m.dbPkg.regionMilitary).where(and(eq(m.dbPkg.regionMilitary.worldId, worldId), eq(m.dbPkg.regionMilitary.regionId, regionId))))[0]?.warband;
   const setWarband = (regionId: string, value: number, when: Date) => m.mapPools.writeRegionWarband(db, worldId, regionId, value, when);
+  // The region row's regrowth marker.
+  const marker = async (regionId: string) => (await db.select().from(m.dbPkg.regionMilitary).where(and(eq(m.dbPkg.regionMilitary.worldId, worldId), eq(m.dbPkg.regionMilitary.regionId, regionId))))[0]?.updatedAt;
   const garrison = async (townId: string) => (await db.select().from(m.dbPkg.townMilitary).where(and(eq(m.dbPkg.townMilitary.worldId, worldId), eq(m.dbPkg.townMilitary.townId, townId))))[0]?.garrison;
   const setGarrison = (townId: string, value: number, when: Date) => m.mapPools.writeTownGarrison(db, worldId, townId, value, when);
   const levy = async (ctx: Ctx) => (await db.select().from(m.dbPkg.playerLevy).where(eq(m.dbPkg.playerLevy.ownerPlayerId, ctx.playerId)))[0];
@@ -415,14 +417,25 @@ suite("Map actions (integration)", () => {
     expect(far.report.fleet).toMatchObject({ ships: { "trade-ship": 2 }, naval: 2 });
   });
 
-  it("regeneration: a reduced warband comes back 5 a day up to its content value", async () => {
-    await setWarband("R046", 80, at(9));
-    expect(await m.mapPools.readRegionWarband(db, worldId, "R046", at(9.5))).toBe(80);
-    expect(await m.mapPools.readRegionWarband(db, worldId, "R046", at(11))).toBe(90);
-    // Persisted with updated_at moved: another 1.5 days adds one more day's worth.
-    expect(await m.mapPools.readRegionWarband(db, worldId, "R046", at(12.5))).toBe(95);
-    expect(await m.mapPools.readRegionWarband(db, worldId, "R046", at(30))).toBe(100);
-    expect(await m.mapPools.readRegionWarband(db, worldId, "R046", at(40))).toBe(100);
+  it("regrowth: 5 a day on a steady clock; the part of a day carries over, a fight below the full count leaves the clock running, and a full pool's first loss starts it", async () => {
+    const read = (when: Date) => m.mapPools.readRegionWarband(db, worldId, "R046", when);
+    await setWarband("R046", 50, at(9)); // content 100; a fresh row's clock starts at the write
+    expect(await read(at(9.5))).toBe(50);
+    expect(await read(at(11))).toBe(60);
+    // The marker moves by whole days only: the half day carries over.
+    expect(await read(at(12.5))).toBe(65);
+    expect(await marker("R046")).toEqual(at(12));
+    expect(await read(at(13))).toBe(70); // the old marker, 12.5, gave 65
+    // A fight below the full count leaves the clock where it is.
+    await setWarband("R046", 60, at(13.5));
+    expect(await marker("R046")).toEqual(at(13));
+    expect(await read(at(14))).toBe(65); // the old rule restarted at 13.5 and gave 60
+    expect(await read(at(40))).toBe(100);
+    // A full pool's first loss starts the clock at the fight.
+    await setWarband("R046", 90, at(40.5));
+    expect(await marker("R046")).toEqual(at(40.5));
+    expect(await read(at(41))).toBe(90);
+    expect(await read(at(41.5))).toBe(95);
   });
 
   it("an empty holding reverts after a full day and the warband comes back; a garrisoned one stays", async () => {
@@ -752,13 +765,16 @@ suite("Map actions (integration)", () => {
     await recordChronicle(characterId);
   });
 
-  it("garrison regeneration: a reduced garrison comes back 5 a day up to its content value", async () => {
-    await setGarrison("reii", 140, at(9));
-    expect(await m.mapPools.readTownGarrison(db, worldId, "reii", at(9.5))).toBe(140);
-    expect(await m.mapPools.readTownGarrison(db, worldId, "reii", at(11))).toBe(150);
-    expect(await m.mapPools.readTownGarrison(db, worldId, "reii", at(12.5))).toBe(155);
-    expect(await m.mapPools.readTownGarrison(db, worldId, "reii", at(30))).toBe(160);
-    expect(await m.mapPools.readTownGarrison(db, worldId, "reii", at(40))).toBe(160);
+  it("garrison regrowth: 5 a day on a steady clock; the part of a day carries over and a fight below the full count leaves the clock running", async () => {
+    const read = (when: Date) => m.mapPools.readTownGarrison(db, worldId, "reii", when);
+    await setGarrison("reii", 100, at(9)); // content 160
+    expect(await read(at(9.5))).toBe(100);
+    expect(await read(at(11))).toBe(110);
+    expect(await read(at(12.5))).toBe(115);
+    expect(await read(at(13))).toBe(120);
+    await setGarrison("reii", 110, at(13.5));
+    expect(await read(at(14))).toBe(115);
+    expect(await read(at(40))).toBe(160);
   });
 
   // --- Move (3c) ---------------------------------------------------------------
