@@ -1088,6 +1088,30 @@ export const koinonMusterHulls = pgTable("koinon_muster_hulls", {
   countCheck: check("koinon_muster_hulls_count_check", sql`${table.count} > 0`),
 }));
 
+// Hulls at sea (migration 0067, raids prompt 3): the ships that carry men leave
+// their owner's stock when they sail and come home at returns_at, with the
+// party or on their own. One row per sailing per owner; the owner's settle
+// credits the hulls back and stamps returned_at, and the row stays as the record.
+export const VOYAGE_KINDS = ["scout", "raid", "attack", "move"] as const;
+export type VoyageKind = (typeof VOYAGE_KINDS)[number];
+
+export const playerVoyages = pgTable("player_voyages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  ownerPlayerId: uuid("owner_player_id").references(() => players.id).notNull(),
+  ships: jsonb("ships").$type<Record<string, number>>().notNull(),
+  kind: text("kind").$type<VoyageKind>().notNull(),
+  regionId: text("region_id").notNull(),
+  townId: text("town_id"),
+  musterId: uuid("muster_id").references(() => koinonMusters.id),
+  sailedAt: timestamp("sailed_at", { withTimezone: true }).notNull(),
+  returnsAt: timestamp("returns_at", { withTimezone: true }).notNull(),
+  returnedAt: timestamp("returned_at", { withTimezone: true }),
+}, (table) => ({
+  kindCheck: check("player_voyages_kind_check", sql`${table.kind} IN ('scout', 'raid', 'attack', 'move')`),
+  awayIdx: index("player_voyages_away_idx").on(table.ownerPlayerId, table.returnsAt).where(sql`returned_at IS NULL`),
+}));
+
 export const resources = pgTable("resources", {
   id: uuid("id").primaryKey().defaultRandom(),
   scope: text("scope").notNull(),

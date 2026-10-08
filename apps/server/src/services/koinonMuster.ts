@@ -33,7 +33,7 @@ import {
   type ReachForceRow,
   type ReachSteps,
 } from "@massalia/shared";
-import { altarBonusFor, fleetInStock, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, type UnitRow } from "./barracks.js";
+import { altarBonusFor, fleetInStock, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, sailHulls, type UnitRow } from "./barracks.js";
 import { applyComposureDelta } from "./composure.js";
 import { settleAll, type ActingContext } from "./buildings.js";
 import { creditDrachmae, creditGood, listHoldings } from "./holdings.js";
@@ -55,7 +55,9 @@ import { townStats } from "./townStats.js";
 //
 // Pledged men have no table: they are the player's own player_units rows with
 // a "muster" mission (barracks.ts: isPledged), locked against every other use.
-// Pledged hulls are counts in koinon_muster_hulls; ships are never moved.
+// Pledged hulls are counts in koinon_muster_hulls; the hulls that sail leave
+// their owners' stock from the launch until the army is home (sailHulls, raids
+// prompt 3), and pledged hulls that do not sail never leave.
 //
 // Locks. Every write that changes a muster runs under the koinon lock, through
 // inOwnKoinon. A write that touches the caller's own rows takes his player
@@ -720,6 +722,21 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
         for (const h of load?.sailing ?? []) {
           hullsOf[h.ownerId] = (hullsOf[h.ownerId] ?? 0) + h.count;
           sailed[h.shipId] = (sailed[h.shipId] ?? 0) + h.count;
+        }
+        // 10b. The hulls that sail leave their owners' stock until the army is
+        // home (raids prompt 3). Every owner here is locked (step 4) and was
+        // settled at the launch instant (step 6), so ships of his that were
+        // home by then are in stock. A stand-down and a muster by land sail nothing.
+        if (load) {
+          const byOwner = new Map<string, Record<string, number>>();
+          for (const h of load.sailing) {
+            const counts = byOwner.get(h.ownerId) ?? {};
+            counts[h.shipId] = (counts[h.shipId] ?? 0) + h.count;
+            byOwner.set(h.ownerId, counts);
+          }
+          for (const ownerId of [...byOwner.keys()].sort()) {
+            await sailHulls(tx, { playerId: ownerId, worldId: muster.worldId }, byOwner.get(ownerId)!, { kind: "raid", musterId: muster.id, regionId: muster.regionId, townId: muster.townId, sailedAt: launchAt, returnsAt: arrivesAt });
+          }
         }
         // Against a town, the pooled naval power must match its fleet.
         let fleet: MusterReport["fleet"] = null;

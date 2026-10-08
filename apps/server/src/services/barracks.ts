@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, asc, eq, gte, isNull, lte, or, sql, inArray } from "drizzle-orm";
-import { bandOffers, createDb, effectLog, koinonMembers, koinonMusters, playerCharacters, playerLevy, playerUnits, players, resources, type UnitMission } from "@massalia/db";
+import { bandOffers, createDb, effectLog, koinonMembers, koinonMusters, playerCharacters, playerLevy, playerUnits, players, playerVoyages, resources, type UnitMission, type VoyageKind } from "@massalia/db";
 import {
   bandDef,
   goodCategoryFor,
@@ -359,9 +359,67 @@ export type BarracksSettle = {
   merged: BarracksMerge[]; // same-unit trained rows folded into one at a base
   tribute: TributeSettle; // what held towns and regions paid this settle
   holdings: HoldingsSettle; // holdings that reverted for want of a garrison
+  shipsHome: { voyageId: string; ships: Record<string, number> }[]; // voyages whose hulls came back to stock this settle, by returns_at then id
 };
 
-const emptySettle = (): BarracksSettle => ({ days: 0, drachmaeDirect: 0, purchases: 0, cost: 0, owed: 0, drawn: {}, bought: {}, insolvent: [], renewed: [], departed: [], arrived: [], merged: [], holdings: { reverted: [] }, tribute: { paid: [] } });
+const emptySettle = (): BarracksSettle => ({ days: 0, drachmaeDirect: 0, purchases: 0, cost: 0, owed: 0, drawn: {}, bought: {}, insolvent: [], renewed: [], departed: [], arrived: [], merged: [], holdings: { reverted: [] }, tribute: { paid: [] }, shipsHome: [] });
+
+// --- Hulls at sea (raids prompt 3) ------------------------------------------------
+// The ships that carry men leave their owner's stock when the party sets out
+// and come back when it is home: with the survivors, or on their own at that
+// same instant if nobody survived. While away a hull is not in stock, so it
+// cannot carry another party, be pledged or be sold.
+
+export type VoyagePlan = { kind: VoyageKind; regionId: string; townId: string | null; musterId?: string | null; sailedAt: Date; returnsAt: Date };
+
+// Take the hulls out of stock and record the sailing. Counts below 1 are
+// dropped; with nothing left nothing is written. Each ship id is drawn with
+// drainResource (the draw computed in SQL): every caller chose its counts from
+// Math.floor of the stock it read under the same owner's lock, so the draw
+// takes the whole count. A row that cannot be drawn throws.
+export async function sailHulls(exec: Exec, owner: Pick<ActingContext, "playerId" | "worldId">, ships: Record<string, number>, plan: VoyagePlan): Promise<void> {
+  const hulls: Record<string, number> = {};
+  for (const [shipId, count] of Object.entries(ships)) if (count >= 1) hulls[shipId] = Math.floor(count);
+  if (Object.keys(hulls).length === 0) return;
+  for (const [shipId, count] of Object.entries(hulls)) {
+    const row = await getOrCreateResource(exec, owner.playerId, shipId, plan.sailedAt);
+    if (!(await drainResource(exec, row.id, count))) throw new Error(`barracks: hull draw of ${count} ${shipId} failed under lock`);
+  }
+  await exec.insert(playerVoyages).values({
+    worldId: owner.worldId,
+    ownerPlayerId: owner.playerId,
+    ships: hulls,
+    kind: plan.kind,
+    regionId: plan.regionId,
+    townId: plan.townId,
+    musterId: plan.musterId ?? null,
+    sailedAt: plan.sailedAt,
+    returnsAt: plan.returnsAt,
+  });
+}
+
+// The player's hulls at sea, for the Barracks: one entry per sailing, by
+// returns_at then id, each ship in ships.json order with its label (counts
+// below 1, and ids the content no longer has, are left out of the view).
+export type VoyageView = { id: string; ships: { id: string; label: string; count: number }[]; kind: VoyageKind; musterId: string | null; regionId: string; townId: string | null; sailedAt: string; returnsAt: string };
+export async function shipsAtSea(exec: Exec, ctx: ActingContext): Promise<VoyageView[]> {
+  const shipsC = getShipsContent();
+  const rows = await exec
+    .select()
+    .from(playerVoyages)
+    .where(and(eq(playerVoyages.worldId, ctx.worldId), eq(playerVoyages.ownerPlayerId, ctx.playerId), isNull(playerVoyages.returnedAt)))
+    .orderBy(asc(playerVoyages.returnsAt), asc(playerVoyages.id));
+  return rows.map((v) => ({
+    id: v.id,
+    ships: Object.entries(shipsC.ships).flatMap(([id, d]) => ((v.ships[id] ?? 0) >= 1 ? [{ id, label: d.label, count: Math.floor(v.ships[id]!) }] : [])),
+    kind: v.kind,
+    musterId: v.musterId,
+    regionId: v.regionId,
+    townId: v.townId,
+    sailedAt: v.sailedAt.toISOString(),
+    returnsAt: v.returnsAt.toISOString(),
+  }));
+}
 
 type UpkeepPlan = { drachmaeDirect: number; purchases: number; cost: number; draws: Record<string, number>; buys: Record<string, number> };
 
@@ -438,6 +496,24 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
       await exec.update(playerUnits).set({ mission: null }).where(eq(playerUnits.id, r.id));
       r.mission = null;
     }
+  }
+
+  // 1c. Hulls home from sea (raids prompt 3): every voyage of this player and
+  // world whose returns_at has passed is claimed (returned_at stamped, claim
+  // first) and its ships credited back to stock, by returns_at then id. Before
+  // the marker's early return, so a player whose men all fell still gets his
+  // ships back.
+  const home = await exec
+    .update(playerVoyages)
+    .set({ returnedAt: now })
+    .where(and(eq(playerVoyages.worldId, ctx.worldId), eq(playerVoyages.ownerPlayerId, ctx.playerId), isNull(playerVoyages.returnedAt), lte(playerVoyages.returnsAt, now)))
+    .returning({ id: playerVoyages.id, ships: playerVoyages.ships, returnsAt: playerVoyages.returnsAt });
+  home.sort((a, b) => a.returnsAt.getTime() - b.returnsAt.getTime() || a.id.localeCompare(b.id));
+  for (const v of home) {
+    for (const [shipId, count] of Object.entries(v.ships)) {
+      if (count >= 1) await creditResource(exec, (await getOrCreateResource(exec, ctx.playerId, shipId, now)).id, Math.floor(count));
+    }
+    out.shipsHome.push({ voyageId: v.id, ships: v.ships });
   }
 
   const marker = (
@@ -914,7 +990,8 @@ export type UpkeepView = { perDay: Record<string, number>; rows: Record<string, 
 export const UPKEEP_NOTE = "Shortfalls are bought at the market's seasonal price.";
 // The player's ships in stock (whole hulls), for the reach rule and the
 // Barracks strip: counts by ship id, the reach ships, and the strip's summary
-// (labels from ships.json, troop space summed, range the farthest hull).
+// (labels from ships.json, troop space summed, range the farthest hull). Ships
+// at sea (player_voyages) are not in stock until the party is home.
 export type FleetStripView = { ships: { id: string; label: string; role: string; count: number; troopSpace: number; range: number; naval: number }[]; space: number; range: number };
 export async function fleetInStock(exec: Exec, ctx: ActingContext): Promise<{ counts: Record<string, number>; fleet: ReachShip[]; strip: FleetStripView }> {
   const shipsC = getShipsContent();
@@ -954,6 +1031,8 @@ export type BarracksView = {
   upkeep: UpkeepView;
   summary: SummaryView;
   fleet: FleetStripView;
+  // The hulls at sea, one entry per sailing, listed under Away · Returning.
+  atSea: VoyageView[];
   // The altar while lit at `now` (the good burned, its morale bonus, the
   // instant it goes cold), else null.
   altar: { good: string; mor: number; until: string } | null;
@@ -1027,6 +1106,9 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
     for (const r of rows) {
       for (const id of [r.basedAt, r.movingTo, r.mission?.regionId, r.mission?.townId]) if (id && !(id in places)) places[id] = await nameOf(id);
     }
+    // The hulls at sea, after this view's own settle brought home what was due.
+    const atSea = await shipsAtSea(tx, ctx);
+    for (const v of atSea) for (const id of [v.regionId, v.townId]) if (id && !(id in places)) places[id] = await nameOf(id);
     const { strip: fleet } = await fleetInStock(tx, ctx);
     const battleC = getBattleContent();
     const me = (await tx.select({ until: players.altarUntil, good: players.altarGood }).from(players).where(eq(players.id, ctx.playerId)).limit(1))[0];
@@ -1035,6 +1117,7 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
       gate,
       places,
       fleet,
+      atSea,
       season,
       now: now.toISOString(),
       levy: { men: levy.men },

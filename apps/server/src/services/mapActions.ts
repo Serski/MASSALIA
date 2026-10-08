@@ -24,7 +24,7 @@ import {
   type ReachShip,
 } from "@massalia/shared";
 import { applyComposureDelta } from "./composure.js";
-import { altarBonusFor, barracksView, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, PLEDGED_REFUSAL, type BarracksView, type UnitRow } from "./barracks.js";
+import { altarBonusFor, barracksView, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, PLEDGED_REFUSAL, sailHulls, type BarracksView, type UnitRow } from "./barracks.js";
 import { getBuildingsContent, settleAll, type ActingContext } from "./buildings.js";
 import { raidOpinion, type RaidOpinion } from "./factionOpinion.js";
 import { creditDrachmae, creditGood, holderOf, insertConquest, insertTownConquest, listHoldings } from "./holdings.js";
@@ -42,7 +42,8 @@ import { townStats } from "./townStats.js";
 // force and reach checks → for a town by sea, the fleet check → the battle
 // (pure, seeded on world + player + target + instant) → losses, plunder or
 // conquest → recovery → effect_log with the full report and the Chronicle
-// payload. Ships are counted, never debited or moved. The response is composed
+// payload. The hulls that sail leave stock (sailHulls) until the party is
+// home, when the owner's settle brings them back. The response is composed
 // after the commit from the fresh reach and barracks views.
 //
 // A town (ruling 1–4): the defender is its garrison with the garrison stat
@@ -68,8 +69,9 @@ export type MapActionType = "scout" | "raid" | "attack";
 // or a town (`townId`, whose region is resolved through the graph).
 // `ships` (optional): the hulls to sail with, by ship id. Absent, the crossing
 // is assembled automatically (transports first, warships for what is short,
-// in-range warships as escort); present, it is validated against stock, the
-// crossing's range and the force's space and used as given.
+// and in-range warships as an escort only for a raid or an attack on a town,
+// where the naval check reads them); present, it is validated against stock,
+// the crossing's range and the force's space and used as given.
 export type MapActInput = { type: MapActionType; regionId?: string; townId?: string; rows: { rowId: string; count: number }[]; ships?: Record<string, number> };
 
 export type MapActReport = {
@@ -178,7 +180,8 @@ async function characterOf(exec: DbTx, playerId: string): Promise<{ id: string; 
 
 // Ships for a sea route of `steps` seas: enough trade-ships for the force's
 // space, then galleys if space is still short, taking only hulls whose range
-// covers the crossing; stock is counted, never debited.
+// covers the crossing. Stock is counted here; the hulls that sail leave it at
+// step 8b (sailHulls) until the party is home.
 function assembleFleet(forceSpace: number, counts: Record<string, number>, steps: number): { ships: Record<string, number>; fleet: ReachShip[] } {
   const shipsC = getShipsContent();
   const taken: Record<string, number> = {};
@@ -335,9 +338,11 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
 
     // 4. Ships for a sea route: trade-ships first, galleys for what is still short.
     let ships: Record<string, number> = {};
-    // The fleet that sails against a town: the transports taken plus every
-    // warship in stock whose range covers the crossing (an escort), and its
-    // naval power (ruling 3 as amended).
+    // The fleet that sails against a town: the transports taken plus, for a
+    // raid or an attack on a town, every warship in stock whose range covers
+    // the crossing (an escort), and its naval power (ruling 3 as amended). Only
+    // there does the naval check read them; anywhere else they would leave
+    // port for nothing.
     let sailing: Record<string, number> = {};
     let naval = 0;
     if (route === "sea") {
@@ -369,10 +374,12 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
         if (stats.range < steps) return fail(409, REACH_REASON.range(steps, stats.range));
         ships = assembled.ships;
         sailing = { ...ships };
-        for (const [id, def] of Object.entries(shipsC.ships)) {
-          if (def.role !== "warship" || def.range < steps) continue;
-          const spare = (counts[id] ?? 0) - (ships[id] ?? 0);
-          if (spare > 0) sailing[id] = (sailing[id] ?? 0) + spare;
+        if (townId !== null && input.type !== "scout") {
+          for (const [id, def] of Object.entries(shipsC.ships)) {
+            if (def.role !== "warship" || def.range < steps) continue;
+            const spare = (counts[id] ?? 0) - (ships[id] ?? 0);
+            if (spare > 0) sailing[id] = (sailing[id] ?? 0) + spare;
+          }
         }
       }
       naval = Object.entries(sailing).reduce((n, [id, count]) => n + count * (shipsC.ships[id]?.naval ?? 0), 0);
@@ -585,6 +592,10 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
     // 8. Recovery for every surviving participant.
     const mission = { kind: input.type, regionId, ...(isTown ? { townId } : {}), departedAt: now.toISOString() };
     for (const r of rows) await tx.update(playerUnits).set({ movingTo: destination, arrivesAt, mission }).where(eq(playerUnits.id, r.id));
+    // 8b. The hulls that sailed leave stock until the party is home (raids
+    // prompt 3): every branch reaches this — a scout, a repulse, a win, a
+    // loss, a party that fell to a man, a conquest.
+    if (route === "sea") await sailHulls(tx, ctx, sailing, { kind: input.type, regionId, townId, sailedAt: now, returnsAt: arrivesAt });
 
     // 9. The report on the character, with the Chronicle payload alongside.
     await tx.insert(effectLog).values({ characterId: character.id, kind: "map_action", detail: { ...report, chronicle, source: "map" }, createdAt: now });
@@ -695,6 +706,8 @@ export async function move(ctx: ActingContext, input: MapMoveInput, now: Date): 
     await splitRows(tx, character.id, selected, now);
     const mission = { kind: "move" as const, regionId: target.regionId, ...(target.townId ? { townId: target.townId } : {}), departedAt: now.toISOString() };
     for (const r of rows) await tx.update(playerUnits).set({ movingTo: target.id, arrivesAt, mission }).where(eq(playerUnits.id, r.id));
+    // A move by sea takes its hulls there and back: twice the crossing (raids prompt 3).
+    if (route === "sea") await sailHulls(tx, ctx, ships, { kind: "move", regionId: target.regionId, townId: target.townId, sailedAt: now, returnsAt: new Date(arrivesAt.getTime() + minutes * 60_000) });
 
     // 5. The report and its Chronicle line.
     const fromBase = view.bases.find((b) => b.id === base);

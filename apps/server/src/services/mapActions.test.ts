@@ -73,6 +73,8 @@ suite("Map actions (integration)", () => {
   const stock = async (ctx: Ctx, type: string) =>
     Number((await db.select().from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scopeId, ctx.playerId), eq(m.dbPkg.resources.type, type))))[0]?.amount ?? 0);
   const wallet = async (ctx: Ctx) => (await db.select().from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.playerId, ctx.playerId)))[0]!.drachmae;
+  // The player's voyages (hulls at sea, home or not), by sailing then id.
+  const voyages = (ctx: Ctx) => db.select().from(m.dbPkg.playerVoyages).where(eq(m.dbPkg.playerVoyages.ownerPlayerId, ctx.playerId)).orderBy(asc(m.dbPkg.playerVoyages.sailedAt), asc(m.dbPkg.playerVoyages.id));
   // The dynasty's intel rows, as a scout or a fight writes them.
   const regionIntelOf = async (dynastyId: string, regionId: string) => (await db.select().from(m.dbPkg.regionIntel).where(and(eq(m.dbPkg.regionIntel.dynastyId, dynastyId), eq(m.dbPkg.regionIntel.regionId, regionId))))[0];
   const townIntelOf = async (dynastyId: string, townId: string) => (await db.select().from(m.dbPkg.townIntel).where(and(eq(m.dbPkg.townIntel.dynastyId, dynastyId), eq(m.dbPkg.townIntel.townId, townId))))[0];
@@ -414,7 +416,7 @@ suite("Map actions (integration)", () => {
     expect(await rows(ctx)).toHaveLength(4); // nothing moved
   });
 
-  it("a sea target without enough hulls is refused with the hull reason; with hulls the raid sails", async () => {
+  it("a sea target without enough hulls is refused with the hull reason; with hulls the raid sails, and the hulls are out of stock until the party is home", async () => {
     const { ctx } = await makePlayer();
     await give(ctx, "trade-ship", 1); // 20 space
     const peltasts = await insertRow(ctx, { unitId: "peltast", count: 40 }); // 40 space
@@ -427,9 +429,61 @@ suite("Map actions (integration)", () => {
     if (!r.ok) return;
     expect(r.report).toMatchObject({ route: "sea", steps: 2, recoveryHours: 6, ships: { "trade-ship": 1, galley: 5 } });
     expect(r.report.arrivesAt).toBe(recovered(at(9), 2).toISOString());
-    // Ships are counted, never debited.
+    // The hulls that sailed are out of stock, on one voyage, until the party is home.
+    expect(await stock(ctx, "trade-ship")).toBe(0);
+    expect(await stock(ctx, "galley")).toBe(0);
+    const v = await voyages(ctx);
+    expect(v).toHaveLength(1);
+    expect(v[0]).toMatchObject({ ships: { "trade-ship": 1, galley: 5 }, kind: "raid", regionId: "R078", townId: null, musterId: null, sailedAt: at(9), returnsAt: recovered(at(9), 2), returnedAt: null });
+    expect((await m.barracks.barracksView(ctx, at(9.1))).atSea).toEqual([
+      { id: v[0]!.id, ships: [{ id: "trade-ship", label: "Pentekonter", count: 1 }, { id: "galley", label: "Trireme", count: 5 }], kind: "raid", musterId: null, regionId: "R078", townId: null, sailedAt: at(9).toISOString(), returnsAt: recovered(at(9), 2).toISOString() },
+    ]);
+    // The settle brings them home at the party's instant, not a minute before, and only once.
+    const home = recovered(at(9), 2);
+    expect((await settle(ctx, new Date(home.getTime() - 60_000))).shipsHome).toEqual([]);
+    expect((await settle(ctx, home)).shipsHome).toEqual([{ voyageId: v[0]!.id, ships: { "trade-ship": 1, galley: 5 } }]);
     expect(await stock(ctx, "trade-ship")).toBe(1);
     expect(await stock(ctx, "galley")).toBe(5);
+    expect((await voyages(ctx))[0]).toMatchObject({ returnedAt: home });
+    expect((await settle(ctx, at(10))).shipsHome).toEqual([]);
+    expect(await stock(ctx, "trade-ship")).toBe(1);
+    expect(await stock(ctx, "galley")).toBe(5);
+  });
+
+  it("hulls at sea carry no second party until they are home", async () => {
+    const { ctx } = await makePlayer();
+    await give(ctx, "trade-ship", 1);
+    await setWarband("R078", 10, at(9));
+    // Two units, so the settle does not fold them into one row.
+    const peltasts = await insertRow(ctx, { unitId: "peltast", count: 20 });
+    const hoplites = await insertRow(ctx, { unitId: "hoplite", count: 20 });
+    expect(await act(ctx, "raid", "R078", [peltasts.id])).toMatchObject({ ok: true, report: { route: "sea", ships: { "trade-ship": 1 } } });
+    // The port is empty: the reach reads no hulls (range comes before hulls), and the men stay home.
+    expect(await act(ctx, "raid", "R078", [hoplites.id])).toEqual({ ok: false, code: 409, error: "Beyond the fleet's range (2 seas, fleet reaches 0)." });
+    expect((await rows(ctx)).find((x) => x.id === hoplites.id)).toMatchObject({ basedAt: "R060", movingTo: null, count: 20 });
+    // Once the party is home the same hull sails again.
+    const again = await act(ctx, "raid", "R078", [hoplites.id], recovered(at(9), 2));
+    expect(again).toMatchObject({ ok: true });
+    if (!again.ok) return;
+    expect(again.report.ships).toEqual({ "trade-ship": 1 });
+  });
+
+  it("a party that falls to a man still brings its hulls home, on the party's clock", async () => {
+    const { ctx } = await makePlayer();
+    await give(ctx, "trade-ship", 1);
+    await setWarband("R078", 6000, at(9)); // the floor sends 120: all 5 fall on every seed
+    const hoplites = await insertRow(ctx, { unitId: "hoplite", count: 5 });
+    const r = await act(ctx, "raid", "R078", [hoplites.id]);
+    expect(r).toMatchObject({ ok: true });
+    if (!r.ok) return;
+    expect(r.report).toMatchObject({ winner: "defender", attacker: { losses: 5 }, defender: { start: 6000, turnout: 120 } });
+    expect(await rows(ctx)).toEqual([]);
+    expect(await stock(ctx, "trade-ship")).toBe(0);
+    const v = await voyages(ctx);
+    expect(v).toHaveLength(1);
+    expect(v[0]).toMatchObject({ ships: { "trade-ship": 1 }, returnsAt: recovered(at(9), 2), returnedAt: null });
+    expect((await settle(ctx, recovered(at(9), 2))).shipsHome).toEqual([{ voyageId: v[0]!.id, ships: { "trade-ship": 1 } }]);
+    expect(await stock(ctx, "trade-ship")).toBe(1);
   });
 
   it("a chosen fleet: used as given when it fits, refused beyond stock, short of space, out of range, or unknown", async () => {
@@ -448,10 +502,14 @@ suite("Map actions (integration)", () => {
     expect(r).toMatchObject({ ok: true });
     if (!r.ok) return;
     expect(r.report).toMatchObject({ route: "sea", steps: 2, ships: { "trade-ship": 2, galley: 1 } });
-    expect(await stock(ctx, "galley")).toBe(2);
+    expect(await stock(ctx, "trade-ship")).toBe(0);
+    expect(await stock(ctx, "galley")).toBe(1); // the second trireme stayed in port
     // A trireme chosen for a five-sea crossing is refused with the range reason
-    // (the automatic assembly would have left it home).
+    // (the automatic assembly would have left it home). The settle at 10 has
+    // brought the raid's hulls home.
     await settle(ctx, at(10));
+    expect(await stock(ctx, "trade-ship")).toBe(2);
+    expect(await stock(ctx, "galley")).toBe(2);
     await setGarrison("thapsus", 10, at(10));
     // Hoplites, so the settle does not fold this row into the peltasts back from the raid.
     const fresh = await insertRow(ctx, { unitId: "hoplite", count: 40, season: 6 });
@@ -659,6 +717,10 @@ suite("Map actions (integration)", () => {
     // Turned back at sea, the men still saw the garrison and the ships: the intel reads them.
     expect(r.report.intel).toEqual({ warband: 10, pentekonters: 4, triremes: 4, scoutedGameDate: expect.any(String) });
     expect(await townIntelOf(dynastyId, "aleria")).toMatchObject({ garrison: 10, pentekonters: 4, triremes: 4, scoutedAt: at(9) });
+    // Repulsed or not, the hulls are at sea until the party is home.
+    expect(await stock(ctx, "trade-ship")).toBe(0);
+    expect(await voyages(ctx)).toHaveLength(1);
+    expect((await voyages(ctx))[0]).toMatchObject({ kind: "attack", townId: "aleria", ships: { "trade-ship": 2 }, returnsAt: recovered(at(9), 2) });
     // The town's fleet is unchanged. Triremes in stock whose range covers the
     // crossing sail as an escort even though the pentekonters carry everyone:
     // naval 2 + 25 against 24, and the landing holds. The crossing itself is
@@ -674,6 +736,11 @@ suite("Map actions (integration)", () => {
     expect(again.report.winner).toBe("attacker");
     expect(again.report.conquest).toEqual({ regionId: "R073", townId: "aleria", previousOwner: "etruscans" });
     expect(await townIntelOf(dynastyId, "aleria")).toMatchObject({ garrison: 0, pentekonters: 4, triremes: 4, scoutedAt: at(10) });
+    // The escort sailed too: nothing in port until the survivors take the town up.
+    expect(await stock(ctx, "trade-ship")).toBe(0);
+    expect(await stock(ctx, "galley")).toBe(0);
+    expect(await voyages(ctx)).toHaveLength(2);
+    expect((await voyages(ctx))[1]).toMatchObject({ ships: { "trade-ship": 2, galley: 5 }, returnsAt: recovered(at(10), 2) });
     // Out of range, the escort stays home and does not cap the fleet's range:
     // from Massalia, Thapsus (five seas, naval 8) is reached on the
     // pentekonters' range 7 with naval 2 alone, and the landing is repulsed.
@@ -903,9 +970,16 @@ suite("Map actions (integration)", () => {
     expect(sailed).toMatchObject({ ok: true });
     if (!sailed.ok) return;
     expect(sailed.report).toMatchObject({ route: "sea", steps: 1, minutes: 30, ships: { "trade-ship": 2 }, townId: "emporion" });
-    expect(await stock(ctx, "trade-ship")).toBe(2);
+    // The hulls go there and back: twice the crossing.
+    expect(await stock(ctx, "trade-ship")).toBe(0);
+    expect(await voyages(ctx)).toHaveLength(1);
+    expect((await voyages(ctx))[0]).toMatchObject({ kind: "move", regionId: "R065", townId: "emporion", ships: { "trade-ship": 2 }, sailedAt: at(9), returnsAt: new Date(at(9).getTime() + 60 * 60_000) });
     // The movers cannot be sent again while on the march.
     expect(await moveTo(ctx, "R060", [peltasts.id], at(9.01))).toMatchObject({ ok: false, code: 409, error: "Peltast are still on the march." });
+    expect((await settle(ctx, new Date(at(9).getTime() + 59 * 60_000))).shipsHome).toEqual([]);
+    expect(await stock(ctx, "trade-ship")).toBe(0);
+    expect((await settle(ctx, new Date(at(9).getTime() + 60 * 60_000))).shipsHome).toHaveLength(1);
+    expect(await stock(ctx, "trade-ship")).toBe(2);
   });
 
   it("move within one region: from a held town to its region's other town of ours takes 10 minutes", async () => {

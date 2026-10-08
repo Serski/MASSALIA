@@ -526,6 +526,8 @@ suite("Koinon muster (integration)", () => {
   const stockOf = async (playerId: string, type: string) =>
     Number((await db.select().from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scope, "player"), eq(m.dbPkg.resources.scopeId, playerId), eq(m.dbPkg.resources.type, type))))[0]?.amount ?? 0);
   const grain = (playerId: string) => stockOf(playerId, "grain");
+  // The player's voyages (hulls at sea, home or not), by sailing then id.
+  const voyagesOf = (playerId: string) => db.select().from(m.dbPkg.playerVoyages).where(eq(m.dbPkg.playerVoyages.ownerPlayerId, playerId)).orderBy(asc(m.dbPkg.playerVoyages.sailedAt), asc(m.dbPkg.playerVoyages.id));
   const logs = async (playerId: string, kind: string) => {
     const character = (await db.select({ id: m.dbPkg.playerCharacters.id }).from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.playerId, playerId)))[0]!;
     return db.select().from(m.dbPkg.effectLog).where(and(eq(m.dbPkg.effectLog.characterId, character.id), eq(m.dbPkg.effectLog.kind, kind))).orderBy(asc(m.dbPkg.effectLog.createdAt));
@@ -741,9 +743,13 @@ suite("Koinon muster (integration)", () => {
     expect(await wallet(shipowner)).toBe(100_000 + drachmae[shipowner]!);
     expect(await grain(shipowner)).toBe(grains[shipowner]);
     expect(await stockOf(shipowner, good)).toBe(spoils[shipowner]);
-    // The ship owner's line: no men, two hulls. His ships are counted, never moved.
+    // The ship owner's line: no men, two hulls. His two hulls sailed and are at sea until the army is home.
     expect((await logs(shipowner, "koinon_muster"))[0]!.detail).toMatchObject({ chronicle: { force: [], hulls: 2, winner: "attacker", lost: 0, townId: seaTown.townId, share: { drachmae: drachmae[shipowner], grain: grains[shipowner], spoil: { good, label, amount: spoils[shipowner] } } } });
-    expect((await db.select().from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scopeId, shipowner), eq(m.dbPkg.resources.type, "trade-ship"))))[0]!.amount).toBe("2");
+    expect((await db.select().from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scopeId, shipowner), eq(m.dbPkg.resources.type, "trade-ship"))))[0]!.amount).toBe("0");
+    expect(await voyagesOf(shipowner)).toHaveLength(1);
+    expect((await voyagesOf(shipowner))[0]).toMatchObject({ ships: { "trade-ship": 2 }, kind: "raid", musterId: bySea, regionId: seaTown.regionId, townId: seaTown.townId, sailedAt: LAUNCH, returnsAt: recovered(seaTown.steps), returnedAt: null });
+    expect(await voyagesOf(soldier)).toEqual([]);
+    expect(recovered(seaTown.steps).getTime()).toBeLessThanOrEqual(at(DAY).getTime()); // seven seas at most: home by at(23 hours)
     expect(await garrisonOf(seaTown.townId)).toBe(10 - report.killed);
     expect(await db.select().from(m.dbPkg.koinonMusterHulls)).toEqual([]);
 
@@ -763,6 +769,9 @@ suite("Koinon muster (integration)", () => {
     expect(land.parts.map((p) => [p.playerId, p.shares, p.drachmae])).toEqual([[soldier, 20, land.plunder!.drachmae]]);
     expect(await wallet(shipowner)).toBe(before);
     expect((await logs(shipowner, "koinon_muster")).length).toBe(1);
+    // The land resolve settled the ship owner at its launch: his hulls from the sea raid are home.
+    expect((await db.select().from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scopeId, shipowner), eq(m.dbPkg.resources.type, "trade-ship"))))[0]!.amount).toBe("2");
+    expect((await voyagesOf(shipowner))[0]).toMatchObject({ returnedAt: at(DAY) });
   });
 
   it("by sea: a trireme that cannot make the crossing neither sails nor counts; three pentekonters pledged with one in stock is one hull", async () => {
@@ -787,6 +796,12 @@ suite("Koinon muster (integration)", () => {
     expect(report.parts.map((p) => [p.playerId, p.men, p.hulls, p.seats])).toEqual([[soldier, 20, 0, 0], [transporter, 0, 1, 20]]);
     expect((await logs(escort, "koinon_muster")).length).toBe(0);
     expect(await wallet(escort)).toBe(100_000);
+    // The pentekonter that sailed is at sea; the trireme that could not never left port.
+    expect(await stockOf(transporter, "trade-ship")).toBe(0);
+    expect(await voyagesOf(transporter)).toHaveLength(1);
+    expect((await voyagesOf(transporter))[0]).toMatchObject({ ships: { "trade-ship": 1 }, musterId });
+    expect(await stockOf(escort, "galley")).toBe(1);
+    expect(await voyagesOf(escort)).toEqual([]);
   });
 
   it("by sea: space short of the force stands the muster down with the hulls reason; a stronger town fleet repulses it with no losses and recovery", async () => {
@@ -804,6 +819,9 @@ suite("Koinon muster (integration)", () => {
     expect(await unitRow(row)).toMatchObject({ count: 30, mission: null, movingTo: null, arrivesAt: null });
     expect((await logs(soldier, "koinon_muster")).length).toBe(0);
     expect((await m.koinon.koinonView(await ctx(soldier), at(3 * HOUR))).koinon!.lastMuster).toMatchObject({ status: "stood_down", reason: REACH_REASON.hulls(30, 20) });
+    // A stand-down sails nothing.
+    expect(await stockOf(shipowner, "trade-ship")).toBe(1);
+    expect(await voyagesOf(shipowner)).toEqual([]);
 
     // Two pentekonters carry the 30, but the town's fleet (3 × 1 + 2 × 5) outweighs them.
     const repulsed = await musterRow(k, soldier, { id: uid(901), regionId: seaTown.regionId, townId: seaTown.townId, launchAt: at(4 * HOUR) });
@@ -824,6 +842,10 @@ suite("Koinon muster (integration)", () => {
     expect((await logs(soldier, "battle_loss")).length).toBe(0);
     expect((await logs(soldier, "koinon_muster"))[0]!.detail).toMatchObject({ chronicle: { winner: "repulsed", killed: 0, lost: 0, share: null, hulls: 0 } });
     expect((await logs(shipowner, "koinon_muster"))[0]!.detail).toMatchObject({ chronicle: { winner: "repulsed", force: [], hulls: 2, share: null } });
+    // Repulsed, the hulls are still at sea until the army is home.
+    expect(await stockOf(shipowner, "trade-ship")).toBe(0);
+    expect(await voyagesOf(shipowner)).toHaveLength(1);
+    expect((await voyagesOf(shipowner))[0]).toMatchObject({ ships: { "trade-ship": 2 }, returnsAt: home });
   });
 
   it("stands down with no men pledged, and when the force cannot reach the target; the rows are free at once", async () => {
@@ -836,6 +858,8 @@ suite("Koinon muster (integration)", () => {
     expect(await m.muster.resolveMuster(empty, LAUNCH)).toEqual({ outcome: "stood_down" });
     expect((await musters())[0]).toMatchObject({ status: "stood_down", closedAt: LAUNCH, report: { outcome: "stood_down", reason: REACH_REASON.noMen } });
     expect(await db.select().from(m.dbPkg.koinonMusterHulls)).toEqual([]);
+    expect(await stockOf(member, "trade-ship")).toBe(1);
+    expect(await db.select().from(m.dbPkg.playerVoyages)).toEqual([]);
 
     // Men and no hulls for a crossing: the page says why before the launch, and the resolve gives the same reason.
     const stranded = await musterRow(k, leader, { id: uid(901), regionId: seaTown.regionId, townId: seaTown.townId, launchAt: at(DAY) });
