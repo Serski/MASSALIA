@@ -164,3 +164,12 @@ STOP 1. Report:
 ## Push (only after I reply "push")
 
 Fast-forward only, plain `git push`. Report remote HEAD, the CI run with its Gate and Audit steps, Railway server and worker on the new SHA, migration 0067 in `__massalia_migrations` on production (a select through `railway run --service Postgres --environment production`), Pages green and API health.
+
+## STOP 1 ruling (8 Oct 2026)
+
+1. The new test readers (`marker`, `voyages`, `regionIntelOf` and `townIntelOf` in the map-action suite, `voyagesOf` in the muster suite): accepted.
+2. `writeTownGarrison` reading the content value before the row insert: accepted. A first write on a fresh town still starts the clock at the write.
+3. The refusal sentences as rendered: accepted. "Another house holds this town." and "Another house holds this land."
+4. The AT SEA row as rendered: accepted. The name "Pentekonter · 2, Trireme · 1" with the clock to the return; the lines "Raid on …", "The koinon's raid on …", "Scouting …", "Attack on …" and "Carrying men to …"; the tag "AT SEA" with the bar from the sailing to the return.
+
+One commit: this ruling appended verbatim to docs/barracks/raids-prompt-3.md under its heading, subject `docs: the raids prompt 3 STOP 1 ruling`. Run the gate at the new HEAD, then `pnpm audit --audit-level=high`. On GATE GREEN and audit exit 0, push as the prompt's Push section says: fast-forward only, plain `git push`. Report the Committed line, the gate's last line with suite counts, the audit exit code, remote HEAD, the CI run with its Gate and Audit steps, Railway server and worker on the new SHA, migration 0067 in `__massalia_migrations` on production, Pages green and API health. On any red, STOP with the log and do not push.
