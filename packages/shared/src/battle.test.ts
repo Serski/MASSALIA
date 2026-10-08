@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { parseBattleContent, parseUnitsContent, raidAngers, raidPlunder, raidTurnout, type UnitStats } from "./barracks.js";
+import { marchMinutes, parseBattleContent, parseUnitsContent, raidAngers, raidPlunder, raidTurnout, type UnitStats } from "./barracks.js";
 import { resolveBattle, SKIRMISH_MSL, type BattleConfig, type BattleRow } from "./battle.js";
 import { parseBuildingsContent } from "./buildings.js";
 
@@ -31,6 +31,10 @@ describe("battle content", () => {
     expect(battle.tribute).toEqual({ perPopulation: 0.08, minGarrisonPerPopulation: 0.01 });
     expect(battle.regionTribute).toEqual({ grainPerWarband: 0.05, timberPerWarband: 0.025, minGrain: 15, minTimber: 8, levyPerYear: 5 });
     expect(battle.move).toEqual({ minutesPerStep: 30, minutesWithinRegion: 10 });
+    // The road (raids prompt 4): whole minutes each way.
+    expect(battle.march).toEqual({ minutesPerStep: 30, minutesWithinRegion: 10 });
+    expect(() => parseBattleContent({ ...read("content/military/battle.json"), march: { minutesPerStep: 0, minutesWithinRegion: 10 } }, goods)).toThrow();
+    expect(() => parseBattleContent({ ...read("content/military/battle.json"), march: { minutesPerStep: 30, minutesWithinRegion: 7.5 } }, goods)).toThrow();
     // The altar: two seasons, a bull +3 and a chicken +1; every good a vendor good.
     expect(battle.altar.seasons).toBe(2);
     expect(battle.altar.goods).toEqual({ bull: 3, chicken: 1 });
@@ -50,6 +54,16 @@ describe("battle content", () => {
     // The grudge: a chance in [0, 1] and a whole, positive loss.
     expect(() => parseBattleContent({ ...read("content/military/battle.json"), raid: { ...raid, opinion: { chance: 1.5, loss: 1 } } }, goods)).toThrow();
     expect(() => parseBattleContent({ ...read("content/military/battle.json"), raid: { ...raid, opinion: { chance: 0.33, loss: 0 } } }, goods)).toThrow();
+  });
+});
+
+describe("the road", () => {
+  it("marchMinutes: within the base's region, a land step, and seas crossed", () => {
+    expect(marchMinutes(battle.march, { route: "land", steps: 0 })).toBe(10);
+    expect(marchMinutes(battle.march, { route: "within", steps: 0 })).toBe(10);
+    expect(marchMinutes(battle.march, { route: "land", steps: 1 })).toBe(30);
+    expect(marchMinutes(battle.march, { route: "sea", steps: 2 })).toBe(60);
+    expect(marchMinutes(battle.march, { route: "sea", steps: 5 })).toBe(150);
   });
 });
 

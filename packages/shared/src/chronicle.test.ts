@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { REAL_MS_PER_SEASON } from "./calendar.js";
-import { buildChronicle, CHRONICLE_EFFECT_LOG_KINDS, type ChronicleInput, renderCampaignLine, renderForce, renderPlunder } from "./chronicle.js";
+import { buildChronicle, CHRONICLE_EFFECT_LOG_KINDS, type ChronicleInput, renderCampaignLine, renderForce, renderMarchLine, renderPlunder } from "./chronicle.js";
 
 // One real day = one in-game season; tests anchor the world start at ms 0 so a
 // timestamp of N seasons is simply N * REAL_MS_PER_SEASON.
@@ -463,6 +463,13 @@ describe("campaign lines", () => {
     );
     expect(renderCampaignLine("holding_reverted", { regionId: "R047", regionName: "Vocontii", townId: "reii", townName: "Reii" })).toBe("Reii slipped from our hands: no garrison held it.");
     expect(renderCampaignLine("map_action", { action: "move", regionId: "R059", townId: "nikaia", townName: "Nikaia", force, from: "Massalia", minutes: 30 })).toBe("40 peltasts march from Massalia to Nikaia, arriving in 00:30:00.");
+    // The march (raids prompt 4): the set-out card, and a party turned back or broken up.
+    expect(renderMarchLine({ stage: "setout", action: "raid", force, place: "Salyes", minutes: 30 })).toBe("40 peltasts set out to raid Salyes, arriving in 00:30:00.");
+    expect(renderMarchLine({ stage: "setout", action: "scout", force, place: "Salyes", minutes: 30 })).toBe("40 peltasts set out to scout Salyes, arriving in 00:30:00.");
+    expect(renderMarchLine({ stage: "setout", action: "attack", force, place: "Salyes", minutes: 30 })).toBe("40 peltasts march on Salyes, arriving in 00:30:00.");
+    expect(renderMarchLine({ stage: "taken", action: "attack", force, place: "Salyes" })).toBe("40 peltasts found Salyes held by another house and turned back.");
+    expect(renderMarchLine({ stage: "ours", action: "raid", force, place: "Salyes" })).toBe("40 peltasts found Salyes already ours and turned back.");
+    expect(renderMarchLine({ stage: "dispersed", action: "raid", force: [], place: "Salyes" })).toBe("The party sent to Salyes broke up on the road.");
     expect(renderCampaignLine("holding_tribute", { regionId: "R032", tribute: [{ name: "Vienna", days: 2, drachmae: 240 }, { name: "Salyes", days: 1, grain: 15, timber: 8 }] })).toBe(
       "Tribute: Vienna sent 240 drachmae over 2 days; Salyes sent 15 grain and 8 timber.",
     );

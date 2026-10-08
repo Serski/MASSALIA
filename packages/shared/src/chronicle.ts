@@ -314,6 +314,21 @@ function renderTributeLine(p: CampaignPayload): string {
   return parts.length ? `Tribute: ${parts.join("; ")}.` : "Tribute: nothing was paid.";
 }
 
+// A party's march (raids prompt 4): the set-out card's line, and the report of
+// a party that turned back or broke up on the road. The one wording, for the
+// server's reports and the web alike.
+export function renderMarchLine(p: { stage: "setout" | "taken" | "ours" | "dispersed"; action: "scout" | "raid" | "attack"; force: CampaignForcePart[]; place: string; minutes?: number }): string {
+  const force = renderForce(p.force) || "Our men";
+  if (p.stage === "setout") {
+    const arriving = `arriving in ${clock(p.minutes ?? 0)}.`;
+    if (p.action === "attack") return `${force} march on ${p.place}, ${arriving}`;
+    return `${force} set out to ${p.action} ${p.place}, ${arriving}`;
+  }
+  if (p.stage === "taken") return `${force} found ${p.place} held by another house and turned back.`;
+  if (p.stage === "ours") return `${force} found ${p.place} already ours and turned back.`;
+  return `The party sent to ${p.place} broke up on the road.`;
+}
+
 export function renderCampaignLine(type: ChronicleCampaignKind, p: CampaignPayload): string {
   const place = p.townName ?? p.regionName ?? p.regionId;
   if (type === "holding_tribute") return renderTributeLine(p);

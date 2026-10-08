@@ -71,6 +71,10 @@ export type BattleContent = {
   regionTribute: { grainPerWarband: number; timberPerWarband: number; minGrain: number; minTimber: number; levyPerYear: number };
   // Moving men between bases: minutes per land or sea step, or within one region.
   move: { minutesPerStep: number; minutesWithinRegion: number };
+  // The road (raids prompt 4): a raid, an attack or a scout travels
+  // minutesPerStep a land step or a sea crossed, or minutesWithinRegion to a
+  // target in its base's own region, each way.
+  march: { minutesPerStep: number; minutesWithinRegion: number };
   // The Barracks altar: a vendor good burned there raises the morale of every
   // row the player fields for `seasons` seasons (real days) from the act, by the
   // bonus its entry in `goods` gives. Keys must be vendor goods.
@@ -293,6 +297,8 @@ function battleContentSchema(goods: ReadonlySet<string>) {
       })
       .strict(),
     move: z.object({ minutesPerStep: z.number().positive(), minutesWithinRegion: z.number().positive() }).strict(),
+    // Whole minutes: a march stores its road as an integer.
+    march: z.object({ minutesPerStep: z.number().int().positive(), minutesWithinRegion: z.number().int().positive() }).strict(),
     altar: z.object({ seasons: z.number().int().positive(), goods: goodsSchema(goods, "altar.goods") }).strict(),
     npc: z
       .object({
@@ -386,6 +392,15 @@ export function sha256Words(message: string): Uint32Array {
 // re-login never rerolls. Math.random is not used anywhere in the system.
 export function seededRoll(seedParts: string[]): number {
   return sha256Words(seedParts.join("|"))[0]! / 2 ** 32;
+}
+
+// The road's minutes each way for an action's route: minutesWithinRegion for
+// a target in the base's own region (a land route of 0 steps, or "within",
+// accepted so the web picker can pass its route as it stands), else the steps
+// times minutesPerStep.
+export function marchMinutes(march: { minutesPerStep: number; minutesWithinRegion: number }, route: { route: "within" | "land" | "sea"; steps: number }): number {
+  if (route.route === "within" || (route.route === "land" && route.steps === 0)) return march.minutesWithinRegion;
+  return route.steps * march.minutesPerStep;
 }
 
 // The men who meet a raid: half to all of the men sent, a whole number rolled

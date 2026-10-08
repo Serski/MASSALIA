@@ -14,6 +14,7 @@
   "tribute": { "perPopulation": 0.08, "minGarrisonPerPopulation": 0.01 },
   "regionTribute": { "grainPerWarband": 0.05, "timberPerWarband": 0.025, "minGrain": 15, "minTimber": 8, "levyPerYear": 5 },
   "move": { "minutesPerStep": 30, "minutesWithinRegion": 10 },
+  "march": { "minutesPerStep": 30, "minutesWithinRegion": 10 },
   "npc": {
     "warband":  { "label": "Tribal warband", "stats": { "atk": 5, "def": 3, "msl": 1, "mor": 4, "spd": 6, "space": 1 } },
     "garrison": { "label": "Town garrison",  "stats": { "atk": 6, "def": 7, "msl": 1, "mor": 6, "spd": 3, "space": 1 } }
