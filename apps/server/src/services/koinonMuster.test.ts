@@ -868,6 +868,33 @@ suite("Koinon muster (integration)", () => {
     expect(await unitRow(outside)).toMatchObject({ mission: null, movingTo: null });
   });
 
+  // The grudge (raids prompt 2): a raid on a nation's land rolls once on the
+  // battle's seed. The seed is sha256(world | muster | reii | launch), so the
+  // muster's id decides it: uid(900) hits (0.1013), uid(903) misses (0.5372).
+  const relation = async (factionId: string) => (await db.select().from(m.dbPkg.factionRelations).where(and(eq(m.dbPkg.factionRelations.worldId, worldId), eq(m.dbPkg.factionRelations.factionId, factionId))))[0];
+  async function raidOnReii(id: string) {
+    const a = await freshPlayer("Kallias", 100_000, 1);
+    const k = await koinonOf("The Sacred Band", [a], uid(800));
+    const musterId = await musterRow(k, a, { id, regionId: "R047", townId: "reii" });
+    await pledgedMen(a, "peltast", 40, musterId, 501);
+    expect(await m.muster.resolveMuster(musterId, LAUNCH)).toEqual({ outcome: "resolved" });
+    const report = await reportOf();
+    expect(report).toMatchObject({ outcome: "won", townId: "reii", defender: { start: 160 } });
+    return report;
+  }
+
+  it("the grudge: a raid on Reii that rolls under the chance lowers the Saluvii by a point, for the whole world", async () => {
+    const report = await raidOnReii(uid(900));
+    expect(report.opinion).toEqual({ factionId: "saluvii", name: "Saluvii", from: -45, to: -46, line: "The Saluvii will remember this." });
+    expect(await relation("saluvii")).toMatchObject({ opinion: -46, stance: "unfriendly" });
+  });
+
+  it("the grudge: a raid on Reii that rolls over the chance leaves the Saluvii as they were", async () => {
+    const report = await raidOnReii(uid(903));
+    expect(report.opinion).toBeNull();
+    expect(await relation("saluvii")).toBeUndefined();
+  });
+
   it("claim first: two resolves at once leave one report and credit the wallets once, 10 runs", async () => {
     for (let run = 0; run < 10; run++) {
       const [a, b] = [await freshPlayer(`A${run}`), await freshPlayer(`B${run}`)];

@@ -450,6 +450,10 @@ const factionSchema = z
     warChief: warChiefSchema.nullable().optional(),
     // Institutional-only: the governing-body label (no ruler/heir/war-chief).
     institutionLabel: z.string().min(1).optional(),
+    // The map polity ids (the `owner` in region-military.json and
+    // town-military.json) whose land is this faction's; absent means the
+    // faction's own id. A raid on that land can sour the faction.
+    polities: z.array(z.string().min(1)).min(1).optional(),
   })
   .strict()
   .superRefine((f, ctx) => {
@@ -492,7 +496,30 @@ export function parseFactionsContent(data: unknown): FactionsContent {
       if (!ids.has(ref)) throw new Error(`Faction ${f.id} references unknown faction id: ${ref}`);
     }
   }
+  // Every map polity belongs to at most one faction (a faction without a
+  // `polities` list claims its own id).
+  const claimed = new Map<string, string>();
+  for (const f of parsed.factions) {
+    for (const polity of f.polities ?? [f.id]) {
+      const other = claimed.get(polity);
+      if (other !== undefined) throw new Error(`Polity ${polity} belongs to two factions: ${other} and ${f.id}`);
+      claimed.set(polity, f.id);
+    }
+  }
   return parsed;
+}
+
+// The faction whose land a map polity is, or null for unclaimed land and for
+// polities no faction holds (the Etruscans, for one).
+export function factionOfPolity(content: FactionsContent, polityId: string | null): FactionDef | null {
+  if (polityId === null) return null;
+  return content.factions.find((f) => (f.polities ?? [f.id]).includes(polityId)) ?? null;
+}
+
+// The line a raid's report carries when the nation's opinion fell: a major
+// power by its name, a people with the article.
+export function raidGrudgeLine(f: Pick<FactionDef, "name" | "group">): string {
+  return f.group === "major-powers" ? `${f.name} will remember this.` : `The ${f.name} will remember this.`;
 }
 
 // --- League city drift (Atlas Phase 2b-i): gentle once-per-game-year growth ---

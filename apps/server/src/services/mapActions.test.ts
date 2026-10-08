@@ -82,6 +82,9 @@ suite("Map actions (integration)", () => {
   const garrison = async (townId: string) => (await db.select().from(m.dbPkg.townMilitary).where(and(eq(m.dbPkg.townMilitary.worldId, worldId), eq(m.dbPkg.townMilitary.townId, townId))))[0]?.garrison;
   const setGarrison = (townId: string, value: number, when: Date) => m.mapPools.writeTownGarrison(db, worldId, townId, value, when);
   const levy = async (ctx: Ctx) => (await db.select().from(m.dbPkg.playerLevy).where(eq(m.dbPkg.playerLevy.ownerPlayerId, ctx.playerId)))[0];
+  // The world's opinion rows: one nation's, or all of them (a raid on land no faction holds writes none).
+  const relation = async (factionId: string) => (await db.select().from(m.dbPkg.factionRelations).where(and(eq(m.dbPkg.factionRelations.worldId, worldId), eq(m.dbPkg.factionRelations.factionId, factionId))))[0];
+  const relations = () => db.select().from(m.dbPkg.factionRelations).where(eq(m.dbPkg.factionRelations.worldId, worldId));
   // A ready row standing at a base (created and ready well before the action).
   type RowOpts = { source?: "trained" | "band"; unitId: string; count: number; basedAt?: string; ready?: boolean; movingTo?: string | null; season?: number };
   const insertRow = async (ctx: Ctx, o: RowOpts) =>
@@ -203,6 +206,9 @@ suite("Map actions (integration)", () => {
     expect(await stock(ctx, "grain")).toBe(5000 - 3 * 40 + killed * 5); // 3 whole days after ready_at (at 6) × 40 peltasts × 1 grain, then the plunder
     expect(await stock(ctx, good)).toBe((good === "oliveoil" ? 5000 - 3 * 40 : 0) + killed * 5); // the peltasts eat olive oil too
     expect(await warband("R046")).toBe(20 - killed);
+    // Salyes is unclaimed: no nation to sour.
+    expect(r.report.opinion).toBeNull();
+    expect(await relations()).toEqual([]);
     const row = (await rows(ctx)).find((x) => x.id === peltasts.id)!;
     expect(row).toMatchObject({ movingTo: "R060", arrivesAt: recovered(at(9), 1), count: 40 - r.report.attacker.losses, mission: { kind: "raid", regionId: "R046", departedAt: at(9).toISOString() } });
     expect((await logs(characterId, "battle_loss")).length).toBe(r.report.attacker.losses > 0 ? 1 : 0);
@@ -553,6 +559,12 @@ suite("Map actions (integration)", () => {
     expect(r.report.plunder).toEqual({ drachmae: killed * 50 * 2, grain: killed * 5 * 2, spoil: { good, label: good === "oliveoil" ? "olive oil" : good, amount: killed * 5 * 2 } });
     expect(await wallet(ctx)).toBe(100 + killed * 100);
     expect(await stock(ctx, good)).toBe((good === "oliveoil" ? 5000 - 3 * 40 : 0) + killed * 10);
+    // Reii is the Saluvii's (start −45): one time in three the raid sours them by a point.
+    if (r.report.opinion === null) expect(await relation("saluvii")).toBeUndefined();
+    else {
+      expect(r.report.opinion).toEqual({ factionId: "saluvii", name: "Saluvii", from: -45, to: -46, line: "The Saluvii will remember this." });
+      expect(await relation("saluvii")).toMatchObject({ opinion: -46, stance: "unfriendly" });
+    }
     expect(await garrison("reii")).toBe(10 - killed);
     expect(r.report.line).toMatch(/^Raided Reii with 40 peltasts: \d+ soldiers? slain/);
     await recordChronicle(characterId);
@@ -611,6 +623,19 @@ suite("Map actions (integration)", () => {
     await recordChronicle(characterId);
   });
 
+  it("a raid turned back at sea does not roll: Carthage is not soured by a landing that never happened", async () => {
+    const { ctx, characterId } = await makePlayer();
+    // Thapsus (Carthage's, five seas, naval 8): 40 peltasts on 2 pentekonters (naval 2) are repulsed.
+    await give(ctx, "trade-ship", 2);
+    const peltasts = await insertRow(ctx, { unitId: "peltast", count: 40 });
+    const r = await actTown(ctx, "raid", "thapsus", [peltasts.id]);
+    expect(r).toMatchObject({ ok: true });
+    if (!r.ok) return;
+    expect(r.report).toMatchObject({ type: "raid", townId: "thapsus", route: "sea", steps: 5, winner: "repulsed", fleet: { ships: { "trade-ship": 2 }, naval: 2, defender: { naval: 8 }, held: false }, plunder: null, opinion: null });
+    expect(await relation("carthage")).toBeUndefined();
+    await recordChronicle(characterId);
+  });
+
   it("taking a town: a town holding, the garrison at 0, survivors based at the town and recovering, the region untouched", async () => {
     const { ctx, characterId } = await makePlayer();
     await setGarrison("reii", 10, at(9));
@@ -620,6 +645,9 @@ suite("Map actions (integration)", () => {
     if (!r.ok) return;
     expect(r.report).toMatchObject({ winner: "attacker", conquest: { regionId: "R047", townId: "reii", previousOwner: "saluvii" }, destination: "reii", town: { walls: 1, garrisonDef: 8 } });
     expect(await garrison("reii")).toBe(0);
+    // An attack does not roll the grudge.
+    expect(r.report.opinion).toBeNull();
+    expect(await relation("saluvii")).toBeUndefined();
     const held = await holdingsOf(ctx);
     expect(held).toHaveLength(1);
     expect(held[0]).toMatchObject({ regionId: "R047", townId: "reii", kind: "conquest", previousOwner: "saluvii", lastGarrisonedAt: recovered(at(9), 1), lastTributeAt: recovered(at(9), 1) });

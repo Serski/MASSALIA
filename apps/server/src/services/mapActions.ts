@@ -26,6 +26,7 @@ import {
 import { applyComposureDelta } from "./composure.js";
 import { altarBonusFor, barracksView, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, PLEDGED_REFUSAL, type BarracksView, type UnitRow } from "./barracks.js";
 import { getBuildingsContent, settleAll, type ActingContext } from "./buildings.js";
+import { raidOpinion, type RaidOpinion } from "./factionOpinion.js";
 import { creditDrachmae, creditGood, insertConquest, insertTownConquest, listHoldings } from "./holdings.js";
 import { lockPlayer } from "./lock.js";
 import { getTopology } from "./mapGraph.js";
@@ -103,6 +104,10 @@ export type MapActReport = {
   plunder: PlunderPayload | null;
   conquest: { regionId: string; townId: string | null; previousOwner: string | null } | null;
   intel: { warband: number; pentekonters?: number; triremes?: number; scoutedGameDate: string } | null;
+  // A raid that landed on a nation's land and soured it (raidOpinion); null
+  // for a scout, an attack, a landing turned back at sea, and a raid that
+  // missed the roll or fell on land no faction holds.
+  opinion: RaidOpinion | null;
   line: string;
 };
 
@@ -420,6 +425,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
         plunder: null,
         conquest: null,
         intel: { warband, ...(townFleet ?? {}), scoutedGameDate },
+        opinion: null,
         line: renderCampaignLine("map_action", chronicle),
       };
     } else if (fleetLine && !fleetLine.held) {
@@ -448,6 +454,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
         plunder: null,
         conquest: null,
         intel: null,
+        opinion: null,
         line: renderCampaignLine("map_action", chronicle),
       };
     } else {
@@ -484,8 +491,11 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
 
       let plunder: MapActReport["plunder"] = null;
       let conquest: MapActReport["conquest"] = null;
+      let opinion: MapActReport["opinion"] = null;
       if (input.type === "raid") {
         await writeDefender(remaining);
+        // Any raid that fights, won or lost, can sour the nation whose land it is.
+        opinion = await raidOpinion(tx, ctx.worldId, isTown ? await townContentOwner(townId) : await regionContentOwner(regionId), seed);
         if (result.winner === "attacker") {
           // Drachmae, grain and one third good drawn on the battle's seed; a
           // town's stores pay townPlunderMultiplier times the region rate.
@@ -539,6 +549,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
         plunder,
         conquest,
         intel: null,
+        opinion,
         line: renderCampaignLine("map_action", chronicle),
       };
       rows.splice(0, rows.length, ...survivors);

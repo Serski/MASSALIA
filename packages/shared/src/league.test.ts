@@ -12,10 +12,12 @@ import {
   STANCE_SCALE,
   applyOpinion,
   driftCity,
+  factionOfPolity,
   liveAge,
   opinionBand,
   parseCitiesContent,
   parseFactionsContent,
+  raidGrudgeLine,
   stanceMeta,
   stanceToOpinion,
   stanceValue,
@@ -207,6 +209,30 @@ describe("content/diplomacy/factions.json", () => {
     const { institutionLabel: _l, ...noLabel } = inst;
     expect(() => parseFactionsContent({ factions: [noLabel] })).toThrow(); // institutional w/o label
     expect(() => parseFactionsContent({ factions: [{ ...personal, ruler: { ...personal.ruler!, prestige: 101 } }] })).toThrow(); // stat > 100
+  });
+
+  it("maps every map polity to the faction whose land it is, and nothing to unclaimed land or a polity no faction holds", () => {
+    const of = (polity: string | null) => factionOfPolity(factions, polity)?.id ?? null;
+    expect(of("roman_republic")).toBe("rome");
+    expect(of("allobriges")).toBe("allobroges");
+    expect(of("trusates")).toBe("tarusates");
+    expect(of("llergetae")).toBe("ilergetae");
+    expect(of("lacetani")).toBe("lacetani");
+    expect(of("lacetanni")).toBe("lacetani");
+    expect(of("saluvii")).toBe("saluvii");
+    expect(of("unclaimed")).toBeNull();
+    expect(of("etruscans")).toBeNull();
+    expect(of(null)).toBeNull();
+  });
+
+  it("rejects a polity claimed by two factions", () => {
+    const other = factions.factions.find((f) => f.id === "vocontii")!;
+    expect(() => parseFactionsContent({ factions: [...factions.factions.filter((f) => f.id !== "vocontii"), { ...other, polities: ["vocontii", "saluvii"] }] })).toThrow(/Polity saluvii belongs to two factions: saluvii and vocontii/);
+  });
+
+  it("the grudge line: a major power by its name, a people with the article", () => {
+    expect(raidGrudgeLine({ name: "Carthage", group: "major-powers" })).toBe("Carthage will remember this.");
+    expect(raidGrudgeLine({ name: "Saluvii", group: "celto-ligurian" })).toBe("The Saluvii will remember this.");
   });
 });
 

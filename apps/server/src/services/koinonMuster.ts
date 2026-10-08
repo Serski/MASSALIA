@@ -42,7 +42,8 @@ import { lockPlayer } from "./lock.js";
 import { describeForce, selectForce, spoilLabel, splitRows } from "./mapActions.js";
 import { getTopology } from "./mapGraph.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
-import { readRegionWarband, readTownFleet, readTownGarrison, townContentOwner, writeRegionWarband, writeTownGarrison } from "./mapPools.js";
+import { raidOpinion, type RaidOpinion } from "./factionOpinion.js";
+import { readRegionWarband, readTownFleet, readTownGarrison, regionContentOwner, townContentOwner, writeRegionWarband, writeTownGarrison } from "./mapPools.js";
 import { forceRowOf, homePlaces, homeRegions } from "./mapReach.js";
 import { townStats } from "./townStats.js";
 
@@ -571,6 +572,9 @@ export type MusterReport = {
   defender: { label: string; start: number; end: number; turnout: number } | null;
   fleet: { hulls: Record<string, number>; naval: number; space: number; filled: number; defender: { pentekonters: number; triremes: number; naval: number } | null; held: boolean } | null;
   plunder: PlunderPayload | null;
+  // The nation whose land it was and whose opinion the raid lowered (one roll
+  // for the whole army); null when repulsed, stood down, or the roll missed.
+  opinion: RaidOpinion | null;
   parts: MusterPart[];
 };
 
@@ -688,7 +692,7 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
         // P9: a muster that cannot march stands down. Rows are free at once, with no recovery.
         const standDown = async (reason: string): Promise<MusterResolved & { launchAt: Date; shrine: typeof shrine }> => {
           await release();
-          await close("stood_down", { ...blank, outcome: "stood_down", reason, line: null, route: null, steps: null, recoveryHours: null, arrivesAt: null, rounds: 0, men: 0, lost: 0, killed: 0, defender: null, fleet: null, plunder: null, parts: [] });
+          await close("stood_down", { ...blank, outcome: "stood_down", reason, line: null, route: null, steps: null, recoveryHours: null, arrivesAt: null, rounds: 0, men: 0, lost: 0, killed: 0, defender: null, fleet: null, plunder: null, opinion: null, parts: [] });
           return { outcome: "stood_down", launchAt, shrine };
         };
 
@@ -730,6 +734,7 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
         let rounds = 0;
         let defender: MusterReport["defender"] = null;
         let plunder: MusterReport["plunder"] = null;
+        let opinion: MusterReport["opinion"] = null;
         let survivors: UnitRow[] = army;
 
         if (fleet && !fleet.held) {
@@ -782,6 +787,8 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
           else await writeRegionWarband(tx, muster.worldId, muster.regionId, remaining, launchAt);
           defender = { label: npc.label, start: pool, end: remaining, turnout: met };
           outcome = result.winner === "attacker" ? "won" : "driven_off";
+          // Won or driven off, the army's one raid can sour the nation whose land it is.
+          opinion = await raidOpinion(tx, muster.worldId, muster.townId !== null ? await townContentOwner(muster.townId) : await regionContentOwner(muster.regionId), seed);
 
           // 14. On a win: the plunder by `act`'s formula, split by shares
           // (ruling 5, P7, P8) and credited to each owner.
@@ -842,6 +849,7 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
           defender,
           fleet,
           plunder,
+          opinion,
           parts: participants.map((o) => ({
             playerId: o.playerId,
             name: o.name,

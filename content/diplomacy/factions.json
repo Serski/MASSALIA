@@ -246,6 +246,7 @@
       "group": "celto-ligurian",
       "blurb": "A populous people of the Rhone and Isere valleys, settled between the river and the Alpine foothills.",
       "governance": "personal",
+      "polities": ["allobriges"],
       "start": {
         "opinion": -45,
         "atWar": false,
@@ -623,6 +624,7 @@
       "group": "aquitani",
       "blurb": "An Aquitanian people of the wooded lowlands of the southwest.",
       "governance": "personal",
+      "polities": ["trusates"],
       "start": {
         "opinion": -45,
         "atWar": false,
@@ -670,6 +672,7 @@
       "group": "iberian",
       "blurb": "An Iberian people of the inland plains south of the Pyrenees.",
       "governance": "personal",
+      "polities": ["llergetae"],
       "start": {
         "opinion": 45,
         "atWar": false,
@@ -717,6 +720,7 @@
       "group": "iberian",
       "blurb": "An Iberian people of the hill country of the northeastern peninsula.",
       "governance": "personal",
+      "polities": ["lacetani", "lacetanni"],
       "start": {
         "opinion": 137,
         "atWar": false,
@@ -764,6 +768,7 @@
       "group": "major-powers",
       "blurb": "A rising republic of central Italy, steadily extending its power across the peninsula.",
       "governance": "institutional",
+      "polities": ["roman_republic"],
       "start": {
         "opinion": 137,
         "atWar": false,

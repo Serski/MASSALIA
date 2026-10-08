@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { parseBattleContent, parseUnitsContent, raidPlunder, raidTurnout, type UnitStats } from "./barracks.js";
+import { parseBattleContent, parseUnitsContent, raidAngers, raidPlunder, raidTurnout, type UnitStats } from "./barracks.js";
 import { resolveBattle, SKIRMISH_MSL, type BattleConfig, type BattleRow } from "./battle.js";
 import { parseBuildingsContent } from "./buildings.js";
 
@@ -23,7 +23,7 @@ describe("battle content", () => {
   it("parses the real file and rejects an unknown key", () => {
     expect(battle.rounds).toBe(3);
     expect(battle.npc.warband.stats.spd).toBe(6);
-    expect(battle.raid).toEqual({ rounds: 1, turnout: { floorOneIn: 50, capOneIn: 4 }, plunderPerKill: 50, grainPerKill: 5, spoilPerKill: 5, spoilGoods: ["oliveoil", "leather", "salt", "wool"], townPlunderMultiplier: 2 });
+    expect(battle.raid).toEqual({ rounds: 1, turnout: { floorOneIn: 50, capOneIn: 4 }, plunderPerKill: 50, grainPerKill: 5, spoilPerKill: 5, spoilGoods: ["oliveoil", "leather", "salt", "wool"], townPlunderMultiplier: 2, opinion: { chance: 0.33, loss: 1 } });
     expect(battle.recovery).toEqual({ hoursPerStep: 3 });
     // 3c: towns, tribute, region tribute and moves.
     expect(battle.regen).toEqual({ warbandPerDay: 5, garrisonPerDay: 5 });
@@ -47,6 +47,9 @@ describe("battle content", () => {
     expect(() => parseBattleContent({ ...read("content/military/battle.json"), raid: { ...raid, turnout: { floorOneIn: 0, capOneIn: 4 } } }, goods)).toThrow();
     expect(() => parseBattleContent({ ...read("content/military/battle.json"), raid: { ...raid, turnout: { floorOneIn: 50, capOneIn: 1.5 } } }, goods)).toThrow();
     expect(() => parseBattleContent({ ...read("content/military/battle.json"), raid: { ...raid, turnout: { floorOneIn: 50, capOneIn: 4, extra: 1 } } }, goods)).toThrow();
+    // The grudge: a chance in [0, 1] and a whole, positive loss.
+    expect(() => parseBattleContent({ ...read("content/military/battle.json"), raid: { ...raid, opinion: { chance: 1.5, loss: 1 } } }, goods)).toThrow();
+    expect(() => parseBattleContent({ ...read("content/military/battle.json"), raid: { ...raid, opinion: { chance: 0.33, loss: 0 } } }, goods)).toThrow();
   });
 });
 
@@ -74,6 +77,13 @@ describe("raid rules", () => {
         if (pool > 0) expect(met, `${men} vs ${pool}`).toBeGreaterThanOrEqual(Math.ceil(pool / 50));
       }
     }
+  });
+
+  it("raidAngers: one roll per raid on the seed, a third of the time", () => {
+    let hits = 0;
+    for (let i = 0; i < 1000; i++) if (raidAngers(battle.raid, `s${i}`)) hits++;
+    expect(hits).toBe(314);
+    expect(raidAngers(battle.raid, "s0")).toBe(raidAngers(battle.raid, "s0"));
   });
 
   it("raidPlunder: 50 drachmae, 5 grain and 5 of one good per kill, doubled for a town, the good fixed by the seed", () => {

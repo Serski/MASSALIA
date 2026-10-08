@@ -47,7 +47,18 @@ export type BattleContent = {
   // kills still come off the whole pool); each kill pays plunderPerKill
   // drachmae, grainPerKill grain and spoilPerKill of a third good drawn once
   // per raid from spoilGoods; a town pays townPlunderMultiplier times all three.
-  raid: { rounds: number; turnout: { floorOneIn: number; capOneIn: number }; plunderPerKill: number; grainPerKill: number; spoilPerKill: number; spoilGoods: string[]; townPlunderMultiplier: number };
+  // A raid that lands on a nation's land rolls once: with opinion.chance it
+  // lowers that nation's opinion of Massalia by opinion.loss points.
+  raid: {
+    rounds: number;
+    turnout: { floorOneIn: number; capOneIn: number };
+    plunderPerKill: number;
+    grainPerKill: number;
+    spoilPerKill: number;
+    spoilGoods: string[];
+    townPlunderMultiplier: number;
+    opinion: { chance: number; loss: number };
+  };
   recovery: { hoursPerStep: number }; // recovery after an action: max(1, steps) × hoursPerStep hours
   regen: { warbandPerDay: number; garrisonPerDay: number };
   // Towns (3c): walls add min(walls, wallsDefCap) to every defending row's def.
@@ -265,6 +276,7 @@ function battleContentSchema(goods: ReadonlySet<string>) {
             }
           }),
         townPlunderMultiplier: z.number().positive(),
+        opinion: z.object({ chance: z.number().min(0).max(1), loss: z.number().int().positive() }).strict(),
       })
       .strict(),
     recovery: z.object({ hoursPerStep: z.number().positive() }).strict(),
@@ -394,6 +406,12 @@ export function raidTurnout(raid: BattleContent["raid"], men: number, pool: numb
 // What a won raid pays for its kills: drachmae, grain and one third good drawn
 // once per raid on the battle's own seed, so a raid's good is fixed by its
 // battle. A town pays townPlunderMultiplier times all three.
+// Whether a raid that lands on a nation's land sours it: one roll per raid on
+// the battle's seed against opinion.chance.
+export function raidAngers(raid: BattleContent["raid"], seed: string): boolean {
+  return seededRoll([seed, "opinion"]) < raid.opinion.chance;
+}
+
 export type RaidPlunder = { drachmae: number; grain: number; spoil: { good: string; amount: number } };
 export function raidPlunder(raid: BattleContent["raid"], kills: number, isTown: boolean, seed: string): RaidPlunder {
   const mult = isTown ? raid.townPlunderMultiplier : 1;
