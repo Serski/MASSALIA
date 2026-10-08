@@ -54,7 +54,8 @@ export type ReachView = {
   bases: BaseView[];
   force: { men: number; space: number };
   /** ship counts by id with their display names (ships.json), the farthest range and the troop space aboard, and each hull type in stock with its facts */
-  fleet: { ships: Record<string, number>; labels: Record<string, string>; range: number; space: number; tiers?: { range: number; space: number }[]; hulls: FleetStripView["ships"] };
+  // `supplies`: the naval supplies in store (barracks prompt 4); each hull carries its suppliesPerTrip.
+  fleet: { ships: Record<string, number>; labels: Record<string, string>; range: number; space: number; tiers?: { range: number; space: number }[]; hulls: FleetStripView["ships"]; supplies: number };
   reach: Record<string, ReachEntry>;
   moveTargets: MoveTargetView[];
 };
@@ -166,7 +167,7 @@ export async function reachView(exec: Exec, ctx: ActingContext, now: Date, opts:
     const f = forceRowOf(r);
     if (f) force.push(f);
   }
-  const { counts, fleet, strip } = await fleetInStock(exec, ctx);
+  const { counts, fleet, strip, supplies } = await fleetInStock(exec, ctx);
   const home = await homeRegions(topology);
   // Region holdings are never targets; the region of a held town or of home
   // ground with men stays a target for its other towns (home ground is already
@@ -183,5 +184,5 @@ export async function reachView(exec: Exec, ctx: ActingContext, now: Date, opts:
   const campaign: CampaignView = { season: cs.season, open: cs.open, opensAt: cs.opensAtMs === null ? null : new Date(cs.opensAtMs).toISOString() };
   const moveTargets = await moveTargetsOf(topology, allBases, ctx, exec);
   const labels = Object.fromEntries(Object.entries(getShipsContent().ships).map(([id, d]) => [id, d.label]));
-  return { now: now.toISOString(), campaign, bases, force: forceStats(force), fleet: { ships: counts, labels, ...fleetStats(fleet), hulls: strip.ships }, reach, moveTargets };
+  return { now: now.toISOString(), campaign, bases, force: forceStats(force), fleet: { ships: counts, labels, ...fleetStats(fleet), hulls: strip.ships, supplies }, reach, moveTargets };
 }

@@ -62,6 +62,7 @@ export const REACH_REASON = {
   noBase: "No base within reach.",
   range: (seaSteps: number, fleetRange: number) => `Beyond the fleet's range (${seaSteps} seas, fleet reaches ${fleetRange}).`,
   hulls: (forceSpace: number, fleetSpace: number) => `Not enough hulls: ${forceSpace} space needed, ${fleetSpace} aboard.`,
+  supplies: (need: number, have: number) => `Not enough naval supplies: ${need} needed, ${have} in store.`,
 } as const;
 
 // A fleet's reach: `range` is the farthest any hull sails, `space` every hull's

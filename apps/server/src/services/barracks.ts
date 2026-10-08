@@ -398,6 +398,22 @@ export async function sailHulls(exec: Exec, owner: Pick<ActingContext, "playerId
   });
 }
 
+// The naval supplies a voyage uses, taken from the owner's stock when the
+// party sets out (barracks prompt 4). Need 0 reads and writes nothing. The
+// supply row is read without creating one (no row reads 0): a refusal returns
+// from the transaction, and a row created here would be committed. Short is
+// { ok: false, have } with nothing written; else `need` is drawn with
+// drainResource (the draw computed in SQL; a failed draw throws).
+export async function takeSupplies(exec: Exec, owner: Pick<ActingContext, "playerId">, need: number): Promise<{ ok: true } | { ok: false; have: number }> {
+  if (need <= 0) return { ok: true };
+  const good = getShipsContent().supplyGood;
+  const row = (await exec.select().from(resources).where(and(eq(resources.scope, "player"), eq(resources.scopeId, owner.playerId), eq(resources.type, good))).limit(1))[0];
+  const have = row ? Math.max(0, Math.floor(Number(row.amount))) : 0;
+  if (!row || have < need) return { ok: false, have };
+  if (!(await drainResource(exec, row.id, need))) throw new Error(`barracks: supply draw of ${need} ${good} failed under lock`);
+  return { ok: true };
+}
+
 // --- Reports (raids prompt 4) ------------------------------------------------------
 // A party's battle report is kept on its march and listed in the Barracks,
 // newest first, the latest ten; one not yet opened is highlighted until its
@@ -1040,29 +1056,35 @@ export type UpkeepView = { perDay: Record<string, number>; rows: Record<string, 
 export const UPKEEP_NOTE = "Shortfalls are bought at the market's seasonal price.";
 // The player's ships in stock (whole hulls), for the reach rule and the
 // Barracks strip: counts by ship id, the reach ships, and the strip's summary
-// (labels from ships.json, troop space summed, range the farthest hull). Ships
-// at sea (player_voyages) are not in stock until the party is home.
-export type FleetStripView = { ships: { id: string; label: string; role: string; count: number; troopSpace: number; range: number; naval: number }[]; space: number; range: number };
-export async function fleetInStock(exec: Exec, ctx: ActingContext): Promise<{ counts: Record<string, number>; fleet: ReachShip[]; strip: FleetStripView }> {
+// (labels from ships.json, troop space summed, range the farthest hull), with
+// the naval supplies in store (whole units; barracks prompt 4). Ships at sea
+// (player_voyages) are not in stock until the party is home. `counts` keeps
+// ship ids only: the supply row feeds `supplies` and nothing else.
+export type FleetStripView = { ships: { id: string; label: string; role: string; count: number; troopSpace: number; range: number; naval: number; suppliesPerTrip: number }[]; space: number; range: number };
+export async function fleetInStock(exec: Exec, ctx: ActingContext): Promise<{ counts: Record<string, number>; fleet: ReachShip[]; strip: FleetStripView; supplies: number }> {
   const shipsC = getShipsContent();
   const shipIds = Object.keys(shipsC.ships);
   const stock = await exec
     .select({ type: resources.type, amount: resources.amount })
     .from(resources)
-    .where(and(eq(resources.scope, "player"), eq(resources.scopeId, ctx.playerId), inArray(resources.type, shipIds)));
+    .where(and(eq(resources.scope, "player"), eq(resources.scopeId, ctx.playerId), inArray(resources.type, [...shipIds, shipsC.supplyGood])));
   const counts: Record<string, number> = Object.fromEntries(shipIds.map((id) => [id, 0]));
-  for (const s of stock) counts[s.type] = Math.max(0, Math.floor(Number(s.amount)));
+  let supplies = 0;
+  for (const s of stock) {
+    if (s.type === shipsC.supplyGood) supplies = Math.max(0, Math.floor(Number(s.amount)));
+    if (s.type in counts) counts[s.type] = Math.max(0, Math.floor(Number(s.amount)));
+  }
   const fleet: ReachShip[] = shipIds.map((id) => ({ shipId: id, count: counts[id]!, range: shipsC.ships[id]!.range, troopSpace: shipsC.ships[id]!.troopSpace }));
   const present = fleet.filter((s) => s.count > 0);
   const strip: FleetStripView = {
     ships: present.map((s) => {
       const d = shipsC.ships[s.shipId]!;
-      return { id: s.shipId, label: d.label, role: d.role, count: s.count, troopSpace: d.troopSpace, range: d.range, naval: d.naval };
+      return { id: s.shipId, label: d.label, role: d.role, count: s.count, troopSpace: d.troopSpace, range: d.range, naval: d.naval, suppliesPerTrip: d.suppliesPerTrip };
     }),
     space: present.reduce((n, s) => n + s.count * s.troopSpace, 0),
     range: present.length ? Math.max(...present.map((s) => s.range)) : 0,
   };
-  return { counts, fleet, strip };
+  return { counts, fleet, strip, supplies };
 }
 
 export type BarracksView = {

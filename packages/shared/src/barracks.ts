@@ -26,8 +26,23 @@ export type UnitRole = (typeof UNIT_ROLES)[number];
 // `naval` its fighting weight (unused until the battle resolver).
 export const SHIP_ROLES = ["transport", "warship"] as const;
 export type ShipRole = (typeof SHIP_ROLES)[number];
-export type ShipDef = { label: string; role: ShipRole; range: number; troopSpace: number; naval: number };
-export type ShipsContent = { version: number; source: string; ships: Record<string, ShipDef> };
+// Every hull that leaves port uses its `suppliesPerTrip` of the content's
+// `supplyGood` for the trip there and back (barracks prompt 4), taken from
+// the owner's stock when the party sets out.
+export type ShipDef = { label: string; role: ShipRole; range: number; troopSpace: number; naval: number; suppliesPerTrip: number };
+export type ShipsContent = { version: number; source: string; supplyGood: string; ships: Record<string, ShipDef> };
+
+// The naval supplies a fleet uses for its voyage: over counts of 1 or more,
+// each hull's whole count times its suppliesPerTrip; an id the content does
+// not know counts 0.
+export function voyageSupplies(content: ShipsContent, ships: Record<string, number>): number {
+  let need = 0;
+  for (const [id, count] of Object.entries(ships)) {
+    if (count < 1) continue;
+    need += Math.floor(count) * (content.ships[id]?.suppliesPerTrip ?? 0);
+  }
+  return need;
+}
 
 // Battle constants and NPC defender stat blocks (content/military/battle.json).
 // The resolver in battle.ts reads them; nothing else in content is required.
@@ -215,19 +230,24 @@ function shipsContentSchema(goods: ReadonlySet<string>) {
       range: z.number().int().positive(),
       troopSpace: z.number().int().nonnegative(),
       naval: z.number().int().nonnegative(),
+      suppliesPerTrip: z.number().int().nonnegative(),
     })
     .strict();
   return z
     .object({
       version: z.number().int().positive(),
       source: z.string(),
+      supplyGood: z.string().min(1),
       ships: z.record(z.string(), shipSchema).superRefine((map, ctx) => {
         for (const id of Object.keys(map)) {
           if (!goods.has(id)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `ship id "${id}" is not a vendor good` });
         }
       }),
     })
-    .strict();
+    .strict()
+    .superRefine((content, ctx) => {
+      if (!goods.has(content.supplyGood)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["supplyGood"], message: `supplyGood "${content.supplyGood}" is not a vendor good` });
+    });
 }
 
 // `knownGoods`: the resource ids gear and upkeep may name (the buildings.json

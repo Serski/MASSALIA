@@ -17,6 +17,7 @@ import {
   renderMarchLine,
   resolveBattle,
   unitDef,
+  voyageSupplies,
   type BattleResult,
   type BattleRow,
   type CampaignForcePart,
@@ -26,7 +27,7 @@ import {
   type ReachShip,
 } from "@massalia/shared";
 import { applyComposureDelta } from "./composure.js";
-import { altarBonusFor, barracksView, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, PLEDGED_REFUSAL, sailHulls, type BarracksView, type UnitRow } from "./barracks.js";
+import { altarBonusFor, barracksView, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, PLEDGED_REFUSAL, sailHulls, takeSupplies, type BarracksView, type UnitRow } from "./barracks.js";
 import { getBuildingsContent, settleAll, type ActingContext } from "./buildings.js";
 import { raidOpinion, type RaidOpinion } from "./factionOpinion.js";
 import { creditDrachmae, creditGood, holderOf, insertConquest, insertTownConquest, listHoldings } from "./holdings.js";
@@ -153,6 +154,8 @@ export type MapSetOutReport = {
   arrivesAt: string;
   ships: Record<string, number>;
   shipLabels: Record<string, string>;
+  // The naval supplies the voyage took when the party set out (0 by land).
+  supplies: number;
   men: number;
   rows: { id: string; unitId: string; label: string; icon: string; count: number }[];
   line: string;
@@ -377,7 +380,9 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
     const route: "land" | "sea" = byLand ? "land" : "sea";
     const steps = byLand ? entry.landSteps! : entry.seaSteps!;
 
-    // 4. Ships for a sea route: trade-ships first, galleys for what is still short.
+    // 4. Ships for a sea route: trade-ships first, galleys for what is still
+    // short; then the naval supplies every hull that sails uses for the trip
+    // there and back (barracks prompt 4), taken now.
     let ships: Record<string, number> = {};
     // The fleet that sails against a town: the transports taken plus, for a
     // raid or an attack on a town, every warship in stock whose range covers
@@ -424,7 +429,15 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
       }
     }
 
-    // 4b. Split, under the lock, now that nothing can refuse.
+    // 4c. Naval supplies for the hulls that sail; short, nothing moves.
+    let supplies = 0;
+    if (route === "sea") {
+      supplies = voyageSupplies(shipsC, sailing);
+      const took = await takeSupplies(tx, ctx, supplies);
+      if (!took.ok) return fail(409, REACH_REASON.supplies(supplies, took.have));
+    }
+
+    // 4d. Split, under the lock, now that nothing can refuse.
     await splitRows(tx, (await characterOf(tx, ctx.playerId)).id, selected, now);
 
     // 5. The road (raids prompt 4): the party sets out, and the battle is
@@ -464,6 +477,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
       arrivesAt: arrivesAt.toISOString(),
       ships: sailing,
       shipLabels,
+      supplies,
       men: rows.reduce((n, r) => n + r.count, 0),
       rows: rows.map((r) => ({ id: r.id, unitId: r.unitId, label: labelOf(r), icon: iconOf(r), count: r.count })),
       line: renderMarchLine({ stage: "setout", action: input.type, force: describeForce(rows), place: townName ?? regionName, minutes }),
@@ -746,6 +760,8 @@ export type MapMoveReport = {
   arrivesAt: string;
   ships: Record<string, number>;
   shipLabels: Record<string, string>;
+  // The naval supplies the voyage took (0 unless by sea).
+  supplies: number;
   men: number;
   rows: { id: string; unitId: string; label: string; icon: string; count: number }[];
   line: string;
@@ -777,7 +793,8 @@ export async function move(ctx: ActingContext, input: MapMoveInput, now: Date): 
     const verdict = moveVerdict(steps, view.force, { range: view.fleet.range, space: view.fleet.space });
     if (!verdict.ok) return fail(409, verdict.reason ?? "Out of reach.");
 
-    // 3. The route and the travel time; ships for a sea crossing.
+    // 3. The route and the travel time; ships for a sea crossing, and the
+    // naval supplies they use for the trip there and back (barracks prompt 4).
     let route: MapMoveReport["route"];
     let stepCount: number;
     let minutes: number;
@@ -802,6 +819,13 @@ export async function move(ctx: ActingContext, input: MapMoveInput, now: Date): 
       ships = assembled.ships;
     }
     const arrivesAt = new Date(now.getTime() + minutes * 60_000);
+    // 3b. Naval supplies for the hulls that sail; short, nothing moves.
+    let supplies = 0;
+    if (route === "sea") {
+      supplies = voyageSupplies(getShipsContent(), ships);
+      const took = await takeSupplies(tx, ctx, supplies);
+      if (!took.ok) return fail(409, REACH_REASON.supplies(supplies, took.have));
+    }
 
     // 4. Split, then set the march.
     const character = await characterOf(tx, ctx.playerId);
@@ -835,6 +859,7 @@ export async function move(ctx: ActingContext, input: MapMoveInput, now: Date): 
       arrivesAt: arrivesAt.toISOString(),
       ships,
       shipLabels: Object.fromEntries(Object.entries(getShipsContent().ships).map(([id, d]) => [id, d.label])),
+      supplies,
       men,
       rows: rows.map((r) => ({ id: r.id, unitId: r.unitId, label: labelOf(r), icon: iconOf(r), count: r.count })),
       line: renderCampaignLine("map_action", chronicle),

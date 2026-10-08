@@ -110,7 +110,7 @@ suite("/api/map/reach (integration)", () => {
     expect(v.campaign).toEqual({ season: "Spring", open: true, opensAt: null });
     expect(Math.abs(Date.parse(v.now) - Date.now())).toBeLessThan(10_000);
     expect(v.force).toEqual({ men: 5, space: 5 });
-    expect(v.fleet).toEqual({ ships: { "trade-ship": 0, galley: 0 }, labels: { "trade-ship": "Pentekonter", galley: "Trireme" }, range: 0, space: 0, tiers: [], hulls: [] });
+    expect(v.fleet).toEqual({ ships: { "trade-ship": 0, galley: 0 }, labels: { "trade-ship": "Pentekonter", galley: "Trireme" }, range: 0, space: 0, tiers: [], hulls: [], supplies: 0 });
     expect(v.reach.R060).toBeUndefined();
     expect(v.reach.R174).toBeUndefined();
     expect(v.reach.R046).toMatchObject({ landSteps: 1, byBase: { R060: { landSteps: 1 } }, attack: { ok: true }, raid: { ok: true }, colonise: { ok: true } });

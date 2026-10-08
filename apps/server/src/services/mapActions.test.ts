@@ -68,6 +68,8 @@ suite("Map actions (integration)", () => {
     await give(ctx, "grain", 5000);
     await give(ctx, "oliveoil", 5000);
     await give(ctx, "chicken", 5000);
+    // Naval supplies for every voyage (barracks prompt 4): a hull uses one per trip.
+    await give(ctx, "naval-supplies", 100);
     return { ctx, characterId: ch.id, dynastyId: dynasty.id };
   }
   const give = (ctx: Ctx, type: string, amount: number) =>
@@ -613,6 +615,48 @@ suite("Map actions (integration)", () => {
     expect((await settle(ctx, at(10))).shipsHome).toEqual([]);
     expect(await stock(ctx, "trade-ship")).toBe(1);
     expect(await stock(ctx, "galley")).toBe(5);
+  });
+
+  it("a sea raid takes a naval supply per hull at the click; short, it is refused and nothing moves", async () => {
+    const a = await makePlayer();
+    await give(a.ctx, "trade-ship", 2);
+    await setWarband("R078", 10, at(9)); // two seas out
+    const peltastsA = await insertRow(a.ctx, { unitId: "peltast", count: 40 });
+    const sent = await launch(a.ctx, "raid", "R078", [peltastsA.id]);
+    expect(sent).toMatchObject({ ok: true, report: { route: "sea", ships: { "trade-ship": 2 }, supplies: 2 } });
+    expect(await stock(a.ctx, "naval-supplies")).toBe(98);
+    // Short of supplies: refused before anything moves.
+    const b = await makePlayer();
+    await give(b.ctx, "trade-ship", 2);
+    await db.update(m.dbPkg.resources).set({ amount: "1" }).where(and(eq(m.dbPkg.resources.scopeId, b.ctx.playerId), eq(m.dbPkg.resources.type, "naval-supplies")));
+    const peltastsB = await insertRow(b.ctx, { unitId: "peltast", count: 40 });
+    expect(await launch(b.ctx, "raid", "R078", [peltastsB.id])).toEqual({ ok: false, code: 409, error: "Not enough naval supplies: 2 needed, 1 in store." });
+    expect((await rows(b.ctx)).find((x) => x.id === peltastsB.id)).toMatchObject({ basedAt: "R060", movingTo: null, count: 40, mission: null });
+    expect(await stock(b.ctx, "trade-ship")).toBe(2);
+    expect(await stock(b.ctx, "naval-supplies")).toBe(1);
+    expect(await db.select().from(m.dbPkg.playerMarches).where(eq(m.dbPkg.playerMarches.ownerPlayerId, b.ctx.playerId))).toEqual([]);
+    expect(await voyages(b.ctx)).toEqual([]);
+    // By land nothing is spent.
+    await setWarband("R046", 20, at(9));
+    expect(await launch(b.ctx, "raid", "R046", [peltastsB.id])).toMatchObject({ ok: true, report: { route: "land", supplies: 0 } });
+    expect(await stock(b.ctx, "naval-supplies")).toBe(1);
+  });
+
+  it("a move by sea takes its supplies too", async () => {
+    const { ctx } = await makePlayer();
+    await give(ctx, "trade-ship", 2);
+    const peltasts = await insertRow(ctx, { unitId: "peltast", count: 40 });
+    const sailed = await moveTo(ctx, "emporion", [peltasts.id]);
+    expect(sailed).toMatchObject({ ok: true, report: { route: "sea", steps: 1, ships: { "trade-ship": 2 }, supplies: 2 } });
+    expect(await stock(ctx, "naval-supplies")).toBe(98);
+  });
+
+  it("the reach reads the supplies in store and each hull's supplies per trip", async () => {
+    const { ctx } = await makePlayer();
+    await give(ctx, "trade-ship", 1);
+    const view = await reach(ctx, at(9));
+    expect(view.fleet.supplies).toBe(100);
+    expect(view.fleet.hulls.find((h) => h.id === "trade-ship")).toMatchObject({ suppliesPerTrip: 1 });
   });
 
   it("hulls at sea carry no second party until they are home", async () => {

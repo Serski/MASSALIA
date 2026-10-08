@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { bandDef, parseBandsContent, parseShipsContent, parseUnitsContent, seededRoll, sha256Words, unitDef, UNIT_ROLES } from "./barracks.js";
+import { bandDef, parseBandsContent, parseShipsContent, voyageSupplies, parseUnitsContent, seededRoll, sha256Words, unitDef, UNIT_ROLES } from "./barracks.js";
 import { parseBuildingsContent } from "./buildings.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -141,11 +141,21 @@ describe("ships content", () => {
   it("parses the real file: trade-ship is the pentekonter role, galley the trireme", () => {
     const ships = parseShipsContent(raw, goods);
     expect(Object.keys(ships.ships).sort()).toEqual(["galley", "trade-ship"]);
-    expect(ships.ships["trade-ship"]).toEqual({ label: "Pentekonter", role: "transport", range: 7, troopSpace: 20, naval: 1 });
-    expect(ships.ships.galley).toEqual({ label: "Trireme", role: "warship", range: 4, troopSpace: 4, naval: 5 });
+    expect(ships.supplyGood).toBe("naval-supplies");
+    expect(ships.ships["trade-ship"]).toEqual({ label: "Pentekonter", role: "transport", range: 7, troopSpace: 20, naval: 1, suppliesPerTrip: 1 });
+    expect(ships.ships.galley).toEqual({ label: "Trireme", role: "warship", range: 4, troopSpace: 4, naval: 5, suppliesPerTrip: 1 });
+  });
+  it("voyageSupplies: each hull's count times its supplies per trip; an unknown id counts nothing", () => {
+    const ships = parseShipsContent(raw, goods);
+    expect(voyageSupplies(ships, {})).toBe(0);
+    expect(voyageSupplies(ships, { "trade-ship": 2 })).toBe(2);
+    expect(voyageSupplies(ships, { "trade-ship": 2, galley: 5 })).toBe(7);
+    expect(voyageSupplies(ships, { quinquereme: 3 })).toBe(0);
   });
   it("rejects a ship id that is not a vendor good, a bad role, a non-integer range, and an unknown key", () => {
     expect(() => parseShipsContent({ ...raw, ships: { ...raw.ships, bireme: raw.ships.galley } }, goods)).toThrow(/not a vendor good/);
+    expect(() => parseShipsContent({ ...raw, ships: { galley: { ...raw.ships.galley, suppliesPerTrip: 1.5 } } }, goods)).toThrow();
+    expect(() => parseShipsContent({ ...raw, supplyGood: "unicorn-feed" }, goods)).toThrow(/supplyGood .* is not a vendor good/);
     expect(() => parseShipsContent({ ...raw, ships: { galley: { ...raw.ships.galley, role: "raider" } } }, goods)).toThrow();
     expect(() => parseShipsContent({ ...raw, ships: { galley: { ...raw.ships.galley, range: 4.5 } } }, goods)).toThrow();
     expect(() => parseShipsContent({ ...raw, ships: { galley: { ...raw.ships.galley, basedAt: "R060" } } }, goods)).toThrow();
