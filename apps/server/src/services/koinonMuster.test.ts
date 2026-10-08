@@ -626,6 +626,20 @@ suite("Koinon muster (integration)", () => {
     expect((await rowsOf(a)).map((r) => [r.movingTo, r.mission])).toEqual([[null, null]]);
   });
 
+  it("the fight writes the intel of every member who fought and has a dynasty, dated the launch", async () => {
+    const { a, musterId } = await landRaid();
+    // Kallias founds a house; Nikias and Deon have none and write nothing.
+    const { dynasties, playerCharacters, regionIntel } = m.dbPkg;
+    const dynasty = (await db.insert(dynasties).values({ worldId, name: "House Test", prestige: 0, houseSlug: "test-house", foundingPlayerId: a, generation: 1 }).returning())[0]!;
+    await db.update(playerCharacters).set({ dynastyId: dynasty.id }).where(eq(playerCharacters.playerId, a));
+    expect(await m.muster.resolveMuster(musterId, LAUNCH)).toEqual({ outcome: "resolved" });
+    const report = await reportOf();
+    expect(report.killed).toBe(8);
+    const intel = await db.select().from(regionIntel);
+    expect(intel).toHaveLength(1);
+    expect(intel[0]).toMatchObject({ dynastyId: dynasty.id, regionId: landRegion, warband: 30 - report.killed, scoutedAt: LAUNCH });
+  });
+
   it("the altar: a member's bull lit before the launch steadies his own rows and nobody else's; a blessing cold at the launch or lit after it counts for nothing", async () => {
     // Two members, 60 hoplites each, against a warband of 33000, of which the
     // floor (660, one in fifty) turns out: on every seed the cold owner loses

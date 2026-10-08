@@ -73,6 +73,9 @@ suite("Map actions (integration)", () => {
   const stock = async (ctx: Ctx, type: string) =>
     Number((await db.select().from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scopeId, ctx.playerId), eq(m.dbPkg.resources.type, type))))[0]?.amount ?? 0);
   const wallet = async (ctx: Ctx) => (await db.select().from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.playerId, ctx.playerId)))[0]!.drachmae;
+  // The dynasty's intel rows, as a scout or a fight writes them.
+  const regionIntelOf = async (dynastyId: string, regionId: string) => (await db.select().from(m.dbPkg.regionIntel).where(and(eq(m.dbPkg.regionIntel.dynastyId, dynastyId), eq(m.dbPkg.regionIntel.regionId, regionId))))[0];
+  const townIntelOf = async (dynastyId: string, townId: string) => (await db.select().from(m.dbPkg.townIntel).where(and(eq(m.dbPkg.townIntel.dynastyId, dynastyId), eq(m.dbPkg.townIntel.townId, townId))))[0];
   const rows = (ctx: Ctx) => db.select().from(m.dbPkg.playerUnits).where(eq(m.dbPkg.playerUnits.ownerPlayerId, ctx.playerId)).orderBy(asc(m.dbPkg.playerUnits.createdAt));
   const holdingsOf = (ctx: Ctx) => db.select().from(m.dbPkg.playerHoldings).where(eq(m.dbPkg.playerHoldings.ownerPlayerId, ctx.playerId));
   const logs = (characterId: string, kind: string) =>
@@ -189,7 +192,7 @@ suite("Map actions (integration)", () => {
   });
 
   it("raid win: plunder credited, the warband reduced, losses logged per row, party home in a day", async () => {
-    const { ctx, characterId } = await makePlayer({ drachmae: 100 });
+    const { ctx, characterId, dynastyId } = await makePlayer({ drachmae: 100 });
     await setWarband("R046", 20, at(9)); // 40 peltasts meet 5 (a fourth of 20) and kill 4 or 5 on every seed, losing 0 or 1
     const peltasts = await insertRow(ctx, { unitId: "peltast", count: 40 });
     const r = await act(ctx, "raid", "R046", [peltasts.id]);
@@ -211,6 +214,9 @@ suite("Map actions (integration)", () => {
     // Salyes is unclaimed: no nation to sour.
     expect(r.report.opinion).toBeNull();
     expect(await relations()).toEqual([]);
+    // The fight wrote what the men saw to the dynasty's intel: the warband as it was left.
+    expect(r.report.intel).toEqual({ warband: 20 - killed, scoutedGameDate: expect.any(String) });
+    expect(await regionIntelOf(dynastyId, "R046")).toMatchObject({ warband: 20 - killed, scoutedAt: at(9), scoutedGameDate: r.report.intel!.scoutedGameDate });
     const row = (await rows(ctx)).find((x) => x.id === peltasts.id)!;
     expect(row).toMatchObject({ movingTo: "R060", arrivesAt: recovered(at(9), 1), count: 40 - r.report.attacker.losses, mission: { kind: "raid", regionId: "R046", departedAt: at(9).toISOString() } });
     expect((await logs(characterId, "battle_loss")).length).toBe(r.report.attacker.losses > 0 ? 1 : 0);
@@ -259,6 +265,26 @@ suite("Map actions (integration)", () => {
     await recordChronicle(characterId);
   });
 
+  it("the number a scout wrote follows the fight: the raider's intel reads what is left, another house's stays as it scouted", async () => {
+    await setWarband("R046", 100, at(9));
+    const a = await makePlayer();
+    const b = await makePlayer();
+    for (const p of [a, b]) {
+      const scouts = await insertRow(p.ctx, { unitId: "peltast", count: 10 });
+      expect(await act(p.ctx, "scout", "R046", [scouts.id])).toMatchObject({ ok: true, report: { intel: { warband: 100 } } });
+      expect(await regionIntelOf(p.dynastyId, "R046")).toMatchObject({ warband: 100, scoutedAt: at(9) });
+    }
+    const hoplites = await insertRow(a.ctx, { unitId: "hoplite", count: 30 });
+    const r = await act(a.ctx, "raid", "R046", [hoplites.id], at(9.5));
+    expect(r).toMatchObject({ ok: true });
+    if (!r.ok) return;
+    const killed = r.report.defender!.losses;
+    expect([4, 5]).toContain(killed);
+    expect(r.report.intel).toMatchObject({ warband: 100 - killed });
+    expect(await regionIntelOf(a.dynastyId, "R046")).toMatchObject({ warband: 100 - killed, scoutedAt: at(9.5) });
+    expect(await regionIntelOf(b.dynastyId, "R046")).toMatchObject({ warband: 100, scoutedAt: at(9) });
+  });
+
   it("too few for the tribe: 20 peltasts meet the 120 of 6000 the floor sends, are driven off and take nothing", async () => {
     const { ctx, characterId } = await makePlayer({ drachmae: 100 });
     await setWarband("R046", 6000, at(9)); // above the content 100: read back as written; one in fifty is 120
@@ -279,13 +305,16 @@ suite("Map actions (integration)", () => {
   });
 
   it("attack win: a conquest holding, survivors rebased there and recovering, the warband at 0", async () => {
-    const { ctx, characterId } = await makePlayer();
+    const { ctx, characterId, dynastyId } = await makePlayer();
     await setWarband("R046", 10, at(9));
     const hoplites = await insertRow(ctx, { unitId: "hoplite", count: 30 });
     const r = await act(ctx, "attack", "R046", [hoplites.id]);
     expect(r).toMatchObject({ ok: true });
     if (!r.ok) return;
     expect(r.report.winner).toBe("attacker");
+    // A conquest leaves nothing: the intel reads 0.
+    expect(r.report.intel).toMatchObject({ warband: 0 });
+    expect(await regionIntelOf(dynastyId, "R046")).toMatchObject({ warband: 0, scoutedAt: at(9) });
     expect(r.report.conquest).toEqual({ regionId: "R046", townId: null, previousOwner: "unclaimed" });
     expect(r.report.destination).toBe("R046");
     const h = await holdingsOf(ctx);
@@ -574,7 +603,7 @@ suite("Map actions (integration)", () => {
   });
 
   it("town raid: the garrison is the defender behind its walls, plunder pays double the region rate, the garrison is reduced", async () => {
-    const { ctx, characterId } = await makePlayer({ drachmae: 100 });
+    const { ctx, characterId, dynastyId } = await makePlayer({ drachmae: 100 });
     await setGarrison("reii", 10, at(9)); // 3 (a fourth of 10, rounded) meet the raid behind walls 1: 2 or 3 are slain on every seed
     const peltasts = await insertRow(ctx, { unitId: "peltast", count: 40 });
     const r = await actTown(ctx, "raid", "reii", [peltasts.id]);
@@ -595,12 +624,15 @@ suite("Map actions (integration)", () => {
       expect(await relation("saluvii")).toMatchObject({ opinion: -46, stance: "unfriendly" });
     }
     expect(await garrison("reii")).toBe(10 - killed);
+    // The fight wrote the garrison as it was left, and the town's ships, to the dynasty's intel.
+    expect(r.report.intel).toEqual({ warband: 10 - killed, pentekonters: 0, triremes: 0, scoutedGameDate: expect.any(String) });
+    expect(await townIntelOf(dynastyId, "reii")).toMatchObject({ garrison: 10 - killed, pentekonters: 0, triremes: 0 });
     expect(r.report.line).toMatch(/^Raided Reii with 40 peltasts: \d+ soldiers? slain/);
     await recordChronicle(characterId);
   });
 
   it("sea assault: a fleet weaker than the town's is repulsed with no battle, no losses and no garrison change; a stronger one lands", async () => {
-    const { ctx, characterId } = await makePlayer();
+    const { ctx, characterId, dynastyId } = await makePlayer();
     // Aleria (R073): two seas out, no land route, fleet 4 pentekonters and 4 triremes (naval 24).
     await setGarrison("aleria", 10, at(9));
     await give(ctx, "trade-ship", 2); // naval 1 each: 2 against 24
@@ -624,6 +656,9 @@ suite("Map actions (integration)", () => {
     expect(await holdingsOf(ctx)).toHaveLength(0);
     expect((await rows(ctx)).find((x) => x.id === peltasts.id)).toMatchObject({ count: 40, movingTo: "R060", arrivesAt: recovered(at(9), 2) });
     expect(r.report.line).toBe("Sailed against Aleria with 40 peltasts and were driven off by its fleet before landing.");
+    // Turned back at sea, the men still saw the garrison and the ships: the intel reads them.
+    expect(r.report.intel).toEqual({ warband: 10, pentekonters: 4, triremes: 4, scoutedGameDate: expect.any(String) });
+    expect(await townIntelOf(dynastyId, "aleria")).toMatchObject({ garrison: 10, pentekonters: 4, triremes: 4, scoutedAt: at(9) });
     // The town's fleet is unchanged. Triremes in stock whose range covers the
     // crossing sail as an escort even though the pentekonters carry everyone:
     // naval 2 + 25 against 24, and the landing holds. The crossing itself is
@@ -638,6 +673,7 @@ suite("Map actions (integration)", () => {
     expect(again.report.ships).toEqual({ "trade-ship": 2 });
     expect(again.report.winner).toBe("attacker");
     expect(again.report.conquest).toEqual({ regionId: "R073", townId: "aleria", previousOwner: "etruscans" });
+    expect(await townIntelOf(dynastyId, "aleria")).toMatchObject({ garrison: 0, pentekonters: 4, triremes: 4, scoutedAt: at(10) });
     // Out of range, the escort stays home and does not cap the fleet's range:
     // from Massalia, Thapsus (five seas, naval 8) is reached on the
     // pentekonters' range 7 with naval 2 alone, and the landing is repulsed.

@@ -39,7 +39,7 @@ import { settleAll, type ActingContext } from "./buildings.js";
 import { creditDrachmae, creditGood, listHoldings } from "./holdings.js";
 import { getKoinonContent, inOwnKoinon, lockKoinon, memberRow, type KoinonError, type KoinonRole, type KoinonRow } from "./koinon.js";
 import { lockPlayer } from "./lock.js";
-import { describeForce, selectForce, spoilLabel, splitRows } from "./mapActions.js";
+import { describeForce, selectForce, spoilLabel, splitRows, writeIntel } from "./mapActions.js";
 import { getTopology } from "./mapGraph.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
 import { raidOpinion, type RaidOpinion } from "./factionOpinion.js";
@@ -155,6 +155,11 @@ export async function pledgedRows(exec: Exec, musterId: string, ownerPlayerId?: 
 
 async function characterIdOf(exec: Exec, playerId: string): Promise<string | null> {
   return (await exec.select({ id: playerCharacters.id }).from(playerCharacters).where(eq(playerCharacters.playerId, playerId)).limit(1))[0]?.id ?? null;
+}
+
+// The character's dynasty, whose intel a fight updates; null without one.
+async function dynastyIdOf(exec: Exec, playerId: string): Promise<string | null> {
+  return (await exec.select({ dynastyId: playerCharacters.dynastyId }).from(playerCharacters).where(eq(playerCharacters.playerId, playerId)).limit(1))[0]?.dynastyId ?? null;
 }
 
 // --- Opening -------------------------------------------------------------------
@@ -735,6 +740,9 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
         let defender: MusterReport["defender"] = null;
         let plunder: MusterReport["plunder"] = null;
         let opinion: MusterReport["opinion"] = null;
+        // What the army saw, for every participant's intel: the pool as the
+        // fight left it and a town's ships. A repulse at sea saw neither.
+        let seen: { pool: number; fleet: { pentekonters: number; triremes: number } | null } | null = null;
         let survivors: UnitRow[] = army;
 
         if (fleet && !fleet.held) {
@@ -786,6 +794,7 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
           if (muster.townId !== null) await writeTownGarrison(tx, muster.worldId, muster.townId, remaining, launchAt);
           else await writeRegionWarband(tx, muster.worldId, muster.regionId, remaining, launchAt);
           defender = { label: npc.label, start: pool, end: remaining, turnout: met };
+          seen = { pool: remaining, fleet: muster.townId !== null ? await readTownFleet(tx, muster.worldId, muster.townId, launchAt) : null };
           outcome = result.winner === "attacker" ? "won" : "driven_off";
           // Won or driven off, the army's one raid can sour the nation whose land it is.
           opinion = await raidOpinion(tx, muster.worldId, muster.townId !== null ? await townContentOwner(muster.townId) : await regionContentOwner(muster.regionId), seed);
@@ -816,6 +825,13 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
         const lost = Object.values(lostOf).reduce((n, v) => n + v, 0);
         const participants = sides.filter((o) => (menOf[o.playerId] ?? 0) > 0 || (hullsOf[o.playerId] ?? 0) > 0);
         for (const o of participants) {
+          // The fight updates the intel of every member who fought and has a dynasty (raids prompt 3).
+          if (seen) {
+            const dynastyId = await dynastyIdOf(tx, o.playerId);
+            if (dynastyId) {
+              await writeIntel(tx, muster.worldId, dynastyId, { regionId: muster.regionId, townId: muster.townId, pool: seen.pool, fleet: seen.fleet, at: launchAt, gameDate: formatGameDate(gameDate(launchAt.getTime(), world.startedAt.getTime())) });
+            }
+          }
           const chronicle: MusterChronicle = {
             koinonName: k?.name ?? "",
             regionId: muster.regionId,

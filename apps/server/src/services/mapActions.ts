@@ -103,6 +103,10 @@ export type MapActReport = {
   defender: { label: string; start: number; end: number; losses: number; turnout: number } | null;
   plunder: PlunderPayload | null;
   conquest: { regionId: string; townId: string | null; previousOwner: string | null } | null;
+  // What the men saw: a scout's snapshot, or the place as a fight left it (the
+  // pool after the kills, 0 after a conquest, the garrison as it stood when a
+  // landing was turned back), with a town's ships. Also written to the
+  // dynasty's intel (writeIntel), the row a scout writes.
   intel: { warband: number; pentekonters?: number; triremes?: number; scoutedGameDate: string } | null;
   // A raid that landed on a nation's land and soured it (raidOpinion); null
   // for a scout, an attack, a landing turned back at sea, and a raid that
@@ -141,6 +145,29 @@ export function describeForce(rows: UnitRow[]): CampaignForcePart[] {
     }
   }
   return [...merged.values()];
+}
+
+// What a party saw, on the dynasty's intel: the same row a scout writes. For
+// a town, its garrison and ships; for a region, its warband. Dated the sight.
+export async function writeIntel(
+  exec: DbTx,
+  worldId: string,
+  dynastyId: string,
+  seen: { regionId: string; townId: string | null; pool: number; fleet: { pentekonters: number; triremes: number } | null; at: Date; gameDate: string },
+): Promise<void> {
+  if (seen.townId !== null) {
+    const row = { garrison: seen.pool, pentekonters: seen.fleet?.pentekonters ?? 0, triremes: seen.fleet?.triremes ?? 0, scoutedAt: seen.at, scoutedGameDate: seen.gameDate };
+    await exec
+      .insert(townIntel)
+      .values({ worldId, dynastyId, townId: seen.townId, ...row })
+      .onConflictDoUpdate({ target: [townIntel.worldId, townIntel.dynastyId, townIntel.townId], set: row });
+  } else {
+    const row = { warband: seen.pool, scoutedAt: seen.at, scoutedGameDate: seen.gameDate };
+    await exec
+      .insert(regionIntel)
+      .values({ worldId, dynastyId, regionId: seen.regionId, ...row })
+      .onConflictDoUpdate({ target: [regionIntel.worldId, regionIntel.dynastyId, regionIntel.regionId], set: row });
+  }
 }
 
 async function characterOf(exec: DbTx, playerId: string): Promise<{ id: string; dynastyId: string | null }> {
@@ -370,6 +397,8 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
     // Recovery: max(1, steps) × hoursPerStep hours from now, for any action.
     const recoveryHours = Math.max(1, steps) * battleC.recovery.hoursPerStep;
     const arrivesAt = new Date(now.getTime() + recoveryHours * MS_PER_HOUR);
+    // The game date of what the men see, for the intel every branch writes.
+    const scoutedGameDate = formatGameDate(gameDate(now.getTime(), ctx.worldStartedMs));
     const men = rows.reduce((n, r) => n + r.count, 0);
     const forceText = describeForce(rows);
     const place = isTown ? { townId, townName: townName! } : {};
@@ -392,19 +421,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
     if (input.type === "scout") {
       // 6. Scout: the dynasty's intel snapshot, no battle. A town's intel
       // carries its garrison and fleet.
-      const scoutedGameDate = formatGameDate(gameDate(now.getTime(), ctx.worldStartedMs));
-      if (character.dynastyId && isTown && townFleet) {
-        const seen = { garrison: warband, pentekonters: townFleet.pentekonters, triremes: townFleet.triremes, scoutedAt: now, scoutedGameDate };
-        await tx
-          .insert(townIntel)
-          .values({ worldId: ctx.worldId, dynastyId: character.dynastyId, townId, ...seen })
-          .onConflictDoUpdate({ target: [townIntel.worldId, townIntel.dynastyId, townIntel.townId], set: seen });
-      } else if (character.dynastyId) {
-        await tx
-          .insert(regionIntel)
-          .values({ worldId: ctx.worldId, dynastyId: character.dynastyId, regionId, warband, scoutedAt: now, scoutedGameDate })
-          .onConflictDoUpdate({ target: [regionIntel.worldId, regionIntel.dynastyId, regionIntel.regionId], set: { warband, scoutedAt: now, scoutedGameDate } });
-      }
+      if (character.dynastyId) await writeIntel(tx, ctx.worldId, character.dynastyId, { regionId, townId, pool: warband, fleet: townFleet, at: now, gameDate: scoutedGameDate });
       chronicle = { action: "scout", regionId, regionName, ...place, men, force: forceText, warband, ...(townFleet ? { fleet: townFleet } : {}) };
       report = {
         type: "scout",
@@ -433,7 +450,9 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
         line: renderCampaignLine("map_action", chronicle),
       };
     } else if (fleetLine && !fleetLine.held) {
-      // 6b. Repulsed at sea: home with recovery, nothing else changes.
+      // 6b. Repulsed at sea: home with recovery, nothing else changes. The men
+      // saw the garrison and the ships that turned them back (raids prompt 3).
+      if (character.dynastyId) await writeIntel(tx, ctx.worldId, character.dynastyId, { regionId, townId, pool: warband, fleet: townFleet, at: now, gameDate: scoutedGameDate });
       chronicle = { action: input.type, regionId, regionName, ...place, men, force: forceText, winner: "repulsed", killed: 0, lost: 0 };
       report = {
         type: input.type,
@@ -457,7 +476,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
         defender: { label: npc.label, start: warband, end: warband, losses: 0, turnout: 0 },
         plunder: null,
         conquest: null,
-        intel: null,
+        intel: { warband, ...(townFleet ?? {}), scoutedGameDate },
         opinion: null,
         line: renderCampaignLine("map_action", chronicle),
       };
@@ -522,6 +541,10 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
       } else {
         await writeDefender(remaining);
       }
+      // 7b. What the men saw: the pool as the fight left it (0 after a
+      // conquest) and a town's ships, on the dynasty's intel (raids prompt 3).
+      const end = conquest !== null ? 0 : remaining;
+      if (character.dynastyId) await writeIntel(tx, ctx.worldId, character.dynastyId, { regionId, townId, pool: end, fleet: townFleet, at: now, gameDate: scoutedGameDate });
 
       chronicle = { action: input.type, regionId, regionName, ...place, men, force: forceText, winner: result.winner, killed: defLosses, lost: result.attacker.losses, plunder, conquest: conquest !== null };
       report = {
@@ -552,7 +575,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
         defender: { label: npc.label, start: warband, end: remaining, losses: defLosses, turnout: met },
         plunder,
         conquest,
-        intel: null,
+        intel: { warband: end, ...(townFleet ?? {}), scoutedGameDate },
         opinion,
         line: renderCampaignLine("map_action", chronicle),
       };
