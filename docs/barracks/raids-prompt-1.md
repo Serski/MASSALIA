@@ -128,3 +128,13 @@ STOP 1. Report:
 ## Push (only after I reply "push")
 
 Fast-forward only, plain `git push`. Report remote HEAD, the CI run with its Gate and Audit steps, Railway server and worker on the new SHA, Pages green and API health. No migration to confirm.
+
+## STOP 1 ruling (8 Oct 2026)
+
+1. The by-land leg of "shares": keep it as built. The warband written at 10 regenerates to 15 by the launch a day later, so 3 turn out, and 20 peltasts win on every seed with 2 or 3 slain and 0 or 1 lost. The assertions on `{ start: 15, turnout: 3 }`, killed in [2, 3] and the win stand. The prompt's 10 and 2 missed the day of regeneration.
+2. The BattleReport as rendered: accepted. Enemy row "Town garrison | 2 | 0", "2 of 10 soldiers turned out.", "Plunder: 200 drachmae, 20 grain and 20 salt." All other wording stands as rendered.
+3. The `renderPlunder` import in KoinonView.tsx: accepted. The part line needs it.
+4. The two spoil-good rejection regexes: accepted. The ZodError message escapes the quotes.
+5. The spoil on every won muster share: accepted. That is the rule, and older rows read as before.
+
+One commit: this ruling appended verbatim to docs/barracks/raids-prompt-1.md under its heading, subject `docs: the raids prompt's STOP 1 ruling`. Run the gate at the new HEAD, then `pnpm audit --audit-level=high`. On GATE GREEN and audit exit 0, push as the prompt's Push section says: fast-forward only, plain `git push`. Report the Committed line, the gate's last line with suite counts, the audit exit code, remote HEAD, the CI run with its Gate and Audit steps, Railway server and worker on the new SHA, Pages green and API health. On any red, STOP with the log and do not push.
