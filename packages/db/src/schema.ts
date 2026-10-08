@@ -895,7 +895,9 @@ export const UNIT_MISSION_KINDS = ["scout", "raid", "attack", "move", "muster"] 
 export type UnitMissionKind = (typeof UNIT_MISSION_KINDS)[number];
 // regionId is always the region; townId is set when the target or destination is a town.
 // `musterId` is set on a "muster" mission only; its departedAt is the pledge instant.
-export type UnitMission = { kind: UnitMissionKind; regionId: string; townId?: string; departedAt: string; musterId?: string };
+// `marchId` (raids prompt 4): a party's rows carry it while they march out to a
+// scout, raid or attack and lose it when they arrive; the way home carries none.
+export type UnitMission = { kind: UnitMissionKind; regionId: string; townId?: string; departedAt: string; musterId?: string; marchId?: string };
 
 export const HOLDING_KINDS = ["colony", "conquest"] as const;
 export type HoldingKind = (typeof HOLDING_KINDS)[number];
@@ -1110,6 +1112,40 @@ export const playerVoyages = pgTable("player_voyages", {
 }, (table) => ({
   kindCheck: check("player_voyages_kind_check", sql`${table.kind} IN ('scout', 'raid', 'attack', 'move')`),
   awayIdx: index("player_voyages_away_idx").on(table.ownerPlayerId, table.returnsAt).where(sql`returned_at IS NULL`),
+}));
+
+// Parties on the march (migration 0068, raids prompt 4): a raid, an attack or a
+// scout sets out and fights when it arrives, resolved by the first request
+// after that instant. One row per party, with its report once it has arrived.
+export const MARCH_KINDS = ["scout", "raid", "attack"] as const;
+export type MarchKind = (typeof MARCH_KINDS)[number];
+
+export const playerMarches = pgTable("player_marches", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  ownerPlayerId: uuid("owner_player_id").references(() => players.id).notNull(),
+  kind: text("kind").$type<MarchKind>().notNull(),
+  regionId: text("region_id").notNull(),
+  townId: text("town_id"),
+  baseId: text("base_id").notNull(),
+  route: text("route").$type<"land" | "sea">().notNull(),
+  steps: integer("steps").notNull(),
+  minutes: integer("minutes").notNull(),
+  party: jsonb("party").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  ships: jsonb("ships").$type<Record<string, number>>().notNull().default(sql`'{}'::jsonb`),
+  sailing: jsonb("sailing").$type<Record<string, number>>().notNull().default(sql`'{}'::jsonb`),
+  departedAt: timestamp("departed_at", { withTimezone: true }).notNull(),
+  arrivesAt: timestamp("arrives_at", { withTimezone: true }).notNull(),
+  status: text("status").$type<"marching" | "resolved">().notNull().default("marching"),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  report: jsonb("report").$type<Record<string, unknown> | null>(),
+  seenAt: timestamp("seen_at", { withTimezone: true }),
+}, (table) => ({
+  kindCheck: check("player_marches_kind_check", sql`${table.kind} IN ('scout', 'raid', 'attack')`),
+  routeCheck: check("player_marches_route_check", sql`${table.route} IN ('land', 'sea')`),
+  statusCheck: check("player_marches_status_check", sql`${table.status} IN ('marching', 'resolved')`),
+  dueIdx: index("player_marches_due_idx").on(table.arrivesAt).where(sql`status = 'marching'`),
+  ownerIdx: index("player_marches_owner_idx").on(table.ownerPlayerId, table.arrivesAt),
 }));
 
 export const resources = pgTable("resources", {
