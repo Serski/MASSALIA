@@ -1971,9 +1971,10 @@ export function BattleReport({ report, onClose }: { report: PickerReport; onClos
             </table>
           ) : null}
           {turnout !== null && report.defender && turnout < report.defender.start ? (
-            <p className="w2map-report-note" data-testid="turnout-line">{turnout} of {report.defender.start} {defenders} turned out.</p>
+            <p className="w2map-report-note" data-testid="turnout-line">{turnout} of {report.defender.start} {defenders} turned out; {report.defender.end} remain.</p>
           ) : null}
           {report.plunder ? <p className="w2map-report-note">Plunder: {renderPlunder(report.plunder)}.</p> : null}
+          {report.opinion ? <p className="w2map-report-note" data-testid="opinion-line">{report.opinion.line}</p> : null}
           {report.conquest ? <p className="w2map-report-note">{place} is yours. The survivors hold it.</p> : null}
           {report.rounds > 0 ? <p className="w2map-report-note">{report.rounds} round{report.rounds === 1 ? "" : "s"} fought{sailed ? ` · sailed with ${sailed}` : ""}.</p> : null}
           <p className="w2map-report-note">The party {report.destination === (report.townId ?? report.regionId) ? "settles in" : "returns"} in {hours}h.</p>

@@ -205,6 +205,7 @@ function LastMuster({ last }: { last: KoinonLastMuster }) {
       {last.status === "resolved" && report ? (
         <>
           {report.line ? <p className="koinon-hint">{report.line}</p> : null}
+          {report.opinion ? <p className="koinon-hint" data-muster-opinion>{report.opinion.line}</p> : null}
           {report.parts.map((part) => {
             const sent = part.men > 0 && part.hulls > 0 ? `${menText(part.men)} and ${hullsText(part.hulls)}` : part.hulls > 0 ? hullsText(part.hulls) : menText(part.men);
             // His part of the plunder, the third good included when the report has one (a report from before the raids prompt has none).

@@ -864,8 +864,9 @@ describe("KoinonView · the muster", () => {
       "Nikias · sent 20 men and 1 hull · lost 0 · 384 drachmae and 48 grain",
       "Deon · sent 2 hulls · lost 0 · 288 drachmae and 36 grain",
     ]);
-    // The form stays above it: another muster can be called.
+    // The form stays above it: another muster can be called. A report from before the raids prompts has no grudge line.
     expect(won.card().querySelector('[data-muster="form"]')).not.toBeNull();
+    expect(won.card().querySelector("[data-muster-opinion]")).toBeNull();
     won.unmount();
 
     // A report since the raids prompt: the plunder's third good, each part's share of it on his line.
@@ -875,6 +876,7 @@ describe("KoinonView · the muster", () => {
           report: {
             outcome: "won", reason: null, line: "Raided Reii: 50 men sent, 12 soldiers slain, 3 lost, 960 drachmae, 120 grain and 120 salt taken.", men: 50, lost: 3, killed: 12,
             plunder: { drachmae: 960, grain: 120, spoil: { good: "salt", label: "salt", amount: 120 } },
+            opinion: { factionId: "saluvii", name: "Saluvii", from: -45, to: -46, line: "The Saluvii will remember this." },
             parts: [
               { playerId: "kallias", name: "Kallias", men: 30, lost: 3, hulls: 0, seats: 0, shares: 30, drachmae: 288, grain: 36, spoil: 36 },
               { playerId: "nikias", name: "Nikias", men: 20, lost: 0, hulls: 1, seats: 20, shares: 40, drachmae: 384, grain: 48, spoil: 48 },
@@ -884,7 +886,11 @@ describe("KoinonView · the muster", () => {
         }),
       }),
     );
-    expect(lines(spoiled.card().querySelector<HTMLElement>("[data-muster-last]")!, "data-part")).toEqual([
+    const spoiledBlock = spoiled.card().querySelector<HTMLElement>("[data-muster-last]")!;
+    // The grudge line sits under the report line, above the parts.
+    expect(spoiledBlock.querySelector("[data-muster-opinion]")!.textContent).toBe("The Saluvii will remember this.");
+    expect(spoiledBlock.querySelector("[data-muster-opinion]")!.previousElementSibling!.textContent).toBe("Raided Reii: 50 men sent, 12 soldiers slain, 3 lost, 960 drachmae, 120 grain and 120 salt taken.");
+    expect(lines(spoiledBlock, "data-part")).toEqual([
       "Kallias · sent 30 men · lost 3 · 288 drachmae, 36 grain and 36 salt",
       "Nikias · sent 20 men and 1 hull · lost 0 · 384 drachmae, 48 grain and 48 salt",
       "Deon · sent 2 hulls · lost 0 · 288 drachmae, 36 grain and 36 salt",

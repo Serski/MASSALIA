@@ -1429,6 +1429,8 @@ export type KoinonMusterReport = {
   lost: number;
   killed: number;
   plunder: { drachmae: number; grain: number; spoil?: { good: string; label: string; amount: number } } | null;
+  // The nation the raid soured, if any; a report stored before the raids prompts has none.
+  opinion?: { factionId: string; name: string; from: number; to: number; line: string } | null;
   parts: KoinonMusterPart[];
 };
 export type KoinonLastMuster = { id: string; targetName: string; gatherName: string; launchLabel: string; status: "resolved" | "stood_down" | "cancelled"; reason: string | null; report: KoinonMusterReport | null };
@@ -1833,6 +1835,8 @@ export type MapActReport = {
   plunder: { drachmae: number; grain: number; spoil?: { good: string; label: string; amount: number } } | null;
   conquest: { regionId: string; townId: string | null; previousOwner: string | null } | null;
   intel: { warband: number; pentekonters?: number; triremes?: number; scoutedGameDate: string } | null;
+  // The nation a raid soured, if any; a report stored before the raids prompts has none.
+  opinion?: { factionId: string; name: string; from: number; to: number; line: string } | null;
   line: string;
 };
 
