@@ -127,3 +127,15 @@ STOP 1. Report:
 ## Push (only after I reply "push")
 
 Fast-forward only, plain `git push`. Report remote HEAD, the CI run with its Gate and Audit steps, Railway server and worker on the new SHA, Pages green and API health.
+
+## STOP 1 ruling (9 Oct 2026)
+
+1. A slave's locked Barracks as rendered: accepted. "The unfree may not raise an army." on the banner and as the altar buttons' title.
+2. The road out in red as rendered: accepted. `.barracks-bar.out`, from #7a2e34 to the theme's danger red, on a raid, an attack or a scout bound for its place; green once it is bound home, and for moves.
+3. The picker's supplies as rendered: accepted. "· 2 naval supplies" before the arrival clock; "Not enough naval supplies: 2 needed, 1 in store." with Go disabled; the sea move's "space 40 of 68 aboard · 2 pentekonters · 2 naval supplies".
+4. The card note: accepted. "2 naval supplies for the voyage." ("1 naval supply" for one).
+5. The sea move's footer keeping the whole stock's space: accepted. The prompt's 60 was only an example; the footer names the hulls that sail and keeps the stock's space as before.
+6. `supplyGood` checked by a superRefine on the whole ships content: accepted, with the message as given.
+7. `takeSupplies` reading the row with a plain select, so a player who never held naval supplies reads 0 and is refused without a row being made: accepted, as the prompt asks.
+
+One commit: this ruling appended verbatim to docs/barracks/barracks-prompt-4.md under its heading, subject `docs: the barracks prompt 4 STOP 1 ruling`. Run the gate at the new HEAD, then `pnpm audit --audit-level=high`. On GATE GREEN and audit exit 0, push as the prompt's Push section says: fast-forward only, plain `git push`. Report the Committed line, the gate's last line with suite counts, the audit exit code, remote HEAD, the CI run with its Gate and Audit steps, Railway server and worker on the new SHA, Pages green and API health. On any red, STOP with the log and do not push.
