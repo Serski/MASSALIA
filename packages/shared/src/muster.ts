@@ -1,5 +1,5 @@
 import { campaignSeason, seasonIndexAt } from "./buildings.js";
-import { renderForce, type CampaignForcePart } from "./chronicle.js";
+import { renderForce, renderPlunder, type CampaignForcePart, type PlunderPayload } from "./chronicle.js";
 import type { KoinonContent } from "./koinon.js";
 
 // ---------------------------------------------------------------------------
@@ -116,7 +116,7 @@ export type MusterChronicle = {
   winner: "attacker" | "defender" | "repulsed";
   killed: number;
   lost: number;
-  share: { drachmae: number; grain: number } | null;
+  share: PlunderPayload | null;
 };
 
 // The one sentence for a muster entry, shared by the server's report and the
@@ -133,20 +133,20 @@ export function renderMusterLine(p: MusterChronicle): string {
   const killed = `${p.killed} ${defenders} slain`;
   const lost = p.lost === 0 ? "none of ours lost" : `${p.lost} of ours lost`;
   if (p.winner === "attacker") {
-    return `Raided ${place} ${koinon}: sent ${sent}, ${killed}, ${lost}, ${p.share?.drachmae ?? 0} drachmae and ${p.share?.grain ?? 0} grain for our share.`;
+    return `Raided ${place} ${koinon}: sent ${sent}, ${killed}, ${lost}, ${renderPlunder(p.share)} for our share.`;
   }
   return `Raided ${place} ${koinon} and were driven off: sent ${sent}, ${killed}, ${lost}.`;
 }
 
 // The koinon's own line for a marched muster, on the Koinon tab's last-muster
 // report: the whole army's outcome, where renderMusterLine tells one member's.
-export type MusterReportLine = { regionId: string; regionName?: string; townId?: string | null; townName?: string | null; outcome: "won" | "driven_off" | "repulsed"; men: number; killed: number; lost: number; plunder: { drachmae: number; grain: number } | null };
+export type MusterReportLine = { regionId: string; regionName?: string; townId?: string | null; townName?: string | null; outcome: "won" | "driven_off" | "repulsed"; men: number; killed: number; lost: number; plunder: PlunderPayload | null };
 export function renderMusterReportLine(p: MusterReportLine): string {
   const place = p.townName ?? p.regionName ?? p.regionId;
   if (p.outcome === "repulsed") return `Sailed against ${place} and were driven off by its fleet before landing.`;
   const isTown = p.townId !== undefined && p.townId !== null;
   const defenders = isTown ? (p.killed === 1 ? "soldier" : "soldiers") : p.killed === 1 ? "tribesman" : "tribesmen";
   const sent = `${p.men} ${p.men === 1 ? "man" : "men"} sent, ${p.killed} ${defenders} slain, ${p.lost === 0 ? "none lost" : `${p.lost} lost`}`;
-  if (p.outcome === "won") return `Raided ${place}: ${sent}, ${p.plunder?.drachmae ?? 0} drachmae and ${p.plunder?.grain ?? 0} grain taken.`;
+  if (p.outcome === "won") return `Raided ${place}: ${sent}, ${renderPlunder(p.plunder)} taken.`;
   return `Raided ${place} and were driven off: ${sent}.`;
 }

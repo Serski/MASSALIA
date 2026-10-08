@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { REAL_MS_PER_SEASON } from "./calendar.js";
-import { buildChronicle, CHRONICLE_EFFECT_LOG_KINDS, type ChronicleInput, renderCampaignLine, renderForce } from "./chronicle.js";
+import { buildChronicle, CHRONICLE_EFFECT_LOG_KINDS, type ChronicleInput, renderCampaignLine, renderForce, renderPlunder } from "./chronicle.js";
 
 // One real day = one in-game season; tests anchor the world start at ms 0 so a
 // timestamp of N seasons is simply N * REAL_MS_PER_SEASON.
@@ -442,6 +442,13 @@ describe("campaign lines", () => {
     expect(renderCampaignLine("map_action", { action: "raid", regionId: "R046", regionName: "Salyes", force, winner: "attacker", killed: 1, lost: 0, plunder: { drachmae: 20, grain: 5 } })).toBe(
       "Raided Salyes with 40 peltasts: 1 tribesman slain, none of ours lost, 20 drachmae and 5 grain of plunder.",
     );
+    // The raids prompt: a third good on the plunder, named in running text.
+    expect(renderCampaignLine("map_action", { action: "raid", regionId: "R046", regionName: "Salyes", force, winner: "attacker", killed: 5, lost: 0, plunder: { drachmae: 250, grain: 25, spoil: { good: "oliveoil", label: "olive oil", amount: 25 } } })).toBe(
+      "Raided Salyes with 40 peltasts: 5 tribesmen slain, none of ours lost, 250 drachmae, 25 grain and 25 olive oil of plunder.",
+    );
+    expect(renderPlunder({ drachmae: 500, grain: 50, spoil: { good: "wool", label: "wool", amount: 50 } })).toBe("500 drachmae, 50 grain and 50 wool");
+    expect(renderPlunder({ drachmae: 400, grain: 50 })).toBe("400 drachmae and 50 grain");
+    expect(renderPlunder(null)).toBe("0 drachmae and 0 grain");
     expect(renderCampaignLine("map_action", { action: "scout", regionId: "R046", regionName: "Salyes", force: [{ count: 1, label: "Hippeis", plural: "Hippeis", source: "trained" }], warband: 1 })).toBe("Scouted Salyes with 1 hippeis: 1 tribesman under arms.");
     expect(renderCampaignLine("holding_reverted", { regionId: "R046", regionName: "Salyes" })).toBe("Salyes slipped from our hands: no garrison held it.");
     // 3c: towns name the town, count soldiers, and a sea assault can be driven off before landing.

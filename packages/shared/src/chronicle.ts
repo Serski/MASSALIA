@@ -245,7 +245,7 @@ export type CampaignPayload = {
   winner?: "attacker" | "defender" | "stand" | "repulsed";
   killed?: number;
   lost?: number;
-  plunder?: { drachmae: number; grain: number } | null;
+  plunder?: PlunderPayload | null;
   conquest?: boolean;
   warband?: number; // scout: the strength seen (a town: its garrison)
   fleet?: { pentekonters: number; triremes: number }; // scout on a town: the fleet seen
@@ -258,6 +258,20 @@ export type CampaignPayload = {
 };
 
 export type CampaignForcePart = { count: number; label: string; plural?: string; source?: "trained" | "band" };
+
+// What a won raid paid: drachmae, grain and, since the raids prompt, one third
+// good. `spoil` is optional because rows written before it have none; `label`
+// is the good in running text ("olive oil").
+export type PlunderPayload = { drachmae: number; grain: number; spoil?: { good: string; label: string; amount: number } };
+
+// The plunder in words: "500 drachmae, 50 grain and 50 wool", or without a
+// spoil "400 drachmae and 50 grain"; null reads "0 drachmae and 0 grain".
+export function renderPlunder(p: PlunderPayload | null | undefined): string {
+  const dr = `${p?.drachmae ?? 0} drachmae`;
+  const grain = `${p?.grain ?? 0} grain`;
+  if (p?.spoil) return `${dr}, ${grain} and ${p.spoil.amount} ${p.spoil.label}`;
+  return `${dr} and ${grain}`;
+}
 
 // "20 peltasts", "1 ekdromos", "10 hoplites and 20 Cretan archers": trained
 // units in lowercase running text with the plural past one man, bands by their
@@ -314,11 +328,7 @@ export function renderCampaignLine(type: ChronicleCampaignKind, p: CampaignPaylo
   const killed = `${defenders(p.killed ?? 0)} slain`;
   const lost = (p.lost ?? 0) === 0 ? "none of ours lost" : `${p.lost} of ours lost`;
   if (p.action === "raid") {
-    if (p.winner === "attacker") {
-      const dr = p.plunder?.drachmae ?? 0;
-      const grain = p.plunder?.grain ?? 0;
-      return `Raided ${place}${force}: ${killed}, ${lost}, ${dr} drachmae and ${grain} grain of plunder.`;
-    }
+    if (p.winner === "attacker") return `Raided ${place}${force}: ${killed}, ${lost}, ${renderPlunder(p.plunder)} of plunder.`;
     return `Raided ${place}${force} and were driven off: ${killed}, ${lost}.`;
   }
   if (p.winner === "attacker") return `Took ${place}${force}: ${killed}, ${lost}. ${isTown ? "The town" : "The land"} is ours.`;

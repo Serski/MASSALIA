@@ -131,6 +131,12 @@ describe("renderMusterLine", () => {
     expect(renderMusterLine({ ...base, hulls: 1 })).toBe("Raided Vocontii with the koinon The Sacred Band: sent 20 peltasts and 1 hull, 12 tribesmen slain, 3 of ours lost, 240 drachmae and 30 grain for our share.");
   });
 
+  it("a share with the third good names it", () => {
+    expect(renderMusterLine({ ...base, share: { drachmae: 240, grain: 30, spoil: { good: "salt", label: "salt", amount: 30 } } })).toBe(
+      "Raided Vocontii with the koinon The Sacred Band: sent 20 peltasts, 12 tribesmen slain, 3 of ours lost, 240 drachmae, 30 grain and 30 salt for our share.",
+    );
+  });
+
   it("driven off, against a town", () => {
     expect(renderMusterLine({ ...base, townId: "reii", townName: "Reii", winner: "defender", killed: 1, share: null })).toBe("Raided Reii with the koinon The Sacred Band and were driven off: sent 20 peltasts, 1 soldier slain, 3 of ours lost.");
   });
@@ -148,5 +154,9 @@ describe("renderMusterReportLine", () => {
     expect(renderMusterReportLine({ ...base, men: 1, killed: 1, lost: 0 })).toBe("Raided Vocontii: 1 man sent, 1 tribesman slain, none lost, 240 drachmae and 30 grain taken.");
     expect(renderMusterReportLine({ ...base, townId: "reii", townName: "Reii", outcome: "driven_off", killed: 1, plunder: null })).toBe("Raided Reii and were driven off: 60 men sent, 1 soldier slain, 3 lost.");
     expect(renderMusterReportLine({ ...base, townId: "reii", townName: "Reii", outcome: "repulsed", killed: 0, lost: 0, plunder: null })).toBe("Sailed against Reii and were driven off by its fleet before landing.");
+  });
+
+  it("a plunder with the third good names it", () => {
+    expect(renderMusterReportLine({ ...base, plunder: { drachmae: 240, grain: 30, spoil: { good: "salt", label: "salt", amount: 30 } } })).toBe("Raided Vocontii: 60 men sent, 12 tribesmen slain, 3 lost, 240 drachmae, 30 grain and 30 salt taken.");
   });
 });
