@@ -535,7 +535,8 @@ suite("Koinon muster (integration)", () => {
   type Report = NonNullable<Awaited<ReturnType<Mods["koinon"]["koinonView"]>>["koinon"]>["lastMuster"] extends infer L ? (L extends { report: infer R } ? NonNullable<R> : never) : never;
   const reportOf = async () => (await musters())[0]!.report as unknown as Report;
   const battle = () => m.barracks.getBattleContent();
-  const recovered = (steps: number) => new Date(LAUNCH.getTime() + Math.max(1, steps) * battle().recovery.hoursPerStep * HOUR);
+  // The army is home the road's minutes after the launch (raids prompt 4); every muster here marches one land step or by sea.
+  const recovered = (steps: number) => new Date(LAUNCH.getTime() + steps * battle().march.minutesPerStep * MIN);
 
   // Three members against a warband by land: 40 hoplites; 30 peltasts; 30
   // hoplites and 20 peltasts in two rows.
@@ -749,7 +750,7 @@ suite("Koinon muster (integration)", () => {
     expect(await voyagesOf(shipowner)).toHaveLength(1);
     expect((await voyagesOf(shipowner))[0]).toMatchObject({ ships: { "trade-ship": 2 }, kind: "raid", musterId: bySea, regionId: seaTown.regionId, townId: seaTown.townId, sailedAt: LAUNCH, returnsAt: recovered(seaTown.steps), returnedAt: null });
     expect(await voyagesOf(soldier)).toEqual([]);
-    expect(recovered(seaTown.steps).getTime()).toBeLessThanOrEqual(at(DAY).getTime()); // seven seas at most: home by at(23 hours)
+    expect(recovered(seaTown.steps).getTime()).toBeLessThanOrEqual(at(DAY).getTime()); // seven seas at most bring the army home by LAUNCH plus 3½ hours
     expect(await garrisonOf(seaTown.townId)).toBe(10 - report.killed);
     expect(await db.select().from(m.dbPkg.koinonMusterHulls)).toEqual([]);
 
@@ -835,7 +836,7 @@ suite("Koinon muster (integration)", () => {
     expect(report.fleet).toEqual({ hulls: { "trade-ship": 2 }, naval: 2, space: 40, filled: 30, defender: { pentekonters: 3, triremes: 2, naval: 13 }, held: false });
     expect(report.line).toBe(`Sailed against ${report.townName} and were driven off by its fleet before landing.`);
     // No battle: the men are whole and bound home, the garrison untouched, nothing paid.
-    const home = new Date(at(4 * HOUR).getTime() + Math.max(1, seaTown.steps) * battle().recovery.hoursPerStep * HOUR);
+    const home = new Date(at(4 * HOUR).getTime() + seaTown.steps * battle().march.minutesPerStep * MIN);
     expect(await unitRow(row)).toMatchObject({ count: 30, movingTo: massalia, arrivesAt: home, mission: { kind: "raid", townId: seaTown.townId } });
     expect(await garrisonOf(seaTown.townId)).toBe(50);
     expect([await wallet(soldier), await wallet(shipowner)]).toEqual(wallets);

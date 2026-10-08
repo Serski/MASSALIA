@@ -12,6 +12,7 @@ import {
   gameDate,
   HOME_POLITY_ID,
   loadMusterHulls,
+  marchMinutes,
   musterLaunch,
   musterShares,
   musterWinter,
@@ -570,7 +571,8 @@ export type MusterReport = {
   launchAt: string;
   route: "land" | "sea" | null;
   steps: number | null;
-  recoveryHours: number | null;
+  // The road home's minutes (raids prompt 4): null on a stand-down.
+  minutes: number | null;
   arrivesAt: string | null;
   rounds: number;
   men: number;
@@ -591,7 +593,6 @@ export type MusterReport = {
 // nothing to resolve (unknown, already closed, or not yet at its launch).
 export type MusterResolved = { outcome: "busy" | "not_due" | "resolved" | "stood_down" };
 
-const MS_PER_HOUR = 3_600_000;
 // The muster's own advisory key, in the two-int keyspace so it can never meet a
 // player lock (lock.ts uses the single-key form).
 const musterLockKey = (musterId: string) => sql`hashtext('koinon_muster'), hashtext(${musterId}::text)`;
@@ -698,10 +699,10 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
           await tx.delete(koinonMusterHulls).where(eq(koinonMusterHulls.musterId, muster.id));
           await tx.update(koinonMusters).set({ status, report }).where(eq(koinonMusters.id, muster.id));
         };
-        // P9: a muster that cannot march stands down. Rows are free at once, with no recovery.
+        // P9: a muster that cannot march stands down. Rows are free at once, with no march home.
         const standDown = async (reason: string): Promise<MusterResolved & { launchAt: Date; shrine: typeof shrine }> => {
           await release();
-          await close("stood_down", { ...blank, outcome: "stood_down", reason, line: null, route: null, steps: null, recoveryHours: null, arrivesAt: null, rounds: 0, men: 0, lost: 0, killed: 0, defender: null, fleet: null, plunder: null, opinion: null, parts: [] });
+          await close("stood_down", { ...blank, outcome: "stood_down", reason, line: null, route: null, steps: null, minutes: null, arrivesAt: null, rounds: 0, men: 0, lost: 0, killed: 0, defender: null, fleet: null, plunder: null, opinion: null, parts: [] });
           return { outcome: "stood_down", launchAt, shrine };
         };
 
@@ -715,8 +716,9 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
 
         // 10. By sea: the hulls that sail (P6) and the seats loaded (P7).
         const load = route === "sea" ? loadMusterHulls(force.space, steps, hulls) : null;
-        const recoveryHours = Math.max(1, steps) * battleC.recovery.hoursPerStep;
-        const arrivesAt = new Date(launchAt.getTime() + recoveryHours * MS_PER_HOUR);
+        // The army comes home on the march clock: the road's minutes from the launch (raids prompt 4).
+        const minutes = marchMinutes(battleC.march, { route, steps });
+        const arrivesAt = new Date(launchAt.getTime() + minutes * 60_000);
         const sum = (rows: { ownerPlayerId: string; count: number }[]) => rows.reduce<Record<string, number>>((out, r) => ({ ...out, [r.ownerPlayerId]: (out[r.ownerPlayerId] ?? 0) + r.count }), {});
         const menOf = sum(army);
         const hullsOf: Record<string, number> = {};
@@ -765,7 +767,7 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
         let survivors: UnitRow[] = army;
 
         if (fleet && !fleet.held) {
-          // Repulsed at sea: no battle, no losses, home with recovery.
+          // Repulsed at sea: no battle, no losses, home by the march.
           outcome = "repulsed";
         } else {
           // 11. The defender as it stood at the launch instant: the region's
@@ -834,7 +836,7 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
           }
         }
 
-        // 15. Recovery: every surviving row is bound for the gathering place,
+        // 15. The march home: every surviving row is bound for the gathering place,
         // counted from the launch instant.
         const mission: UnitMission = { kind: "raid", regionId: muster.regionId, ...(muster.townId !== null ? { townId: muster.townId } : {}), departedAt: launchAt.toISOString() };
         for (const r of survivors) await tx.update(playerUnits).set({ movingTo: muster.gatherId, arrivesAt, mission }).where(eq(playerUnits.id, r.id));
@@ -875,7 +877,7 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
           line: renderMusterReportLine({ ...place, outcome, men: force.men, killed, lost, plunder }),
           route,
           steps,
-          recoveryHours,
+          minutes,
           arrivesAt: arrivesAt.toISOString(),
           rounds,
           men: force.men,

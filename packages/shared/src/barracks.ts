@@ -59,7 +59,6 @@ export type BattleContent = {
     townPlunderMultiplier: number;
     opinion: { chance: number; loss: number };
   };
-  recovery: { hoursPerStep: number }; // recovery after an action: max(1, steps) × hoursPerStep hours
   regen: { warbandPerDay: number; garrisonPerDay: number };
   // Towns (3c): walls add min(walls, wallsDefCap) to every defending row's def.
   town: { wallsDefCap: number };
@@ -283,7 +282,6 @@ function battleContentSchema(goods: ReadonlySet<string>) {
         opinion: z.object({ chance: z.number().min(0).max(1), loss: z.number().int().positive() }).strict(),
       })
       .strict(),
-    recovery: z.object({ hoursPerStep: z.number().positive() }).strict(),
     regen: z.object({ warbandPerDay: z.number().int().nonnegative(), garrisonPerDay: z.number().int().nonnegative() }).strict(),
     town: z.object({ wallsDefCap: z.number().int().nonnegative() }).strict(),
     tribute: z.object({ perPopulation: z.number().nonnegative(), minGarrisonPerPopulation: z.number().nonnegative() }).strict(),

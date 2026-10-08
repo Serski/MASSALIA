@@ -24,7 +24,6 @@ describe("battle content", () => {
     expect(battle.rounds).toBe(3);
     expect(battle.npc.warband.stats.spd).toBe(6);
     expect(battle.raid).toEqual({ rounds: 1, turnout: { floorOneIn: 50, capOneIn: 4 }, plunderPerKill: 50, grainPerKill: 5, spoilPerKill: 5, spoilGoods: ["oliveoil", "leather", "salt", "wool"], townPlunderMultiplier: 2, opinion: { chance: 0.33, loss: 1 } });
-    expect(battle.recovery).toEqual({ hoursPerStep: 3 });
     // 3c: towns, tribute, region tribute and moves.
     expect(battle.regen).toEqual({ warbandPerDay: 5, garrisonPerDay: 5 });
     expect(battle.town).toEqual({ wallsDefCap: 3 });
@@ -39,7 +38,6 @@ describe("battle content", () => {
     expect(battle.altar.seasons).toBe(2);
     expect(battle.altar.goods).toEqual({ bull: 3, chicken: 1 });
     expect(() => parseBattleContent({ ...read("content/military/battle.json"), move: { minutesPerStep: 0, minutesWithinRegion: 10 } }, goods)).toThrow();
-    expect(() => parseBattleContent({ ...read("content/military/battle.json"), recovery: { hoursPerStep: 0 } }, goods)).toThrow();
     expect(() => parseBattleContent({ ...read("content/military/battle.json"), extra: 1 }, goods)).toThrow();
     expect(() => parseBattleContent({ ...read("content/military/battle.json"), pursuitLoss: 2 }, goods)).toThrow();
     expect(() => parseBattleContent({ ...read("content/military/battle.json"), altar: { seasons: 2, goods: { unicorn: 3 } } }, goods)).toThrow(/altar\.goods: unknown good/);
