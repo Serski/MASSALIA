@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api, ApiError, type BarracksOffer, type BarracksRosterRow, type BarracksUnit, type BarracksView, type BarracksVoyage, type BaseView, type MapReachView } from "../../api.js";
+import { api, ApiError, type BarracksOffer, type BarracksRosterRow, type BarracksUnit, type BarracksView, type BarracksVoyage, type BaseView, type MapActReport, type MapReachView } from "../../api.js";
 import { BattleReport, ForcePicker, type PickerReport } from "../../map/World2Map.js";
 import { AssetIcon, formatClock, formatDuration, GoodGlyph, onDeviceClock, type PanelProps, ProgressBar, REGION_NAMES_SRC, RESOURCE_WEBP, useCountdownSeconds } from "../shared.js";
 
@@ -605,6 +605,8 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
   // own order stands.
   const [bases, setBases] = useState<BaseView[]>([]);
   const [moveReport, setMoveReport] = useState<PickerReport | null>(null);
+  // A battle report opened from the Reports list (raids prompt 4).
+  const [openReport, setOpenReport] = useState<MapActReport | null>(null);
   // Region display names for the mission lines (the map's public names file),
   // with the view's own place names (towns included) on top.
   const [names, setNames] = useState<Record<string, string>>({});
@@ -788,6 +790,38 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
         </div>
       </div>
 
+      {(view.reports ?? []).length > 0 ? (
+        <section className="barracks-section" data-section="reports" aria-label="Reports">
+          <SectionHead title="Reports" />
+          <div className="barracks-list">
+            {(view.reports ?? []).map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                className={`barracks-row barracks-report${r.seen ? "" : " is-new"}`}
+                data-report={r.id}
+                onClick={() => {
+                  setOpenReport(r.report);
+                  // Opened for the first time: the highlight goes, and stays gone. A failed read leaves it.
+                  if (!r.seen) api.barracksReportRead(r.id).then(setView).catch(() => {});
+                }}
+              >
+                <div className="barracks-row-grid two">
+                  <div className="barracks-row-body">
+                    <div className="barracks-row-name">{r.report.line}</div>
+                    <div className="barracks-row-sub">{r.gameDate}</div>
+                  </div>
+                  <span className="barracks-tags">
+                    {r.seen ? null : <span className="barracks-tag barracks-tag-new">NEW</span>}
+                    <span className="barracks-tag">{MISSION_TAG[r.kind]}</span>
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <div className="barracks-columns">
         <section className="barracks-section" data-section="home" aria-label="At home">
           <SectionHead title="At home" note={menText(men(home))} />
@@ -839,7 +873,10 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
             <div className="barracks-list away">
               {away.length === 0 && atSea.length === 0 ? <p className="barracks-empty">No one on the march.</p> : null}
               {away.map((row) => (
-                <AwayRow key={row.id} row={row} names={placeNames} offset={offset} serverNowMs={serverNowMs} onZero={onZero} />
+                // Keyed per leg: a party's row marches out and then home under one
+                // id, and with the id alone the countdown would carry the old leg's
+                // zero into the new one (a refetch at the turn, none at the homecoming).
+                <AwayRow key={`${row.id}:${row.arrivesAt}`} row={row} names={placeNames} offset={offset} serverNowMs={serverNowMs} onZero={onZero} />
               ))}
               {atSea.map((v) => (
                 <VoyageRow key={v.id} voyage={v} names={placeNames} offset={offset} serverNowMs={serverNowMs} onZero={onZero} />
@@ -953,6 +990,11 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
       {moveReport ? (
         <div className="w2map-modal-host">
           <BattleReport report={moveReport} onClose={() => setMoveReport(null)} />
+        </div>
+      ) : null}
+      {openReport ? (
+        <div className="w2map-modal-host">
+          <BattleReport report={openReport} onClose={() => setOpenReport(null)} />
         </div>
       ) : null}
     </section>

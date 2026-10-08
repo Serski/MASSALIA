@@ -656,6 +656,8 @@ export const api = {
   barracksSacrifice: (good: string) => apiFetch<BarracksView>("/api/barracks/sacrifice", { method: "POST", body: { good } }),
   barracksDisband: (rowId: string) => apiFetch<BarracksView>("/api/barracks/disband", { method: "POST", body: { rowId } }),
   barracksCancel: (rowId: string) => apiFetch<BarracksView>("/api/barracks/cancel", { method: "POST", body: { rowId } }),
+  // A battle report opened for the first time (raids prompt 4): the highlight goes. Answers the view.
+  barracksReportRead: (marchId: string) => apiFetch<BarracksView>("/api/barracks/report-read", { method: "POST", body: { marchId } }),
   // Map reach (military prompt 3a): which land provinces the player's force can
   // Attack, Raid or Colonise from its bases, with a one-line reason when not.
   mapReach: () => apiFetch<MapReachView>("/api/map/reach"),
@@ -1745,6 +1747,9 @@ export type BarracksOffer = {
   hired: boolean;
 };
 
+// A battle report (raids prompt 4; mirrors MarchReportView in services/barracks.ts): kept on its
+// march, listed newest first, unread until its owner first opens it.
+export type BarracksReport = { id: string; kind: MapActType; regionId: string; townId: string | null; arrivedAt: string; gameDate: string; seen: boolean; report: MapActReport };
 // Hulls at sea (raids prompt 3): one entry per sailing, listed under Away · Returning.
 export type BarracksVoyage = { id: string; ships: { id: string; label: string; count: number }[]; kind: "scout" | "raid" | "attack" | "move"; musterId: string | null; regionId: string; townId: string | null; sailedAt: string; returnsAt: string };
 export type BarracksView = {
@@ -1770,6 +1775,8 @@ export type BarracksView = {
   fleet: { ships: { id: string; label: string; role: "transport" | "warship"; count: number; troopSpace: number; range: number; naval: number }[]; space: number; range: number };
   // The hulls at sea, one entry per sailing (optional: an older payload has none).
   atSea?: BarracksVoyage[];
+  // The battle reports, newest first, the latest ten (optional: an older payload has none).
+  reports?: BarracksReport[];
   // The altar while lit (the good burned, its morale bonus, the instant it goes cold), else null.
   altar: { good: string; mor: number; until: string } | null;
 };

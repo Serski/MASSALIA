@@ -62,7 +62,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function mount(view: BarracksView) {
+// `then`: what the second /api/barracks read answers (the refetch a timer at zero asks for).
+async function mount(view: BarracksView, then?: BarracksView) {
   hookWarnings = [];
   // The names file the mission lines read (restoreAllMocks clears it after each test).
   vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ version: 1, names: { R060: "Massalia", R046: "Salyes" } }), { status: 200, headers: { "content-type": "application/json" } }));
@@ -70,7 +71,8 @@ async function mount(view: BarracksView) {
     const text = args.map(String).join(" ");
     if (/order of Hooks|Rendered more hooks|Rendered fewer hooks/.test(text)) hookWarnings.push(text);
   });
-  vi.spyOn(api, "barracks").mockResolvedValue(view);
+  const barracks = vi.spyOn(api, "barracks").mockResolvedValue(then ?? view);
+  barracks.mockResolvedValueOnce(view);
   vi.spyOn(api, "mapReach").mockResolvedValue({
     now: iso(NOW), campaign: { season: "Spring", open: true, opensAt: null }, force: { men: 0, space: 0 }, fleet: { ships: {}, range: 0, space: 0 }, reach: {}, moveTargets: [],
     bases: [
@@ -210,6 +212,60 @@ describe("BarracksPanel", () => {
     expect(container.querySelector('[data-section="training"]')!.textContent).toContain("Peltast · 2");
     // The levy is down to 1, so the stepper snaps to its new bound.
     expect((within(card).getByLabelText("men to recruit as Peltast") as HTMLInputElement).value).toBe("1");
+    expect(hookWarnings).toEqual([]);
+  });
+
+  it("reports: newest first; an unread one is highlighted until opened, and opening it shows the card and marks it read", async () => {
+    const battle = (over: Partial<BarracksView["reports"] extends (infer R)[] | undefined ? R["report"] : never>) => ({
+      type: "raid" as const, regionId: "R046", regionName: "Salyes", townId: null, townName: null, town: null, fleet: null, base: "R060", route: "land" as const, steps: 1, marchId: "m-raid", minutes: 30, arrivedAt: iso(NOW - H), homeAt: iso(NOW - H / 2), destination: "R060", ships: {}, winner: "attacker" as const, rounds: 1,
+      attacker: { rows: [], losses: 0 }, defender: { label: "Tribal warband", start: 20, end: 15, losses: 5, turnout: 5 }, plunder: { drachmae: 250, grain: 25 }, conquest: null, intel: null, line: "Raided Salyes with 40 peltasts: 5 tribesmen slain, none of ours lost, 250 drachmae and 25 grain of plunder.", ...over,
+    });
+    const reports = [
+      { id: "m-raid", kind: "raid" as const, regionId: "R046", townId: null, arrivedAt: iso(NOW - H), gameDate: "Spring, 277 BC", seen: false, report: battle({}) },
+      { id: "m-scout", kind: "scout" as const, regionId: "R046", townId: null, arrivedAt: iso(NOW - 2 * H), gameDate: "Spring, 277 BC", seen: true, report: battle({ type: "scout", marchId: "m-scout", winner: null, rounds: 0, defender: null, plunder: null, intel: { warband: 20, scoutedGameDate: "Spring, 277 BC" }, line: "Scouted Salyes with 10 peltasts: 20 tribesmen under arms." }) },
+    ];
+    const read = vi.spyOn(api, "barracksReportRead").mockResolvedValue(payload({ reports: [{ ...reports[0]!, seen: true }, reports[1]!] }));
+    const { container } = await mount(payload({ reports }));
+    const section = container.querySelector('[data-section="reports"]')!;
+    expect(section).not.toBeNull();
+    expect(section.textContent).toContain("Reports");
+    const rows = [...section.querySelectorAll<HTMLButtonElement>(".barracks-report")];
+    expect(rows.map((r) => r.getAttribute("data-report"))).toEqual(["m-raid", "m-scout"]);
+    expect(rows[0]!.classList.contains("is-new")).toBe(true);
+    expect(rows[0]!.textContent).toContain("NEW");
+    expect(rows[0]!.textContent).toContain("RAID");
+    expect(rows[0]!.textContent).toContain("Spring, 277 BC");
+    expect(rows[1]!.classList.contains("is-new")).toBe(false);
+    expect(rows[1]!.textContent).not.toContain("NEW");
+    expect(rows[1]!.textContent).toContain("SCOUT");
+    // Opening the unread one: the card, the read, and the highlight gone with the returned view.
+    await act(async () => {
+      fireEvent.click(rows[0]!);
+    });
+    await flush();
+    expect(container.querySelector(".w2map-modal-host .w2map-report-line")!.textContent).toBe(reports[0]!.report.line);
+    expect(read).toHaveBeenCalledWith("m-raid");
+    expect(container.querySelector('[data-report="m-raid"]')!.classList.contains("is-new")).toBe(false);
+    expect(container.querySelector('[data-report="m-raid"]')!.textContent).not.toContain("NEW");
+    expect(hookWarnings).toEqual([]);
+    cleanup();
+
+    const plain = await mount(payload());
+    expect(plain.container.querySelector('[data-section="reports"]')).toBeNull();
+    expect(hookWarnings).toEqual([]);
+  });
+
+  it("a party that turns for home counts down again: one refetch at its arrival, none at the turn", async () => {
+    const out = row({ id: "party", unitId: "hoplite", label: "Hoplite", plural: "Hoplites", count: 30, startCount: 30, movingTo: "R046", arrivesAt: iso(NOW - 1000), mission: { kind: "raid", regionId: "R046", departedAt: iso(NOW - 31 * 60_000), marchId: "m-1" } });
+    const back = row({ ...out, movingTo: "R060", arrivesAt: iso(NOW + 30 * 60_000), mission: { kind: "raid", regionId: "R046", departedAt: iso(NOW - 31 * 60_000) } });
+    const { container } = await mount(payload({ roster: [homeLevy, out] }), payload({ roster: [homeLevy, back] }));
+    await flush();
+    expect(api.barracks).toHaveBeenCalledTimes(2);
+    const away = container.querySelector('[data-section="away"]')!;
+    expect(away.textContent).toContain("Returning from Salyes");
+    expect(away.textContent).toMatch(/0:29:5\d|0:30:00/);
+    await flush();
+    expect(api.barracks).toHaveBeenCalledTimes(2);
     expect(hookWarnings).toEqual([]);
   });
 

@@ -4135,6 +4135,11 @@
 .dashboard-shell .barracks-tag{ color: #7fb069; font-family: var(--font-display); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; white-space: nowrap; }
 /* A row at home pledged to the koinon's muster: the tag sits beside its name. */
 .dashboard-shell .barracks-tag-muster{ margin-left: 8px; }
+/* Reports (raids prompt 4): each report a button laid out as an away row; an unread one carries a faint tint, a gold edge and the NEW tag. */
+.dashboard-shell .barracks-report{ display: block; width: 100%; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.dashboard-shell .barracks-report.is-new{ background: rgba(var(--accent-rgb), 0.08); box-shadow: inset 3px 0 0 var(--dash-gold-bright); }
+.dashboard-shell .barracks-tags{ display: inline-flex; gap: 8px; align-items: center; }
+.dashboard-shell .barracks-tag-new{ color: var(--dash-gold-bright); }
 .dashboard-shell .barracks-small{ padding: 6px 10px; font-size: 9px; }
 .dashboard-shell .barracks-bar{ height: 3px; margin-top: 6px; background: rgba(34, 26, 20, 0.9); border-radius: 0; overflow: hidden; }
 .dashboard-shell .barracks-bar-fill{ height: 100%; background: linear-gradient(90deg, var(--dash-bronze), var(--dash-gold-bright)); }
