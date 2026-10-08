@@ -129,3 +129,12 @@ STOP 1. Report:
 ## Push (only after I reply "push")
 
 Fast-forward only, plain `git push`. Report remote HEAD, the CI run with its Gate and Audit steps, Railway server and worker on the new SHA, Pages green and API health. No migration to confirm.
+
+## STOP 1 ruling (8 Oct 2026)
+
+1. The `faction_relations` readers in both server suites (`relation`, `relations`, `raidOnReii`): accepted.
+2. The duplicate-polity message naming the pair in file order ("saluvii and vocontii"): accepted.
+3. `opinion: null` written out on the stood-down report: accepted.
+4. The town-raid BattleReport as rendered: accepted. Enemy row "Town garrison | 2 | 0", "2 of 10 soldiers turned out; 8 remain.", "Plunder: 200 drachmae, 20 grain and 20 salt.", "The Saluvii will remember this." All other wording stands as rendered.
+
+One commit: this ruling appended verbatim to docs/barracks/raids-prompt-2.md under its heading, subject `docs: the raids prompt 2 STOP 1 ruling`. Run the gate at the new HEAD, then `pnpm audit --audit-level=high`. On GATE GREEN and audit exit 0, push as the prompt's Push section says: fast-forward only, plain `git push`. Report the Committed line, the gate's last line with suite counts, the audit exit code, remote HEAD, the CI run with its Gate and Audit steps, Railway server and worker on the new SHA, Pages green and API health. On any red, STOP with the log and do not push.
