@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api, ApiError, type BarracksOffer, type BarracksRosterRow, type BarracksUnit, type BarracksView, type BaseView, type MapReachView } from "../../api.js";
+import { api, ApiError, type BarracksOffer, type BarracksRosterRow, type BarracksUnit, type BarracksView, type BarracksVoyage, type BaseView, type MapReachView } from "../../api.js";
 import { BattleReport, ForcePicker, type PickerReport } from "../../map/World2Map.js";
 import { AssetIcon, formatClock, formatDuration, GoodGlyph, onDeviceClock, type PanelProps, ProgressBar, REGION_NAMES_SRC, RESOURCE_WEBP, useCountdownSeconds } from "../shared.js";
 
@@ -114,6 +114,24 @@ export function missionLine(row: BarracksRosterRow, names: Record<string, string
 // "26 of 30" when the row has lost men, else the count.
 // A levy row's men as a plain count ("33"); a band's against its full strength
 // once it has taken losses ("35 of 40"), since a band is hired as a company.
+// The line under a sailing at sea: what took the hulls out, and where (the
+// town's name when there is one, else the region's).
+export function voyageLine(v: BarracksVoyage, names: Record<string, string>): string {
+  const placeId = v.townId ?? v.regionId;
+  const place = names[placeId] ?? placeId;
+  if (v.musterId) return `The koinon's raid on ${place}`;
+  switch (v.kind) {
+    case "raid":
+      return `Raid on ${place}`;
+    case "scout":
+      return `Scouting ${place}`;
+    case "attack":
+      return `Attack on ${place}`;
+    default:
+      return `Carrying men to ${place}`;
+  }
+}
+
 export const countText = (row: Pick<BarracksRosterRow, "source" | "count" | "startCount">) =>
   row.source === "band" && row.count !== row.startCount ? `${row.count} of ${row.startCount}` : String(row.count);
 const men = (rows: BarracksRosterRow[]) => rows.reduce((n, r) => n + r.count, 0);
@@ -281,6 +299,33 @@ export function AwayRow({ row, names, offset, serverNowMs, onZero }: { row: Barr
           {pct !== null ? <ProgressBar pct={pct} tone="away" /> : null}
         </div>
         {row.mission ? <span className="barracks-tag">{MISSION_TAG[row.mission.kind]}</span> : null}
+      </div>
+    </div>
+  );
+}
+
+// Away · Returning: hulls at sea, one row per sailing, counting down to the
+// instant the owner's settle brings them home, with what took them out, a
+// progress bar and the AT SEA tag. At zero the panel refetches, as AwayRow does.
+export function VoyageRow({ voyage, names, offset, serverNowMs, onZero }: { voyage: BarracksVoyage; names: Record<string, string>; offset: number; serverNowMs: number; onZero: (key: string) => void }) {
+  const target = voyage.returnsAt;
+  const left = useCountdownSeconds(onDeviceClock(target, offset));
+  useEffect(() => {
+    if (left <= 0) onZero(`${voyage.id}:sea:${target}`);
+  }, [voyage.id, target, left, onZero]);
+  const pct = progressPct(voyage.sailedAt, voyage.returnsAt, serverNowMs);
+  return (
+    <div className="barracks-row barracks-away barracks-voyage" data-voyage={voyage.id}>
+      <div className="barracks-row-grid two">
+        <div className="barracks-row-body">
+          <div className="barracks-row-name split">
+            <span>{voyage.ships.map((s) => `${s.label} · ${s.count}`).join(", ")}</span>
+            <span className="barracks-row-left">{formatClock(left)}</span>
+          </div>
+          <div className="barracks-row-sub barracks-mission">{voyageLine(voyage, names)}</div>
+          <ProgressBar pct={pct} tone="away" />
+        </div>
+        <span className="barracks-tag">AT SEA</span>
       </div>
     </div>
   );
@@ -657,13 +702,15 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
   const lockReason = LOCK_REASON(view.gate.required, view.gate.current);
   const capped = view.activeBands >= view.config.maxActiveBands;
 
-  // The roster in its three places.
+  // The roster in its three places, and the hulls at sea beside the men away.
   const away = view.roster.filter((r) => r.movingTo !== null);
+  const atSea = view.atSea ?? [];
   const training = view.roster.filter((r) => r.source === "trained" && !r.active && r.movingTo === null);
   const home = view.roster.filter((r) => r.movingTo === null && r.active);
   const upkeepFor = (row: BarracksRosterRow) => ({ row: view.upkeep.rows[row.id] ?? null, perMan: row.source === "trained" ? (view.units.find((u) => u.id === row.unitId)?.upkeepPerDay ?? null) : null });
   const strip = upkeepGoods(view.upkeep.perDay);
-  // The ships in port, listed under Massalia (their only place on the panel).
+  // The ships in port, listed under Massalia (their only place on the panel);
+  // ships at sea are listed under Away · Returning, one row per sailing.
   const fleetShips = view.fleet?.ships ?? [];
   // At Home by place: Massalia first, then holdings, then home ground, then
   // anything the reach payload did not name; only places with men (Massalia
@@ -790,9 +837,12 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
           <section className="barracks-section" data-section="away" aria-label="Away, returning">
             <SectionHead title="Away · Returning" note={menText(men(away))} />
             <div className="barracks-list away">
-              {away.length === 0 ? <p className="barracks-empty">No one on the march.</p> : null}
+              {away.length === 0 && atSea.length === 0 ? <p className="barracks-empty">No one on the march.</p> : null}
               {away.map((row) => (
                 <AwayRow key={row.id} row={row} names={placeNames} offset={offset} serverNowMs={serverNowMs} onZero={onZero} />
+              ))}
+              {atSea.map((v) => (
+                <VoyageRow key={v.id} voyage={v} names={placeNames} offset={offset} serverNowMs={serverNowMs} onZero={onZero} />
               ))}
             </div>
           </section>

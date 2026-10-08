@@ -1743,6 +1743,8 @@ export type BarracksOffer = {
   hired: boolean;
 };
 
+// Hulls at sea (raids prompt 3): one entry per sailing, listed under Away · Returning.
+export type BarracksVoyage = { id: string; ships: { id: string; label: string; count: number }[]; kind: "scout" | "raid" | "attack" | "move"; musterId: string | null; regionId: string; townId: string | null; sailedAt: string; returnsAt: string };
 export type BarracksView = {
   gate: BarracksGate;
   // Display names for every place the roster mentions (bases, destinations, mission targets): region ids and town slugs alike.
@@ -1764,6 +1766,8 @@ export type BarracksView = {
   summary: { underArms: number; levyMen: number; growthPerYear: number; baseGrowthPerYear?: number; heldRegions?: number; seasonsPerYear: number };
   // The ships in stock for the strip's FLEET cell: labels from ships.json, troop space summed, range the farthest hull.
   fleet: { ships: { id: string; label: string; role: "transport" | "warship"; count: number; troopSpace: number; range: number; naval: number }[]; space: number; range: number };
+  // The hulls at sea, one entry per sailing (optional: an older payload has none).
+  atSea?: BarracksVoyage[];
   // The altar while lit (the good burned, its morale bonus, the instant it goes cold), else null.
   altar: { good: string; mor: number; until: string } | null;
 };

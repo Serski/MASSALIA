@@ -213,6 +213,33 @@ describe("BarracksPanel", () => {
     expect(hookWarnings).toEqual([]);
   });
 
+  it("ships at sea: one row per sailing under Away · Returning, with the hulls, what took them out, the clock, a bar and the AT SEA tag", async () => {
+    const voyage = (id: string, over: Partial<BarracksView["atSea"] extends (infer V)[] | undefined ? V : never> = {}) => ({
+      id, ships: [{ id: "trade-ship", label: "Pentekonter", count: 2 }, { id: "galley", label: "Trireme", count: 1 }], kind: "raid" as const, musterId: null, regionId: "R046", townId: null, sailedAt: iso(NOW - H), returnsAt: iso(NOW + 2 * H), ...over,
+    });
+    const { container } = await mount(payload({ roster: [homeLevy], atSea: [voyage("voy-1"), voyage("voy-2", { musterId: "m-1", ships: [{ id: "trade-ship", label: "Pentekonter", count: 1 }] })] }));
+    const away = container.querySelector('[data-section="away"]')!;
+    const sailings = away.querySelectorAll(".barracks-voyage");
+    expect(sailings).toHaveLength(2);
+    const first = away.querySelector('[data-voyage="voy-1"]')!;
+    expect(first.querySelector(".barracks-row-name span")!.textContent).toBe("Pentekonter · 2, Trireme · 1");
+    expect(first.querySelector(".barracks-mission")!.textContent).toBe("Raid on Salyes");
+    expect(first.querySelector(".barracks-row-left")!.textContent).toMatch(/0(1:59:5\d|2:00:00)/);
+    expect(first.querySelector(".barracks-tag")!.textContent).toBe("AT SEA");
+    expect(first.querySelector(".barracks-bar-fill")?.getAttribute("style")).toContain("width: 33%");
+    expect(away.querySelector('[data-voyage="voy-2"] .barracks-mission')!.textContent).toBe("The koinon's raid on Salyes");
+    expect(away.textContent).not.toContain("No one on the march.");
+    expect(hookWarnings).toEqual([]);
+    cleanup();
+
+    // The default payload has no sailing, and its away rows are as they were.
+    const plain = await mount(payload());
+    const plainAway = plain.container.querySelector('[data-section="away"]')!;
+    expect(plainAway.querySelector(".barracks-voyage")).toBeNull();
+    expect(plainAway.querySelectorAll(".barracks-row")).toHaveLength(2);
+    expect(hookWarnings).toEqual([]);
+  });
+
   it("countText: levy rows show the plain count, bands show their strength against the company once reduced", () => {
     expect(countText({ source: "trained", count: 33, startCount: 33 })).toBe("33");
     expect(countText({ source: "trained", count: 26, startCount: 30 })).toBe("26");
