@@ -217,3 +217,15 @@ STOP 1. Report:
 ## Push (only after I reply "push")
 
 Fast-forward only, plain `git push`. Report remote HEAD, the CI run with its Gate and Audit steps, Railway server and worker on the new SHA, migration 0068 in `__massalia_migrations` on production (a select through `railway run --service Postgres --environment production`), Pages green and API health.
+
+## STOP 1 ruling (8 Oct 2026)
+
+1. The set-out card as rendered: accepted. Headed "Raid · Salyes", the line "40 peltasts set out to raid Salyes, arriving in 00:30:00.".
+2. The turned-back report as rendered: accepted. "40 peltasts found Aleria held by another house and turned back.", no rows table, then the way home. The "already ours" and "broke up on the road" lines as the prompt gives them: accepted.
+3. The way-home line: accepted. "The march home takes 01:00:00."
+4. The Reports list as rendered: accepted. Newest first; an unread report tinted with the gold left edge and the NEW tag before its kind's; a read one plain; the line, the game date under it, the kind's tag.
+5. `act` no longer computing the fleet's naval power: accepted. The arrival reads it from the march's `sailing`, and an unused value would fail the lint.
+6. The `recordChronicle` calls that now record nothing for raids, attacks and scouts: leave them as they are. They still record moves and holdings.
+7. The region-cards test checking only the arrival's pair of reads (the military after the roster): accepted. The mount reads the military file first by design.
+
+One commit: this ruling appended verbatim to docs/barracks/raids-prompt-4.md under its heading, subject `docs: the raids prompt 4 STOP 1 ruling`. Run the gate at the new HEAD, then `pnpm audit --audit-level=high`. On GATE GREEN and audit exit 0, push as the prompt's Push section says: fast-forward only, plain `git push`. Report the Committed line, the gate's last line with suite counts, the audit exit code, remote HEAD, the CI run with its Gate and Audit steps, Railway server and worker on the new SHA, migration 0068 in `__massalia_migrations` on production, Pages green and API health. On any red, STOP with the log and do not push.
