@@ -92,6 +92,14 @@ const MISSION_TAG: Record<NonNullable<BarracksRosterRow["mission"]>["kind"], str
 // (koinon prompt 3): it cannot be moved or disbanded until the muster is over.
 export const PLEDGED_LINE = "Pledged to the koinon's muster.";
 export const isPledgedRow = (row: BarracksRosterRow) => row.mission?.kind === "muster" && row.movingTo === null;
+// A raid, an attack or a scout still bound for its place (the test missionLine
+// makes): its bar is red on the way out and green once it turns for home.
+export function isOutbound(row: BarracksRosterRow): boolean {
+  const m = row.mission;
+  if (!m || m.kind === "move" || m.kind === "muster") return false;
+  return row.movingTo === (m.townId ?? m.regionId);
+}
+
 export function missionLine(row: BarracksRosterRow, names: Record<string, string>): string {
   const m = row.mission;
   if (!m) return "Returning";
@@ -295,7 +303,7 @@ export function AwayRow({ row, names, offset, serverNowMs, onZero }: { row: Barr
             <span className="barracks-row-left">{formatClock(left)}</span>
           </div>
           <div className="barracks-row-sub barracks-mission">{missionLine(row, names)}</div>
-          {pct !== null ? <ProgressBar pct={pct} tone="away" /> : null}
+          {pct !== null ? <ProgressBar pct={pct} tone={isOutbound(row) ? "out" : "away"} /> : null}
         </div>
         {row.mission ? <span className="barracks-tag">{MISSION_TAG[row.mission.kind]}</span> : null}
       </div>

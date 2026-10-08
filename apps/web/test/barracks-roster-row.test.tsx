@@ -37,6 +37,22 @@ describe("roster rows", () => {
     expect(container.querySelector(".barracks-bar-fill")?.getAttribute("style")).toContain("width: 47%");
   });
 
+  it("the bar is red on the way out and green coming home", () => {
+    const tone = (over: Partial<BarracksRosterRow>) => {
+      const { container, unmount } = render(<AwayRow row={base({ arrivesAt: iso(H), ...over })} names={names} offset={0} serverNowMs={Date.now()} onZero={noop} />);
+      const bar = container.querySelector(".barracks-bar")!;
+      const out = bar.classList.contains("out");
+      expect(out || bar.classList.contains("away")).toBe(true);
+      unmount();
+      return out ? "out" : "away";
+    };
+    // Bound for the place: red.
+    for (const kind of ["raid", "attack", "scout"] as const) expect(tone({ movingTo: "R046", mission: { kind, regionId: "R046", departedAt: iso(-H) } }), kind).toBe("out");
+    // The same raid bound home, and a move: green.
+    expect(tone({ movingTo: "R060", mission: { kind: "raid", regionId: "R046", departedAt: iso(-H) } })).toBe("away");
+    expect(tone({ movingTo: "nikaia", mission: { kind: "move", regionId: "R059", townId: "nikaia", departedAt: iso(-H) } })).toBe("away");
+  });
+
   it("on the march: the mission line and tag, the countdown, and the region name from the names file", () => {
     const raid = base({ movingTo: "R060", arrivesAt: iso(2 * H + 14 * 60_000 + 7_000), mission: { kind: "raid", regionId: "R046", departedAt: iso(-H) } });
     const { container } = render(<AwayRow row={raid} names={names} offset={0} serverNowMs={Date.now()} onZero={noop} />);

@@ -4144,6 +4144,7 @@
 .dashboard-shell .barracks-bar{ height: 3px; margin-top: 6px; background: rgba(34, 26, 20, 0.9); border-radius: 0; overflow: hidden; }
 .dashboard-shell .barracks-bar-fill{ height: 100%; background: linear-gradient(90deg, var(--dash-bronze), var(--dash-gold-bright)); }
 .dashboard-shell .barracks-bar.away .barracks-bar-fill{ background: linear-gradient(90deg, #5a7a4a, #7fb069); }
+.dashboard-shell .barracks-bar.out .barracks-bar-fill{ background: linear-gradient(90deg, #7a2e34, var(--danger)); }
 .dashboard-shell .build-progress{ display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
 .dashboard-shell .build-progress-head{ display: flex; justify-content: space-between; gap: 12px; }
 .dashboard-shell .build-clock{ font-variant-numeric: tabular-nums; color: var(--dash-stone-dim); }

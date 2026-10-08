@@ -626,8 +626,9 @@ export function onDeviceClock(targetIso: string | null, offset: number): string 
 }
 
 // The thin bar under a row that is waiting on a clock: a unit in training, a
-// party away, a building going up.
-export function ProgressBar({ pct, tone }: { pct: number; tone: "away" | "training" | "build" }) {
+// party away (green) or still on its way out to a fight (red, "out"), a
+// building going up.
+export function ProgressBar({ pct, tone }: { pct: number; tone: "away" | "out" | "training" | "build" }) {
   return (
     <div className={`barracks-bar ${tone}`} role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
       <div className="barracks-bar-fill" style={{ width: `${pct}%` }} />
