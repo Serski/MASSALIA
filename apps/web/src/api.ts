@@ -1697,7 +1697,8 @@ export type EventResolution = {
 
 // --- Barracks (GET /api/barracks; mirrors apps/server/src/services/barracks.ts) ---
 
-export type BarracksGate = { stat: "militia"; required: number; current: number; met: boolean };
+// Met for every free character; the unfree see the Barracks locked with `reason` (barracks prompt 4).
+export type BarracksGate = { met: boolean; reason: string | null };
 
 export type BarracksUnit = {
   id: string;

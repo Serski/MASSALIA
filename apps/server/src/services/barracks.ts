@@ -29,7 +29,6 @@ import { lockPlayer } from "./lock.js";
 import { getTopology } from "./mapGraph.js";
 import { heldGarrisonedRegions, settleHoldings, settleTribute, type HoldingsSettle, type TributeSettle } from "./holdings.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
-import { sheetStats } from "./traits.js";
 import type { MapActReport } from "./mapActions.js";
 
 // ---------------------------------------------------------------------------
@@ -225,19 +224,17 @@ async function logEffect(exec: Exec, characterId: string, kind: string, detail: 
   await exec.insert(effectLog).values({ characterId, kind, detail, ...(createdAt ? { createdAt } : {}) });
 }
 
-// The militia gate, on the militia the character sheet shows: base plus trait
-// bonuses, clamped (sheetStats). A trait that lifts the sheet to the gate opens it.
-export type GateView = { stat: "militia"; required: number; current: number; met: boolean };
+// The gate (barracks prompt 4): every free character may raise an army,
+// whatever his militia; the unfree may not, as the koinon, the Three Hundred
+// and the parties refuse them. `reason` is the line the client shows while
+// the Barracks is locked.
+export const UNFREE_REFUSAL = "The unfree may not raise an army.";
+export type GateView = { met: true; reason: null } | { met: false; reason: string };
 
 export async function gateFor(exec: Exec, ctx: ActingContext): Promise<GateView> {
-  const required = getUnitsContent().gate.militia;
-  const rows = await exec
-    .select({ id: playerCharacters.id, prestige: playerCharacters.prestige, devotion: playerCharacters.devotion, militia: playerCharacters.militia, intelligence: playerCharacters.intelligence })
-    .from(playerCharacters)
-    .where(eq(playerCharacters.playerId, ctx.playerId))
-    .limit(1);
-  const current = rows[0] ? (await sheetStats(rows[0], exec)).militia : 0;
-  return { stat: "militia", required, current, met: current >= required };
+  const rows = await exec.select({ classId: playerCharacters.classId }).from(playerCharacters).where(eq(playerCharacters.playerId, ctx.playerId)).limit(1);
+  const classId = rows[0]?.classId ?? null;
+  return classId !== null && classId !== "slave" ? { met: true, reason: null } : { met: false, reason: UNFREE_REFUSAL };
 }
 
 // --- Levy (3b) ---------------------------------------------------------------
@@ -798,7 +795,7 @@ export async function recruitUnits(ctx: ActingContext, unitId: string, count: nu
   return mutate<RecruitResult>(ctx, now, async (tx, composureDays) => {
     const fail = (code: number, error: string): Outcome<RecruitResult> => ({ composureDays, result: { ok: false, code, error } });
     const gate = await gateFor(tx, ctx);
-    if (!gate.met) return fail(403, `Militia ${gate.required} required.`);
+    if (!gate.met) return fail(403, gate.reason);
     const season = seasonFor(ctx, now);
     const levy = await ensureLevy(tx, ctx, season);
     if (levy.men < count) return fail(409, `The levy can spare ${levy.men} men; you asked for ${count}.`);
@@ -843,7 +840,7 @@ export async function hireBand(ctx: ActingContext, bandId: string, now: Date): P
     const season = seasonFor(ctx, now);
     await rollOffers(tx, ctx, season);
     const gate = await gateFor(tx, ctx);
-    if (!gate.met) return fail(403, `Militia ${gate.required} required.`);
+    if (!gate.met) return fail(403, gate.reason);
     const offer = (await offersFor(tx, ctx, season)).find((o) => o.bandId === bandId);
     if (!offer || offer.hired) return fail(404, "That band is not on offer this season.");
     const active = (await ownedUnitRows(tx, ctx)).filter((r) => r.source === "band").length;
@@ -893,7 +890,7 @@ export async function sacrifice(ctx: ActingContext, good: string, now: Date): Pr
     return await mutate<SacrificeResult>(ctx, now, async (tx, composureDays) => {
       const fail = (code: number, error: string): Outcome<SacrificeResult> => ({ composureDays, result: { ok: false, code, error } });
       const gate = await gateFor(tx, ctx);
-      if (!gate.met) return fail(403, `Militia ${gate.required} required.`);
+      if (!gate.met) return fail(403, gate.reason);
       // An own key only: `in` would let "constructor" through.
       if (!Object.hasOwn(altar.goods, good)) return fail(400, "The altar takes a bull or a chicken.");
       const mor = altar.goods[good]!;

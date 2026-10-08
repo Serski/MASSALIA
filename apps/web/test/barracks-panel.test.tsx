@@ -34,7 +34,7 @@ const offer = (id: string, label: string, hired: boolean) => ({ id, label, icon:
 function payload(over: Partial<BarracksView> = {}): BarracksView {
   const roster = over.roster ?? [homeLevy, homeBand, awayRaid, awayNoMission, trainingRow];
   return {
-    gate: { stat: "militia", required: 20, current: 26, met: true },
+    gate: { met: true, reason: null },
     season: 93,
     now: iso(NOW),
     levy: { men: 3 },
@@ -88,8 +88,8 @@ async function mount(view: BarracksView, then?: BarracksView) {
 
 describe("BarracksPanel", () => {
   it("locked: the banner shows and every action is disabled, while the catalogue still renders", async () => {
-    const { container } = await mount(payload({ gate: { stat: "militia", required: 20, current: 4, met: false }, roster: [] }));
-    expect(container.querySelector(".barracks-lock")?.textContent).toContain("You stand at 4");
+    const { container } = await mount(payload({ gate: { met: false, reason: "The unfree may not raise an army." }, roster: [] }));
+    expect(container.querySelector(".barracks-lock")?.textContent).toContain("The unfree may not raise an army.");
     expect(container.querySelector(".section-eyebrow")?.textContent).toBe("Barracks · Spring, 277 BC");
     const recruit = [...container.querySelectorAll("button")].filter((b) => /^Recruit \d+$/.test(b.textContent ?? ""));
     expect(recruit).toHaveLength(2);
@@ -358,14 +358,14 @@ describe("BarracksPanel", () => {
     expect(hookWarnings).toEqual([]);
   });
 
-  it("the altar, below the gate: both buttons disabled with the lock reason", async () => {
-    const { container } = await mount(payload({ gate: { stat: "militia", required: 20, current: 4, met: false } }));
+  it("the altar, locked: both buttons disabled with the lock reason", async () => {
+    const { container } = await mount(payload({ gate: { met: false, reason: "The unfree may not raise an army." } }));
     const altar = container.querySelector('[data-section="altar"]') as HTMLElement;
     const buttons = [...altar.querySelectorAll("button")] as HTMLButtonElement[];
     expect(buttons).toHaveLength(2);
     expect(buttons.map((b) => [b.disabled, b.title])).toEqual([
-      [true, "The barracks admit men of militia 20. You stand at 4."],
-      [true, "The barracks admit men of militia 20. You stand at 4."],
+      [true, "The unfree may not raise an army."],
+      [true, "The unfree may not raise an army."],
     ]);
     expect(hookWarnings).toEqual([]);
   });

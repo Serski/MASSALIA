@@ -35,7 +35,7 @@ async function loadModules() {
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
 type View = {
-  gate: { stat: string; required: number; current: number; met: boolean };
+  gate: { met: boolean; reason: string | null };
   season: number;
   now: string;
   levy: { men: number };
@@ -86,12 +86,12 @@ suite("/api/barracks (integration)", () => {
     worldId = world.id;
   });
 
-  async function freshPlayer(opts: { militia?: number; drachmae?: number; goods?: Record<string, number> } = {}) {
+  async function freshPlayer(opts: { militia?: number; drachmae?: number; goods?: Record<string, number>; classId?: string } = {}) {
     const { users, players, playerCharacters, dynasties, resources, sessions } = m.dbPkg;
     const user = (await db.insert(users).values({ email: `u-${Math.random().toString(36).slice(2)}@t`, passwordHash: "x" }).returning())[0]!;
     const player = (await db.insert(players).values({ worldId, userId: user.id, name: `Kleon-${Math.random().toString(36).slice(2, 8)}`, color: "#123456", houseSlug: "test-house" }).returning())[0]!;
     const dynasty = (await db.insert(dynasties).values({ worldId, name: "House Test", prestige: 0, houseSlug: "test-house", foundingPlayerId: player.id, generation: 1 }).returning())[0]!;
-    await db.insert(playerCharacters).values({ playerId: player.id, worldId, houseSlug: "test-house", classId: "hoplite", dynastyId: dynasty.id, militia: opts.militia ?? 20, drachmae: opts.drachmae ?? 1000, startAge: 30, deathAge: 90 });
+    await db.insert(playerCharacters).values({ playerId: player.id, worldId, houseSlug: "test-house", classId: opts.classId ?? "hoplite", dynastyId: dynasty.id, militia: opts.militia ?? 20, drachmae: opts.drachmae ?? 1000, startAge: 30, deathAge: 90 });
     for (const [type, amount] of Object.entries(opts.goods ?? {})) {
       await db.insert(resources).values({ scope: "player", scopeId: player.id, type, amount: String(amount), ratePerSecond: "0", lastUpdatedAt: startedAt });
     }
@@ -109,12 +109,12 @@ suite("/api/barracks (integration)", () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it("GET below the gate still serves the catalogue, offers and levy, with gate.met false", async () => {
-    const p = await freshPlayer({ militia: 5 });
+  it("GET as a slave still serves the catalogue, offers and levy, with the gate locked by the unfree line", async () => {
+    const p = await freshPlayer({ classId: "slave" });
     const res = await get(p.token);
     expect(res.statusCode).toBe(200);
     const v = res.json<View>();
-    expect(v.gate).toEqual({ stat: "militia", required: 20, current: 5, met: false });
+    expect(v.gate).toEqual({ met: false, reason: "The unfree may not raise an army." });
     expect(v.season).toBe(9);
     // Server time, ISO, within a few seconds of the request.
     expect(Math.abs(Date.parse(v.now) - Date.now())).toBeLessThan(10_000);
@@ -129,15 +129,15 @@ suite("/api/barracks (integration)", () => {
     expect(v.offers.every((o) => !o.hired && o.men >= 10 && typeof o.upkeepPerDay.drachmae === "number")).toBe(true);
     expect(v.roster).toEqual([]);
     expect(v.activeBands).toBe(0);
-    // Below the gate every POST refuses with 403.
+    // The unfree: every POST refuses with 403.
     expect((await post(p.token, "recruit", { unitId: "peltast", count: 1 })).statusCode).toBe(403);
     expect((await post(p.token, "hire", { bandId: v.offers[0]!.id })).statusCode).toBe(403);
   });
 
-  it("GET above the gate: gate.met true, and a second GET returns the same offers", async () => {
-    const p = await freshPlayer({ militia: 20 });
+  it("GET as a free character at militia 0: the gate is met, and a second GET returns the same offers", async () => {
+    const p = await freshPlayer({ militia: 0 });
     const a = (await get(p.token)).json<View>();
-    expect(a.gate.met).toBe(true);
+    expect(a.gate).toEqual({ met: true, reason: null });
     const b = (await get(p.token)).json<View>();
     expect(b.offers.map((o) => o.id)).toEqual(a.offers.map((o) => o.id));
   });

@@ -18,9 +18,8 @@ const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v));
 describe("units.json", () => {
   const units = parseUnitsContent(unitsRaw, goods);
 
-  it("parses the real file: four units, gate militia 20, levy 100 +10/4 seasons", () => {
+  it("parses the real file: four units, levy 100 +10/4 seasons", () => {
     expect(Object.keys(units.units)).toEqual(["peltast", "ekdromos", "hoplite", "hippeis"]);
-    expect(units.gate).toEqual({ militia: 20 });
     expect(units.levy).toEqual({ startMen: 100, growthPerYear: 10, seasonsPerYear: 4 });
     expect(units.minServiceSeasons).toBe(2);
     expect(unitDef(units, "hoplite")!.gear).toEqual({ timber: 1, iron: 1, tin: 2 });

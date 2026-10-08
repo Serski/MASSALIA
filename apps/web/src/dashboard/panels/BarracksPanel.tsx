@@ -16,7 +16,6 @@ import { AssetIcon, formatClock, formatDuration, GoodGlyph, onDeviceClock, type 
 // Hooks: every per-row hook lives in a child component; the panel's own hooks
 // all sit above its loading return, so the hook order never changes.
 
-const LOCK_REASON = (required: number, current: number) => `The barracks admit men of militia ${required}. You stand at ${current}.`;
 const BAND_CAP_REASON = "Two bands is all the city will feed.";
 const SERVICE_REASON = "Two seasons' service first.";
 const MS_PER_DAY = 86_400_000;
@@ -701,7 +700,7 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
   }
 
   const locked = !view.gate.met;
-  const lockReason = LOCK_REASON(view.gate.required, view.gate.current);
+  const lockReason = view.gate.reason ?? "";
   const capped = view.activeBands >= view.config.maxActiveBands;
 
   // The roster in its three places, and the hulls at sea beside the men away.

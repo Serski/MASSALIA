@@ -284,7 +284,7 @@ describe("move picker", () => {
   it("from a Barracks row: MOVE opens the same picker with the row pre-ticked and a destination selector, Go runs the move, the report shows and the panel refetches", async () => {
     const hoplites = row({ id: "home-hoplites", count: 26 });
     const view: BarracksView = {
-      gate: { stat: "militia", required: 20, current: 26, met: true },
+      gate: { met: true, reason: null },
       places: { R060: "Massalia" },
       season: 93,
       now: iso(NOW),

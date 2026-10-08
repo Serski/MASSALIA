@@ -99,7 +99,6 @@ export type LevyConfig = { startMen: number; growthPerYear: number; seasonsPerYe
 export type UnitsContent = {
   version: number;
   source: string;
-  gate: { militia: number };
   levy: LevyConfig;
   minServiceSeasons: number;
   units: Record<string, UnitDef>;
@@ -171,7 +170,6 @@ function unitsContentSchema(goods: ReadonlySet<string>) {
     .object({
       version: z.number().int().positive(),
       source: z.string(),
-      gate: z.object({ militia: z.number().int().nonnegative() }).strict(),
       levy: z
         .object({
           startMen: z.number().int().nonnegative(),

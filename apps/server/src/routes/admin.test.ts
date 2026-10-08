@@ -379,11 +379,12 @@ suite("admin tooling and account gates (integration)", () => {
     expect(byId[pledged.id]).toMatchObject({ state: "pledged", editable: false });
     expect(byId[moving.id]).toMatchObject({ state: "moving", movingTo: "R046", editable: false });
 
-    // Below the militia gate, adding men is refused.
+    // The unfree are refused men.
+    await db.update(playerCharacters).set({ classId: "slave" }).where(eq(playerCharacters.id, characterId));
     const gated = await post("units/grant", { unitId: "peltast", count: 20, reason: "x" });
     expect(gated.statusCode).toBe(409);
-    expect(gated.json()).toEqual({ error: "Militia 20 required." });
-    await db.update(playerCharacters).set({ militia: 20 }).where(eq(playerCharacters.id, characterId));
+    expect(gated.json()).toEqual({ error: "The unfree may not raise an army." });
+    await db.update(playerCharacters).set({ classId: "trader" }).where(eq(playerCharacters.id, characterId));
 
     // Count: relative and guarded on a trained row; startCount follows a rise.
     expect((await post(`units/${hoplites.id}/count`, { delta: 5, reason: "event bug" })).json()).toMatchObject({ ok: true, unitRowId: hoplites.id, count: 15, removed: false });

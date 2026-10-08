@@ -1,7 +1,6 @@
 {
   "version": 1,
   "source": "server-side military content; never copy into apps/web/public",
-  "gate": { "militia": 20 },
   "levy": { "startMen": 100, "growthPerYear": 10, "seasonsPerYear": 4 },
   "minServiceSeasons": 2,
   "units": {

@@ -526,9 +526,9 @@ export async function adminRoutes(app: FastifyInstance) {
   // --- Military --------------------------------------------------------------------
   // Each edit settles first (settledEdit), so an arrived row has been landed and a
   // stale pledge released before the row is read. Adding men (a grant, a positive
-  // count) is refused below the militia gate: a player under it could neither
-  // move nor disband them (ruling, 4 Oct 2026). Pledged and marching rows are
-  // refused for every edit: another player's muster, or the settle, owns them.
+  // count) is refused for the unfree (barracks prompt 4): a slave could neither
+  // move nor disband them. Pledged and marching rows are refused for every
+  // edit: another player's muster, or the settle, owns them.
   const unitRowOf = async (tx: Tx, owner: Owner, unitRowId: string) => {
     const rows = await tx
       .select()
@@ -542,7 +542,7 @@ export async function adminRoutes(app: FastifyInstance) {
   };
   const requireGate = async (tx: Tx, ctx: ActingContext) => {
     const gate = await gateFor(tx, ctx);
-    if (!gate.met) httpError(`Militia ${gate.required} required.`, 409);
+    if (!gate.met) httpError(gate.reason, 409);
   };
 
   // Relative count on a trained row; a row brought to zero is deleted, as a battle

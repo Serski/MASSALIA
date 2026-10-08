@@ -39,7 +39,7 @@ suite("Barracks (integration)", () => {
   let worldId: string;
   type Ctx = { playerId: string; worldId: string; worldStartedMs: number };
 
-  async function makePlayer(opts: { militia?: number; drachmae?: number } = {}): Promise<{ ctx: Ctx; characterId: string }> {
+  async function makePlayer(opts: { militia?: number; drachmae?: number; classId?: string } = {}): Promise<{ ctx: Ctx; characterId: string }> {
     const { users, players, playerCharacters, dynasties } = m.dbPkg;
     const user = (await db.insert(users).values({ email: `u-${Math.random().toString(36).slice(2)}@t`, passwordHash: "x" }).returning())[0]!;
     const player = (await db.insert(players).values({ worldId, userId: user.id, name: `Xanthippos-${Math.random().toString(36).slice(2, 8)}`, color: "#123456", houseSlug: "test-house" }).returning())[0]!;
@@ -47,7 +47,7 @@ suite("Barracks (integration)", () => {
     const ch = (
       await db
         .insert(playerCharacters)
-        .values({ playerId: player.id, worldId, houseSlug: "test-house", classId: "hoplite", dynastyId: dynasty.id, militia: opts.militia ?? 20, drachmae: opts.drachmae ?? 1000, startAge: 30, deathAge: 90 })
+        .values({ playerId: player.id, worldId, houseSlug: "test-house", classId: opts.classId ?? "hoplite", dynastyId: dynasty.id, militia: opts.militia ?? 20, drachmae: opts.drachmae ?? 1000, startAge: 30, deathAge: 90 })
         .returning()
     )[0]!;
     return { ctx: { playerId: player.id, worldId, worldStartedMs: T0 }, characterId: ch.id };
@@ -157,37 +157,32 @@ suite("Barracks (integration)", () => {
   });
 
   describe("gate", () => {
-    it("militia 19 refuses recruit and hire with 403; militia 20 succeeds", async () => {
-      const low = await makePlayer({ militia: 19 });
-      await giveAll(low.ctx, { timber: 50, leather: 50 });
-      expect(await m.barracks.recruitUnits(low.ctx, "peltast", 1, at(9))).toMatchObject({ ok: false, code: 403 });
-      const offers = await roll(low.ctx, 9);
-      expect(await m.barracks.hireBand(low.ctx, offers[0]!.bandId, at(9))).toMatchObject({ ok: false, code: 403 });
-      expect(await rows(low.ctx)).toHaveLength(0);
-
-      const ok = await makePlayer({ militia: 20 });
+    it("a free character raises an army whatever his militia: militia 0 recruits and hires, and the view's gate is { met: true, reason: null }", async () => {
+      const ok = await makePlayer({ militia: 0 });
       await giveAll(ok.ctx, { timber: 50, leather: 50 });
+      expect((await m.barracks.barracksView(ok.ctx, at(9))).gate).toEqual({ met: true, reason: null });
       expect(await m.barracks.recruitUnits(ok.ctx, "peltast", 1, at(9))).toMatchObject({ ok: true, unitId: "peltast", count: 1 });
-      const offers2 = await roll(ok.ctx, 9);
-      expect(await m.barracks.hireBand(ok.ctx, offers2[0]!.bandId, at(9))).toMatchObject({ ok: true, bandId: offers2[0]!.bandId });
+      const offers = await roll(ok.ctx, 9);
+      expect(await m.barracks.hireBand(ok.ctx, offers[0]!.bandId, at(9))).toMatchObject({ ok: true, bandId: offers[0]!.bandId });
     });
 
-    it("reads the sheet's militia: base 18 with Duelist and Sellsword (20) recruits; base 20 with Craven (18) is refused", async () => {
-      const lifted = await makePlayer({ militia: 18 });
-      await db.insert(m.dbPkg.characterTraits).values([
-        { characterId: lifted.characterId, traitId: "duelist" },
-        { characterId: lifted.characterId, traitId: "sellsword" },
-      ]);
-      await giveAll(lifted.ctx, { timber: 50, leather: 50 });
-      expect((await m.barracks.barracksView(lifted.ctx, at(9))).gate).toEqual({ stat: "militia", required: 20, current: 20, met: true });
-      expect(await m.barracks.recruitUnits(lifted.ctx, "peltast", 1, at(9))).toMatchObject({ ok: true, unitId: "peltast", count: 1 });
-
-      const craven = await makePlayer({ militia: 20 });
-      await db.insert(m.dbPkg.characterTraits).values({ characterId: craven.characterId, traitId: "craven" });
-      await giveAll(craven.ctx, { timber: 50, leather: 50 });
-      expect((await m.barracks.barracksView(craven.ctx, at(9))).gate).toMatchObject({ current: 18, met: false });
-      expect(await m.barracks.recruitUnits(craven.ctx, "peltast", 1, at(9))).toMatchObject({ ok: false, code: 403 });
-      expect(await rows(craven.ctx)).toHaveLength(0);
+    it("a slave is refused recruit, hire and the altar with 403 and the unfree line, and the view's gate carries the line", async () => {
+      const slave = await makePlayer({ classId: "slave" });
+      await giveAll(slave.ctx, { timber: 50, leather: 50, bull: 1 });
+      const refusal = { ok: false, code: 403, error: "The unfree may not raise an army." };
+      expect(await m.barracks.recruitUnits(slave.ctx, "peltast", 1, at(9))).toEqual(refusal);
+      const offers = await roll(slave.ctx, 9);
+      expect(await m.barracks.hireBand(slave.ctx, offers[0]!.bandId, at(9))).toEqual(refusal);
+      expect(await m.barracks.sacrifice(slave.ctx, "bull", at(9))).toEqual(refusal);
+      // Nothing moved: no row, the gear and the bull still in stock, the offer not hired, the altar cold.
+      expect(await rows(slave.ctx)).toHaveLength(0);
+      expect(await stock(slave.ctx, "timber")).toBe(50);
+      expect(await stock(slave.ctx, "leather")).toBe(50);
+      expect(await stock(slave.ctx, "bull")).toBe(1);
+      expect((await roll(slave.ctx, 9)).find((o) => o.bandId === offers[0]!.bandId)!.hired).toBe(false);
+      const view = await m.barracks.barracksView(slave.ctx, at(9));
+      expect(view.gate).toEqual({ met: false, reason: "The unfree may not raise an army." });
+      expect(view.altar).toBeNull();
     });
   });
 
@@ -665,8 +660,8 @@ suite("Barracks (integration)", () => {
       expect(await stock(ctx, "bull")).toBe(0);
     });
 
-    it("below the militia gate the offering is refused like recruit; a good the altar does not take is 400", async () => {
-      const low = await makePlayer({ militia: 19 });
+    it("the unfree are refused the offering like recruit; a good the altar does not take is 400", async () => {
+      const low = await makePlayer({ classId: "slave" });
       await giveAll(low.ctx, { bull: 1 });
       expect(await m.barracks.sacrifice(low.ctx, "bull", at(9))).toMatchObject({ ok: false, code: 403 });
       expect(await stock(low.ctx, "bull")).toBe(1);
