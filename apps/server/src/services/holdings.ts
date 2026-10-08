@@ -33,6 +33,13 @@ export const isTownHolding = (h: Pick<HoldingRow, "townId">): boolean => h.townI
 
 const holdingKey = (h: Pick<HoldingRow, "worldId" | "regionId" | "townId">) => and(eq(playerHoldings.worldId, h.worldId), eq(playerHoldings.regionId, h.regionId), eq(playerHoldings.townId, h.townId));
 
+// Who holds the place at (world, region, town), `townId` being "" for a region
+// holding; null when nobody does. An attack on another house's holding is
+// refused at launch (raids prompt 3).
+export async function holderOf(exec: Exec, worldId: string, regionId: string, townId: string): Promise<string | null> {
+  return (await exec.select({ owner: playerHoldings.ownerPlayerId }).from(playerHoldings).where(holdingKey({ worldId, regionId, townId })).limit(1))[0]?.owner ?? null;
+}
+
 export async function listHoldings(exec: Exec, ctx: ActingContext): Promise<HoldingRow[]> {
   return exec
     .select()

@@ -322,6 +322,22 @@ suite("Map actions (integration)", () => {
     await recordChronicle(characterId);
   });
 
+  it("another house's holding: an attack is refused at launch and nothing moves; a raid there still goes", async () => {
+    const a = await makePlayer();
+    const b = await makePlayer();
+    await m.holdings.insertConquest(db, a.ctx, "R046", "unclaimed", at(8));
+    await m.holdings.insertTownConquest(db, a.ctx, "R047", "reii", "saluvii", at(8));
+    const hoplites = await insertRow(b.ctx, { unitId: "hoplite", count: 30 });
+    expect(await act(b.ctx, "attack", "R046", [hoplites.id])).toEqual({ ok: false, code: 409, error: "Another house holds this land." });
+    expect(await actTown(b.ctx, "attack", "reii", [hoplites.id])).toEqual({ ok: false, code: 409, error: "Another house holds this town." });
+    expect((await rows(b.ctx)).find((x) => x.id === hoplites.id)).toMatchObject({ basedAt: "R060", count: 30, movingTo: null });
+    expect((await holdingsOf(a.ctx)).map((h) => [h.regionId, h.townId])).toEqual([["R046", ""], ["R047", "reii"]]);
+    // A raid on the held land goes on as before.
+    await setWarband("R046", 100, at(9));
+    const raid = await act(b.ctx, "raid", "R046", [hoplites.id]);
+    expect(raid).toMatchObject({ ok: true, report: { type: "raid" } });
+  });
+
   it("the altar: a bull lit before the fight raises every row's morale; a blessing that went cold before it gives nothing", async () => {
     // 40 hoplites against a warband of 90. Unblessed they are broken on every
     // seed; with a bull lit (+3 morale: 15 more points of losses before a row

@@ -27,7 +27,7 @@ import { applyComposureDelta } from "./composure.js";
 import { altarBonusFor, barracksView, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, PLEDGED_REFUSAL, type BarracksView, type UnitRow } from "./barracks.js";
 import { getBuildingsContent, settleAll, type ActingContext } from "./buildings.js";
 import { raidOpinion, type RaidOpinion } from "./factionOpinion.js";
-import { creditDrachmae, creditGood, insertConquest, insertTownConquest, listHoldings } from "./holdings.js";
+import { creditDrachmae, creditGood, holderOf, insertConquest, insertTownConquest, listHoldings } from "./holdings.js";
 import { lockPlayer } from "./lock.js";
 import { getTopology } from "./mapGraph.js";
 import { basesOf, fleetInStock, forceRowOf, homeRegions, reachView, type ReachView } from "./mapReach.js";
@@ -264,6 +264,8 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
     // 1. Target: a town, or a townless land region; neither fog, Massalia's,
     // nor ours. Massalia's own ground answers as such before the towns rule
     // (R060 holds a town). A region with towns is attacked through its towns.
+    // An attack on another house's holding is refused (raids prompt 3); a raid
+    // or a scout there is not.
     const holdings = await listHoldings(tx, ctx);
     const townId = input.townId ?? null;
     let regionId: string;
@@ -273,6 +275,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
       regionId = region;
       if (regionId === topology.massaliaRegion || (await townContentOwner(townId)) === HOME_POLITY_ID || (await homeRegions(topology)).has(regionId)) return fail(409, "Massalia does not act against her own.");
       if (holdings.some((h) => h.townId === townId)) return fail(409, "You hold this town.");
+      if (input.type === "attack" && (await holderOf(tx, ctx.worldId, regionId, townId)) !== null) return fail(409, "Another house holds this town.");
     } else {
       if (typeof input.regionId !== "string" || !topology.land.has(input.regionId)) return fail(404, "No such region.");
       regionId = input.regionId;
@@ -280,6 +283,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
       const townsHere = [...topology.townRegion.entries()].some(([, r]) => r === regionId);
       if (townsHere) return fail(409, "This land answers to its towns: choose one.");
       if (holdings.some((h) => h.regionId === regionId && h.townId === "")) return fail(409, "You hold this land.");
+      if (input.type === "attack" && (await holderOf(tx, ctx.worldId, regionId, "")) !== null) return fail(409, "Another house holds this land.");
     }
 
     // 2. Rows: ours, active, not moving, one base, at least one; a scout needs speed.
