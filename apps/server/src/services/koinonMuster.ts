@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { and, asc, desc, eq, inArray, isNull, lte, ne, sql } from "drizzle-orm";
-import { createDb, effectLog, koinonMembers, koinonMusterHulls, koinonMusters, playerCharacters, players, playerUnits, resources, worlds, type UnitMission } from "@massalia/db";
+import { createDb, effectLog, koinonMembers, koinonMusterHulls, koinonMusters, playerCharacters, playerMarches, players, playerUnits, resources, worlds, type UnitMission } from "@massalia/db";
 import {
   bandDef,
   distancesFrom,
@@ -39,7 +39,7 @@ import { settleAll, type ActingContext } from "./buildings.js";
 import { creditDrachmae, creditGood, listHoldings } from "./holdings.js";
 import { getKoinonContent, inOwnKoinon, lockKoinon, memberRow, type KoinonError, type KoinonRole, type KoinonRow } from "./koinon.js";
 import { lockPlayer } from "./lock.js";
-import { describeForce, selectForce, spoilLabel, splitRows, writeIntel } from "./mapActions.js";
+import { describeForce, resolveMarch, selectForce, spoilLabel, splitRows, writeIntel } from "./mapActions.js";
 import { getTopology } from "./mapGraph.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
 import { raidOpinion, type RaidOpinion } from "./factionOpinion.js";
@@ -68,7 +68,9 @@ import { townStats } from "./townStats.js";
 // The resolve is lazy and lives here, not in the worker (which cannot reach the
 // economy): resolveMuster computes everything as of the launch instant, and a
 // preHandler hook runs it before any request that could see or change its
-// inputs, so the result is the one a job at launch would have given.
+// inputs, so the result is the one a job at launch would have given. The same
+// hook resolves a party's march at its arrival (resolveMarch, raids prompt 4),
+// marches and musters in the order their battles fall.
 // ---------------------------------------------------------------------------
 
 const db = createDb();
@@ -910,52 +912,66 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
   }
 }
 
-// --- The hook: due musters resolve before any request ---------------------------------
+// --- The hook: due marches and musters resolve before any request -------------------
 
 const RESOLVE_BACKOFF_MS = 60_000;
-// When a muster's resolve last threw, by muster id, in this process: it is not
-// tried again for a minute, so a muster in trouble cannot slow every request.
+// When a resolve last threw, by muster or march id, in this process: it is not
+// tried again for a minute, so one in trouble cannot slow every request.
 const failedAt = new Map<string, number>();
 
-export type MusterResolverDeps = {
+export type CampaignResolverDeps = {
   resolve?: (musterId: string, now: Date) => Promise<unknown>;
-  onError?: (musterId: string, err: unknown) => void;
+  resolveMarch?: (marchId: string, now: Date) => Promise<unknown>;
+  onError?: (id: string, err: unknown) => void;
 };
 
-// Every open muster whose launch instant has passed, oldest first: one indexed
-// query when nothing is due. A resolve that throws is reported once and left
-// open for a later request; it never throws from here.
-export async function resolveDueMusters(now: Date, deps: MusterResolverDeps = {}): Promise<void> {
-  const due = await db.select({ id: koinonMusters.id }).from(koinonMusters).where(and(eq(koinonMusters.status, "open"), lte(koinonMusters.launchAt, now))).orderBy(asc(koinonMusters.launchAt), asc(koinonMusters.id));
-  for (const { id } of due) {
+// Every open muster whose launch instant has passed and every marching party
+// whose arrival has (two indexed queries), merged by their instant — a march
+// before a muster at the same instant, then by id — and resolved in turn, so
+// two parties bound for one place fight it in the order they arrive. The loop
+// stops at the first resolve that answers `busy`: another request is resolving
+// that one and goes on down the same list, so nothing later is fought ahead of
+// it (two parties on one place would otherwise fight the same pool, or both
+// take it). A resolve that throws is reported once and left for a later
+// request, not tried again for a minute, and holds nothing back; it never
+// throws from here.
+export async function resolveDueCampaigns(now: Date, deps: CampaignResolverDeps = {}): Promise<void> {
+  const musters = await db.select({ id: koinonMusters.id, at: koinonMusters.launchAt }).from(koinonMusters).where(and(eq(koinonMusters.status, "open"), lte(koinonMusters.launchAt, now)));
+  const marches = await db.select({ id: playerMarches.id, at: playerMarches.arrivesAt }).from(playerMarches).where(and(eq(playerMarches.status, "marching"), lte(playerMarches.arrivesAt, now)));
+  const due = [...marches.map((m) => ({ kind: "march" as const, ...m })), ...musters.map((m) => ({ kind: "muster" as const, ...m }))].sort(
+    (a, b) => a.at.getTime() - b.at.getTime() || (a.kind === b.kind ? 0 : a.kind === "march" ? -1 : 1) || a.id.localeCompare(b.id),
+  );
+  for (const { kind, id } of due) {
     const failed = failedAt.get(id);
     if (failed !== undefined && now.getTime() - failed < RESOLVE_BACKOFF_MS) continue;
     try {
-      await (deps.resolve ?? resolveMuster)(id, now);
+      const outcome = await (kind === "march" ? (deps.resolveMarch ?? resolveMarch) : (deps.resolve ?? resolveMuster))(id, now);
       failedAt.delete(id);
+      if ((outcome as { outcome?: string } | null | undefined)?.outcome === "busy") return;
     } catch (err) {
       failedAt.set(id, now.getTime());
-      (deps.onError ?? ((musterId, error) => console.error(`[muster] resolve of ${musterId} failed`, error)))(id, err);
+      (deps.onError ?? ((failedId, error) => console.error(`[campaign] resolve of ${failedId} failed`, error)))(id, err);
     }
   }
 }
 
-// Between a muster's launch and its resolve only time passes, because every
-// write in the game happens inside a request. So the resolve runs before the
-// handler of any request under /api, /me or /admin (never /health or static
-// content), and the handler then sees the muster already marched. The hook
-// never fails a request.
-export function registerMusterResolver(app: FastifyInstance, deps: MusterResolverDeps & { now?: () => Date } = {}): void {
+// Between a muster's launch, or a party's arrival, and its resolve only time
+// passes, because every write in the game happens inside a request. So the
+// resolve runs before the handler of any request under /api, /me or /admin
+// (never /health or static content), and the handler then sees the muster
+// already marched and the party already fought. The hook never fails a request.
+export function registerCampaignResolver(app: FastifyInstance, deps: CampaignResolverDeps & { now?: () => Date } = {}): void {
   app.addHook("preHandler", async (req) => {
     const path = req.url.split("?")[0]!;
     if (!path.startsWith("/api/") && path !== "/me" && !path.startsWith("/me/") && path !== "/admin" && !path.startsWith("/admin/")) return;
     try {
-      await resolveDueMusters(deps.now ? deps.now() : new Date(), {
+      await resolveDueCampaigns(deps.now ? deps.now() : new Date(), {
         resolve: deps.resolve,
-        onError: deps.onError ?? ((musterId, err) => req.log.error({ err, musterId }, "muster resolve failed")),
+        resolveMarch: deps.resolveMarch,
+        onError: deps.onError ?? ((id, err) => req.log.error({ err, id }, "campaign resolve failed")),
       });
     } catch (err) {
-      req.log.error({ err }, "muster resolver failed");
+      req.log.error({ err }, "campaign resolver failed");
     }
   });
 }

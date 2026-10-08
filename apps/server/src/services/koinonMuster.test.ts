@@ -985,7 +985,7 @@ suite("Koinon muster (integration)", () => {
     const calls: string[] = [];
     const errors: [string, unknown][] = [];
     const app = Fastify();
-    m.muster.registerMusterResolver(app, {
+    m.muster.registerCampaignResolver(app, {
       now: () => clock,
       resolve: async (id, now) => {
         calls.push(id);
@@ -1052,7 +1052,7 @@ suite("Koinon muster (integration)", () => {
     await setWarband(landRegion, 3);
     const app = Fastify();
     let clock = at(3 * HOUR);
-    m.muster.registerMusterResolver(app, { now: () => clock });
+    m.muster.registerCampaignResolver(app, { now: () => clock });
     for (const url of ["/api/ping", "/me"]) app.get(url, async () => ({ statuses: (await musters()).map((r) => r.status) }));
     await app.ready();
     try {
@@ -1067,5 +1067,28 @@ suite("Koinon muster (integration)", () => {
     } finally {
       await app.close();
     }
+  });
+
+  it("resolveDueCampaigns: marches and musters in the order their battles fall", async () => {
+    const leader = await freshPlayer("Kallias");
+    const k = await koinonOf("The Sacred Band", [leader]);
+    const musterId = await musterRow(k, leader); // due at LAUNCH
+    // Three parties on the march (rows written directly): arriving an hour before the launch, an hour after, and after `now`.
+    const march = async (id: string, arrivesAt: Date) =>
+      (await db.insert(m.dbPkg.playerMarches).values({ id, worldId, ownerPlayerId: leader, kind: "raid", regionId: landRegion, townId: null, baseId: massalia, route: "land", steps: 1, minutes: 30, party: [], ships: {}, sailing: {}, departedAt: at(-HOUR), arrivesAt }).returning())[0]!.id;
+    const early = await march(uid(910), at(HOUR));
+    const late = await march(uid(911), at(3 * HOUR));
+    await march(uid(912), at(6 * HOUR));
+    const calls: string[] = [];
+    const record = async (id: string) => {
+      calls.push(id);
+      return { outcome: "resolved" };
+    };
+    await m.muster.resolveDueCampaigns(at(5 * HOUR), { resolve: record, resolveMarch: record });
+    expect(calls).toEqual([early, musterId, late]);
+    // One being resolved elsewhere stops the loop: nothing later is fought ahead of it.
+    calls.length = 0;
+    await m.muster.resolveDueCampaigns(at(5 * HOUR), { resolve: record, resolveMarch: async (id) => (id === early ? { outcome: "busy" } : record(id)) });
+    expect(calls).toEqual([]);
   });
 });

@@ -34,11 +34,12 @@ async function loadModules() {
   const mapPools = await import("./mapPools.js");
   const holdings = await import("./holdings.js");
   const actions = await import("./mapActions.js");
+  const muster = await import("./koinonMuster.js");
   const lock = await import("./lock.js");
   const mapReach = await import("./mapReach.js");
   const traits = await import("./traits.js");
   const age = await import("./age.js");
-  return { dbPkg, shared, buildings, barracks, mapGraph, mapPools, holdings, actions, lock, mapReach, traits, age };
+  return { dbPkg, shared, buildings, barracks, mapGraph, mapPools, holdings, actions, muster, lock, mapReach, traits, age };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -248,6 +249,25 @@ suite("Map actions (integration)", () => {
     expect((await rows(b.ctx)).find((x) => x.id === hoplitesB.id)).toMatchObject({ count: 30, movingTo: "R060", arrivesAt: home(fought(at(9), 10), 30) });
     expect((await holdingsOf(a.ctx)).map((h) => h.regionId)).toEqual(["R046"]);
     expect(await warband("R046")).toBe(0);
+  });
+
+  it("two parties on one place fight in the order they arrive", async () => {
+    const a = await makePlayer();
+    const b = await makePlayer();
+    await setWarband("R046", 100, at(9));
+    const hoplitesA = await insertRow(a.ctx, { unitId: "hoplite", count: 30 });
+    const hoplitesB = await insertRow(b.ctx, { unitId: "hoplite", count: 30 });
+    const raidA = await launch(a.ctx, "raid", "R046", [hoplitesA.id], at(9));
+    const raidB = await launch(b.ctx, "raid", "R046", [hoplitesB.id], fought(at(9), 10));
+    expect([raidA.ok, raidB.ok]).toEqual([true, true]);
+    if (!raidA.ok || !raidB.ok) return;
+    // The hook resolves both at once, A's first: B meets what A left.
+    await m.muster.resolveDueCampaigns(at(10));
+    const reportA = (await marchRow(raidA.report.marchId)).report as unknown as MapActReport;
+    const reportB = (await marchRow(raidB.report.marchId)).report as unknown as MapActReport;
+    expect(reportA.defender).toMatchObject({ start: 100 });
+    expect(reportB.defender).toMatchObject({ start: 100 - reportA.defender!.losses });
+    expect(await warband("R046")).toBe(100 - reportA.defender!.losses - reportB.defender!.losses);
   });
 
   it("a party whose men all left on the road breaks up", async () => {

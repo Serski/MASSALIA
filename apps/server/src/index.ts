@@ -46,7 +46,7 @@ import { loadBarracksContent } from "./services/barracks.js";
 import { loadMapGraph } from "./services/mapGraph.js";
 import { loadNewsContent } from "./services/news.js";
 import { loadKoinonContent } from "./services/koinon.js";
-import { registerMusterResolver } from "./services/koinonMuster.js";
+import { registerCampaignResolver } from "./services/koinonMuster.js";
 import { loadTraitDefs } from "./services/traits.js";
 import { loadComposureConfig } from "./services/composure.js";
 import { listEvents } from "./services/eventEngine.js";
@@ -124,9 +124,10 @@ await loadStories();
 // content (ON CONFLICT DO NOTHING — existing pools are never overwritten).
 await ensureMilitaryPools();
 
-// A koinon muster whose launch instant has passed marches before the handler of
-// any /api, /me or /admin request runs (koinon prompt 3). Before the routes.
-registerMusterResolver(app);
+// A koinon muster whose launch instant has passed marches, and a party whose
+// arrival has passed fights, before the handler of any /api, /me or /admin
+// request runs (koinon prompt 3, raids prompt 4). Before the routes.
+registerCampaignResolver(app);
 
 // SELECT 1 + Redis PING (2s each); 503 names the failing part. Rate-limit exempt.
 registerHealthRoute(app);
