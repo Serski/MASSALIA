@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { forceStats, HOME_POLITY_ID, moveVerdict, renderForce, renderPlunder, routeFor, verdictsFor, type CampaignForcePart, type MapActionType } from "@massalia/shared";
-import { api, apiBaseUrl, ApiError, type BarracksRosterRow, type BaseView, type MapActReport, type MapActType, type MapMoveReport, type MapReachView, type MoveTargetView, type ReachEntry } from "../api.js";
+import { forceStats, HOME_POLITY_ID, marchMinutes, moveVerdict, renderForce, renderPlunder, routeFor, verdictsFor, type CampaignForcePart, type MapActionType } from "@massalia/shared";
+import { api, apiBaseUrl, ApiError, type BarracksRosterRow, type BaseView, type MapActReport, type MapActType, type MapMoveReport, type MapReachView, type MapSetOutReport, type MoveTargetView, type ReachEntry } from "../api.js";
 import { AssetIcon, ChoicePicker, CULTURE_WEBP, formatClock, formatDuration, marchLine, POLITY_CREST, titleCase, useCountdownSeconds } from "../dashboard/shared.js";
 import { mapActionButtons, withReach, type MapActionButton } from "./mapActions.js";
 
@@ -386,11 +386,24 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   // action. Whole rows or part of a trained row.
   const [picker, setPicker] = useState<{ type: MapActType | "move"; target: PickTarget } | null>(null);
   const [roster, setRoster] = useState<BarracksRosterRow[] | null>(null);
-  const [report, setReport] = useState<MapActReport | MapMoveReport | null>(null);
+  const [report, setReport] = useState<PickerReport | null>(null);
+  // Military entitlements, read once per map load and again when a party bound
+  // for the open place gets there (after the roster has answered, so the fight
+  // has committed and the strength shown is what it left). Not signed in (or
+  // the API unreachable) simply leaves every strength row at "No survey yet".
+  const loadMilitary = useCallback(() => {
+    fetch(MILITARY_SRC, { credentials: "include" })
+      .then((response) => (response.ok ? (response.json() as Promise<MilitaryPayload>) : null))
+      .then((payload) => {
+        if (payload) setMilitary({ towns: payload.towns ?? {}, regions: payload.regions ?? {} });
+      })
+      .catch(() => {});
+  }, []);
   // The player's men in the selected place (a town when one is open, else the
   // region): those standing there and any party heading there, with a countdown
-  // to the earliest arrival (server clock). At zero the roster is refetched once
-  // so the settle can land them.
+  // to the earliest arrival (server clock). Once that instant has passed the
+  // roster is refetched once (so the settle, or the march's arrival, lands them),
+  // and the military numbers after it.
   const placeId = selectedTown ?? selected;
   const menHere = useMemo(() => {
     const rows = roster ?? [];
@@ -402,15 +415,21 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   const menLeft = useCountdownSeconds(menHere.earliest ? new Date(Date.parse(menHere.earliest) - clockOffset).toISOString() : null);
   const rosterRefetched = useRef(new Set<string>());
   useEffect(() => {
-    if (!menHere.earliest || menLeft > 0) return;
+    // The instant itself, not the countdown's value: on a party's first render
+    // the countdown still reads its previous value (0 when it had none), which
+    // would fire the refetch when the party sets out, not when it gets there.
+    if (!menHere.earliest || Date.parse(menHere.earliest) - clockOffset > Date.now()) return;
     const key = `${placeId}:${menHere.earliest}`;
     if (rosterRefetched.current.has(key)) return;
     rosterRefetched.current.add(key);
     api
       .barracks()
-      .then((view) => setRoster(view.roster))
+      .then((view) => {
+        setRoster(view.roster);
+        loadMilitary();
+      })
       .catch(() => {});
-  }, [menHere.earliest, menLeft, placeId]);
+  }, [menHere.earliest, menLeft, placeId, clockOffset, loadMilitary]);
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" && "matchMedia" in window ? window.matchMedia(MOBILE_QUERY).matches : false,
   );
@@ -434,15 +453,8 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
       .then((response) => response.json() as Promise<TownStatsFile>)
       .then((file) => setTownStats(file.towns ?? {}))
       .catch(() => {});
-    // Military entitlements, fetched once per map load. Not signed in (or the API
-    // unreachable) simply leaves every strength row at "No survey yet".
-    fetch(MILITARY_SRC, { credentials: "include" })
-      .then((response) => (response.ok ? (response.json() as Promise<MilitaryPayload>) : null))
-      .then((payload) => {
-        if (payload) setMilitary({ towns: payload.towns ?? {}, regions: payload.regions ?? {} });
-      })
-      .catch(() => {});
-  }, []);
+    loadMilitary();
+  }, [loadMilitary]);
 
   // Reach: fetched when the map opens and again whenever the dashboard refreshes
   // the player (a barracks change). Not signed in leaves the matrix's verdicts.
@@ -1124,7 +1136,9 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
       .then((view) => setRoster(view.roster))
       .catch(() => setRoster([]));
   };
-  const onActed = (res: { report: MapActReport | MapMoveReport; reach: MapReachView; roster: BarracksRosterRow[] }) => {
+  // An action's answer is the set-out card (raids prompt 4): nothing is known
+  // of the place yet. The numbers are read again when the party gets there.
+  const onActed = (res: PickerResult) => {
     setReach(res.reach.reach ?? {});
     setReachBases(res.reach.bases ?? []);
     setReachFleet(res.reach.fleet ?? EMPTY_FLEET);
@@ -1132,16 +1146,6 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
     setCampaign(res.reach.campaign ?? null);
     setClockOffset(res.reach.now ? Date.parse(res.reach.now) - Date.now() : 0);
     setRoster(res.roster);
-    if (res.report.type !== "move" && res.report.intel) {
-      const intel = res.report.intel;
-      if (res.report.townId) {
-        const townId = res.report.townId;
-        setMilitary((m) => ({ ...m, towns: { ...m.towns, [townId]: { garrison: intel.warband, pentekonters: intel.pentekonters ?? 0, triremes: intel.triremes ?? 0, source: "intel", scoutedGameDate: intel.scoutedGameDate } } }));
-      } else {
-        const regionId = res.report.regionId;
-        setMilitary((m) => ({ ...m, regions: { ...m.regions, [regionId]: { warband: intel.warband, source: "intel", scoutedGameDate: intel.scoutedGameDate } } }));
-      }
-    }
     setPicker(null);
     setReport(res.report);
     onRefresh?.();
@@ -1555,8 +1559,11 @@ export const shipsText = (ships: Record<string, number>, labels: Record<string, 
 // these only label the picker).
 const MOVE_MINUTES_PER_STEP = 30;
 const MOVE_MINUTES_WITHIN = 10;
+// The road for an action, mirroring battle.json's march block (the server
+// decides; this only labels the picker).
+const MARCH_CLOCK = { minutesPerStep: 30, minutesWithinRegion: 10 };
 
-export type PickerReport = MapActReport | MapMoveReport;
+export type PickerReport = MapActReport | MapMoveReport | MapSetOutReport;
 export type PickerResult = { report: PickerReport; reach: MapReachView; roster: BarracksRosterRow[] };
 
 // A roster icon the way the Barracks roster shows it: the unit's or band's
@@ -1871,7 +1878,7 @@ export function ForcePicker({
                         : chosenShips
                           ? `by sea · ${route.steps} sea${route.steps === 1 ? "" : "s"} · carries ${carries} of ${force.space} men${escort.length ? ` · ${escort.map((h) => `${h.count} ${h.label.toLowerCase()}${h.count === 1 ? "" : "s"}`).join(", ")} escort` : ""} · range ${fleetRange}`
                           : `by sea · ${route.steps} sea${route.steps === 1 ? "" : "s"} · space ${force.space} of ${fleet.space} aboard${shipsText(fleet.ships, fleet.labels, " · ") ? ` · ${shipsText(fleet.ships, fleet.labels, " · ")}` : ""}`}
-                    {isMove && "minutes" in route ? ` · arrives in ${travelClock(route.minutes)}` : ""}
+                    {` · arrives in ${travelClock("minutes" in route ? route.minutes : marchMinutes(MARCH_CLOCK, route))}`}
                   </span>
                 ) : null}
                 <span>{verdict.ok ? (isMove ? "Ready to march." : "Within reach.") : verdict.reason}</span>
@@ -1902,13 +1909,15 @@ const townFleetText = (f: { pentekonters: number; triremes: number }) => {
 };
 
 export function BattleReport({ report, onClose }: { report: PickerReport; onClose: () => void }) {
-  if (report.type === "move") {
+  // A move, and a party just sent out (the set-out card, raids prompt 4): one line.
+  if (report.type === "move" || report.type === "setout") {
+    const head = report.type === "move" ? "March" : ACTION_LABEL[report.action];
     return (
-      <div className="w2map-modal" role="dialog" aria-label={`March to ${report.townName ?? report.regionName}`} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+      <div className="w2map-modal" role="dialog" aria-label={`${head} ${report.townName ?? report.regionName}`} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
         <div className="w2map-modal-card">
           <button type="button" className="w2map-info-close" onClick={onClose} aria-label="Close">Close</button>
           <div className="w2map-info-body">
-            <div className="w2map-info-label">March · {report.townName ?? report.regionName}</div>
+            <div className="w2map-info-label">{head} · {report.townName ?? report.regionName}</div>
             <p className="w2map-report-line">{report.line}</p>
             <div className="w2map-actions">
               <button type="button" className="w2map-action" onClick={onClose}>Close</button>
@@ -1918,7 +1927,8 @@ export function BattleReport({ report, onClose }: { report: PickerReport; onClos
       </div>
     );
   }
-  const hours = report.recoveryHours;
+  // A party turned back or broken up on the road fought nobody: no rows table.
+  const fought = report.winner !== "repulsed" && report.winner !== "turned_back" && report.winner !== "dispersed";
   const sailed = shipsText(report.ships, report.shipLabels);
   const place = report.townName ?? report.regionName;
   const fleet = report.fleet;
@@ -1942,7 +1952,7 @@ export function BattleReport({ report, onClose }: { report: PickerReport; onClos
               Your {shipsText(fleet.ships, report.shipLabels) || "ships"} against {townFleetText(fleet.defender)}: the landing {fleet.held ? "held" : "was driven off"}
             </p>
           ) : null}
-          {report.type !== "scout" && report.winner !== "repulsed" ? (
+          {report.type !== "scout" && fought ? (
             <table className="w2map-report-table">
               <thead>
                 <tr><th>Rows</th><th>Start</th><th>End</th></tr>
@@ -1977,7 +1987,7 @@ export function BattleReport({ report, onClose }: { report: PickerReport; onClos
           {report.opinion ? <p className="w2map-report-note" data-testid="opinion-line">{report.opinion.line}</p> : null}
           {report.conquest ? <p className="w2map-report-note">{place} is yours. The survivors hold it.</p> : null}
           {report.rounds > 0 ? <p className="w2map-report-note">{report.rounds} round{report.rounds === 1 ? "" : "s"} fought{sailed ? ` · sailed with ${sailed}` : ""}.</p> : null}
-          <p className="w2map-report-note">The party {report.destination === (report.townId ?? report.regionId) ? "settles in" : "returns"} in {hours}h.</p>
+          {report.homeAt ? <p className="w2map-report-note">The march home takes {travelClock(report.minutes)}.</p> : null}
           <div className="w2map-actions">
             <button type="button" className="w2map-action" onClick={onClose}>Close</button>
           </div>

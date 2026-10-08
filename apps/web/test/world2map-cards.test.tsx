@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import type { BarracksRosterRow } from "../src/api.js";
 
 // ---------------------------------------------------------------------------
 // Region cards on the Atlas: a region with towns lists each town as an entry
@@ -56,16 +57,18 @@ afterEach(() => {
 
 const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 40)); });
 
-async function mountMap() {
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+// The roster /api/barracks answers (a party on the march, for the arrival case),
+// and the reach's `now` taken when it answers, so the clock offset is nil.
+async function mountMap(roster: BarracksRosterRow[] = []) {
+  const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = String(input);
     if (url.endsWith("/map2/world2.json")) return jsonResponse(WORLD);
     if (url.endsWith("/map2/politics2.json")) return jsonResponse({ polities: { boii: { name: "Boii", color: "#123" } }, owners: { R046: "boii", R047: "boii" } });
     if (url.endsWith("/map2/names2.json")) return jsonResponse({ version: 1, names: { R060: "Massalia", R046: "Salyes", R047: "Vocontii" } });
     if (url.endsWith("/map2/townstats.json")) return jsonResponse({ version: 1, towns: {} });
     if (url.includes("/api/map/military")) return jsonResponse({ towns: {}, regions: {} });
-    if (url.includes("/api/map/reach")) return jsonResponse(REACH);
-    if (url.includes("/api/barracks")) return jsonResponse({ roster: [] });
+    if (url.includes("/api/map/reach")) return jsonResponse({ ...REACH, now: new Date().toISOString() });
+    if (url.includes("/api/barracks")) return jsonResponse({ roster });
     return jsonResponse({ error: "not found" }, 404);
   });
   const { World2Map } = await import("../src/map/World2Map.js");
@@ -73,7 +76,8 @@ async function mountMap() {
   await flush();
   const svg = view.container.querySelector("svg.w2map-svg") as SVGSVGElement;
   expect(svg).not.toBeNull();
-  return { view, svg };
+  const calls = (part: string) => fetchSpy.mock.calls.filter((c) => String(c[0]).includes(part)).length;
+  return { view, svg, fetchSpy, calls };
 }
 
 // A tap on the region: the hit-test reads elementFromPoint, which jsdom lacks.
@@ -89,6 +93,34 @@ function drag(svg: SVGSVGElement) {
 }
 
 describe("World2Map region cards", () => {
+  it("a party bound for the open region: nothing is read again when it is chosen, the roster and the military numbers once when it gets there", async () => {
+    const iso = (ms: number) => new Date(ms).toISOString();
+    const arrives = Date.now() + 1500;
+    const party: BarracksRosterRow = {
+      id: "p1", source: "trained", unitId: "peltast", label: "Peltast", plural: "Peltasts", icon: "PELTAST.webp", count: 20, startCount: 20, recruitedSeason: 1,
+      readyAt: iso(Date.now() - 3_600_000), contractEndAt: null, basedAt: "R060", movingTo: "R046", arrivesAt: iso(arrives),
+      mission: { kind: "raid", regionId: "R046", departedAt: iso(Date.now() - 60_000), marchId: "m-1" }, createdAt: iso(Date.now() - 7_200_000), stats: { spd: 8, space: 1 }, active: true, canDisband: false,
+    };
+    const { view, svg, fetchSpy, calls } = await mountMap([party]);
+    expect(calls("/api/barracks")).toBe(1);
+    expect(calls("/api/map/military")).toBe(1);
+    await act(async () => tap(svg, "R046"));
+    expect(view.container.querySelector('[role="dialog"][data-region="R046"]')).not.toBeNull();
+    // Chosen before the party gets there: nothing is read again.
+    await flush();
+    expect(calls("/api/barracks")).toBe(1);
+    expect(calls("/api/map/military")).toBe(1);
+    // When it gets there: the roster once, then the military numbers once.
+    await vi.waitFor(() => expect(calls("/api/map/military")).toBe(2), { timeout: 5000, interval: 50 });
+    expect(calls("/api/barracks")).toBe(2);
+    const barracksCalls = fetchSpy.mock.calls.map((c, i) => [i, String(c[0])] as const).filter(([, u]) => u.includes("/api/barracks") || u.includes("/api/map/military"));
+    expect(barracksCalls.at(-2)![1]).toContain("/api/barracks");
+    expect(barracksCalls.at(-1)![1]).toContain("/api/map/military");
+    await flush();
+    expect(calls("/api/barracks")).toBe(2);
+    expect(calls("/api/map/military")).toBe(2);
+  });
+
   it("a region with towns lists each town as an entry that opens the town card, with the note and no action buttons", async () => {
     const { view, svg } = await mountMap();
     await act(async () => tap(svg, "R047"));

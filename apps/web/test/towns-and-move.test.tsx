@@ -70,7 +70,7 @@ describe("BattleReport · towns and moves", () => {
   const attackerRows = [{ id: "r1", unitId: "peltast", label: "Peltast", icon: "PELTAST.webp", start: 40, end: 40, broke: false }];
   const report = (over: Partial<MapActReport>): MapActReport => ({
     type: "attack", regionId: "R073", regionName: "Corsica", townId: "aleria", townName: "Aleria", town: { walls: 2, population: 2000, garrisonDef: 9 }, fleet: null,
-    base: "R060", route: "sea", steps: 2, recoveryHours: 6, arrivesAt: iso(NOW + 6 * H), destination: "R060", ships: { "trade-ship": 2 }, shipLabels: { "trade-ship": "Pentekonter", galley: "Trireme" }, winner: "attacker", rounds: 3,
+    base: "R060", route: "sea", steps: 2, marchId: "m-1", minutes: 60, arrivedAt: iso(NOW), homeAt: iso(NOW + H), destination: "R060", ships: { "trade-ship": 2 }, shipLabels: { "trade-ship": "Pentekonter", galley: "Trireme" }, winner: "attacker", rounds: 3,
     attacker: { rows: attackerRows, losses: 0 }, defender: { label: "Town garrison", start: 10, end: 0, losses: 10 }, plunder: null, conquest: null, intel: null, line: "", ...over,
   });
 
@@ -81,16 +81,36 @@ describe("BattleReport · towns and moves", () => {
     expect(getByTestId("walls-line").textContent).toBe("Walls 2, garrison defends at 9");
     expect(getByTestId("fleet-line").textContent).toBe("Your 3 pentekonters against 2 pentekonters and 1 trireme: the landing was driven off");
     expect(container.querySelector(".w2map-report-table")).toBeNull();
-    expect(container.textContent).toContain("The party returns in 6h.");
+    expect(container.textContent).toContain("The march home takes 01:00:00.");
+  });
+
+  it("a set-out card is one line, and a party turned back shows its line, no rows table and the way home", () => {
+    const setout = render(
+      <BattleReport
+        report={{ type: "setout", action: "raid", marchId: "m-2", regionId: "R046", regionName: "Salyes", townId: null, townName: null, base: "R060", route: "land", steps: 1, minutes: 30, departedAt: iso(NOW), arrivesAt: iso(NOW + H / 2), ships: {}, shipLabels: {}, men: 40, rows: [], line: "40 peltasts set out to raid Salyes, arriving in 00:30:00." }}
+        onClose={noop}
+      />,
+    );
+    expect(setout.container.querySelector(".w2map-info-label")!.textContent).toBe("Raid · Salyes");
+    expect(setout.container.querySelector(".w2map-report-line")!.textContent).toBe("40 peltasts set out to raid Salyes, arriving in 00:30:00.");
+    expect(setout.container.querySelector(".w2map-report-table")).toBeNull();
+    setout.unmount();
+    const r = report({ winner: "turned_back", rounds: 0, town: null, defender: null, line: "40 peltasts found Aleria held by another house and turned back." });
+    const { container } = render(<BattleReport report={r} onClose={noop} />);
+    expect(container.querySelector(".w2map-report-line")!.textContent).toBe(r.line);
+    expect(container.querySelector(".w2map-report-table")).toBeNull();
+    expect(container.querySelector('[data-testid="turnout-line"]')).toBeNull();
+    expect(container.textContent).toContain("The march home takes 01:00:00.");
   });
 
   it("a taken town: the landing held, the rows table, the conquest line, and the party settles in", () => {
-    const r = report({ fleet: { ships: { "trade-ship": 2, galley: 5 }, naval: 27, defender: { pentekonters: 4, triremes: 4, naval: 24 }, held: true }, conquest: { regionId: "R073", townId: "aleria", previousOwner: "etruscans" }, destination: "aleria", line: "Took Aleria with 40 peltasts: 10 soldiers slain, none of ours lost. The town is ours." });
+    const r = report({ fleet: { ships: { "trade-ship": 2, galley: 5 }, naval: 27, defender: { pentekonters: 4, triremes: 4, naval: 24 }, held: true }, conquest: { regionId: "R073", townId: "aleria", previousOwner: "etruscans" }, destination: "aleria", homeAt: null, line: "Took Aleria with 40 peltasts: 10 soldiers slain, none of ours lost. The town is ours." });
     const { container, getByTestId } = render(<BattleReport report={r} onClose={noop} />);
     expect(getByTestId("fleet-line").textContent).toBe("Your 2 pentekonters and 5 triremes against 4 pentekonters and 4 triremes: the landing held");
     expect(container.querySelector(".w2map-report-enemy")!.textContent).toBe("Town garrison100");
     expect(container.textContent).toContain("Aleria is yours. The survivors hold it.");
-    expect(container.textContent).toContain("The party settles in in 6h.");
+    // The survivors hold the place: no way home.
+    expect(container.textContent).not.toContain("The march home");
     expect(container.querySelector('[data-testid="turnout-line"]')).toBeNull();
     expect(container.querySelector('[data-testid="opinion-line"]')).toBeNull();
     // A move: one line.
@@ -140,6 +160,7 @@ describe("action picker · sea route", () => {
     const verdict = container.querySelector(".w2map-verdict")!.textContent!;
     expect(verdict).toContain("1 men · space 1");
     expect(verdict).toContain("by sea · 2 seas · space 1 of 28 aboard · 1 pentekonter · 2 triremes");
+    expect(verdict).toContain(" · arrives in 01:00:00"); // the road: two seas at 30 minutes each
     expect(verdict).toContain("Within reach.");
     expect((container.querySelector(".w2map-action") as HTMLButtonElement).disabled).toBe(false);
   });

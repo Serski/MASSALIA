@@ -659,12 +659,13 @@ export const api = {
   // Map reach (military prompt 3a): which land provinces the player's force can
   // Attack, Raid or Colonise from its bases, with a one-line reason when not.
   mapReach: () => apiFetch<MapReachView>("/api/map/reach"),
-  // Map actions (military prompt 3b): Scout, Raid or Attack a townless region
-  // with whole roster rows; resolves in the request and returns the report with
-  // fresh reach and roster payloads.
+  // Map actions (military prompt 3b; raids prompt 4): Scout, Raid or Attack a
+  // townless region or a town with roster rows. Sends the party and answers the
+  // set-out report with fresh reach and roster payloads; the battle is fought
+  // when the party arrives, and its report waits in the Barracks.
   // `ships` (optional): the hulls to sail with, by ship id; absent, the server assembles the crossing.
   mapAct: (type: MapActType, target: MapActTarget, rows: { rowId: string; count: number }[], ships?: Record<string, number>) =>
-    apiFetch<MapActResponse>("/api/map/act", { method: "POST", body: { type, ...target, rows, ...(ships ? { ships } : {}) } }),
+    apiFetch<MapActResponse<MapSetOutReport>>("/api/map/act", { method: "POST", body: { type, ...target, rows, ...(ships ? { ships } : {}) } }),
   // Move (military prompt 3c): rows from one base to another place of the player's
   // (Massalia's region, home ground, or a holding). Same response shape as an action.
   mapMove: (baseId: string, rows: { rowId: string; count: number }[]) =>
@@ -1725,7 +1726,8 @@ export type BarracksRosterRow = {
   arrivesAt: string | null; // ISO; when that movement completes
   // What a moving row is doing (townId when the target or destination is a town).
   // A standing row whose kind is "muster" is pledged to its koinon's muster.
-  mission: { kind: "scout" | "raid" | "attack" | "move" | "muster"; regionId: string; townId?: string; musterId?: string; departedAt: string } | null;
+  // `marchId`: a party on its way out to a scout, raid or attack carries its march; the way home carries none.
+  mission: { kind: "scout" | "raid" | "attack" | "move" | "muster"; regionId: string; townId?: string; musterId?: string; marchId?: string; departedAt: string } | null;
   createdAt: string; // ISO; training progress runs from here to readyAt
   stats: Record<string, number>; // the unit's or band's stat block (for the force picker)
   active: boolean;
@@ -1825,12 +1827,18 @@ export type MapActReport = {
   base: string;
   route: "land" | "sea";
   steps: number;
-  recoveryHours: number;
-  arrivesAt: string;
+  // The march (raids prompt 4): its id, the road's minutes each way, the instant the party
+  // reached the place, and when the survivors are home (null after a conquest, and when nobody comes back).
+  marchId: string;
+  minutes: number;
+  arrivedAt: string;
+  homeAt: string | null;
   destination: string;
   ships: Record<string, number>;
   shipLabels?: Record<string, string>; // display names from ships.json by ship id
-  winner: "attacker" | "defender" | "stand" | "repulsed" | null;
+  // "turned_back": the place was its own house's, or another house's for an attack, when the party
+  // arrived; "dispersed": its men all left the roster on the road. Neither fought.
+  winner: "attacker" | "defender" | "stand" | "repulsed" | "turned_back" | "dispersed" | null;
   rounds: number;
   attacker: { rows: { id: string; unitId: string; label: string; icon: string; start: number; end: number; broke: boolean }[]; losses: number };
   // `turnout`: the men who fought (a fifth of the pool for a raid). Optional, as is the plunder's
@@ -1841,6 +1849,28 @@ export type MapActReport = {
   intel: { warband: number; pentekonters?: number; triremes?: number; scoutedGameDate: string } | null;
   // The nation a raid soured, if any; a report stored before the raids prompts has none.
   opinion?: { factionId: string; name: string; from: number; to: number; line: string } | null;
+  line: string;
+};
+
+// The set-out card (mirrors MapSetOutReport in mapActions.ts): the party is on the road; `ships` is every hull that sailed.
+export type MapSetOutReport = {
+  type: "setout";
+  action: MapActType;
+  marchId: string;
+  regionId: string;
+  regionName: string;
+  townId: string | null;
+  townName: string | null;
+  base: string;
+  route: "land" | "sea";
+  steps: number;
+  minutes: number;
+  departedAt: string;
+  arrivesAt: string;
+  ships: Record<string, number>;
+  shipLabels?: Record<string, string>;
+  men: number;
+  rows: { id: string; unitId: string; label: string; icon: string; count: number }[];
   line: string;
 };
 
