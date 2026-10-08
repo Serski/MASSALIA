@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { forceStats, HOME_POLITY_ID, marchMinutes, moveVerdict, renderForce, renderPlunder, routeFor, verdictsFor, type CampaignForcePart, type MapActionType } from "@massalia/shared";
+import { forceStats, HOME_POLITY_ID, marchMinutes, moveVerdict, REACH_REASON, renderForce, renderPlunder, routeFor, verdictsFor, type CampaignForcePart, type MapActionType } from "@massalia/shared";
 import { api, apiBaseUrl, ApiError, type BarracksRosterRow, type BaseView, type MapActReport, type MapActType, type MapMoveReport, type MapReachView, type MapSetOutReport, type MoveTargetView, type ReachEntry } from "../api.js";
 import { AssetIcon, ChoicePicker, CULTURE_WEBP, formatClock, formatDuration, marchLine, POLITY_CREST, titleCase, useCountdownSeconds } from "../dashboard/shared.js";
 import { mapActionButtons, withReach, type MapActionButton } from "./mapActions.js";
@@ -1686,12 +1686,15 @@ export function ForcePicker({
   const hulls = fleet.hulls ?? [];
   // Only with the hulls in the payload; an older payload keeps the plain sea footer.
   const seaSteps = !isMove && fleet.hulls && route?.route === "sea" ? route.steps : null;
-  const automatic = (): Record<string, number> => {
+  // The automatic assembly for `seas` seas: transports that can make the
+  // crossing first, warships for what is still short, as the server's
+  // assembleFleet takes them.
+  const automatic = (seas: number): Record<string, number> => {
     const pick: Record<string, number> = {};
     let space = 0;
     for (const role of ["transport", "warship"] as const) {
       for (const h of hulls) {
-        if (h.role !== role || seaSteps === null || h.range < seaSteps || space >= force.space) continue;
+        if (h.role !== role || h.range < seas || space >= force.space) continue;
         const n = Math.min(h.count, h.troopSpace > 0 ? Math.ceil((force.space - space) / h.troopSpace) : 0);
         if (n > 0) {
           pick[h.id] = n;
@@ -1701,7 +1704,17 @@ export function ForcePicker({
     }
     return pick;
   };
-  const chosenShips = seaSteps !== null ? (shipPick ?? automatic()) : null;
+  const chosenShips = seaSteps !== null ? (shipPick ?? automatic(seaSteps)) : null;
+  // A move's sea crossing sails the automatic assembly (the server assembles its
+  // own); with the hulls in the payload the footer names them.
+  const moveShips = isMove && fleet.hulls && route?.route === "sea" ? automatic(route.steps) : null;
+  // The naval supplies the hulls that will sail use (barracks prompt 4): each
+  // hull's count times its suppliesPerTrip. A payload without hulls, or hulls
+  // without suppliesPerTrip, shows no supplies and checks nothing.
+  const sailingShips = chosenShips ?? moveShips;
+  const sailingHulls = sailingShips ? hulls.filter((h) => (sailingShips[h.id] ?? 0) > 0) : [];
+  const suppliesKnown = sailingHulls.length > 0 && sailingHulls.every((h) => h.suppliesPerTrip !== undefined);
+  const suppliesNeed = suppliesKnown ? sailingHulls.reduce((n, h) => n + (sailingShips![h.id] ?? 0) * (h.suppliesPerTrip ?? 0), 0) : 0;
   const chosenHulls = chosenShips ? hulls.filter((h) => (chosenShips[h.id] ?? 0) > 0).map((h) => ({ ...h, count: chosenShips[h.id]! })) : [];
   const carries = chosenHulls.filter((h) => h.role === "transport").reduce((n, h) => n + h.count * h.troopSpace, 0);
   const escort = chosenHulls.filter((h) => h.role === "warship");
@@ -1713,6 +1726,9 @@ export function ForcePicker({
     if (slowest < seaSteps) verdict = { ok: false, reason: `Beyond the fleet's range (${seaSteps} seas, fleet reaches ${slowest}).` };
     else if (carries < force.space) verdict = { ok: false, reason: `Not enough hulls: ${force.space} space needed, ${carries} aboard.` };
   }
+  // After the hull and range checks: the supplies in store against what the voyage uses.
+  if (verdict.ok && suppliesNeed > 0 && fleet.supplies !== undefined && fleet.supplies < suppliesNeed) verdict = { ok: false, reason: REACH_REASON.supplies(suppliesNeed, fleet.supplies) };
+  const suppliesText = suppliesNeed > 0 ? ` · ${suppliesNeed} naval ${suppliesNeed === 1 ? "supply" : "supplies"}` : "";
   const setShip = (id: string, value: number) => {
     const h = hulls.find((x) => x.id === id);
     if (!h) return;
@@ -1877,7 +1893,8 @@ export function ForcePicker({
                         ? `by land · ${route.steps} step${route.steps === 1 ? "" : "s"}`
                         : chosenShips
                           ? `by sea · ${route.steps} sea${route.steps === 1 ? "" : "s"} · carries ${carries} of ${force.space} men${escort.length ? ` · ${escort.map((h) => `${h.count} ${h.label.toLowerCase()}${h.count === 1 ? "" : "s"}`).join(", ")} escort` : ""} · range ${fleetRange}`
-                          : `by sea · ${route.steps} sea${route.steps === 1 ? "" : "s"} · space ${force.space} of ${fleet.space} aboard${shipsText(fleet.ships, fleet.labels, " · ") ? ` · ${shipsText(fleet.ships, fleet.labels, " · ")}` : ""}`}
+                          : `by sea · ${route.steps} sea${route.steps === 1 ? "" : "s"} · space ${force.space} of ${fleet.space} aboard${shipsText(moveShips ?? fleet.ships, fleet.labels, " · ") ? ` · ${shipsText(moveShips ?? fleet.ships, fleet.labels, " · ")}` : ""}`}
+                    {suppliesText}
                     {` · arrives in ${travelClock("minutes" in route ? route.minutes : marchMinutes(MARCH_CLOCK, route))}`}
                   </span>
                 ) : null}
@@ -1919,6 +1936,7 @@ export function BattleReport({ report, onClose }: { report: PickerReport; onClos
           <div className="w2map-info-body">
             <div className="w2map-info-label">{head} · {report.townName ?? report.regionName}</div>
             <p className="w2map-report-line">{report.line}</p>
+            {report.supplies ? <p className="w2map-report-note" data-testid="supplies-line">{report.supplies} naval {report.supplies === 1 ? "supply" : "supplies"} for the voyage.</p> : null}
             <div className="w2map-actions">
               <button type="button" className="w2map-action" onClick={onClose}>Close</button>
             </div>

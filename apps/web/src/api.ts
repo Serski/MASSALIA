@@ -1773,7 +1773,7 @@ export type BarracksView = {
   // growthPerYear is the total at the next year boundary: the content growth plus what held, garrisoned regions add.
   summary: { underArms: number; levyMen: number; growthPerYear: number; baseGrowthPerYear?: number; heldRegions?: number; seasonsPerYear: number };
   // The ships in stock for the strip's FLEET cell: labels from ships.json, troop space summed, range the farthest hull.
-  fleet: { ships: { id: string; label: string; role: "transport" | "warship"; count: number; troopSpace: number; range: number; naval: number }[]; space: number; range: number };
+  fleet: { ships: { id: string; label: string; role: "transport" | "warship"; count: number; troopSpace: number; range: number; naval: number; suppliesPerTrip?: number }[]; space: number; range: number };
   // The hulls at sea, one entry per sailing (optional: an older payload has none).
   atSea?: BarracksVoyage[];
   // The battle reports, newest first, the latest ten (optional: an older payload has none).
@@ -1804,8 +1804,10 @@ export type HoldingView = { garrison: number; minGarrison: number; perDay: { dra
 export type BaseView = { id: string; regionId: string; townId: string | null; kind: BaseKind; name: string; holding: HoldingView | null };
 // A place the player may move men to, with the steps from each base (by base id).
 export type MoveTargetView = { id: string; regionId: string; townId: string | null; kind: BaseKind; name: string; byBase: Record<string, { landSteps: number | null; seaSteps: number | null }> };
-export type FleetHull = { id: string; label: string; role: "transport" | "warship"; count: number; troopSpace: number; range: number; naval: number };
-export type FleetView = { ships: Record<string, number>; labels?: Record<string, string>; range: number; space: number; tiers?: { range: number; space: number }[]; hulls?: FleetHull[] };
+// `suppliesPerTrip` and `supplies` (barracks prompt 4): what each hull uses per voyage, and the naval
+// supplies in store. Optional: an older payload has neither, and the picker then checks nothing.
+export type FleetHull = { id: string; label: string; role: "transport" | "warship"; count: number; troopSpace: number; range: number; naval: number; suppliesPerTrip?: number };
+export type FleetView = { ships: Record<string, number>; labels?: Record<string, string>; range: number; space: number; tiers?: { range: number; space: number }[]; hulls?: FleetHull[]; supplies?: number };
 
 export type MapReachView = {
   now: string; // server time (ISO); countdowns anchor to this, not the device clock
@@ -1877,6 +1879,7 @@ export type MapSetOutReport = {
   arrivesAt: string;
   ships: Record<string, number>;
   shipLabels?: Record<string, string>;
+  supplies?: number; // the naval supplies the voyage took (optional: an older payload has none)
   men: number;
   rows: { id: string; unitId: string; label: string; icon: string; count: number }[];
   line: string;
@@ -1898,6 +1901,7 @@ export type MapMoveReport = {
   arrivesAt: string;
   ships: Record<string, number>;
   shipLabels?: Record<string, string>;
+  supplies?: number; // the naval supplies the voyage took (optional: an older payload has none)
   men: number;
   rows: { id: string; unitId: string; label: string; icon: string; count: number }[];
   line: string;

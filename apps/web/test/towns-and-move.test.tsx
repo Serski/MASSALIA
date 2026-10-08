@@ -94,7 +94,17 @@ describe("BattleReport · towns and moves", () => {
     expect(setout.container.querySelector(".w2map-info-label")!.textContent).toBe("Raid · Salyes");
     expect(setout.container.querySelector(".w2map-report-line")!.textContent).toBe("40 peltasts set out to raid Salyes, arriving in 00:30:00.");
     expect(setout.container.querySelector(".w2map-report-table")).toBeNull();
+    expect(setout.container.textContent).not.toContain("for the voyage");
     setout.unmount();
+    // By sea, the supplies the voyage took.
+    const sea = render(
+      <BattleReport
+        report={{ type: "setout", action: "raid", marchId: "m-3", regionId: "R078", regionName: "Balari", townId: null, townName: null, base: "R060", route: "sea", steps: 2, minutes: 60, departedAt: iso(NOW), arrivesAt: iso(NOW + H), ships: { "trade-ship": 2 }, shipLabels: {}, supplies: 2, men: 40, rows: [], line: "40 peltasts set out to raid Balari, arriving in 01:00:00." }}
+        onClose={noop}
+      />,
+    );
+    expect(sea.getByTestId("supplies-line").textContent).toBe("2 naval supplies for the voyage.");
+    sea.unmount();
     const r = report({ winner: "turned_back", rounds: 0, town: null, defender: null, line: "40 peltasts found Aleria held by another house and turned back." });
     const { container } = render(<BattleReport report={r} onClose={noop} />);
     expect(container.querySelector(".w2map-report-line")!.textContent).toBe(r.line);
@@ -183,10 +193,10 @@ describe("action picker · pledged men", () => {
 
 describe("action picker · ships section", () => {
   const hulls = [
-    { id: "trade-ship", label: "Pentekonter", role: "transport" as const, count: 3, troopSpace: 20, range: 7, naval: 1 },
-    { id: "galley", label: "Trireme", role: "warship" as const, count: 2, troopSpace: 4, range: 4, naval: 5 },
+    { id: "trade-ship", label: "Pentekonter", role: "transport" as const, count: 3, troopSpace: 20, range: 7, naval: 1, suppliesPerTrip: 1 },
+    { id: "galley", label: "Trireme", role: "warship" as const, count: 2, troopSpace: 4, range: 4, naval: 5, suppliesPerTrip: 1 },
   ];
-  const stock = { ships: { "trade-ship": 3, galley: 2 }, labels: { "trade-ship": "Pentekonter", galley: "Trireme" }, range: 7, space: 68, tiers: [{ range: 7, space: 60 }, { range: 4, space: 8 }], hulls };
+  const stock = { ships: { "trade-ship": 3, galley: 2 }, labels: { "trade-ship": "Pentekonter", galley: "Trireme" }, range: 7, space: 68, tiers: [{ range: 7, space: 60 }, { range: 4, space: 8 }], hulls, supplies: 10 };
   const seaEntry = { landSteps: null, seaSteps: 2, byBase: { R060: { landSteps: null, seaSteps: 2 } }, attack: { ok: true }, raid: { ok: true }, colonise: { ok: true } };
 
   it("by sea, a Ships section appears under the men, prefilled with the automatic assembly and editable within stock, and the footer reads the fleet", async () => {
@@ -206,11 +216,13 @@ describe("action picker · ships section", () => {
     expect(section.textContent).toContain("escort · range 4");
     let footer = container.querySelector(".w2map-verdict")!.textContent!;
     expect(footer).toContain("by sea · 2 seas · carries 40 of 40 men · range 7");
+    expect(footer).toContain(" · 2 naval supplies"); // one per hull that sails
     expect(footer).toContain("Within reach.");
     // Two triremes as escort.
     fireEvent.change(tri, { target: { value: "2" } });
     footer = container.querySelector(".w2map-verdict")!.textContent!;
     expect(footer).toContain("carries 40 of 40 men · 2 triremes escort · range 7");
+    expect(footer).toContain(" · 4 naval supplies");
     // Beyond stock is clamped; one pentekonter short of the men is refused with the hull reason.
     fireEvent.change(pent, { target: { value: "9" } });
     expect((getByLabelText("Pentekonters to sail") as HTMLInputElement).value).toBe("3");
@@ -226,6 +238,27 @@ describe("action picker · ships section", () => {
       await new Promise((r) => setTimeout(r, 10));
     });
     expect(mapAct).toHaveBeenCalledWith("raid", { regionId: "R090" }, [{ rowId: "home-1", count: 40 }], { "trade-ship": 2, galley: 2 });
+  });
+
+  it("short of naval supplies the picker refuses before Go", () => {
+    const roster = [row({ id: "home-1", unitId: "peltast", label: "Peltast", plural: "Peltasts", count: 40, stats })];
+    const { container, getByText } = render(<ForcePicker type="raid" target={{ kind: "region", id: "R090", regionId: "R090", name: "Balari" }} names={{ R060: "Massalia" }} entry={seaEntry} fleet={{ ...stock, supplies: 1 }} roster={roster} onClose={noop} onActed={noop} />);
+    fireEvent.click(container.querySelector("input[type=checkbox]")!);
+    const footer = container.querySelector(".w2map-verdict")!.textContent!;
+    expect(footer).toContain(" · 2 naval supplies");
+    expect(footer).toContain("Not enough naval supplies: 2 needed, 1 in store.");
+    expect((getByText("Go") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("a sea move names the hulls that will sail and their supplies", () => {
+    const roster = [row({ id: "home-1", unitId: "peltast", label: "Peltast", plural: "Peltasts", count: 40, stats })];
+    const { container } = render(<ForcePicker type="move" target={{ kind: "town", id: "emporion", regionId: "R065", name: "Emporion" }} names={names} moveTargets={moveTargets} fleet={stock} roster={roster} onClose={noop} onActed={noop} />);
+    fireEvent.click(container.querySelector("input[type=checkbox]")!);
+    const footer = container.querySelector(".w2map-verdict")!.textContent!;
+    expect(footer).toContain("by sea · 1 sea · space 40 of 68 aboard · 2 pentekonters");
+    expect(footer).not.toContain("3 pentekonters");
+    expect(footer).toContain(" · 2 naval supplies");
+    expect(footer).toContain("Ready to march.");
   });
 
   it("a chosen hull that cannot make the crossing reads the range reason", () => {
