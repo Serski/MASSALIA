@@ -23,7 +23,7 @@ describe("battle content", () => {
   it("parses the real file and rejects an unknown key", () => {
     expect(battle.rounds).toBe(3);
     expect(battle.npc.warband.stats.spd).toBe(6);
-    expect(battle.raid).toEqual({ rounds: 1, warbandShare: 0.2, plunderPerKill: 50, grainPerKill: 5, spoilPerKill: 5, spoilGoods: ["oliveoil", "leather", "salt", "wool"], townPlunderMultiplier: 2 });
+    expect(battle.raid).toEqual({ rounds: 1, turnout: { floorOneIn: 50, capOneIn: 4 }, plunderPerKill: 50, grainPerKill: 5, spoilPerKill: 5, spoilGoods: ["oliveoil", "leather", "salt", "wool"], townPlunderMultiplier: 2 });
     expect(battle.recovery).toEqual({ hoursPerStep: 3 });
     // 3c: towns, tribute, region tribute and moves.
     expect(battle.regen).toEqual({ warbandPerDay: 5, garrisonPerDay: 5 });
@@ -44,16 +44,36 @@ describe("battle content", () => {
     expect(() => parseBattleContent({ ...read("content/military/battle.json"), raid: { ...raid, spoilGoods: ["oliveoil", "unicorn"] } }, goods)).toThrow(/raid\.spoilGoods: unknown good/);
     expect(() => parseBattleContent({ ...read("content/military/battle.json"), raid: { ...raid, spoilGoods: ["salt", "wool", "salt"] } }, goods)).toThrow(/raid\.spoilGoods: .*salt.* twice/);
     expect(() => parseBattleContent({ ...read("content/military/battle.json"), raid: { ...raid, spoilGoods: [] } }, goods)).toThrow();
-    expect(() => parseBattleContent({ ...read("content/military/battle.json"), raid: { ...raid, warbandShare: 0 } }, goods)).toThrow();
-    expect(() => parseBattleContent({ ...read("content/military/battle.json"), raid: { ...raid, warbandShare: 1.5 } }, goods)).toThrow();
+    expect(() => parseBattleContent({ ...read("content/military/battle.json"), raid: { ...raid, turnout: { floorOneIn: 0, capOneIn: 4 } } }, goods)).toThrow();
+    expect(() => parseBattleContent({ ...read("content/military/battle.json"), raid: { ...raid, turnout: { floorOneIn: 50, capOneIn: 1.5 } } }, goods)).toThrow();
+    expect(() => parseBattleContent({ ...read("content/military/battle.json"), raid: { ...raid, turnout: { floorOneIn: 50, capOneIn: 4, extra: 1 } } }, goods)).toThrow();
   });
 });
 
 describe("raid rules", () => {
-  it("raidTurnout: a fifth of the pool, rounded, at least one man, never above the pool, nothing from nothing", () => {
-    const cases: [number, number][] = [[0, 0], [1, 1], [2, 1], [7, 1], [10, 2], [20, 4], [30, 6], [90, 18], [100, 20], [600, 120], [3300, 660]];
-    for (const [pool, met] of cases) expect(raidTurnout(battle.raid, pool), String(pool)).toBe(met);
-    for (let pool = 0; pool <= 1000; pool++) expect(raidTurnout(battle.raid, pool)).toBeLessThanOrEqual(pool);
+  it("raidTurnout: half to all of the men sent, between one in fifty and one in four of the pool", () => {
+    // Fixed by the bounds alone, so the same on every seed.
+    const fixed: [number, number, number][] = [[40, 20, 5], [20, 6000, 120], [50, 3, 1], [1, 100, 2], [10, 0, 0], [120, 33000, 660], [50, 25500, 510]];
+    for (let i = 0; i < 100; i++) for (const [men, pool, met] of fixed) expect(raidTurnout(battle.raid, men, pool, `s${i}`), `${men} vs ${pool} s${i}`).toBe(met);
+    // Rolled within the bounds: half to all of the men sent, a flat draw.
+    const tally = (men: number, pool: number) => {
+      const out: Record<number, number> = {};
+      for (let i = 0; i < 400; i++) {
+        const met = raidTurnout(battle.raid, men, pool, `s${i}`);
+        out[met] = (out[met] ?? 0) + 1;
+      }
+      return out;
+    };
+    expect(tally(10, 100)).toEqual({ 5: 66, 6: 64, 7: 65, 8: 68, 9: 63, 10: 74 });
+    expect(tally(5, 100)).toEqual({ 2: 98, 3: 97, 4: 96, 5: 109 });
+    // Never above the pool, never below one in fifty of it.
+    for (let pool = 0; pool <= 500; pool++) {
+      for (const men of [1, 5, 20, 60]) {
+        const met = raidTurnout(battle.raid, men, pool, `p${pool}`);
+        expect(met, `${men} vs ${pool}`).toBeLessThanOrEqual(pool);
+        if (pool > 0) expect(met, `${men} vs ${pool}`).toBeGreaterThanOrEqual(Math.ceil(pool / 50));
+      }
+    }
   });
 
   it("raidPlunder: 50 drachmae, 5 grain and 5 of one good per kill, doubled for a town, the good fixed by the seed", () => {

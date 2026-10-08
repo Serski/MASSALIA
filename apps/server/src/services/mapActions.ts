@@ -96,7 +96,8 @@ export type MapActReport = {
   rounds: number;
   attacker: { rows: { id: string; unitId: string; label: string; icon: string; start: number; end: number; broke: boolean }[]; losses: number };
   // The defender: the whole pool before and after, and `turnout`, the men who
-  // fought — a fifth of it for a raid, the whole pool for an attack, 0 when the
+  // fought — for a raid half to all of the men sent, between the floor and the
+  // cap of the pool (raidTurnout); the whole pool for an attack; 0 when the
   // landing was repulsed. The kills come off the whole pool.
   defender: { label: string; start: number; end: number; losses: number; turnout: number } | null;
   plunder: PlunderPayload | null;
@@ -459,8 +460,9 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
         const def = r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId);
         return { id: r.id, label: labelOf(r), count: r.count, stats: bonus ? { ...def!.stats, mor: def!.stats.mor + bonus } : def!.stats };
       });
-      // A raid meets a share of the pool (raidTurnout); an attack meets everyone.
-      const met = input.type === "raid" ? raidTurnout(battleC.raid, warband) : warband;
+      // A raid meets half to all of the men it sends, between the floor and the
+      // cap of the pool (raidTurnout, rolled on the seed); an attack meets everyone.
+      const met = input.type === "raid" ? raidTurnout(battleC.raid, men, warband, seed) : warband;
       const defender: BattleRow[] = [{ id: isTown ? "garrison" : "warband", label: npc.label, count: met, stats: npcStats }];
       const result: BattleResult = resolveBattle({ attacker, defender, seed, config: battleC, mode: input.type });
       const writeDefender = (value: number) => (isTown ? writeTownGarrison(tx, ctx.worldId, townId, value, now) : writeRegionWarband(tx, ctx.worldId, regionId, value, now));

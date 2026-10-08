@@ -42,11 +42,12 @@ export type BattleContent = {
   defenseFloor: number;
   moraleStep: number;
   pursuitLoss: number;
-  // A raid: warbandShare is the share of a warband or garrison that meets it
-  // (the kills still come off the whole pool); each kill pays plunderPerKill
+  // A raid faces half to all of the men it sends, never fewer than one in
+  // turnout.floorOneIn of the pool nor more than one in turnout.capOneIn (the
+  // kills still come off the whole pool); each kill pays plunderPerKill
   // drachmae, grainPerKill grain and spoilPerKill of a third good drawn once
   // per raid from spoilGoods; a town pays townPlunderMultiplier times all three.
-  raid: { rounds: number; warbandShare: number; plunderPerKill: number; grainPerKill: number; spoilPerKill: number; spoilGoods: string[]; townPlunderMultiplier: number };
+  raid: { rounds: number; turnout: { floorOneIn: number; capOneIn: number }; plunderPerKill: number; grainPerKill: number; spoilPerKill: number; spoilGoods: string[]; townPlunderMultiplier: number };
   recovery: { hoursPerStep: number }; // recovery after an action: max(1, steps) × hoursPerStep hours
   regen: { warbandPerDay: number; garrisonPerDay: number };
   // Towns (3c): walls add min(walls, wallsDefCap) to every defending row's def.
@@ -248,7 +249,7 @@ function battleContentSchema(goods: ReadonlySet<string>) {
     raid: z
       .object({
         rounds: z.number().int().positive(),
-        warbandShare: z.number().positive().max(1),
+        turnout: z.object({ floorOneIn: z.number().int().positive(), capOneIn: z.number().int().positive() }).strict(),
         plunderPerKill: z.number().nonnegative(),
         grainPerKill: z.number().nonnegative(),
         spoilPerKill: z.number().nonnegative(),
@@ -375,12 +376,19 @@ export function seededRoll(seedParts: string[]): number {
   return sha256Words(seedParts.join("|"))[0]! / 2 ** 32;
 }
 
-// The men who meet a raid: a share of the pool, at least one man, never more
-// than the pool; an empty pool meets nothing. Math.round, not ceil: 7 × 0.2 is
-// 1.4000000000000001 in floating point.
-export function raidTurnout(raid: BattleContent["raid"], pool: number): number {
-  if (pool <= 0) return 0;
-  return Math.min(pool, Math.max(1, Math.round(pool * raid.warbandShare)));
+// The men who meet a raid: half to all of the men sent, a whole number rolled
+// once per raid on the battle's seed, held between one in floorOneIn of the
+// pool (rounded up) and one in capOneIn (rounded, at least one man), and never
+// above the pool. An empty pool, or no men sent, meets nothing. Divisions by
+// whole numbers keep it exact: 25,500 / 50 is 510, where 25,500 × 0.02 in
+// floating point is not.
+export function raidTurnout(raid: BattleContent["raid"], men: number, pool: number, seed: string): number {
+  if (pool <= 0 || men <= 0) return 0;
+  const lo = Math.max(1, Math.floor(men / 2));
+  const rolled = lo + Math.floor(seededRoll([seed, "turnout"]) * (men - lo + 1));
+  const floor = Math.ceil(pool / raid.turnout.floorOneIn);
+  const cap = Math.max(1, Math.round(pool / raid.turnout.capOneIn));
+  return Math.min(pool, Math.max(floor, Math.min(rolled, cap)));
 }
 
 // What a won raid pays for its kills: drachmae, grain and one third good drawn

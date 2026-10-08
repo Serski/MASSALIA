@@ -550,7 +550,7 @@ suite("Koinon muster (integration)", () => {
   }
 
   it("a land raid of three members: each owner's losses on his own rows, the pool down by the kills, the plunder split, every survivor bound for the gathering place", async () => {
-    // Against 30, a fifth (6) turns out and all 6 are slain on every seed; the army loses 0 to 2.
+    // Against 30, 120 men meet 8 (a fourth of 30, rounded) and all 8 are slain on every seed; the army loses 0 to 4.
     const { a, b, c, musterId } = await landRaid();
     const sent: Record<string, number> = { [a]: 40, [b]: 30, [c]: 50 };
     // Not due before its launch instant.
@@ -583,8 +583,8 @@ suite("Koinon muster (integration)", () => {
     expect(report.lost).toBe(report.parts.reduce((n, p) => n + p.lost, 0));
 
     // The pool drops by the kills.
-    expect(report.defender).toEqual({ label: battle().npc.warband.label, start: 30, end: 30 - report.killed, turnout: 6 });
-    expect(report.killed).toBe(6);
+    expect(report.defender).toEqual({ label: battle().npc.warband.label, start: 30, end: 30 - report.killed, turnout: 8 });
+    expect(report.killed).toBe(8);
     expect(await warbandOf(landRegion)).toBe(30 - report.killed);
 
     // The plunder is act's total for those kills, the third good included, and the parts add up to it.
@@ -627,13 +627,13 @@ suite("Koinon muster (integration)", () => {
   });
 
   it("the altar: a member's bull lit before the launch steadies his own rows and nobody else's; a blessing cold at the launch or lit after it counts for nothing", async () => {
-    // Two members, 60 hoplites each, against a warband of 3300, of which a fifth
-    // (660) turns out: on every seed the cold owner loses 27 to 30 men and the
-    // blessed one 24 to 26.
+    // Two members, 60 hoplites each, against a warband of 33000, of which the
+    // floor (660, one in fifty) turns out: on every seed the cold owner loses
+    // 27 to 30 men and the blessed one 24 to 26.
     const [a, b] = [await freshPlayer("Kallias", 100_000, 1), await freshPlayer("Nikias", 100_000, 2)];
     const k = await koinonOf("The Sacred Band", [a, b], uid(800));
     const musterId = await musterRow(k, a);
-    await setWarband(landRegion, 3300);
+    await setWarband(landRegion, 33000);
     await pledgedMen(a, "hoplite", 60, musterId, 501);
     await pledgedMen(b, "hoplite", 60, musterId, 502);
     // Kallias burns a bull an hour before the launch: lit until two days on.
@@ -695,8 +695,8 @@ suite("Koinon muster (integration)", () => {
   });
 
   it("shares: 40 men carried on another member's two pentekonters are 40 shares each; by land the ship owner gets nothing", async () => {
-    // Against a garrison of 10, a fifth (2) turns out at any walls, and 40
-    // peltasts slay both on every seed.
+    // Against a garrison of 10, 3 (a fourth of 10, rounded) turn out at any
+    // walls, and 40 peltasts slay 2 or 3 of them on every seed.
     const [soldier, shipowner] = [await freshPlayer("Kallias", 100_000, 1), await freshPlayer("Nikias", 100_000, 2)];
     const k = await koinonOf("The Sacred Band", [soldier, shipowner]);
     await geography(soldier);
@@ -708,8 +708,8 @@ suite("Koinon muster (integration)", () => {
     expect(await m.muster.resolveMuster(bySea, LAUNCH)).toEqual({ outcome: "resolved" });
     const report = await reportOf();
     expect(report).toMatchObject({ outcome: "won", route: "sea", steps: seaTown.steps, townId: seaTown.townId, arrivesAt: recovered(seaTown.steps).toISOString() });
-    expect(report.defender).toMatchObject({ start: 10, turnout: 2 });
-    expect(report.killed).toBe(2);
+    expect(report.defender).toMatchObject({ start: 10, turnout: 3 });
+    expect([2, 3]).toContain(report.killed);
     expect(report.fleet).toEqual({ hulls: { "trade-ship": 2 }, naval: 2, space: 40, filled: 40, defender: null, held: true });
     const { good, label } = report.plunder!.spoil!;
     const mult = battle().raid.townPlunderMultiplier;
@@ -734,8 +734,8 @@ suite("Koinon muster (integration)", () => {
     expect(await db.select().from(m.dbPkg.koinonMusterHulls)).toEqual([]);
 
     // By land no hull carries anyone: the ship owner has no part and no line.
-    // The warband of 10 has regenerated to 15 by the launch a day on; a fifth
-    // (3) turns out and 20 peltasts win on every seed, slaying 2 or 3.
+    // The warband of 10 has regenerated to 15 by the launch a day on; 4 (a
+    // fourth of 15, rounded) turn out and 20 peltasts win on every seed, slaying 2 to 4.
     await setWarband(landRegion, 10);
     const byLand = await musterRow(k, soldier, { id: uid(901), launchAt: at(DAY) });
     await db.delete(m.dbPkg.playerUnits);
@@ -744,8 +744,8 @@ suite("Koinon muster (integration)", () => {
     const before = await wallet(shipowner);
     expect(await m.muster.resolveMuster(byLand, at(DAY))).toEqual({ outcome: "resolved" });
     const land = (await musters())[1]!.report as unknown as Report;
-    expect(land).toMatchObject({ outcome: "won", route: "land", fleet: null, defender: { start: 15, turnout: 3 } });
-    expect([2, 3]).toContain(land.killed);
+    expect(land).toMatchObject({ outcome: "won", route: "land", fleet: null, defender: { start: 15, turnout: 4 } });
+    expect([2, 3, 4]).toContain(land.killed);
     expect(land.parts.map((p) => [p.playerId, p.shares, p.drachmae])).toEqual([[soldier, 20, land.plunder!.drachmae]]);
     expect(await wallet(shipowner)).toBe(before);
     expect((await logs(shipowner, "koinon_muster")).length).toBe(1);

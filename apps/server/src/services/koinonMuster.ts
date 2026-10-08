@@ -566,7 +566,8 @@ export type MusterReport = {
   men: number;
   lost: number;
   killed: number;
-  // The pool before and after, and `turnout`, the fifth of it that met the raid.
+  // The pool before and after, and `turnout`, the men who met the raid: half to
+  // all of the army's men, between the floor and the cap of the pool.
   defender: { label: string; start: number; end: number; turnout: number } | null;
   fleet: { hulls: Record<string, number>; naval: number; space: number; filled: number; defender: { pentekonters: number; triremes: number; naval: number } | null; held: boolean } | null;
   plunder: PlunderPayload | null;
@@ -753,8 +754,9 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
             const bonus = altar.get(r.ownerPlayerId) ?? 0;
             return { id: r.id, label: def?.label ?? r.unitId, count: r.count, stats: bonus ? { ...def!.stats, mor: def!.stats.mor + bonus } : def!.stats };
           });
-          // A raid meets a share of the pool, as `act` does; the kills come off the whole.
-          const met = raidTurnout(battleC.raid, pool);
+          // A raid meets half to all of the army's men, between the floor and the
+          // cap of the pool, as `act` does; the kills come off the whole.
+          const met = raidTurnout(battleC.raid, force.men, pool, seed);
           const result = resolveBattle({ attacker, defender: [{ id: isTown ? "garrison" : "warband", label: npc.label, count: met, stats: npcStats }], seed, config: battleC, mode: "raid" });
 
           // 13. Losses per row, on its owner: shrink or delete, one battle_loss
