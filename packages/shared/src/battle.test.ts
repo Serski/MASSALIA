@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { parseBattleContent, parseUnitsContent, type UnitStats } from "./barracks.js";
+import { parseBattleContent, parseUnitsContent, raidPlunder, raidTurnout, type UnitStats } from "./barracks.js";
 import { resolveBattle, SKIRMISH_MSL, type BattleConfig, type BattleRow } from "./battle.js";
 import { parseBuildingsContent } from "./buildings.js";
 
@@ -23,7 +23,7 @@ describe("battle content", () => {
   it("parses the real file and rejects an unknown key", () => {
     expect(battle.rounds).toBe(3);
     expect(battle.npc.warband.stats.spd).toBe(6);
-    expect(battle.raid).toEqual({ rounds: 1, plunderPerKill: 40, grainPerKill: 5, townPlunderMultiplier: 2 });
+    expect(battle.raid).toEqual({ rounds: 1, warbandShare: 0.2, plunderPerKill: 50, grainPerKill: 5, spoilPerKill: 5, spoilGoods: ["oliveoil", "leather", "salt", "wool"], townPlunderMultiplier: 2 });
     expect(battle.recovery).toEqual({ hoursPerStep: 3 });
     // 3c: towns, tribute, region tribute and moves.
     expect(battle.regen).toEqual({ warbandPerDay: 5, garrisonPerDay: 5 });
@@ -39,6 +39,41 @@ describe("battle content", () => {
     expect(() => parseBattleContent({ ...read("content/military/battle.json"), extra: 1 }, goods)).toThrow();
     expect(() => parseBattleContent({ ...read("content/military/battle.json"), pursuitLoss: 2 }, goods)).toThrow();
     expect(() => parseBattleContent({ ...read("content/military/battle.json"), altar: { seasons: 2, goods: { unicorn: 3 } } }, goods)).toThrow(/altar\.goods: unknown good/);
+    // The raid's third good: every id a vendor good, none twice; a share of the warband in (0, 1].
+    const raid = battle.raid;
+    expect(() => parseBattleContent({ ...read("content/military/battle.json"), raid: { ...raid, spoilGoods: ["oliveoil", "unicorn"] } }, goods)).toThrow(/raid\.spoilGoods: unknown good/);
+    expect(() => parseBattleContent({ ...read("content/military/battle.json"), raid: { ...raid, spoilGoods: ["salt", "wool", "salt"] } }, goods)).toThrow(/raid\.spoilGoods: .*salt.* twice/);
+    expect(() => parseBattleContent({ ...read("content/military/battle.json"), raid: { ...raid, spoilGoods: [] } }, goods)).toThrow();
+    expect(() => parseBattleContent({ ...read("content/military/battle.json"), raid: { ...raid, warbandShare: 0 } }, goods)).toThrow();
+    expect(() => parseBattleContent({ ...read("content/military/battle.json"), raid: { ...raid, warbandShare: 1.5 } }, goods)).toThrow();
+  });
+});
+
+describe("raid rules", () => {
+  it("raidTurnout: a fifth of the pool, rounded, at least one man, never above the pool, nothing from nothing", () => {
+    const cases: [number, number][] = [[0, 0], [1, 1], [2, 1], [7, 1], [10, 2], [20, 4], [30, 6], [90, 18], [100, 20], [600, 120], [3300, 660]];
+    for (const [pool, met] of cases) expect(raidTurnout(battle.raid, pool), String(pool)).toBe(met);
+    for (let pool = 0; pool <= 1000; pool++) expect(raidTurnout(battle.raid, pool)).toBeLessThanOrEqual(pool);
+  });
+
+  it("raidPlunder: 50 drachmae, 5 grain and 5 of one good per kill, doubled for a town, the good fixed by the seed", () => {
+    const region = raidPlunder(battle.raid, 10, false, "s");
+    expect(region.drachmae).toBe(500);
+    expect(region.grain).toBe(50);
+    expect(region.spoil.amount).toBe(50);
+    expect(battle.raid.spoilGoods).toContain(region.spoil.good);
+    const town = raidPlunder(battle.raid, 10, true, "s");
+    expect(town).toEqual({ drachmae: 1000, grain: 100, spoil: { good: region.spoil.good, amount: 100 } });
+    expect(raidPlunder(battle.raid, 0, false, "s")).toEqual({ drachmae: 0, grain: 0, spoil: { good: region.spoil.good, amount: 0 } });
+    expect(raidPlunder(battle.raid, 3, true, "s")).toEqual(raidPlunder(battle.raid, 3, true, "s"));
+    // Over 400 seeds each of the four goods is drawn at least 80 times.
+    const drawn: Record<string, number> = {};
+    for (let i = 0; i < 400; i++) {
+      const good = raidPlunder(battle.raid, 1, false, `s${i}`).spoil.good;
+      drawn[good] = (drawn[good] ?? 0) + 1;
+    }
+    expect(Object.keys(drawn).sort()).toEqual([...battle.raid.spoilGoods].sort());
+    for (const good of battle.raid.spoilGoods) expect(drawn[good], good).toBeGreaterThanOrEqual(80);
   });
 });
 

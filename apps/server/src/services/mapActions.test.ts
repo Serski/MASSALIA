@@ -194,8 +194,8 @@ suite("Map actions (integration)", () => {
     expect(r.report.defender!.start).toBe(20);
     const killed = r.report.defender!.losses;
     expect(killed).toBeGreaterThan(0);
-    expect(r.report.plunder).toEqual({ drachmae: killed * 40, grain: killed * 5 });
-    expect(await wallet(ctx)).toBe(100 + killed * 40);
+    expect(r.report.plunder).toEqual({ drachmae: killed * 50, grain: killed * 5 });
+    expect(await wallet(ctx)).toBe(100 + killed * 50);
     expect(await stock(ctx, "grain")).toBe(5000 - 3 * 40 + killed * 5); // 3 whole days after ready_at (at 6) × 40 peltasts × 1 grain, then the plunder
     expect(await warband("R046")).toBe(20 - killed);
     const row = (await rows(ctx)).find((x) => x.id === peltasts.id)!;
@@ -483,8 +483,8 @@ suite("Map actions (integration)", () => {
     expect(r.report).toMatchObject({ type: "raid", townId: "reii", winner: "attacker", defender: { label: "Town garrison", start: 10 }, conquest: null });
     const killed = r.report.defender!.losses;
     expect(killed).toBeGreaterThan(0);
-    expect(r.report.plunder).toEqual({ drachmae: killed * 40 * 2, grain: killed * 5 * 2 });
-    expect(await wallet(ctx)).toBe(100 + killed * 80);
+    expect(r.report.plunder).toEqual({ drachmae: killed * 50 * 2, grain: killed * 5 * 2 });
+    expect(await wallet(ctx)).toBe(100 + killed * 100);
     expect(await garrison("reii")).toBe(10 - killed);
     expect(r.report.line).toMatch(/^Raided Reii with 40 peltasts: \d+ soldiers? slain/);
     await recordChronicle(characterId);

@@ -42,7 +42,11 @@ export type BattleContent = {
   defenseFloor: number;
   moraleStep: number;
   pursuitLoss: number;
-  raid: { rounds: number; plunderPerKill: number; grainPerKill: number; townPlunderMultiplier: number };
+  // A raid: warbandShare is the share of a warband or garrison that meets it
+  // (the kills still come off the whole pool); each kill pays plunderPerKill
+  // drachmae, grainPerKill grain and spoilPerKill of a third good drawn once
+  // per raid from spoilGoods; a town pays townPlunderMultiplier times all three.
+  raid: { rounds: number; warbandShare: number; plunderPerKill: number; grainPerKill: number; spoilPerKill: number; spoilGoods: string[]; townPlunderMultiplier: number };
   recovery: { hoursPerStep: number }; // recovery after an action: max(1, steps) × hoursPerStep hours
   regen: { warbandPerDay: number; garrisonPerDay: number };
   // Towns (3c): walls add min(walls, wallsDefCap) to every defending row's def.
@@ -242,7 +246,25 @@ function battleContentSchema(goods: ReadonlySet<string>) {
     moraleStep: z.number().positive(),
     pursuitLoss: z.number().min(0).max(1),
     raid: z
-      .object({ rounds: z.number().int().positive(), plunderPerKill: z.number().nonnegative(), grainPerKill: z.number().nonnegative(), townPlunderMultiplier: z.number().positive() })
+      .object({
+        rounds: z.number().int().positive(),
+        warbandShare: z.number().positive().max(1),
+        plunderPerKill: z.number().nonnegative(),
+        grainPerKill: z.number().nonnegative(),
+        spoilPerKill: z.number().nonnegative(),
+        spoilGoods: z
+          .array(z.string())
+          .min(1)
+          .superRefine((list, ctx) => {
+            const seen = new Set<string>();
+            for (const good of list) {
+              if (!goods.has(good)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `raid.spoilGoods: unknown good "${good}"` });
+              if (seen.has(good)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `raid.spoilGoods: "${good}" twice` });
+              seen.add(good);
+            }
+          }),
+        townPlunderMultiplier: z.number().positive(),
+      })
       .strict(),
     recovery: z.object({ hoursPerStep: z.number().positive() }).strict(),
     regen: z.object({ warbandPerDay: z.number().int().nonnegative(), garrisonPerDay: z.number().int().nonnegative() }).strict(),
@@ -351,4 +373,26 @@ export function sha256Words(message: string): Uint32Array {
 // re-login never rerolls. Math.random is not used anywhere in the system.
 export function seededRoll(seedParts: string[]): number {
   return sha256Words(seedParts.join("|"))[0]! / 2 ** 32;
+}
+
+// The men who meet a raid: a share of the pool, at least one man, never more
+// than the pool; an empty pool meets nothing. Math.round, not ceil: 7 × 0.2 is
+// 1.4000000000000001 in floating point.
+export function raidTurnout(raid: BattleContent["raid"], pool: number): number {
+  if (pool <= 0) return 0;
+  return Math.min(pool, Math.max(1, Math.round(pool * raid.warbandShare)));
+}
+
+// What a won raid pays for its kills: drachmae, grain and one third good drawn
+// once per raid on the battle's own seed, so a raid's good is fixed by its
+// battle. A town pays townPlunderMultiplier times all three.
+export type RaidPlunder = { drachmae: number; grain: number; spoil: { good: string; amount: number } };
+export function raidPlunder(raid: BattleContent["raid"], kills: number, isTown: boolean, seed: string): RaidPlunder {
+  const mult = isTown ? raid.townPlunderMultiplier : 1;
+  const good = raid.spoilGoods[Math.floor(seededRoll([seed, "spoil"]) * raid.spoilGoods.length)]!;
+  return {
+    drachmae: Math.round(kills * raid.plunderPerKill * mult),
+    grain: Math.round(kills * raid.grainPerKill * mult),
+    spoil: { good, amount: Math.round(kills * raid.spoilPerKill * mult) },
+  };
 }
