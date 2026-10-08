@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { forceStats, HOME_POLITY_ID, moveVerdict, renderForce, routeFor, verdictsFor, type CampaignForcePart, type MapActionType } from "@massalia/shared";
+import { forceStats, HOME_POLITY_ID, moveVerdict, renderForce, renderPlunder, routeFor, verdictsFor, type CampaignForcePart, type MapActionType } from "@massalia/shared";
 import { api, apiBaseUrl, ApiError, type BarracksRosterRow, type BaseView, type MapActReport, type MapActType, type MapMoveReport, type MapReachView, type MoveTargetView, type ReachEntry } from "../api.js";
 import { AssetIcon, ChoicePicker, CULTURE_WEBP, formatClock, formatDuration, marchLine, POLITY_CREST, titleCase, useCountdownSeconds } from "../dashboard/shared.js";
 import { mapActionButtons, withReach, type MapActionButton } from "./mapActions.js";
@@ -1922,6 +1922,11 @@ export function BattleReport({ report, onClose }: { report: PickerReport; onClos
   const sailed = shipsText(report.ships, report.shipLabels);
   const place = report.townName ?? report.regionName;
   const fleet = report.fleet;
+  // A raid meets a share of the pool: the enemy row counts the men who fought,
+  // and a note says how many of the whole turned out. A report stored before
+  // the raids prompt has no turnout and shows the whole pool as before.
+  const turnout = report.type === "raid" && report.defender && report.defender.turnout !== undefined ? report.defender.turnout : null;
+  const defenders = report.townId ? "soldiers" : "tribesmen";
   return (
     <div className="w2map-modal" role="dialog" aria-label={`${ACTION_LABEL[report.type]} ${place}`} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
       <div className="w2map-modal-card">
@@ -1955,11 +1960,20 @@ export function BattleReport({ report, onClose }: { report: PickerReport; onClos
                     <td>{r.end}</td>
                   </tr>
                 ))}
-                {report.defender ? <tr className="w2map-report-enemy"><td>{report.defender.label}</td><td>{report.defender.start}</td><td>{report.defender.end}</td></tr> : null}
+                {report.defender ? (
+                  <tr className="w2map-report-enemy">
+                    <td>{report.defender.label}</td>
+                    <td>{turnout ?? report.defender.start}</td>
+                    <td>{turnout !== null ? turnout - report.defender.losses : report.defender.end}</td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           ) : null}
-          {report.plunder ? <p className="w2map-report-note">Plunder: {report.plunder.drachmae} drachmae, {report.plunder.grain} grain.</p> : null}
+          {turnout !== null && report.defender && turnout < report.defender.start ? (
+            <p className="w2map-report-note" data-testid="turnout-line">{turnout} of {report.defender.start} {defenders} turned out.</p>
+          ) : null}
+          {report.plunder ? <p className="w2map-report-note">Plunder: {renderPlunder(report.plunder)}.</p> : null}
           {report.conquest ? <p className="w2map-report-note">{place} is yours. The survivors hold it.</p> : null}
           {report.rounds > 0 ? <p className="w2map-report-note">{report.rounds} round{report.rounds === 1 ? "" : "s"} fought{sailed ? ` · sailed with ${sailed}` : ""}.</p> : null}
           <p className="w2map-report-note">The party {report.destination === (report.townId ?? report.regionId) ? "settles in" : "returns"} in {hours}h.</p>

@@ -868,6 +868,29 @@ describe("KoinonView · the muster", () => {
     expect(won.card().querySelector('[data-muster="form"]')).not.toBeNull();
     won.unmount();
 
+    // A report since the raids prompt: the plunder's third good, each part's share of it on his line.
+    const spoiled = await show(
+      inside("nikias", {
+        lastMuster: last({
+          report: {
+            outcome: "won", reason: null, line: "Raided Reii: 50 men sent, 12 soldiers slain, 3 lost, 960 drachmae, 120 grain and 120 salt taken.", men: 50, lost: 3, killed: 12,
+            plunder: { drachmae: 960, grain: 120, spoil: { good: "salt", label: "salt", amount: 120 } },
+            parts: [
+              { playerId: "kallias", name: "Kallias", men: 30, lost: 3, hulls: 0, seats: 0, shares: 30, drachmae: 288, grain: 36, spoil: 36 },
+              { playerId: "nikias", name: "Nikias", men: 20, lost: 0, hulls: 1, seats: 20, shares: 40, drachmae: 384, grain: 48, spoil: 48 },
+              { playerId: "deon", name: "Deon", men: 0, lost: 0, hulls: 2, seats: 30, shares: 30, drachmae: 288, grain: 36, spoil: 36 },
+            ],
+          },
+        }),
+      }),
+    );
+    expect(lines(spoiled.card().querySelector<HTMLElement>("[data-muster-last]")!, "data-part")).toEqual([
+      "Kallias · sent 30 men · lost 3 · 288 drachmae, 36 grain and 36 salt",
+      "Nikias · sent 20 men and 1 hull · lost 0 · 384 drachmae, 48 grain and 48 salt",
+      "Deon · sent 2 hulls · lost 0 · 288 drachmae, 36 grain and 36 salt",
+    ]);
+    spoiled.unmount();
+
     const stood = await show(inside("nikias", { lastMuster: last({ status: "stood_down", reason: "Not enough hulls: 30 space needed, 20 aboard.", report: { outcome: "stood_down", reason: "Not enough hulls: 30 space needed, 20 aboard.", line: null, men: 0, lost: 0, killed: 0, plunder: null, parts: [] } }) }));
     expect(stood.card().querySelector("[data-muster-last]")!.textContent).toContain("Stood down: Not enough hulls: 30 space needed, 20 aboard.");
     stood.unmount();

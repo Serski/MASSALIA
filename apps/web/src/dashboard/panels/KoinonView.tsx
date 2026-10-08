@@ -1,4 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { renderPlunder } from "@massalia/shared";
 import { api, ApiError, type KoinonArmies, type KoinonArmyRow, type KoinonLastMuster, type KoinonMember, type KoinonMissionKind, type KoinonMuster, type KoinonMusterMine, type KoinonMusterTargets, type KoinonPage } from "../../api.js";
 import { professions } from "../../data/league.js";
 import { LobbyPortrait } from "../../lobby/LobbyPortrait.js";
@@ -206,9 +207,12 @@ function LastMuster({ last }: { last: KoinonLastMuster }) {
           {report.line ? <p className="koinon-hint">{report.line}</p> : null}
           {report.parts.map((part) => {
             const sent = part.men > 0 && part.hulls > 0 ? `${menText(part.men)} and ${hullsText(part.hulls)}` : part.hulls > 0 ? hullsText(part.hulls) : menText(part.men);
+            // His part of the plunder, the third good included when the report has one (a report from before the raids prompt has none).
+            const spoil = report.plunder?.spoil;
+            const share = renderPlunder({ drachmae: part.drachmae, grain: part.grain, ...(spoil ? { spoil: { good: spoil.good, label: spoil.label, amount: part.spoil ?? 0 } } : {}) });
             return (
               <div key={part.playerId} className="koinon-line" data-part={part.playerId}>
-                {part.name} <span className="koinon-dim">· sent {sent} · lost {part.lost}{report.outcome === "won" ? ` · ${part.drachmae} drachmae and ${part.grain} grain` : ""}</span>
+                {part.name} <span className="koinon-dim">· sent {sent} · lost {part.lost}{report.outcome === "won" ? ` · ${share}` : ""}</span>
               </div>
             );
           })}

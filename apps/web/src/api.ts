@@ -1419,7 +1419,8 @@ export type KoinonMuster = {
   outlook: { route: "land" | "sea" | null; steps: number | null; ok: boolean; reason: string | null; space: number; hullSpace: number };
 };
 // One member's part in a marched muster, and the report every member sees.
-export type KoinonMusterPart = { playerId: string; name: string; men: number; lost: number; hulls: number; seats: number; shares: number; drachmae: number; grain: number };
+// `spoil` is the member's part of the plunder's third good; a report stored before the raids prompt has none.
+export type KoinonMusterPart = { playerId: string; name: string; men: number; lost: number; hulls: number; seats: number; shares: number; drachmae: number; grain: number; spoil?: number };
 export type KoinonMusterReport = {
   outcome: "won" | "driven_off" | "repulsed" | "stood_down";
   reason: string | null;
@@ -1427,7 +1428,7 @@ export type KoinonMusterReport = {
   men: number;
   lost: number;
   killed: number;
-  plunder: { drachmae: number; grain: number } | null;
+  plunder: { drachmae: number; grain: number; spoil?: { good: string; label: string; amount: number } } | null;
   parts: KoinonMusterPart[];
 };
 export type KoinonLastMuster = { id: string; targetName: string; gatherName: string; launchLabel: string; status: "resolved" | "stood_down" | "cancelled"; reason: string | null; report: KoinonMusterReport | null };
@@ -1826,8 +1827,10 @@ export type MapActReport = {
   winner: "attacker" | "defender" | "stand" | "repulsed" | null;
   rounds: number;
   attacker: { rows: { id: string; unitId: string; label: string; icon: string; start: number; end: number; broke: boolean }[]; losses: number };
-  defender: { label: string; start: number; end: number; losses: number } | null;
-  plunder: { drachmae: number; grain: number } | null;
+  // `turnout`: the men who fought (a fifth of the pool for a raid). Optional, as is the plunder's
+  // third good: a report stored before the raids prompt has neither.
+  defender: { label: string; start: number; end: number; losses: number; turnout?: number } | null;
+  plunder: { drachmae: number; grain: number; spoil?: { good: string; label: string; amount: number } } | null;
   conquest: { regionId: string; townId: string | null; previousOwner: string | null } | null;
   intel: { warband: number; pentekonters?: number; triremes?: number; scoutedGameDate: string } | null;
   line: string;

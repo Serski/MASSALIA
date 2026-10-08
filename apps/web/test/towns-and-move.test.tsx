@@ -91,10 +91,24 @@ describe("BattleReport · towns and moves", () => {
     expect(container.querySelector(".w2map-report-enemy")!.textContent).toBe("Town garrison100");
     expect(container.textContent).toContain("Aleria is yours. The survivors hold it.");
     expect(container.textContent).toContain("The party settles in in 6h.");
+    expect(container.querySelector('[data-testid="turnout-line"]')).toBeNull();
     // A move: one line.
     const move = render(<BattleReport report={{ type: "move", from: "R060", fromName: "Massalia", baseId: "nikaia", regionId: "R059", regionName: "Ligurians", townId: "nikaia", townName: "Nikaia", route: "land", steps: 1, minutes: 30, arrivesAt: iso(NOW + H / 2), ships: {}, men: 20, rows: [], line: "20 hoplites march from Massalia to Nikaia, arriving in 00:30:00." }} onClose={noop} />);
     expect(move.container.querySelector(".w2map-report-line")!.textContent).toBe("20 hoplites march from Massalia to Nikaia, arriving in 00:30:00.");
     expect(move.container.querySelector(".w2map-report-table")).toBeNull();
+  });
+
+  it("a town raid: the enemy row counts the men who turned out, the turnout line, and the plunder with its third good", () => {
+    const r = report({
+      type: "raid", rounds: 1, defender: { label: "Town garrison", start: 10, end: 8, losses: 2, turnout: 2 },
+      plunder: { drachmae: 200, grain: 20, spoil: { good: "salt", label: "salt", amount: 20 } },
+      line: "Raided Aleria with 40 peltasts: 2 soldiers slain, none of ours lost, 200 drachmae, 20 grain and 20 salt of plunder.",
+    });
+    const { container, getByTestId } = render(<BattleReport report={r} onClose={noop} />);
+    expect(container.querySelector(".w2map-report-line")!.textContent).toBe(r.line);
+    expect(container.querySelector(".w2map-report-enemy")!.textContent).toBe("Town garrison20");
+    expect(getByTestId("turnout-line").textContent).toBe("2 of 10 soldiers turned out.");
+    expect(container.textContent).toContain("Plunder: 200 drachmae, 20 grain and 20 salt.");
   });
 });
 
