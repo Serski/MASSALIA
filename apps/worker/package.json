@@ -15,7 +15,7 @@
     "@massalia/db": "workspace:*",
     "@massalia/shared": "workspace:*",
     "bullmq": "^5.56.0",
-    "ioredis": "^5.6.1"
+    "ioredis": "^6.0.0"
   },
   "devDependencies": {
     "tsx": "^4.19.4"
