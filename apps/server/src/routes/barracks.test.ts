@@ -250,4 +250,12 @@ suite("/api/barracks (integration)", () => {
     const levy = (await db.select().from(m.dbPkg.playerLevy).where(eq(m.dbPkg.playerLevy.ownerPlayerId, p.playerId)))[0]!;
     expect(levy.men).toBe(125);
   });
+
+  it("POST /report-read: no marchId is 400, an unknown one 404, without a session 401", async () => {
+    const p = await freshPlayer();
+    expect((await post(p.token, "report-read", {})).statusCode).toBe(400);
+    expect((await post(p.token, "report-read", { marchId: "" })).statusCode).toBe(400);
+    expect((await post(p.token, "report-read", { marchId: crypto.randomUUID() })).statusCode).toBe(404);
+    expect((await app.inject({ method: "POST", url: "/api/barracks/report-read", payload: { marchId: crypto.randomUUID() } })).statusCode).toBe(401);
+  });
 });

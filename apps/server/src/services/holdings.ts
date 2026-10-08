@@ -117,8 +117,9 @@ export async function settleHoldings(exec: Exec, ctx: ActingContext, now: Date):
 }
 
 // A conquest holding. `garrisonedAt` dates last_garrisoned_at and
-// last_tribute_at (the survivors are in recovery until then, so the empty-for-
-// a-day clock and the tribute both start when the men actually stand).
+// last_tribute_at: when the men first stand there, the battle's instant since
+// raids prompt 4 (the survivors hold the place from the moment they win it), so
+// the empty-for-a-day clock and the tribute both start then.
 export async function insertConquest(exec: Exec, ctx: ActingContext, regionId: string, previousOwner: string | null, now: Date, garrisonedAt: Date = now): Promise<HoldingRow> {
   const inserted = await exec
     .insert(playerHoldings)

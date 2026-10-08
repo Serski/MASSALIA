@@ -1,10 +1,12 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { and, asc, eq, gte, isNull, lte, or, sql, inArray } from "drizzle-orm";
-import { bandOffers, createDb, effectLog, koinonMembers, koinonMusters, playerCharacters, playerLevy, playerUnits, players, playerVoyages, resources, type UnitMission, type VoyageKind } from "@massalia/db";
+import { and, asc, desc, eq, gte, isNull, lte, or, sql, inArray } from "drizzle-orm";
+import { bandOffers, createDb, effectLog, koinonMembers, koinonMusters, playerCharacters, playerLevy, playerMarches, playerUnits, players, playerVoyages, resources, type MarchKind, type UnitMission, type VoyageKind } from "@massalia/db";
 import {
   bandDef,
+  formatGameDate,
+  gameDate,
   goodCategoryFor,
   parseBandsContent,
   parseBattleContent,
@@ -28,6 +30,7 @@ import { getTopology } from "./mapGraph.js";
 import { heldGarrisonedRegions, settleHoldings, settleTribute, type HoldingsSettle, type TributeSettle } from "./holdings.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
 import { sheetStats } from "./traits.js";
+import type { MapActReport } from "./mapActions.js";
 
 // ---------------------------------------------------------------------------
 // Barracks — the player's army: trained UNITS raised from the levy and hired
@@ -398,6 +401,53 @@ export async function sailHulls(exec: Exec, owner: Pick<ActingContext, "playerId
   });
 }
 
+// --- Reports (raids prompt 4) ------------------------------------------------------
+// A party's battle report is kept on its march and listed in the Barracks,
+// newest first, the latest ten; one not yet opened is highlighted until its
+// owner first opens it (markReportRead).
+
+export type MarchReportView = { id: string; kind: MarchKind; regionId: string; townId: string | null; arrivedAt: string; gameDate: string; seen: boolean; report: MapActReport };
+async function marchReports(exec: Exec, ctx: ActingContext): Promise<MarchReportView[]> {
+  const rows = await exec
+    .select()
+    .from(playerMarches)
+    .where(and(eq(playerMarches.worldId, ctx.worldId), eq(playerMarches.ownerPlayerId, ctx.playerId), eq(playerMarches.status, "resolved")))
+    .orderBy(desc(playerMarches.arrivesAt), asc(playerMarches.id))
+    .limit(10);
+  return rows.map((m) => ({
+    id: m.id,
+    kind: m.kind,
+    regionId: m.regionId,
+    townId: m.townId,
+    arrivedAt: m.arrivesAt.toISOString(),
+    gameDate: formatGameDate(gameDate(m.arrivesAt.getTime(), ctx.worldStartedMs)),
+    seen: m.seenAt !== null,
+    report: m.report as unknown as MapActReport,
+  }));
+}
+
+// The owner opened a report: its first opening is stamped, once. A report
+// read before answers ok with nothing changed; anything else (unknown, not
+// his, not resolved, another world) is 404. No player lock: nothing of the
+// wallet, the stock or the roster changes.
+export async function markReportRead(ctx: ActingContext, marchId: string, now: Date): Promise<{ ok: true } | Failure> {
+  if (!UUID_RE.test(marchId)) return { ok: false, code: 404, error: "No such report." };
+  const stamped = await db
+    .update(playerMarches)
+    .set({ seenAt: now })
+    .where(and(eq(playerMarches.id, marchId), eq(playerMarches.ownerPlayerId, ctx.playerId), eq(playerMarches.worldId, ctx.worldId), eq(playerMarches.status, "resolved"), isNull(playerMarches.seenAt)))
+    .returning({ id: playerMarches.id });
+  if (stamped.length > 0) return { ok: true };
+  const his = (
+    await db
+      .select({ id: playerMarches.id })
+      .from(playerMarches)
+      .where(and(eq(playerMarches.id, marchId), eq(playerMarches.ownerPlayerId, ctx.playerId), eq(playerMarches.worldId, ctx.worldId), eq(playerMarches.status, "resolved")))
+      .limit(1)
+  )[0];
+  return his ? { ok: true } : { ok: false, code: 404, error: "No such report." };
+}
+
 // The player's hulls at sea, for the Barracks: one entry per sailing, by
 // returns_at then id, each ship in ships.json order with its label (counts
 // below 1, and ids the content no longer has, are left out of the view).
@@ -666,11 +716,14 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
     }
   }
 
-  // 6b. Arrivals. A row mid-relocation (or recovering from an action) whose
-  // arrives_at has passed now stands at its destination; the merge pass below
-  // folds it into whatever already stands there.
+  // 6b. Arrivals. A row mid-relocation (or on the road home from an action)
+  // whose arrives_at has passed now stands at its destination; the merge pass
+  // below folds it into whatever already stands there. A row still carrying a
+  // march (a party on its way out, raids prompt 4) is landed by its march's
+  // arrival (resolveMarch), never by the settle.
   for (const r of rows) {
     if (r.movingTo === null || r.arrivesAt === null || r.arrivesAt.getTime() > now.getTime()) continue;
+    if (r.mission?.marchId) continue;
     await exec.update(playerUnits).set({ basedAt: r.movingTo, movingTo: null, arrivesAt: null, mission: null }).where(eq(playerUnits.id, r.id));
     await logEffect(exec, characterId, "barracks_arrive", { unitId: r.unitId, count: r.count, from: r.basedAt, to: r.movingTo, source: "barracks" });
     out.arrived.push({ rowId: r.id, unitId: r.unitId, source: r.source, count: r.count });
@@ -1033,6 +1086,9 @@ export type BarracksView = {
   fleet: FleetStripView;
   // The hulls at sea, one entry per sailing, listed under Away · Returning.
   atSea: VoyageView[];
+  // The battle reports (raids prompt 4): the player's resolved marches in this
+  // world, newest first, the latest ten.
+  reports: MarchReportView[];
   // The altar while lit at `now` (the good burned, its morale bonus, the
   // instant it goes cold), else null.
   altar: { good: string; mor: number; until: string } | null;
@@ -1108,6 +1164,7 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
     }
     // The hulls at sea, after this view's own settle brought home what was due.
     const atSea = await shipsAtSea(tx, ctx);
+    const reports = await marchReports(tx, ctx);
     for (const v of atSea) for (const id of [v.regionId, v.townId]) if (id && !(id in places)) places[id] = await nameOf(id);
     const { strip: fleet } = await fleetInStock(tx, ctx);
     const battleC = getBattleContent();
@@ -1118,6 +1175,7 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
       places,
       fleet,
       atSea,
+      reports,
       season,
       now: now.toISOString(),
       levy: { men: levy.men },

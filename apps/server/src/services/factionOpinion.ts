@@ -13,7 +13,7 @@ import { getBattleContent } from "./barracks.js";
 // The bar is per world (faction_relations), so every player's raids move it for
 // everyone. Unclaimed land and polities no faction holds never roll. No
 // effect_log row of its own: the change rides on the raid's report, which is
-// already stored (the map_action detail, the muster's report).
+// already stored (on its march, or on the muster).
 // ---------------------------------------------------------------------------
 
 type DbTx = Parameters<Parameters<ReturnType<typeof createDb>["transaction"]>[0]>[0];

@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
-import { createDb, effectLog, playerCharacters, playerUnits, regionIntel, townIntel } from "@massalia/db";
+import { and, eq, inArray, lte, sql } from "drizzle-orm";
+import { createDb, effectLog, playerCharacters, playerMarches, playerUnits, regionIntel, townIntel, worlds, type UnitMission } from "@massalia/db";
 import {
   bandDef,
   campaignSeason,
@@ -8,11 +8,13 @@ import {
   formatGameDate,
   gameDate,
   HOME_POLITY_ID,
+  marchMinutes,
   moveVerdict,
   raidPlunder,
   raidTurnout,
   REACH_REASON,
   renderCampaignLine,
+  renderMarchLine,
   resolveBattle,
   unitDef,
   type BattleResult,
@@ -36,15 +38,23 @@ import { readRegionWarband, readTownFleet, readTownGarrison, regionContentOwner,
 import { townStats } from "./townStats.js";
 
 // ---------------------------------------------------------------------------
-// Map actions (barracks prompts 3b, 3c): Scout, Raid and Attack against
-// townless regions and towns not owned by Massalia. One locked transaction:
-// lock → settleAll (arrivals, holding reversion, tribute, upkeep) → target,
-// force and reach checks → for a town by sea, the fleet check → the battle
-// (pure, seeded on world + player + target + instant) → losses, plunder or
-// conquest → recovery → effect_log with the full report and the Chronicle
-// payload. The hulls that sail leave stock (sailHulls) until the party is
-// home, when the owner's settle brings them back. The response is composed
-// after the commit from the fresh reach and barracks views.
+// Map actions (barracks prompts 3b, 3c; raids prompt 4): Scout, Raid and
+// Attack against townless regions and towns not owned by Massalia, in two
+// halves. `act` sends the party: one locked transaction, lock → settleAll
+// (arrivals, holding reversion, tribute, upkeep) → target, force and reach
+// checks → the ships → the split → the march row, the rows bound for the
+// target with the march's id on their mission, and the hulls that sail out
+// of stock for the round trip (sailHulls). The answer is the set-out card.
+// `resolveMarch` fights when the party arrives, resolved by the first request
+// after that instant (the campaign hook in koinonMuster.ts), every clock in it
+// the arrival: the place as it stands then → for a town by sea, the fleet
+// check → the battle (pure, seeded on world + march + target + instant) →
+// losses, plunder or conquest → the survivors on the road home, or standing
+// on a conquest → the report on the march and a map_report effect_log row.
+// A party that finds the place its own house's, or an attack that finds it
+// another house's, turns back; a party whose men all left on the road breaks
+// up. The response to `act` is composed after the commit from the fresh reach
+// and barracks views.
 //
 // A town (ruling 1–4): the defender is its garrison with the garrison stat
 // block, every row's def raised by min(walls, wallsDefCap); the region's
@@ -60,7 +70,6 @@ import { townStats } from "./townStats.js";
 const db = createDb();
 type DbTx = Parameters<Parameters<ReturnType<typeof createDb>["transaction"]>[0]>[0];
 
-const MS_PER_HOUR = 3_600_000;
 const FAST_SPD = 6;
 
 export type MapActionType = "scout" | "raid" | "attack";
@@ -90,12 +99,21 @@ export type MapActReport = {
   base: string;
   route: "land" | "sea";
   steps: number;
-  recoveryHours: number;
-  arrivesAt: string;
+  // The march (raids prompt 4): its id, the road's minutes each way, the
+  // instant the party reached the place, and when the survivors are home
+  // (null after a conquest, whose survivors hold the place, and when nobody
+  // comes back).
+  marchId: string;
+  minutes: number;
+  arrivedAt: string;
+  homeAt: string | null;
   destination: string;
   ships: Record<string, number>;
   shipLabels: Record<string, string>;
-  winner: "attacker" | "defender" | "stand" | "repulsed" | null;
+  // "turned_back": the place was its own house's, or another house's for an
+  // attack, when the party arrived; "dispersed": its men all left the roster
+  // on the road. Neither fought.
+  winner: "attacker" | "defender" | "stand" | "repulsed" | "turned_back" | "dispersed" | null;
   rounds: number;
   attacker: { rows: { id: string; unitId: string; label: string; icon: string; start: number; end: number; broke: boolean }[]; losses: number };
   // The defender: the whole pool before and after, and `turnout`, the men who
@@ -117,8 +135,31 @@ export type MapActReport = {
   line: string;
 };
 
+// The set-out card: what `act` answers once the party is on the road. `ships`
+// is every hull that sailed, the escort included.
+export type MapSetOutReport = {
+  type: "setout";
+  action: MapActionType;
+  marchId: string;
+  regionId: string;
+  regionName: string;
+  townId: string | null;
+  townName: string | null;
+  base: string;
+  route: "land" | "sea";
+  steps: number;
+  minutes: number;
+  departedAt: string;
+  arrivesAt: string;
+  ships: Record<string, number>;
+  shipLabels: Record<string, string>;
+  men: number;
+  rows: { id: string; unitId: string; label: string; icon: string; count: number }[];
+  line: string;
+};
+
 type Failure = { ok: false; code: number; error: string };
-export type MapActResult = Failure | { ok: true; report: MapActReport; reach: ReachView; campaign: ReachView["campaign"]; force: ReachView["force"]; fleet: ReachView["fleet"]; roster: BarracksView["roster"] };
+export type MapActResult = Failure | { ok: true; report: MapSetOutReport; reach: ReachView; campaign: ReachView["campaign"]; force: ReachView["force"]; fleet: ReachView["fleet"]; roster: BarracksView["roster"] };
 
 // The force as chronicle parts: rows of the same unit merge into one figure
 // ("21 peltasts", not "7 peltasts, 7 peltasts and 7 peltasts"), in first-seen
@@ -283,7 +324,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
   const bandsC = getBandsContent();
   const battleC = getBattleContent();
   const shipsC = getShipsContent();
-  const outcome = await db.transaction(async (tx): Promise<{ composureDays: number; result: Failure | { ok: true; report: MapActReport } }> => {
+  const outcome = await db.transaction(async (tx): Promise<{ composureDays: number; result: Failure | { ok: true; report: MapSetOutReport } }> => {
     await lockPlayer(tx, ctx.playerId);
     const settled = await settleAll(tx, ctx, now);
     const fail = (code: number, error: string) => ({ composureDays: settled.composureDays, result: { ok: false as const, code, error } });
@@ -340,11 +381,10 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
     let ships: Record<string, number> = {};
     // The fleet that sails against a town: the transports taken plus, for a
     // raid or an attack on a town, every warship in stock whose range covers
-    // the crossing (an escort), and its naval power (ruling 3 as amended). Only
-    // there does the naval check read them; anywhere else they would leave
-    // port for nothing.
+    // the crossing (an escort); its naval power meets the town's fleet when
+    // the party arrives (ruling 3 as amended). Only there does the naval check
+    // read them; anywhere else they would leave port for nothing.
     let sailing: Record<string, number> = {};
-    let naval = 0;
     if (route === "sea") {
       const { counts } = await fleetInStock(tx, ctx);
       if (input.ships) {
@@ -382,223 +422,52 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
           }
         }
       }
-      naval = Object.entries(sailing).reduce((n, [id, count]) => n + count * (shipsC.ships[id]?.naval ?? 0), 0);
     }
 
     // 4b. Split, under the lock, now that nothing can refuse.
     await splitRows(tx, (await characterOf(tx, ctx.playerId)).id, selected, now);
 
-    // 5. Defender: the region's warband, or the town's garrison behind its
-    // walls, after regeneration. A town's fleet is read for the sea rule.
+    // 5. The road (raids prompt 4): the party sets out, and the battle is
+    // fought when it arrives (resolveMarch). One march row, its rows in the
+    // order the fight will see them; every marching row carries the march's
+    // id on its mission until it arrives; the hulls that sail leave stock for
+    // the round trip. No effect_log row: the march is the record.
     const isTown = townId !== null;
-    const stats = isTown ? await townStats(townId) : null;
-    const wallsBonus = stats ? Math.min(stats.walls, battleC.town.wallsDefCap) : 0;
-    const npc = isTown ? battleC.npc.garrison : battleC.npc.warband;
-    const npcStats = { ...npc.stats, def: npc.stats.def + wallsBonus };
-    const warband = isTown ? await readTownGarrison(tx, ctx.worldId, townId, now) : await readRegionWarband(tx, ctx.worldId, regionId, now);
-    const townFleet = isTown ? await readTownFleet(tx, ctx.worldId, townId, now) : null;
-    const character = await characterOf(tx, ctx.playerId);
     const regionName = await regionDisplayName(regionId);
     const townName = isTown ? await townDisplayName(townId) : null;
-    const town: MapActReport["town"] = stats ? { walls: stats.walls, population: stats.population, garrisonDef: npcStats.def } : null;
-    // Recovery: max(1, steps) × hoursPerStep hours from now, for any action.
-    const recoveryHours = Math.max(1, steps) * battleC.recovery.hoursPerStep;
-    const arrivesAt = new Date(now.getTime() + recoveryHours * MS_PER_HOUR);
-    // The game date of what the men see, for the intel every branch writes.
-    const scoutedGameDate = formatGameDate(gameDate(now.getTime(), ctx.worldStartedMs));
-    const men = rows.reduce((n, r) => n + r.count, 0);
-    const forceText = describeForce(rows);
-    const place = isTown ? { townId, townName: townName! } : {};
+    const minutes = marchMinutes(battleC.march, { route, steps });
+    const arrivesAt = new Date(now.getTime() + minutes * 60_000);
+    const march = (
+      await tx
+        .insert(playerMarches)
+        .values({ worldId: ctx.worldId, ownerPlayerId: ctx.playerId, kind: input.type, regionId, townId, baseId: base, route, steps, minutes, party: rows.map((r) => r.id), ships, sailing, departedAt: now, arrivesAt })
+        .returning({ id: playerMarches.id })
+    )[0]!;
+    const mission: UnitMission = { kind: input.type, regionId, ...(isTown ? { townId } : {}), departedAt: now.toISOString(), marchId: march.id };
+    for (const r of rows) await tx.update(playerUnits).set({ movingTo: townId ?? regionId, arrivesAt, mission }).where(eq(playerUnits.id, r.id));
+    if (route === "sea") await sailHulls(tx, ctx, sailing, { kind: input.type, regionId, townId, sailedAt: now, returnsAt: new Date(now.getTime() + 2 * minutes * 60_000) });
+
     const shipLabels = Object.fromEntries(Object.entries(shipsC.ships).map(([id, d]) => [id, d.label]));
-    const attackerRows = () => rows.map((r) => ({ id: r.id, unitId: r.unitId, label: labelOf(r), icon: iconOf(r), start: r.count, end: r.count, broke: false }));
-
-    let report: MapActReport;
-    let destination = base;
-    let chronicle: CampaignPayload;
-
-    // 5b. A sea assault on a town must beat its fleet first (ruling 3): with
-    // lower naval power the landing is repulsed — no battle, no losses, the
-    // force returns with recovery, the town's fleet unchanged.
-    let fleetLine: MapActReport["fleet"] = null;
-    if (isTown && route === "sea" && townFleet && townFleet.pentekonters + townFleet.triremes > 0 && input.type !== "scout") {
-      const defenderNaval = townFleet.pentekonters * 1 + townFleet.triremes * 5;
-      fleetLine = { ships: sailing, naval, defender: { ...townFleet, naval: defenderNaval }, held: naval >= defenderNaval };
-    }
-
-    if (input.type === "scout") {
-      // 6. Scout: the dynasty's intel snapshot, no battle. A town's intel
-      // carries its garrison and fleet.
-      if (character.dynastyId) await writeIntel(tx, ctx.worldId, character.dynastyId, { regionId, townId, pool: warband, fleet: townFleet, at: now, gameDate: scoutedGameDate });
-      chronicle = { action: "scout", regionId, regionName, ...place, men, force: forceText, warband, ...(townFleet ? { fleet: townFleet } : {}) };
-      report = {
-        type: "scout",
-        regionId,
-        regionName,
-        townId,
-        townName,
-        town,
-        fleet: null,
-        base,
-        route,
-        steps,
-        recoveryHours,
-        arrivesAt: arrivesAt.toISOString(),
-        destination,
-        ships,
-        shipLabels,
-        winner: null,
-        rounds: 0,
-        attacker: { rows: attackerRows(), losses: 0 },
-        defender: null,
-        plunder: null,
-        conquest: null,
-        intel: { warband, ...(townFleet ?? {}), scoutedGameDate },
-        opinion: null,
-        line: renderCampaignLine("map_action", chronicle),
-      };
-    } else if (fleetLine && !fleetLine.held) {
-      // 6b. Repulsed at sea: home with recovery, nothing else changes. The men
-      // saw the garrison and the ships that turned them back (raids prompt 3).
-      if (character.dynastyId) await writeIntel(tx, ctx.worldId, character.dynastyId, { regionId, townId, pool: warband, fleet: townFleet, at: now, gameDate: scoutedGameDate });
-      chronicle = { action: input.type, regionId, regionName, ...place, men, force: forceText, winner: "repulsed", killed: 0, lost: 0 };
-      report = {
-        type: input.type,
-        regionId,
-        regionName,
-        townId,
-        townName,
-        town,
-        fleet: fleetLine,
-        base,
-        route,
-        steps,
-        recoveryHours,
-        arrivesAt: arrivesAt.toISOString(),
-        destination,
-        ships,
-        shipLabels,
-        winner: "repulsed",
-        rounds: 0,
-        attacker: { rows: attackerRows(), losses: 0 },
-        defender: { label: npc.label, start: warband, end: warband, losses: 0, turnout: 0 },
-        plunder: null,
-        conquest: null,
-        intel: { warband, ...(townFleet ?? {}), scoutedGameDate },
-        opinion: null,
-        line: renderCampaignLine("map_action", chronicle),
-      };
-    } else {
-      // 7. Raid / Attack: the pure battle, then its consequences.
-      const seed = crypto.createHash("sha256").update([ctx.worldId, ctx.playerId, townId ?? regionId, now.toISOString()].join("|")).digest("hex");
-      // The altar: a blessing lit now raises every row's morale, on a copy of
-      // the content stats (def.stats is the shared content object). No clamp.
-      const bonus = (await altarBonusFor(tx, [ctx.playerId], now)).get(ctx.playerId) ?? 0;
-      const attacker: BattleRow[] = rows.map((r) => {
-        const def = r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId);
-        return { id: r.id, label: labelOf(r), count: r.count, stats: bonus ? { ...def!.stats, mor: def!.stats.mor + bonus } : def!.stats };
-      });
-      // A raid meets half to all of the men it sends, between the floor and the
-      // cap of the pool (raidTurnout, rolled on the seed); an attack meets everyone.
-      const met = input.type === "raid" ? raidTurnout(battleC.raid, men, warband, seed) : warband;
-      const defender: BattleRow[] = [{ id: isTown ? "garrison" : "warband", label: npc.label, count: met, stats: npcStats }];
-      const result: BattleResult = resolveBattle({ attacker, defender, seed, config: battleC, mode: input.type });
-      const writeDefender = (value: number) => (isTown ? writeTownGarrison(tx, ctx.worldId, townId, value, now) : writeRegionWarband(tx, ctx.worldId, regionId, value, now));
-
-      // Attacker losses per row: shrink or delete, one battle_loss log each.
-      const survivors: UnitRow[] = [];
-      for (const r of rows) {
-        const side = result.attacker.rows.find((x) => x.id === r.id)!;
-        const lost = side.start - side.end;
-        if (lost > 0) await tx.insert(effectLog).values({ characterId: character.id, kind: "battle_loss", detail: { rowId: r.id, unitId: r.unitId, source: r.source, lost, regionId, townId, action: input.type }, createdAt: now });
-        if (side.end <= 0) await tx.delete(playerUnits).where(eq(playerUnits.id, r.id));
-        else {
-          if (lost > 0) await tx.update(playerUnits).set({ count: side.end }).where(eq(playerUnits.id, r.id));
-          survivors.push({ ...r, count: side.end });
-        }
-      }
-      const defLosses = result.defender.losses;
-      const remaining = Math.max(0, warband - defLosses);
-
-      let plunder: MapActReport["plunder"] = null;
-      let conquest: MapActReport["conquest"] = null;
-      let opinion: MapActReport["opinion"] = null;
-      if (input.type === "raid") {
-        await writeDefender(remaining);
-        // Any raid that fights, won or lost, can sour the nation whose land it is.
-        opinion = await raidOpinion(tx, ctx.worldId, isTown ? await townContentOwner(townId) : await regionContentOwner(regionId), seed);
-        if (result.winner === "attacker") {
-          // Drachmae, grain and one third good drawn on the battle's seed; a
-          // town's stores pay townPlunderMultiplier times the region rate.
-          const p = raidPlunder(battleC.raid, defLosses, isTown, seed);
-          plunder = { drachmae: p.drachmae, grain: p.grain, spoil: { good: p.spoil.good, label: spoilLabel(p.spoil.good), amount: p.spoil.amount } };
-          await creditDrachmae(tx, ctx.playerId, p.drachmae);
-          await creditGood(tx, ctx.playerId, "grain", p.grain, now);
-          await creditGood(tx, ctx.playerId, p.spoil.good, p.spoil.amount, now);
-        }
-      } else if (result.winner === "attacker") {
-        // The garrison is in recovery until arrivesAt: the holding's clocks
-        // (empty-for-a-day, tribute) start when the men actually stand.
-        const previousOwner = isTown ? await townContentOwner(townId) : await regionContentOwner(regionId);
-        if (isTown) await insertTownConquest(tx, ctx, regionId, townId, previousOwner, now, arrivesAt);
-        else await insertConquest(tx, ctx, regionId, previousOwner, now, arrivesAt);
-        await writeDefender(0);
-        conquest = { regionId, townId, previousOwner };
-        destination = townId ?? regionId;
-        for (const r of survivors) await tx.update(playerUnits).set({ basedAt: destination }).where(eq(playerUnits.id, r.id));
-      } else {
-        await writeDefender(remaining);
-      }
-      // 7b. What the men saw: the pool as the fight left it (0 after a
-      // conquest) and a town's ships, on the dynasty's intel (raids prompt 3).
-      const end = conquest !== null ? 0 : remaining;
-      if (character.dynastyId) await writeIntel(tx, ctx.worldId, character.dynastyId, { regionId, townId, pool: end, fleet: townFleet, at: now, gameDate: scoutedGameDate });
-
-      chronicle = { action: input.type, regionId, regionName, ...place, men, force: forceText, winner: result.winner, killed: defLosses, lost: result.attacker.losses, plunder, conquest: conquest !== null };
-      report = {
-        type: input.type,
-        regionId,
-        regionName,
-        townId,
-        townName,
-        town,
-        fleet: fleetLine,
-        base,
-        route,
-        steps,
-        recoveryHours,
-        arrivesAt: arrivesAt.toISOString(),
-        destination,
-        ships,
-        shipLabels,
-        winner: result.winner,
-        rounds: result.rounds.length,
-        attacker: {
-          rows: rows.map((r) => {
-            const side = result.attacker.rows.find((x) => x.id === r.id)!;
-            return { id: r.id, unitId: r.unitId, label: labelOf(r), icon: iconOf(r), start: side.start, end: side.end, broke: side.broke };
-          }),
-          losses: result.attacker.losses,
-        },
-        defender: { label: npc.label, start: warband, end: remaining, losses: defLosses, turnout: met },
-        plunder,
-        conquest,
-        intel: { warband: end, ...(townFleet ?? {}), scoutedGameDate },
-        opinion,
-        line: renderCampaignLine("map_action", chronicle),
-      };
-      rows.splice(0, rows.length, ...survivors);
-    }
-
-    // 8. Recovery for every surviving participant.
-    const mission = { kind: input.type, regionId, ...(isTown ? { townId } : {}), departedAt: now.toISOString() };
-    for (const r of rows) await tx.update(playerUnits).set({ movingTo: destination, arrivesAt, mission }).where(eq(playerUnits.id, r.id));
-    // 8b. The hulls that sailed leave stock until the party is home (raids
-    // prompt 3): every branch reaches this — a scout, a repulse, a win, a
-    // loss, a party that fell to a man, a conquest.
-    if (route === "sea") await sailHulls(tx, ctx, sailing, { kind: input.type, regionId, townId, sailedAt: now, returnsAt: arrivesAt });
-
-    // 9. The report on the character, with the Chronicle payload alongside.
-    await tx.insert(effectLog).values({ characterId: character.id, kind: "map_action", detail: { ...report, chronicle, source: "map" }, createdAt: now });
+    const report: MapSetOutReport = {
+      type: "setout",
+      action: input.type,
+      marchId: march.id,
+      regionId,
+      regionName,
+      townId,
+      townName,
+      base,
+      route,
+      steps,
+      minutes,
+      departedAt: now.toISOString(),
+      arrivesAt: arrivesAt.toISOString(),
+      ships: sailing,
+      shipLabels,
+      men: rows.reduce((n, r) => n + r.count, 0),
+      rows: rows.map((r) => ({ id: r.id, unitId: r.unitId, label: labelOf(r), icon: iconOf(r), count: r.count })),
+      line: renderMarchLine({ stage: "setout", action: input.type, force: describeForce(rows), place: townName ?? regionName, minutes }),
+    };
     return { composureDays: settled.composureDays, result: { ok: true, report } };
   });
 
@@ -608,13 +477,246 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
   }
   if (!outcome.result.ok) return outcome.result;
 
-  // 10. Compose the response from fresh reads so the client re-renders from one payload.
+  // 6. Compose the response from fresh reads so the client re-renders from one payload.
   const reach = await db.transaction(async (tx) => {
     await lockPlayer(tx, ctx.playerId);
     return reachView(tx, ctx, now);
   });
   const barracks = await barracksView(ctx, now);
   return { ok: true, report: outcome.result.report, reach, campaign: reach.campaign, force: reach.force, fleet: reach.fleet, roster: barracks.roster };
+}
+
+// The march's own advisory lock, in the two-int keyspace as the muster's.
+const marchLockKey = (marchId: string) => sql`hashtext('map_march'), hashtext(${marchId}::text)`;
+
+export type MarchResolved = { outcome: "busy" | "not_due" | "resolved" };
+
+// The party arrives (raids prompt 4). One transaction, and every clock in it
+// is the arrival instant, never `now`: `now` only decides whether the march is
+// due. Resolved a minute or three days after it arrives, the result is the
+// same. In order: a party with no rows left broke up on the road; a place its
+// own house now holds turns any party back, one another house holds turns an
+// attack back; a scout scouts; a sea assault on a town meets its fleet; the
+// rest fight. The survivors take the same road home, or stand on a conquest
+// from this instant. The report is stored on the march and in a map_report
+// effect_log row.
+export async function resolveMarch(marchId: string, now: Date): Promise<MarchResolved> {
+  const unitsC = getUnitsContent();
+  const bandsC = getBandsContent();
+  const battleC = getBattleContent();
+  const shipsC = getShipsContent();
+  const done = await db.transaction(async (tx): Promise<MarchResolved & { at?: Date; ctx?: ActingContext; composureDays?: number }> => {
+    // 1. A march being resolved elsewhere is skipped, not waited on.
+    const lock = await tx.execute(sql`SELECT pg_try_advisory_xact_lock(${marchLockKey(marchId)}) AS granted`);
+    if (!(lock.rows as { granted: boolean }[])[0]?.granted) return { outcome: "busy" };
+
+    // 2. The march, the owner's lock, then the claim; a lost claim applies nothing.
+    const due = (await tx.select().from(playerMarches).where(eq(playerMarches.id, marchId)).limit(1))[0];
+    if (!due || due.status !== "marching" || due.arrivesAt.getTime() > now.getTime()) return { outcome: "not_due" };
+    await lockPlayer(tx, due.ownerPlayerId);
+    const march = (
+      await tx
+        .update(playerMarches)
+        .set({ status: "resolved", resolvedAt: due.arrivesAt })
+        .where(and(eq(playerMarches.id, marchId), eq(playerMarches.status, "marching"), lte(playerMarches.arrivesAt, now)))
+        .returning()
+    )[0];
+    if (!march) return { outcome: "not_due" };
+    const at = march.arrivesAt;
+
+    // 3. The owner's context and his own settle at the arrival instant.
+    const world = (await tx.select({ startedAt: worlds.startedAt }).from(worlds).where(eq(worlds.id, march.worldId)).limit(1))[0]!;
+    const ctx: ActingContext = { playerId: march.ownerPlayerId, worldId: march.worldId, worldStartedMs: world.startedAt.getTime() };
+    const settled = await settleAll(tx, ctx, at);
+
+    // 4. The party: the owner's rows that still carry this march, in the order
+    // they set out (rows that left on the road are simply missing).
+    const carrying = await tx
+      .select()
+      .from(playerUnits)
+      .where(and(eq(playerUnits.ownerPlayerId, ctx.playerId), sql`${playerUnits.mission}->>'marchId' = ${march.id}`));
+    const rows: UnitRow[] = march.party.map((id) => carrying.find((r) => r.id === id)).filter((r): r is UnitRow => r !== undefined);
+
+    const { regionId, townId, baseId: base, route, steps, minutes, ships, sailing } = march;
+    const kind = march.kind;
+    const isTown = townId !== null;
+    const regionName = await regionDisplayName(regionId);
+    const townName = isTown ? await townDisplayName(townId) : null;
+    const place = isTown ? { townId, townName: townName! } : {};
+    const placeName = townName ?? regionName;
+    const labelOf = (r: UnitRow) => (r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId))?.label ?? r.unitId;
+    const iconOf = (r: UnitRow) => (r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId))?.icon ?? "";
+    const shipLabels = Object.fromEntries(Object.entries(shipsC.ships).map(([id, d]) => [id, d.label]));
+    const attackerRows = () => rows.map((r) => ({ id: r.id, unitId: r.unitId, label: labelOf(r), icon: iconOf(r), start: r.count, end: r.count, broke: false }));
+    const men = rows.reduce((n, r) => n + r.count, 0);
+    const forceText = describeForce(rows);
+    const character = await characterOf(tx, ctx.playerId);
+    // When the survivors are home: the same road back from the arrival.
+    const homeAt = new Date(at.getTime() + minutes * 60_000);
+    const common = { regionId, regionName, townId, townName, base, route, steps, marchId: march.id, minutes, arrivedAt: at.toISOString(), ships, shipLabels };
+
+    let report: MapActReport;
+    let destination = base;
+    let conquered = false;
+
+    // 5. A party with no rows left broke up on the road: no fight, nobody comes home.
+    const holder = await holderOf(tx, ctx.worldId, regionId, townId ?? "");
+    if (rows.length === 0) {
+      report = { type: kind, ...common, homeAt: null, town: null, fleet: null, destination, winner: "dispersed", rounds: 0, attacker: { rows: [], losses: 0 }, defender: null, plunder: null, conquest: null, intel: null, opinion: null, line: renderMarchLine({ stage: "dispersed", action: kind, force: [], place: placeName }) };
+    } else if (holder === ctx.playerId || (holder !== null && kind === "attack")) {
+      // 5b. The place is its own house's now, or another house's for an attack: the party turns back whole.
+      const stage = holder === ctx.playerId ? "ours" : "taken";
+      report = { type: kind, ...common, homeAt: homeAt.toISOString(), town: null, fleet: null, destination, winner: "turned_back", rounds: 0, attacker: { rows: attackerRows(), losses: 0 }, defender: null, plunder: null, conquest: null, intel: null, opinion: null, line: renderMarchLine({ stage, action: kind, force: forceText, place: placeName }) };
+    } else {
+      // 6. Defender: the region's warband, or the town's garrison behind its
+      // walls, as it stands at the arrival. A town's fleet is read for the sea rule.
+      const stats = isTown ? await townStats(townId) : null;
+      const wallsBonus = stats ? Math.min(stats.walls, battleC.town.wallsDefCap) : 0;
+      const npc = isTown ? battleC.npc.garrison : battleC.npc.warband;
+      const npcStats = { ...npc.stats, def: npc.stats.def + wallsBonus };
+      const warband = isTown ? await readTownGarrison(tx, ctx.worldId, townId, at) : await readRegionWarband(tx, ctx.worldId, regionId, at);
+      const townFleet = isTown ? await readTownFleet(tx, ctx.worldId, townId, at) : null;
+      const town: MapActReport["town"] = stats ? { walls: stats.walls, population: stats.population, garrisonDef: npcStats.def } : null;
+      // The game date of what the men see, for the intel every branch writes.
+      const scoutedGameDate = formatGameDate(gameDate(at.getTime(), ctx.worldStartedMs));
+      const naval = Object.entries(sailing).reduce((n, [id, count]) => n + count * (shipsC.ships[id]?.naval ?? 0), 0);
+
+      // 6b. A sea assault on a town must beat its fleet first (ruling 3): with
+      // lower naval power the landing is repulsed — no battle, no losses, the
+      // party marches home, the town's fleet unchanged.
+      let fleetLine: MapActReport["fleet"] = null;
+      if (isTown && route === "sea" && townFleet && townFleet.pentekonters + townFleet.triremes > 0 && kind !== "scout") {
+        const defenderNaval = townFleet.pentekonters * 1 + townFleet.triremes * 5;
+        fleetLine = { ships: sailing, naval, defender: { ...townFleet, naval: defenderNaval }, held: naval >= defenderNaval };
+      }
+
+      if (kind === "scout") {
+        // 7. Scout: the dynasty's intel snapshot, no battle. A town's intel
+        // carries its garrison and fleet.
+        if (character.dynastyId) await writeIntel(tx, ctx.worldId, character.dynastyId, { regionId, townId, pool: warband, fleet: townFleet, at, gameDate: scoutedGameDate });
+        const chronicle: CampaignPayload = { action: "scout", regionId, regionName, ...place, men, force: forceText, warband, ...(townFleet ? { fleet: townFleet } : {}) };
+        report = { type: "scout", ...common, homeAt: homeAt.toISOString(), town, fleet: null, destination, winner: null, rounds: 0, attacker: { rows: attackerRows(), losses: 0 }, defender: null, plunder: null, conquest: null, intel: { warband, ...(townFleet ?? {}), scoutedGameDate }, opinion: null, line: renderCampaignLine("map_action", chronicle) };
+      } else if (fleetLine && !fleetLine.held) {
+        // 7b. Repulsed at sea: home by the same road, nothing else changes. The
+        // men saw the garrison and the ships that turned them back.
+        if (character.dynastyId) await writeIntel(tx, ctx.worldId, character.dynastyId, { regionId, townId, pool: warband, fleet: townFleet, at, gameDate: scoutedGameDate });
+        const chronicle: CampaignPayload = { action: kind, regionId, regionName, ...place, men, force: forceText, winner: "repulsed", killed: 0, lost: 0 };
+        report = { type: kind, ...common, homeAt: homeAt.toISOString(), town, fleet: fleetLine, destination, winner: "repulsed", rounds: 0, attacker: { rows: attackerRows(), losses: 0 }, defender: { label: npc.label, start: warband, end: warband, losses: 0, turnout: 0 }, plunder: null, conquest: null, intel: { warband, ...(townFleet ?? {}), scoutedGameDate }, opinion: null, line: renderCampaignLine("map_action", chronicle) };
+      } else {
+        // 8. Raid / Attack: the pure battle, then its consequences.
+        const seed = crypto.createHash("sha256").update([ctx.worldId, march.id, townId ?? regionId, at.toISOString()].join("|")).digest("hex");
+        // The altar: a blessing lit at the arrival raises every row's morale, on
+        // a copy of the content stats (def.stats is the shared content object). No clamp.
+        const bonus = (await altarBonusFor(tx, [ctx.playerId], at)).get(ctx.playerId) ?? 0;
+        const attacker: BattleRow[] = rows.map((r) => {
+          const def = r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId);
+          return { id: r.id, label: labelOf(r), count: r.count, stats: bonus ? { ...def!.stats, mor: def!.stats.mor + bonus } : def!.stats };
+        });
+        // A raid meets half to all of the men it sends, between the floor and the
+        // cap of the pool (raidTurnout, rolled on the seed); an attack meets everyone.
+        const met = kind === "raid" ? raidTurnout(battleC.raid, men, warband, seed) : warband;
+        const defender: BattleRow[] = [{ id: isTown ? "garrison" : "warband", label: npc.label, count: met, stats: npcStats }];
+        const result: BattleResult = resolveBattle({ attacker, defender, seed, config: battleC, mode: kind });
+        const writeDefender = (value: number) => (isTown ? writeTownGarrison(tx, ctx.worldId, townId, value, at) : writeRegionWarband(tx, ctx.worldId, regionId, value, at));
+
+        // Attacker losses per row: shrink or delete, one battle_loss log each.
+        const survivors: UnitRow[] = [];
+        for (const r of rows) {
+          const side = result.attacker.rows.find((x) => x.id === r.id)!;
+          const lost = side.start - side.end;
+          if (lost > 0) await tx.insert(effectLog).values({ characterId: character.id, kind: "battle_loss", detail: { rowId: r.id, unitId: r.unitId, source: r.source, lost, regionId, townId, action: kind, marchId: march.id }, createdAt: at });
+          if (side.end <= 0) await tx.delete(playerUnits).where(eq(playerUnits.id, r.id));
+          else {
+            if (lost > 0) await tx.update(playerUnits).set({ count: side.end }).where(eq(playerUnits.id, r.id));
+            survivors.push({ ...r, count: side.end });
+          }
+        }
+        const defLosses = result.defender.losses;
+        const remaining = Math.max(0, warband - defLosses);
+
+        let plunder: MapActReport["plunder"] = null;
+        let conquest: MapActReport["conquest"] = null;
+        let opinion: MapActReport["opinion"] = null;
+        if (kind === "raid") {
+          await writeDefender(remaining);
+          // Any raid that fights, won or lost, can sour the nation whose land it is.
+          opinion = await raidOpinion(tx, ctx.worldId, isTown ? await townContentOwner(townId) : await regionContentOwner(regionId), seed);
+          if (result.winner === "attacker") {
+            // Drachmae, grain and one third good drawn on the battle's seed; a
+            // town's stores pay townPlunderMultiplier times the region rate.
+            const p = raidPlunder(battleC.raid, defLosses, isTown, seed);
+            plunder = { drachmae: p.drachmae, grain: p.grain, spoil: { good: p.spoil.good, label: spoilLabel(p.spoil.good), amount: p.spoil.amount } };
+            await creditDrachmae(tx, ctx.playerId, p.drachmae);
+            await creditGood(tx, ctx.playerId, "grain", p.grain, at);
+            await creditGood(tx, ctx.playerId, p.spoil.good, p.spoil.amount, at);
+          }
+        } else if (result.winner === "attacker") {
+          // The survivors hold the place from this instant: the holding's clocks
+          // (empty-for-a-day, tribute) start now.
+          const previousOwner = isTown ? await townContentOwner(townId) : await regionContentOwner(regionId);
+          if (isTown) await insertTownConquest(tx, ctx, regionId, townId, previousOwner, at, at);
+          else await insertConquest(tx, ctx, regionId, previousOwner, at, at);
+          await writeDefender(0);
+          conquest = { regionId, townId, previousOwner };
+          destination = townId ?? regionId;
+          conquered = true;
+        } else {
+          await writeDefender(remaining);
+        }
+        // 8b. What the men saw: the pool as the fight left it (0 after a
+        // conquest) and a town's ships, on the dynasty's intel.
+        const end = conquest !== null ? 0 : remaining;
+        if (character.dynastyId) await writeIntel(tx, ctx.worldId, character.dynastyId, { regionId, townId, pool: end, fleet: townFleet, at, gameDate: scoutedGameDate });
+
+        const chronicle: CampaignPayload = { action: kind, regionId, regionName, ...place, men, force: forceText, winner: result.winner, killed: defLosses, lost: result.attacker.losses, plunder, conquest: conquest !== null };
+        report = {
+          type: kind,
+          ...common,
+          homeAt: conquered || survivors.length === 0 ? null : homeAt.toISOString(),
+          town,
+          fleet: fleetLine,
+          destination,
+          winner: result.winner,
+          rounds: result.rounds.length,
+          attacker: {
+            rows: rows.map((r) => {
+              const side = result.attacker.rows.find((x) => x.id === r.id)!;
+              return { id: r.id, unitId: r.unitId, label: labelOf(r), icon: iconOf(r), start: side.start, end: side.end, broke: side.broke };
+            }),
+            losses: result.attacker.losses,
+          },
+          defender: { label: npc.label, start: warband, end: remaining, losses: defLosses, turnout: met },
+          plunder,
+          conquest,
+          intel: { warband: end, ...(townFleet ?? {}), scoutedGameDate },
+          opinion,
+          line: renderCampaignLine("map_action", chronicle),
+        };
+        rows.splice(0, rows.length, ...survivors);
+      }
+    }
+
+    // 9. The survivors: standing on a conquest at once, or on the road home by
+    // the same minutes, with no march on their mission. The hulls need nothing:
+    // they sailed for the round trip.
+    if (conquered) {
+      for (const r of rows) await tx.update(playerUnits).set({ basedAt: destination, movingTo: null, arrivesAt: null, mission: null }).where(eq(playerUnits.id, r.id));
+    } else {
+      const mission: UnitMission = { kind, regionId, ...(isTown ? { townId } : {}), departedAt: march.departedAt.toISOString() };
+      for (const r of rows) await tx.update(playerUnits).set({ movingTo: base, arrivesAt: homeAt, mission }).where(eq(playerUnits.id, r.id));
+    }
+
+    // 10. The report on the march and on the character (map_report, not a Chronicle kind).
+    await tx.update(playerMarches).set({ report }).where(eq(playerMarches.id, march.id));
+    await tx.insert(effectLog).values({ characterId: character.id, kind: "map_report", detail: { ...report, source: "map" }, createdAt: at });
+    return { outcome: "resolved", at, ctx, composureDays: settled.composureDays };
+  });
+
+  if (done.outcome === "resolved" && done.ctx && done.at && (done.composureDays ?? 0) > 0) {
+    const ch = (await db.select({ id: playerCharacters.id }).from(playerCharacters).where(eq(playerCharacters.playerId, done.ctx.playerId)).limit(1))[0];
+    if (ch) await applyComposureDelta(ch.id, done.composureDays!, "building:shrine", done.at);
+  }
+  return { outcome: done.outcome };
 }
 
 // ---------------------------------------------------------------------------

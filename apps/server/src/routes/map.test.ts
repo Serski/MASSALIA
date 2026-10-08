@@ -21,10 +21,11 @@ async function loadModules() {
   const { errorHandler } = await import("../errorHandler.js");
   const buildings = await import("../services/buildings.js");
   const barracks = await import("../services/barracks.js");
+  const mapActions = await import("../services/mapActions.js");
   const mapGraph = await import("../services/mapGraph.js");
   const traits = await import("../services/traits.js");
   const age = await import("../services/age.js");
-  return { dbPkg, mapRoutes, errorHandler, buildings, barracks, mapGraph, traits, age };
+  return { dbPkg, mapRoutes, errorHandler, buildings, barracks, mapActions, mapGraph, traits, age };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -118,7 +119,7 @@ suite("/api/map/reach (integration)", () => {
     expect(seaOnly.attack.reason).toMatch(/fleet's range/);
   });
 
-  it("POST /act: a raid happy path returns the report, fresh reach and the roster; a region with towns is 409", async () => {
+  it("POST /act: a raid happy path returns the set-out card, fresh reach and the roster, and the battle when the party arrives; a region with towns is 409", async () => {
     const p = await freshPlayer();
     const { writeRegionWarband } = await import("../services/mapPools.js");
     await writeRegionWarband(db, worldId, "R046", 20, now);
@@ -137,13 +138,19 @@ suite("/api/map/reach (integration)", () => {
     expect((await post({ type: "raid", regionId: "R046", rows: [{ rowId, count: 40 }], ships: [1] })).statusCode).toBe(400);
     const res = await post({ type: "raid", regionId: "R046", rows: [{ rowId, count: 40 }] });
     expect(res.statusCode).toBe(200);
-    const v = res.json<{ report: { type: string; winner: string; regionName: string; plunder: { drachmae: number } | null; line: string }; reach: { reach: Record<string, unknown> }; force: { men: number }; roster: { id: string; movingTo: string | null }[] }>();
-    expect(v.report).toMatchObject({ type: "raid", winner: "attacker", regionName: "Salyes" });
-    expect(v.report.plunder!.drachmae).toBeGreaterThan(0);
-    expect(v.report.line).toMatch(/^Raided Salyes/);
-    expect(v.force.men).toBe(0); // the party is recovering
-    expect(v.roster.find((r) => r.id === rowId)!.movingTo).toBe("R060");
+    const v = res.json<{ report: { type: string; action: string; marchId: string; arrivesAt: string; regionName: string; line: string }; reach: { reach: Record<string, unknown> }; force: { men: number }; roster: { id: string; movingTo: string | null }[] }>();
+    expect(v.report).toMatchObject({ type: "setout", action: "raid", regionName: "Salyes" });
+    expect(v.report.line).toBe("40 peltasts set out to raid Salyes, arriving in 00:30:00.");
+    expect(v.force.men).toBe(0); // the party is on the march
+    expect(v.roster.find((r) => r.id === rowId)!.movingTo).toBe("R046");
     expect(v.reach.reach.R046).toBeDefined();
+    // The battle is fought when the party arrives, and its report kept on the march.
+    expect(await m.mapActions.resolveMarch(v.report.marchId, new Date(v.report.arrivesAt))).toEqual({ outcome: "resolved" });
+    const march = (await db.select().from(m.dbPkg.playerMarches).where(eq(m.dbPkg.playerMarches.id, v.report.marchId)))[0]!;
+    const report = march.report as { winner: string; plunder: { drachmae: number } | null; line: string };
+    expect(report.winner).toBe("attacker");
+    expect(report.plunder!.drachmae).toBeGreaterThan(0);
+    expect(report.line).toMatch(/^Raided Salyes/);
     expect((await app.inject({ method: "POST", url: "/api/map/act", payload: { type: "raid", regionId: "R046", rows: [{ rowId, count: 40 }] } })).statusCode).toBe(401);
   });
 
@@ -158,11 +165,11 @@ suite("/api/map/reach (integration)", () => {
     expect((await post({ type: "scout", regionId: "R047", townId: "reii", rows: [{ rowId, count: 10 }] })).statusCode).toBe(400);
     expect((await post({ type: "scout", rows: [{ rowId, count: 10 }] })).statusCode).toBe(400);
     expect((await post({ type: "move", rows: [{ rowId, count: 10 }] })).statusCode).toBe(400);
-    // Scout Reii with half the row: the town's intel, the report names the town.
+    // Scout Reii with half the row: the set-out card names the town.
     const scout = await post({ type: "scout", townId: "reii", rows: [{ rowId, count: 10 }] });
     expect(scout.statusCode).toBe(200);
-    const sv = scout.json<{ report: { type: string; townId: string; townName: string; intel: { warband: number; pentekonters: number; triremes: number }; town: { walls: number; population: number } } }>();
-    expect(sv.report).toMatchObject({ type: "scout", townId: "reii", townName: "Reii", intel: { warband: 160, pentekonters: 0, triremes: 0 }, town: { walls: 1, population: 1500 } });
+    const sv = scout.json<{ report: { type: string; action: string; townId: string; townName: string } }>();
+    expect(sv.report).toMatchObject({ type: "setout", action: "scout", townId: "reii", townName: "Reii" });
     // Move the other half to Arelate: one line, the row on the march, moveTargets still lists it.
     const move = await post({ type: "move", baseId: "arelate", rows: [{ rowId, count: 10 }] });
     expect(move.statusCode).toBe(200);

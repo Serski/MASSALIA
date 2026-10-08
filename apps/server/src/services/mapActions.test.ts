@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, asc, eq, sql } from "drizzle-orm";
+import type { MapActReport } from "./mapActions.js";
 
 // ---------------------------------------------------------------------------
 // Map actions (integration): scout intel, raid plunder, conquest, defeat,
@@ -17,9 +18,12 @@ const suite = describe.runIf(dbUrl.includes("_test"));
 const DAY = 86_400_000;
 const T0 = Date.UTC(2000, 0, 1);
 const at = (seasons: number) => new Date(T0 + seasons * DAY);
-const HOUR = 3_600_000;
-// Recovery after an action: max(1, steps) × 3 hours (battle.json recovery.hoursPerStep).
-const recovered = (from: Date, steps: number) => new Date(from.getTime() + Math.max(1, steps) * 3 * HOUR);
+const MIN = 60_000;
+// The road (battle.json march): a party fights `minutes` after it sets out and
+// is home twice that later. R046 and Reii are 30 minutes from Massalia, R078
+// and Aleria 60, Thapsus 150, Album from Genoa 10.
+const fought = (from: Date, minutes: number) => new Date(from.getTime() + minutes * MIN);
+const home = (from: Date, minutes: number) => new Date(from.getTime() + 2 * minutes * MIN);
 
 async function loadModules() {
   const dbPkg = await import("@massalia/db");
@@ -120,20 +124,38 @@ suite("Map actions (integration)", () => {
       await m.lock.lockPlayer(tx, ctx.playerId);
       return m.barracks.settleBarracks(tx, ctx, when);
     });
-  // Whole rows by id (the count is read back from the row); partial sends use actRows.
-  const act = async (ctx: Ctx, type: "scout" | "raid" | "attack", regionId: string, rowIds: string[], when = at(9)) => {
+  // The raw act: the party sets out and the answer is the set-out card.
+  // Whole rows by id (the count is read back from the row); partial sends use launchRows.
+  const launch = async (ctx: Ctx, type: "scout" | "raid" | "attack", regionId: string, rowIds: string[], when = at(9)) => {
     const all = await rows(ctx);
     return m.actions.act(ctx, { type, regionId, rows: rowIds.map((id) => ({ rowId: id, count: all.find((r) => r.id === id)?.count ?? 1 })) }, when);
   };
-  const actRows = (ctx: Ctx, type: "scout" | "raid" | "attack", regionId: string, sent: { rowId: string; count: number }[], when = at(9)) => m.actions.act(ctx, { type, regionId, rows: sent }, when);
-  const actShips = async (ctx: Ctx, type: "scout" | "raid" | "attack", target: { regionId: string } | { townId: string }, rowIds: string[], ships: Record<string, number>, when = at(9)) => {
+  const launchRows = (ctx: Ctx, type: "scout" | "raid" | "attack", regionId: string, sent: { rowId: string; count: number }[], when = at(9)) => m.actions.act(ctx, { type, regionId, rows: sent }, when);
+  const launchShips = async (ctx: Ctx, type: "scout" | "raid" | "attack", target: { regionId: string } | { townId: string }, rowIds: string[], ships: Record<string, number>, when = at(9)) => {
     const all = await rows(ctx);
     return m.actions.act(ctx, { type, ...target, rows: rowIds.map((id) => ({ rowId: id, count: all.find((r) => r.id === id)?.count ?? 1 })), ships }, when);
   };
-  const actTown = async (ctx: Ctx, type: "scout" | "raid" | "attack", townId: string, rowIds: string[], when = at(9)) => {
+  const launchTown = async (ctx: Ctx, type: "scout" | "raid" | "attack", townId: string, rowIds: string[], when = at(9)) => {
     const all = await rows(ctx);
     return m.actions.act(ctx, { type, townId, rows: rowIds.map((id) => ({ rowId: id, count: all.find((r) => r.id === id)?.count ?? 1 })) }, when);
   };
+  // Send the party and let it arrive: the launch answer with the march's
+  // stored battle report in place of the set-out card (kept as `setOut`). A
+  // refusal is returned as it is.
+  type Launch = Awaited<ReturnType<Mods["actions"]["act"]>>;
+  type SetOut = Extract<Launch, { ok: true }>;
+  type Arrived = Omit<SetOut, "report"> & { report: MapActReport; setOut: SetOut["report"] };
+  const marchRow = async (id: string) => (await db.select().from(m.dbPkg.playerMarches).where(eq(m.dbPkg.playerMarches.id, id)))[0]!;
+  const arrive = async (res: Launch): Promise<Extract<Launch, { ok: false }> | Arrived> => {
+    if (!res.ok) return res;
+    const setOut = res.report;
+    expect(await m.actions.resolveMarch(setOut.marchId, new Date(setOut.arrivesAt))).toEqual({ outcome: "resolved" });
+    return { ...res, setOut, report: (await marchRow(setOut.marchId)).report as unknown as MapActReport };
+  };
+  const act = async (ctx: Ctx, type: "scout" | "raid" | "attack", regionId: string, rowIds: string[], when = at(9)) => arrive(await launch(ctx, type, regionId, rowIds, when));
+  const actRows = async (ctx: Ctx, type: "scout" | "raid" | "attack", regionId: string, sent: { rowId: string; count: number }[], when = at(9)) => arrive(await launchRows(ctx, type, regionId, sent, when));
+  const actShips = async (ctx: Ctx, type: "scout" | "raid" | "attack", target: { regionId: string } | { townId: string }, rowIds: string[], ships: Record<string, number>, when = at(9)) => arrive(await launchShips(ctx, type, target, rowIds, ships, when));
+  const actTown = async (ctx: Ctx, type: "scout" | "raid" | "attack", townId: string, rowIds: string[], when = at(9)) => arrive(await launchTown(ctx, type, townId, rowIds, when));
   const moveTo = async (ctx: Ctx, baseId: string, rowIds: string[], when = at(9)) => {
     const all = await rows(ctx);
     return m.actions.move(ctx, { baseId, rows: rowIds.map((id) => ({ rowId: id, count: all.find((r) => r.id === id)?.count ?? 1 })) }, when);
@@ -171,7 +193,126 @@ suite("Map actions (integration)", () => {
     await db.$client.end();
   });
 
-  it("scout: needs a row at Spd 6+, writes the dynasty's intel with the regenerated warband, and sends the party into recovery", async () => {
+  it("a raid sets out and fights when it arrives; the settle never lands a party on its way out", async () => {
+    const { ctx, characterId } = await makePlayer();
+    await setWarband("R046", 20, at(9));
+    const peltasts = await insertRow(ctx, { unitId: "peltast", count: 40 });
+    const sent = await launch(ctx, "raid", "R046", [peltasts.id]);
+    expect(sent).toMatchObject({ ok: true });
+    if (!sent.ok) return;
+    expect(sent.report).toMatchObject({ type: "setout", action: "raid", regionId: "R046", regionName: "Salyes", townId: null, townName: null, base: "R060", route: "land", steps: 1, minutes: 30, departedAt: at(9).toISOString(), arrivesAt: fought(at(9), 30).toISOString(), men: 40, line: "40 peltasts set out to raid Salyes, arriving in 00:30:00." });
+    const marchId = sent.report.marchId;
+    expect((await rows(ctx)).find((x) => x.id === peltasts.id)).toMatchObject({ movingTo: "R046", arrivesAt: fought(at(9), 30), mission: { kind: "raid", regionId: "R046", departedAt: at(9).toISOString(), marchId } });
+    expect(await marchRow(marchId)).toMatchObject({ status: "marching", kind: "raid", baseId: "R060", minutes: 30, party: [peltasts.id], report: null, seenAt: null });
+    expect(await warband("R046")).toBe(20);
+    expect(await logs(characterId, "map_report")).toHaveLength(0);
+    // The settle at the arrival instant leaves the party on the road: its march lands it.
+    await settle(ctx, fought(at(9), 30));
+    expect((await rows(ctx)).find((x) => x.id === peltasts.id)).toMatchObject({ movingTo: "R046", mission: { marchId } });
+    // Due at the arrival, once.
+    expect(await m.actions.resolveMarch(marchId, new Date(fought(at(9), 30).getTime() - MIN))).toEqual({ outcome: "not_due" });
+    expect(await m.actions.resolveMarch(marchId, fought(at(9), 30))).toEqual({ outcome: "resolved" });
+    expect(await m.actions.resolveMarch(marchId, fought(at(9), 30))).toEqual({ outcome: "not_due" });
+    const march = await marchRow(marchId);
+    expect(march).toMatchObject({ status: "resolved", resolvedAt: fought(at(9), 30) });
+    const report = march.report as unknown as MapActReport;
+    expect(report).toMatchObject({ type: "raid", winner: "attacker", marchId, arrivedAt: fought(at(9), 30).toISOString(), homeAt: home(at(9), 30).toISOString() });
+    const row = (await rows(ctx)).find((x) => x.id === peltasts.id)!;
+    expect(row).toMatchObject({ movingTo: "R060", arrivesAt: home(at(9), 30), mission: { kind: "raid", regionId: "R046", departedAt: at(9).toISOString() } });
+    expect(row.mission!.marchId).toBeUndefined();
+    expect(await warband("R046")).toBe(20 - report.defender!.losses);
+    const reports = await logs(characterId, "map_report");
+    expect(reports).toHaveLength(1);
+    expect(reports[0]!.createdAt).toEqual(fought(at(9), 30));
+    expect(await logs(characterId, "map_action")).toHaveLength(0);
+  });
+
+  it("a party that finds the place taken turns back", async () => {
+    const a = await makePlayer();
+    const b = await makePlayer();
+    await setWarband("R046", 10, at(9));
+    const hoplitesA = await insertRow(a.ctx, { unitId: "hoplite", count: 30 });
+    const peltastsA = await insertRow(a.ctx, { unitId: "peltast", count: 20 });
+    const hoplitesB = await insertRow(b.ctx, { unitId: "hoplite", count: 30 });
+    const attackA = await launch(a.ctx, "attack", "R046", [hoplitesA.id], at(9));
+    const raidA = await launch(a.ctx, "raid", "R046", [peltastsA.id], fought(at(9), 5));
+    const attackB = await launch(b.ctx, "attack", "R046", [hoplitesB.id], fought(at(9), 10));
+    expect([attackA.ok, raidA.ok, attackB.ok]).toEqual([true, true, true]);
+    if (!attackA.ok || !raidA.ok || !attackB.ok) return;
+    // In arrival order: A takes the place; A's own raid finds it ours; B's attack finds it another house's.
+    for (const sent of [attackA, raidA, attackB]) expect(await m.actions.resolveMarch(sent.report.marchId, new Date(sent.report.arrivesAt))).toEqual({ outcome: "resolved" });
+    expect((await marchRow(attackA.report.marchId)).report).toMatchObject({ winner: "attacker", conquest: { regionId: "R046" } });
+    expect((await marchRow(raidA.report.marchId)).report).toMatchObject({ winner: "turned_back", line: "20 peltasts found Salyes already ours and turned back." });
+    expect((await marchRow(attackB.report.marchId)).report).toMatchObject({ winner: "turned_back", defender: null, line: "30 hoplites found Salyes held by another house and turned back." });
+    expect((await rows(a.ctx)).find((x) => x.id === peltastsA.id)).toMatchObject({ count: 20, movingTo: "R060", arrivesAt: home(fought(at(9), 5), 30) });
+    expect((await rows(b.ctx)).find((x) => x.id === hoplitesB.id)).toMatchObject({ count: 30, movingTo: "R060", arrivesAt: home(fought(at(9), 10), 30) });
+    expect((await holdingsOf(a.ctx)).map((h) => h.regionId)).toEqual(["R046"]);
+    expect(await warband("R046")).toBe(0);
+  });
+
+  it("a party whose men all left on the road breaks up", async () => {
+    const { ctx, characterId } = await makePlayer();
+    await setWarband("R046", 20, at(9));
+    const peltasts = await insertRow(ctx, { unitId: "peltast", count: 40 });
+    const sent = await launch(ctx, "raid", "R046", [peltasts.id]);
+    expect(sent).toMatchObject({ ok: true });
+    if (!sent.ok) return;
+    // Gone on the road, as an unpaid-upkeep disband would take them.
+    await db.delete(m.dbPkg.playerUnits).where(eq(m.dbPkg.playerUnits.id, peltasts.id));
+    expect(await m.actions.resolveMarch(sent.report.marchId, new Date(sent.report.arrivesAt))).toEqual({ outcome: "resolved" });
+    const report = (await marchRow(sent.report.marchId)).report as unknown as MapActReport;
+    expect(report).toMatchObject({ winner: "dispersed", homeAt: null, defender: null, line: "The party sent to Salyes broke up on the road." });
+    expect(report.attacker.rows).toEqual([]);
+    expect(await warband("R046")).toBe(20);
+    expect(await logs(characterId, "battle_loss")).toHaveLength(0);
+  });
+
+  it("winter stops departures, not arrivals", async () => {
+    // Day 8 opens Winter; a raid sent 10 minutes before, in Autumn, arrives 20 minutes into it and is fought.
+    const { ctx } = await makePlayer();
+    await setWarband("R046", 20, at(7.9));
+    const peltasts = await insertRow(ctx, { unitId: "peltast", count: 40 });
+    const autumn = new Date(at(8).getTime() - 10 * MIN);
+    const sent = await launch(ctx, "raid", "R046", [peltasts.id], autumn);
+    expect(sent).toMatchObject({ ok: true });
+    if (!sent.ok) return;
+    expect(await launch(ctx, "raid", "R046", [peltasts.id], at(8))).toMatchObject({ ok: false, code: 409, error: "The passes are closed until spring." });
+    expect(await m.actions.resolveMarch(sent.report.marchId, fought(autumn, 30))).toEqual({ outcome: "resolved" });
+    expect((await marchRow(sent.report.marchId)).report).toMatchObject({ winner: "attacker", arrivedAt: fought(autumn, 30).toISOString() });
+  });
+
+  it("reports: the Barracks lists them newest first, unread until opened", async () => {
+    const { ctx } = await makePlayer();
+    const other = await makePlayer();
+    await setWarband("R046", 20, at(9));
+    const scouts = await insertRow(ctx, { unitId: "peltast", count: 10 });
+    const hoplites = await insertRow(ctx, { unitId: "hoplite", count: 30 });
+    const scout = await launch(ctx, "scout", "R046", [scouts.id], at(9));
+    const raid = await launch(ctx, "raid", "R046", [hoplites.id], fought(at(9), 10));
+    expect([scout.ok, raid.ok]).toEqual([true, true]);
+    if (!scout.ok || !raid.ok) return;
+    for (const sent of [scout, raid]) expect(await m.actions.resolveMarch(sent.report.marchId, new Date(sent.report.arrivesAt))).toEqual({ outcome: "resolved" });
+    const reports = (await m.barracks.barracksView(ctx, at(10))).reports;
+    expect(reports.map((r) => [r.id, r.kind, r.arrivedAt, r.seen])).toEqual([
+      [raid.report.marchId, "raid", fought(at(9), 40).toISOString(), false],
+      [scout.report.marchId, "scout", fought(at(9), 30).toISOString(), false],
+    ]);
+    for (const r of reports) {
+      expect(typeof r.gameDate).toBe("string");
+      expect(r.report).toMatchObject({ marchId: r.id, type: r.kind });
+    }
+    // Opened once: the highlight goes and stays gone; a second opening changes nothing.
+    expect(await m.barracks.markReportRead(ctx, raid.report.marchId, at(10))).toEqual({ ok: true });
+    expect((await m.barracks.barracksView(ctx, at(10))).reports.map((r) => r.seen)).toEqual([true, false]);
+    expect(await m.barracks.markReportRead(ctx, raid.report.marchId, at(11))).toEqual({ ok: true });
+    expect((await marchRow(raid.report.marchId)).seenAt).toEqual(at(10));
+    // Not his, unknown, or not an id at all: no such report.
+    expect(await m.barracks.markReportRead(other.ctx, raid.report.marchId, at(10))).toEqual({ ok: false, code: 404, error: "No such report." });
+    expect(await m.barracks.markReportRead(ctx, "00000000-0000-4000-8000-000000000999", at(10))).toEqual({ ok: false, code: 404, error: "No such report." });
+    expect(await m.barracks.markReportRead(ctx, "nope", at(10))).toEqual({ ok: false, code: 404, error: "No such report." });
+  });
+
+  it("scout: needs a row at Spd 6+, writes the dynasty's intel with the regenerated warband, and sends the party out and home", async () => {
     const { ctx, characterId, dynastyId } = await makePlayer();
     const hoplites = await insertRow(ctx, { unitId: "hoplite", count: 10 });
     const slow = await act(ctx, "scout", "R046", [hoplites.id]);
@@ -181,15 +322,16 @@ suite("Map actions (integration)", () => {
     const r = await act(ctx, "scout", "R046", [peltasts.id]);
     expect(r).toMatchObject({ ok: true });
     if (!r.ok) return;
-    expect(r.report).toMatchObject({ type: "scout", regionId: "R046", regionName: "Salyes", route: "land", steps: 1, recoveryHours: 3, destination: "R060", intel: { warband: 100 }, winner: null });
-    expect(r.report.arrivesAt).toBe(recovered(at(9), 1).toISOString());
+    expect(r.report).toMatchObject({ type: "scout", regionId: "R046", regionName: "Salyes", route: "land", steps: 1, minutes: 30, destination: "R060", intel: { warband: 100 }, winner: null });
+    expect(r.report.homeAt).toBe(home(at(9), 30).toISOString());
     const intel = (await db.select().from(m.dbPkg.regionIntel).where(and(eq(m.dbPkg.regionIntel.dynastyId, dynastyId), eq(m.dbPkg.regionIntel.regionId, "R046"))))[0]!;
     expect(intel).toMatchObject({ warband: 100 });
     expect(typeof intel.scoutedGameDate).toBe("string");
-    expect((await rows(ctx)).find((x) => x.id === peltasts.id)).toMatchObject({ movingTo: "R060", arrivesAt: recovered(at(9), 1), count: 10, mission: { kind: "scout", regionId: "R046", departedAt: at(9).toISOString() } });
+    expect((await rows(ctx)).find((x) => x.id === peltasts.id)).toMatchObject({ movingTo: "R060", arrivesAt: home(at(9), 30), count: 10, mission: { kind: "scout", regionId: "R046", departedAt: at(9).toISOString() } });
     // The moving party is out of the roster's force.
     expect(r.force.men).toBe(10); // the hoplites still stand
-    expect(await logs(characterId, "map_action")).toHaveLength(1);
+    expect(await logs(characterId, "map_report")).toHaveLength(1);
+    expect(await logs(characterId, "map_action")).toHaveLength(0);
     await recordChronicle(characterId);
   });
 
@@ -218,9 +360,9 @@ suite("Map actions (integration)", () => {
     expect(await relations()).toEqual([]);
     // The fight wrote what the men saw to the dynasty's intel: the warband as it was left.
     expect(r.report.intel).toEqual({ warband: 20 - killed, scoutedGameDate: expect.any(String) });
-    expect(await regionIntelOf(dynastyId, "R046")).toMatchObject({ warband: 20 - killed, scoutedAt: at(9), scoutedGameDate: r.report.intel!.scoutedGameDate });
+    expect(await regionIntelOf(dynastyId, "R046")).toMatchObject({ warband: 20 - killed, scoutedAt: fought(at(9), 30), scoutedGameDate: r.report.intel!.scoutedGameDate });
     const row = (await rows(ctx)).find((x) => x.id === peltasts.id)!;
-    expect(row).toMatchObject({ movingTo: "R060", arrivesAt: recovered(at(9), 1), count: 40 - r.report.attacker.losses, mission: { kind: "raid", regionId: "R046", departedAt: at(9).toISOString() } });
+    expect(row).toMatchObject({ movingTo: "R060", arrivesAt: home(at(9), 30), count: 40 - r.report.attacker.losses, mission: { kind: "raid", regionId: "R046", departedAt: at(9).toISOString() } });
     expect((await logs(characterId, "battle_loss")).length).toBe(r.report.attacker.losses > 0 ? 1 : 0);
     expect(await holdingsOf(ctx)).toHaveLength(0);
     expect(r.report.line).toMatch(new RegExp(`^Raided Salyes with 40 peltasts: ${killed} tribesmen slain, (none|1) of ours lost, ${killed * 50} drachmae, ${killed * 5} grain and ${killed * 5} (olive oil|leather|salt|wool) of plunder\\.$`));
@@ -274,7 +416,7 @@ suite("Map actions (integration)", () => {
     for (const p of [a, b]) {
       const scouts = await insertRow(p.ctx, { unitId: "peltast", count: 10 });
       expect(await act(p.ctx, "scout", "R046", [scouts.id])).toMatchObject({ ok: true, report: { intel: { warband: 100 } } });
-      expect(await regionIntelOf(p.dynastyId, "R046")).toMatchObject({ warband: 100, scoutedAt: at(9) });
+      expect(await regionIntelOf(p.dynastyId, "R046")).toMatchObject({ warband: 100, scoutedAt: fought(at(9), 30) });
     }
     const hoplites = await insertRow(a.ctx, { unitId: "hoplite", count: 30 });
     const r = await act(a.ctx, "raid", "R046", [hoplites.id], at(9.5));
@@ -283,8 +425,8 @@ suite("Map actions (integration)", () => {
     const killed = r.report.defender!.losses;
     expect([4, 5]).toContain(killed);
     expect(r.report.intel).toMatchObject({ warband: 100 - killed });
-    expect(await regionIntelOf(a.dynastyId, "R046")).toMatchObject({ warband: 100 - killed, scoutedAt: at(9.5) });
-    expect(await regionIntelOf(b.dynastyId, "R046")).toMatchObject({ warband: 100, scoutedAt: at(9) });
+    expect(await regionIntelOf(a.dynastyId, "R046")).toMatchObject({ warband: 100 - killed, scoutedAt: fought(at(9.5), 30) });
+    expect(await regionIntelOf(b.dynastyId, "R046")).toMatchObject({ warband: 100, scoutedAt: fought(at(9), 30) });
   });
 
   it("too few for the tribe: 20 peltasts meet the 120 of 6000 the floor sends, are driven off and take nothing", async () => {
@@ -306,7 +448,7 @@ suite("Map actions (integration)", () => {
     await recordChronicle(characterId);
   });
 
-  it("attack win: a conquest holding, survivors rebased there and recovering, the warband at 0", async () => {
+  it("attack win: a conquest holding, survivors standing there at once, the warband at 0", async () => {
     const { ctx, characterId, dynastyId } = await makePlayer();
     await setWarband("R046", 10, at(9));
     const hoplites = await insertRow(ctx, { unitId: "hoplite", count: 30 });
@@ -316,16 +458,19 @@ suite("Map actions (integration)", () => {
     expect(r.report.winner).toBe("attacker");
     // A conquest leaves nothing: the intel reads 0.
     expect(r.report.intel).toMatchObject({ warband: 0 });
-    expect(await regionIntelOf(dynastyId, "R046")).toMatchObject({ warband: 0, scoutedAt: at(9) });
+    expect(await regionIntelOf(dynastyId, "R046")).toMatchObject({ warband: 0, scoutedAt: fought(at(9), 30) });
     expect(r.report.conquest).toEqual({ regionId: "R046", townId: null, previousOwner: "unclaimed" });
     expect(r.report.destination).toBe("R046");
     const h = await holdingsOf(ctx);
     expect(h).toHaveLength(1);
-    expect(h[0]).toMatchObject({ regionId: "R046", kind: "conquest", previousOwner: "unclaimed", since: at(9), lastGarrisonedAt: recovered(at(9), 1) });
+    expect(h[0]).toMatchObject({ regionId: "R046", kind: "conquest", previousOwner: "unclaimed", since: fought(at(9), 30), lastGarrisonedAt: fought(at(9), 30) });
     expect(await warband("R046")).toBe(0);
-    expect((await rows(ctx)).find((x) => x.id === hoplites.id)).toMatchObject({ basedAt: "R046", movingTo: "R046", arrivesAt: recovered(at(9), 1) });
-    expect(r.reach.bases.map((b) => b.regionId)).toEqual(["R060", "R046"]);
-    expect(r.reach.reach.R046).toBeUndefined(); // our own land is a base now, not a target
+    // The survivors hold the place from the instant they won it.
+    expect((await rows(ctx)).find((x) => x.id === hoplites.id)).toMatchObject({ basedAt: "R046", movingTo: null, arrivesAt: null, mission: null });
+    // The launch's answer predates the conquest: the reach after the fight shows the new base.
+    const view = await reach(ctx, fought(at(9), 30));
+    expect(view.bases.map((b) => b.regionId)).toEqual(["R060", "R046"]);
+    expect(view.reach.R046).toBeUndefined(); // our own land is a base now, not a target
     expect(r.report.line).toMatch(/^Took Salyes with 30 hoplites: \d+ tribesm[ae]n slain, (none|\d+) of ours lost\. The land is ours\.$/);
     // A second attack on our own holding is refused.
     const again = await act(ctx, "attack", "R046", [hoplites.id], at(11));
@@ -347,7 +492,7 @@ suite("Map actions (integration)", () => {
     expect(await holdingsOf(ctx)).toHaveLength(0);
     expect(await warband("R046")).toBe(100 - r.report.defender!.losses);
     const survivor = (await rows(ctx)).find((x) => x.id === hoplites.id);
-    if (survivor) expect(survivor).toMatchObject({ basedAt: "R060", movingTo: "R060", arrivesAt: recovered(at(9), 1) });
+    if (survivor) expect(survivor).toMatchObject({ basedAt: "R060", movingTo: "R060", arrivesAt: home(at(9), 30) });
     else expect(r.report.attacker.rows[0]!.end).toBe(0);
     expect(r.report.line).toMatch(/^Attacked Salyes with 5 hoplites and were broken/);
     await recordChronicle(characterId);
@@ -427,24 +572,24 @@ suite("Map actions (integration)", () => {
     const r = await act(ctx, "raid", "R078", [peltasts.id]);
     expect(r).toMatchObject({ ok: true });
     if (!r.ok) return;
-    expect(r.report).toMatchObject({ route: "sea", steps: 2, recoveryHours: 6, ships: { "trade-ship": 1, galley: 5 } });
-    expect(r.report.arrivesAt).toBe(recovered(at(9), 2).toISOString());
+    expect(r.report).toMatchObject({ route: "sea", steps: 2, minutes: 60, ships: { "trade-ship": 1, galley: 5 } });
+    expect(r.report.homeAt).toBe(home(at(9), 60).toISOString());
     // The hulls that sailed are out of stock, on one voyage, until the party is home.
     expect(await stock(ctx, "trade-ship")).toBe(0);
     expect(await stock(ctx, "galley")).toBe(0);
     const v = await voyages(ctx);
     expect(v).toHaveLength(1);
-    expect(v[0]).toMatchObject({ ships: { "trade-ship": 1, galley: 5 }, kind: "raid", regionId: "R078", townId: null, musterId: null, sailedAt: at(9), returnsAt: recovered(at(9), 2), returnedAt: null });
-    expect((await m.barracks.barracksView(ctx, at(9.1))).atSea).toEqual([
-      { id: v[0]!.id, ships: [{ id: "trade-ship", label: "Pentekonter", count: 1 }, { id: "galley", label: "Trireme", count: 5 }], kind: "raid", musterId: null, regionId: "R078", townId: null, sailedAt: at(9).toISOString(), returnsAt: recovered(at(9), 2).toISOString() },
+    expect(v[0]).toMatchObject({ ships: { "trade-ship": 1, galley: 5 }, kind: "raid", regionId: "R078", townId: null, musterId: null, sailedAt: at(9), returnsAt: home(at(9), 60), returnedAt: null });
+    expect((await m.barracks.barracksView(ctx, new Date(at(9).getTime() + 90 * MIN))).atSea).toEqual([
+      { id: v[0]!.id, ships: [{ id: "trade-ship", label: "Pentekonter", count: 1 }, { id: "galley", label: "Trireme", count: 5 }], kind: "raid", musterId: null, regionId: "R078", townId: null, sailedAt: at(9).toISOString(), returnsAt: home(at(9), 60).toISOString() },
     ]);
     // The settle brings them home at the party's instant, not a minute before, and only once.
-    const home = recovered(at(9), 2);
-    expect((await settle(ctx, new Date(home.getTime() - 60_000))).shipsHome).toEqual([]);
-    expect((await settle(ctx, home)).shipsHome).toEqual([{ voyageId: v[0]!.id, ships: { "trade-ship": 1, galley: 5 } }]);
+    const back = home(at(9), 60);
+    expect((await settle(ctx, new Date(back.getTime() - 60_000))).shipsHome).toEqual([]);
+    expect((await settle(ctx, back)).shipsHome).toEqual([{ voyageId: v[0]!.id, ships: { "trade-ship": 1, galley: 5 } }]);
     expect(await stock(ctx, "trade-ship")).toBe(1);
     expect(await stock(ctx, "galley")).toBe(5);
-    expect((await voyages(ctx))[0]).toMatchObject({ returnedAt: home });
+    expect((await voyages(ctx))[0]).toMatchObject({ returnedAt: back });
     expect((await settle(ctx, at(10))).shipsHome).toEqual([]);
     expect(await stock(ctx, "trade-ship")).toBe(1);
     expect(await stock(ctx, "galley")).toBe(5);
@@ -458,11 +603,12 @@ suite("Map actions (integration)", () => {
     const peltasts = await insertRow(ctx, { unitId: "peltast", count: 20 });
     const hoplites = await insertRow(ctx, { unitId: "hoplite", count: 20 });
     expect(await act(ctx, "raid", "R078", [peltasts.id])).toMatchObject({ ok: true, report: { route: "sea", ships: { "trade-ship": 1 } } });
-    // The port is empty: the reach reads no hulls (range comes before hulls), and the men stay home.
-    expect(await act(ctx, "raid", "R078", [hoplites.id])).toEqual({ ok: false, code: 409, error: "Beyond the fleet's range (2 seas, fleet reaches 0)." });
+    // The first party has fought and its hull is still at sea: the port is empty, the reach
+    // reads no hulls (range comes before hulls), and the men stay home.
+    expect(await act(ctx, "raid", "R078", [hoplites.id], fought(at(9), 60))).toEqual({ ok: false, code: 409, error: "Beyond the fleet's range (2 seas, fleet reaches 0)." });
     expect((await rows(ctx)).find((x) => x.id === hoplites.id)).toMatchObject({ basedAt: "R060", movingTo: null, count: 20 });
     // Once the party is home the same hull sails again.
-    const again = await act(ctx, "raid", "R078", [hoplites.id], recovered(at(9), 2));
+    const again = await act(ctx, "raid", "R078", [hoplites.id], home(at(9), 60));
     expect(again).toMatchObject({ ok: true });
     if (!again.ok) return;
     expect(again.report.ships).toEqual({ "trade-ship": 1 });
@@ -481,8 +627,8 @@ suite("Map actions (integration)", () => {
     expect(await stock(ctx, "trade-ship")).toBe(0);
     const v = await voyages(ctx);
     expect(v).toHaveLength(1);
-    expect(v[0]).toMatchObject({ ships: { "trade-ship": 1 }, returnsAt: recovered(at(9), 2), returnedAt: null });
-    expect((await settle(ctx, recovered(at(9), 2))).shipsHome).toEqual([{ voyageId: v[0]!.id, ships: { "trade-ship": 1 } }]);
+    expect(v[0]).toMatchObject({ ships: { "trade-ship": 1 }, returnsAt: home(at(9), 60), returnedAt: null });
+    expect((await settle(ctx, home(at(9), 60))).shipsHome).toEqual([{ voyageId: v[0]!.id, ships: { "trade-ship": 1 } }]);
     expect(await stock(ctx, "trade-ship")).toBe(1);
   });
 
@@ -622,9 +768,9 @@ suite("Map actions (integration)", () => {
     expect(raid.report.attacker.rows[0]).toMatchObject({ id: marched.id, start: 20, icon: "HOPLITE.webp" });
     expect(raid.report.line).toMatch(/^Raided Salyes with 20 hoplites/);
     expect(await logs(characterId, "barracks_split")).toHaveLength(1);
-    // Bad counts are refused before anything moves.
-    expect(await actRows(ctx, "raid", "R046", [{ rowId: home.id, count: 11 }], at(9.1))).toMatchObject({ ok: false, code: 400 });
-    expect(await actRows(ctx, "raid", "R046", [{ rowId: home.id, count: 0 }], at(9.1))).toMatchObject({ ok: false, code: 400 });
+    // Bad counts are refused before anything moves (tried once the 20 have fought and are on the road home).
+    expect(await actRows(ctx, "raid", "R046", [{ rowId: home.id, count: 11 }], fought(at(9), 30))).toMatchObject({ ok: false, code: 400 });
+    expect(await actRows(ctx, "raid", "R046", [{ rowId: home.id, count: 0 }], fought(at(9), 30))).toMatchObject({ ok: false, code: 400 });
   });
 
   it("a band at less than its full count is refused: a band marches as one", async () => {
@@ -712,15 +858,15 @@ suite("Map actions (integration)", () => {
     expect(r.report.attacker.rows[0]).toMatchObject({ start: 40, end: 40 });
     expect(await garrison("aleria")).toBe(10);
     expect(await holdingsOf(ctx)).toHaveLength(0);
-    expect((await rows(ctx)).find((x) => x.id === peltasts.id)).toMatchObject({ count: 40, movingTo: "R060", arrivesAt: recovered(at(9), 2) });
+    expect((await rows(ctx)).find((x) => x.id === peltasts.id)).toMatchObject({ count: 40, movingTo: "R060", arrivesAt: home(at(9), 60) });
     expect(r.report.line).toBe("Sailed against Aleria with 40 peltasts and were driven off by its fleet before landing.");
     // Turned back at sea, the men still saw the garrison and the ships: the intel reads them.
     expect(r.report.intel).toEqual({ warband: 10, pentekonters: 4, triremes: 4, scoutedGameDate: expect.any(String) });
-    expect(await townIntelOf(dynastyId, "aleria")).toMatchObject({ garrison: 10, pentekonters: 4, triremes: 4, scoutedAt: at(9) });
+    expect(await townIntelOf(dynastyId, "aleria")).toMatchObject({ garrison: 10, pentekonters: 4, triremes: 4, scoutedAt: fought(at(9), 60) });
     // Repulsed or not, the hulls are at sea until the party is home.
     expect(await stock(ctx, "trade-ship")).toBe(0);
     expect(await voyages(ctx)).toHaveLength(1);
-    expect((await voyages(ctx))[0]).toMatchObject({ kind: "attack", townId: "aleria", ships: { "trade-ship": 2 }, returnsAt: recovered(at(9), 2) });
+    expect((await voyages(ctx))[0]).toMatchObject({ kind: "attack", townId: "aleria", ships: { "trade-ship": 2 }, returnsAt: home(at(9), 60) });
     // The town's fleet is unchanged. Triremes in stock whose range covers the
     // crossing sail as an escort even though the pentekonters carry everyone:
     // naval 2 + 25 against 24, and the landing holds. The crossing itself is
@@ -735,12 +881,12 @@ suite("Map actions (integration)", () => {
     expect(again.report.ships).toEqual({ "trade-ship": 2 });
     expect(again.report.winner).toBe("attacker");
     expect(again.report.conquest).toEqual({ regionId: "R073", townId: "aleria", previousOwner: "etruscans" });
-    expect(await townIntelOf(dynastyId, "aleria")).toMatchObject({ garrison: 0, pentekonters: 4, triremes: 4, scoutedAt: at(10) });
+    expect(await townIntelOf(dynastyId, "aleria")).toMatchObject({ garrison: 0, pentekonters: 4, triremes: 4, scoutedAt: fought(at(10), 60) });
     // The escort sailed too: nothing in port until the survivors take the town up.
     expect(await stock(ctx, "trade-ship")).toBe(0);
     expect(await stock(ctx, "galley")).toBe(0);
     expect(await voyages(ctx)).toHaveLength(2);
-    expect((await voyages(ctx))[1]).toMatchObject({ ships: { "trade-ship": 2, galley: 5 }, returnsAt: recovered(at(10), 2) });
+    expect((await voyages(ctx))[1]).toMatchObject({ ships: { "trade-ship": 2, galley: 5 }, returnsAt: home(at(10), 60) });
     // Out of range, the escort stays home and does not cap the fleet's range:
     // from Massalia, Thapsus (five seas, naval 8) is reached on the
     // pentekonters' range 7 with naval 2 alone, and the landing is repulsed.
@@ -768,7 +914,7 @@ suite("Map actions (integration)", () => {
     await recordChronicle(characterId);
   });
 
-  it("taking a town: a town holding, the garrison at 0, survivors based at the town and recovering, the region untouched", async () => {
+  it("taking a town: a town holding, the garrison at 0, survivors standing at the town at once, the region untouched", async () => {
     const { ctx, characterId } = await makePlayer();
     await setGarrison("reii", 10, at(9));
     const hoplites = await insertRow(ctx, { unitId: "hoplite", count: 60 });
@@ -782,15 +928,15 @@ suite("Map actions (integration)", () => {
     expect(await relation("saluvii")).toBeUndefined();
     const held = await holdingsOf(ctx);
     expect(held).toHaveLength(1);
-    expect(held[0]).toMatchObject({ regionId: "R047", townId: "reii", kind: "conquest", previousOwner: "saluvii", lastGarrisonedAt: recovered(at(9), 1), lastTributeAt: recovered(at(9), 1) });
-    expect((await rows(ctx)).find((x) => x.id === hoplites.id)).toMatchObject({ basedAt: "reii", movingTo: "reii", mission: { kind: "attack", regionId: "R047", townId: "reii" } });
+    expect(held[0]).toMatchObject({ regionId: "R047", townId: "reii", kind: "conquest", previousOwner: "saluvii", lastGarrisonedAt: fought(at(9), 30), lastTributeAt: fought(at(9), 30) });
+    expect((await rows(ctx)).find((x) => x.id === hoplites.id)).toMatchObject({ basedAt: "reii", movingTo: null, arrivesAt: null, mission: null });
     // The region has no warband of its own to touch, and no row was created for it.
     expect(await warband("R047")).toBeUndefined();
     expect(r.report.line).toMatch(/^Took Reii with 60 hoplites: \d+ soldiers? slain, .* The town is ours\.$/);
     // Once home, the town is a base: its region is no target, and the next town over is a step away.
     await settle(ctx, at(10));
     const view = await reach(ctx, at(10));
-    // The garrison is what survived (the seed carries the player id, so the losses vary by run).
+    // The garrison is what survived (the seed carries the march id, so the losses vary by run).
     const survivors = r.report.attacker.rows[0]!.end;
     expect(view.bases).toContainEqual({ id: "reii", regionId: "R047", townId: "reii", kind: "conquest", name: "Reii", holding: { garrison: survivors, minGarrison: 15, perDay: { drachmae: 120, grain: 0, timber: 0 }, levyPerYear: 0 } });
     // The region of a held town keeps its entry (for other towns there), at 0 steps from the town; the next region over is a step.
@@ -816,7 +962,7 @@ suite("Map actions (integration)", () => {
     const r = await actTown(ctx, "scout", "album", [garrisonRow.id]);
     expect(r).toMatchObject({ ok: true });
     if (!r.ok) return;
-    expect(r.report).toMatchObject({ townId: "album", base: "genoa", route: "land", steps: 0, recoveryHours: 3, destination: "genoa" });
+    expect(r.report).toMatchObject({ townId: "album", base: "genoa", route: "land", steps: 0, minutes: 10, destination: "genoa" });
   });
 
   it("town tribute: whole days only, only while the garrison meets the population minimum, and never after reversion", async () => {

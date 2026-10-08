@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../services/auth.js";
 import { buildingContext, type ActingContext } from "../services/buildings.js";
-import { barracksView, cancelTraining, disbandRow, hireBand, recruitUnits, sacrifice } from "../services/barracks.js";
+import { barracksView, cancelTraining, disbandRow, hireBand, markReportRead, recruitUnits, sacrifice } from "../services/barracks.js";
 import { ensureCharacterRow, getActivePlayer, getActiveWorldId } from "../services/character.js";
 
 // The Barracks: the player's army (trained units from the levy, hired bands on
@@ -131,6 +131,29 @@ export async function barracksRoutes(app: FastifyInstance) {
     }
     const now = new Date();
     const result = await disbandRow(ctx, rowId, now);
+    if (!result.ok) {
+      reply.code(result.code);
+      return { error: result.error };
+    }
+    return barracksView(ctx, now);
+  });
+
+  // A battle report opened for the first time (raids prompt 4): the highlight
+  // goes, and stays gone. Answers the view, as the other POSTs do.
+  app.post("/report-read", async (request, reply) => {
+    const user = await requireAuth(request);
+    const ctx = await acting(user.id);
+    if ("error" in ctx) {
+      reply.code(ctx.code);
+      return { error: ctx.error };
+    }
+    const marchId = (request.body as { marchId?: unknown } | undefined)?.marchId;
+    if (typeof marchId !== "string" || !marchId) {
+      reply.code(400);
+      return { error: "A marchId is required." };
+    }
+    const now = new Date();
+    const result = await markReportRead(ctx, marchId, now);
     if (!result.ok) {
       reply.code(result.code);
       return { error: result.error };

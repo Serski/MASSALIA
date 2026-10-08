@@ -214,11 +214,12 @@ export async function mapRoutes(app: FastifyInstance) {
     return view;
   });
 
-  // Map actions (barracks prompts 3b, 3c): Scout, Raid or Attack a townless
-  // region (regionId) or a town (townId) with a set of roster rows. Resolves in
-  // the request; the rhythm is the recovery afterwards. Auth and player
-  // resolution as /reach; not behind MAP_MUTATIONS_ENABLED (same footing as
-  // the barracks).
+  // Map actions (barracks prompts 3b, 3c; raids prompt 4): Scout, Raid or
+  // Attack a townless region (regionId) or a town (townId) with a set of
+  // roster rows. Sends the party and answers the set-out card; the battle is
+  // fought when the party arrives, resolved by the first request after that
+  // instant. Auth and player resolution as /reach; not behind
+  // MAP_MUTATIONS_ENABLED (same footing as the barracks).
   app.post("/act", async (request, reply) => {
     const { requireAuth } = await import("../services/auth.js");
     const { ensureCharacterRow, getActivePlayer, getActiveWorldId } = await import("../services/character.js");
