@@ -9,6 +9,8 @@ import {
   gameDate,
   HOME_POLITY_ID,
   moveVerdict,
+  raidPlunder,
+  raidTurnout,
   REACH_REASON,
   renderCampaignLine,
   resolveBattle,
@@ -17,12 +19,13 @@ import {
   type BattleRow,
   type CampaignForcePart,
   type CampaignPayload,
+  type PlunderPayload,
   type ReachEntry,
   type ReachShip,
 } from "@massalia/shared";
 import { applyComposureDelta } from "./composure.js";
 import { altarBonusFor, barracksView, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, PLEDGED_REFUSAL, type BarracksView, type UnitRow } from "./barracks.js";
-import { settleAll, type ActingContext } from "./buildings.js";
+import { getBuildingsContent, settleAll, type ActingContext } from "./buildings.js";
 import { creditDrachmae, creditGood, insertConquest, insertTownConquest, listHoldings } from "./holdings.js";
 import { lockPlayer } from "./lock.js";
 import { getTopology } from "./mapGraph.js";
@@ -92,8 +95,11 @@ export type MapActReport = {
   winner: "attacker" | "defender" | "stand" | "repulsed" | null;
   rounds: number;
   attacker: { rows: { id: string; unitId: string; label: string; icon: string; start: number; end: number; broke: boolean }[]; losses: number };
-  defender: { label: string; start: number; end: number; losses: number } | null;
-  plunder: { drachmae: number; grain: number } | null;
+  // The defender: the whole pool before and after, and `turnout`, the men who
+  // fought — a fifth of it for a raid, the whole pool for an attack, 0 when the
+  // landing was repulsed. The kills come off the whole pool.
+  defender: { label: string; start: number; end: number; losses: number; turnout: number } | null;
+  plunder: PlunderPayload | null;
   conquest: { regionId: string; townId: string | null; previousOwner: string | null } | null;
   intel: { warband: number; pentekonters?: number; triremes?: number; scoutedGameDate: string } | null;
   line: string;
@@ -106,6 +112,12 @@ export type MapActResult = Failure | { ok: true; report: MapActReport; reach: Re
 // ("21 peltasts", not "7 peltasts, 7 peltasts and 7 peltasts"), in first-seen
 // order; a trained part carries label and plural, a band its label. The
 // sentence itself comes from renderForce, shared with the web register.
+// A raid's third good in running text: the content label lowered ("olive
+// oil"), or the id when the content has no label for it ("salt").
+export function spoilLabel(good: string): string {
+  return (getBuildingsContent().goodLabels?.[good] ?? good).toLowerCase();
+}
+
 export function describeForce(rows: UnitRow[]): CampaignForcePart[] {
   const merged = new Map<string, CampaignForcePart>();
   for (const r of rows) {
@@ -431,7 +443,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
         winner: "repulsed",
         rounds: 0,
         attacker: { rows: attackerRows(), losses: 0 },
-        defender: { label: npc.label, start: warband, end: warband, losses: 0 },
+        defender: { label: npc.label, start: warband, end: warband, losses: 0, turnout: 0 },
         plunder: null,
         conquest: null,
         intel: null,
@@ -447,7 +459,9 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
         const def = r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId);
         return { id: r.id, label: labelOf(r), count: r.count, stats: bonus ? { ...def!.stats, mor: def!.stats.mor + bonus } : def!.stats };
       });
-      const defender: BattleRow[] = [{ id: isTown ? "garrison" : "warband", label: npc.label, count: warband, stats: npcStats }];
+      // A raid meets a share of the pool (raidTurnout); an attack meets everyone.
+      const met = input.type === "raid" ? raidTurnout(battleC.raid, warband) : warband;
+      const defender: BattleRow[] = [{ id: isTown ? "garrison" : "warband", label: npc.label, count: met, stats: npcStats }];
       const result: BattleResult = resolveBattle({ attacker, defender, seed, config: battleC, mode: input.type });
       const writeDefender = (value: number) => (isTown ? writeTownGarrison(tx, ctx.worldId, townId, value, now) : writeRegionWarband(tx, ctx.worldId, regionId, value, now));
 
@@ -471,11 +485,13 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
       if (input.type === "raid") {
         await writeDefender(remaining);
         if (result.winner === "attacker") {
-          // A town's stores pay townPlunderMultiplier times the region rate.
-          const mult = isTown ? battleC.raid.townPlunderMultiplier : 1;
-          plunder = { drachmae: Math.round(defLosses * battleC.raid.plunderPerKill * mult), grain: Math.round(defLosses * battleC.raid.grainPerKill * mult) };
-          await creditDrachmae(tx, ctx.playerId, plunder.drachmae);
-          await creditGood(tx, ctx.playerId, "grain", plunder.grain, now);
+          // Drachmae, grain and one third good drawn on the battle's seed; a
+          // town's stores pay townPlunderMultiplier times the region rate.
+          const p = raidPlunder(battleC.raid, defLosses, isTown, seed);
+          plunder = { drachmae: p.drachmae, grain: p.grain, spoil: { good: p.spoil.good, label: spoilLabel(p.spoil.good), amount: p.spoil.amount } };
+          await creditDrachmae(tx, ctx.playerId, p.drachmae);
+          await creditGood(tx, ctx.playerId, "grain", p.grain, now);
+          await creditGood(tx, ctx.playerId, p.spoil.good, p.spoil.amount, now);
         }
       } else if (result.winner === "attacker") {
         // The garrison is in recovery until arrivesAt: the holding's clocks
@@ -517,7 +533,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
           }),
           losses: result.attacker.losses,
         },
-        defender: { label: npc.label, start: warband, end: remaining, losses: defLosses },
+        defender: { label: npc.label, start: warband, end: remaining, losses: defLosses, turnout: met },
         plunder,
         conquest,
         intel: null,

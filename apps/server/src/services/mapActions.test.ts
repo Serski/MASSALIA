@@ -185,24 +185,83 @@ suite("Map actions (integration)", () => {
 
   it("raid win: plunder credited, the warband reduced, losses logged per row, party home in a day", async () => {
     const { ctx, characterId } = await makePlayer({ drachmae: 100 });
-    await setWarband("R046", 20, at(9)); // a thin warband so 40 peltasts win on the exchange
+    await setWarband("R046", 20, at(9)); // a fifth of 20 meets the raid: 40 peltasts kill all 4 on every seed, losing 0 or 1
     const peltasts = await insertRow(ctx, { unitId: "peltast", count: 40 });
     const r = await act(ctx, "raid", "R046", [peltasts.id]);
     expect(r).toMatchObject({ ok: true });
     if (!r.ok) return;
     expect(r.report.winner).toBe("attacker");
-    expect(r.report.defender!.start).toBe(20);
+    expect(r.report.defender).toMatchObject({ start: 20, turnout: 4 });
     const killed = r.report.defender!.losses;
-    expect(killed).toBeGreaterThan(0);
-    expect(r.report.plunder).toEqual({ drachmae: killed * 50, grain: killed * 5 });
+    expect(killed).toBe(4);
+    // The plunder: 50 drachmae, 5 grain and 5 of one of the four goods per kill.
+    const good = r.report.plunder!.spoil!.good;
+    expect(["oliveoil", "leather", "salt", "wool"]).toContain(good);
+    const label = good === "oliveoil" ? "olive oil" : good;
+    expect(r.report.plunder).toEqual({ drachmae: killed * 50, grain: killed * 5, spoil: { good, label, amount: killed * 5 } });
     expect(await wallet(ctx)).toBe(100 + killed * 50);
     expect(await stock(ctx, "grain")).toBe(5000 - 3 * 40 + killed * 5); // 3 whole days after ready_at (at 6) × 40 peltasts × 1 grain, then the plunder
+    expect(await stock(ctx, good)).toBe((good === "oliveoil" ? 5000 - 3 * 40 : 0) + killed * 5); // the peltasts eat olive oil too
     expect(await warband("R046")).toBe(20 - killed);
     const row = (await rows(ctx)).find((x) => x.id === peltasts.id)!;
     expect(row).toMatchObject({ movingTo: "R060", arrivesAt: recovered(at(9), 1), count: 40 - r.report.attacker.losses, mission: { kind: "raid", regionId: "R046", departedAt: at(9).toISOString() } });
     expect((await logs(characterId, "battle_loss")).length).toBe(r.report.attacker.losses > 0 ? 1 : 0);
     expect(await holdingsOf(ctx)).toHaveLength(0);
-    expect(r.report.line).toMatch(/^Raided Salyes with 40 peltasts: \d+ tribesm[ae]n slain, (none|\d+) of ours lost, \d+ drachmae and \d+ grain of plunder\.$/);
+    expect(r.report.line).toMatch(/^Raided Salyes with 40 peltasts: 4 tribesmen slain, (none|1) of ours lost, 200 drachmae, 20 grain and 20 (olive oil|leather|salt|wool) of plunder\.$/);
+    await recordChronicle(characterId);
+  });
+
+  // The raids prompt: a fifth of the warband turns out, so a small party can
+  // win against a full warband, and sending too few still costs men. Each
+  // count below holds on every seed (checked on 3000 random seeds).
+  it("a small party raids a full warband: 20 peltasts meet 20 of 100 and win", async () => {
+    const { ctx, characterId } = await makePlayer({ drachmae: 100 });
+    await setWarband("R046", 100, at(9));
+    const peltasts = await insertRow(ctx, { unitId: "peltast", count: 20 });
+    const r = await act(ctx, "raid", "R046", [peltasts.id]);
+    expect(r).toMatchObject({ ok: true });
+    if (!r.ok) return;
+    expect(r.report.winner).toBe("attacker");
+    expect(r.report.defender).toMatchObject({ start: 100, turnout: 20 });
+    const killed = r.report.defender!.losses;
+    expect([2, 3]).toContain(killed);
+    expect([0, 1]).toContain(r.report.attacker.losses);
+    expect(await warband("R046")).toBe(100 - killed);
+    expect(r.report.plunder!.drachmae).toBe(killed * 50);
+    expect(await wallet(ctx)).toBe(100 + killed * 50);
+    await recordChronicle(characterId);
+  });
+
+  it("hoplites raid a full warband: 30 hoplites meet 20 of 100 and win", async () => {
+    const { ctx, characterId } = await makePlayer();
+    await setWarband("R046", 100, at(9));
+    const hoplites = await insertRow(ctx, { unitId: "hoplite", count: 30 });
+    const r = await act(ctx, "raid", "R046", [hoplites.id]);
+    expect(r).toMatchObject({ ok: true });
+    if (!r.ok) return;
+    expect(r.report.winner).toBe("attacker");
+    expect(r.report.defender).toMatchObject({ start: 100, turnout: 20 });
+    expect([4, 5]).toContain(r.report.defender!.losses);
+    expect([1, 2, 3]).toContain(r.report.attacker.losses);
+    await recordChronicle(characterId);
+  });
+
+  it("too few for the tribe: 20 peltasts meet 120 of 600, are driven off and take nothing", async () => {
+    const { ctx, characterId } = await makePlayer({ drachmae: 100 });
+    await setWarband("R046", 600, at(9)); // above the content 100: read back as written
+    const peltasts = await insertRow(ctx, { unitId: "peltast", count: 20 });
+    const r = await act(ctx, "raid", "R046", [peltasts.id]);
+    expect(r).toMatchObject({ ok: true });
+    if (!r.ok) return;
+    expect(r.report.winner).toBe("defender");
+    expect(r.report.defender).toMatchObject({ start: 600, turnout: 120 });
+    const killed = r.report.defender!.losses;
+    expect([2, 3]).toContain(killed);
+    expect(r.report.attacker.losses).toBe(3);
+    expect(r.report.plunder).toBeNull();
+    expect(await wallet(ctx)).toBe(100);
+    expect(await warband("R046")).toBe(600 - killed);
+    expect(r.report.line).toMatch(/^Raided Salyes with 20 peltasts and were driven off: /);
     await recordChronicle(characterId);
   });
 
@@ -238,6 +297,7 @@ suite("Map actions (integration)", () => {
     expect(r).toMatchObject({ ok: true });
     if (!r.ok) return;
     expect(r.report.winner).toBe("defender");
+    expect(r.report.defender).toMatchObject({ start: 100, turnout: 100 }); // an attack meets everyone
     expect(r.report.conquest).toBeNull();
     expect(r.report.destination).toBe("R060");
     expect(await holdingsOf(ctx)).toHaveLength(0);
@@ -475,16 +535,19 @@ suite("Map actions (integration)", () => {
 
   it("town raid: the garrison is the defender behind its walls, plunder pays double the region rate, the garrison is reduced", async () => {
     const { ctx, characterId } = await makePlayer({ drachmae: 100 });
-    await setGarrison("reii", 10, at(9)); // a thin garrison so 40 peltasts win on the exchange
+    await setGarrison("reii", 10, at(9)); // a fifth of 10 meets the raid behind walls 1: both are slain on every seed
     const peltasts = await insertRow(ctx, { unitId: "peltast", count: 40 });
     const r = await actTown(ctx, "raid", "reii", [peltasts.id]);
     expect(r).toMatchObject({ ok: true });
     if (!r.ok) return;
-    expect(r.report).toMatchObject({ type: "raid", townId: "reii", winner: "attacker", defender: { label: "Town garrison", start: 10 }, conquest: null });
+    expect(r.report).toMatchObject({ type: "raid", townId: "reii", winner: "attacker", defender: { label: "Town garrison", start: 10, turnout: 2 }, conquest: null });
     const killed = r.report.defender!.losses;
-    expect(killed).toBeGreaterThan(0);
-    expect(r.report.plunder).toEqual({ drachmae: killed * 50 * 2, grain: killed * 5 * 2 });
+    expect(killed).toBe(2);
+    const good = r.report.plunder!.spoil!.good;
+    expect(["oliveoil", "leather", "salt", "wool"]).toContain(good);
+    expect(r.report.plunder).toEqual({ drachmae: killed * 50 * 2, grain: killed * 5 * 2, spoil: { good, label: good === "oliveoil" ? "olive oil" : good, amount: killed * 5 * 2 } });
     expect(await wallet(ctx)).toBe(100 + killed * 100);
+    expect(await stock(ctx, good)).toBe((good === "oliveoil" ? 5000 - 3 * 40 : 0) + killed * 10);
     expect(await garrison("reii")).toBe(10 - killed);
     expect(r.report.line).toMatch(/^Raided Reii with 40 peltasts: \d+ soldiers? slain/);
     await recordChronicle(characterId);

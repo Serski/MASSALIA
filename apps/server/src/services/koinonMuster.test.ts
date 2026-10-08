@@ -523,8 +523,9 @@ suite("Koinon muster (integration)", () => {
   const warbandOf = async (regionId: string) => (await db.select().from(m.dbPkg.regionMilitary).where(and(eq(m.dbPkg.regionMilitary.worldId, worldId), eq(m.dbPkg.regionMilitary.regionId, regionId))))[0]!.warband;
   const garrisonOf = async (townId: string) => (await db.select().from(m.dbPkg.townMilitary).where(and(eq(m.dbPkg.townMilitary.worldId, worldId), eq(m.dbPkg.townMilitary.townId, townId))))[0]!.garrison;
   const wallet = async (playerId: string) => (await db.select({ d: m.dbPkg.playerCharacters.drachmae }).from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.playerId, playerId)))[0]!.d;
-  const grain = async (playerId: string) =>
-    Number((await db.select().from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scope, "player"), eq(m.dbPkg.resources.scopeId, playerId), eq(m.dbPkg.resources.type, "grain"))))[0]?.amount ?? 0);
+  const stockOf = async (playerId: string, type: string) =>
+    Number((await db.select().from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scope, "player"), eq(m.dbPkg.resources.scopeId, playerId), eq(m.dbPkg.resources.type, type))))[0]?.amount ?? 0);
+  const grain = (playerId: string) => stockOf(playerId, "grain");
   const logs = async (playerId: string, kind: string) => {
     const character = (await db.select({ id: m.dbPkg.playerCharacters.id }).from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.playerId, playerId)))[0]!;
     return db.select().from(m.dbPkg.effectLog).where(and(eq(m.dbPkg.effectLog.characterId, character.id), eq(m.dbPkg.effectLog.kind, kind))).orderBy(asc(m.dbPkg.effectLog.createdAt));
@@ -549,6 +550,7 @@ suite("Koinon muster (integration)", () => {
   }
 
   it("a land raid of three members: each owner's losses on his own rows, the pool down by the kills, the plunder split, every survivor bound for the gathering place", async () => {
+    // Against 30, a fifth (6) turns out and all 6 are slain on every seed; the army loses 0 to 2.
     const { a, b, c, musterId } = await landRaid();
     const sent: Record<string, number> = { [a]: 40, [b]: 30, [c]: 50 };
     // Not due before its launch instant.
@@ -581,18 +583,24 @@ suite("Koinon muster (integration)", () => {
     expect(report.lost).toBe(report.parts.reduce((n, p) => n + p.lost, 0));
 
     // The pool drops by the kills.
-    expect(report.defender).toEqual({ label: battle().npc.warband.label, start: 30, end: 30 - report.killed });
+    expect(report.defender).toEqual({ label: battle().npc.warband.label, start: 30, end: 30 - report.killed, turnout: 6 });
+    expect(report.killed).toBe(6);
     expect(await warbandOf(landRegion)).toBe(30 - report.killed);
 
-    // The plunder is act's total for those kills, and the parts add up to it.
-    const total = { drachmae: Math.round(report.killed * battle().raid.plunderPerKill), grain: Math.round(report.killed * battle().raid.grainPerKill) };
+    // The plunder is act's total for those kills, the third good included, and the parts add up to it.
+    const { good, label } = report.plunder!.spoil!;
+    expect(battle().raid.spoilGoods).toContain(good);
+    const total = { drachmae: Math.round(report.killed * battle().raid.plunderPerKill), grain: Math.round(report.killed * battle().raid.grainPerKill), spoil: { good, label, amount: report.killed * battle().raid.spoilPerKill } };
     expect(report.plunder).toEqual(total);
     expect(report.parts.reduce((n, p) => n + p.drachmae, 0)).toBe(total.drachmae);
     expect(report.parts.reduce((n, p) => n + p.grain, 0)).toBe(total.grain);
+    expect(report.parts.reduce((n, p) => n + p.spoil, 0)).toBe(total.spoil.amount);
     expect(Object.fromEntries(report.parts.map((p) => [p.playerId, p.drachmae]))).toEqual(splitByShares(total.drachmae, sent));
+    expect(Object.fromEntries(report.parts.map((p) => [p.playerId, p.spoil]))).toEqual(splitByShares(total.spoil.amount, sent));
     for (const p of report.parts) {
       expect(await wallet(p.playerId), p.name).toBe(100_000 + p.drachmae);
       expect(await grain(p.playerId), p.name).toBe(p.grain);
+      expect(await stockOf(p.playerId, good), p.name).toBe(p.spoil);
     }
 
     // One Chronicle line each, with his own part.
@@ -600,13 +608,13 @@ suite("Koinon muster (integration)", () => {
       const lines = await logs(p.playerId, "koinon_muster");
       expect(lines.length, p.name).toBe(1);
       expect(lines[0]!.createdAt.getTime()).toBe(LAUNCH.getTime());
-      expect(lines[0]!.detail).toMatchObject({ musterId, source: "koinon", chronicle: { koinonName: "The Sacred Band", regionId: landRegion, hulls: 0, winner: "attacker", killed: report.killed, lost: p.lost, share: { drachmae: p.drachmae, grain: p.grain } } });
+      expect(lines[0]!.detail).toMatchObject({ musterId, source: "koinon", chronicle: { koinonName: "The Sacred Band", regionId: landRegion, hulls: 0, winner: "attacker", killed: report.killed, lost: p.lost, share: { drachmae: p.drachmae, grain: p.grain, spoil: { good, label, amount: p.spoil } } } });
     }
     expect(((await logs(c, "koinon_muster"))[0]!.detail as { chronicle: { force: unknown } }).chronicle.force).toEqual([
       { count: 30, label: "Hoplite", plural: "Hoplites", source: "trained" },
       { count: 20, label: "Peltast", plural: "Peltasts", source: "trained" },
     ]);
-    expect(report.line).toBe(`Raided ${report.regionName}: 120 men sent, ${report.killed} tribesmen slain, ${report.lost === 0 ? "none lost" : `${report.lost} lost`}, ${total.drachmae} drachmae and ${total.grain} grain taken.`);
+    expect(report.line).toBe(`Raided ${report.regionName}: 120 men sent, ${report.killed} tribesmen slain, ${report.lost === 0 ? "none lost" : `${report.lost} lost`}, ${total.drachmae} drachmae, ${total.grain} grain and ${total.spoil.amount} ${total.spoil.label} taken.`);
 
     // Closed: the hull pledges are gone, the koinon may muster again, and the page shows the report.
     expect(await m.muster.resolveMuster(musterId, at(3 * HOUR))).toEqual({ outcome: "not_due" });
@@ -619,12 +627,13 @@ suite("Koinon muster (integration)", () => {
   });
 
   it("the altar: a member's bull lit before the launch steadies his own rows and nobody else's; a blessing cold at the launch or lit after it counts for nothing", async () => {
-    // Two members, 60 hoplites each, against a warband of 660: on every seed the
-    // cold owner loses 27 to 30 men and the blessed one 24 to 26.
+    // Two members, 60 hoplites each, against a warband of 3300, of which a fifth
+    // (660) turns out: on every seed the cold owner loses 27 to 30 men and the
+    // blessed one 24 to 26.
     const [a, b] = [await freshPlayer("Kallias", 100_000, 1), await freshPlayer("Nikias", 100_000, 2)];
     const k = await koinonOf("The Sacred Band", [a, b], uid(800));
     const musterId = await musterRow(k, a);
-    await setWarband(landRegion, 660);
+    await setWarband(landRegion, 3300);
     await pledgedMen(a, "hoplite", 60, musterId, 501);
     await pledgedMen(b, "hoplite", 60, musterId, 502);
     // Kallias burns a bull an hour before the launch: lit until two days on.
@@ -685,47 +694,58 @@ suite("Koinon muster (integration)", () => {
     for (const u of units) expect(u.arrivesAt).toBe(recovered(1).toISOString());
   });
 
-  it("shares: 20 men carried on another member's pentekonter are 20 shares each; by land the ship owner gets nothing", async () => {
+  it("shares: 40 men carried on another member's two pentekonters are 40 shares each; by land the ship owner gets nothing", async () => {
+    // Against a garrison of 10, a fifth (2) turns out at any walls, and 40
+    // peltasts slay both on every seed.
     const [soldier, shipowner] = [await freshPlayer("Kallias", 100_000, 1), await freshPlayer("Nikias", 100_000, 2)];
     const k = await koinonOf("The Sacred Band", [soldier, shipowner]);
     await geography(soldier);
-    await setTown(seaTown.townId, 3);
+    await setTown(seaTown.townId, 10);
     const bySea = await musterRow(k, soldier, { regionId: seaTown.regionId, townId: seaTown.townId });
-    await pledgedMen(soldier, "hoplite", 20, bySea, 501);
-    await pledgedHulls(shipowner, bySea, "trade-ship", 1);
+    await pledgedMen(soldier, "peltast", 40, bySea, 501);
+    await pledgedHulls(shipowner, bySea, "trade-ship", 2);
 
     expect(await m.muster.resolveMuster(bySea, LAUNCH)).toEqual({ outcome: "resolved" });
     const report = await reportOf();
     expect(report).toMatchObject({ outcome: "won", route: "sea", steps: seaTown.steps, townId: seaTown.townId, arrivesAt: recovered(seaTown.steps).toISOString() });
-    expect(report.fleet).toEqual({ hulls: { "trade-ship": 1 }, naval: 1, space: 20, filled: 20, defender: null, held: true });
-    const total = { drachmae: Math.round(report.killed * battle().raid.plunderPerKill * battle().raid.townPlunderMultiplier), grain: Math.round(report.killed * battle().raid.grainPerKill * battle().raid.townPlunderMultiplier) };
+    expect(report.defender).toMatchObject({ start: 10, turnout: 2 });
+    expect(report.killed).toBe(2);
+    expect(report.fleet).toEqual({ hulls: { "trade-ship": 2 }, naval: 2, space: 40, filled: 40, defender: null, held: true });
+    const { good, label } = report.plunder!.spoil!;
+    const mult = battle().raid.townPlunderMultiplier;
+    const total = { drachmae: Math.round(report.killed * battle().raid.plunderPerKill * mult), grain: Math.round(report.killed * battle().raid.grainPerKill * mult), spoil: { good, label, amount: Math.round(report.killed * battle().raid.spoilPerKill * mult) } };
     expect(report.plunder).toEqual(total);
-    const drachmae = splitByShares(total.drachmae, { [soldier]: 20, [shipowner]: 20 });
-    const grains = splitByShares(total.grain, { [soldier]: 20, [shipowner]: 20 });
+    const drachmae = splitByShares(total.drachmae, { [soldier]: 40, [shipowner]: 40 });
+    const grains = splitByShares(total.grain, { [soldier]: 40, [shipowner]: 40 });
+    const spoils = splitByShares(total.spoil.amount, { [soldier]: 40, [shipowner]: 40 });
     expect(report.parts).toEqual([
-      { playerId: soldier, name: "Kallias", men: 20, lost: report.lost, hulls: 0, seats: 0, shares: 20, drachmae: drachmae[soldier], grain: grains[soldier] },
-      { playerId: shipowner, name: "Nikias", men: 0, lost: 0, hulls: 1, seats: 20, shares: 20, drachmae: drachmae[shipowner], grain: grains[shipowner] },
+      { playerId: soldier, name: "Kallias", men: 40, lost: report.lost, hulls: 0, seats: 0, shares: 40, drachmae: drachmae[soldier], grain: grains[soldier], spoil: spoils[soldier] },
+      { playerId: shipowner, name: "Nikias", men: 0, lost: 0, hulls: 2, seats: 40, shares: 40, drachmae: drachmae[shipowner], grain: grains[shipowner], spoil: spoils[shipowner] },
     ]);
     expect(drachmae[soldier]! + drachmae[shipowner]!).toBe(total.drachmae);
     expect(await wallet(soldier)).toBe(100_000 + drachmae[soldier]!);
     expect(await wallet(shipowner)).toBe(100_000 + drachmae[shipowner]!);
     expect(await grain(shipowner)).toBe(grains[shipowner]);
-    // The ship owner's line: no men, one hull. His ships are counted, never moved.
-    expect((await logs(shipowner, "koinon_muster"))[0]!.detail).toMatchObject({ chronicle: { force: [], hulls: 1, winner: "attacker", lost: 0, townId: seaTown.townId, share: { drachmae: drachmae[shipowner], grain: grains[shipowner] } } });
-    expect((await db.select().from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scopeId, shipowner), eq(m.dbPkg.resources.type, "trade-ship"))))[0]!.amount).toBe("1");
-    expect(await garrisonOf(seaTown.townId)).toBe(3 - report.killed);
+    expect(await stockOf(shipowner, good)).toBe(spoils[shipowner]);
+    // The ship owner's line: no men, two hulls. His ships are counted, never moved.
+    expect((await logs(shipowner, "koinon_muster"))[0]!.detail).toMatchObject({ chronicle: { force: [], hulls: 2, winner: "attacker", lost: 0, townId: seaTown.townId, share: { drachmae: drachmae[shipowner], grain: grains[shipowner], spoil: { good, label, amount: spoils[shipowner] } } } });
+    expect((await db.select().from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scopeId, shipowner), eq(m.dbPkg.resources.type, "trade-ship"))))[0]!.amount).toBe("2");
+    expect(await garrisonOf(seaTown.townId)).toBe(10 - report.killed);
     expect(await db.select().from(m.dbPkg.koinonMusterHulls)).toEqual([]);
 
     // By land no hull carries anyone: the ship owner has no part and no line.
-    await setWarband(landRegion, 3);
+    // The warband of 10 has regenerated to 15 by the launch a day on; a fifth
+    // (3) turns out and 20 peltasts win on every seed, slaying 2 or 3.
+    await setWarband(landRegion, 10);
     const byLand = await musterRow(k, soldier, { id: uid(901), launchAt: at(DAY) });
     await db.delete(m.dbPkg.playerUnits);
-    await pledgedMen(soldier, "hoplite", 20, byLand, 505);
+    await pledgedMen(soldier, "peltast", 20, byLand, 505);
     await db.insert(m.dbPkg.koinonMusterHulls).values({ musterId: byLand, ownerPlayerId: shipowner, shipId: "trade-ship", count: 1, pledgedAt: NOW });
     const before = await wallet(shipowner);
     expect(await m.muster.resolveMuster(byLand, at(DAY))).toEqual({ outcome: "resolved" });
     const land = (await musters())[1]!.report as unknown as Report;
-    expect(land).toMatchObject({ outcome: "won", route: "land", fleet: null });
+    expect(land).toMatchObject({ outcome: "won", route: "land", fleet: null, defender: { start: 15, turnout: 3 } });
+    expect([2, 3]).toContain(land.killed);
     expect(land.parts.map((p) => [p.playerId, p.shares, p.drachmae])).toEqual([[soldier, 20, land.plunder!.drachmae]]);
     expect(await wallet(shipowner)).toBe(before);
     expect((await logs(shipowner, "koinon_muster")).length).toBe(1);

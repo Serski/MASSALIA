@@ -15,6 +15,8 @@ import {
   musterLaunch,
   musterShares,
   musterWinter,
+  raidPlunder,
+  raidTurnout,
   REACH_REASON,
   renderMusterLine,
   renderMusterReportLine,
@@ -27,6 +29,7 @@ import {
   type BattleRow,
   type MusterChronicle,
   type MusterHull,
+  type PlunderPayload,
   type ReachForceRow,
   type ReachSteps,
 } from "@massalia/shared";
@@ -36,7 +39,7 @@ import { settleAll, type ActingContext } from "./buildings.js";
 import { creditDrachmae, creditGood, listHoldings } from "./holdings.js";
 import { getKoinonContent, inOwnKoinon, lockKoinon, memberRow, type KoinonError, type KoinonRole, type KoinonRow } from "./koinon.js";
 import { lockPlayer } from "./lock.js";
-import { describeForce, selectForce, splitRows } from "./mapActions.js";
+import { describeForce, selectForce, spoilLabel, splitRows } from "./mapActions.js";
 import { getTopology } from "./mapGraph.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
 import { readRegionWarband, readTownFleet, readTownGarrison, townContentOwner, writeRegionWarband, writeTownGarrison } from "./mapPools.js";
@@ -540,8 +543,9 @@ export async function unseenMuster(exec: Exec, playerId: string, worldId: string
 
 // One member's part in a marched muster: the men he sent and lost, the hulls of
 // his that sailed, the seats of them that were filled, his shares and his part
-// of the plunder.
-export type MusterPart = { playerId: string; name: string; men: number; lost: number; hulls: number; seats: number; shares: number; drachmae: number; grain: number };
+// of the plunder (`spoil` is his part of the third good; the good itself is on
+// the report's plunder).
+export type MusterPart = { playerId: string; name: string; men: number; lost: number; hulls: number; seats: number; shares: number; drachmae: number; grain: number; spoil: number };
 // The report stored on the muster and shown to every member as the last muster.
 export type MusterReport = {
   outcome: "won" | "driven_off" | "repulsed" | "stood_down";
@@ -562,9 +566,10 @@ export type MusterReport = {
   men: number;
   lost: number;
   killed: number;
-  defender: { label: string; start: number; end: number } | null;
+  // The pool before and after, and `turnout`, the fifth of it that met the raid.
+  defender: { label: string; start: number; end: number; turnout: number } | null;
   fleet: { hulls: Record<string, number>; naval: number; space: number; filled: number; defender: { pentekonters: number; triremes: number; naval: number } | null; held: boolean } | null;
-  plunder: { drachmae: number; grain: number } | null;
+  plunder: PlunderPayload | null;
   parts: MusterPart[];
 };
 
@@ -718,6 +723,7 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
         const lostOf: Record<string, number> = {};
         let drachmaeOf: Record<string, number> = {};
         let grainOf: Record<string, number> = {};
+        let spoilOf: Record<string, number> = {};
         let outcome: "won" | "driven_off" | "repulsed";
         let killed = 0;
         let rounds = 0;
@@ -747,7 +753,9 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
             const bonus = altar.get(r.ownerPlayerId) ?? 0;
             return { id: r.id, label: def?.label ?? r.unitId, count: r.count, stats: bonus ? { ...def!.stats, mor: def!.stats.mor + bonus } : def!.stats };
           });
-          const result = resolveBattle({ attacker, defender: [{ id: isTown ? "garrison" : "warband", label: npc.label, count: pool, stats: npcStats }], seed, config: battleC, mode: "raid" });
+          // A raid meets a share of the pool, as `act` does; the kills come off the whole.
+          const met = raidTurnout(battleC.raid, pool);
+          const result = resolveBattle({ attacker, defender: [{ id: isTown ? "garrison" : "warband", label: npc.label, count: met, stats: npcStats }], seed, config: battleC, mode: "raid" });
 
           // 13. Losses per row, on its owner: shrink or delete, one battle_loss
           // log each, as `act` writes them. The pool is written back.
@@ -770,19 +778,21 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
           const remaining = Math.max(0, pool - killed);
           if (muster.townId !== null) await writeTownGarrison(tx, muster.worldId, muster.townId, remaining, launchAt);
           else await writeRegionWarband(tx, muster.worldId, muster.regionId, remaining, launchAt);
-          defender = { label: npc.label, start: pool, end: remaining };
+          defender = { label: npc.label, start: pool, end: remaining, turnout: met };
           outcome = result.winner === "attacker" ? "won" : "driven_off";
 
           // 14. On a win: the plunder by `act`'s formula, split by shares
           // (ruling 5, P7, P8) and credited to each owner.
           if (result.winner === "attacker") {
-            const mult = isTown ? battleC.raid.townPlunderMultiplier : 1;
-            plunder = { drachmae: Math.round(killed * battleC.raid.plunderPerKill * mult), grain: Math.round(killed * battleC.raid.grainPerKill * mult) };
-            drachmaeOf = splitByShares(plunder.drachmae, shares);
-            grainOf = splitByShares(plunder.grain, shares);
+            const p = raidPlunder(battleC.raid, killed, isTown, seed);
+            plunder = { drachmae: p.drachmae, grain: p.grain, spoil: { good: p.spoil.good, label: spoilLabel(p.spoil.good), amount: p.spoil.amount } };
+            drachmaeOf = splitByShares(p.drachmae, shares);
+            grainOf = splitByShares(p.grain, shares);
+            spoilOf = splitByShares(p.spoil.amount, shares);
             for (const id of Object.keys(shares).sort()) {
               await creditDrachmae(tx, id, drachmaeOf[id] ?? 0);
               await creditGood(tx, id, "grain", grainOf[id] ?? 0, launchAt);
+              await creditGood(tx, id, p.spoil.good, spoilOf[id] ?? 0, launchAt);
             }
           }
         }
@@ -807,7 +817,10 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
             winner: outcome === "won" ? "attacker" : outcome === "repulsed" ? "repulsed" : "defender",
             killed,
             lost: lostOf[o.playerId] ?? 0,
-            share: outcome === "won" ? { drachmae: drachmaeOf[o.playerId] ?? 0, grain: grainOf[o.playerId] ?? 0 } : null,
+            share:
+              outcome === "won" && plunder?.spoil
+                ? { drachmae: drachmaeOf[o.playerId] ?? 0, grain: grainOf[o.playerId] ?? 0, spoil: { good: plunder.spoil.good, label: plunder.spoil.label, amount: spoilOf[o.playerId] ?? 0 } }
+                : null,
           };
           await tx.insert(effectLog).values({ characterId: characterOf.get(o.playerId)!, kind: "koinon_muster", detail: { chronicle, musterId: muster.id, line: renderMusterLine(chronicle), source: "koinon" }, createdAt: launchAt });
         }
@@ -837,6 +850,7 @@ export async function resolveMuster(musterId: string, now: Date): Promise<Muster
             shares: shares[o.playerId] ?? 0,
             drachmae: drachmaeOf[o.playerId] ?? 0,
             grain: grainOf[o.playerId] ?? 0,
+            spoil: spoilOf[o.playerId] ?? 0,
           })),
         });
         return { outcome: "resolved", launchAt, shrine };
