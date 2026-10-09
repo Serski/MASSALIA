@@ -27,6 +27,7 @@ import {
   stepsTo,
   unitDef,
   verdictsFor,
+  voyageSupplies,
   type BattleRow,
   type MusterChronicle,
   type MusterHull,
@@ -34,7 +35,7 @@ import {
   type ReachForceRow,
   type ReachSteps,
 } from "@massalia/shared";
-import { altarBonusFor, fleetInStock, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, sailHulls, type UnitRow } from "./barracks.js";
+import { altarBonusFor, drawSupplies, fleetInStock, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, sailHulls, type UnitRow } from "./barracks.js";
 import { applyComposureDelta } from "./composure.js";
 import { settleAll, type ActingContext } from "./buildings.js";
 import { creditDrachmae, creditGood, holderOf, listHoldings } from "./holdings.js";
@@ -272,11 +273,29 @@ export async function pledge(ctx: ActingContext, input: PledgeInput, now: Date):
       if (selected && !selected.ok) return fail(selected.code, selected.error);
       if (selected && selected.ok && selected.base !== muster.gatherId) return fail(409, `Only men standing at ${await musterGatherName(muster)} can be pledged.`);
       if (ships.length > 0) {
-        const { counts } = await fleetInStock(tx, ctx);
+        const { counts, supplies } = await fleetInStock(tx, ctx);
         for (const [id, n] of ships) {
           const have = counts[id] ?? 0;
           const label = shipsC.ships[id]!.label.toLowerCase();
           if (n > have) return fail(409, `Only ${have} ${label}${have === 1 ? "" : "s"} in port.`);
+        }
+        // Naval supplies (raids prompt 5): a muster by sea needs them for his
+        // pledged hulls that can make the crossing, each count at most his
+        // stock (as the launch counts them, P5), worked out for his pledge as
+        // it stands and as this call leaves it. A call that raises the need
+        // above his supplies is refused before anything is written; one that
+        // lowers it or leaves it as it was always passes. By land nothing is checked.
+        const route = routeFor("raid", musterSteps(muster.gatherRegionId, muster.regionId));
+        if (route?.route === "sea") {
+          const seas = route.steps;
+          const standing = await tx.select().from(koinonMusterHulls).where(and(eq(koinonMusterHulls.musterId, muster.id), eq(koinonMusterHulls.ownerPlayerId, ctx.playerId)));
+          const asIs: Record<string, number> = Object.fromEntries(standing.map((h) => [h.shipId, h.count]));
+          const asLeft: Record<string, number> = { ...asIs };
+          for (const [id, n] of ships) asLeft[id] = n;
+          const needOf = (pledged: Record<string, number>) =>
+            voyageSupplies(shipsC, Object.fromEntries(Object.entries(pledged).filter(([id]) => (shipsC.ships[id]?.range ?? 0) >= seas).map(([id, n]) => [id, Math.min(n, counts[id] ?? 0)])));
+          const need = needOf(asLeft);
+          if (need > needOf(asIs) && need > supplies) return fail(409, REACH_REASON.supplies(need, supplies));
         }
       }
 
@@ -401,6 +420,8 @@ export type MyPledgeView = {
   gather: { id: string; name: string };
   rows: { rowId: string; unitId: string; label: string; plural: string; icon: string; source: "trained" | "band"; count: number; pledged: boolean }[];
   ships: { id: string; label: string; inStock: number; pledged: number; range: number; troopSpace: number }[];
+  // His naval supplies in store (raids prompt 5): a hull pledge by sea needs one per hull per voyage.
+  supplies: number;
 };
 
 // GET /api/koinon/muster/mine — the caller's own side of the open muster. It
@@ -421,11 +442,12 @@ export async function myMusterPledge(ctx: ActingContext, now: Date): Promise<Koi
     const standing = (await tx.select().from(playerUnits).where(and(eq(playerUnits.worldId, ctx.worldId), eq(playerUnits.ownerPlayerId, ctx.playerId), eq(playerUnits.basedAt, muster.gatherId), isNull(playerUnits.movingTo))).orderBy(playerUnits.createdAt, playerUnits.id)).filter(
       (r) => isActive(r, now) && (!isPledged(r) || r.mission?.musterId === muster.id),
     );
-    const { counts } = await fleetInStock(tx, ctx);
+    const { counts, supplies } = await fleetInStock(tx, ctx);
     const hulls = await tx.select().from(koinonMusterHulls).where(and(eq(koinonMusterHulls.musterId, muster.id), eq(koinonMusterHulls.ownerPlayerId, ctx.playerId)));
     const view: MyPledgeView = {
       now: now.toISOString(),
       gather: { id: muster.gatherId, name: await musterGatherName(muster) },
+      supplies,
       rows: standing.map((r) => {
         const def = r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId);
         const label = def?.label ?? r.unitId;
@@ -659,7 +681,8 @@ export type MusterResolved = { outcome: "busy" | "not_due" | "marched" | "resolv
 // them; `parts` each member who sent men or had a hull sail, in the koinon's
 // standing order, with his men at the launch, his hulls that sailed and the
 // seats on them that his and the others' men filled; `fleet` the hulls that
-// sailed (null by land).
+// sailed (null by land); `supplies` what each owner whose hulls sailed paid in
+// naval supplies, 0 included ({} by land).
 export type MusterMarch = {
   koinonName: string;
   route: "land" | "sea";
@@ -668,6 +691,7 @@ export type MusterMarch = {
   party: string[];
   parts: { playerId: string; men: number; hulls: number; seats: number }[];
   fleet: { hulls: Record<string, number>; naval: number; space: number; filled: number } | null;
+  supplies: Record<string, number>;
 };
 
 // The muster's own advisory key, in the two-int keyspace so it can never meet a
@@ -725,6 +749,7 @@ type Resolved = MusterResolved & { at?: Date; shrine?: Shrine };
 // line, no report.
 async function launchMuster(tx: DbTx, due: MusterRow, now: Date): Promise<Resolved> {
   const battleC = getBattleContent();
+  const shipsC = getShipsContent();
   const musterId = due.id;
   // 1. The pledging owners, unlocked; then every owner's player lock in
   // ascending id order, then the koinon lock: player locks first, the koinon
@@ -825,11 +850,14 @@ async function launchMuster(tx: DbTx, due: MusterRow, now: Date): Promise<Resolv
     hullsOf[h.ownerId] = (hullsOf[h.ownerId] ?? 0) + h.count;
     sailed[h.shipId] = (sailed[h.shipId] ?? 0) + h.count;
   }
-  // 9b. The hulls that sail leave their owners' stock for the round trip, the
-  // launch plus twice the road (raids prompt 3), as `act` sails a party's. Every
-  // owner here is locked (step 3) and was settled at the launch instant (step
-  // 5), so ships of his that were home by then are in stock. A stand-down and
-  // a muster by land sail nothing.
+  // 9b. The hulls that sail take their naval supplies from their owner's stock
+  // (raids prompt 5: what the pledge checked; one spent since sails anyway
+  // and pays what is left) and leave it for the round trip, the launch plus
+  // twice the road (raids prompt 3), as `act` sails a party's. Every owner
+  // here is locked (step 3) and was settled at the launch instant (step 5), so
+  // ships of his that were home by then are in stock. A stand-down and a
+  // muster by land sail nothing and take nothing.
+  const supplies: Record<string, number> = {};
   if (load) {
     const byOwner = new Map<string, Record<string, number>>();
     for (const h of load.sailing) {
@@ -838,6 +866,7 @@ async function launchMuster(tx: DbTx, due: MusterRow, now: Date): Promise<Resolv
       byOwner.set(h.ownerId, counts);
     }
     for (const ownerId of [...byOwner.keys()].sort()) {
+      supplies[ownerId] = await drawSupplies(tx, { playerId: ownerId }, voyageSupplies(shipsC, byOwner.get(ownerId)!));
       await sailHulls(tx, { playerId: ownerId, worldId: muster.worldId }, byOwner.get(ownerId)!, { kind: "raid", musterId: muster.id, regionId: muster.regionId, townId: muster.townId, sailedAt: launchAt, returnsAt: new Date(launchAt.getTime() + 2 * minutes * 60_000) });
     }
   }
@@ -861,6 +890,7 @@ async function launchMuster(tx: DbTx, due: MusterRow, now: Date): Promise<Resolv
     party: army.map((r) => r.id),
     parts: participants.map((o) => ({ playerId: o.playerId, men: menOf[o.playerId] ?? 0, hulls: hullsOf[o.playerId] ?? 0, seats: load?.seats[o.playerId] ?? 0 })),
     fleet: load ? { hulls: sailed, naval: load.naval, space: load.space, filled: load.filled } : null,
+    supplies,
   };
   await tx.update(koinonMusters).set({ arrivesAt, march }).where(eq(koinonMusters.id, muster.id));
   return { outcome: "marched", at: launchAt, shrine };

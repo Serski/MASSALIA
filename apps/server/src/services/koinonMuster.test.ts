@@ -84,6 +84,13 @@ suite("Koinon muster (integration)", () => {
   }
   const ships = (playerId: string, type: "trade-ship" | "galley", amount: number) =>
     db.insert(m.dbPkg.resources).values({ scope: "player", scopeId: playerId, type, amount: String(amount), ratePerSecond: "0", lastUpdatedAt: NOW });
+  // A good in store, added to what the player holds (one resources row per player and type).
+  const goods = async (playerId: string, type: string, amount: number) => {
+    const { resources } = m.dbPkg;
+    const row = (await db.select().from(resources).where(and(eq(resources.scope, "player"), eq(resources.scopeId, playerId), eq(resources.type, type))).limit(1))[0];
+    if (row) await db.update(resources).set({ amount: String(Number(row.amount) + amount) }).where(eq(resources.id, row.id));
+    else await db.insert(resources).values({ scope: "player", scopeId: playerId, type, amount: String(amount), ratePerSecond: "0", lastUpdatedAt: NOW });
+  };
   const unitRow = async (id: string) => (await db.select().from(m.dbPkg.playerUnits).where(eq(m.dbPkg.playerUnits.id, id)).limit(1))[0];
   const rowsOf = (playerId: string) => db.select().from(m.dbPkg.playerUnits).where(eq(m.dbPkg.playerUnits.ownerPlayerId, playerId)).orderBy(asc(m.dbPkg.playerUnits.createdAt), asc(m.dbPkg.playerUnits.id));
   const musters = () => db.select().from(m.dbPkg.koinonMusters).orderBy(asc(m.dbPkg.koinonMusters.openedAt));
@@ -408,6 +415,54 @@ suite("Koinon muster (integration)", () => {
     expect(view.rows.map((r) => [r.rowId, r.label, r.count, r.pledged])).toEqual([[hoplites, "Hoplite", 30, true], [peltasts, "Peltast", 20, false]]);
     expect(view.ships.find((s) => s.id === "trade-ship")).toMatchObject({ label: "Pentekonter", inStock: 2, pledged: 1 });
     expect(view.ships.find((s) => s.id === "galley")).toMatchObject({ inStock: 0, pledged: 0 });
+    // His naval supplies in store, for a muster by sea.
+    expect(view.supplies).toBe(0);
+    await goods(member, "naval-supplies", 3);
+    const stocked = await m.muster.myMusterPledge(await ctx(member), at(2 * MIN));
+    if ("error" in stocked) throw new Error(stocked.error);
+    expect(stocked.supplies).toBe(3);
+  });
+
+  it("naval supplies: a hull pledge by sea needs them, by land it does not; the launch takes one per hull that sails", async () => {
+    const [leader, member, sold] = [await freshPlayer("Kallias", 100_000, 1), await freshPlayer("Nikias", 100_000, 2), await freshPlayer("Deon", 100_000, 3)];
+    await koinonOf("The Sacred Band", [leader, member, sold]);
+    const view = await geography(leader);
+    const sea = await opened(leader, { regionId: undefined, townId: seaTown.townId });
+    // Two pentekonters and one supply: pledging both is refused, one is taken, and both with a second supply.
+    await ships(member, "trade-ship", 2);
+    await goods(member, "naval-supplies", 1);
+    expect(await m.muster.pledge(await ctx(member), { ships: { "trade-ship": 2 } }, NOW)).toEqual({ ok: false, code: 409, error: "Not enough naval supplies: 2 needed, 1 in store." });
+    expect(await hullsOf(member)).toEqual({});
+    expect(await m.muster.pledge(await ctx(member), { ships: { "trade-ship": 1 } }, NOW)).toEqual({ ok: true });
+    await goods(member, "naval-supplies", 1);
+    expect(await m.muster.pledge(await ctx(member), { ships: { "trade-ship": 2 } }, at(MIN))).toEqual({ ok: true });
+    expect(await hullsOf(member)).toEqual({ "trade-ship": 2 });
+    // A trireme pledged to a crossing beyond its range needs none (a second koinon's muster: a koinon has one at a time).
+    const far = view.targets.find((t) => t.route === "sea" && t.steps > 4)!;
+    const [leader2] = [await freshPlayer("Lykos", 100_000, 4)];
+    await koinonOf("Sons of Protis", [leader2]);
+    await opened(leader2, { regionId: far.regionId, townId: far.townId });
+    await ships(leader2, "galley", 1);
+    expect(await m.muster.pledge(await ctx(leader2), { ships: { galley: 1 } }, NOW)).toEqual({ ok: true });
+    // By land a member with no supplies pledges hulls.
+    const [leader3] = [await freshPlayer("Xenon", 100_000, 5)];
+    await koinonOf("The Hundred", [leader3]);
+    await opened(leader3);
+    await ships(leader3, "trade-ship", 1);
+    expect(await m.muster.pledge(await ctx(leader3), { ships: { "trade-ship": 1 } }, NOW)).toEqual({ ok: true });
+    // At the sea muster's launch, with men pledged: each owner's sailing hulls take their supplies; one who sold his since he pledged sails anyway and pays 0.
+    await ships(sold, "trade-ship", 1);
+    await goods(sold, "naval-supplies", 1);
+    expect(await m.muster.pledge(await ctx(sold), { ships: { "trade-ship": 1 } }, at(2 * MIN))).toEqual({ ok: true });
+    await db.update(m.dbPkg.resources).set({ amount: "0" }).where(and(eq(m.dbPkg.resources.scopeId, sold), eq(m.dbPkg.resources.type, "naval-supplies")));
+    const peltasts = await men(leader, "peltast", 40);
+    expect(await m.muster.pledge(await ctx(leader), { rows: [{ rowId: peltasts, count: 40 }] }, at(3 * MIN))).toEqual({ ok: true });
+    expect(await m.muster.resolveMuster(sea, LAUNCH)).toEqual({ outcome: "marched" });
+    expect(await stockOf(member, "naval-supplies")).toBe(0);
+    expect(await stockOf(sold, "naval-supplies")).toBe(0);
+    expect(((await musterOf(sea)).march as { supplies: Record<string, number> }).supplies).toEqual({ [member]: 2, [sold]: 0 });
+    expect(await stockOf(member, "trade-ship")).toBe(0);
+    expect(await stockOf(sold, "trade-ship")).toBe(0);
   });
 
   // --- the Politics count -------------------------------------------------------
@@ -447,6 +502,7 @@ suite("Koinon muster (integration)", () => {
     const musterId = await opened(leader, { regionId: undefined, townId: seaTown.townId });
     const hoplites = await men(soldier, "hoplite", 30);
     await ships(shipowner, "trade-ship", 2);
+    await goods(shipowner, "naval-supplies", 2); // a hull pledge by sea needs them (raids prompt 5)
     expect(await m.muster.pledge(await ctx(soldier), { rows: [{ rowId: hoplites, count: 30 }] }, NOW)).toEqual({ ok: true });
     expect(await m.muster.pledge(await ctx(shipowner), { ships: { "trade-ship": 1 } }, at(MIN))).toEqual({ ok: true });
 
@@ -513,9 +569,11 @@ suite("Koinon muster (integration)", () => {
   // A row already pledged to the muster, standing at Massalia, with a fixed id.
   const pledgedMen = (playerId: string, unitId: string, count: number, musterId: string, n: number, over: Record<string, unknown> = {}) =>
     men(playerId, unitId, count, massalia, { id: uid(n), mission: { kind: "muster", musterId, regionId: landRegion, departedAt: NOW.toISOString() }, ...over });
-  // A hull pledge backed by the same number of hulls in stock.
+  // A hull pledge backed by the same number of hulls in stock, and the naval
+  // supplies the pledged hulls need (raids prompt 5), added to what he holds.
   async function pledgedHulls(playerId: string, musterId: string, shipId: "trade-ship" | "galley", count: number, pledgedAt = NOW, inStock = count) {
     await ships(playerId, shipId, inStock);
+    await goods(playerId, m.barracks.getShipsContent().supplyGood, count * m.barracks.getShipsContent().ships[shipId]!.suppliesPerTrip);
     await db.insert(m.dbPkg.koinonMusterHulls).values({ musterId, ownerPlayerId: playerId, shipId, count, pledgedAt });
   }
   const setWarband = (regionId: string, warband: number) =>
@@ -587,6 +645,7 @@ suite("Koinon muster (integration)", () => {
         { playerId: c, men: 50, hulls: 0, seats: 0 },
       ],
       fleet: null,
+      supplies: {},
     });
     expect(await db.select().from(m.dbPkg.koinonMusterHulls)).toEqual([]);
     for (const p of [a, b, c]) {
@@ -877,6 +936,9 @@ suite("Koinon muster (integration)", () => {
     expect((await voyagesOf(shipowner))[0]).toMatchObject({ ships: { "trade-ship": 2 }, kind: "raid", musterId: bySea, regionId: seaTown.regionId, townId: seaTown.townId, sailedAt: LAUNCH, returnsAt: homeAt(seaTown.steps), returnedAt: null });
     expect(await voyagesOf(soldier)).toEqual([]);
     expect(homeAt(seaTown.steps).getTime()).toBeLessThanOrEqual(at(2 * HOUR + 7 * HOUR).getTime()); // seven seas at most bring the army home by LAUNCH plus 7 hours
+    // The launch took one naval supply per hull that sailed.
+    expect(await stockOf(shipowner, "naval-supplies")).toBe(0);
+    expect(((await musterOf(bySea)).march as { supplies: Record<string, number> }).supplies).toEqual({ [shipowner]: 2 });
     expect(await garrisonOf(seaTown.townId)).toBe(10 - report.killed);
     expect(await db.select().from(m.dbPkg.koinonMusterHulls)).toEqual([]);
 
@@ -946,8 +1008,9 @@ suite("Koinon muster (integration)", () => {
     expect(await unitRow(row)).toMatchObject({ count: 30, mission: null, movingTo: null, arrivesAt: null });
     expect((await logs(soldier, "koinon_muster")).length).toBe(0);
     expect((await m.koinon.koinonView(await ctx(soldier), at(3 * HOUR))).koinon!.lastMuster).toMatchObject({ status: "stood_down", reason: REACH_REASON.hulls(30, 20) });
-    // A stand-down sails nothing.
+    // A stand-down sails nothing and takes no supplies.
     expect(await stockOf(shipowner, "trade-ship")).toBe(1);
+    expect(await stockOf(shipowner, "naval-supplies")).toBe(1);
     expect(await voyagesOf(shipowner)).toEqual([]);
 
     // Two pentekonters carry the 30, but the town's fleet (3 × 1 + 2 × 5) outweighs them.

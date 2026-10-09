@@ -415,6 +415,21 @@ export async function takeSupplies(exec: Exec, owner: Pick<ActingContext, "playe
   return { ok: true };
 }
 
+// A muster's hulls (raids prompt 5), whose supplies the pledge checked: take up
+// to `need` naval supplies and answer how many were taken. One who spent his
+// since he pledged sails anyway and pays what he has left. 0 for need 0 or no
+// row; the draw is computed in SQL (a failed draw throws). It never refuses.
+export async function drawSupplies(exec: Exec, owner: Pick<ActingContext, "playerId">, need: number): Promise<number> {
+  if (need <= 0) return 0;
+  const good = getShipsContent().supplyGood;
+  const row = (await exec.select().from(resources).where(and(eq(resources.scope, "player"), eq(resources.scopeId, owner.playerId), eq(resources.type, good))).limit(1))[0];
+  if (!row) return 0;
+  const took = Math.min(need, Math.max(0, Math.floor(Number(row.amount))));
+  if (took <= 0) return 0;
+  if (!(await drainResource(exec, row.id, took))) throw new Error(`barracks: supply draw of ${took} ${good} failed under lock`);
+  return took;
+}
+
 // --- Reports (raids prompt 4) ------------------------------------------------------
 // A party's battle report is kept on its march and listed in the Barracks,
 // newest first, the latest ten; one not yet opened is highlighted until its
