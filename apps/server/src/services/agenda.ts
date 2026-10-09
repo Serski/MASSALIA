@@ -27,6 +27,7 @@ import {
   type TreasuryOwner,
 } from "@massalia/db";
 import {
+  buildingEffects,
   canDraft,
   canVeto,
   currentAgendaCycle,
@@ -240,6 +241,8 @@ export interface AgendaCardView {
   // A building project's polis and build time (government prompt 2a); absent on a card.
   group?: string;
   seasons?: number;
+  // What the project does when it stands, one line per effect (government prompt 2b); absent on a card.
+  effects?: string[];
 }
 
 export interface AgendaScopeView {
@@ -268,7 +271,8 @@ function leagueCardViews(ids: string[]): AgendaCardView[] {
   for (const id of ids) {
     const motion = projectMotion(id, buildings, cities);
     if (motion) {
-      out.push({ id: motion.id, title: motion.title, description: motion.description, cost: motion.cost, partyLean: motion.partyLean, group: motion.polis, seasons: motion.seasons });
+      const building = buildings.find((b) => b.id === motion.buildingId)!;
+      out.push({ id: motion.id, title: motion.title, description: motion.description, cost: motion.cost, partyLean: motion.partyLean, group: motion.polis, seasons: motion.seasons, effects: buildingEffects(building, motion.polis) });
       continue;
     }
     out.push(...cardViews(pool, [id]));

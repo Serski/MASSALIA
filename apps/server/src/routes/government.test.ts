@@ -6,7 +6,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import cookie from "@fastify/cookie";
-import { leagueDocket, parseCitiesContent, parseLeagueBuildings } from "@massalia/shared";
+import { buildingEffects, leagueDocket, parseCitiesContent, parseLeagueBuildings } from "@massalia/shared";
 
 // ---------------------------------------------------------------------------
 // GET /api/government and the public League scope of GET /api/agenda
@@ -47,7 +47,7 @@ async function loadModules() {
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
-type Scope = { phase: string | null; cards: { id: string; title: string; group?: string; seasons?: number }[]; draftedCardId: string | null; vetoedCardId: string | null; treasury: { balance: number; ledger: unknown[] }; youMayDraft: boolean; youMayVeto: boolean };
+type Scope = { phase: string | null; cards: { id: string; title: string; group?: string; seasons?: number; effects?: string[] }[]; draftedCardId: string | null; vetoedCardId: string | null; treasury: { balance: number; ledger: unknown[] }; youMayDraft: boolean; youMayVeto: boolean };
 type Gov =
   | { member: false }
   | {
@@ -155,7 +155,10 @@ suite("GET /api/government and the public League scope (integration)", () => {
       expect(card.group).toBe(project.polis);
       expect(card.seasons).toBe(project.seasons);
       expect(card.title).toBe(project.title);
+      // What the project does when it stands (government prompt 2b).
+      expect(card.effects).toEqual(buildingEffects(buildings.find((b) => b.id === project.buildingId)!, project.polis));
     }
+    expect(view.league.cards[0]!.effects).toEqual(["Priests +20 dr a season for 4 seasons", "Every army +3 morale for 2 years", "Massalia +3 stability a year"]);
     expect(view.league.youMayDraft).toBe(true);
     expect(view.league.youMayVeto).toBe(false);
     expect(view.treasury.balance).toBe(60_000 + 910 + m.getPoliticsConfig().treasury.leviedPerSeason);
@@ -257,6 +260,8 @@ suite("GET /api/government and the public League scope (integration)", () => {
       const scope = await leagueScope(c.token);
       expect(scope.phase).toBe("voting");
       expect(scope.cards.map((card) => card.id)).toEqual([first]);
+      const project = startDocket.find((p) => p.id === first)!;
+      expect(scope.cards[0]!.effects).toEqual(buildingEffects(buildings.find((b) => b.id === project.buildingId)!, project.polis));
       expect(scope.draftedCardId).toBe(first);
       expect(scope.vetoedCardId).toBeNull();
       expect(scope.youMayDraft).toBe(false);
