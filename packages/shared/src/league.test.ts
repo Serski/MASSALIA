@@ -4,7 +4,6 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   CITY_GROUPS,
-  CITY_STABILITY_BASELINE,
   FACTION_GROUPS,
   OPINION_MAX,
   OPINION_MIN,
@@ -295,54 +294,60 @@ describe("the opinion bar (Diplomacy D1)", () => {
   });
 });
 
-describe("driftCity (once-per-game-year city growth)", () => {
+describe("driftCity (once-per-game-year city drift)", () => {
+  const START = 1000;
+
   it("grows population +2% and garrison +2% (rounded), stamping the year", () => {
-    const { changed, next } = driftCity(city({ population: 1000, garrison: 50 }), 1);
+    const { changed, next } = driftCity(city({ population: 1000, garrison: 50 }), 1, START);
     expect(changed).toBe(true);
-    expect(next.population).toBe(1020); // round(1000 * 1.02)
+    expect(next.population).toBe(1020); // 1000 + round(1000 * 0.02)
     expect(next.garrison).toBe(51); // round(50 * 1.02)
     expect(next.lastGrowthYear).toBe(1);
   });
 
-  it("small cities still creep up by at least 1 (rounding)", () => {
-    const { next } = driftCity(city({ population: 500, garrison: 30 }), 1);
-    expect(next.population).toBe(510); // round(510)
-    expect(next.garrison).toBe(31); // round(30.6)
+  it("stability falls a point a year and never below 0", () => {
+    expect(driftCity(city({ stability: 90 }), 1, START).next.stability).toBe(89);
+    expect(driftCity(city({ stability: 1 }), 1, START).next.stability).toBe(0);
+    expect(driftCity(city({ stability: 0 }), 1, START).next.stability).toBe(0);
+  });
+
+  it("a polis of 0 grows from its founding size: 0 with a start of 2,000 grows to 40", () => {
+    const { next } = driftCity(city({ population: 0 }), 1, 2000);
+    expect(next.population).toBe(40);
+  });
+
+  it("a polis above its founding size grows from its own population: 1,000 with a start of 500 grows to 1,020", () => {
+    expect(driftCity(city({ population: 1000 }), 1, 500).next.population).toBe(1020);
+    // and one below it grows from the founding size: 500 with a start of 1,000 grows by 20.
+    expect(driftCity(city({ population: 500 }), 1, 1000).next.population).toBe(520);
   });
 
   it("is idempotent on re-run within the same year (no double-grow)", () => {
-    const first = driftCity(city(), 1);
-    const second = driftCity({ ...first.next }, 1);
+    const first = driftCity(city(), 1, START);
+    const second = driftCity({ ...first.next }, 1, START);
     expect(second.changed).toBe(false);
     expect(second.next).toEqual(first.next); // unchanged
   });
 
   it("grows again once the year advances", () => {
-    const y1 = driftCity(city({ population: 1000 }), 1);
-    const y2 = driftCity({ ...y1.next }, 2);
+    const y1 = driftCity(city({ population: 1000, stability: 60 }), 1, START);
+    const y2 = driftCity({ ...y1.next }, 2, START);
     expect(y2.changed).toBe(true);
-    expect(y2.next.population).toBe(1040); // round(1020 * 1.02)
+    expect(y2.next.population).toBe(1040); // 1020 + round(1020 * 0.02)
+    expect(y2.next.stability).toBe(58);
     expect(y2.next.lastGrowthYear).toBe(2);
   });
 
   it("catches up with a single step when several years behind (no replay)", () => {
-    const { changed, next } = driftCity(city({ population: 1000, lastGrowthYear: 1 }), 5);
+    const { changed, next } = driftCity(city({ population: 1000, stability: 60, lastGrowthYear: 1 }), 5, START);
     expect(changed).toBe(true);
     expect(next.population).toBe(1020); // ONE step, not four
+    expect(next.stability).toBe(59);
     expect(next.lastGrowthYear).toBe(5);
   });
 
-  it("drifts stability toward the baseline from above and below, then settles", () => {
-    expect(driftCity(city({ stability: 90 }), 1).next.stability).toBe(89); // above → -1
-    expect(driftCity(city({ stability: 60 }), 1).next.stability).toBe(61); // below → +1
-    expect(driftCity(city({ stability: CITY_STABILITY_BASELINE }), 1).next.stability).toBe(CITY_STABILITY_BASELINE); // at baseline → stays
-    // never overshoots the baseline by the step
-    expect(driftCity(city({ stability: CITY_STABILITY_BASELINE + 1 }), 1).next.stability).toBe(CITY_STABILITY_BASELINE);
-    expect(driftCity(city({ stability: CITY_STABILITY_BASELINE - 1 }), 1).next.stability).toBe(CITY_STABILITY_BASELINE);
-  });
-
-  it("never changes fortifications and leaves tax flat", () => {
-    const { next } = driftCity(city({ fortifications: 4, tax: 320 }), 1);
+  it("never changes fortifications and leaves the stored tax flat", () => {
+    const { next } = driftCity(city({ fortifications: 4, tax: 320 }), 1, START);
     expect(next.fortifications).toBe(4);
     expect(next.tax).toBe(320);
   });

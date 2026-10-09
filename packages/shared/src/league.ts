@@ -522,19 +522,21 @@ export function raidGrudgeLine(f: Pick<FactionDef, "name" | "group">): string {
   return f.group === "major-powers" ? `${f.name} will remember this.` : `The ${f.name} will remember this.`;
 }
 
-// --- League city drift (Atlas Phase 2b-i): gentle once-per-game-year growth ---
-// Cities evolve slowly over time. Constants are deliberately small and named here
-// so they are trivially tunable (balance deferred to evidence). Diplomacy stances
-// do NOT drift this phase; only cities. Pure + DB-free so it is unit-tested.
+// --- League city drift: once per game year ----------------------------------
+// Cities evolve slowly over time. The numbers live here beside each other, an
+// exception to the content rule until the drift moves to content as a whole
+// (government prompt 2a). Diplomacy stances do NOT drift; only cities. Pure +
+// DB-free so it is unit-tested.
 
-// +2% population per game year (rounded) — larger cities gain more in absolute terms.
+// +2% a game year (rounded) of the polis's population or of its starting
+// population, whichever is larger, so a polis that fell to nothing grows back
+// and a grown one keeps growing.
 export const CITY_POP_GROWTH = 0.02;
 // +2% garrison per game year (rounded) — gentle creep alongside population.
 export const CITY_GARRISON_GROWTH = 0.02;
-// Stability drifts toward this baseline so it self-settles rather than runs away.
-export const CITY_STABILITY_BASELINE = 70;
-// ±1 per game year toward the baseline (capped so it never overshoots).
-export const CITY_STABILITY_STEP = 1;
+// Stability falls by this each game year, never below 0 (government prompt 2a:
+// the Temple of Artemis will raise it, in 2b). It replaced the pull toward 70.
+export const CITY_STABILITY_DECAY = 1;
 
 export type CityDriftStats = {
   population: number;
@@ -548,28 +550,26 @@ export type CityDriftStats = {
 // has already grown in (or after) `currentYear`, it is returned unchanged. A city
 // that is behind grows exactly one step (it does NOT replay every missed year —
 // it jumps to the current year) and the caller stamps lastGrowthYear = currentYear.
-// tax is left FLAT (it is not a function of population — content ratios vary
-// 3.3%–12%); fortifications NEVER auto-grow (1..5, Archon-upgraded in a later phase).
+// Population grows by CITY_POP_GROWTH of the larger of its population and its
+// `startPopulation` (the polis's founding size from content); stability falls by
+// CITY_STABILITY_DECAY, never below 0. The stored tax is left FLAT (the tax a
+// polis pays is polisTax of its population, computed on read); fortifications
+// never drift (1..5; the Walls raise them when they stand).
 export function driftCity(
   city: CityDriftStats & { lastGrowthYear: number | null },
   currentYear: number,
+  startPopulation: number,
 ): { changed: boolean; next: CityDriftStats & { lastGrowthYear: number | null } } {
   if (city.lastGrowthYear !== null && city.lastGrowthYear >= currentYear) {
     return { changed: false, next: { ...city } };
   }
-  let stability = city.stability;
-  if (stability < CITY_STABILITY_BASELINE) {
-    stability = Math.min(CITY_STABILITY_BASELINE, stability + CITY_STABILITY_STEP);
-  } else if (stability > CITY_STABILITY_BASELINE) {
-    stability = Math.max(CITY_STABILITY_BASELINE, stability - CITY_STABILITY_STEP);
-  }
   return {
     changed: true,
     next: {
-      population: Math.round(city.population * (1 + CITY_POP_GROWTH)),
+      population: city.population + Math.round(Math.max(city.population, startPopulation) * CITY_POP_GROWTH),
       tax: city.tax, // flat — not derived from population
-      stability,
-      fortifications: city.fortifications, // never auto-grows
+      stability: Math.max(0, city.stability - CITY_STABILITY_DECAY),
+      fortifications: city.fortifications, // never drifts
       garrison: Math.round(city.garrison * (1 + CITY_GARRISON_GROWTH)),
       lastGrowthYear: currentYear,
     },
