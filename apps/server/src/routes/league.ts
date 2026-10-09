@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { FastifyInstance } from "fastify";
 import { sql } from "drizzle-orm";
 import {
+  formatGameDate,
   gameDate,
   liveAge,
   opinionBand,
@@ -51,6 +52,15 @@ function getFactions(): FactionsContent {
 
 // --- Response shapes (real values — this is a visible stats readout) ---------
 
+// A League building in a polis (government prompt 2a): standing, or under way
+// with the game date it stands.
+export type CityBuildingView = {
+  buildingId: string;
+  name: string;
+  status: "building" | "built";
+  completesLabel: string | null;
+};
+
 export type CityView = {
   id: string;
   name: string;
@@ -58,9 +68,10 @@ export type CityView = {
   population: number;
   tax: number;
   stability: number;
-  // 1..5 fortification level (display-only this phase).
+  // 1..5 fortification level: the Walls raise it when they stand.
   fortifications: number;
   garrison: number;
+  buildings: CityBuildingView[]; // in the buildings' content order
 };
 
 // A faction character (Diplomacy D3) with live age derived from the calendar.
@@ -114,6 +125,7 @@ export async function leagueRoutes(app: FastifyInstance) {
     const { requireAuth } = await import("../services/auth.js");
     const { getActiveWorldId } = await import("../services/character.js");
     const { getPoliticsConfig } = await import("../services/oligarchy.js");
+    const { getLeagueBuildings } = await import("../services/agenda.js");
     const db = (_db ??= createDb());
 
     await requireAuth(request);
@@ -139,6 +151,21 @@ export async function leagueRoutes(app: FastifyInstance) {
       ),
     );
 
+    // The League's buildings in each polis (government prompt 2a): standing, or
+    // under way with the game date they stand, in the buildings' content order.
+    const started = await db.execute(sql`SELECT started_at FROM worlds WHERE id = ${worldId}`);
+    const startedMs = new Date((started.rows[0] as { started_at: string | Date }).started_at).getTime();
+    const projects = await db.execute(sql`SELECT city_id, building_id, completes_at, completed_at FROM league_projects WHERE world_id = ${worldId}`);
+    const projectRows = projects.rows as { city_id: string; building_id: string; completes_at: string | Date; completed_at: string | Date | null }[];
+    const buildingDefs = getLeagueBuildings();
+    const buildingsOf = (cityId: string): CityBuildingView[] =>
+      buildingDefs.flatMap((def) => {
+        const row = projectRows.find((p) => p.city_id === cityId && p.building_id === def.id);
+        if (!row) return [];
+        const built = row.completed_at !== null;
+        return [{ buildingId: def.id, name: def.name, status: built ? "built" : "building", completesLabel: built ? null : formatGameDate(gameDate(new Date(row.completes_at).getTime(), startedMs)) }];
+      });
+
     // Emit in content order so the grouping/sort is stable and content-driven.
     // `tax` is what the polis pays the League treasury a season (government
     // prompt 1): polisTax of its live population, not the stored column.
@@ -154,6 +181,7 @@ export async function leagueRoutes(app: FastifyInstance) {
         stability: row?.stability ?? c.start.stability,
         fortifications: row?.fortifications ?? c.start.fortifications,
         garrison: row?.garrison ?? c.start.garrison,
+        buildings: buildingsOf(c.id),
       };
     });
     return { cities: out };

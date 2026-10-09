@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
-import { activeWorld, createDb, leagueCities, treasuryBalance, treasuryLedgerRows } from "@massalia/db";
-import { formatGameDate, gameDate, governmentSeats, leagueTax, treasuryReasonLabel, type GovernmentSeat } from "@massalia/shared";
-import { agendaScopeView, getAgendaPools, heldOffices, type AgendaScopeView } from "./agenda.js";
+import { activeWorld, createDb, leagueCities, leagueProjects, treasuryBalance, treasuryLedgerRows } from "@massalia/db";
+import { formatGameDate, gameDate, governmentSeats, leagueTax, projectMotion, projectMotionId, treasuryReasonLabel, type GovernmentSeat } from "@massalia/shared";
+import { agendaScopeView, getLeagueBuildings, getLeagueCities, heldOffices, leagueMeasureTitle, type AgendaScopeView } from "./agenda.js";
 import type { CharacterRow } from "./character.js";
 import { getPoliticsConfig } from "./oligarchy.js";
 
@@ -21,6 +21,17 @@ export interface GovernmentLedgerLine {
   createdAt: string;
 }
 
+// A League building project (government prompt 2a): under way or standing.
+export interface GovernmentProjectView {
+  cityId: string;
+  polis: string;
+  buildingId: string;
+  title: string;
+  status: "building" | "built";
+  completesAt: string;
+  completesLabel: string; // "Summer, 292 BC": the game date the building stands
+}
+
 export type GovernmentView =
   | { member: false }
   | {
@@ -31,6 +42,7 @@ export type GovernmentView =
         taxPerSeason: number; // leagueTax over the world's poleis now
         ledger: GovernmentLedgerLine[]; // the 40 newest
       };
+      projects: GovernmentProjectView[]; // under way first by completion, then built by completion
       league: AgendaScopeView; // agendaScopeView(actor, "league", now), unfiltered
     };
 
@@ -44,13 +56,12 @@ export async function governmentView(actor: CharacterRow, now: Date = new Date()
   // already in the books it reads next.
   const league = await agendaScopeView(actor, "league", now);
   const world = await activeWorld();
-  if (!world) return { member: true, seats, treasury: { balance: 0, taxPerSeason: 0, ledger: [] }, league };
+  if (!world) return { member: true, seats, treasury: { balance: 0, taxPerSeason: 0, ledger: [] }, projects: [], league };
 
   const cfg = getPoliticsConfig();
-  const pool = getAgendaPools().league;
-  const cardTitle = (cardId: string) => pool.find((c) => c.id === cardId)?.title;
   const poleis = await db.select({ population: leagueCities.population }).from(leagueCities).where(eq(leagueCities.worldId, world.id));
   const rows = await treasuryLedgerRows(world.id, "league", LEDGER_LINES);
+  const dateLabel = (ms: number) => formatGameDate(gameDate(ms, world.startedMs));
   return {
     member: true,
     seats,
@@ -59,11 +70,35 @@ export async function governmentView(actor: CharacterRow, now: Date = new Date()
       taxPerSeason: leagueTax(poleis.map((p) => p.population), cfg.treasury),
       ledger: rows.map((r) => ({
         delta: r.delta,
-        label: treasuryReasonLabel(r.reason, cardTitle),
-        dateLabel: formatGameDate(gameDate(Date.parse(r.createdAt), world.startedMs)),
+        label: treasuryReasonLabel(r.reason, leagueMeasureTitle),
+        dateLabel: dateLabel(Date.parse(r.createdAt)),
         createdAt: r.createdAt,
       })),
     },
+    projects: await projectViews(world.id, dateLabel),
     league,
   };
+}
+
+// The world's projects: under way first by completion, then the built ones by completion.
+async function projectViews(worldId: string, dateLabel: (ms: number) => string): Promise<GovernmentProjectView[]> {
+  const buildings = getLeagueBuildings();
+  const cities = getLeagueCities().cities;
+  const rows = await db.select().from(leagueProjects).where(eq(leagueProjects.worldId, worldId));
+  const views: GovernmentProjectView[] = [];
+  for (const row of rows) {
+    const motion = projectMotion(projectMotionId(row.cityId, row.buildingId), buildings, cities);
+    if (!motion) continue;
+    views.push({
+      cityId: row.cityId,
+      polis: motion.polis,
+      buildingId: row.buildingId,
+      title: motion.title,
+      status: row.completedAt ? "built" : "building",
+      completesAt: row.completesAt.toISOString(),
+      completesLabel: dateLabel(row.completesAt.getTime()),
+    });
+  }
+  const rank = (v: GovernmentProjectView) => (v.status === "building" ? 0 : 1);
+  return views.sort((a, b) => rank(a) - rank(b) || a.completesAt.localeCompare(b.completesAt));
 }

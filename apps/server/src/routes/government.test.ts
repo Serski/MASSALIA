@@ -50,7 +50,13 @@ type Mods = Awaited<ReturnType<typeof loadModules>>;
 type Scope = { phase: string | null; cards: { id: string; title: string; group?: string; seasons?: number }[]; draftedCardId: string | null; vetoedCardId: string | null; treasury: { balance: number; ledger: unknown[] }; youMayDraft: boolean; youMayVeto: boolean };
 type Gov =
   | { member: false }
-  | { member: true; seats: { office: string; side: string | null }[]; treasury: { balance: number; taxPerSeason: number; ledger: { delta: number; label: string; dateLabel: string; createdAt: string }[] }; league: Scope };
+  | {
+      member: true;
+      seats: { office: string; side: string | null }[];
+      treasury: { balance: number; taxPerSeason: number; ledger: { delta: number; label: string; dateLabel: string; createdAt: string }[] };
+      projects: { cityId: string; polis: string; buildingId: string; title: string; status: string; completesAt: string; completesLabel: string }[];
+      league: Scope;
+    };
 
 suite("GET /api/government and the public League scope (integration)", () => {
   let m: Mods;
@@ -199,6 +205,28 @@ suite("GET /api/government and the public League scope (integration)", () => {
     expect(s.member && s.league.cards.length).toBeGreaterThan(0);
 
     expect(await government(partyArchon.token)).toEqual({ member: false });
+  });
+
+  it("a member sees the League's projects, under way first, and a spend ledger row names the project", async () => {
+    await firstWinter();
+    const strategos = await citizen("strategos");
+    await seat("strategos", null, strategos.characterId);
+    const startedMs = Date.now() - HOUR;
+    // The Walls of Nikaia under way (stand in the Winter eight seasons on, an hour
+    // past the boundary so the game date is unambiguous), the Port of Olbia standing.
+    await db.insert(m.dbPkg.leagueProjects).values({ worldId, cityId: "nikaia", buildingId: "walls", cost: 2000, startedAt: new Date(startedMs), completesAt: new Date(startedMs + 8 * DAY + HOUR) });
+    await db.insert(m.dbPkg.leagueProjects).values({ worldId, cityId: "olbia", buildingId: "port", cost: 2000, startedAt: new Date(startedMs - 9 * DAY), completesAt: new Date(startedMs - DAY), completedAt: new Date(startedMs - DAY) });
+    await db.insert(m.dbPkg.treasuryLedger).values({ worldId, owner: "league", delta: -2000, reason: "agenda:project:nikaia:walls" });
+
+    const view = await government(strategos.token);
+    expect(view.member).toBe(true);
+    if (!view.member) return;
+    expect(view.projects.map((p) => [p.title, p.polis, p.status, p.completesLabel])).toEqual([
+      ["The Walls of Nikaia", "Nikaia", "building", "Winter, 298 BC"],
+      ["The Port of Olbia", "Olbia", "built", "Winter, 300 BC"],
+    ]);
+    expect(view.projects[0]!.completesAt).toBe(new Date(startedMs + 8 * DAY + HOUR).toISOString());
+    expect(view.treasury.ledger.map((l) => [l.delta, l.label])).toContainEqual([-2000, "Passed measure: The Walls of Nikaia"]);
   });
 
   // A world whose docket has gone to the vote: started a day and an hour back,

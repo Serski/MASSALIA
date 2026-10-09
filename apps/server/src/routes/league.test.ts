@@ -20,6 +20,7 @@ const dbUrl = process.env.DATABASE_URL ?? "";
 const suite = describe.runIf(dbUrl.includes("_test"));
 
 const DAY = 86_400_000;
+const HOUR = 3_600_000;
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const cities = parseCitiesContent(JSON.parse(readFileSync(resolve(root, "content/cities/cities.json"), "utf8")));
 
@@ -31,7 +32,8 @@ async function loadModules() {
   const dbPkg = await import("@massalia/db");
   const { leagueRoutes, loadLeagueContent } = await import("./league.js");
   const { loadPoliticsConfig, getPoliticsConfig } = await import("../services/oligarchy.js");
-  return { dbPkg, leagueRoutes, loadLeagueContent, loadPoliticsConfig, getPoliticsConfig };
+  const { loadAgendaContent } = await import("../services/agenda.js");
+  return { dbPkg, leagueRoutes, loadLeagueContent, loadPoliticsConfig, getPoliticsConfig, loadAgendaContent };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -46,6 +48,7 @@ suite("GET /api/league/cities: the tax each polis pays a season (integration)", 
     db = m.dbPkg.createDb();
     await m.loadLeagueContent();
     await m.loadPoliticsConfig();
+    await m.loadAgendaContent();
     app = Fastify();
     await app.register(cookie, { secret: "test-session-secret-at-least-32-chars-long" });
     await app.register(m.leagueRoutes, { prefix: "/api/league" });
@@ -57,7 +60,7 @@ suite("GET /api/league/cities: the tax each polis pays a season (integration)", 
   });
 
   beforeEach(async () => {
-    await db.execute(sql`TRUNCATE TABLE league_cities, sessions, users, worlds CASCADE`);
+    await db.execute(sql`TRUNCATE TABLE league_projects, league_cities, sessions, users, worlds CASCADE`);
     worldId = (await db.insert(m.dbPkg.worlds).values({ name: "Cities Test", seed: "ctest", startedAt: new Date(Date.now() - DAY), endsAt: new Date(Date.now() + 181 * DAY), status: "active" }).returning())[0]!.id;
   });
 
@@ -87,6 +90,21 @@ suite("GET /api/league/cities: the tax each polis pays a season (integration)", 
     expect((await db.select().from(m.dbPkg.leagueCities)).length).toBe(cities.cities.length);
     await get(await session());
     expect((await db.select().from(m.dbPkg.leagueCities)).length).toBe(cities.cities.length);
+  });
+
+  it("a polis shows its League buildings: the ones standing and the ones under way with the date they stand", async () => {
+    type City = { id: string; buildings: { buildingId: string; name: string; status: string; completesLabel: string | null }[] };
+    const startedMs = Date.now() - DAY;
+    await db.insert(m.dbPkg.leagueProjects).values({ worldId, cityId: "nikaia", buildingId: "port", cost: 2000, startedAt: new Date(startedMs), completesAt: new Date(startedMs + 8 * DAY + HOUR) });
+    await db.insert(m.dbPkg.leagueProjects).values({ worldId, cityId: "nikaia", buildingId: "temple", cost: 1000, startedAt: new Date(startedMs), completesAt: new Date(startedMs + DAY), completedAt: new Date(startedMs + DAY) });
+    const body = (await get(await session())).json() as { cities: City[] };
+    const nikaia = body.cities.find((c) => c.id === "nikaia")!;
+    // Content order: the Temple before the Port.
+    expect(nikaia.buildings).toEqual([
+      { buildingId: "temple", name: "Temple of Artemis", status: "built", completesLabel: null },
+      { buildingId: "port", name: "Port", status: "building", completesLabel: "Winter, 298 BC" },
+    ]);
+    expect(body.cities.find((c) => c.id === "massalia")!.buildings).toEqual([]);
   });
 
   it("a grown polis pays more: the tax follows the live population, not the stored column", async () => {
