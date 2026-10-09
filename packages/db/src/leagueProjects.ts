@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, eq, isNull, lte, sql } from "drizzle-orm";
-import { leagueClassGrants, leagueClassPay, leagueDocket, parseLeagueBuildings, projectKey, projectMotion, type LeagueBuilding, type LeagueClassGrant, type ProjectMotion, type ProjectTiming } from "@massalia/shared";
+import { leagueClassGrants, leagueClassPay, leagueDocket, leagueMorale, parseLeagueBuildings, projectKey, projectMotion, type LeagueBuilding, type LeagueClassGrant, type ProjectMotion, type ProjectTiming } from "@massalia/shared";
 import { createDb, type DbExec } from "./client.js";
 import { ensureLeagueCities, loadCities } from "./leagueRevenue.js";
 import { leagueCities, leagueProjects, treasuries } from "./schema.js";
@@ -68,6 +68,13 @@ export async function leagueClassPayFor(exec: DbExec, worldId: string, worldStar
 export async function leagueClassGrantsFor(exec: DbExec, worldId: string, classId: string, at: Date): Promise<LeagueClassGrant[]> {
   const [defs, cities] = await Promise.all([loadLeagueBuildings(), loadCities()]);
   return leagueClassGrants(await projectTimings(exec, worldId), defs, cities.cities, classId, at.getTime());
+}
+
+// The blessing every army in this world fights under at `at` (government prompt
+// 2b): the Temple's morale and the instant the run of Temples ends, or null.
+export async function leagueMoraleAt(exec: DbExec, worldId: string, at: Date): Promise<{ amount: number; until: Date } | null> {
+  const blessing = leagueMorale(await projectTimings(exec, worldId), await loadLeagueBuildings(), at.getTime());
+  return blessing ? { amount: blessing.amount, until: new Date(blessing.untilMs) } : null;
 }
 
 export interface CompletedProject {

@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, asc, desc, eq, gte, isNull, lte, or, sql, inArray } from "drizzle-orm";
-import { bandOffers, createDb, effectLog, koinonMembers, koinonMusterParts, koinonMusters, playerCharacters, playerLevy, playerMarches, playerUnits, players, playerVoyages, resources, type MarchKind, type UnitMission, type VoyageKind } from "@massalia/db";
+import { bandOffers, createDb, effectLog, koinonMembers, koinonMusterParts, koinonMusters, leagueMoraleAt, playerCharacters, playerLevy, playerMarches, playerUnits, players, playerVoyages, resources, type MarchKind, type UnitMission, type VoyageKind } from "@massalia/db";
 import {
   bandDef,
   formatGameDate,
@@ -1028,6 +1028,17 @@ export async function altarBonusFor(exec: Exec, playerIds: string[], at: Date): 
   return out;
 }
 
+// The morale every row of a player's army fights with at `at`: his own altar's
+// blessing (altarBonusFor, each player's own) plus the Temple of Artemis's,
+// which is every army's in the world while a Temple's years run (government
+// prompt 2b). The same Map shape as altarBonusFor; both battle sites call this.
+export async function moraleBonusFor(exec: Exec, worldId: string, playerIds: string[], at: Date): Promise<Map<string, number>> {
+  const out = await altarBonusFor(exec, playerIds, at);
+  const temple = await leagueMoraleAt(exec, worldId, at);
+  if (temple) for (const [id, bonus] of out) out.set(id, bonus + temple.amount);
+  return out;
+}
+
 // The instant a row may be released: created_at + minServiceSeasons days (trained)
 // or + termSeasons days (band). Shared by disbandRow and the view's canDisband.
 function releaseAtMs(row: Pick<UnitRow, "source" | "createdAt">, unitsC: UnitsContent, bandsC: BandsContent): number {
@@ -1189,6 +1200,10 @@ export type BarracksView = {
   // The altar while lit at `now` (the good burned, its morale bonus, the
   // instant it goes cold), else null.
   altar: { good: string; mor: number; until: string } | null;
+  // The Temple of Artemis's blessing on every army in the world at `now`
+  // (government prompt 2b): the morale, the instant the run of Temples ends
+  // (excluded) and the game date of the last season it holds; else null.
+  temple: { mor: number; until: string; throughLabel: string } | null;
 };
 
 // The army's upkeep per day for the Ledger's Economy view and the Barracks
@@ -1267,6 +1282,8 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
     const battleC = getBattleContent();
     const me = (await tx.select({ until: players.altarUntil, good: players.altarGood }).from(players).where(eq(players.id, ctx.playerId)).limit(1))[0];
     const altar = me?.until && me.good && me.until.getTime() > now.getTime() ? { good: me.good, mor: battleC.altar.goods[me.good] ?? 0, until: me.until.toISOString() } : null;
+    const blessing = await leagueMoraleAt(tx, ctx.worldId, now);
+    const temple = blessing ? { mor: blessing.amount, until: blessing.until.toISOString(), throughLabel: formatGameDate(gameDate(blessing.until.getTime() - 1, ctx.worldStartedMs)) } : null;
     const result: BarracksView = {
       gate,
       places,
@@ -1278,6 +1295,7 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
       levy: { men: levy.men },
       config: { minServiceSeasons: unitsC.minServiceSeasons, maxActiveBands: bandsC.market.maxActiveBands, termSeasons: bandsC.contract.termSeasons, altar: { seasons: battleC.altar.seasons, goods: battleC.altar.goods } },
       altar,
+      temple,
       units: Object.entries(unitsC.units).map(([id, u]) => ({ id, label: u.label, plural: u.plural, icon: u.icon, role: u.role, trainSeasons: u.trainSeasons, gear: u.gear, upkeepPerDay: u.upkeepPerDay, stats: u.stats })),
       roster,
       offers: offers.flatMap((o) => {

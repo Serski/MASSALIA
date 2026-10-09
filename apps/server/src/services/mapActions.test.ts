@@ -185,7 +185,7 @@ suite("Map actions (integration)", () => {
   });
 
   beforeEach(async () => {
-    await db.execute(sql`TRUNCATE TABLE player_units, player_holdings, player_levy, band_offers, region_intel, region_military, town_intel, town_military, effect_log, resources, player_buildings, player_pops, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
+    await db.execute(sql`TRUNCATE TABLE league_projects, player_units, player_holdings, player_levy, band_offers, region_intel, region_military, town_intel, town_military, effect_log, resources, player_buildings, player_pops, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
     await db.insert(m.dbPkg.houses).values({ slug: "test-house", name: "House Test", initial: "T", alignment: "c", stance: "s", motto: "m", patron: "p", crest: "c" }).onConflictDoNothing();
     const world = (await db.insert(m.dbPkg.worlds).values({ name: "Actions Test", seed: "atest", startedAt: new Date(T0), endsAt: new Date(T0 + 182 * DAY), status: "active" }).returning())[0]!;
     worldId = world.id;
@@ -566,6 +566,34 @@ suite("Map actions (integration)", () => {
     });
     expect(expired.winner).toBe("defender");
     expect(expired.line).toMatch(/^Attacked Salyes with 40 hoplites and were broken/);
+  });
+
+  // The Temple of Artemis (government prompt 2b): its blessing is every army's in
+  // the world for the 8 seasons after it stands. One Temple per `it`, since a
+  // project is unique per polis. The same 40 hoplites against the warband of 90,
+  // with no bull.
+  const templeStands = (completesAt: Date) => db.insert(m.dbPkg.leagueProjects).values({ worldId, cityId: "massalia", buildingId: "temple", cost: 1000, startedAt: at(0), completesAt });
+  const fightUnblessed = async () => {
+    const { ctx } = await makePlayer();
+    await setWarband("R046", 90, at(9));
+    const hoplites = await insertRow(ctx, { unitId: "hoplite", count: 40 });
+    const r = await act(ctx, "attack", "R046", [hoplites.id]);
+    if (!r.ok) throw new Error(r.error);
+    return r.report;
+  };
+
+  it("the Temple: a Temple standing at season 4 steadies the attackers as a bull would; they stand and withdraw", async () => {
+    await templeStands(at(4));
+    const report = await fightUnblessed();
+    expect(report.winner).toBe("stand");
+    expect(report.line).toMatch(/^Attacked Salyes with 40 hoplites and withdrew/);
+  });
+
+  it("the Temple: one whose 8 seasons ran out at season 8 gives nothing; they are broken", async () => {
+    await templeStands(at(0));
+    const report = await fightUnblessed();
+    expect(report.winner).toBe("defender");
+    expect(report.line).toMatch(/^Attacked Salyes with 40 hoplites and were broken/);
   });
 
   it("selection: a moving row, rows from two bases, a row still training, and an empty force are refused", async () => {

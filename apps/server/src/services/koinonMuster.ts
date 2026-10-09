@@ -35,7 +35,7 @@ import {
   type ReachForceRow,
   type ReachSteps,
 } from "@massalia/shared";
-import { altarBonusFor, drawSupplies, fleetInStock, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, sailHulls, type UnitRow } from "./barracks.js";
+import { drawSupplies, fleetInStock, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, moraleBonusFor, sailHulls, type UnitRow } from "./barracks.js";
 import { applyComposureDelta } from "./composure.js";
 import { settleAll, type ActingContext } from "./buildings.js";
 import { creditDrachmae, creditGood, holderOf, listHoldings } from "./holdings.js";
@@ -1013,9 +1013,10 @@ async function arriveMuster(tx: DbTx, due: MusterRow, now: Date): Promise<Resolv
 
       // One army: every row is its own row in the battle, seeded on the arrival.
       const seed = crypto.createHash("sha256").update([muster.worldId, muster.id, muster.townId ?? muster.regionId, at.toISOString()].join("|")).digest("hex");
-      // The altar: each participant's blessing, as lit at the arrival, raises
-      // his own rows' morale on a copy of the content stats. No clamp.
-      const altar = await altarBonusFor(tx, sides.map((o) => o.playerId), at);
+      // The altar and the Temple: each participant's own blessing, as lit at the
+      // arrival, and the Temple of Artemis's on every army in the world while
+      // its years run, raise his rows' morale on a copy of the content stats. No clamp.
+      const altar = await moraleBonusFor(tx, muster.worldId, sides.map((o) => o.playerId), at);
       const attacker: BattleRow[] = army.map((r) => {
         const def = r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId);
         const bonus = altar.get(r.ownerPlayerId) ?? 0;

@@ -128,7 +128,7 @@ suite("Barracks (integration)", () => {
   });
 
   beforeEach(async () => {
-    await db.execute(sql`TRUNCATE TABLE player_units, player_holdings, player_levy, band_offers, effect_log, resources, player_buildings, player_pops, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
+    await db.execute(sql`TRUNCATE TABLE league_projects, player_units, player_holdings, player_levy, band_offers, effect_log, resources, player_buildings, player_pops, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
     await db.insert(m.dbPkg.houses).values({ slug: "test-house", name: "House Test", initial: "T", alignment: "c", stance: "s", motto: "m", patron: "p", crest: "c" }).onConflictDoNothing();
     const world = (await db.insert(m.dbPkg.worlds).values({ name: "Barracks Test", seed: "btest", startedAt: new Date(T0), endsAt: new Date(T0 + 182 * DAY), status: "active" }).returning())[0]!;
     worldId = world.id;
@@ -658,6 +658,34 @@ suite("Barracks (integration)", () => {
       expect((await m.barracks.barracksView(ctx, at(11))).altar).toBeNull();
       expect(await m.barracks.sacrifice(ctx, "bull", at(11))).toEqual({ ok: true, good: "bull", mor: 3, until: at(13) });
       expect(await stock(ctx, "bull")).toBe(0);
+    });
+
+    // The Temple of Artemis (government prompt 2b): a standing Temple blesses every
+    // army in the world for 8 seasons, on top of each player's own altar.
+    const templeStands = (worldId: string, at4: Date) => db.insert(m.dbPkg.leagueProjects).values({ worldId, cityId: "massalia", buildingId: "temple", cost: 1000, startedAt: at(0), completesAt: at4 });
+
+    it("a Temple standing at season 4 shows at the altar until season 12, and adds to every player's blessing", async () => {
+      await templeStands(worldId, at(4));
+      const a = await makePlayer();
+      const b = await makePlayer();
+      const view = await m.barracks.barracksView(a.ctx, at(9));
+      expect(view.temple).toEqual({ mor: 3, until: at(12).toISOString(), throughLabel: m.shared.formatGameDate(m.shared.gameDate(at(12).getTime() - 1, T0)) });
+      expect((await m.barracks.barracksView(a.ctx, at(12))).temple).toBeNull();
+
+      await giveAll(a.ctx, { bull: 1 });
+      expect(await m.barracks.sacrifice(a.ctx, "bull", at(8))).toMatchObject({ ok: true, until: at(10) });
+      const ids = [a.ctx.playerId, b.ctx.playerId];
+      expect([...(await m.barracks.moraleBonusFor(db, worldId, ids, at(9))).values()]).toEqual([6, 3]);
+      expect([...(await m.barracks.moraleBonusFor(db, worldId, ids, at(10.5))).values()]).toEqual([3, 3]);
+      expect([...(await m.barracks.moraleBonusFor(db, worldId, ids, at(12))).values()]).toEqual([0, 0]);
+    });
+
+    it("a Temple standing only in another world adds nothing in this one", async () => {
+      const ended = (await db.insert(m.dbPkg.worlds).values({ name: "Old", seed: "old", startedAt: new Date(T0 - 100 * DAY), endsAt: new Date(T0), status: "ended" }).returning())[0]!.id;
+      await templeStands(ended, at(4));
+      const { ctx } = await makePlayer();
+      expect((await m.barracks.barracksView(ctx, at(9))).temple).toBeNull();
+      expect([...(await m.barracks.moraleBonusFor(db, worldId, [ctx.playerId], at(9))).values()]).toEqual([0]);
     });
 
     it("the unfree are refused the offering like recruit; a good the altar does not take is 400", async () => {
