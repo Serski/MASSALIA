@@ -93,7 +93,7 @@ suite("Ledger / building engine (integration)", () => {
   });
 
   beforeEach(async () => {
-    await db.execute(sql`TRUNCATE TABLE world_treasury, player_buildings, player_pops, resources, effect_log, character_traits, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
+    await db.execute(sql`TRUNCATE TABLE league_projects, league_cities, world_treasury, player_buildings, player_pops, resources, effect_log, character_traits, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
     await db.insert(m.dbPkg.houses).values({ slug: "test-house", name: "House Test", initial: "T", alignment: "c", stance: "s", motto: "m", patron: "p", crest: "c" }).onConflictDoNothing();
     const world = (await db.insert(m.dbPkg.worlds).values({ name: "Ledger Test", seed: "ltest", startedAt: new Date(T0), endsAt: new Date(T0 + 182 * DAY), status: "active" }).returning())[0]!;
     worldId = world.id;
@@ -1046,5 +1046,116 @@ suite("Ledger / building engine (integration)", () => {
     // Owned pop counts on mine, from player_pops (the default seeds the estate's T1 staffing).
     const mineV = await m.buildings.mine("landowner", c, new Date(T0));
     expect(mineV.pops).toMatchObject({ slave: 2 });
+  });
+
+  // --- The League's class grants (government prompt 2b) -------------------------
+  // A standing Temple pays every Priest 20 a season for the 4 seasons after it
+  // stands; each season is settled once per character, whole, at his first settle
+  // in or after it, by the class he holds then. The character fixtures set
+  // created_at to the instant each case means (the column defaults to the real
+  // clock, years after T0). A Temple at Massalia stands at T0 + 2 days: its grant
+  // pays seasons 2 to 5.
+  describe("the League's class grants", () => {
+    const GRANT = "league_grant";
+    const day = (d: number) => new Date(T0 + d * DAY);
+
+    async function grantPlayer(classId: string, createdAt: Date): Promise<{ playerId: string; characterId: string; ctx: Awaited<ReturnType<typeof m.buildings.buildingContext>> & object }> {
+      const { users, players, playerCharacters } = m.dbPkg;
+      const user = (await db.insert(users).values({ email: `g-${Math.random().toString(36).slice(2)}@t`, passwordHash: "x" }).returning())[0]!;
+      const player = (await db.insert(players).values({ worldId, userId: user.id, name: `G-${Math.random().toString(36).slice(2, 8)}`, color: "#123456", houseSlug: "test-house" }).returning())[0]!;
+      const ch = (await db.insert(playerCharacters).values({ playerId: player.id, worldId, houseSlug: "test-house", classId, drachmae: 100, startAge: 30, deathAge: 90, createdAt }).returning())[0]!;
+      return { playerId: player.id, characterId: ch.id, ctx: (await m.buildings.buildingContext(player.id, worldId))! };
+    }
+    const walletOf = async (playerId: string) => (await db.select({ d: m.dbPkg.playerCharacters.drachmae }).from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.playerId, playerId)))[0]!.d;
+    const markerOf = async (playerId: string) =>
+      (await db.select({ at: m.dbPkg.resources.lastUpdatedAt }).from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scope, "player"), eq(m.dbPkg.resources.scopeId, playerId), eq(m.dbPkg.resources.type, GRANT))))[0]?.at.getTime() ?? null;
+    const logsOf = async (characterId: string) =>
+      (await db.select({ detail: m.dbPkg.effectLog.detail }).from(m.dbPkg.effectLog).where(and(eq(m.dbPkg.effectLog.characterId, characterId), eq(m.dbPkg.effectLog.kind, GRANT)))).map((r) => r.detail);
+    const templeAtMassalia = () => db.insert(m.dbPkg.leagueProjects).values({ worldId, cityId: "massalia", buildingId: "temple", cost: 1000, startedAt: day(-2), completesAt: day(2) });
+
+    it("a Priest is paid each season once, whole, at his first settle in or after it", async () => {
+      await templeAtMassalia();
+      const p = await grantPlayer("priest", day(0));
+
+      await m.buildings.collect(p.ctx, day(1.5));
+      expect(await walletOf(p.playerId)).toBe(100);
+      expect(await markerOf(p.playerId)).toBe(day(1).getTime());
+      expect(await logsOf(p.characterId)).toEqual([]);
+
+      await m.buildings.collect(p.ctx, day(2.5));
+      expect(await walletOf(p.playerId)).toBe(120);
+      expect(await markerOf(p.playerId)).toBe(day(2).getTime());
+
+      await m.buildings.collect(p.ctx, day(2.9));
+      expect(await walletOf(p.playerId)).toBe(120);
+
+      await m.buildings.collect(p.ctx, day(9));
+      expect(await walletOf(p.playerId)).toBe(180);
+
+      await m.buildings.collect(p.ctx, day(12));
+      expect(await walletOf(p.playerId)).toBe(180);
+      expect(await markerOf(p.playerId)).toBe(day(12).getTime());
+      expect(await logsOf(p.characterId)).toEqual([
+        { fromSeason: 2, toSeason: 2, amount: 20 },
+        { fromSeason: 3, toSeason: 9, amount: 60 },
+      ]);
+    });
+
+    it("a settle at an earlier clock pays nothing and moves nothing", async () => {
+      await templeAtMassalia();
+      const p = await grantPlayer("priest", day(0));
+      await m.buildings.collect(p.ctx, day(2.5));
+      expect(await walletOf(p.playerId)).toBe(120);
+      await db.transaction(async (tx) => {
+        await m.buildings.settleAll(tx, p.ctx, day(1.5));
+      });
+      expect(await walletOf(p.playerId)).toBe(120);
+      expect(await markerOf(p.playerId)).toBe(day(2).getTime());
+    });
+
+    it("a Trader draws nothing from a Temple, with no log, and his marker still moves", async () => {
+      await templeAtMassalia();
+      const t = await grantPlayer("trader", day(0));
+      for (const [at, marker] of [[1.5, 1], [2.5, 2], [2.9, 2], [9, 9], [12, 12]] as const) {
+        await m.buildings.collect(t.ctx, day(at));
+        expect(await walletOf(t.playerId), `at day ${at}`).toBe(100);
+        expect(await markerOf(t.playerId), `marker at day ${at}`).toBe(day(marker).getTime());
+      }
+      expect(await logsOf(t.characterId)).toEqual([]);
+    });
+
+    it("a Trader who becomes a Priest is paid from the next unsettled season, never for a season settled in his old class", async () => {
+      await templeAtMassalia();
+      const p = await grantPlayer("trader", day(0));
+      await m.buildings.collect(p.ctx, day(2.5)); // season 2 settled as a Trader: nothing
+      await db.update(m.dbPkg.playerCharacters).set({ classId: "priest" }).where(eq(m.dbPkg.playerCharacters.id, p.characterId));
+      await m.buildings.collect(p.ctx, day(2.9));
+      expect(await walletOf(p.playerId)).toBe(100);
+      await m.buildings.collect(p.ctx, day(4.5));
+      expect(await walletOf(p.playerId)).toBe(140); // seasons 3 and 4
+      expect(await logsOf(p.characterId)).toEqual([{ fromSeason: 3, toSeason: 4, amount: 40 }]);
+    });
+
+    it("a Priest created mid-grant is paid from the season he was created in", async () => {
+      await templeAtMassalia();
+      const p = await grantPlayer("priest", day(4.5));
+      await m.buildings.collect(p.ctx, day(4.6));
+      expect(await walletOf(p.playerId)).toBe(120); // season 4 only
+      expect(await markerOf(p.playerId)).toBe(day(4).getTime());
+      await m.buildings.collect(p.ctx, day(9));
+      expect(await walletOf(p.playerId)).toBe(140); // season 5
+    });
+
+    it("mine lists the grants running for the player's class, with the day they run through", async () => {
+      await templeAtMassalia();
+      const p = await grantPlayer("priest", day(0));
+      const view = await m.buildings.mine("priest", p.ctx, day(3));
+      const { formatGameDate, gameDate } = await import("@massalia/shared");
+      expect(view.leagueGrants).toEqual([
+        { title: "A Temple of Artemis at Massalia", perDay: 20, until: day(6).toISOString(), throughLabel: formatGameDate(gameDate(day(6).getTime() - 1, T0)) },
+      ]);
+      expect((await m.buildings.mine("priest", p.ctx, day(6))).leagueGrants).toEqual([]);
+      expect((await m.buildings.mine("trader", p.ctx, day(3))).leagueGrants).toEqual([]);
+    });
   });
 });

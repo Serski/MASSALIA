@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, eq, isNull, lte, sql } from "drizzle-orm";
-import { leagueDocket, parseLeagueBuildings, projectKey, projectMotion, type LeagueBuilding, type ProjectMotion, type ProjectTiming } from "@massalia/shared";
+import { leagueClassGrants, leagueClassPay, leagueDocket, parseLeagueBuildings, projectKey, projectMotion, type LeagueBuilding, type LeagueClassGrant, type ProjectMotion, type ProjectTiming } from "@massalia/shared";
 import { createDb, type DbExec } from "./client.js";
 import { ensureLeagueCities, loadCities } from "./leagueRevenue.js";
 import { leagueCities, leagueProjects, treasuries } from "./schema.js";
@@ -54,6 +54,20 @@ export async function leagueProjectMotion(id: string): Promise<ProjectMotion | n
 export async function projectTimings(exec: DbExec, worldId: string): Promise<ProjectTiming[]> {
   const rows = await exec.select({ cityId: leagueProjects.cityId, buildingId: leagueProjects.buildingId, completesAt: leagueProjects.completesAt }).from(leagueProjects).where(eq(leagueProjects.worldId, worldId));
   return rows.map((r) => ({ cityId: r.cityId, buildingId: r.buildingId, completesAt: r.completesAt.getTime() }));
+}
+
+// What the League pays a character of `classId` in this world for the seasons
+// fromSeason to toSeason inclusive (government prompt 2b): leagueClassPay over
+// the world's projects. 0 when the range is empty.
+export async function leagueClassPayFor(exec: DbExec, worldId: string, worldStartMs: number, classId: string, fromSeason: number, toSeason: number): Promise<number> {
+  if (fromSeason > toSeason) return 0;
+  return leagueClassPay(await projectTimings(exec, worldId), await loadLeagueBuildings(), classId, worldStartMs, fromSeason, toSeason);
+}
+
+// The grants running for `classId` in this world at `at`, titled from the cities content.
+export async function leagueClassGrantsFor(exec: DbExec, worldId: string, classId: string, at: Date): Promise<LeagueClassGrant[]> {
+  const [defs, cities] = await Promise.all([loadLeagueBuildings(), loadCities()]);
+  return leagueClassGrants(await projectTimings(exec, worldId), defs, cities.cities, classId, at.getTime());
 }
 
 export interface CompletedProject {

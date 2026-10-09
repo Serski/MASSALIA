@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { and, eq, gte, lte, sql } from "drizzle-orm";
-import { createDb, effectLog, playerBuildings, playerCharacters, playerPops, resources, worldTreasury, worlds } from "@massalia/db";
+import { and, eq, gte, lt, lte, sql } from "drizzle-orm";
+import { createDb, effectLog, leagueClassGrantsFor, leagueClassPayFor, playerBuildings, playerCharacters, playerPops, resources, worldTreasury, worlds } from "@massalia/db";
 import {
   buildingCost,
   buildingBuildDays,
@@ -12,6 +12,8 @@ import {
   canBuild,
   classSectionLabel,
   coeffFor,
+  formatGameDate,
+  gameDate,
   goodCategoryFor,
   goodPerDay,
   materialCostForTier,
@@ -20,6 +22,7 @@ import {
   parsePopsContent,
   productionMultiplier,
   ratePerSecond,
+  REAL_MS_PER_SEASON,
   seasonAt,
   staffCountForTier,
   staffDailyCost,
@@ -198,6 +201,7 @@ type ResourceRow = typeof resources.$inferSelect;
 const INCOME_TYPE = "building_income"; // wallet (income − upkeep) accrual marker
 const SHRINE_TYPE = "building_shrine"; // shrine composure (whole-day) marker
 const STAFF_TYPE = "building_staff"; // staff upkeep + food (whole-day) marker
+const LEAGUE_GRANT_TYPE = "league_grant"; // the League's class grants: lastUpdatedAt is the first instant of the last season settled
 
 async function resourceRows(exec: Exec, playerId: string): Promise<ResourceRow[]> {
   return exec.select().from(resources).where(and(eq(resources.scope, "player"), eq(resources.scopeId, playerId)));
@@ -611,6 +615,61 @@ async function settleWallet(exec: Exec, ctx: ActingContext, rows: BuildingRow[],
   return { income, upkeep, collected: Math.round(net), owed: Math.round(owed) };
 }
 
+// --- The League's class grants (government prompt 2b) ---------------------------
+// A standing Temple pays every Priest in the world, the Bazaar every Trader, the
+// Granary every Landowner and the Port every Shipbuilder, for the seasons after
+// it stands. Each season is settled once per character, whole, at his first
+// settle in or after it, and paid by the class he holds then. The marker is a
+// resources row of LEAGUE_GRANT_TYPE whose lastUpdatedAt is the first instant of
+// the last season settled. The seasons owed run from the later of the season
+// after the marker's and the season the character was created in (with no
+// marker, from the season he was created in) to the current season. They are
+// claimed first, paid or not — the UPDATE moves the marker only forward, the
+// INSERT yields to a row already there — so a character is never paid later for
+// seasons he spent in another class, and two settles never pay a season twice.
+// New money, as a building's income is: the League treasury pays none of it.
+async function settleLeagueGrants(exec: Exec, ctx: ActingContext, now: Date): Promise<number> {
+  const character = (
+    await exec
+      .select({ id: playerCharacters.id, classId: playerCharacters.classId, createdAt: playerCharacters.createdAt })
+      .from(playerCharacters)
+      .where(and(eq(playerCharacters.playerId, ctx.playerId), eq(playerCharacters.worldId, ctx.worldId)))
+      .limit(1)
+  )[0];
+  if (!character) return 0;
+  const seasonOf = (ms: number) => gameDate(ms, ctx.worldStartedMs).seasonIndex;
+  const current = seasonOf(now.getTime());
+  const created = seasonOf(character.createdAt.getTime());
+  const marker = (
+    await exec
+      .select({ id: resources.id, lastUpdatedAt: resources.lastUpdatedAt })
+      .from(resources)
+      .where(and(eq(resources.scope, "player"), eq(resources.scopeId, ctx.playerId), eq(resources.type, LEAGUE_GRANT_TYPE)))
+      .limit(1)
+  )[0];
+  const from = Math.max(marker ? seasonOf(marker.lastUpdatedAt.getTime()) + 1 : created, created);
+  if (from > current) return 0; // nothing owed (an earlier clock included)
+
+  const currentStart = new Date(ctx.worldStartedMs + current * REAL_MS_PER_SEASON);
+  const claimed = marker
+    ? await exec.update(resources).set({ lastUpdatedAt: currentStart }).where(and(eq(resources.id, marker.id), lt(resources.lastUpdatedAt, currentStart))).returning({ id: resources.id })
+    : await exec
+        .insert(resources)
+        .values({ scope: "player", scopeId: ctx.playerId, type: LEAGUE_GRANT_TYPE, amount: "0", ratePerSecond: "0", lastUpdatedAt: currentStart })
+        .onConflictDoNothing({ target: [resources.scope, resources.scopeId, resources.type] })
+        .returning({ id: resources.id });
+  if (claimed.length === 0) return 0;
+
+  const pay = await leagueClassPayFor(exec, ctx.worldId, ctx.worldStartedMs, character.classId, from, current);
+  if (pay > 0) {
+    const credited = await exec.update(playerCharacters).set({ drachmae: sql`${playerCharacters.drachmae} + ${pay}` }).where(eq(playerCharacters.id, character.id)).returning({ id: playerCharacters.id });
+    if (credited.length !== 1) throw new Error(`league grant credit touched ${credited.length} rows`);
+    // Audit only, not a Chronicle kind.
+    await exec.insert(effectLog).values({ characterId: character.id, kind: "league_grant", detail: { fromSeason: from, toSeason: current, amount: pay }, createdAt: now });
+  }
+  return pay;
+}
+
 // --- Staff upkeep + food settle (Phase 2; v2.2 — charged on OWNED pops) --------
 // Staff costs accrue per WHOLE in-game day on their own marker (mirrors the shrine,
 // so the partial-day remainder carries and frequent collecting can't dodge them).
@@ -711,17 +770,18 @@ async function settleShrine(exec: Exec, ctx: ActingContext, rows: BuildingRow[],
 // pop counts so history banks at the staffing that actually prevailed and every
 // marker resets to `now`. Composure is returned (never applied here) — the caller
 // applies it AFTER the transaction, break-aware, exactly as collect does.
-type FullSettle = { rows: BuildingRow[]; idled: Set<string>; banked: Record<string, number>; wallet: WalletSettle; staff: StaffSettle; barracks: BarracksSettle; composureDays: number };
+type FullSettle = { rows: BuildingRow[]; idled: Set<string>; banked: Record<string, number>; wallet: WalletSettle; grants: number; staff: StaffSettle; barracks: BarracksSettle; composureDays: number };
 
 export async function settleAll(exec: Exec, ctx: ActingContext, now: Date): Promise<FullSettle> {
   const rows = await flipActivations(exec, await ownedRows(exec, ctx.playerId), now);
   const idled = await staffingFor(exec, ctx, rows, now);
   const banked = await settleGoods(exec, ctx, rows, now, idled);
   const wallet = await settleWallet(exec, ctx, rows, now, idled);
+  const grants = await settleLeagueGrants(exec, ctx, now); // the League's class grants, right after the wallet so wages and food can draw on them
   const staff = await settleStaffing(exec, ctx, rows, now); // owned-pop wages + food; after income is banked
   const barracks = await settleBarracks(exec, ctx, now); // unit + band upkeep, insolvency, contract ends; after household charges
   const composureDays = await settleShrine(exec, ctx, rows, idled, now);
-  return { rows, idled, banked, wallet, staff, barracks, composureDays };
+  return { rows, idled, banked, wallet, grants, staff, barracks, composureDays };
 }
 
 // --- Catalog (GET /api/buildings) -------------------------------------------
@@ -880,6 +940,10 @@ export type MineView = {
   // arithmetic the Barracks strip shows, so the Economy view lists it under
   // Expenses without a second fetch.
   army: { perDay: Record<string, number> };
+  // The League's grants running for the player's class now (government prompt
+  // 2b): a season is a real day, so perDay is the grant a season; `until` the
+  // span's end (excluded); throughLabel the game date of the last season it pays.
+  leagueGrants: { title: string; perDay: number; until: string; throughLabel: string }[];
 };
 
 const BASE_STORAGE_CAP = 100;
@@ -987,6 +1051,12 @@ export async function mine(classId: string, ctx: ActingContext, now: Date): Prom
     classSection: { label: classSectionLabel(classId), comingSoon: classSectionLabel(classId) !== null, flavor: c.classBuildings[classId]?.flavor, entries: [] },
     pops: ownedPops,
     army: { perDay: await armyUpkeepPerDay(db, ctx, now) },
+    leagueGrants: (await leagueClassGrantsFor(db, ctx.worldId, classId, now)).map((g) => ({
+      title: g.title,
+      perDay: g.perSeason,
+      until: new Date(g.untilMs).toISOString(),
+      throughLabel: formatGameDate(gameDate(g.untilMs - 1, ctx.worldStartedMs)),
+    })),
   };
 }
 
