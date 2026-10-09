@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { renderPlunder } from "@massalia/shared";
-import { api, ApiError, type KoinonArmies, type KoinonArmyRow, type KoinonLastMuster, type KoinonMember, type KoinonMissionKind, type KoinonMuster, type KoinonMusterMine, type KoinonMusterTargets, type KoinonPage } from "../../api.js";
+import { api, ApiError, type KoinonArmies, type KoinonArmyRow, type KoinonLastMuster, type KoinonMarchingMuster, type KoinonMember, type KoinonMissionKind, type KoinonMuster, type KoinonMusterMine, type KoinonMusterTargets, type KoinonPage } from "../../api.js";
 import { professions } from "../../data/league.js";
 import { LobbyPortrait } from "../../lobby/LobbyPortrait.js";
 import { AssetIcon, BuildProgress, ChoicePicker, formatDuration, HouseCrest, onDeviceClock, type PanelProps, titleCase, useCountdownSeconds } from "../shared.js";
@@ -12,8 +12,9 @@ import { AssetIcon, BuildProgress, ChoicePicker, formatDuration, HouseCrest, onD
 // read-only. Durations count from the payload's `now` and do not tick.
 //
 // The Raid muster (koinon prompt 3) is a card of its own between the Board and
-// the Treasury: the form that calls one, or the open muster with its pledges,
-// the member's own pledge, and the last muster's report.
+// the Treasury: the form that calls one, or the open muster with its pledges
+// and the member's own pledge, or the army on the march (raids prompt 5), and
+// the last muster's report.
 
 type Koinon = NonNullable<KoinonPage["koinon"]>;
 
@@ -223,6 +224,32 @@ function LastMuster({ last }: { last: KoinonLastMuster }) {
   );
 }
 
+// The army on the march (raids prompt 5): where it is bound, when it arrives
+// (a countdown on the payload's server clock, as the open muster's), the road,
+// and who sent what. No form, no pledge: a koinon has one muster at a time.
+function MusterMarching({ marching, offset }: { marching: KoinonMarchingMuster; offset: number }) {
+  const left = useCountdownSeconds(onDeviceClock(marching.arrivesAt, offset));
+  const strength = marching.hulls > 0 ? `${menText(marching.men)} and ${hullsText(marching.hulls)}` : menText(marching.men);
+  const road = marching.route === "sea" ? `By sea, ${marching.steps} ${marching.steps === 1 ? "sea" : "seas"}: ${strength}.` : `By land: ${strength}.`;
+  return (
+    <div className="koinon-muster-march" data-muster="marching">
+      <p className="koinon-muster-head">
+        Raid on {marching.target.name} · from {marching.gather.name} · {left > 0 ? `arrives in ${formatDuration(left)}` : "arriving"}
+      </p>
+      <p className="koinon-hint" data-march="road">{road}</p>
+      <div className="koinon-subhead">The army</div>
+      {marching.parts.map((p) => {
+        const sent = p.men > 0 && p.hulls > 0 ? `${menText(p.men)} and ${hullsText(p.hulls)}` : p.hulls > 0 ? hullsText(p.hulls) : menText(p.men);
+        return (
+          <div key={p.playerId} className="koinon-line" data-march-part={p.playerId}>
+            {p.name} <span className="koinon-dim">· sent {sent}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // No muster open: the form that calls one. The targets are read for the chosen
 // gathering place; the launch is a lead on the server's clock, and a lead that
 // would land in Winter is greyed out (the server refuses it either way).
@@ -411,6 +438,10 @@ function YourPledge({ muster, stamp, busy, run }: { muster: KoinonMuster; stamp:
           />
         </label>
       ))}
+      {muster.outlook.route === "sea" && mine.supplies !== undefined && ships.length > 0 ? (
+        // A hull pledge by sea needs naval supplies, one per hull per voyage (raids prompt 5).
+        <p className="koinon-hint" data-muster="supplies">Naval supplies in store: {mine.supplies}.</p>
+      ) : null}
       <div className="koinon-actions koinon-actions-start">
         <button type="button" className="panel-btn" data-action="muster-pledge" disabled={busy || (rows.length === 0 && !hullsChanged)} onClick={pledge}>
           Pledge
@@ -542,17 +573,18 @@ export function KoinonView({ onRefresh }: PanelProps) {
     return () => clearTimeout(timer);
   }, [page, offset, load]);
 
-  // One read a second after an open muster's launch, armed and cleared exactly
-  // as the Lesche's is: from the payload's own clock, keyed on the payload. A
-  // payload already past the launch that still shows the muster open (its
-  // resolve is in hand elsewhere, or failed) looks again in a minute.
+  // One read a second after an open muster's launch, or after a marching
+  // army's arrival (raids prompt 5), armed and cleared exactly as the Lesche's
+  // is: from the payload's own clock, keyed on the payload. A payload already
+  // past the instant that still shows the muster open or the army marching
+  // (its resolve is in hand elsewhere, or failed) looks again in a minute.
   useEffect(() => {
-    const muster = page?.koinon?.muster;
-    if (!page || !muster) return;
-    const marchesAt = onDeviceClock(muster.launchAt, offset);
-    if (!marchesAt) return;
-    const past = Date.parse(muster.launchAt) <= Date.parse(page.now);
-    const timer = setTimeout(() => void load().catch(() => {}), past ? 60_000 : Math.max(1000, Date.parse(marchesAt) - Date.now() + 1000));
+    const instant = page?.koinon?.muster?.launchAt ?? page?.koinon?.marching?.arrivesAt;
+    if (!page || !instant) return;
+    const standsAt = onDeviceClock(instant, offset);
+    if (!standsAt) return;
+    const past = Date.parse(instant) <= Date.parse(page.now);
+    const timer = setTimeout(() => void load().catch(() => {}), past ? 60_000 : Math.max(1000, Date.parse(standsAt) - Date.now() + 1000));
     return () => clearTimeout(timer);
   }, [page, offset, load]);
 
@@ -748,6 +780,11 @@ export function KoinonView({ onRefresh }: PanelProps) {
           <KoinonCard title="Muster" section="muster" warm>
             {koinon.muster ? (
               <MusterOpen muster={koinon.muster} stamp={page} offset={offset} busy={busy} run={run} />
+            ) : koinon.marching ? (
+              <>
+                <MusterMarching marching={koinon.marching} offset={offset} />
+                {koinon.lastMuster ? <LastMuster last={koinon.lastMuster} /> : null}
+              </>
             ) : (
               <>
                 <p className="koinon-hint">Any member may call the koinon to a raid. Members bring men to the gathering place and pledge them. At the hour they march as one.</p>

@@ -1400,10 +1400,26 @@ export type KoinonPage = {
     hall: { phase: KoinonHallPhase; startedAt: string | null; completesAt: string | null; paidUntil: string | null; daysCovered: number };
     givers: { playerId: string; name: string; total: number }[];
     gifts: { id: string; name: string; amount: number; label: string }[];
-    // Koinon prompt 3: the open Raid muster and the most recent closed one.
+    // Koinon prompt 3: the open Raid muster and the most recent closed one; raids
+    // prompt 5: the army on the march (optional: an older payload has none).
     muster: KoinonMuster | null;
+    marching?: KoinonMarchingMuster | null;
     lastMuster: KoinonLastMuster | null;
   };
+};
+// The koinon's army on the march (mirrors MarchingMusterView): where it is bound,
+// when it arrives, and who sent what.
+export type KoinonMarchingMuster = {
+  id: string;
+  target: { regionId: string; townId: string | null; name: string };
+  gather: { id: string; name: string };
+  launchAt: string;
+  arrivesAt: string;
+  route: "land" | "sea";
+  steps: number;
+  men: number;
+  hulls: number;
+  parts: { playerId: string; name: string; men: number; hulls: number }[];
 };
 export type KoinonHallPhase = "none" | "building" | "open" | "shut";
 // The open muster: mirrors services/koinonMuster.ts (MusterView). `outlook` is
@@ -1425,9 +1441,13 @@ export type KoinonMuster = {
 // `spoil` is the member's part of the plunder's third good; a report stored before the raids prompt has none.
 export type KoinonMusterPart = { playerId: string; name: string; men: number; lost: number; hulls: number; seats: number; shares: number; drachmae: number; grain: number; spoil?: number };
 export type KoinonMusterReport = {
-  outcome: "won" | "driven_off" | "repulsed" | "stood_down";
+  // "turned_back": the army found the place held by one of its own houses; "dispersed": its men all left on the road (raids prompt 5).
+  outcome: "won" | "driven_off" | "repulsed" | "stood_down" | "turned_back" | "dispersed";
   reason: string | null;
   line: string | null;
+  // The place, as the server has always stored it (optional: an older client type left them out).
+  regionName?: string;
+  townName?: string | null;
   men: number;
   lost: number;
   killed: number;
@@ -1452,6 +1472,7 @@ export type KoinonMusterMine = {
   gather: { id: string; name: string };
   rows: { rowId: string; unitId: string; label: string; plural: string; icon: string; source: "trained" | "band"; count: number; pledged: boolean }[];
   ships: { id: string; label: string; inStock: number; pledged: number; range: number; troopSpace: number }[];
+  supplies?: number; // his naval supplies in store (raids prompt 5; optional: an older payload has none)
 };
 // GET /api/koinon/armies — leader only; mirrors ArmiesView. Read-only and derived
 // at read time. `return` is a party on its way back (from targetName, when named).

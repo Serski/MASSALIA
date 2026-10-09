@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, ApiError, type KoinonArmies, type KoinonLastMuster, type KoinonMember, type KoinonMuster, type KoinonMusterMine, type KoinonMusterTargets, type KoinonPage, type KoinonRole } from "../src/api.js";
+import { api, ApiError, type KoinonArmies, type KoinonLastMuster, type KoinonMarchingMuster, type KoinonMember, type KoinonMuster, type KoinonMusterMine, type KoinonMusterTargets, type KoinonPage, type KoinonRole } from "../src/api.js";
 import { awayLine, KoinonView } from "../src/dashboard/panels/KoinonView.js";
 
 // ---------------------------------------------------------------------------
@@ -120,6 +120,24 @@ const targetsFrom = (gatherId: string, over: Partial<KoinonMusterTargets> = {}):
   ...over,
 });
 const mineOf = (over: Partial<KoinonMusterMine> = {}): KoinonMusterMine => ({ now: NOW, gather: { id: "R060", name: "Massalia" }, rows: [], ships: [], ...over });
+// The army on the march (raids prompt 5): Reii from Massalia by sea, three seas, arriving in an hour.
+const marchingOf = (over: Partial<KoinonMarchingMuster> = {}): KoinonMarchingMuster => ({
+  id: "m1",
+  target: { regionId: "R031", townId: "reii", name: "Reii" },
+  gather: { id: "R060", name: "Massalia" },
+  launchAt: inHours(-2),
+  arrivesAt: inHours(1),
+  route: "sea",
+  steps: 3,
+  men: 70,
+  hulls: 3,
+  parts: [
+    { playerId: "kallias", name: "Kallias", men: 40, hulls: 0 },
+    { playerId: "nikias", name: "Nikias", men: 30, hulls: 1 },
+    { playerId: "deon", name: "Deon", men: 0, hulls: 2 },
+  ],
+  ...over,
+});
 const musterOf = (over: Partial<KoinonMuster> = {}): KoinonMuster => ({
   id: "m1",
   kind: "raid",
@@ -806,17 +824,53 @@ describe("KoinonView · the muster", () => {
 
   it("a member with no men at the gathering place sees the hint and can still pledge hulls", async () => {
     const pledge = vi.spyOn(api, "koinonMusterPledge").mockResolvedValue({ ok: true });
-    vi.spyOn(api, "koinonMusterMine").mockResolvedValue(mineOf({ ships: [{ id: "trade-ship", label: "Pentekonter", inStock: 2, pledged: 0, range: 7, troopSpace: 20 }] }));
-    const { card } = await show(inside("nikias", { muster: musterOf() }));
+    vi.spyOn(api, "koinonMusterMine").mockResolvedValue(mineOf({ ships: [{ id: "trade-ship", label: "Pentekonter", inStock: 2, pledged: 0, range: 7, troopSpace: 20 }], supplies: 2 }));
+    const { card, unmount } = await show(inside("nikias", { muster: musterOf() }));
     const own = card().querySelector<HTMLElement>('[data-muster="mine"]')!;
     expect(own.textContent).toContain("Move men to Massalia from the Barracks or the map, then pledge them.");
     expect(own.querySelector("[data-row]")).toBeNull();
+    // By sea, a hull pledge needs naval supplies: his store is shown under the hull lines.
+    expect(own.querySelector('[data-muster="supplies"]')!.textContent).toBe("Naval supplies in store: 2.");
     expect(button(own, "Pledge")!.disabled).toBe(true);
     fireEvent.change(own.querySelector('[data-ship="trade-ship"] input')!, { target: { value: "1" } });
     expect(button(own, "Pledge")!.disabled).toBe(false);
     fireEvent.click(button(own, "Pledge")!);
     await tick(0);
     expect(pledge).toHaveBeenCalledWith({ ships: { "trade-ship": 1 } });
+    unmount();
+    // By land there is no supplies line.
+    const land = await show(inside("nikias", { muster: musterOf({ outlook: { route: "land", steps: 1, ok: false, reason: "No men under arms.", space: 0, hullSpace: 0 } }) }));
+    expect(land.card().querySelector('[data-muster="supplies"]')).toBeNull();
+  });
+
+  it("an army on the march shows where it is bound, when it arrives and who sent what; no form, no pledge; one read a second after it arrives", async () => {
+    const { card, read, unmount } = await show(inside("nikias", { marching: marchingOf() }));
+    expect(card().querySelector('[data-muster="marching"]')).not.toBeNull();
+    expect(card().querySelector(".koinon-muster-head")!.textContent).toBe("Raid on Reii · from Massalia · arrives in 1h 0m");
+    expect(card().querySelector('[data-march="road"]')!.textContent).toBe("By sea, 3 seas: 70 men and 3 hulls.");
+    expect(lines(card(), "data-march-part")).toEqual(["Kallias · sent 40 men", "Nikias · sent 30 men and 1 hull", "Deon · sent 2 hulls"]);
+    expect(card().querySelector('[data-muster="form"]')).toBeNull();
+    expect(card().querySelector('[data-muster="mine"]')).toBeNull();
+    expect(api.koinonMusterMine).not.toHaveBeenCalled();
+    expect(api.koinonMusterTargets).not.toHaveBeenCalled();
+    // The read comes a second after the arrival.
+    expect(read).toHaveBeenCalledTimes(1);
+    await tick(60 * MIN - 1);
+    expect(read).toHaveBeenCalledTimes(1);
+    await tick(2000);
+    expect(read).toHaveBeenCalledTimes(2);
+    unmount();
+    // A payload past the arrival that still shows the army marching reads again in a minute.
+    const past = await show(inside("nikias", { marching: marchingOf({ arrivesAt: inHours(-0.01) }) }));
+    expect(past.card().querySelector(".koinon-muster-head")!.textContent).toBe("Raid on Reii · from Massalia · arriving");
+    await tick(59_000);
+    expect(past.read).toHaveBeenCalledTimes(1);
+    await tick(1000);
+    expect(past.read).toHaveBeenCalledTimes(2);
+    // By land the road names the men alone.
+    past.unmount();
+    const land = await show(inside("nikias", { marching: marchingOf({ route: "land", steps: 1, hulls: 0, parts: [{ playerId: "kallias", name: "Kallias", men: 70, hulls: 0 }] }) }));
+    expect(land.card().querySelector('[data-march="road"]')!.textContent).toBe("By land: 70 men.");
   });
 
   it("only the opener and the leader see Call it off, and it asks first", async () => {
@@ -970,6 +1024,9 @@ describe("KoinonView · the muster", () => {
     await reload(inside("kallias", { muster: musterOf({ canCancel: true }) }));
     expect(card().querySelector('[data-muster="open"]')).not.toBeNull();
     expect(card().querySelector('[data-muster="mine"]')).not.toBeNull();
+    await reload(inside("kallias", { marching: marchingOf() }));
+    expect(card().querySelector('[data-muster="marching"]')).not.toBeNull();
+    expect(card().querySelector('[data-muster="open"]')).toBeNull();
     await reload(inside("kallias", { lastMuster: { id: "m1", targetName: "Reii", gatherName: "Massalia", launchLabel: "Summer, 300 BC", status: "cancelled", reason: null, report: null } }));
     expect(card().querySelector('[data-muster="form"]')).not.toBeNull();
     expect(card().querySelector("[data-muster-last]")).not.toBeNull();

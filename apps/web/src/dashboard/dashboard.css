@@ -4301,6 +4301,7 @@
    lines, and a count beside each row or hull a member may pledge. */
 .dashboard-shell .koinon-muster-form,
 .dashboard-shell .koinon-muster-open,
+.dashboard-shell .koinon-muster-march,
 .dashboard-shell .koinon-muster-mine,
 .dashboard-shell .koinon-muster-last{ display: grid; gap: 8px; }
 .dashboard-shell .koinon-muster-last{ padding-top: 10px; border-top: 1px solid var(--dash-line); }
