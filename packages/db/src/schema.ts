@@ -1050,10 +1050,15 @@ export const koinonPosts = pgTable("koinon_posts", {
   koinonIdx: index("koinon_posts_koinon_idx").on(table.koinonId, table.createdAt.desc()),
 }));
 
-// The koinon's Raid muster (migration 0064): one raid a koinon marches on
-// together. One open muster per koinon (partial unique index). Pledged men are
-// player_units rows with a "muster" mission; pledged hulls are counts below.
-export const MUSTER_STATUSES = ["open", "resolved", "stood_down", "cancelled"] as const;
+// The koinon's Raid muster (migration 0064; raids prompt 5, migration 0069):
+// one raid a koinon marches on together. One muster open or marching per
+// koinon (partial unique index). Pledged men are player_units rows with a
+// "muster" mission; pledged hulls are counts below. At the launch the army
+// sets out ('marching'): `arrives_at` is when it reaches the place and `march`
+// what it took on the road (its rows in the order the fight sees them, each
+// member's part and the hulls that sailed); the battle is fought when it
+// arrives and the report stored.
+export const MUSTER_STATUSES = ["open", "marching", "resolved", "stood_down", "cancelled"] as const;
 export type MusterStatus = (typeof MUSTER_STATUSES)[number];
 export const koinonMusters = pgTable("koinon_musters", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -1069,14 +1074,17 @@ export const koinonMusters = pgTable("koinon_musters", {
   gatherRegionId: text("gather_region_id").notNull(),
   openedAt: timestamp("opened_at", { withTimezone: true }).notNull().defaultNow(),
   launchAt: timestamp("launch_at", { withTimezone: true }).notNull(),
+  arrivesAt: timestamp("arrives_at", { withTimezone: true }),
   status: text("status").$type<MusterStatus>().notNull().default("open"),
   closedAt: timestamp("closed_at", { withTimezone: true }),
   report: jsonb("report").$type<Record<string, unknown> | null>(),
+  march: jsonb("march").$type<Record<string, unknown> | null>(),
 }, (table) => ({
   kindCheck: check("koinon_musters_kind_check", sql`${table.kind} IN ('raid')`),
-  statusCheck: check("koinon_musters_status_check", sql`${table.status} IN ('open', 'resolved', 'stood_down', 'cancelled')`),
-  oneOpen: uniqueIndex("koinon_musters_one_open_idx").on(table.koinonId).where(sql`status = 'open'`),
+  statusCheck: check("koinon_musters_status_check", sql`${table.status} IN ('open', 'marching', 'resolved', 'stood_down', 'cancelled')`),
+  oneOpen: uniqueIndex("koinon_musters_one_open_idx").on(table.koinonId).where(sql`status IN ('open', 'marching')`),
   dueIdx: index("koinon_musters_due_idx").on(table.launchAt).where(sql`status = 'open'`),
+  arrivalIdx: index("koinon_musters_arrival_idx").on(table.arrivesAt).where(sql`status = 'marching'`),
 }));
 
 export const koinonMusterHulls = pgTable("koinon_muster_hulls", {
@@ -1088,6 +1096,18 @@ export const koinonMusterHulls = pgTable("koinon_muster_hulls", {
 }, (table) => ({
   pk: primaryKey({ columns: [table.musterId, table.ownerPlayerId, table.shipId] }),
   countCheck: check("koinon_muster_hulls_count_check", sql`${table.count} > 0`),
+}));
+
+// Every member who took part in a muster that marched has his copy of its
+// report in the Barracks (raids prompt 5): `seen_at` is the instant he first
+// opened it, null until then.
+export const koinonMusterParts = pgTable("koinon_muster_parts", {
+  musterId: uuid("muster_id").references(() => koinonMusters.id).notNull(),
+  playerId: uuid("player_id").references(() => players.id).notNull(),
+  seenAt: timestamp("seen_at", { withTimezone: true }),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.musterId, table.playerId] }),
+  playerIdx: index("koinon_muster_parts_player_idx").on(table.playerId),
 }));
 
 // Hulls at sea (migration 0067, raids prompt 3): the ships that carry men leave
