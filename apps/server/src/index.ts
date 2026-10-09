@@ -1,13 +1,11 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
-import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { endDbPools } from "@massalia/db";
 import { errorHandler } from "./errorHandler.js";
 import { closeQueue } from "./services/queue.js";
 import { registerRateLimit } from "./rateLimit.js";
+import { registerPublicContent } from "./publicContent.js";
 import { registerHealthRoute } from "./health.js";
 import { authRoutes } from "./routes/auth.js";
 import { characterRoutes } from "./routes/characters.js";
@@ -59,9 +57,6 @@ import { loadStories } from "./services/story.js";
 import { ensureMilitaryPools } from "./services/mapMilitary.js";
 import { electionConfig } from "@massalia/shared";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(__dirname, "../../..");
-
 // Trust exactly ONE hop (Railway's edge proxy) — NOT `true`, which would trust
 // arbitrary client-supplied X-Forwarded-For chains and let an attacker spoof their
 // IP to bypass per-IP rate limiting. This is the function form of the former
@@ -88,13 +83,11 @@ await app.register(cookie, { secret: sessionSecret });
 // Global limiter (rateLimit.ts): after cookie (the key reads the session), before
 // every route (its onRoute hook budgets /api/ mutations). /content/ is exempt.
 await registerRateLimit(app);
-// Only the JSON content is served by the API; images (portraits, story art) ship
-// with the web build under apps/web/public and never pass through this process.
-await app.register(fastifyStatic, {
-  root: path.join(repoRoot, "content"),
-  prefix: "/content/",
-  allowedPath: (pathName) => pathName.endsWith(".json"),
-});
+// /content/ serves only the files listed in publicContent.ts (the client's news
+// and age config); every other content file answers 404. Images (portraits,
+// story art) ship with the web build under apps/web/public and never pass
+// through this process.
+await registerPublicContent(app);
 // Validate content JSON at boot — fail fast on a malformed file.
 await loadTraitDefs();
 await loadComposureConfig();
