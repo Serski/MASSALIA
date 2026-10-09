@@ -686,6 +686,10 @@ export const treasuryLedger = pgTable("treasury_ledger", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   ownerIdx: index("treasury_ledger_owner_idx").on(table.worldId, table.owner, table.createdAt),
+  // The League's once-only credits are claimed by their ledger row (migration
+  // 0070): 'opening' once per world, 'tax:s<N>' and 'fees:s<N>' once per world
+  // per season. A unique partial index in the migration; mirrored here for reference.
+  claimIdx: uniqueIndex("treasury_ledger_claim_idx").on(table.worldId, table.owner, table.reason).where(sql`reason = 'opening' OR reason LIKE 'tax:s%' OR reason LIKE 'fees:s%'`),
 }));
 
 // Agenda cycle state: drafting → voting → resolved on the season clock.
