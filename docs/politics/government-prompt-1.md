@@ -197,3 +197,25 @@ Not in the hour before the 00:00 UTC season rollover. Fast-forward only, plain `
 - after the first sync (the worker's hourly sweep, or sooner on any player's dashboard load), read only: World 2's newest League ledger rows, exactly one `opening` row, the balance against the STOP 1 figure, world_treasury's balance, and the worker's agenda-sweep log line with its revenue
 
 A red run is a STOP with the log. A second `opening` row, or a balance that differs from the STOP 1 figure by more than what has come in since, is a STOP: report it and wait. Do not write to production to fix it. I check the tabs in the game myself.
+
+## STOP 1 ruling (9 Oct 2026)
+
+1. 65debf1 (Salt in the Wine) does not ship with this. Another session put it back on main; its frames are still not in, and the story stays on story/salt-in-the-wine until they are.
+   - If another session is still working in this clone, STOP before the rebase and say so.
+   - Rebuild main without it: git rebase --onto origin/main 65debf1 main
+   - git patch-id for each of the seven commits must match before and after. Report the seven pairs.
+   - Leave story/salt-in-the-wine as it is.
+
+2. The claim rows keep the sync's now as created_at, so each row's date is the season it credits. Accepted.
+
+3. The route test's 60,930, with the levy, is right. Accepted.
+
+4. The third league case, TreasuryCard's ledger flag and the seatLabel helper are accepted.
+
+5. The anchors that sat a few lines off are accepted.
+
+6. The words are approved as reported: the ledger labels, the Government tab's lines, the new voting heading and the thousands separator on every treasury balance.
+
+7. Append this ruling verbatim to docs/politics/government-prompt-1.md under "STOP 1 ruling (9 Oct 2026)", as its own commit: docs: the government prompt's STOP 1 ruling
+
+8. Run the gate and the audit at the new HEAD. If the gate ends GATE GREEN at that HEAD, the audit exits 0 and all seven patch-ids match, push and report as the prompt's Push section says. Anything else is a STOP. The story branch stays local.
