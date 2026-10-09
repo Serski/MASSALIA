@@ -3,7 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // A pool write never moves its marker backwards (koinon prompt 3, STOP 1
-// ruling). A muster's resolve writes the defender's pool at its launch instant,
+// ruling). A muster's army writes the defender's pool at its arrival instant,
 // which may be earlier than the pool's last write. And the marker is the
 // regrowth clock (raids prompt 3): a write below the full count leaves it where
 // it is, and a full pool's first loss starts it. Integration tests against a

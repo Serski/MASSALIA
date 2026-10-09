@@ -7,8 +7,9 @@ import { REACH_REASON, splitByShares } from "@massalia/shared";
 // The koinon's Raid muster (koinon prompt 3) — integration tests against a REAL
 // Postgres, guarded to a *_test database. Opening, pledging men and hulls, the
 // lock on a pledged row, its release by the owner's own settle, withdrawing,
-// the count on the Politics nav, the read-only view, the resolve at the launch
-// instant and the hook that runs it before a request.
+// the count on the Politics nav, the read-only view, the launch that sends the
+// army out and the arrival that fights (raids prompt 5), and the hook that runs
+// them before a request.
 // ---------------------------------------------------------------------------
 
 const dbUrl = process.env.DATABASE_URL ?? "";
@@ -535,8 +536,18 @@ suite("Koinon muster (integration)", () => {
   type Report = NonNullable<Awaited<ReturnType<Mods["koinon"]["koinonView"]>>["koinon"]>["lastMuster"] extends infer L ? (L extends { report: infer R } ? NonNullable<R> : never) : never;
   const reportOf = async () => (await musters())[0]!.report as unknown as Report;
   const battle = () => m.barracks.getBattleContent();
-  // The army is home the road's minutes after the launch (raids prompt 4); every muster here marches one land step or by sea.
-  const recovered = (steps: number) => new Date(LAUNCH.getTime() + steps * battle().march.minutesPerStep * MIN);
+  // The road (raids prompts 4 and 5): the army arrives `steps` × minutesPerStep after the launch and is home twice that later;
+  // every muster here marches one land step or by sea.
+  const arrival = (steps: number, from = LAUNCH) => new Date(from.getTime() + steps * battle().march.minutesPerStep * MIN);
+  const homeAt = (steps: number, from = LAUNCH) => new Date(from.getTime() + 2 * steps * battle().march.minutesPerStep * MIN);
+  const musterOf = async (id: string) => (await db.select().from(m.dbPkg.koinonMusters).where(eq(m.dbPkg.koinonMusters.id, id)))[0]!;
+  // The launch at `now` (the army sets out), then the arrival at the later of `now` and the army's arrival instant.
+  async function launchAndFight(musterId: string, now: Date) {
+    expect(await m.muster.resolveMuster(musterId, now)).toEqual({ outcome: "marched" });
+    const at = (await musterOf(musterId)).arrivesAt!;
+    const outcome = (await m.muster.resolveMuster(musterId, new Date(Math.max(now.getTime(), at.getTime())))).outcome;
+    return { at, outcome };
+  }
 
   // Three members against a warband by land: 40 hoplites; 30 peltasts; 30
   // hoplites and 20 peltasts in two rows.
@@ -560,12 +571,63 @@ suite("Koinon muster (integration)", () => {
     expect(await m.muster.resolveMuster(musterId, at(HOUR))).toEqual({ outcome: "not_due" });
     expect((await musters())[0]!.status).toBe("open");
 
-    expect(await m.muster.resolveMuster(musterId, at(2 * HOUR + 30 * MIN))).toEqual({ outcome: "resolved" });
+    // The launch: the army sets out, and nothing is fought yet.
+    expect(await m.muster.resolveMuster(musterId, at(2 * HOUR + 30 * MIN))).toEqual({ outcome: "marched" });
+    const marching = await musterOf(musterId);
+    expect(marching).toMatchObject({ status: "marching", arrivesAt: arrival(1), closedAt: null, report: null });
+    expect(marching.march).toEqual({
+      koinonName: "The Sacred Band",
+      route: "land",
+      steps: 1,
+      minutes: 30,
+      party: [uid(501), uid(502), uid(503), uid(504)],
+      parts: [
+        { playerId: a, men: 40, hulls: 0, seats: 0 },
+        { playerId: b, men: 30, hulls: 0, seats: 0 },
+        { playerId: c, men: 50, hulls: 0, seats: 0 },
+      ],
+      fleet: null,
+    });
+    expect(await db.select().from(m.dbPkg.koinonMusterHulls)).toEqual([]);
+    for (const p of [a, b, c]) {
+      for (const r of await rowsOf(p)) expect(r).toMatchObject({ basedAt: massalia, movingTo: landRegion, arrivesAt: arrival(1), mission: { kind: "raid", musterId, regionId: landRegion, departedAt: LAUNCH.toISOString() } });
+      expect((await logs(p, "battle_loss")).length).toBe(0);
+      expect((await logs(p, "koinon_muster")).length).toBe(0);
+    }
+    expect(await warbandOf(landRegion)).toBe(30);
+    // On the page a minute before the arrival: the army on the march, no muster open, no last muster; no second muster can be called.
+    const onRoad = (await m.koinon.koinonView(await ctx(b), new Date(arrival(1).getTime() - MIN))).koinon!;
+    expect(onRoad.muster).toBeNull();
+    expect(onRoad.lastMuster).toBeNull();
+    expect(onRoad.marching).toMatchObject({
+      id: musterId,
+      target: { regionId: landRegion, townId: null },
+      gather: { id: massalia },
+      launchAt: LAUNCH.toISOString(),
+      arrivesAt: arrival(1).toISOString(),
+      route: "land",
+      steps: 1,
+      men: 120,
+      hulls: 0,
+      parts: [
+        { playerId: a, name: "Kallias", men: 40, hulls: 0 },
+        { playerId: b, name: "Nikias", men: 30, hulls: 0 },
+        { playerId: c, name: "Deon", men: 50, hulls: 0 },
+      ],
+    });
+    expect(await open(b, {}, new Date(arrival(1).getTime() - MIN))).toEqual({ ok: false, code: 409, error: "The koinon's army is still on the march." });
+    expect(await m.muster.pledge(await ctx(b), { rows: [{ rowId: uid(502), count: 30 }] }, new Date(arrival(1).getTime() - MIN))).toEqual({ ok: false, code: 409, error: "The koinon has no muster open." });
+    // His own settle a minute after the arrival leaves the row on the road: the army's arrival lands it.
+    await settle(a, new Date(arrival(1).getTime() + MIN));
+    expect((await rowsOf(a))[0]).toMatchObject({ movingTo: landRegion, mission: { kind: "raid", musterId } });
+
+    // The arrival: the fight, dated the arrival.
+    expect(await m.muster.resolveMuster(musterId, arrival(1))).toEqual({ outcome: "resolved" });
     const muster = (await musters())[0]!;
     expect(muster).toMatchObject({ status: "resolved" });
-    expect(muster.closedAt!.getTime()).toBe(LAUNCH.getTime());
+    expect(muster.closedAt!.getTime()).toBe(arrival(1).getTime());
     const report = await reportOf();
-    expect(report).toMatchObject({ outcome: "won", reason: null, regionId: landRegion, townId: null, gatherId: massalia, route: "land", steps: 1, launchAt: LAUNCH.toISOString(), arrivesAt: recovered(1).toISOString(), men: 120, fleet: null });
+    expect(report).toMatchObject({ outcome: "won", reason: null, regionId: landRegion, townId: null, gatherId: massalia, route: "land", steps: 1, minutes: 30, launchAt: LAUNCH.toISOString(), arrivedAt: arrival(1).toISOString(), homeAt: homeAt(1).toISOString(), men: 120, fleet: null });
     expect(report.parts.map((p) => [p.playerId, p.men, p.hulls, p.seats, p.shares])).toEqual([[a, 40, 0, 0, 40], [b, 30, 0, 0, 30], [c, 50, 0, 0, 50]]);
     expect(report.killed).toBeGreaterThan(0);
 
@@ -577,11 +639,12 @@ suite("Koinon muster (integration)", () => {
       expect(losses.reduce((n, l) => n + (l.detail as { lost: number }).lost, 0)).toBe(p.lost);
       for (const l of losses) {
         expect(l.detail).toMatchObject({ action: "raid", regionId: landRegion, musterId });
-        expect(l.createdAt.getTime()).toBe(LAUNCH.getTime());
+        expect(l.createdAt.getTime()).toBe(arrival(1).getTime());
       }
-      // Every survivor is bound for the gathering place, counted from the launch.
+      // Every survivor is bound for the gathering place by the same road, with no muster on its mission.
       for (const r of rows) expect(r).toMatchObject({ basedAt: massalia, movingTo: massalia, mission: { kind: "raid", regionId: landRegion, departedAt: LAUNCH.toISOString() } });
-      for (const r of rows) expect(r.arrivesAt!.getTime()).toBe(recovered(1).getTime());
+      for (const r of rows) expect(r.mission!.musterId).toBeUndefined();
+      for (const r of rows) expect(r.arrivesAt!.getTime()).toBe(homeAt(1).getTime());
     }
     expect(report.lost).toBe(report.parts.reduce((n, p) => n + p.lost, 0));
 
@@ -610,7 +673,7 @@ suite("Koinon muster (integration)", () => {
     for (const p of report.parts) {
       const lines = await logs(p.playerId, "koinon_muster");
       expect(lines.length, p.name).toBe(1);
-      expect(lines[0]!.createdAt.getTime()).toBe(LAUNCH.getTime());
+      expect(lines[0]!.createdAt.getTime()).toBe(arrival(1).getTime());
       expect(lines[0]!.detail).toMatchObject({ musterId, source: "koinon", chronicle: { koinonName: "The Sacred Band", regionId: landRegion, hulls: 0, winner: "attacker", killed: report.killed, lost: p.lost, share: { drachmae: p.drachmae, grain: p.grain, spoil: { good, label, amount: p.spoil } } } });
     }
     expect(((await logs(c, "koinon_muster"))[0]!.detail as { chronicle: { force: unknown } }).chronicle.force).toEqual([
@@ -619,31 +682,93 @@ suite("Koinon muster (integration)", () => {
     ]);
     expect(report.line).toBe(`Raided ${report.regionName}: 120 men sent, ${report.killed} tribesmen slain, ${report.lost === 0 ? "none lost" : `${report.lost} lost`}, ${total.drachmae} drachmae, ${total.grain} grain and ${total.spoil.amount} ${total.spoil.label} taken.`);
 
-    // Closed: the hull pledges are gone, the koinon may muster again, and the page shows the report.
+    // Closed: the koinon may muster again, and the page shows the report with no army on the march.
     expect(await m.muster.resolveMuster(musterId, at(3 * HOUR))).toEqual({ outcome: "not_due" });
     const page = (await m.koinon.koinonView(await ctx(b), at(3 * HOUR))).koinon!;
     expect(page.muster).toBeNull();
+    expect(page.marching).toBeNull();
     expect(page.lastMuster).toMatchObject({ id: musterId, status: "resolved", reason: null, report: { outcome: "won", line: report.line } });
-    // His own settle after the recovery brings the men home.
-    await settle(a, new Date(recovered(1).getTime() + MIN));
+    // His own settle after the road home brings the men home.
+    await settle(a, new Date(homeAt(1).getTime() + MIN));
     expect((await rowsOf(a)).map((r) => [r.movingTo, r.mission])).toEqual([[null, null]]);
   });
 
-  it("the fight writes the intel of every member who fought and has a dynasty, dated the launch", async () => {
+  it("the fight writes the intel of every member who fought and has a dynasty, dated the arrival", async () => {
     const { a, musterId } = await landRaid();
     // Kallias founds a house; Nikias and Deon have none and write nothing.
     const { dynasties, playerCharacters, regionIntel } = m.dbPkg;
     const dynasty = (await db.insert(dynasties).values({ worldId, name: "House Test", prestige: 0, houseSlug: "test-house", foundingPlayerId: a, generation: 1 }).returning())[0]!;
     await db.update(playerCharacters).set({ dynastyId: dynasty.id }).where(eq(playerCharacters.playerId, a));
-    expect(await m.muster.resolveMuster(musterId, LAUNCH)).toEqual({ outcome: "resolved" });
+    const { at, outcome } = await launchAndFight(musterId, LAUNCH);
+    expect(outcome).toBe("resolved");
     const report = await reportOf();
     expect(report.killed).toBe(8);
     const intel = await db.select().from(regionIntel);
     expect(intel).toHaveLength(1);
-    expect(intel[0]).toMatchObject({ dynastyId: dynasty.id, regionId: landRegion, warband: 30 - report.killed, scoutedAt: LAUNCH });
+    expect(intel[0]).toMatchObject({ dynastyId: dynasty.id, regionId: landRegion, warband: 30 - report.killed, scoutedAt: at });
   });
 
-  it("the altar: a member's bull lit before the launch steadies his own rows and nobody else's; a blessing cold at the launch or lit after it counts for nothing", async () => {
+  it("the army meets the place as it stands when it arrives", async () => {
+    const { musterId } = await landRaid();
+    expect(await m.muster.resolveMuster(musterId, LAUNCH)).toEqual({ outcome: "marched" });
+    // The warband falls to 12 while the army is on the road (a pool regrows by whole days).
+    await setWarband(landRegion, 12);
+    expect(await m.muster.resolveMuster(musterId, arrival(1))).toEqual({ outcome: "resolved" });
+    expect((await reportOf()).defender).toMatchObject({ start: 12 });
+  });
+
+  it("an army that finds the place held by one of its own houses turns back", async () => {
+    const { a, b, c, musterId } = await landRaid();
+    expect(await m.muster.resolveMuster(musterId, LAUNCH)).toEqual({ outcome: "marched" });
+    // Nikias takes the land a minute after the launch.
+    await db.insert(m.dbPkg.playerHoldings).values({ worldId, regionId: landRegion, townId: "", ownerPlayerId: b, kind: "conquest", previousOwner: "unclaimed", since: at(2 * HOUR + MIN), lastGarrisonedAt: at(2 * HOUR + MIN), lastTributeAt: at(2 * HOUR + MIN) });
+    expect(await m.muster.resolveMuster(musterId, arrival(1))).toEqual({ outcome: "resolved" });
+    const report = await reportOf();
+    expect(report).toMatchObject({ outcome: "turned_back", line: `Found ${report.regionName} held by one of our own and turned back.`, men: 120, lost: 0, killed: 0, rounds: 0, defender: null, fleet: null, plunder: null, opinion: null, homeAt: homeAt(1).toISOString() });
+    expect(report.parts.map((p) => [p.playerId, p.men, p.shares, p.drachmae])).toEqual([[a, 40, 40, 0], [b, 30, 30, 0], [c, 50, 50, 0]]);
+    for (const p of [a, b, c]) {
+      for (const r of await rowsOf(p)) {
+        expect(r).toMatchObject({ movingTo: massalia, arrivesAt: homeAt(1), mission: { kind: "raid", regionId: landRegion } });
+        expect(r.mission!.musterId).toBeUndefined();
+      }
+      expect((await logs(p, "battle_loss")).length).toBe(0);
+      expect((await logs(p, "koinon_muster")).length).toBe(0);
+    }
+    expect((await rowsOf(a))[0]!.count).toBe(40);
+    expect(await warbandOf(landRegion)).toBe(30);
+  });
+
+  it("an army whose men all left on the road breaks up", async () => {
+    const { a, b, c, musterId } = await landRaid();
+    expect(await m.muster.resolveMuster(musterId, LAUNCH)).toEqual({ outcome: "marched" });
+    // Gone on the road, as an unpaid-upkeep disband would take them.
+    await db.delete(m.dbPkg.playerUnits);
+    expect(await m.muster.resolveMuster(musterId, arrival(1))).toEqual({ outcome: "resolved" });
+    const report = await reportOf();
+    expect(report).toMatchObject({ outcome: "dispersed", line: `The army sent to ${report.regionName} broke up on the road.`, men: 0, defender: null, plunder: null, homeAt: null, parts: [] });
+    expect(await warbandOf(landRegion)).toBe(30);
+    for (const p of [a, b, c]) {
+      expect((await logs(p, "battle_loss")).length).toBe(0);
+      expect((await logs(p, "koinon_muster")).length).toBe(0);
+    }
+    expect((await musterOf(musterId)).status).toBe("resolved");
+  });
+
+  it("a member who leaves the koinon on the march still fights and takes his share", async () => {
+    const { a, c, musterId } = await landRaid();
+    expect(await m.muster.resolveMuster(musterId, LAUNCH)).toEqual({ outcome: "marched" });
+    expect(await m.koinon.expel(await ctx(a), c, at(2 * HOUR + 5 * MIN))).toEqual({ ok: true });
+    expect(await m.muster.resolveMuster(musterId, arrival(1))).toEqual({ outcome: "resolved" });
+    const report = await reportOf();
+    expect(report.outcome).toBe("won");
+    const part = report.parts.find((p) => p.playerId === c)!;
+    expect(part).toMatchObject({ men: 50, shares: 50 });
+    expect(part.drachmae).toBeGreaterThan(0);
+    expect(await wallet(c)).toBe(100_000 + part.drachmae);
+    expect((await logs(c, "koinon_muster"))[0]!.detail).toMatchObject({ chronicle: { koinonName: "The Sacred Band", winner: "attacker", share: { drachmae: part.drachmae } } });
+  });
+
+  it("the altar: a member's bull lit before the arrival steadies his own rows and nobody else's; a blessing cold at the arrival or lit after it counts for nothing", async () => {
     // Two members, 60 hoplites each, against a warband of 33000, of which the
     // floor (660, one in fifty) turns out: on every seed the cold owner loses
     // 27 to 30 men and the blessed one 24 to 26.
@@ -653,11 +778,12 @@ suite("Koinon muster (integration)", () => {
     await setWarband(landRegion, 33000);
     await pledgedMen(a, "hoplite", 60, musterId, 501);
     await pledgedMen(b, "hoplite", 60, musterId, 502);
-    // Kallias burns a bull an hour before the launch: lit until two days on.
+    // Kallias burns a bull an hour before the launch: lit until two days on, through the arrival.
     await db.insert(m.dbPkg.resources).values({ scope: "player", scopeId: a, type: "bull", amount: "1", ratePerSecond: "0", lastUpdatedAt: NOW });
     expect(await m.barracks.sacrifice(await ctx(a), "bull", at(HOUR))).toEqual({ ok: true, good: "bull", mor: 3, until: at(HOUR + 2 * DAY) });
 
-    expect(await m.muster.resolveMuster(musterId, at(2 * HOUR + 30 * MIN))).toEqual({ outcome: "resolved" });
+    const { at: fought, outcome } = await launchAndFight(musterId, at(2 * HOUR + 30 * MIN));
+    expect(outcome).toBe("resolved");
     const report = await reportOf();
     const part = (id: string) => report.parts.find((p) => p.playerId === id)!;
     expect(part(a).men).toBe(60);
@@ -666,19 +792,19 @@ suite("Koinon muster (integration)", () => {
     expect(part(a).lost).toBeLessThanOrEqual(26);
     expect(part(a).lost).toBeGreaterThan(0);
 
-    // Through altarBonusFor at the launch instant: Kallias's bull counts; a bull
-    // that went cold at the launch, and one lit a minute after it, give nothing.
+    // Through altarBonusFor at the arrival instant: Kallias's bull counts; a bull
+    // that went cold at the arrival, and one lit a minute after it, give nothing.
     const { players } = m.dbPkg;
-    expect(await m.barracks.altarBonusFor(db, [a, b], LAUNCH)).toEqual(new Map([[a, 3], [b, 0]]));
-    await db.update(players).set({ altarUntil: LAUNCH, altarGood: "bull" }).where(eq(players.id, b));
-    expect(await m.barracks.altarBonusFor(db, [a, b], LAUNCH)).toEqual(new Map([[a, 3], [b, 0]]));
-    await db.update(players).set({ altarUntil: at(2 * HOUR + MIN + 2 * DAY), altarGood: "bull" }).where(eq(players.id, b));
-    expect(await m.barracks.altarBonusFor(db, [a, b], LAUNCH)).toEqual(new Map([[a, 3], [b, 0]]));
-    expect(await m.barracks.altarBonusFor(db, [b], at(2 * HOUR + MIN))).toEqual(new Map([[b, 3]]));
-    expect(await m.barracks.altarBonusFor(db, [], LAUNCH)).toEqual(new Map());
+    expect(await m.barracks.altarBonusFor(db, [a, b], fought)).toEqual(new Map([[a, 3], [b, 0]]));
+    await db.update(players).set({ altarUntil: fought, altarGood: "bull" }).where(eq(players.id, b));
+    expect(await m.barracks.altarBonusFor(db, [a, b], fought)).toEqual(new Map([[a, 3], [b, 0]]));
+    await db.update(players).set({ altarUntil: new Date(fought.getTime() + MIN + 2 * DAY), altarGood: "bull" }).where(eq(players.id, b));
+    expect(await m.barracks.altarBonusFor(db, [a, b], fought)).toEqual(new Map([[a, 3], [b, 0]]));
+    expect(await m.barracks.altarBonusFor(db, [b], new Date(fought.getTime() + MIN))).toEqual(new Map([[b, 3]]));
+    expect(await m.barracks.altarBonusFor(db, [], fought)).toEqual(new Map());
   });
 
-  it("deterministic: resolved 30 minutes after launch and 3 days after, the reports, rows, wallets and pool are identical", async () => {
+  it("deterministic: an army launched and fought at its arrival, and one launched and fought 3 days later, leave the reports, rows, wallets and pool identical", async () => {
     const { regionMilitary, townMilitary, playerUnits, playerCharacters, resources, effectLog, koinonMusterHulls } = m.dbPkg;
     const snapshot = async () =>
       JSON.stringify({
@@ -693,22 +819,22 @@ suite("Koinon muster (integration)", () => {
       });
 
     const first = await landRaid();
-    expect(await m.muster.resolveMuster(first.musterId, at(2 * HOUR + 30 * MIN))).toEqual({ outcome: "resolved" });
+    expect((await launchAndFight(first.musterId, at(2 * HOUR + 30 * MIN))).outcome).toBe("resolved");
     const soon = await snapshot();
 
     await reset();
     const second = await landRaid();
     expect(second).toEqual(first);
-    expect(await m.muster.resolveMuster(second.musterId, at(2 * HOUR + 3 * DAY))).toEqual({ outcome: "resolved" });
+    expect((await launchAndFight(second.musterId, at(2 * HOUR + 3 * DAY))).outcome).toBe("resolved");
     const late = await snapshot();
 
     // Compared parsed first, so a difference reads as a diff; then byte for byte.
     expect(JSON.parse(late)).toEqual(JSON.parse(soon));
     expect(late).toBe(soon);
-    // arrivesAt is counted from the launch instant in both.
+    // The road home is counted from the arrival in both.
     const units = (JSON.parse(late) as { units: { arrivesAt: string }[] }).units;
     expect(units.length).toBeGreaterThan(0);
-    for (const u of units) expect(u.arrivesAt).toBe(recovered(1).toISOString());
+    for (const u of units) expect(u.arrivesAt).toBe(homeAt(1).toISOString());
   });
 
   it("shares: 40 men carried on another member's two pentekonters are 40 shares each; by land the ship owner gets nothing", async () => {
@@ -722,9 +848,9 @@ suite("Koinon muster (integration)", () => {
     await pledgedMen(soldier, "peltast", 40, bySea, 501);
     await pledgedHulls(shipowner, bySea, "trade-ship", 2);
 
-    expect(await m.muster.resolveMuster(bySea, LAUNCH)).toEqual({ outcome: "resolved" });
+    expect((await launchAndFight(bySea, LAUNCH)).outcome).toBe("resolved");
     const report = await reportOf();
-    expect(report).toMatchObject({ outcome: "won", route: "sea", steps: seaTown.steps, townId: seaTown.townId, arrivesAt: recovered(seaTown.steps).toISOString() });
+    expect(report).toMatchObject({ outcome: "won", route: "sea", steps: seaTown.steps, townId: seaTown.townId, arrivedAt: arrival(seaTown.steps).toISOString(), homeAt: homeAt(seaTown.steps).toISOString() });
     expect(report.defender).toMatchObject({ start: 10, turnout: 3 });
     expect([2, 3]).toContain(report.killed);
     expect(report.fleet).toEqual({ hulls: { "trade-ship": 2 }, naval: 2, space: 40, filled: 40, defender: null, held: true });
@@ -748,9 +874,9 @@ suite("Koinon muster (integration)", () => {
     expect((await logs(shipowner, "koinon_muster"))[0]!.detail).toMatchObject({ chronicle: { force: [], hulls: 2, winner: "attacker", lost: 0, townId: seaTown.townId, share: { drachmae: drachmae[shipowner], grain: grains[shipowner], spoil: { good, label, amount: spoils[shipowner] } } } });
     expect((await db.select().from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scopeId, shipowner), eq(m.dbPkg.resources.type, "trade-ship"))))[0]!.amount).toBe("0");
     expect(await voyagesOf(shipowner)).toHaveLength(1);
-    expect((await voyagesOf(shipowner))[0]).toMatchObject({ ships: { "trade-ship": 2 }, kind: "raid", musterId: bySea, regionId: seaTown.regionId, townId: seaTown.townId, sailedAt: LAUNCH, returnsAt: recovered(seaTown.steps), returnedAt: null });
+    expect((await voyagesOf(shipowner))[0]).toMatchObject({ ships: { "trade-ship": 2 }, kind: "raid", musterId: bySea, regionId: seaTown.regionId, townId: seaTown.townId, sailedAt: LAUNCH, returnsAt: homeAt(seaTown.steps), returnedAt: null });
     expect(await voyagesOf(soldier)).toEqual([]);
-    expect(recovered(seaTown.steps).getTime()).toBeLessThanOrEqual(at(DAY).getTime()); // seven seas at most bring the army home by LAUNCH plus 3½ hours
+    expect(homeAt(seaTown.steps).getTime()).toBeLessThanOrEqual(at(2 * HOUR + 7 * HOUR).getTime()); // seven seas at most bring the army home by LAUNCH plus 7 hours
     expect(await garrisonOf(seaTown.townId)).toBe(10 - report.killed);
     expect(await db.select().from(m.dbPkg.koinonMusterHulls)).toEqual([]);
 
@@ -763,7 +889,7 @@ suite("Koinon muster (integration)", () => {
     await pledgedMen(soldier, "peltast", 20, byLand, 505);
     await db.insert(m.dbPkg.koinonMusterHulls).values({ musterId: byLand, ownerPlayerId: shipowner, shipId: "trade-ship", count: 1, pledgedAt: NOW });
     const before = await wallet(shipowner);
-    expect(await m.muster.resolveMuster(byLand, at(DAY))).toEqual({ outcome: "resolved" });
+    expect((await launchAndFight(byLand, at(DAY))).outcome).toBe("resolved");
     const land = (await musters())[1]!.report as unknown as Report;
     expect(land).toMatchObject({ outcome: "won", route: "land", fleet: null, defender: { start: 15, turnout: 4 } });
     expect([2, 3, 4]).toContain(land.killed);
@@ -790,7 +916,7 @@ suite("Koinon muster (integration)", () => {
     await pledgedHulls(escort, musterId, "galley", 1, at(-MIN));
     await pledgedHulls(transporter, musterId, "trade-ship", 3, NOW, 1);
 
-    expect(await m.muster.resolveMuster(musterId, LAUNCH)).toEqual({ outcome: "resolved" });
+    expect((await launchAndFight(musterId, LAUNCH)).outcome).toBe("resolved");
     const report = await reportOf();
     expect(report).toMatchObject({ route: "sea", steps: far.steps });
     expect(report.fleet).toMatchObject({ hulls: { "trade-ship": 1 }, naval: 1, space: 20, filled: 20 });
@@ -830,13 +956,13 @@ suite("Koinon muster (integration)", () => {
     await db.update(m.dbPkg.resources).set({ amount: "2" }).where(and(eq(m.dbPkg.resources.scopeId, shipowner), eq(m.dbPkg.resources.type, "trade-ship")));
     await db.insert(m.dbPkg.koinonMusterHulls).values({ musterId: repulsed, ownerPlayerId: shipowner, shipId: "trade-ship", count: 2, pledgedAt: NOW });
     const wallets = [await wallet(soldier), await wallet(shipowner)];
-    expect(await m.muster.resolveMuster(repulsed, at(4 * HOUR))).toEqual({ outcome: "resolved" });
+    expect((await launchAndFight(repulsed, at(4 * HOUR))).outcome).toBe("resolved");
     const report = (await musters())[1]!.report as unknown as Report;
     expect(report).toMatchObject({ outcome: "repulsed", route: "sea", men: 30, lost: 0, killed: 0, rounds: 0, defender: null, plunder: null });
     expect(report.fleet).toEqual({ hulls: { "trade-ship": 2 }, naval: 2, space: 40, filled: 30, defender: { pentekonters: 3, triremes: 2, naval: 13 }, held: false });
     expect(report.line).toBe(`Sailed against ${report.townName} and were driven off by its fleet before landing.`);
-    // No battle: the men are whole and bound home, the garrison untouched, nothing paid.
-    const home = new Date(at(4 * HOUR).getTime() + seaTown.steps * battle().march.minutesPerStep * MIN);
+    // No battle: the men are whole and bound home by the same road, the garrison untouched, nothing paid.
+    const home = homeAt(seaTown.steps, at(4 * HOUR));
     expect(await unitRow(row)).toMatchObject({ count: 30, movingTo: massalia, arrivesAt: home, mission: { kind: "raid", townId: seaTown.townId } });
     expect(await garrisonOf(seaTown.townId)).toBe(50);
     expect([await wallet(soldier), await wallet(shipowner)]).toEqual(wallets);
@@ -886,7 +1012,7 @@ suite("Koinon muster (integration)", () => {
     expect(await m.koinon.expel(await ctx(leader), expelled, at(MIN))).toEqual({ ok: true });
     const untouched = JSON.stringify(await unitRow(outside));
 
-    expect(await m.muster.resolveMuster(musterId, LAUNCH)).toEqual({ outcome: "resolved" });
+    expect((await launchAndFight(musterId, LAUNCH)).outcome).toBe("resolved");
     const report = await reportOf();
     expect(report.men).toBe(40);
     expect(report.parts.map((p) => p.playerId)).toEqual([leader]);
@@ -908,15 +1034,16 @@ suite("Koinon muster (integration)", () => {
   });
 
   // The grudge (raids prompt 2): a raid on a nation's land rolls once on the
-  // battle's seed. The seed is sha256(world | muster | reii | launch), so the
-  // muster's id decides it: uid(900) hits (0.1013), uid(903) misses (0.5372).
+  // battle's seed. The seed is sha256(world | muster | reii | arrival), so the
+  // muster's id decides it: uid(900) hits (0.0215), uid(901) misses (0.8646);
+  // both raids are won on their seed.
   const relation = async (factionId: string) => (await db.select().from(m.dbPkg.factionRelations).where(and(eq(m.dbPkg.factionRelations.worldId, worldId), eq(m.dbPkg.factionRelations.factionId, factionId))))[0];
   async function raidOnReii(id: string) {
     const a = await freshPlayer("Kallias", 100_000, 1);
     const k = await koinonOf("The Sacred Band", [a], uid(800));
     const musterId = await musterRow(k, a, { id, regionId: "R047", townId: "reii" });
     await pledgedMen(a, "peltast", 40, musterId, 501);
-    expect(await m.muster.resolveMuster(musterId, LAUNCH)).toEqual({ outcome: "resolved" });
+    expect((await launchAndFight(musterId, LAUNCH)).outcome).toBe("resolved");
     const report = await reportOf();
     expect(report).toMatchObject({ outcome: "won", townId: "reii", defender: { start: 160 } });
     return report;
@@ -929,12 +1056,12 @@ suite("Koinon muster (integration)", () => {
   });
 
   it("the grudge: a raid on Reii that rolls over the chance leaves the Saluvii as they were", async () => {
-    const report = await raidOnReii(uid(903));
+    const report = await raidOnReii(uid(901));
     expect(report.opinion).toBeNull();
     expect(await relation("saluvii")).toBeUndefined();
   });
 
-  it("claim first: two resolves at once leave one report and credit the wallets once, 10 runs", async () => {
+  it("claim first: two launches at once send the army out once, and two arrivals at once leave one report and credit the wallets once, 10 runs", async () => {
     for (let run = 0; run < 10; run++) {
       const [a, b] = [await freshPlayer(`A${run}`), await freshPlayer(`B${run}`)];
       const k = await koinonOf(`Band ${run}`, [a, b]);
@@ -943,7 +1070,10 @@ suite("Koinon muster (integration)", () => {
       await pledgedMen(a, "hoplite", 30, musterId, 600 + run * 2);
       await pledgedMen(b, "hoplite", 30, musterId, 601 + run * 2);
 
-      const outcomes = (await Promise.all([m.muster.resolveMuster(musterId, LAUNCH), m.muster.resolveMuster(musterId, at(3 * HOUR))])).map((r) => r.outcome);
+      const launches = (await Promise.all([m.muster.resolveMuster(musterId, LAUNCH), m.muster.resolveMuster(musterId, LAUNCH)])).map((r) => r.outcome);
+      expect(launches.filter((o) => o === "marched").length, `run ${run}: ${launches.join(", ")}`).toBe(1);
+      expect(launches.filter((o) => o === "busy" || o === "not_due").length).toBe(1);
+      const outcomes = (await Promise.all([m.muster.resolveMuster(musterId, at(3 * HOUR)), m.muster.resolveMuster(musterId, at(3 * HOUR))])).map((r) => r.outcome);
       expect(outcomes.filter((o) => o === "resolved").length, `run ${run}: ${outcomes.join(", ")}`).toBe(1);
       expect(outcomes.filter((o) => o === "busy" || o === "not_due").length).toBe(1);
       const muster = (await db.select().from(m.dbPkg.koinonMusters).where(eq(m.dbPkg.koinonMusters.id, musterId)))[0]!;
@@ -969,6 +1099,13 @@ suite("Koinon muster (integration)", () => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('koinon_muster'), hashtext(${musterId}::text))`);
       expect(await m.muster.resolveMuster(musterId, at(3 * HOUR))).toEqual({ outcome: "busy" });
       expect(JSON.stringify([await musters(), await unitRow(row)])).toBe(before);
+    });
+    expect(await m.muster.resolveMuster(musterId, at(3 * HOUR))).toEqual({ outcome: "marched" });
+    const marching = JSON.stringify([await musters(), await unitRow(row)]);
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('koinon_muster'), hashtext(${musterId}::text))`);
+      expect(await m.muster.resolveMuster(musterId, at(3 * HOUR))).toEqual({ outcome: "busy" });
+      expect(JSON.stringify([await musters(), await unitRow(row)])).toBe(marching);
     });
     expect(await m.muster.resolveMuster(musterId, at(3 * HOUR))).toEqual({ outcome: "resolved" });
   });
@@ -1091,5 +1228,44 @@ suite("Koinon muster (integration)", () => {
     calls.length = 0;
     await m.muster.resolveDueCampaigns(at(5 * HOUR), { resolve: record, resolveMarch: async (id) => (id === early ? { outcome: "busy" } : record(id)) });
     expect(calls).toEqual([]);
+  });
+
+  it("a party and the koinon's army bound for one place fight in the order they arrive", async () => {
+    const a = await freshPlayer("Kallias", 100_000, 1);
+    const other = await freshPlayer("Xenon", 100_000, 4);
+    const k = await koinonOf("The Sacred Band", [a], uid(800));
+    const musterId = await musterRow(k, a);
+    await setWarband(landRegion, 100);
+    await pledgedMen(a, "hoplite", 40, musterId, 501);
+    // Another house's party, on the road to the same place, arriving 15 minutes after the army.
+    const marchId = uid(930);
+    const partyAt = new Date(arrival(1).getTime() + 15 * MIN);
+    await db.insert(m.dbPkg.playerMarches).values({ id: marchId, worldId, ownerPlayerId: other, kind: "raid", regionId: landRegion, townId: null, baseId: massalia, route: "land", steps: 1, minutes: 30, party: [uid(520)], ships: {}, sailing: {}, departedAt: new Date(partyAt.getTime() - 30 * MIN), arrivesAt: partyAt });
+    await men(other, "hoplite", 30, massalia, { id: uid(520), movingTo: landRegion, arrivesAt: partyAt, mission: { kind: "raid", regionId: landRegion, departedAt: new Date(partyAt.getTime() - 30 * MIN).toISOString(), marchId } });
+    // One call: the muster launches, its army fights, then the party meets what the army left.
+    await m.muster.resolveDueCampaigns(at(3 * HOUR));
+    const muster = await musterOf(musterId);
+    expect(muster.status).toBe("resolved");
+    const army = muster.report as unknown as Report;
+    expect(army.defender).toMatchObject({ start: 100 });
+    const party = (await db.select().from(m.dbPkg.playerMarches).where(eq(m.dbPkg.playerMarches.id, marchId)))[0]!;
+    expect(party.status).toBe("resolved");
+    expect((party.report as { defender: { start: number } }).defender.start).toBe(100 - army.killed);
+  });
+
+  it("resolveDueCampaigns: at one instant a party fights, then an army, then a muster sets out; each item once per call", async () => {
+    const [leader, leader2] = [await freshPlayer("Kallias"), await freshPlayer("Lykos")];
+    const k = await koinonOf("The Sacred Band", [leader]);
+    const k2 = await koinonOf("Sons of Protis", [leader2]);
+    const launching = await musterRow(k, leader); // open, due at LAUNCH
+    const arriving = await musterRow(k2, leader2, { id: uid(902), launchAt: at(HOUR), status: "marching", arrivesAt: LAUNCH, march: { koinonName: "Sons of Protis", route: "land", steps: 1, minutes: 30, party: [], parts: [], fleet: null } });
+    const marching = (await db.insert(m.dbPkg.playerMarches).values({ id: uid(910), worldId, ownerPlayerId: leader, kind: "raid", regionId: landRegion, townId: null, baseId: massalia, route: "land", steps: 1, minutes: 30, party: [], ships: {}, sailing: {}, departedAt: at(HOUR), arrivesAt: LAUNCH }).returning())[0]!.id;
+    const calls: string[] = [];
+    const record = async (id: string) => {
+      calls.push(id);
+      return { outcome: "resolved" };
+    };
+    await m.muster.resolveDueCampaigns(LAUNCH, { resolve: record, resolveMarch: record });
+    expect(calls).toEqual([marching, arriving, launching]);
   });
 });

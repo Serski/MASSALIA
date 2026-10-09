@@ -8,7 +8,7 @@ import { agedPortraitFor } from "./age.js";
 import { getBandsContent, getUnitsContent } from "./barracks.js";
 import { creditWorldTreasury, debitDrachmae, spendTransaction, SpendRejected, type ActingContext } from "./buildings.js";
 import { findCharacterRow } from "./character.js";
-import { musterBlocks, unseenMuster, type LastMusterView, type MusterView } from "./koinonMuster.js";
+import { musterBlocks, unseenMuster, type LastMusterView, type MarchingMusterView, type MusterView } from "./koinonMuster.js";
 import { lockPlayer } from "./lock.js";
 import { getTopology } from "./mapGraph.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
@@ -346,10 +346,12 @@ export type KoinonView = {
     hall: { phase: HallPhase; startedAt: string | null; completesAt: string | null; paidUntil: string | null; daysCovered: number };
     givers: { playerId: string; name: string; total: number }[];
     gifts: { id: string; name: string; amount: number; label: string }[];
-    // The Raid muster (koinon prompt 3): the open one, and the most recent
-    // closed one with its report. `unread` above also counts an open muster the
-    // member has not seen, so opening the tab stamps it read.
+    // The Raid muster (koinon prompt 3): the open one, the army on the march
+    // (between its launch and its arrival, raids prompt 5), and the most
+    // recent closed one with its report. `unread` above also counts an open
+    // muster the member has not seen, so opening the tab stamps it read.
     muster: MusterView | null;
+    marching: MarchingMusterView | null;
     lastMuster: LastMusterView | null;
   };
 };

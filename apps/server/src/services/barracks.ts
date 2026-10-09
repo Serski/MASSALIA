@@ -126,7 +126,8 @@ export function isActive(row: Pick<UnitRow, "source" | "readyAt">, now: Date): b
 // A row pledged to a koinon's muster (koinon prompt 3): it carries a "muster"
 // mission and stands still at the gathering place. It is locked: no map action,
 // no move, no disband, and the settle does not fold it into its neighbours.
-// Once the muster marches the row is on a "raid" mission like any other.
+// Once the muster marches the row is on a "raid" mission that carries the
+// muster's id until its army arrives (raids prompt 5); the way home carries none.
 export const PLEDGED_REFUSAL = "These men are pledged to the koinon's muster.";
 export function isPledged(row: Pick<UnitRow, "mission" | "movingTo">): boolean {
   return row.mission?.kind === "muster" && row.movingTo === null;
@@ -539,9 +540,11 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
   // being expelled never writes another player's rows (they hold no lock on
   // him), so his own settle releases them here: a "muster" mission is cleared
   // when its muster was called off or stood down, or is gone, or he is no
-  // longer a member of its koinon. A muster being resolved keeps its rows: the
-  // resolve holds this player's lock and writes them itself. One query, and
-  // only when the player has such a row.
+  // longer a member of its koinon. A pledged row is kept while its muster is
+  // open or marching: the launch claims its muster as 'marching' before it
+  // settles the owners, so the settle inside it keeps the rows it is about to
+  // send. 'resolved' leaves the list: nothing carries a pledge past its launch.
+  // One query, and only when the player has such a row.
   const pledged = rows.filter(isPledged);
   if (pledged.length > 0) {
     const musterIds = [...new Set(pledged.map((r) => r.mission?.musterId).filter((id): id is string => typeof id === "string"))];
@@ -552,7 +555,7 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
             .select({ id: koinonMusters.id })
             .from(koinonMusters)
             .innerJoin(koinonMembers, and(eq(koinonMembers.koinonId, koinonMusters.koinonId), eq(koinonMembers.playerId, ctx.playerId)))
-            .where(and(inArray(koinonMusters.id, musterIds), inArray(koinonMusters.status, ["open", "resolved"])));
+            .where(and(inArray(koinonMusters.id, musterIds), inArray(koinonMusters.status, ["open", "marching"])));
     const holds = new Set(standing.map((m) => m.id));
     for (const r of pledged) {
       if (r.mission?.musterId && holds.has(r.mission.musterId)) continue;
@@ -669,8 +672,9 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
       live = live.filter((r) => r.id !== victim.id);
       await exec.delete(playerUnits).where(eq(playerUnits.id, victim.id));
       if (victim.source === "trained") await levyReturn(exec, ctx, victim.count);
-      // On the settle's own clock: a muster's resolve settles at its launch
-      // instant, and the men walked then, not when the request came.
+      // On the settle's own clock: a muster settles its owners at its launch
+      // and again at its army's arrival, and the men walked then, not when the
+      // request came.
       await logEffect(exec, characterId, "barracks_disband", { unitId: victim.unitId, count: victim.count, source: "insolvency" }, now);
       out.insolvent.push({ rowId: victim.id, unitId: victim.unitId, source: victim.source, count: victim.count });
       p = plan(live);
@@ -733,10 +737,12 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
   // whose arrives_at has passed now stands at its destination; the merge pass
   // below folds it into whatever already stands there. A row still carrying a
   // march (a party on its way out, raids prompt 4) is landed by its march's
-  // arrival (resolveMarch), never by the settle.
+  // arrival (resolveMarch), and one carrying a muster (the koinon's army on
+  // its way out, raids prompt 5) by the army's arrival (resolveMuster), never
+  // by the settle. A pledged row never gets here: it stands still.
   for (const r of rows) {
     if (r.movingTo === null || r.arrivesAt === null || r.arrivesAt.getTime() > now.getTime()) continue;
-    if (r.mission?.marchId) continue;
+    if (r.mission?.marchId || r.mission?.musterId) continue;
     await exec.update(playerUnits).set({ basedAt: r.movingTo, movingTo: null, arrivesAt: null, mission: null }).where(eq(playerUnits.id, r.id));
     await logEffect(exec, characterId, "barracks_arrive", { unitId: r.unitId, count: r.count, from: r.basedAt, to: r.movingTo, source: "barracks" });
     out.arrived.push({ rowId: r.id, unitId: r.unitId, source: r.source, count: r.count });

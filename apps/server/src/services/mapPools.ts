@@ -61,7 +61,7 @@ export async function readRegionWarband(exec: Exec, worldId: string, regionId: s
 
 // The marker moves only on a write onto a full pool (the old row's value, at
 // or above its content value: a full pool's first loss starts the clock), and
-// never backwards (GREATEST in SQL): a muster's resolve writes at its launch
+// never backwards (GREATEST in SQL): a muster's army writes at its arrival
 // instant, which may be earlier than the pool's last write. A write onto a pool
 // below its content value leaves the marker where it is. A fresh row's clock
 // starts at the write.

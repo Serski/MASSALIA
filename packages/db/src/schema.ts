@@ -894,7 +894,9 @@ export const playerUnits = pgTable("player_units", {
 export const UNIT_MISSION_KINDS = ["scout", "raid", "attack", "move", "muster"] as const;
 export type UnitMissionKind = (typeof UNIT_MISSION_KINDS)[number];
 // regionId is always the region; townId is set when the target or destination is a town.
-// `musterId` is set on a "muster" mission only; its departedAt is the pledge instant.
+// `musterId` is on a pledge's "muster" mission, departed at the pledge, and on
+// the koinon's army's "raid" mission until it arrives, departed at the launch
+// (raids prompt 5); the way home carries none.
 // `marchId` (raids prompt 4): a party's rows carry it while they march out to a
 // scout, raid or attack and lose it when they arrive; the way home carries none.
 export type UnitMission = { kind: UnitMissionKind; regionId: string; townId?: string; departedAt: string; musterId?: string; marchId?: string };

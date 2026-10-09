@@ -124,9 +124,9 @@ await loadStories();
 // content (ON CONFLICT DO NOTHING — existing pools are never overwritten).
 await ensureMilitaryPools();
 
-// A koinon muster whose launch instant has passed marches, and a party whose
-// arrival has passed fights, before the handler of any /api, /me or /admin
-// request runs (koinon prompt 3, raids prompt 4). Before the routes.
+// A koinon muster whose launch instant has passed sets out, and an army or a
+// party whose arrival has passed fights, before the handler of any /api, /me
+// or /admin request runs (koinon prompt 3, raids prompts 4 and 5). Before the routes.
 registerCampaignResolver(app);
 
 // SELECT 1 + Redis PING (2s each); 503 names the failing part. Rate-limit exempt.
