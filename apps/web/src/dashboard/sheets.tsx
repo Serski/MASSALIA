@@ -40,6 +40,7 @@ export const NON_GOODS = new Set<string>([
   "building_income",
   "building_shrine",
   "building_staff",
+  "league_grant",
   "prestige",
   "influence",
   "favor",
@@ -522,6 +523,10 @@ export function InventoryEconomy({ data, goodLabels }: { data: { mine: Buildings
     })
     .filter((r) => r.nominal > 0 || r.income > 0); // income-earning lines only (goods-only excluded)
   const incomeTotal = incomeRows.reduce((s, r) => s + r.income, 0); // drachmae only (idle / fresh-build contribute 0)
+  // The League's grants running for the player's class (government prompt 2b): new
+  // money a day, listed after the buildings. An old server sends none.
+  const grants = mine.leagueGrants ?? [];
+  const grantTotal = grants.reduce((s, g) => s + g.perDay, 0);
 
   // GOODS produced — units/day per good, aggregated across producing buildings.
   // Shown as goods, never priced into income or net.
@@ -551,7 +556,7 @@ export function InventoryEconomy({ data, goodLabels }: { data: { mine: Buildings
   const armyPay = armyPerDay.drachmae ?? 0;
 
   // Net is DRACHMAE income − drachmae expenses. Goods-at-floor are NOT folded in.
-  const net = incomeTotal - wagesTotal - foodCost - upkeepTotal - armyPay;
+  const net = incomeTotal + grantTotal - wagesTotal - foodCost - upkeepTotal - armyPay;
   const idledRows = active.filter((b) => b.idle).map((b) => ({ id: b.id, name: b.name, staffing: (tierDef(b)?.staffing ?? {}) as Record<string, number> }));
   const owed = Math.round(mine.upkeepOwed);
   const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
@@ -565,7 +570,7 @@ export function InventoryEconomy({ data, goodLabels }: { data: { mine: Buildings
       {owed > 0 ? <p className="sheet-gate">Owed: {owed} dr — your purse couldn't cover upkeep + wages.</p> : null}
 
       <SheetLabel>Income · drachmae</SheetLabel>
-      {incomeRows.length === 0 ? (
+      {incomeRows.length === 0 && grants.length === 0 ? (
         <p className="sheet-todo">No drachmae income yet — build and staff an income trade.</p>
       ) : (
         incomeRows.map((r) => (
@@ -586,6 +591,9 @@ export function InventoryEconomy({ data, goodLabels }: { data: { mine: Buildings
           />
         ))
       )}
+      {grants.map((g) => (
+        <ResRow key={`grant:${g.title}:${g.until}`} icon="🏛️" name={g.title} sub={`League grant · through ${g.throughLabel}`} amount={dr(g.perDay)} />
+      ))}
 
       {goodsRows.length > 0 ? (
         <>

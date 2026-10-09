@@ -620,6 +620,9 @@ export function AltarSection({
   return (
     <section className="barracks-section" data-section="altar" aria-label="Altar">
       <SectionHead title="Altar" note={note} />
+      {view.temple ? (
+        <p className="barracks-temple">Artemis watches over the League's armies · +{view.temple.mor} morale to every man you field · through {view.temple.throughLabel}</p>
+      ) : null}
       <div className="barracks-list">
         {order.map((good) => {
           // Balances are fractional (the Bull Farm yields half a bull a day); whole beasts only.

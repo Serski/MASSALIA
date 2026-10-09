@@ -64,7 +64,7 @@ const member = (seats: Extract<GovernmentView, { member: true }>["seats"], leagu
   league,
 });
 // A docket of building projects (government prompt 2a): two poleis, in docket order.
-const project = (cityId: string, polis: string, buildingId: string, title: string, cost: number, seasons: number) => ({
+const project = (cityId: string, polis: string, buildingId: string, title: string, cost: number, seasons: number, effects: string[]) => ({
   id: `project:${cityId}:${buildingId}`,
   title,
   description: `About ${title.toLowerCase()}.`,
@@ -72,19 +72,21 @@ const project = (cityId: string, polis: string, buildingId: string, title: strin
   partyLean: "palaioi",
   group: polis,
   seasons,
+  effects,
 });
+const TEMPLE_EFFECTS = ["Priests +20 dr a season for 4 seasons", "Every army +3 morale for 2 years", "Massalia +3 stability a year"];
 const DOCKET = [
-  project("massalia", "Massalia", "temple", "A Temple of Artemis at Massalia", 1000, 4),
-  project("massalia", "Massalia", "walls", "The Walls of Massalia", 2000, 8),
-  project("nikaia", "Nikaia", "port", "The Port of Nikaia", 2000, 8),
+  project("massalia", "Massalia", "temple", "A Temple of Artemis at Massalia", 1000, 4, TEMPLE_EFFECTS),
+  project("massalia", "Massalia", "walls", "The Walls of Massalia", 2000, 8, ["Massalia's fortifications +1"]),
+  project("nikaia", "Nikaia", "port", "The Port of Nikaia", 2000, 8, ["Shipbuilders +20 dr a season for 4 seasons", "League treasury +50 dr a season"]),
 ];
 
-async function mount(government: GovernmentView) {
+async function mount(government: GovernmentView, agenda: AgendaView = agendaView) {
   vi.spyOn(api, "oligarchyChamber").mockImplementation(never);
   vi.spyOn(api, "chamberVotes").mockImplementation(never);
   vi.spyOn(api, "offices").mockImplementation(never);
   vi.spyOn(api, "elections").mockImplementation(never);
-  vi.spyOn(api, "agenda").mockResolvedValue(agendaView);
+  vi.spyOn(api, "agenda").mockResolvedValue(agenda);
   const gov = vi.spyOn(api, "government").mockResolvedValue(government);
   const utils = render(<PoliticsPanel player={player()} onRefresh={() => {}} />);
   await flush();
@@ -131,6 +133,7 @@ describe("the Government tab", () => {
     const buttons = [...docket.querySelectorAll<HTMLButtonElement>(".event-choice-button")];
     expect(buttons).toHaveLength(3);
     expect(buttons[0]!.textContent).toBe("Put forward");
+    expect(docket.querySelector(".agenda-effects")).toBeNull(); // a card from before carries no effects
 
     fireEvent.click(buttons[0]!);
     await flush();
@@ -147,6 +150,8 @@ describe("the Government tab", () => {
     expect(groups.map((g) => g.querySelectorAll(".agenda-choice").length)).toEqual([2, 1]);
     expect([...docket.querySelectorAll(".agenda-choice .dashboard-label")].map((l) => l.textContent)).toEqual(DOCKET.map((p) => p.title));
     expect([...docket.querySelectorAll(".agenda-seasons")].map((c) => c.textContent)).toEqual(["4 seasons", "8 seasons", "8 seasons"]);
+    // What each project does when it stands (government prompt 2b).
+    expect([...docket.querySelectorAll(".agenda-effects")].map((c) => c.textContent)).toEqual(DOCKET.map((p) => `When it stands: ${p.effects.join(" · ")}`));
     expect([...docket.querySelectorAll(".cost-negative")].map((c) => c.textContent)).toEqual([`${(1000).toLocaleString()} dr.`, `${(2000).toLocaleString()} dr.`, `${(2000).toLocaleString()} dr.`]);
     expect(docket.querySelectorAll(".event-choice-button")).toHaveLength(3);
   });
@@ -169,6 +174,14 @@ describe("the Government tab", () => {
     const card = container.querySelector(".government-projects")!;
     expect(card.textContent).toContain("No project yet.");
     expect(card.querySelectorAll("li")).toHaveLength(0);
+  });
+
+  it("a citizen sees the measure before the chamber with what it does when it stands", async () => {
+    const voting: AgendaView = { ...agendaView, league: scope("league", { phase: "voting", cards: [DOCKET[0]!], draftedCardId: DOCKET[0]!.id }) };
+    const { container } = await mount({ member: false }, voting);
+    const card = container.querySelector(".agenda-card")!;
+    expect(text(card as HTMLElement, "h3")).toBe(`"A Temple of Artemis at Massalia" is before the chamber.`);
+    expect(text(card as HTMLElement, ".agenda-effects")).toBe(`When it stands: ${TEMPLE_EFFECTS.join(" · ")}`);
   });
 
   it("a Strategos sees the cards with no Put forward and no veto", async () => {

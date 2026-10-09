@@ -485,3 +485,23 @@ describe("BarracksPanel", () => {
     expect(hookWarnings).toEqual([]);
   });
 });
+
+describe("the Temple at the altar", () => {
+  const LINE = "Artemis watches over the League's armies · +3 morale to every man you field · through Spring, 277 BC";
+
+  it("shows the Temple's blessing under the altar's head while it runs", async () => {
+    const { container } = await mount(payload({ temple: { mor: 3, until: iso(NOW + 5 * H), throughLabel: "Spring, 277 BC" } }));
+    const altar = container.querySelector('[data-section="altar"]') as HTMLElement;
+    expect(altar.querySelector(".barracks-temple")!.textContent).toBe(LINE);
+  });
+
+  it("shows no line when no Temple runs, and none for a payload without the field", async () => {
+    const { container } = await mount(payload({ temple: null }));
+    expect(container.querySelector(".barracks-temple")).toBeNull();
+    cleanup();
+    const legacy = await mount(payload());
+    expect(legacy.container.querySelector(".barracks-temple")).toBeNull();
+    expect(legacy.container.querySelector('[data-section="altar"]')).not.toBeNull();
+  });
+});
+

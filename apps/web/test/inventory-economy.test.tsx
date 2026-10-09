@@ -46,3 +46,24 @@ describe("InventoryEconomy · army", () => {
     expect(view.container.textContent).toContain("No wages, food, or upkeep yet.");
   });
 });
+
+describe("InventoryEconomy · the League's grants", () => {
+  const grant = { title: "A Temple of Artemis at Massalia", perDay: 20, until: new Date(Date.now() + 86_400_000).toISOString(), throughLabel: "Summer, 299 BC" };
+
+  it("lists a grant under the income with its through-date, folds it into the net, and drops the no-income line", () => {
+    const { container } = render(<InventoryEconomy data={{ mine: { ...mine({}), leagueGrants: [grant] }, people, catalog }} goodLabels={catalog.goodLabels} />);
+    const text = container.textContent!;
+    expect(text).toContain("A Temple of Artemis at Massalia");
+    expect(text).toContain("League grant · through Summer, 299 BC");
+    expect(text).toContain("+20 dr");
+    expect(text).not.toContain("No drachmae income yet");
+    expect(container.querySelector(".econ-net")!.textContent).toContain("+20 dr");
+  });
+
+  it("a payload without the field renders as before", () => {
+    const { container } = render(<InventoryEconomy data={{ mine: mine({}), people, catalog }} goodLabels={catalog.goodLabels} />);
+    expect(container.textContent).toContain("No drachmae income yet");
+    expect(container.textContent).not.toContain("League grant");
+  });
+});
+

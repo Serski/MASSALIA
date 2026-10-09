@@ -72,6 +72,7 @@ export function AgendaScopeSection({ view, onRefresh, treasury = "full" }: { vie
                         <div className="event-body">
                           <span className="dashboard-label">{card.title}</span>
                           <p className="agenda-flavor">{card.description}</p>
+                          {card.effects?.length ? <p className="agenda-effects">When it stands: {card.effects.join(" · ")}</p> : null}
                           <span className="choice-costs">
                             <span className="cost-chip cost-neutral">{titleCase(card.partyLean)} lean</span>
                             {card.cost > 0 ? <span className="cost-chip cost-negative">{card.cost.toLocaleString()} dr.</span> : <span className="cost-chip cost-positive">Free</span>}
@@ -98,7 +99,10 @@ export function AgendaScopeSection({ view, onRefresh, treasury = "full" }: { vie
             ) : null}
           </>
         ) : view.phase === "voting" ? (
-          <h3>{drafted ? `"${drafted.title}" is before the chamber.` : "The chamber is in session."}</h3>
+          <>
+            <h3>{drafted ? `"${drafted.title}" is before the chamber.` : "The chamber is in session."}</h3>
+            {drafted?.effects?.length ? <p className="agenda-effects">When it stands: {drafted.effects.join(" · ")}</p> : null}
+          </>
         ) : (
           <p className="dashboard-todo">No measure is in session.</p>
         )}

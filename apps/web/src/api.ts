@@ -756,7 +756,8 @@ export type OfficesView = {
 export type AgendaScope = "league" | "palaioi" | "dynatoi";
 
 // `group` (the polis) and `seasons` (build time) ride on a League building project (government prompt 2a); a card has neither.
-export type AgendaCardView = { id: string; title: string; description: string; cost: number; partyLean: string; group?: string; seasons?: number };
+// `effects` is what a project does when it stands, one line per effect (government prompt 2b); a card has none.
+export type AgendaCardView = { id: string; title: string; description: string; cost: number; partyLean: string; group?: string; seasons?: number; effects?: string[] };
 
 export type TreasuryView = {
   owner: AgendaScope;
@@ -1582,6 +1583,10 @@ export type BuildingsMine = {
   // The army's daily draw by good, `drachmae` for band pay — the Barracks strip's
   // figures, carried here so the Economy view lists them without a second fetch.
   army: { perDay: Record<string, number> };
+  // The League's grants running for the player's class (government prompt 2b): the
+  // grant a day (a season is a day), the span's end and the game date it runs
+  // through. Optional: an old server sends none.
+  leagueGrants?: { title: string; perDay: number; until: string; throughLabel: string }[];
 };
 
 // The retained spymaster's posture + remaining switch cooldown (Prompt 4). Additive
@@ -1831,6 +1836,9 @@ export type BarracksView = {
   reports?: BarracksReport[];
   // The altar while lit (the good burned, its morale bonus, the instant it goes cold), else null.
   altar: { good: string; mor: number; until: string } | null;
+  // The Temple of Artemis's blessing on every army (government prompt 2b): the morale, the run's end and
+  // the game date it holds through; null while none runs. Optional: an old server sends none.
+  temple?: { mor: number; until: string; throughLabel: string } | null;
 };
 
 // --- Map reach (GET /api/map/reach; mirrors packages/shared/src/reach.ts) ---
