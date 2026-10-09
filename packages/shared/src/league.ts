@@ -534,8 +534,9 @@ export function raidGrudgeLine(f: Pick<FactionDef, "name" | "group">): string {
 export const CITY_POP_GROWTH = 0.02;
 // +2% garrison per game year (rounded) — gentle creep alongside population.
 export const CITY_GARRISON_GROWTH = 0.02;
-// Stability falls by this each game year, never below 0 (government prompt 2a:
-// the Temple of Artemis will raise it, in 2b). It replaced the pull toward 70.
+// Stability falls by this each game year (government prompt 2a), and a standing
+// Temple of Artemis adds its stabilityPerYear through driftCity's bonus (2b).
+// The result stays within 0 to 100. It replaced the pull toward 70.
 export const CITY_STABILITY_DECAY = 1;
 
 export type CityDriftStats = {
@@ -552,13 +553,15 @@ export type CityDriftStats = {
 // it jumps to the current year) and the caller stamps lastGrowthYear = currentYear.
 // Population grows by CITY_POP_GROWTH of the larger of its population and its
 // `startPopulation` (the polis's founding size from content); stability falls by
-// CITY_STABILITY_DECAY, never below 0. The stored tax is left FLAT (the tax a
-// polis pays is polisTax of its population, computed on read); fortifications
-// never drift (1..5; the Walls raise them when they stand).
+// CITY_STABILITY_DECAY and gains `stabilityBonus` (what the polis's standing
+// Temple adds, government prompt 2b), staying within 0 to 100. The stored tax is
+// left FLAT (the tax a polis pays is polisTax of its population, computed on
+// read); fortifications never drift (1..5; the Walls raise them when they stand).
 export function driftCity(
   city: CityDriftStats & { lastGrowthYear: number | null },
   currentYear: number,
   startPopulation: number,
+  stabilityBonus = 0,
 ): { changed: boolean; next: CityDriftStats & { lastGrowthYear: number | null } } {
   if (city.lastGrowthYear !== null && city.lastGrowthYear >= currentYear) {
     return { changed: false, next: { ...city } };
@@ -568,7 +571,7 @@ export function driftCity(
     next: {
       population: city.population + Math.round(Math.max(city.population, startPopulation) * CITY_POP_GROWTH),
       tax: city.tax, // flat — not derived from population
-      stability: Math.max(0, city.stability - CITY_STABILITY_DECAY),
+      stability: Math.min(100, Math.max(0, city.stability - CITY_STABILITY_DECAY + stabilityBonus)),
       fortifications: city.fortifications, // never drifts
       garrison: Math.round(city.garrison * (1 + CITY_GARRISON_GROWTH)),
       lastGrowthYear: currentYear,

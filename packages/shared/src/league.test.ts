@@ -311,6 +311,12 @@ describe("driftCity (once-per-game-year city drift)", () => {
     expect(driftCity(city({ stability: 0 }), 1, START).next.stability).toBe(0);
   });
 
+  it("a standing Temple's bonus lifts stability past the decay, never above 100", () => {
+    expect(driftCity(city({ stability: 60 }), 1, START, 3).next.stability).toBe(62);
+    expect(driftCity(city({ stability: 99 }), 1, START, 3).next.stability).toBe(100);
+    expect(driftCity(city({ stability: 0 }), 1, START, 3).next.stability).toBe(2);
+  });
+
   it("a polis of 0 grows from its founding size: 0 with a start of 2,000 grows to 40", () => {
     const { next } = driftCity(city({ population: 0 }), 1, 2000);
     expect(next.population).toBe(40);
