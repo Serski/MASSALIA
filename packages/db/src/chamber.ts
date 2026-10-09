@@ -2,6 +2,7 @@ import { and, asc, eq, lte } from "drizzle-orm";
 import {
   chamberVoteDueAt,
   gameDate,
+  isAgendaYear,
   nextSeasonBoundaryMs,
   npcBlocVotes,
   questionForYear,
@@ -67,13 +68,20 @@ export async function openChamberVote(): Promise<ChamberVoteRow | null> {
 }
 
 // Open this game year's chamber vote if it is due and not yet opened (idempotent
-// via UNIQUE (world_id, game_year)). Open for one season: closes_at is the next
-// season boundary on the world clock. Returns the opened row, or null.
+// via UNIQUE (world_id, scope, game_year)). Open for one season: closes_at is the
+// next season boundary on the world clock. Returns the opened row, or null.
+//
+// In a year the League agenda runs (government prompt 2a) this opens nothing:
+// the agenda's own Spring vote is the League's vote of the year, the drafted
+// project or, when nothing was drafted or the draft was vetoed, the year's
+// question (advanceAgendaCycles). Opening the question here first would take
+// the (world, scope, year) slot and drop the agenda's vote ON CONFLICT.
 export async function openChamberVoteIfDue(cfg: PoliticsConfig, now: Date = new Date()): Promise<ChamberVoteRow | null> {
   const world = await activeWorld();
   if (!world) return null;
   const gd = gameDate(now.getTime(), world.startedMs);
   if (!chamberVoteDueAt(cfg.chamber, gd.yearInGame)) return null;
+  if (isAgendaYear(gd.yearInGame, "league", cfg.agenda)) return null;
 
   const question = questionForYear(cfg.chamber, gd.yearInGame);
   const inserted = await db

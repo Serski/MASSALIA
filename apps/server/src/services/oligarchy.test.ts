@@ -182,10 +182,20 @@ suite("the Oligarchy Chamber (integration)", () => {
     const { chamberVotes, chamberBallots, partyFavor } = m.dbPkg;
     const politics = m.oligarchy.getPoliticsConfig();
 
-    // The yearly sweep opens exactly one vote (idempotent on world+year).
-    const opened = await m.dbPkg.openChamberVoteIfDue(politics, now);
-    expect(opened).not.toBeNull();
+    // Year 0 is a League agenda year, so the sweep opens nothing (government
+    // prompt 2a): the agenda's own Spring vote is the League's vote of the year.
     expect(await m.dbPkg.openChamberVoteIfDue(politics, now)).toBeNull();
+    expect(await db.select().from(chamberVotes).where(eq(chamberVotes.worldId, worldId))).toEqual([]);
+    // Open the year-0 question ourselves, as openChamberVoteIfDue did: open, closing
+    // one season later on the world clock.
+    const { questionForYear } = await import("@massalia/shared");
+    const question = questionForYear(politics.chamber, 0);
+    const opened = (
+      await db
+        .insert(chamberVotes)
+        .values({ worldId, gameYear: 0, title: question.title, description: question.description, opensAt: now, closesAt: new Date(startedAt.getTime() + 86_400_000), status: "open" })
+        .returning()
+    )[0]!;
     const votes = await db.select().from(chamberVotes).where(eq(chamberVotes.worldId, worldId));
     expect(votes.length).toBe(1);
     expect(votes[0]!.status).toBe("open");
