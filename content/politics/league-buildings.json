@@ -9,7 +9,18 @@
       "seasons": 4,
       "populationAbove": 2000,
       "partyLean": "palaioi",
-      "fortifications": 0
+      "fortifications": 0,
+      "classBonus": {
+        "class": "priest",
+        "perSeason": 20,
+        "seasons": 4
+      },
+      "morale": {
+        "amount": 3,
+        "seasons": 8
+      },
+      "stabilityPerYear": 3,
+      "treasuryPerSeason": 0
     },
     {
       "id": "bazaar",
@@ -20,7 +31,15 @@
       "seasons": 4,
       "populationAbove": 2000,
       "partyLean": "dynatoi",
-      "fortifications": 0
+      "fortifications": 0,
+      "classBonus": {
+        "class": "trader",
+        "perSeason": 20,
+        "seasons": 4
+      },
+      "morale": null,
+      "stabilityPerYear": 0,
+      "treasuryPerSeason": 100
     },
     {
       "id": "granary",
@@ -31,7 +50,15 @@
       "seasons": 4,
       "populationAbove": 2000,
       "partyLean": "independent",
-      "fortifications": 0
+      "fortifications": 0,
+      "classBonus": {
+        "class": "landowner",
+        "perSeason": 20,
+        "seasons": 4
+      },
+      "morale": null,
+      "stabilityPerYear": 0,
+      "treasuryPerSeason": 0
     },
     {
       "id": "walls",
@@ -42,7 +69,11 @@
       "seasons": 8,
       "populationAbove": null,
       "partyLean": "palaioi",
-      "fortifications": 1
+      "fortifications": 1,
+      "classBonus": null,
+      "morale": null,
+      "stabilityPerYear": 0,
+      "treasuryPerSeason": 0
     },
     {
       "id": "port",
@@ -53,7 +84,15 @@
       "seasons": 8,
       "populationAbove": null,
       "partyLean": "dynatoi",
-      "fortifications": 0
+      "fortifications": 0,
+      "classBonus": {
+        "class": "shipbuilder",
+        "perSeason": 20,
+        "seasons": 4
+      },
+      "morale": null,
+      "stabilityPerYear": 0,
+      "treasuryPerSeason": 50
     }
   ]
 }

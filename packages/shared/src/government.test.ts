@@ -62,6 +62,7 @@ describe("the ledger's reasons", () => {
     expect(treasuryClaimReason.opening).toBe("opening");
     expect(treasuryClaimReason.tax(7)).toBe("tax:s7");
     expect(treasuryClaimReason.fees(0)).toBe("fees:s0");
+    expect(treasuryClaimReason.buildings(3)).toBe("buildings:s3");
   });
 
   it("every stored reason has its words", () => {
@@ -69,6 +70,7 @@ describe("the ledger's reasons", () => {
     expect(treasuryReasonLabel("levy:s24")).toBe("Levy");
     expect(treasuryReasonLabel("tax:s24")).toBe("Taxes of the poleis");
     expect(treasuryReasonLabel("fees:s24")).toBe("Market tax and fees");
+    expect(treasuryReasonLabel("buildings:s3")).toBe("Bazaar and harbor dues");
     expect(treasuryReasonLabel("cut:seat_purchase")).toBe("Share of a seat sale");
     expect(treasuryReasonLabel("cut:festival_donation")).toBe("Share of a festival gift");
   });

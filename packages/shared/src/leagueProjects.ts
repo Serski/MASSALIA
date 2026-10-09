@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { REAL_MS_PER_SEASON } from "./calendar.js";
+import { CLASS_IDS, type ClassId } from "./character.js";
 
 // ---------------------------------------------------------------------------
 // The League's building projects (government prompt 2a). The five buildings
@@ -22,6 +24,16 @@ export const leagueBuildingSchema = z
     partyLean: z.enum(["palaioi", "dynatoi", "independent"]),
     // What the polis's fortifications rise by when the building stands (0 = nothing).
     fortifications: z.number().int().nonnegative(),
+    // The grant: every character of `class` in the world is paid `perSeason` for
+    // the `seasons` after the building stands; null pays no one.
+    classBonus: z.object({ class: z.enum(CLASS_IDS), perSeason: z.number().int().positive(), seasons: z.number().int().positive() }).strict().nullable(),
+    // Every army that fights in the world gets `amount` morale for the `seasons`
+    // after the building stands; null gives none.
+    morale: z.object({ amount: z.number().int().positive(), seasons: z.number().int().positive() }).strict().nullable(),
+    // What the polis's stability gains at each yearly drift while the building stands.
+    stabilityPerYear: z.number().int().nonnegative(),
+    // What the building pays the League treasury each season while it stands.
+    treasuryPerSeason: z.number().int().nonnegative(),
   })
   .strict();
 
@@ -124,4 +136,130 @@ export function projectMotion(id: string, buildings: LeagueBuilding[], cities: {
   const polis = cities.find((c) => c.id === parsed.cityId);
   if (!building || !polis) return null;
   return motion(building, polis);
+}
+
+// --- What a standing building does (government prompt 2b) ---------------------
+// The rules below take every project of a world, under way or standing, and
+// decide by time: `completesAt` is the instant the building stands, in ms.
+
+export interface ProjectTiming {
+  cityId: string;
+  buildingId: string;
+  completesAt: number;
+}
+
+export const CLASS_PLURALS: Record<ClassId, string> = {
+  landowner: "Landowners",
+  trader: "Traders",
+  philosopher: "Philosophers",
+  hetaira: "Hetairai",
+  hoplite: "Hoplites",
+  shipbuilder: "Shipbuilders",
+  priest: "Priests",
+  slave: "Slaves",
+};
+
+function buildingOf(buildings: LeagueBuilding[], id: string): LeagueBuilding | undefined {
+  return buildings.find((b) => b.id === id);
+}
+
+// The span a grant or a blessing holds: [completesAt, completesAt + seasons), the end excluded.
+function holds(completesAt: number, seasons: number, atMs: number): boolean {
+  return atMs >= completesAt && atMs < completesAt + seasons * REAL_MS_PER_SEASON;
+}
+
+// What the League pays a character of `classId` for the seasons fromSeason to
+// toSeason inclusive: each project whose building's grant names the class pays
+// its perSeason for every season whose first instant lies in its span. Each
+// building pays on its own. 0 when fromSeason > toSeason.
+export function leagueClassPay(projects: ProjectTiming[], buildings: LeagueBuilding[], classId: string, worldStartMs: number, fromSeason: number, toSeason: number): number {
+  let total = 0;
+  for (let season = fromSeason; season <= toSeason; season++) {
+    const t = worldStartMs + season * REAL_MS_PER_SEASON;
+    for (const p of projects) {
+      const grant = buildingOf(buildings, p.buildingId)?.classBonus;
+      if (!grant || grant.class !== classId) continue;
+      if (holds(p.completesAt, grant.seasons, t)) total += grant.perSeason;
+    }
+  }
+  return total;
+}
+
+export interface LeagueClassGrant {
+  cityId: string;
+  buildingId: string;
+  title: string; // the motion's: "A Temple of Artemis at Massalia"
+  perSeason: number;
+  untilMs: number; // the span's end, excluded
+}
+
+// The grants running for `classId` at atMs, in completesAt order.
+export function leagueClassGrants(projects: ProjectTiming[], buildings: LeagueBuilding[], cities: { id: string; name: string }[], classId: string, atMs: number): LeagueClassGrant[] {
+  const out: LeagueClassGrant[] = [];
+  for (const p of [...projects].sort((a, b) => a.completesAt - b.completesAt)) {
+    const grant = buildingOf(buildings, p.buildingId)?.classBonus;
+    if (!grant || grant.class !== classId || !holds(p.completesAt, grant.seasons, atMs)) continue;
+    const motion = projectMotion(projectMotionId(p.cityId, p.buildingId), buildings, cities);
+    if (!motion) continue;
+    out.push({ cityId: p.cityId, buildingId: p.buildingId, title: motion.title, perSeason: grant.perSeason, untilMs: p.completesAt + grant.seasons * REAL_MS_PER_SEASON });
+  }
+  return out;
+}
+
+export interface LeagueMorale {
+  amount: number; // the largest among the spans that hold atMs; spans never add up
+  untilMs: number; // the end of the run of spans that holds atMs, excluded
+}
+
+// The blessing every army in the world fights under at atMs, or null. A span
+// that starts at or before the run's end carries the run on (a second Temple
+// that stands before the first one's years run out carries the blessing on).
+export function leagueMorale(projects: ProjectTiming[], buildings: LeagueBuilding[], atMs: number): LeagueMorale | null {
+  const spans = projects.flatMap((p) => {
+    const morale = buildingOf(buildings, p.buildingId)?.morale;
+    return morale ? [{ start: p.completesAt, end: p.completesAt + morale.seasons * REAL_MS_PER_SEASON, amount: morale.amount }] : [];
+  });
+  const holding = spans.filter((s) => atMs >= s.start && atMs < s.end);
+  if (holding.length === 0) return null;
+  const amount = Math.max(...holding.map((s) => s.amount));
+  let untilMs = Math.max(...holding.map((s) => s.end));
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const s of spans) {
+      if (s.start <= untilMs && s.end > untilMs) {
+        untilMs = s.end;
+        grew = true;
+      }
+    }
+  }
+  return { amount, untilMs };
+}
+
+// What the standing buildings pay the League treasury a season, at atMs.
+export function leagueDues(projects: ProjectTiming[], buildings: LeagueBuilding[], atMs: number): number {
+  return projects.reduce((sum, p) => sum + (p.completesAt <= atMs ? (buildingOf(buildings, p.buildingId)?.treasuryPerSeason ?? 0) : 0), 0);
+}
+
+// What a polis's standing buildings add to its stability at a yearly drift, at atMs.
+export function leagueStabilityBonus(projects: ProjectTiming[], buildings: LeagueBuilding[], cityId: string, atMs: number): number {
+  return projects.reduce((sum, p) => sum + (p.cityId === cityId && p.completesAt <= atMs ? (buildingOf(buildings, p.buildingId)?.stabilityPerYear ?? 0) : 0), 0);
+}
+
+// "1 season", "2 years" (a multiple of 4 that is 8 or more), else "<n> seasons".
+function spanLabel(seasons: number): string {
+  if (seasons === 1) return "1 season";
+  if (seasons >= 8 && seasons % 4 === 0) return `${seasons / 4} years`;
+  return `${seasons} seasons`;
+}
+
+// One line per effect a building has when it stands, in this order, each only
+// when its number is set.
+export function buildingEffects(building: LeagueBuilding, polis: string): string[] {
+  const out: string[] = [];
+  if (building.classBonus) out.push(`${CLASS_PLURALS[building.classBonus.class]} +${building.classBonus.perSeason} dr a season for ${spanLabel(building.classBonus.seasons)}`);
+  if (building.morale) out.push(`Every army +${building.morale.amount} morale for ${spanLabel(building.morale.seasons)}`);
+  if (building.stabilityPerYear > 0) out.push(`${polis} +${building.stabilityPerYear} stability a year`);
+  if (building.treasuryPerSeason > 0) out.push(`League treasury +${building.treasuryPerSeason} dr a season`);
+  if (building.fortifications > 0) out.push(`${polis}'s fortifications +${building.fortifications}`);
+  return out;
 }

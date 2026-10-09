@@ -50,12 +50,14 @@ export function leagueTax(populations: number[], cfg: TreasuryConfig): number {
 // --- The ledger's claim reasons and labels -----------------------------------
 
 // The reasons the League treasury credits exactly once (the unique partial index
-// of migration 0070 is keyed on them): the opening balance once per world, the
-// poleis' tax and the swept fees once per world per season.
+// of migration 0070, widened by 0072, is keyed on them): the opening balance
+// once per world; the poleis' tax, the swept fees and the standing Bazaars' and
+// Ports' dues once per world per season.
 export const treasuryClaimReason = {
   opening: "opening",
   tax: (season: number): string => `tax:s${season}`,
   fees: (season: number): string => `fees:s${season}`,
+  buildings: (season: number): string => `buildings:s${season}`,
 } as const;
 
 // The words a ledger row shows for its stored reason. `cardTitle` resolves a
@@ -66,6 +68,7 @@ export function treasuryReasonLabel(reason: string, cardTitle?: (cardId: string)
   if (reason.startsWith("levy:s")) return "Levy";
   if (reason.startsWith("tax:s")) return "Taxes of the poleis";
   if (reason.startsWith("fees:s")) return "Market tax and fees";
+  if (reason.startsWith("buildings:s")) return "Bazaar and harbor dues";
   if (reason === "cut:seat_purchase") return "Share of a seat sale";
   if (reason === "cut:festival_donation") return "Share of a festival gift";
   if (reason.startsWith("agenda:")) {
