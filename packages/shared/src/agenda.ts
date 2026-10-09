@@ -59,6 +59,10 @@ export const treasuryConfigSchema = z.object({
   leviedPerSeason: z.number().int().nonnegative(),
   seatPurchaseCutFraction: z.number().min(0).max(1),
   festivalDonationCutFraction: z.number().min(0).max(1),
+  // Government prompt 1: the League treasury's opening balance, credited once
+  // per world, and the tax each polis pays a season per head of population.
+  openingBalance: z.number().int().nonnegative(),
+  taxPerHead: z.number().min(0).max(1),
 });
 export type TreasuryConfig = z.infer<typeof treasuryConfigSchema>;
 

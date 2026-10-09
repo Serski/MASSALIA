@@ -22,6 +22,7 @@ export * from "./oligarchy.js";
 export * from "./interactions.js";
 export * from "./elections.js";
 export * from "./agenda.js";
+export * from "./government.js";
 export * from "./composure.js";
 export * from "./buildings.js";
 export * from "./military.js";

@@ -27,7 +27,7 @@ const agendaCfg: AgendaConfig = politics.agenda;
 
 describe("config: agenda/treasury/dues/endorsement blocks parse", () => {
   it("validates the Prompt 3 config at parse time", () => {
-    expect(politics.treasury).toEqual({ leviedPerSeason: 20, seatPurchaseCutFraction: 0.1, festivalDonationCutFraction: 0.2 });
+    expect(politics.treasury).toEqual({ leviedPerSeason: 20, seatPurchaseCutFraction: 0.1, festivalDonationCutFraction: 0.2, openingBalance: 60000, taxPerHead: 0.02 });
     expect(politics.partyDues.duesPerSeasonPerMember).toBe(5);
     expect(politics.agenda.leagueCardsPerCycle).toBe(3);
     expect(politics.agenda.vetoesPerEphorPerTerm).toBe(1);

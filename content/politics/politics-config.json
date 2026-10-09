@@ -48,7 +48,9 @@
   "treasury": {
     "leviedPerSeason": 20,
     "seatPurchaseCutFraction": 0.1,
-    "festivalDonationCutFraction": 0.2
+    "festivalDonationCutFraction": 0.2,
+    "openingBalance": 60000,
+    "taxPerHead": 0.02
   },
   "partyDues": {
     "duesPerSeasonPerMember": 5
