@@ -24,6 +24,7 @@ MASSALIA is a browser strategy RPG set in the Greek colony of Massalia around 30
 - The Lobby's news is content too: `content/news/news.json`, parsed by `packages/shared/src/news.ts` and loaded at boot by `apps/server/src/services/news.ts`; the client fetches the file from `/content/news/news.json`.
 - Migrations are append-only SQL files in `packages/db/migrations`, applied in name order, one transaction each; never edit an applied file.
 - Military numbers (garrison, pentekonters, triremes, warband) never ship under `apps/web/public`; `apps/web/test/public-leak-guard.test.ts` enforces it.
+- The API's /content/ mount serves only the files listed in apps/server/src/publicContent.ts (today age/age-config.json and news/news.json), and apps/server/src/routes/public-content.test.ts expects 404 for every other file under content/. A file the client needs is added to that list; the mount is never widened.
 - `MAP_MUTATIONS_ENABLED` stays `false` until movement, war, occupation and authorization rules are real.
 - 5xx responses never carry internal messages: `errorHandler.ts` logs the error and answers `{ error: "Something went wrong." }`.
 - Sessions are the signed `httpOnly` cookie only; there is no bearer-token path.
