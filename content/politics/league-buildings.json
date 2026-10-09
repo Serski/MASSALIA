@@ -1,0 +1,59 @@
+{
+  "buildings": [
+    {
+      "id": "temple",
+      "name": "Temple of Artemis",
+      "title": "A Temple of Artemis at {polis}",
+      "description": "Raise the goddess a house of dressed stone. Her priests will remember who paid for it.",
+      "cost": 1000,
+      "seasons": 4,
+      "populationAbove": 2000,
+      "partyLean": "palaioi",
+      "fortifications": 0
+    },
+    {
+      "id": "bazaar",
+      "name": "Grand Bazaar",
+      "title": "The Grand Bazaar of {polis}",
+      "description": "Roof the market in colonnades and give the traders room to haggle. The treasury will take its share.",
+      "cost": 1500,
+      "seasons": 4,
+      "populationAbove": 2000,
+      "partyLean": "dynatoi",
+      "fortifications": 0
+    },
+    {
+      "id": "granary",
+      "name": "Granary",
+      "title": "The Granary of {polis}",
+      "description": "Stone bins for the harvest, against the lean years. The landowners will sell into them.",
+      "cost": 1200,
+      "seasons": 4,
+      "populationAbove": 2000,
+      "partyLean": "independent",
+      "fortifications": 0
+    },
+    {
+      "id": "walls",
+      "name": "Walls",
+      "title": "The Walls of {polis}",
+      "description": "Ring the town in stone. Its fortifications rise by one.",
+      "cost": 2000,
+      "seasons": 8,
+      "populationAbove": null,
+      "partyLean": "palaioi",
+      "fortifications": 1
+    },
+    {
+      "id": "port",
+      "name": "Port",
+      "title": "The Port of {polis}",
+      "description": "Deepen the harbor and lay new slipways. The shipwrights will follow the work.",
+      "cost": 2000,
+      "seasons": 8,
+      "populationAbove": null,
+      "partyLean": "dynatoi",
+      "fortifications": 0
+    }
+  ]
+}

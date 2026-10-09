@@ -45,7 +45,7 @@ export function parseAgendaFile(data: unknown): AgendaCard[] {
 
 // The {palaioi,dynatoi,independent} yes/no leans a card presents to the chamber
 // tally: its favored side votes yes, the others no.
-export function cardLeans(card: AgendaCard): { palaioi: "yes" | "no"; dynatoi: "yes" | "no"; independent: "yes" | "no" } {
+export function cardLeans(card: Pick<AgendaCard, "partyLean">): { palaioi: "yes" | "no"; dynatoi: "yes" | "no"; independent: "yes" | "no" } {
   return {
     palaioi: card.partyLean === "palaioi" ? "yes" : "no",
     dynatoi: card.partyLean === "dynatoi" ? "yes" : "no",
