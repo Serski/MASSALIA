@@ -63,3 +63,17 @@ Not in the hour before the 00:00 UTC season rollover. Fast-forward only, plain `
 - from outside, the status code of each of these: https://api.playmassalia.com/content/map/town-military.json, /content/map/region-military.json, /content/military/battle.json and one file under /content/stories/ must answer 404; /content/news/news.json and /content/age/age-config.json must answer 200
 
 A red run is a STOP with the log. A closed file answering anything but 404, or an open one anything but 200, is a STOP: report it and wait. I check the Lobby news and a character's age in the game myself.
+
+## STOP 1 ruling (9 Oct 2026)
+
+1. The index.ts cleanup is accepted: path, fileURLToPath, __dirname, repoRoot and the fastifyStatic import existed only for the mount, so they go with it. The two library line numbers that sit a few lines off are accepted too.
+
+2. 627a9b4 (Salt in the Wine) does not ship with this. Its six frames are not in yet, and the content fix goes out on its own.
+   - Keep the story on a local branch: git branch story/salt-in-the-wine 627a9b4
+   - Rebuild main without it: git rebase --onto origin/main 627a9b4 main
+   - git patch-id for the two content commits must match before and after the rebase. Report both pairs.
+   - The content walk loses the story's file: expect 64 files walked, 2 served, 62 closed. If the test pins a count, that is a STOP.
+
+3. Append this ruling verbatim to docs/tooling/content-route-prompt-1.md under "STOP 1 ruling (9 Oct 2026)", as its own commit: docs: the content route prompt's STOP 1 ruling
+
+4. Run the gate and the audit at the new HEAD. If the gate ends GATE GREEN at that HEAD, the audit exits 0 and the patch-ids match, push and report as the prompt's Push section says, plus the branch the story is kept on and its SHA. Anything else is a STOP. The story branch stays local.
