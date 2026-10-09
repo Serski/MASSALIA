@@ -185,3 +185,21 @@ Not in the hour before the 00:00 UTC season rollover. Fast-forward only, plain `
 - read only, after the next sync: World 2's League cycle as it stands, any League chamber vote for the current game year (if one exists already, say so: it holds the League's slot for that year), and its league_cities stability values against the STOP 1 reads (the decay lands at the next game year's drift, not before)
 
 A red run is a STOP with the log. Anything off is a STOP: report it and wait. Do not write to production to fix it. I check the tabs in the game myself.
+
+## STOP 1 ruling (9 Oct 2026)
+
+1. The words and the leans are approved as reported: the five names, motion titles and descriptions, the polis headings, the "N seasons" chip, the separators on every cost, the Projects card and the line on the Cities tab.
+
+2. league-buildings.json keeps its { "buildings": [...] } shape, as cities.json does.
+
+3. projects and buildings stay optional in the client's types. Accepted.
+
+4. leagueMeasureTitle, buildingsLine, projectKey, the two getters, the wider TRUNCATE lists and the Port case in the completion test are accepted.
+
+5. The fixture fix in the "member view without projects" test is accepted.
+
+6. The chamber sweep opening nothing in a League agenda year is expected; leave its line as it is. The year-6 cycle keeping its three League cards until it resolves is accepted.
+
+7. Append this ruling verbatim to docs/politics/government-prompt-2a.md under "STOP 1 ruling (9 Oct 2026)", as its own commit: docs: the government prompt 2a's STOP 1 ruling
+
+8. Run the gate and the audit at the new HEAD. If the gate ends GATE GREEN at that HEAD and the audit exits 0, push and report as the prompt's Push section says. Anything else is a STOP. The push must land before 2026-10-13 00:00 UTC, and not in the hour before any 00:00 UTC rollover.
