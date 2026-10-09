@@ -1217,8 +1217,9 @@ export const leagueCities = pgTable("league_cities", {
   worldId: uuid("world_id").references(() => worlds.id).notNull(),
   cityId: text("city_id").notNull(),
   population: integer("population").notNull(),
-  // tax is an independent stat (NOT derived from population — content ratios vary
-  // 3.3%–12%); it does not drift this phase.
+  // Unused since government prompt 1: the tax a polis pays is polisTax of its
+  // population (packages/shared/src/government.ts), computed on read and
+  // collected by collectLeagueRevenue. The column and content's start.tax stay.
   tax: integer("tax").notNull(),
   stability: integer("stability").notNull(),
   // 1..5 fortification level — Archon-upgraded in a later phase; never auto-grows.

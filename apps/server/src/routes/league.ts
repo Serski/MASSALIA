@@ -9,6 +9,7 @@ import {
   opinionBand,
   parseCitiesContent,
   parseFactionsContent,
+  polisTax,
   stanceValue,
   type CitiesContent,
   type CityGroup,
@@ -109,9 +110,10 @@ export type FactionView = {
 export async function leagueRoutes(app: FastifyInstance) {
   // The nine League colonies and their five current stats for the active world.
   app.get("/cities", async (request, reply) => {
-    const { createDb } = await import("@massalia/db");
+    const { createDb, ensureLeagueCities } = await import("@massalia/db");
     const { requireAuth } = await import("../services/auth.js");
     const { getActiveWorldId } = await import("../services/character.js");
+    const { getPoliticsConfig } = await import("../services/oligarchy.js");
     const db = (_db ??= createDb());
 
     await requireAuth(request);
@@ -122,17 +124,10 @@ export async function leagueRoutes(app: FastifyInstance) {
     }
 
     const content = getCities();
-    // Ensure-on-read: seed the world's rows from content defaults if missing.
-    await db.execute(sql`
-      INSERT INTO league_cities (world_id, city_id, population, tax, stability, fortifications, garrison)
-      VALUES ${sql.join(
-        content.cities.map(
-          (c) => sql`(${worldId}, ${c.id}, ${c.start.population}, ${c.start.tax}, ${c.start.stability}, ${c.start.fortifications}, ${c.start.garrison})`,
-        ),
-        sql`, `,
-      )}
-      ON CONFLICT (world_id, city_id) DO NOTHING
-    `);
+    // Ensure-on-read: seed the world's rows from content defaults if missing (the
+    // same rows the League's tax collection seeds).
+    await ensureLeagueCities(db, worldId);
+    const treasuryCfg = getPoliticsConfig().treasury;
 
     const result = await db.execute(sql`
       SELECT city_id, population, tax, stability, fortifications, garrison
@@ -145,14 +140,17 @@ export async function leagueRoutes(app: FastifyInstance) {
     );
 
     // Emit in content order so the grouping/sort is stable and content-driven.
+    // `tax` is what the polis pays the League treasury a season (government
+    // prompt 1): polisTax of its live population, not the stored column.
     const out: CityView[] = content.cities.map((c) => {
       const row = byId.get(c.id);
+      const population = row?.population ?? c.start.population;
       return {
         id: c.id,
         name: c.name,
         group: c.group,
-        population: row?.population ?? c.start.population,
-        tax: row?.tax ?? c.start.tax,
+        population,
+        tax: polisTax(population, treasuryCfg),
         stability: row?.stability ?? c.start.stability,
         fortifications: row?.fortifications ?? c.start.fortifications,
         garrison: row?.garrison ?? c.start.garrison,
