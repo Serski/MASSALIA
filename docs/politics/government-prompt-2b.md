@@ -209,3 +209,21 @@ Not in the hour before the 00:00 UTC season rollover, and before 2026-10-19 00:0
 - read only, after the next sync: World 2's league_projects rows, any `buildings:` ledger row and any `league_grant` effect_log row (none of either is expected until a building stands), and how many `league_grant` markers exist (one per player who has settled since the deploy)
 
 A red run is a STOP with the log. Anything off is a STOP: report it and wait. Do not write to production to fix it. I check the tabs in the game myself.
+
+## STOP 1 ruling (10 Oct 2026)
+
+1. The words are approved as reported: the five buildings' effect lines and their spans, "When it stands:", the Economy row ("League grant · through <season>"), the Barracks line and "Bazaar and harbor dues".
+
+2. The season clamp at 0 for a created_at before the world's start is accepted; nothing in production has one.
+
+3. spanLabel, holds, the templeStands fixtures, league_projects in the four TRUNCATE lists, the ended world in the barracks test and the grantPlayer helper are accepted.
+
+4. The three payloads captured through the services are accepted.
+
+5. The grant rows keyed by title and until are accepted.
+
+6. Antipolis falling to stability 0 at year 7's drift is expected: city stability is display-only today. No change.
+
+7. Append this ruling verbatim to docs/politics/government-prompt-2b.md under "STOP 1 ruling (10 Oct 2026)", as its own commit: docs: the government prompt 2b's STOP 1 ruling
+
+8. Run the gate and the audit at the new HEAD. If the gate ends GATE GREEN at that HEAD and the audit exits 0, push and report as the prompt's Push section says. Anything else is a STOP. The push must land before 2026-10-19 00:00 UTC, and not in the hour before any 00:00 UTC rollover. Land it before 2026-10-13 00:00 UTC if you can, so the Archons see the effects when the first docket opens.
