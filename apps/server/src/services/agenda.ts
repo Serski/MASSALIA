@@ -70,7 +70,7 @@ async function activeWorld(): Promise<{ id: string; startedMs: number } | null> 
   return rows[0] ? { id: rows[0].id, startedMs: rows[0].startedAt.getTime() } : null;
 }
 
-async function heldOffices(characterId: string): Promise<HeldOffice[]> {
+export async function heldOffices(characterId: string): Promise<HeldOffice[]> {
   const rows = await db.select({ office: offices.office, side: offices.side }).from(offices).where(eq(offices.holderCharacterId, characterId));
   return rows.map((r) => ({ office: r.office, side: r.side }));
 }
@@ -223,6 +223,26 @@ export interface AgendaScopeView {
 
 function cardViews(pool: AgendaCard[], ids: string[]): AgendaCardView[] {
   return ids.map((id) => pool.find((c) => c.id === id)).filter((c): c is AgendaCard => !!c).map((c) => ({ id: c.id, title: c.title, description: c.description, cost: c.cost, partyLean: c.partyLean }));
+}
+
+// The League scope as everyone outside the Government sees it (government
+// prompt 1): the treasury's balance without its ledger, no draft or veto power,
+// and of the docket only the card going to the vote — the drafted card while
+// voting, when it is not the vetoed card. After a veto an Archon may draft
+// another card and that one goes to the vote, so the test is
+// `draftedCardId !== vetoedCardId`, not `vetoedCardId === null`. While drafting
+// the docket is the Government's alone, so the cards are empty.
+export function publicLeagueView(view: AgendaScopeView): AgendaScopeView {
+  const toVote = view.phase === "voting" && view.draftedCardId && view.draftedCardId !== view.vetoedCardId ? view.draftedCardId : null;
+  return {
+    ...view,
+    cards: toVote ? view.cards.filter((c) => c.id === toVote) : [],
+    draftedCardId: toVote,
+    vetoedCardId: null,
+    treasury: { ...view.treasury, ledger: [] },
+    youMayDraft: false,
+    youMayVeto: false,
+  };
 }
 
 export async function agendaScopeView(actor: CharacterRow, scope: AgendaScope, now: Date = new Date()): Promise<AgendaScopeView> {

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../services/auth.js";
 import { ensureCharacterRow, getActivePlayer, getActiveWorldId, type CharacterRow } from "../services/character.js";
-import { agendaScopeView, draftCard, endorse, partyLeadersView, vetoCard } from "../services/agenda.js";
+import { agendaScopeView, draftCard, endorse, partyLeadersView, publicLeagueView, vetoCard } from "../services/agenda.js";
 import type { AgendaScope } from "@massalia/shared";
 
 async function actingRow(userId: string): Promise<{ row: CharacterRow } | { error: string; code: number }> {
@@ -18,7 +18,9 @@ function parseScope(value: unknown): AgendaScope | null {
 
 export async function agendaRoutes(app: FastifyInstance) {
   // The three governments: the league agenda + treasury, both party agendas, the
-  // for-life leaders.
+  // for-life leaders. The League scope is the public one for every caller,
+  // Government members included: their docket and ledger are in the Government
+  // tab (GET /api/government).
   app.get("/", async (request, reply) => {
     const user = await requireAuth(request);
     const acting = await actingRow(user.id);
@@ -28,7 +30,7 @@ export async function agendaRoutes(app: FastifyInstance) {
     }
     const now = new Date();
     return {
-      league: await agendaScopeView(acting.row, "league", now),
+      league: publicLeagueView(await agendaScopeView(acting.row, "league", now)),
       palaioi: await agendaScopeView(acting.row, "palaioi", now),
       dynatoi: await agendaScopeView(acting.row, "dynatoi", now),
       leaders: await partyLeadersView(acting.row),
