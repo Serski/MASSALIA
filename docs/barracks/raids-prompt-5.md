@@ -216,3 +216,19 @@ STOP 1. Report:
 ## Push (only after I reply "push")
 
 Fast-forward only, plain `git push`. Report remote HEAD, the CI run with its Gate and Audit steps, Railway server and worker on the new SHA, migration 0069 in `__massalia_migrations` on production (a select through `railway run --service Postgres --environment production`), Pages green and API health.
+
+## STOP 1 ruling (9 Oct 2026)
+
+1. The Muster card with the army on the march as rendered: accepted. "Raid on Reii · from Massalia · arrives in 1h 0m", the road line by sea and by land, "· arriving" at zero, the parts under "The army", the last muster beneath it with no form and no hint.
+2. The turned-back and broken-up lines as rendered: accepted. A turned-back report listing its parts with "lost 0", a broken-up one listing none: accepted.
+3. The supplies line on Your pledge, and the two refusals ("The koinon's army is still on the march.", "Not enough naval supplies: N needed, M in store."): accepted.
+4. The Reports box as rendered: accepted. One title a row with NEW and the kind's tag, "2 new" in the head, "No reports yet." when empty; the march's card with its date under the head; the muster's card headed "Koinon raid · Reii" with the date and the koinon's name, the line and the parts.
+5. The koinon_muster_parts rows written right after the arrival's claim, before the settle and the battle, so a broken-up army's report reaches every member of its snapshot: accepted.
+6. The arrival's sides as the snapshot's participants who still have a character and sent men or hulls, a house that died on the road dropped from the fight and the report: accepted.
+7. `fleet` written only when the army fought or was repulsed, `homeAt` null when nobody comes home, a turned-back army's parts with nothing paid: accepted.
+8. `ReportsBox` as a child component, `reportTitle` exported, the one CSS rule for the row's padding: accepted.
+9. The Barracks panel importing `MusterReportBody` from the Koinon view: accepted as it is.
+10. The test helpers and fixtures, the extra checks in the reports case, and the grudge's new ids (uid(900) hits at 0.0215, uid(901) misses at 0.8646) with their rolls in the comment: accepted.
+11. The local Postgres restart on the stale pid file: noted; nothing for the repo.
+
+One commit: this ruling appended verbatim to docs/barracks/raids-prompt-5.md under its heading, subject `docs: the raids prompt 5 STOP 1 ruling`. Run the gate at the new HEAD, then `pnpm audit --audit-level=high`. On GATE GREEN and audit exit 0, push as the prompt's Push section says: fast-forward only, plain `git push`. Report the Committed line, the gate's last line with suite counts, the audit exit code, remote HEAD, the CI run with its Gate and Audit steps, Railway server and worker on the new SHA, migration 0069 in `__massalia_migrations` on production, Pages green and API health. On any red, STOP with the log and do not push.
