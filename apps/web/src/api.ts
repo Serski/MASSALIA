@@ -657,7 +657,8 @@ export const api = {
   barracksDisband: (rowId: string) => apiFetch<BarracksView>("/api/barracks/disband", { method: "POST", body: { rowId } }),
   barracksCancel: (rowId: string) => apiFetch<BarracksView>("/api/barracks/cancel", { method: "POST", body: { rowId } }),
   // A battle report opened for the first time (raids prompt 4): the highlight goes. Answers the view.
-  barracksReportRead: (marchId: string) => apiFetch<BarracksView>("/api/barracks/report-read", { method: "POST", body: { marchId } }),
+  // A march's report by its marchId, a koinon muster's by its musterId (raids prompt 5).
+  barracksReportRead: (body: { marchId: string } | { musterId: string }) => apiFetch<BarracksView>("/api/barracks/report-read", { method: "POST", body }),
   // Map reach (military prompt 3a): which land provinces the player's force can
   // Attack, Raid or Colonise from its bases, with a one-line reason when not.
   mapReach: () => apiFetch<MapReachView>("/api/map/reach"),
@@ -1770,8 +1771,11 @@ export type BarracksOffer = {
 };
 
 // A battle report (raids prompt 4; mirrors MarchReportView in services/barracks.ts): kept on its
-// march, listed newest first, unread until its owner first opens it.
-export type BarracksReport = { id: string; kind: MapActType; regionId: string; townId: string | null; arrivedAt: string; gameDate: string; seen: boolean; report: MapActReport };
+// march, listed newest first, unread until its owner first opens it. Or a koinon muster's
+// (raids prompt 5; MusterReportView): the muster he took part in, with the koinon's name.
+export type BarracksReport =
+  | { id: string; kind: MapActType; regionId: string; townId: string | null; arrivedAt: string; gameDate: string; seen: boolean; report: MapActReport }
+  | { id: string; kind: "muster"; regionId: string; townId: string | null; arrivedAt: string; gameDate: string; seen: boolean; koinonName: string; report: KoinonMusterReport };
 // Hulls at sea (raids prompt 3): one entry per sailing, listed under Away · Returning.
 export type BarracksVoyage = { id: string; ships: { id: string; label: string; count: number }[]; kind: "scout" | "raid" | "attack" | "move"; musterId: string | null; regionId: string; townId: string | null; sailedAt: string; returnsAt: string };
 export type BarracksView = {

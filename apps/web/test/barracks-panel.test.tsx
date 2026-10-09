@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, type BarracksRosterRow, type BarracksView } from "../src/api.js";
+import { api, type BarracksReport, type BarracksRosterRow, type BarracksView, type KoinonMusterReport, type MapActReport } from "../src/api.js";
 import BarracksPanel, { countText } from "../src/dashboard/panels/BarracksPanel.js";
 
 // ---------------------------------------------------------------------------
@@ -215,43 +215,90 @@ describe("BarracksPanel", () => {
     expect(hookWarnings).toEqual([]);
   });
 
-  it("reports: newest first; an unread one is highlighted until opened, and opening it shows the card and marks it read", async () => {
-    const battle = (over: Partial<BarracksView["reports"] extends (infer R)[] | undefined ? R["report"] : never>) => ({
-      type: "raid" as const, regionId: "R046", regionName: "Salyes", townId: null, townName: null, town: null, fleet: null, base: "R060", route: "land" as const, steps: 1, marchId: "m-raid", minutes: 30, arrivedAt: iso(NOW - H), homeAt: iso(NOW - H / 2), destination: "R060", ships: {}, winner: "attacker" as const, rounds: 1,
+  it("reports: a box after In training, one title per report, unread until opened; the card holds the rest", async () => {
+    const battle = (over: Partial<MapActReport>): MapActReport => ({
+      type: "raid", regionId: "R046", regionName: "Salyes", townId: null, townName: null, town: null, fleet: null, base: "R060", route: "land", steps: 1, marchId: "m-raid", minutes: 30, arrivedAt: iso(NOW - H), homeAt: iso(NOW - H / 2), destination: "R060", ships: {}, winner: "attacker", rounds: 1,
       attacker: { rows: [], losses: 0 }, defender: { label: "Tribal warband", start: 20, end: 15, losses: 5, turnout: 5 }, plunder: { drachmae: 250, grain: 25 }, conquest: null, intel: null, line: "Raided Salyes with 40 peltasts: 5 tribesmen slain, none of ours lost, 250 drachmae and 25 grain of plunder.", ...over,
     });
-    const reports = [
-      { id: "m-raid", kind: "raid" as const, regionId: "R046", townId: null, arrivedAt: iso(NOW - H), gameDate: "Spring, 277 BC", seen: false, report: battle({}) },
-      { id: "m-scout", kind: "scout" as const, regionId: "R046", townId: null, arrivedAt: iso(NOW - 2 * H), gameDate: "Spring, 277 BC", seen: true, report: battle({ type: "scout", marchId: "m-scout", winner: null, rounds: 0, defender: null, plunder: null, intel: { warband: 20, scoutedGameDate: "Spring, 277 BC" }, line: "Scouted Salyes with 10 peltasts: 20 tribesmen under arms." }) },
+    const muster: KoinonMusterReport = {
+      outcome: "won", reason: null, line: "Raided Reii: 50 men sent, 12 soldiers slain, 3 lost, 960 drachmae and 120 grain taken.", regionName: "Reii", townName: "Reii", men: 50, lost: 3, killed: 12, plunder: { drachmae: 960, grain: 120 },
+      parts: [
+        { playerId: "kallias", name: "Kallias", men: 30, lost: 3, hulls: 0, seats: 0, shares: 30, drachmae: 288, grain: 36 },
+        { playerId: "nikias", name: "Nikias", men: 20, lost: 0, hulls: 1, seats: 20, shares: 40, drachmae: 384, grain: 48 },
+      ],
+    };
+    const reports: BarracksReport[] = [
+      { id: "m-raid", kind: "raid", regionId: "R046", townId: null, arrivedAt: iso(NOW - H), gameDate: "Spring, 277 BC", seen: false, report: battle({}) },
+      { id: "m-scout", kind: "scout", regionId: "R046", townId: null, arrivedAt: iso(NOW - 2 * H), gameDate: "Spring, 277 BC", seen: true, report: battle({ type: "scout", marchId: "m-scout", winner: null, rounds: 0, defender: null, plunder: null, intel: { warband: 20, scoutedGameDate: "Spring, 277 BC" }, line: "Scouted Salyes with 10 peltasts: 20 tribesmen under arms." }) },
+      { id: "mu-1", kind: "muster", regionId: "R031", townId: "reii", arrivedAt: iso(NOW - 3 * H), gameDate: "Winter, 278 BC", seen: false, koinonName: "The Sacred Band", report: muster },
     ];
-    const read = vi.spyOn(api, "barracksReportRead").mockResolvedValue(payload({ reports: [{ ...reports[0]!, seen: true }, reports[1]!] }));
+    const seen = (...ids: string[]) => payload({ reports: reports.map((r) => (ids.includes(r.id) ? { ...r, seen: true } : r)) });
+    const read = vi.spyOn(api, "barracksReportRead").mockResolvedValueOnce(seen("m-raid")).mockResolvedValueOnce(seen("m-raid", "mu-1"));
     const { container } = await mount(payload({ reports }));
-    const section = container.querySelector('[data-section="reports"]')!;
-    expect(section).not.toBeNull();
-    expect(section.textContent).toContain("Reports");
+    // The box is the third of the right-hand stack, after Away · Returning and In training.
+    const stack = container.querySelector(".barracks-stack")!;
+    expect([...stack.querySelectorAll(":scope > section")].map((s) => s.getAttribute("data-section"))).toEqual(["away", "training", "reports"]);
+    const section = stack.querySelector<HTMLElement>('[data-section="reports"]')!;
+    expect(section.querySelector(".barracks-head-title")!.textContent).toBe("Reports");
+    expect(section.querySelector(".barracks-head-note")!.textContent).toBe("2 new");
+    expect(section.querySelector(".barracks-list.reports")).not.toBeNull();
+    // One title per report, the NEW tag while unread, the kind's tag; no line, no date.
     const rows = [...section.querySelectorAll<HTMLButtonElement>(".barracks-report")];
-    expect(rows.map((r) => r.getAttribute("data-report"))).toEqual(["m-raid", "m-scout"]);
-    expect(rows[0]!.classList.contains("is-new")).toBe(true);
-    expect(rows[0]!.textContent).toContain("NEW");
-    expect(rows[0]!.textContent).toContain("RAID");
-    expect(rows[0]!.textContent).toContain("Spring, 277 BC");
-    expect(rows[1]!.classList.contains("is-new")).toBe(false);
-    expect(rows[1]!.textContent).not.toContain("NEW");
-    expect(rows[1]!.textContent).toContain("SCOUT");
-    // Opening the unread one: the card, the read, and the highlight gone with the returned view.
+    expect(rows.map((r) => r.getAttribute("data-report"))).toEqual(["m-raid", "m-scout", "mu-1"]);
+    expect(rows.map((r) => r.querySelector(".barracks-row-name")!.textContent)).toEqual(["Raided Salyes", "Scouted Salyes", "Raided Reii"]);
+    expect(rows.map((r) => r.classList.contains("is-new"))).toEqual([true, false, true]);
+    expect(rows.map((r) => r.textContent!.includes("NEW"))).toEqual([true, false, true]);
+    expect(rows.map((r) => [...r.querySelectorAll(".barracks-tag:not(.barracks-tag-new)")].map((t) => t.textContent))).toEqual([["RAID"], ["SCOUT"], ["MUSTER"]]);
+    for (const r of rows) {
+      expect(r.textContent).not.toContain("slain");
+      expect(r.textContent).not.toContain("under arms");
+      expect(r.textContent).not.toContain("277 BC");
+      expect(r.textContent).not.toContain("278 BC");
+    }
+    // Opening the unread raid: its card with the line and the date, the read by marchId, and the highlight gone with the returned view.
     await act(async () => {
       fireEvent.click(rows[0]!);
     });
     await flush();
     expect(container.querySelector(".w2map-modal-host .w2map-report-line")!.textContent).toBe(reports[0]!.report.line);
-    expect(read).toHaveBeenCalledWith("m-raid");
+    expect(container.querySelector('.w2map-modal-host [data-testid="report-date"]')!.textContent).toBe("Spring, 277 BC");
+    expect(read).toHaveBeenCalledWith({ marchId: "m-raid" });
     expect(container.querySelector('[data-report="m-raid"]')!.classList.contains("is-new")).toBe(false);
     expect(container.querySelector('[data-report="m-raid"]')!.textContent).not.toContain("NEW");
+    expect(section.querySelector(".barracks-head-note")!.textContent).toBe("1 new");
+    fireEvent.click(container.querySelector<HTMLButtonElement>(".w2map-modal-host .w2map-info-close")!);
+    expect(container.querySelector(".w2map-modal-host")).toBeNull();
+    // Opening the unread muster: the koinon's card with its head, its line and its parts, and the read by musterId.
+    await act(async () => {
+      fireEvent.click(container.querySelector<HTMLButtonElement>('[data-report="mu-1"]')!);
+    });
+    await flush();
+    const card = container.querySelector<HTMLElement>(".w2map-modal-host")!;
+    expect(card.querySelector(".w2map-info-label")!.textContent).toBe("Koinon raid · Reii");
+    expect(card.querySelector('[data-testid="report-date"]')!.textContent).toBe("Winter, 278 BC · The Sacred Band");
+    expect(card.textContent).toContain(muster.line!);
+    expect([...card.querySelectorAll("[data-part]")].map((el) => el.getAttribute("data-part"))).toEqual(["kallias", "nikias"]);
+    expect(card.querySelector('[data-part="nikias"]')!.textContent).toContain("Nikias · sent 20 men and 1 hull · lost 0 · 384 drachmae and 48 grain");
+    expect(read).toHaveBeenCalledWith({ musterId: "mu-1" });
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('[data-report="mu-1"]')!.classList.contains("is-new")).toBe(false);
+    expect(section.querySelector(".barracks-head-note")).toBeNull();
+    // A read one opens its card again without a read.
+    fireEvent.click(card.querySelector<HTMLButtonElement>(".w2map-info-close")!);
+    await act(async () => {
+      fireEvent.click(container.querySelector<HTMLButtonElement>('[data-report="m-scout"]')!);
+    });
+    expect(container.querySelector(".w2map-modal-host .w2map-report-line")!.textContent).toBe(reports[1]!.report.line);
+    expect(read).toHaveBeenCalledTimes(2);
     expect(hookWarnings).toEqual([]);
     cleanup();
 
+    // No reports: the box stands with its empty line.
     const plain = await mount(payload());
-    expect(plain.container.querySelector('[data-section="reports"]')).toBeNull();
+    const box = plain.container.querySelector('[data-section="reports"]')!;
+    expect(box).not.toBeNull();
+    expect(box.querySelector(".barracks-empty")!.textContent).toBe("No reports yet.");
+    expect(box.querySelector(".barracks-head-note")).toBeNull();
     expect(hookWarnings).toEqual([]);
   });
 

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api, ApiError, type BarracksOffer, type BarracksRosterRow, type BarracksUnit, type BarracksView, type BarracksVoyage, type BaseView, type MapActReport, type MapReachView } from "../../api.js";
+import { api, ApiError, type BarracksOffer, type BarracksRosterRow, type BarracksUnit, type BarracksView, type BarracksReport, type BarracksVoyage, type BaseView, type MapReachView } from "../../api.js";
 import { BattleReport, ForcePicker, type PickerReport } from "../../map/World2Map.js";
 import { AssetIcon, formatClock, formatDuration, GoodGlyph, onDeviceClock, type PanelProps, ProgressBar, REGION_NAMES_SRC, RESOURCE_WEBP, useCountdownSeconds } from "../shared.js";
+import { MusterReportBody } from "./KoinonView.js";
 
 // The Barracks tab (military prompt ui-2). Renders the GET /api/barracks view to
 // the design in docs/barracks/design/Barracks_dc.html: a summary strip, At Home
@@ -169,6 +170,67 @@ function StatChips({ stats }: { stats: Record<string, number> }) {
           <span className="barracks-chip-k">{label}</span> <span className="barracks-chip-v">{stats[key] ?? 0}</span>
         </span>
       ))}
+    </div>
+  );
+}
+
+// --- Reports (raids prompts 4 and 5) ------------------------------------------
+
+// The place a report is about: its town, else its region, else the id.
+const reportPlace = (r: BarracksReport) => r.report.townName ?? r.report.regionName ?? r.townId ?? r.regionId;
+
+// One title per report: how the party or the koinon's army fared at the place.
+export function reportTitle(r: BarracksReport): string {
+  const place = reportPlace(r);
+  const outcome = r.kind === "muster" ? r.report.outcome : r.report.winner;
+  if (outcome === "turned_back") return `Turned back from ${place}`;
+  if (outcome === "dispersed") return `Broke up on the road to ${place}`;
+  if (outcome === "repulsed") return `Sailed against ${place}`;
+  return `${r.kind === "scout" ? "Scouted" : r.kind === "attack" ? "Attacked" : "Raided"} ${place}`;
+}
+
+// The Reports box: the title of each report, the NEW tag while unread and its
+// kind's tag; the line, the date and the rest wait in the card.
+function ReportsBox({ reports, onOpen }: { reports: BarracksReport[]; onOpen: (r: BarracksReport) => void }) {
+  const unread = reports.filter((r) => !r.seen).length;
+  return (
+    <section className="barracks-section" data-section="reports" aria-label="Reports">
+      <SectionHead title="Reports" note={unread > 0 ? `${unread} new` : undefined} />
+      <div className="barracks-list reports">
+        {reports.length === 0 ? <p className="barracks-empty">No reports yet.</p> : null}
+        {reports.map((r) => (
+          <button key={r.id} type="button" className={`barracks-row barracks-report${r.seen ? "" : " is-new"}`} data-report={r.id} onClick={() => onOpen(r)}>
+            <div className="barracks-row-grid two">
+              <div className="barracks-row-name">{reportTitle(r)}</div>
+              <span className="barracks-tags">
+                {r.seen ? null : <span className="barracks-tag barracks-tag-new">NEW</span>}
+                <span className="barracks-tag">{MISSION_TAG[r.kind]}</span>
+              </span>
+            </div>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// A koinon muster's report card, built as the map's BattleReport card is: the
+// head, the game date and the koinon's name, then the report's body.
+function MusterReportCard({ report, onClose }: { report: Extract<BarracksReport, { kind: "muster" }>; onClose: () => void }) {
+  const place = reportPlace(report);
+  return (
+    <div className="w2map-modal" role="dialog" aria-label={`Koinon raid ${place}`} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+      <div className="w2map-modal-card">
+        <button type="button" className="w2map-info-close" onClick={onClose} aria-label="Close">Close</button>
+        <div className="w2map-info-body">
+          <div className="w2map-info-label">Koinon raid · {place}</div>
+          <p className="w2map-report-note" data-testid="report-date">{report.gameDate} · {report.koinonName}</p>
+          <MusterReportBody report={report.report} />
+          <div className="w2map-actions">
+            <button type="button" className="w2map-action" onClick={onClose}>Close</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -612,8 +674,8 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
   // own order stands.
   const [bases, setBases] = useState<BaseView[]>([]);
   const [moveReport, setMoveReport] = useState<PickerReport | null>(null);
-  // A battle report opened from the Reports list (raids prompt 4).
-  const [openReport, setOpenReport] = useState<MapActReport | null>(null);
+  // A report opened from the Reports box (raids prompts 4 and 5): a march's or a muster's.
+  const [openReport, setOpenReport] = useState<BarracksReport | null>(null);
   // Region display names for the mission lines (the map's public names file),
   // with the view's own place names (towns included) on top.
   const [names, setNames] = useState<Record<string, string>>({});
@@ -797,38 +859,6 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
         </div>
       </div>
 
-      {(view.reports ?? []).length > 0 ? (
-        <section className="barracks-section" data-section="reports" aria-label="Reports">
-          <SectionHead title="Reports" />
-          <div className="barracks-list">
-            {(view.reports ?? []).map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                className={`barracks-row barracks-report${r.seen ? "" : " is-new"}`}
-                data-report={r.id}
-                onClick={() => {
-                  setOpenReport(r.report);
-                  // Opened for the first time: the highlight goes, and stays gone. A failed read leaves it.
-                  if (!r.seen) api.barracksReportRead(r.id).then(setView).catch(() => {});
-                }}
-              >
-                <div className="barracks-row-grid two">
-                  <div className="barracks-row-body">
-                    <div className="barracks-row-name">{r.report.line}</div>
-                    <div className="barracks-row-sub">{r.gameDate}</div>
-                  </div>
-                  <span className="barracks-tags">
-                    {r.seen ? null : <span className="barracks-tag barracks-tag-new">NEW</span>}
-                    <span className="barracks-tag">{MISSION_TAG[r.kind]}</span>
-                  </span>
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
       <div className="barracks-columns">
         <section className="barracks-section" data-section="home" aria-label="At home">
           <SectionHead title="At home" note={menText(men(home))} />
@@ -912,6 +942,15 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
               ))}
             </div>
           </section>
+
+          <ReportsBox
+            reports={view.reports ?? []}
+            onOpen={(r) => {
+              setOpenReport(r);
+              // Opened for the first time: the highlight goes, and stays gone. A failed read leaves it.
+              if (!r.seen) api.barracksReportRead(r.kind === "muster" ? { musterId: r.id } : { marchId: r.id }).then(setView).catch(() => {});
+            }}
+          />
         </div>
       </div>
 
@@ -1001,7 +1040,11 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
       ) : null}
       {openReport ? (
         <div className="w2map-modal-host">
-          <BattleReport report={openReport} onClose={() => setOpenReport(null)} />
+          {openReport.kind === "muster" ? (
+            <MusterReportCard report={openReport} onClose={() => setOpenReport(null)} />
+          ) : (
+            <BattleReport report={openReport.report} gameDate={openReport.gameDate} onClose={() => setOpenReport(null)} />
+          )}
         </div>
       ) : null}
     </section>

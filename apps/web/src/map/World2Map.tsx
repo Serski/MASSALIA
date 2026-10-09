@@ -1925,7 +1925,9 @@ const townFleetText = (f: { pentekonters: number; triremes: number }) => {
   return parts.length ? parts.join(" and ") : "no ships";
 };
 
-export function BattleReport({ report, onClose }: { report: PickerReport; onClose: () => void }) {
+// `gameDate`: the game date the report is from, shown under the head when given
+// (the Barracks' Reports list, raids prompt 5); the map passes none.
+export function BattleReport({ report, onClose, gameDate }: { report: PickerReport; onClose: () => void; gameDate?: string }) {
   // A move, and a party just sent out (the set-out card, raids prompt 4): one line.
   if (report.type === "move" || report.type === "setout") {
     const head = report.type === "move" ? "March" : ACTION_LABEL[report.action];
@@ -1935,6 +1937,7 @@ export function BattleReport({ report, onClose }: { report: PickerReport; onClos
           <button type="button" className="w2map-info-close" onClick={onClose} aria-label="Close">Close</button>
           <div className="w2map-info-body">
             <div className="w2map-info-label">{head} · {report.townName ?? report.regionName}</div>
+            {gameDate ? <p className="w2map-report-note" data-testid="report-date">{gameDate}</p> : null}
             <p className="w2map-report-line">{report.line}</p>
             {report.supplies ? <p className="w2map-report-note" data-testid="supplies-line">{report.supplies} naval {report.supplies === 1 ? "supply" : "supplies"} for the voyage.</p> : null}
             <div className="w2map-actions">
@@ -1961,6 +1964,7 @@ export function BattleReport({ report, onClose }: { report: PickerReport; onClos
         <button type="button" className="w2map-info-close" onClick={onClose} aria-label="Close">Close</button>
         <div className="w2map-info-body">
           <div className="w2map-info-label">{ACTION_LABEL[report.type]} · {place}</div>
+          {gameDate ? <p className="w2map-report-note" data-testid="report-date">{gameDate}</p> : null}
           <p className="w2map-report-line">{report.line}</p>
           {report.town && report.type !== "scout" ? (
             <p className="w2map-report-note" data-testid="walls-line">Walls {report.town.walls}, garrison defends at {report.town.garrisonDef}</p>

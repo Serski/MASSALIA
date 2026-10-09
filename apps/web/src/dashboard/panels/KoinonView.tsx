@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { renderPlunder } from "@massalia/shared";
-import { api, ApiError, type KoinonArmies, type KoinonArmyRow, type KoinonLastMuster, type KoinonMarchingMuster, type KoinonMember, type KoinonMissionKind, type KoinonMuster, type KoinonMusterMine, type KoinonMusterTargets, type KoinonPage } from "../../api.js";
+import { api, ApiError, type KoinonArmies, type KoinonArmyRow, type KoinonLastMuster, type KoinonMarchingMuster, type KoinonMember, type KoinonMissionKind, type KoinonMuster, type KoinonMusterMine, type KoinonMusterReport, type KoinonMusterTargets, type KoinonPage } from "../../api.js";
 import { professions } from "../../data/league.js";
 import { LobbyPortrait } from "../../lobby/LobbyPortrait.js";
 import { AssetIcon, BuildProgress, ChoicePicker, formatDuration, HouseCrest, onDeviceClock, type PanelProps, titleCase, useCountdownSeconds } from "../shared.js";
@@ -203,24 +203,31 @@ function LastMuster({ last }: { last: KoinonLastMuster }) {
       </div>
       {last.status === "cancelled" ? <p className="koinon-hint">Called off.</p> : null}
       {last.status === "stood_down" ? <p className="koinon-hint">Stood down: {last.reason ?? "it could not march."}</p> : null}
-      {last.status === "resolved" && report ? (
-        <>
-          {report.line ? <p className="koinon-hint">{report.line}</p> : null}
-          {report.opinion ? <p className="koinon-hint" data-muster-opinion>{report.opinion.line}</p> : null}
-          {report.parts.map((part) => {
-            const sent = part.men > 0 && part.hulls > 0 ? `${menText(part.men)} and ${hullsText(part.hulls)}` : part.hulls > 0 ? hullsText(part.hulls) : menText(part.men);
-            // His part of the plunder, the third good included when the report has one (a report from before the raids prompt has none).
-            const spoil = report.plunder?.spoil;
-            const share = renderPlunder({ drachmae: part.drachmae, grain: part.grain, ...(spoil ? { spoil: { good: spoil.good, label: spoil.label, amount: part.spoil ?? 0 } } : {}) });
-            return (
-              <div key={part.playerId} className="koinon-line" data-part={part.playerId}>
-                {part.name} <span className="koinon-dim">· sent {sent} · lost {part.lost}{report.outcome === "won" ? ` · ${share}` : ""}</span>
-              </div>
-            );
-          })}
-        </>
-      ) : null}
+      {last.status === "resolved" && report ? <MusterReportBody report={report} /> : null}
     </div>
+  );
+}
+
+// A muster's report body: its line, the grudge line and one line per house that
+// took part. Rendered under Last muster here and in the Barracks' report card
+// (raids prompt 5).
+export function MusterReportBody({ report }: { report: KoinonMusterReport }) {
+  return (
+    <>
+      {report.line ? <p className="koinon-hint">{report.line}</p> : null}
+      {report.opinion ? <p className="koinon-hint" data-muster-opinion>{report.opinion.line}</p> : null}
+      {report.parts.map((part) => {
+        const sent = part.men > 0 && part.hulls > 0 ? `${menText(part.men)} and ${hullsText(part.hulls)}` : part.hulls > 0 ? hullsText(part.hulls) : menText(part.men);
+        // His part of the plunder, the third good included when the report has one (a report from before the raids prompt has none).
+        const spoil = report.plunder?.spoil;
+        const share = renderPlunder({ drachmae: part.drachmae, grain: part.grain, ...(spoil ? { spoil: { good: spoil.good, label: spoil.label, amount: part.spoil ?? 0 } } : {}) });
+        return (
+          <div key={part.playerId} className="koinon-line" data-part={part.playerId}>
+            {part.name} <span className="koinon-dim">· sent {sent} · lost {part.lost}{report.outcome === "won" ? ` · ${share}` : ""}</span>
+          </div>
+        );
+      })}
+    </>
   );
 }
 
