@@ -1234,6 +1234,28 @@ export const leagueCities = pgTable("league_cities", {
   worldIdx: index("league_cities_world_idx").on(table.worldId),
 }));
 
+// The League's building projects (government prompt 2a, migration 0071): one row
+// per project the chamber has passed. started_at is the instant the vote closed,
+// completes_at the instant the building stands, completed_at is copied from
+// completes_at by the sweep that first finds it standing (NULL until then). One
+// of each building per polis per world.
+export const leagueProjects = pgTable("league_projects", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  cityId: text("city_id").notNull(),
+  buildingId: text("building_id").notNull(),
+  cost: integer("cost").notNull(),
+  agendaCycleId: uuid("agenda_cycle_id").references(() => agendaCycles.id),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  completesAt: timestamp("completes_at", { withTimezone: true }).notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => ({
+  oneBuildingPerPolis: unique("league_projects_world_id_city_id_building_id_key").on(table.worldId, table.cityId, table.buildingId),
+  // The due rows: a partial index (WHERE completed_at IS NULL) in the migration;
+  // mirrored here for reference, as oligarch_seats mirrors its own.
+  dueIdx: index("league_projects_due_idx").on(table.completesAt).where(sql`completed_at IS NULL`),
+}));
+
 export const factionRelations = pgTable("faction_relations", {
   id: uuid("id").primaryKey().defaultRandom(),
   worldId: uuid("world_id").references(() => worlds.id).notNull(),
