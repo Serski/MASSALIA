@@ -251,11 +251,15 @@ suite("/api/barracks (integration)", () => {
     expect(levy.men).toBe(125);
   });
 
-  it("POST /report-read: no marchId is 400, an unknown one 404, without a session 401", async () => {
+  it("POST /report-read: no marchId or musterId is 400, an unknown one 404, without a session 401", async () => {
     const p = await freshPlayer();
+    const sentence = "A marchId or a musterId is required.";
     expect((await post(p.token, "report-read", {})).statusCode).toBe(400);
+    expect((await post(p.token, "report-read", {})).json()).toEqual({ error: sentence });
     expect((await post(p.token, "report-read", { marchId: "" })).statusCode).toBe(400);
+    expect((await post(p.token, "report-read", { marchId: "" })).json()).toEqual({ error: sentence });
     expect((await post(p.token, "report-read", { marchId: crypto.randomUUID() })).statusCode).toBe(404);
+    expect((await post(p.token, "report-read", { musterId: crypto.randomUUID() })).statusCode).toBe(404);
     expect((await app.inject({ method: "POST", url: "/api/barracks/report-read", payload: { marchId: crypto.randomUUID() } })).statusCode).toBe(401);
   });
 });

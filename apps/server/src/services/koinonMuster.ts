@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { and, asc, desc, eq, inArray, isNull, lte, ne, notInArray, sql } from "drizzle-orm";
-import { createDb, effectLog, koinonMembers, koinonMusterHulls, koinonMusters, playerCharacters, playerMarches, players, playerUnits, resources, worlds, type UnitMission } from "@massalia/db";
+import { createDb, effectLog, koinonMembers, koinonMusterHulls, koinonMusterParts, koinonMusters, playerCharacters, playerMarches, players, playerUnits, resources, worlds, type UnitMission } from "@massalia/db";
 import {
   bandDef,
   distancesFrom,
@@ -920,6 +920,9 @@ async function arriveMuster(tx: DbTx, due: MusterRow, now: Date): Promise<Resolv
       .returning()
   )[0];
   if (!muster) return { outcome: "not_due" };
+  // 2b. Every participant gets his copy of the report in the Barracks (raids
+  // prompt 5), unread, whatever the outcome.
+  if (participantIds.length > 0) await tx.insert(koinonMusterParts).values(participantIds.map((playerId) => ({ musterId: muster.id, playerId, seenAt: null }))).onConflictDoNothing();
 
   // 3. Each participant with a character is settled at the arrival. One with
   // no character is not settled and takes no part: no fight, no share, no line.

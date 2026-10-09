@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../services/auth.js";
 import { buildingContext, type ActingContext } from "../services/buildings.js";
-import { barracksView, cancelTraining, disbandRow, hireBand, markReportRead, recruitUnits, sacrifice } from "../services/barracks.js";
+import { barracksView, cancelTraining, disbandRow, hireBand, markMusterReportRead, markReportRead, recruitUnits, sacrifice } from "../services/barracks.js";
 import { ensureCharacterRow, getActivePlayer, getActiveWorldId } from "../services/character.js";
 
 // The Barracks: the player's army (trained units from the levy, hired bands on
@@ -138,8 +138,10 @@ export async function barracksRoutes(app: FastifyInstance) {
     return barracksView(ctx, now);
   });
 
-  // A battle report opened for the first time (raids prompt 4): the highlight
-  // goes, and stays gone. Answers the view, as the other POSTs do.
+  // A battle report opened for the first time (raids prompts 4 and 5): the
+  // highlight goes, and stays gone. The body carries a `marchId` (a party's)
+  // or a `musterId` (a koinon muster's), one non-empty string. Answers the
+  // view, as the other POSTs do.
   app.post("/report-read", async (request, reply) => {
     const user = await requireAuth(request);
     const ctx = await acting(user.id);
@@ -147,13 +149,15 @@ export async function barracksRoutes(app: FastifyInstance) {
       reply.code(ctx.code);
       return { error: ctx.error };
     }
-    const marchId = (request.body as { marchId?: unknown } | undefined)?.marchId;
-    if (typeof marchId !== "string" || !marchId) {
+    const body = (request.body as { marchId?: unknown; musterId?: unknown } | undefined) ?? {};
+    const marchId = typeof body.marchId === "string" && body.marchId ? body.marchId : null;
+    const musterId = typeof body.musterId === "string" && body.musterId ? body.musterId : null;
+    if ((marchId === null) === (musterId === null)) {
       reply.code(400);
-      return { error: "A marchId is required." };
+      return { error: "A marchId or a musterId is required." };
     }
     const now = new Date();
-    const result = await markReportRead(ctx, marchId, now);
+    const result = musterId !== null ? await markMusterReportRead(ctx, musterId, now) : await markReportRead(ctx, marchId!, now);
     if (!result.ok) {
       reply.code(result.code);
       return { error: result.error };

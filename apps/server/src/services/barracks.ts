@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, asc, desc, eq, gte, isNull, lte, or, sql, inArray } from "drizzle-orm";
-import { bandOffers, createDb, effectLog, koinonMembers, koinonMusters, playerCharacters, playerLevy, playerMarches, playerUnits, players, playerVoyages, resources, type MarchKind, type UnitMission, type VoyageKind } from "@massalia/db";
+import { bandOffers, createDb, effectLog, koinonMembers, koinonMusterParts, koinonMusters, playerCharacters, playerLevy, playerMarches, playerUnits, players, playerVoyages, resources, type MarchKind, type UnitMission, type VoyageKind } from "@massalia/db";
 import {
   bandDef,
   formatGameDate,
@@ -30,6 +30,7 @@ import { getTopology } from "./mapGraph.js";
 import { heldGarrisonedRegions, settleHoldings, settleTribute, type HoldingsSettle, type TributeSettle } from "./holdings.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
 import type { MapActReport } from "./mapActions.js";
+import type { MusterMarch, MusterReport } from "./koinonMuster.js";
 
 // ---------------------------------------------------------------------------
 // Barracks — the player's army: trained UNITS raised from the levy and hired
@@ -430,10 +431,12 @@ export async function drawSupplies(exec: Exec, owner: Pick<ActingContext, "playe
   return took;
 }
 
-// --- Reports (raids prompt 4) ------------------------------------------------------
+// --- Reports (raids prompts 4 and 5) ------------------------------------------------
 // A party's battle report is kept on its march and listed in the Barracks,
 // newest first, the latest ten; one not yet opened is highlighted until its
-// owner first opens it (markReportRead).
+// owner first opens it (markReportRead). A koinon muster's report is listed
+// for every member who took part (koinon_muster_parts), with the same
+// highlight (markMusterReportRead).
 
 export type MarchReportView = { id: string; kind: MarchKind; regionId: string; townId: string | null; arrivedAt: string; gameDate: string; seen: boolean; report: MapActReport };
 async function marchReports(exec: Exec, ctx: ActingContext): Promise<MarchReportView[]> {
@@ -453,6 +456,42 @@ async function marchReports(exec: Exec, ctx: ActingContext): Promise<MarchReport
     seen: m.seenAt !== null,
     report: m.report as unknown as MapActReport,
   }));
+}
+
+// A muster's report for a member who took part: the muster's id, its arrival
+// (`closedAt`) and that instant's game date, whether he has opened it, the
+// koinon's name as it was, and the stored report.
+export type MusterReportView = { id: string; kind: "muster"; regionId: string; townId: string | null; arrivedAt: string; gameDate: string; seen: boolean; koinonName: string; report: MusterReport };
+async function musterReports(exec: Exec, ctx: ActingContext): Promise<MusterReportView[]> {
+  const rows = await exec
+    .select({ muster: koinonMusters, seenAt: koinonMusterParts.seenAt })
+    .from(koinonMusterParts)
+    .innerJoin(koinonMusters, eq(koinonMusters.id, koinonMusterParts.musterId))
+    .where(and(eq(koinonMusterParts.playerId, ctx.playerId), eq(koinonMusters.worldId, ctx.worldId), eq(koinonMusters.status, "resolved")))
+    .orderBy(desc(koinonMusters.closedAt), asc(koinonMusters.id))
+    .limit(10);
+  return rows.flatMap(({ muster, seenAt }) => {
+    if (!muster.closedAt) return [];
+    return [
+      {
+        id: muster.id,
+        kind: "muster" as const,
+        regionId: muster.regionId,
+        townId: muster.townId,
+        arrivedAt: muster.closedAt.toISOString(),
+        gameDate: formatGameDate(gameDate(muster.closedAt.getTime(), ctx.worldStartedMs)),
+        seen: seenAt !== null,
+        koinonName: (muster.march as unknown as MusterMarch | null)?.koinonName ?? "",
+        report: muster.report as unknown as MusterReport,
+      },
+    ];
+  });
+}
+
+// Both lists merged by arrival, newest first, then id: the latest ten.
+async function allReports(exec: Exec, ctx: ActingContext): Promise<(MarchReportView | MusterReportView)[]> {
+  const both = [...(await marchReports(exec, ctx)), ...(await musterReports(exec, ctx))];
+  return both.sort((a, b) => Date.parse(b.arrivedAt) - Date.parse(a.arrivedAt) || a.id.localeCompare(b.id)).slice(0, 10);
 }
 
 // The owner opened a report: its first opening is stamped, once. A report
@@ -475,6 +514,23 @@ export async function markReportRead(ctx: ActingContext, marchId: string, now: D
       .limit(1)
   )[0];
   return his ? { ok: true } : { ok: false, code: 404, error: "No such report." };
+}
+
+// A member opened a muster's report: his part's first opening is stamped,
+// once, by the same rules as a march's.
+export async function markMusterReportRead(ctx: ActingContext, musterId: string, now: Date): Promise<{ ok: true } | Failure> {
+  if (!UUID_RE.test(musterId)) return { ok: false, code: 404, error: "No such report." };
+  const his = (
+    await db
+      .select({ musterId: koinonMusterParts.musterId, seenAt: koinonMusterParts.seenAt })
+      .from(koinonMusterParts)
+      .innerJoin(koinonMusters, eq(koinonMusters.id, koinonMusterParts.musterId))
+      .where(and(eq(koinonMusterParts.musterId, musterId), eq(koinonMusterParts.playerId, ctx.playerId), eq(koinonMusters.worldId, ctx.worldId), eq(koinonMusters.status, "resolved")))
+      .limit(1)
+  )[0];
+  if (!his) return { ok: false, code: 404, error: "No such report." };
+  if (his.seenAt === null) await db.update(koinonMusterParts).set({ seenAt: now }).where(and(eq(koinonMusterParts.musterId, musterId), eq(koinonMusterParts.playerId, ctx.playerId), isNull(koinonMusterParts.seenAt)));
+  return { ok: true };
 }
 
 // The player's hulls at sea, for the Barracks: one entry per sailing, by
@@ -1126,9 +1182,10 @@ export type BarracksView = {
   fleet: FleetStripView;
   // The hulls at sea, one entry per sailing, listed under Away · Returning.
   atSea: VoyageView[];
-  // The battle reports (raids prompt 4): the player's resolved marches in this
-  // world, newest first, the latest ten.
-  reports: MarchReportView[];
+  // The battle reports (raids prompts 4 and 5): the player's resolved marches
+  // in this world, and the koinon musters he took part in, newest first, the
+  // latest ten. A muster's report is listed for every member who took part.
+  reports: (MarchReportView | MusterReportView)[];
   // The altar while lit at `now` (the good burned, its morale bonus, the
   // instant it goes cold), else null.
   altar: { good: string; mor: number; until: string } | null;
@@ -1204,7 +1261,7 @@ export async function barracksView(ctx: ActingContext, now: Date): Promise<Barra
     }
     // The hulls at sea, after this view's own settle brought home what was due.
     const atSea = await shipsAtSea(tx, ctx);
-    const reports = await marchReports(tx, ctx);
+    const reports = await allReports(tx, ctx);
     for (const v of atSea) for (const id of [v.regionId, v.townId]) if (id && !(id in places)) places[id] = await nameOf(id);
     const { strip: fleet } = await fleetInStock(tx, ctx);
     const battleC = getBattleContent();

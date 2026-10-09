@@ -813,6 +813,40 @@ suite("Koinon muster (integration)", () => {
     expect((await musterOf(musterId)).status).toBe("resolved");
   });
 
+  it("every member who took part finds the muster's report in his Barracks, unread until he opens it", async () => {
+    const { a, b, musterId } = await landRaid();
+    const d = await freshPlayer("Lykos", 100_000, 4);
+    await db.insert(m.dbPkg.koinonMembers).values({ worldId, playerId: d, koinonId: uid(800), joinedAt: at(-HOUR), lastReadAt: at(-HOUR) });
+    const { at: fought } = await launchAndFight(musterId, LAUNCH);
+    const reportsOf = async (p: string) => (await m.barracks.barracksView(await ctx(p), at(3 * HOUR))).reports;
+    const mine = await reportsOf(a);
+    expect(mine).toHaveLength(1);
+    expect(mine[0]).toMatchObject({ id: musterId, kind: "muster", koinonName: "The Sacred Band", arrivedAt: fought.toISOString(), seen: false, report: { outcome: "won" } });
+    expect(typeof mine[0]!.gameDate).toBe("string");
+    // Opened once by Kallias: his copy is read, Nikias's is not; a second opening keeps the first instant.
+    expect(await m.barracks.markMusterReportRead(await ctx(a), musterId, at(3 * HOUR))).toEqual({ ok: true });
+    expect((await reportsOf(a))[0]!.seen).toBe(true);
+    expect((await reportsOf(b))[0]!.seen).toBe(false);
+    expect(await m.barracks.markMusterReportRead(await ctx(a), musterId, at(4 * HOUR))).toEqual({ ok: true });
+    expect((await db.select().from(m.dbPkg.koinonMusterParts).where(and(eq(m.dbPkg.koinonMusterParts.musterId, musterId), eq(m.dbPkg.koinonMusterParts.playerId, a))))[0]!.seenAt).toEqual(at(3 * HOUR));
+    // A member who took no part, an unknown uuid and no uuid at all: no such report.
+    expect(await reportsOf(d)).toEqual([]);
+    expect(await m.barracks.markMusterReportRead(await ctx(d), musterId, at(3 * HOUR))).toEqual({ ok: false, code: 404, error: "No such report." });
+    expect(await m.barracks.markMusterReportRead(await ctx(a), uid(999), at(3 * HOUR))).toEqual({ ok: false, code: 404, error: "No such report." });
+    expect(await m.barracks.markMusterReportRead(await ctx(a), "nope", at(3 * HOUR))).toEqual({ ok: false, code: 404, error: "No such report." });
+    // A resolved march of his, arrived after the army, lists before the muster.
+    await db.insert(m.dbPkg.playerMarches).values({ id: uid(940), worldId, ownerPlayerId: a, kind: "scout", regionId: landRegion, townId: null, baseId: massalia, route: "land", steps: 1, minutes: 30, party: [], ships: {}, sailing: {}, departedAt: fought, arrivesAt: new Date(fought.getTime() + HOUR), status: "resolved", resolvedAt: new Date(fought.getTime() + HOUR), report: { type: "scout", line: "Scouted." } });
+    expect((await reportsOf(a)).map((r) => [r.id, r.kind])).toEqual([[uid(940), "scout"], [musterId, "muster"]]);
+  });
+
+  it("a broken-up army's report reaches every member of its snapshot", async () => {
+    const { a, b, c, musterId } = await landRaid();
+    expect(await m.muster.resolveMuster(musterId, LAUNCH)).toEqual({ outcome: "marched" });
+    await db.delete(m.dbPkg.playerUnits);
+    expect(await m.muster.resolveMuster(musterId, arrival(1))).toEqual({ outcome: "resolved" });
+    for (const p of [a, b, c]) expect((await m.barracks.barracksView(await ctx(p), at(3 * HOUR))).reports).toMatchObject([{ id: musterId, kind: "muster", seen: false, report: { outcome: "dispersed" } }]);
+  });
+
   it("a member who leaves the koinon on the march still fights and takes his share", async () => {
     const { a, c, musterId } = await landRaid();
     expect(await m.muster.resolveMuster(musterId, LAUNCH)).toEqual({ outcome: "marched" });
