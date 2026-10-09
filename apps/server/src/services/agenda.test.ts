@@ -62,7 +62,7 @@ suite("Agenda & three governments (integration)", () => {
   });
 
   beforeEach(async () => {
-    await db.execute(sql`TRUNCATE TABLE party_endorsements, ephor_vetoes, agenda_cycles, treasury_ledger, treasuries,
+    await db.execute(sql`TRUNCATE TABLE league_projects, league_cities, party_endorsements, ephor_vetoes, agenda_cycles, treasury_ledger, treasuries,
       election_votes, election_candidates, elections, office_history, offices, chamber_ballots, chamber_votes,
       oligarch_seats, party_favor, effect_log, character_traits, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
     await db.insert(m.dbPkg.houses).values({ slug: "test-house", name: "House Test", initial: "T", alignment: "c", stance: "s", motto: "m", patron: "p", crest: "c" }).onConflictDoNothing();
@@ -96,49 +96,138 @@ suite("Agenda & three governments (integration)", () => {
     expect(ledger.some((l) => l.reason === "cut:festival_donation")).toBe(true);
   });
 
-  it("runs a full league cycle: draft → veto → re-draft → pass → apply effect + spend", async () => {
+  // --- The League's building projects (government prompt 2a) -----------------
+  // The League's docket is every project it can still build and afford; a passed
+  // project is paid from the League treasury and stands `seasons` later.
+
+  const leagueVote = async () => (await db.select().from(m.dbPkg.chamberVotes).where(and(eq(m.dbPkg.chamberVotes.worldId, worldId), eq(m.dbPkg.chamberVotes.scope, "league"))).limit(1))[0]!;
+  const projects = () => db.select().from(m.dbPkg.leagueProjects).where(eq(m.dbPkg.leagueProjects.worldId, worldId));
+  const agendaLedger = async () => (await m.dbPkg.treasuryLedgerRows(worldId, "league", 50)).filter((l) => l.reason.startsWith("agenda:"));
+  const fortifications = async (cityId: string) => (await db.select({ f: m.dbPkg.leagueCities.fortifications }).from(m.dbPkg.leagueCities).where(and(eq(m.dbPkg.leagueCities.worldId, worldId), eq(m.dbPkg.leagueCities.cityId, cityId))))[0]!.f;
+
+  it("runs a full league cycle: a docket of projects, draft → veto → re-draft → pass → pay and build", async () => {
     const archon = await character("archon", "palaioi");
     const ephor = await character("ephor", "palaioi", { militia: 5 });
     const voter = await character("voter", "palaioi");
     await setOffice("archon", "palaioi", archon);
     await setOffice("ephor", "palaioi", ephor);
-    await m.dbPkg.creditTreasury(worldId, "league", 200, "seed", at(8));
+    await m.dbPkg.creditTreasury(worldId, "league", 5000, "seed", at(8));
     const cyc = (await m.dbPkg.openAgendaCycleIfDue("league", cfg, pools, at(8)))!;
     expect(cyc.phase).toBe("drafting");
+    // The docket is every project at the start populations within 5,000: all 36.
+    expect(cyc.cardIds).toHaveLength(36);
+    expect(cyc.cardIds.every((id) => id.startsWith("project:"))).toBe(true);
+    expect(cyc.cardIds).toContain("project:massalia:temple");
+    expect(cyc.cardIds).toContain("project:nikaia:walls");
 
-    await m.dbPkg.setDraftedCard(cyc.id, "league-founders-shrine");
+    await m.dbPkg.setDraftedCard(cyc.id, "project:massalia:temple");
     expect(await m.dbPkg.setVeto(worldId, cyc.id, ephor, "league", 2)).toBe(true);
     expect(await m.dbPkg.setVeto(worldId, cyc.id, ephor, "league", 2)).toBe(false); // one per term
-    await m.dbPkg.setDraftedCard(cyc.id, "league-sea-wall"); // cost 60, militia +1
+    await m.dbPkg.setDraftedCard(cyc.id, "project:nikaia:walls"); // 2,000, 8 seasons, leans palaioi
 
     await m.dbPkg.advanceAgendaCycles(calendar, cfg, pools, at(9)); // opens the chamber vote
-    const vote = (await db.select().from(m.dbPkg.chamberVotes).where(and(eq(m.dbPkg.chamberVotes.worldId, worldId), eq(m.dbPkg.chamberVotes.scope, "league"))).limit(1))[0]!;
-    expect(vote.agendaCardId).toBe("league-sea-wall");
+    const vote = await leagueVote();
+    expect(vote.agendaCardId).toBe("project:nikaia:walls");
+    expect(vote.title).toBe("The Walls of Nikaia");
+    expect(vote.leans).toEqual({ palaioi: "yes", dynatoi: "no", independent: "no" });
     await ballot(vote.id, voter, "yes");
-    const militiaBefore = (await db.select({ m: m.dbPkg.playerCharacters.militia }).from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.id, ephor)).limit(1))[0]!.m;
     const balBefore = await m.dbPkg.treasuryBalance(worldId, "league");
 
     await m.dbPkg.closeDueChamberVotes(cfg, at(10));
     const adv = await m.dbPkg.advanceAgendaCycles(calendar, cfg, pools, at(10));
     expect((await db.select({ s: m.dbPkg.chamberVotes.status }).from(m.dbPkg.chamberVotes).where(eq(m.dbPkg.chamberVotes.id, vote.id)).limit(1))[0]!.s).toBe("passed");
-    expect(adv.resolved.some((r) => r.applied && r.spent === 60)).toBe(true);
-    expect(balBefore - (await m.dbPkg.treasuryBalance(worldId, "league"))).toBe(60); // spent
-    expect((await db.select({ m: m.dbPkg.playerCharacters.militia }).from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.id, ephor)).limit(1))[0]!.m).toBe(militiaBefore + 1); // effect
+    expect(adv.resolved).toEqual([{ scope: "league", gameYear: 2, cardId: "project:nikaia:walls", passed: true, applied: true, spent: 2000 }]);
+    expect(balBefore - (await m.dbPkg.treasuryBalance(worldId, "league"))).toBe(2000);
+    expect((await agendaLedger()).map((l) => [l.reason, l.delta])).toEqual([["agenda:project:nikaia:walls", -2000]]);
+
+    const rows = await projects();
+    expect(rows).toHaveLength(1);
+    const cycle = (await m.dbPkg.getAgendaCycle(worldId, "league", 2))!;
+    expect(cycle.phase).toBe("resolved");
+    expect(rows[0]).toMatchObject({ cityId: "nikaia", buildingId: "walls", cost: 2000, agendaCycleId: cycle.id, completedAt: null });
+    expect(rows[0]!.startedAt.getTime()).toBe(cycle.votingEndsAt.getTime());
+    expect(rows[0]!.startedAt.getTime()).toBe(T0 + 10 * SEASON);
+    expect(rows[0]!.completesAt.getTime()).toBe(T0 + 18 * SEASON);
+
+    // A second advance writes nothing more.
+    const again = await m.dbPkg.advanceAgendaCycles(calendar, cfg, pools, at(10));
+    expect(again.resolved).toEqual([]);
+    expect(await projects()).toHaveLength(1);
+    expect(await agendaLedger()).toHaveLength(1);
+    expect(balBefore - (await m.dbPkg.treasuryBalance(worldId, "league"))).toBe(2000);
   });
 
-  it("never overspends — a passed card the treasury can't afford applies nothing", async () => {
+  it("never overspends — a passed project the treasury can no longer cover writes no project, no debit and no ledger row", async () => {
     const voter = await character("voter", "palaioi");
+    await m.dbPkg.creditTreasury(worldId, "league", 2500, "seed", at(8));
     const cyc = (await m.dbPkg.openAgendaCycleIfDue("league", cfg, pools, at(8)))!;
-    await m.dbPkg.setDraftedCard(cyc.id, "league-sea-wall"); // cost 60
-    await m.dbPkg.creditTreasury(worldId, "league", 10, "seed", at(8)); // only 10
+    expect(cyc.cardIds).toContain("project:nikaia:walls");
+    await m.dbPkg.setDraftedCard(cyc.id, "project:nikaia:walls"); // 2,000
     await m.dbPkg.advanceAgendaCycles(calendar, cfg, pools, at(9));
-    const vote = (await db.select().from(m.dbPkg.chamberVotes).where(and(eq(m.dbPkg.chamberVotes.worldId, worldId), eq(m.dbPkg.chamberVotes.scope, "league"))).limit(1))[0]!;
+    const vote = await leagueVote();
     await ballot(vote.id, voter, "yes");
+    await m.dbPkg.creditTreasury(worldId, "league", -1500, "seed", at(9)); // only 1,000 left
     const balBefore = await m.dbPkg.treasuryBalance(worldId, "league");
     await m.dbPkg.closeDueChamberVotes(cfg, at(10));
     const adv = await m.dbPkg.advanceAgendaCycles(calendar, cfg, pools, at(10));
-    expect(adv.resolved.some((r) => !r.applied && r.spent === 0)).toBe(true);
-    expect(await m.dbPkg.treasuryBalance(worldId, "league")).toBe(balBefore); // nothing spent
+    expect(adv.resolved).toEqual([{ scope: "league", gameYear: 2, cardId: "project:nikaia:walls", passed: true, applied: false, spent: 0 }]);
+    expect(await m.dbPkg.treasuryBalance(worldId, "league")).toBe(balBefore);
+    expect(await projects()).toEqual([]);
+    expect(await agendaLedger()).toEqual([]);
+    expect((await m.dbPkg.getAgendaCycle(worldId, "league", 2))!.phase).toBe("resolved");
+  });
+
+  it("an open vote: advancing a League cycle whose vote is still open leaves it in voting and writes nothing", async () => {
+    const voter = await character("voter", "palaioi");
+    await m.dbPkg.creditTreasury(worldId, "league", 5000, "seed", at(8));
+    const cyc = (await m.dbPkg.openAgendaCycleIfDue("league", cfg, pools, at(8)))!;
+    await m.dbPkg.setDraftedCard(cyc.id, "project:nikaia:walls");
+    await m.dbPkg.advanceAgendaCycles(calendar, cfg, pools, at(9));
+    const vote = await leagueVote();
+    await ballot(vote.id, voter, "yes");
+
+    // Resolve time has come, but the vote has not been closed yet.
+    const adv = await m.dbPkg.advanceAgendaCycles(calendar, cfg, pools, at(10));
+    expect(adv.resolved).toEqual([]);
+    expect((await m.dbPkg.getAgendaCycle(worldId, "league", 2))!.phase).toBe("voting");
+    expect(await projects()).toEqual([]);
+    expect(await m.dbPkg.treasuryBalance(worldId, "league")).toBe(5000);
+
+    // Once the vote closes, the next pass resolves it.
+    await m.dbPkg.closeDueChamberVotes(cfg, at(10));
+    const after = await m.dbPkg.advanceAgendaCycles(calendar, cfg, pools, at(10));
+    expect(after.resolved).toHaveLength(1);
+    expect(after.resolved[0]!.applied).toBe(true);
+    expect(await projects()).toHaveLength(1);
+    expect(await m.dbPkg.treasuryBalance(worldId, "league")).toBe(3000);
+  });
+
+  it("completion: the Walls stand once, raise the polis's fortifications by 1, and never past 5", async () => {
+    await m.dbPkg.ensureLeagueCities(db, worldId);
+    const completesAt = at(18);
+    await db.insert(m.dbPkg.leagueProjects).values({ worldId, cityId: "nikaia", buildingId: "walls", cost: 2000, startedAt: at(10), completesAt });
+    const before = await fortifications("nikaia");
+
+    expect(await m.dbPkg.completeLeagueProjects(new Date(completesAt.getTime() - 1))).toEqual([]);
+    expect(await fortifications("nikaia")).toBe(before);
+
+    const done = await m.dbPkg.completeLeagueProjects(completesAt);
+    expect(done.map((p) => [p.cityId, p.buildingId])).toEqual([["nikaia", "walls"]]);
+    expect(await fortifications("nikaia")).toBe(before + 1);
+    const row = (await projects())[0]!;
+    expect(row.completedAt?.getTime()).toBe(completesAt.getTime());
+
+    expect(await m.dbPkg.completeLeagueProjects(new Date(completesAt.getTime() + SEASON))).toEqual([]);
+    expect(await fortifications("nikaia")).toBe(before + 1);
+
+    // Walls on a polis already at 5 leave it at 5; a Port raises nothing.
+    await db.update(m.dbPkg.leagueCities).set({ fortifications: 5 }).where(and(eq(m.dbPkg.leagueCities.worldId, worldId), eq(m.dbPkg.leagueCities.cityId, "massalia")));
+    await db.insert(m.dbPkg.leagueProjects).values({ worldId, cityId: "massalia", buildingId: "walls", cost: 2000, startedAt: at(10), completesAt });
+    await db.insert(m.dbPkg.leagueProjects).values({ worldId, cityId: "olbia", buildingId: "port", cost: 2000, startedAt: at(10), completesAt });
+    const olbiaBefore = await fortifications("olbia");
+    expect((await m.dbPkg.completeLeagueProjects(completesAt)).map((p) => p.cityId).sort()).toEqual(["massalia", "olbia"]);
+    expect(await fortifications("massalia")).toBe(5);
+    expect(await fortifications("olbia")).toBe(olbiaBefore);
   });
 
   it("a party vote counts only that party's members + that party's NPC bloc", async () => {

@@ -20,11 +20,13 @@ import {
   type PoliticsConfig,
 } from "@massalia/shared";
 import { createDb, type DbExec } from "./client.js";
+import { leagueDocketFor, leagueProjectMotion } from "./leagueProjects.js";
 import {
   agendaCycles,
   chamberVotes,
   effectLog,
   ephorVetoes,
+  leagueProjects,
   offices,
   oligarchSeats,
   partyEndorsements,
@@ -270,8 +272,10 @@ async function recentDraftedIds(worldId: string, scope: AgendaScope, limit = 4):
 }
 
 // Open the drafting cycle for a scope when its declaration window is live (and not
-// already opened). Draws this cycle's cards. No backlog: currentAgendaCycle only
-// reports a window that contains `now`.
+// already opened). The League's docket is every building project it can still
+// build and afford (government prompt 2a), all of them, in order; a party's docket
+// is drawn from its card pool. No backlog: currentAgendaCycle only reports a
+// window that contains `now`.
 export async function openAgendaCycleIfDue(scope: AgendaScope, cfg: PoliticsConfig, pools: AgendaPools, now: Date = new Date()): Promise<AgendaCycleRow | null> {
   const world = await activeWorld();
   if (!world) return null;
@@ -283,7 +287,10 @@ export async function openAgendaCycleIfDue(scope: AgendaScope, cfg: PoliticsConf
 
   const seasons = agendaCycleSeasons(live.gameYear, scope, cfg.agenda);
   const startedMs = world.startedMs;
-  const cards = drawAgendaCards(pools[scope], await recentDraftedIds(world.id, scope), cfg.agenda.leagueCardsPerCycle);
+  const cardIds =
+    scope === "league"
+      ? (await leagueDocketFor(world.id)).map((m) => m.id)
+      : drawAgendaCards(pools[scope], await recentDraftedIds(world.id, scope), cfg.agenda.leagueCardsPerCycle).map((c) => c.id);
   const inserted = await db
     .insert(agendaCycles)
     .values({
@@ -291,7 +298,7 @@ export async function openAgendaCycleIfDue(scope: AgendaScope, cfg: PoliticsConf
       scope,
       gameYear: live.gameYear,
       phase: "drafting",
-      cardIds: cards.map((c) => c.id),
+      cardIds,
       opensAt: new Date(startedMs + seasons.draftSeasonIndex * REAL_MS_PER_SEASON),
       votingEndsAt: new Date(startedMs + seasons.resolveSeasonIndex * REAL_MS_PER_SEASON),
     })
@@ -369,7 +376,10 @@ export async function advanceAgendaCycles(calendarCfg: CalendarConfig, cfg: Poli
     // drafting → voting: open the chamber vote.
     if (cycle.phase === "drafting" && now.getTime() >= voteOpensMs) {
       const drafted = cycle.draftedCardId && cycle.draftedCardId !== cycle.vetoedCardId ? cycle.draftedCardId : null;
-      const card = drafted ? pools[scope].find((c) => c.id === drafted) ?? null : null;
+      // The League's measure is a building project (government prompt 2a); any
+      // other drafted id there (a League card from before) opens the year's
+      // question, as when nothing was drafted. A party's measure is its card.
+      const card = !drafted ? null : scope === "league" ? await leagueProjectMotion(drafted) : (pools[scope].find((c) => c.id === drafted) ?? null);
       const closesAt = new Date(world.startedMs + seasons.resolveSeasonIndex * SEASON);
       if (card) {
         await db
@@ -390,8 +400,24 @@ export async function advanceAgendaCycles(calendarCfg: CalendarConfig, cfg: Poli
       cycle.phase = "voting";
     }
 
-    // voting → resolved: the chamber vote has closed (closeDueChamberVotes runs
-    // first in the sweep); apply the effect + spend on a passed agenda card.
+    // voting → resolved (the League, government prompt 2a): the vote must have
+    // closed first; while it is still open the cycle stays in voting and the
+    // next pass resolves it. Then one transaction, claim first: the phase flips
+    // to resolved only from voting, and a lost claim writes nothing. A passed
+    // project is paid from the League treasury under its row lock and its
+    // league_projects row starts the instant the vote closed. A failed vote, a
+    // project the treasury can no longer cover, the year's question or a League
+    // card from before resolve the cycle and write nothing else.
+    if (scope === "league" && cycle.phase === "voting" && now.getTime() >= resolveMs) {
+      const vote = (await db.select().from(chamberVotes).where(and(eq(chamberVotes.worldId, world.id), eq(chamberVotes.scope, scope), eq(chamberVotes.gameYear, cycle.gameYear))).limit(1))[0];
+      if (vote && vote.status === "open") continue;
+      const resolved = await resolveLeagueCycle(world.id, cycle, vote ?? null, now);
+      if (resolved) out.resolved.push(resolved);
+      continue;
+    }
+
+    // voting → resolved (a party): the chamber vote has closed (closeDueChamberVotes
+    // runs first in the sweep); apply the effect + spend on a passed agenda card.
     if (cycle.phase === "voting" && now.getTime() >= resolveMs) {
       const vote = (await db.select().from(chamberVotes).where(and(eq(chamberVotes.worldId, world.id), eq(chamberVotes.scope, scope), eq(chamberVotes.gameYear, cycle.gameYear))).limit(1))[0];
       let resolution: AgendaResolution = { scope, gameYear: cycle.gameYear, cardId: cycle.draftedCardId, passed: false, applied: false, spent: 0 };
@@ -416,6 +442,46 @@ export async function advanceAgendaCycles(calendarCfg: CalendarConfig, cfg: Poli
     }
   }
   return out;
+}
+
+type ChamberVoteRow = typeof chamberVotes.$inferSelect;
+
+// Resolve a League cycle whose vote has closed (or never opened). Claim first;
+// null when another pass already resolved it.
+async function resolveLeagueCycle(worldId: string, cycle: AgendaCycleRow, vote: ChamberVoteRow | null, now: Date): Promise<AgendaResolution | null> {
+  const motion = vote?.agendaCardId ? await leagueProjectMotion(vote.agendaCardId) : null;
+  return db.transaction(async (tx) => {
+    const claimed = await tx.update(agendaCycles).set({ phase: "resolved" }).where(and(eq(agendaCycles.id, cycle.id), eq(agendaCycles.phase, "voting"))).returning({ id: agendaCycles.id });
+    if (claimed.length === 0) return null;
+    const passed = vote?.status === "passed";
+    const resolution: AgendaResolution = { scope: "league", gameYear: cycle.gameYear, cardId: vote?.agendaCardId ?? cycle.draftedCardId, passed, applied: false, spent: 0 };
+    if (!passed || !motion) return resolution;
+
+    const locked = await tx.select({ balance: treasuries.balance }).from(treasuries).where(and(eq(treasuries.worldId, worldId), eq(treasuries.owner, "league"))).for("update");
+    const balance = locked[0]?.balance ?? 0;
+    if (!canAfford(balance, motion.cost)) return resolution; // passed, but the treasury can no longer cover it
+
+    const startedAt = cycle.votingEndsAt;
+    const completesAt = new Date(startedAt.getTime() + motion.seasons * REAL_MS_PER_SEASON);
+    const project = await tx
+      .insert(leagueProjects)
+      .values({ worldId, cityId: motion.cityId, buildingId: motion.buildingId, cost: motion.cost, agendaCycleId: cycle.id, startedAt, completesAt })
+      .onConflictDoNothing()
+      .returning({ id: leagueProjects.id });
+    if (project.length === 0) return resolution; // the pair is already built or under way
+    if (motion.cost > 0) {
+      const debited = await tx
+        .update(treasuries)
+        .set({ balance: sql`${treasuries.balance} - ${motion.cost}`, updatedAt: now })
+        .where(and(eq(treasuries.worldId, worldId), eq(treasuries.owner, "league"), sql`${treasuries.balance} >= ${motion.cost}`))
+        .returning({ id: treasuries.id });
+      if (debited.length !== 1) throw new Error(`league treasury debit for ${motion.id} touched ${debited.length} rows`);
+      await tx.insert(treasuryLedger).values({ worldId, owner: "league", delta: -motion.cost, reason: `agenda:${motion.id}`, createdAt: now });
+    }
+    resolution.applied = true;
+    resolution.spent = motion.cost;
+    return resolution;
+  });
 }
 
 // Apply a card's (light, representational) effect.

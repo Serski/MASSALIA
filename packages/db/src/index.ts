@@ -12,5 +12,6 @@ export * from "./elections.js";
 export * from "./merc.js";
 export * from "./leagueDrift.js";
 export * from "./leagueRevenue.js";
+export * from "./leagueProjects.js";
 export * from "./military.js";
 export * from "./sessions.js";

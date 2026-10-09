@@ -1,8 +1,12 @@
 import crypto from "node:crypto";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import cookie from "@fastify/cookie";
+import { leagueDocket, parseCitiesContent, parseLeagueBuildings } from "@massalia/shared";
 
 // ---------------------------------------------------------------------------
 // GET /api/government and the public League scope of GET /api/agenda
@@ -21,6 +25,12 @@ const suite = describe.runIf(dbUrl.includes("_test"));
 
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
+const content = (file: string) => JSON.parse(readFileSync(resolve(root, "content", file), "utf8"));
+const buildings = parseLeagueBuildings(content("politics/league-buildings.json")).buildings;
+const cities = parseCitiesContent(content("cities/cities.json")).cities;
+// The League's docket at the start populations with the treasury full (government prompt 2a).
+const startDocket = leagueDocket(buildings, cities.map((c) => ({ id: c.id, name: c.name, population: c.start.population })), new Set(), Number.MAX_SAFE_INTEGER);
 
 function hashToken(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
@@ -37,7 +47,7 @@ async function loadModules() {
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
-type Scope = { phase: string | null; cards: { id: string; title: string }[]; draftedCardId: string | null; vetoedCardId: string | null; treasury: { balance: number; ledger: unknown[] }; youMayDraft: boolean; youMayVeto: boolean };
+type Scope = { phase: string | null; cards: { id: string; title: string; group?: string; seasons?: number }[]; draftedCardId: string | null; vetoedCardId: string | null; treasury: { balance: number; ledger: unknown[] }; youMayDraft: boolean; youMayVeto: boolean };
 type Gov =
   | { member: false }
   | { member: true; seats: { office: string; side: string | null }[]; treasury: { balance: number; taxPerSeason: number; ledger: { delta: number; label: string; dateLabel: string; createdAt: string }[] }; league: Scope };
@@ -67,7 +77,7 @@ suite("GET /api/government and the public League scope (integration)", () => {
   });
 
   beforeEach(async () => {
-    await db.execute(sql`TRUNCATE TABLE party_endorsements, ephor_vetoes, agenda_cycles, treasury_ledger, treasuries, league_cities, world_treasury,
+    await db.execute(sql`TRUNCATE TABLE league_projects, party_endorsements, ephor_vetoes, agenda_cycles, treasury_ledger, treasuries, league_cities, world_treasury,
       election_votes, election_candidates, elections, office_history, offices, chamber_ballots, chamber_votes,
       oligarch_seats, party_favor, effect_log, character_traits, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
     await db.insert(m.dbPkg.houses).values({ slug: "test-house", name: "House Test", initial: "T", alignment: "c", stance: "s", motto: "m", patron: "p", crest: "c" }).onConflictDoNothing();
@@ -131,7 +141,15 @@ suite("GET /api/government and the public League scope (integration)", () => {
     if (!view.member) return;
     expect(view.seats).toEqual([{ office: "archon", side: "palaioi" }]);
     expect(view.league.phase).toBe("drafting");
-    expect(view.league.cards).toHaveLength(m.getPoliticsConfig().agenda.leagueCardsPerCycle);
+    // The docket is every building project at the start populations (36), each with its polis and build time.
+    expect(startDocket).toHaveLength(36);
+    expect(view.league.cards.map((c) => c.id)).toEqual(startDocket.map((p) => p.id));
+    for (const card of view.league.cards) {
+      const project = startDocket.find((p) => p.id === card.id)!;
+      expect(card.group).toBe(project.polis);
+      expect(card.seasons).toBe(project.seasons);
+      expect(card.title).toBe(project.title);
+    }
     expect(view.league.youMayDraft).toBe(true);
     expect(view.league.youMayVeto).toBe(false);
     expect(view.treasury.balance).toBe(60_000 + 910 + m.getPoliticsConfig().treasury.leviedPerSeason);

@@ -25,7 +25,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const citiesFile = path.join(repoRoot, "content/cities/cities.json");
 
 let cities: CitiesContent | null = null;
-async function loadCities(): Promise<CitiesContent> {
+export async function loadCities(): Promise<CitiesContent> {
   if (!cities) cities = parseCitiesContent(JSON.parse(await readFile(citiesFile, "utf8")));
   return cities;
 }

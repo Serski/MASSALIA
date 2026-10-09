@@ -7,6 +7,7 @@ import {
   advanceAgendaCycles,
   closeDueChamberVotes,
   collectLeagueRevenue,
+  completeLeagueProjects,
   createDb,
   ensurePartyLeaders,
   ensureTreasuries,
@@ -31,9 +32,14 @@ import {
   currentAgendaCycle,
   gameDate,
   parseAgendaFile,
+  parseCitiesContent,
+  parseLeagueBuildings,
+  projectMotion,
   type AgendaCard,
   type AgendaScope,
+  type CitiesContent,
   type HeldOffice,
+  type LeagueBuilding,
 } from "@massalia/shared";
 import type { CharacterRow } from "./character.js";
 import { getCalendarConfig } from "./festival.js";
@@ -44,9 +50,11 @@ const db = createDb();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../../..");
 
-// --- Content (the three agenda pools) ---------------------------------------
+// --- Content (the three agenda pools, the League's buildings and poleis) ------
 
 let pools: AgendaPools | null = null;
+let leagueBuildings: LeagueBuilding[] | null = null;
+let leagueCities: CitiesContent | null = null;
 
 export async function loadAgendaContent(): Promise<AgendaPools> {
   const read = async (file: string) => parseAgendaFile(JSON.parse(await fs.readFile(path.join(repoRoot, "content/politics", file), "utf8")));
@@ -55,12 +63,32 @@ export async function loadAgendaContent(): Promise<AgendaPools> {
     palaioi: await read("agenda-palaioi.json"),
     dynatoi: await read("agenda-dynatoi.json"),
   };
+  // The League's measures are building projects (government prompt 2a): the
+  // buildings and the poleis they stand in. The League pool stays for the titles
+  // of the cards passed before.
+  leagueBuildings = parseLeagueBuildings(JSON.parse(await fs.readFile(path.join(repoRoot, "content/politics/league-buildings.json"), "utf8"))).buildings;
+  leagueCities = parseCitiesContent(JSON.parse(await fs.readFile(path.join(repoRoot, "content/cities/cities.json"), "utf8")));
   return pools;
 }
 
 export function getAgendaPools(): AgendaPools {
   if (!pools) throw new Error("Agenda content not loaded — call loadAgendaContent() at boot.");
   return pools;
+}
+
+export function getLeagueBuildings(): LeagueBuilding[] {
+  if (!leagueBuildings) throw new Error("Agenda content not loaded — call loadAgendaContent() at boot.");
+  return leagueBuildings;
+}
+
+export function getLeagueCities(): CitiesContent {
+  if (!leagueCities) throw new Error("Agenda content not loaded — call loadAgendaContent() at boot.");
+  return leagueCities;
+}
+
+// The title a League measure id shows: a project's title, or a League card's.
+export function leagueMeasureTitle(id: string): string | undefined {
+  return projectMotion(id, getLeagueBuildings(), getLeagueCities().cities)?.title ?? getAgendaPools().league.find((c) => c.id === id)?.title;
 }
 
 const SCOPES: AgendaScope[] = ["league", "palaioi", "dynatoi"];
@@ -102,8 +130,10 @@ export async function syncAgenda(now: Date = new Date()): Promise<{ accrued: boo
   await closeDueChamberVotes(cfg, now);
   const advance = await advanceAgendaCycles(getCalendarConfig(), cfg, getAgendaPools(), now);
   const advanced = advance.toVoting.length + advance.resolved.length;
+  // A finished building stands (government prompt 2a).
+  const built = (await completeLeagueProjects(now)).length;
 
-  if (accrued || credited || opened || advanced || leaders) await broadcastState();
+  if (accrued || credited || opened || advanced || leaders || built) await broadcastState();
   return { accrued, opened, advanced, leaders };
 }
 
@@ -207,6 +237,9 @@ export interface AgendaCardView {
   description: string;
   cost: number;
   partyLean: string;
+  // A building project's polis and build time (government prompt 2a); absent on a card.
+  group?: string;
+  seasons?: number;
 }
 
 export interface AgendaScopeView {
@@ -223,6 +256,24 @@ export interface AgendaScopeView {
 
 function cardViews(pool: AgendaCard[], ids: string[]): AgendaCardView[] {
   return ids.map((id) => pool.find((c) => c.id === id)).filter((c): c is AgendaCard => !!c).map((c) => ({ id: c.id, title: c.title, description: c.description, cost: c.cost, partyLean: c.partyLean }));
+}
+
+// The League's docket: a project id resolves to its motion with the polis and
+// the build time; any other id (a League card from before) from the pool as now.
+function leagueCardViews(ids: string[]): AgendaCardView[] {
+  const buildings = getLeagueBuildings();
+  const cities = getLeagueCities().cities;
+  const pool = getAgendaPools().league;
+  const out: AgendaCardView[] = [];
+  for (const id of ids) {
+    const motion = projectMotion(id, buildings, cities);
+    if (motion) {
+      out.push({ id: motion.id, title: motion.title, description: motion.description, cost: motion.cost, partyLean: motion.partyLean, group: motion.polis, seasons: motion.seasons });
+      continue;
+    }
+    out.push(...cardViews(pool, [id]));
+  }
+  return out;
 }
 
 // The League scope as everyone outside the Government sees it (government
@@ -264,7 +315,7 @@ export async function agendaScopeView(actor: CharacterRow, scope: AgendaScope, n
     scope,
     phase: (cycle?.phase as AgendaScopeView["phase"]) ?? null,
     gameYear: cycle?.gameYear ?? null,
-    cards: cycle ? cardViews(getAgendaPools()[scope], cycle.cardIds) : [],
+    cards: !cycle ? [] : scope === "league" ? leagueCardViews(cycle.cardIds) : cardViews(getAgendaPools()[scope], cycle.cardIds),
     draftedCardId: cycle?.draftedCardId ?? null,
     vetoedCardId: cycle?.vetoedCardId ?? null,
     treasury: await treasuryView(world.id, owner),
