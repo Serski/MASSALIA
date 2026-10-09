@@ -43,6 +43,16 @@ export function AgendaScopeSection({ view, onRefresh, treasury = "full" }: { vie
   };
   const drafted = view.cards.find((c) => c.id === view.draftedCardId);
   const kicker = view.scope === "league" ? "The League agenda" : `${titleCase(view.scope)} agenda`;
+  // The League's docket is building projects grouped by polis (government prompt
+  // 2a): consecutive cards with the same `group` share a heading, in docket
+  // order. Cards without a group (a party's) form one unheaded run.
+  const sections: { group: string | null; cards: AgendaScopeView["cards"] }[] = [];
+  for (const card of view.cards) {
+    const group = card.group ?? null;
+    const last = sections[sections.length - 1];
+    if (last && last.group === group) last.cards.push(card);
+    else sections.push({ group, cards: [card] });
+  }
   return (
     <DashboardCard className="agenda-card">
       <div className="event-body">
@@ -50,31 +60,37 @@ export function AgendaScopeSection({ view, onRefresh, treasury = "full" }: { vie
         {view.phase === "drafting" ? (
           <>
             <h3>{view.youMayDraft ? "Choose the measure that goes before the chamber." : "The officials weigh the docket."}</h3>
-            <div className="agenda-grid">
-              {view.cards.map((card) => {
-                const isDrafted = card.id === view.draftedCardId;
-                const isVetoed = card.id === view.vetoedCardId;
-                return (
-                  <DashboardCard key={card.id} className={`agenda-choice${isDrafted ? " agenda-drafted" : ""}${isVetoed ? " agenda-vetoed" : ""}`}>
-                    <div className="event-body">
-                      <span className="dashboard-label">{card.title}</span>
-                      <p className="agenda-flavor">{card.description}</p>
-                      <span className="choice-costs">
-                        <span className="cost-chip cost-neutral">{titleCase(card.partyLean)} lean</span>
-                        {card.cost > 0 ? <span className="cost-chip cost-negative">{card.cost} dr.</span> : <span className="cost-chip cost-positive">Free</span>}
-                        {isVetoed ? <span className="cost-chip cost-negative">Vetoed</span> : null}
-                        {isDrafted ? <span className="cost-chip cost-positive">✓ drafted</span> : null}
-                      </span>
-                      {view.youMayDraft && !isVetoed ? (
-                        <button className="event-choice-button" type="button" disabled={busy} onClick={() => act(() => api.draftAgenda(view.scope, card.id), `${card.title} goes to the chamber.`)}>
-                          <strong>Put forward</strong>
-                        </button>
-                      ) : null}
-                    </div>
-                  </DashboardCard>
-                );
-              })}
-            </div>
+            {sections.map((section, i) => (
+              <div key={section.group ?? `run-${i}`} className="agenda-group">
+                {section.group ? <div className="panel-label agenda-group-label">{section.group}</div> : null}
+                <div className="agenda-grid">
+                  {section.cards.map((card) => {
+                    const isDrafted = card.id === view.draftedCardId;
+                    const isVetoed = card.id === view.vetoedCardId;
+                    return (
+                      <DashboardCard key={card.id} className={`agenda-choice${isDrafted ? " agenda-drafted" : ""}${isVetoed ? " agenda-vetoed" : ""}`}>
+                        <div className="event-body">
+                          <span className="dashboard-label">{card.title}</span>
+                          <p className="agenda-flavor">{card.description}</p>
+                          <span className="choice-costs">
+                            <span className="cost-chip cost-neutral">{titleCase(card.partyLean)} lean</span>
+                            {card.cost > 0 ? <span className="cost-chip cost-negative">{card.cost.toLocaleString()} dr.</span> : <span className="cost-chip cost-positive">Free</span>}
+                            {card.seasons ? <span className="cost-chip cost-neutral agenda-seasons">{card.seasons} seasons</span> : null}
+                            {isVetoed ? <span className="cost-chip cost-negative">Vetoed</span> : null}
+                            {isDrafted ? <span className="cost-chip cost-positive">✓ drafted</span> : null}
+                          </span>
+                          {view.youMayDraft && !isVetoed ? (
+                            <button className="event-choice-button" type="button" disabled={busy} onClick={() => act(() => api.draftAgenda(view.scope, card.id), `${card.title} goes to the chamber.`)}>
+                              <strong>Put forward</strong>
+                            </button>
+                          ) : null}
+                        </div>
+                      </DashboardCard>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
             {view.youMayVeto && drafted ? (
               <button className="dashboard-ghost-button agenda-veto-btn" type="button" disabled={busy} onClick={() => act(() => api.vetoAgenda(view.scope), `You vetoed ${drafted.title}.`)}>
                 Veto {drafted.title} (one per term)

@@ -20,6 +20,11 @@ type MemberView = Extract<GovernmentData, { member: true }>;
 // `onRefresh` reloads this view (PoliticsPanel's own load) and then the dashboard.
 export function GovernmentView({ view, onRefresh }: { view: MemberView; onRefresh: () => void }) {
   const { treasury } = view;
+  // The League's building projects (government prompt 2a): under way first, then
+  // built. An old server sends none.
+  const projects = view.projects ?? [];
+  const underWay = projects.filter((p) => p.status === "building");
+  const built = projects.filter((p) => p.status === "built");
   return (
     <div className="pol-page">
       <DashboardCard className="treasury-card government-seats">
@@ -44,6 +49,33 @@ export function GovernmentView({ view, onRefresh }: { view: MemberView; onRefres
               ))}
             </ul>
           ) : <p className="dashboard-todo">The books are empty.</p>}
+        </div>
+      </DashboardCard>
+
+      <DashboardCard className="treasury-card government-projects">
+        <div className="event-body">
+          <span className="dashboard-label">Projects</span>
+          {projects.length === 0 ? <p className="dashboard-todo">No project yet.</p> : null}
+          {underWay.length > 0 ? (
+            <>
+              <p className="government-projects-head">Under way</p>
+              <ul className="treasury-ledger government-projects-building">
+                {underWay.map((p) => (
+                  <li key={`${p.cityId}:${p.buildingId}`}>{p.title} · stands {p.completesLabel}</li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {built.length > 0 ? (
+            <>
+              <p className="government-projects-head">Built</p>
+              <ul className="treasury-ledger government-projects-built">
+                {built.map((p) => (
+                  <li key={`${p.cityId}:${p.buildingId}`}>{p.title}</li>
+                ))}
+              </ul>
+            </>
+          ) : null}
         </div>
       </DashboardCard>
 

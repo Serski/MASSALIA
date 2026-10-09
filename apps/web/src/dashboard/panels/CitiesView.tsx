@@ -25,6 +25,17 @@ const cityHeadStyle: CSSProperties = {
   letterSpacing: "0.04em",
 };
 const numCellStyle: CSSProperties = { textAlign: "right", fontVariantNumeric: "tabular-nums", color: "var(--dash-parchment)" };
+// The League's buildings in a polis (government prompt 2a), one muted line under its row.
+const buildingsLineStyle: CSSProperties = { padding: "0 4px 7px", color: "var(--dash-stone-dim)", fontSize: "0.85em", borderBottom: "1px solid var(--dash-line)" };
+
+// "Temple of Artemis · Walls (stands Summer, 292 BC)": the standing ones by name,
+// then each one under way with the date it stands.
+export function buildingsLine(buildings: CityView["buildings"]): string {
+  const list = buildings ?? [];
+  const built = list.filter((b) => b.status === "built").map((b) => b.name);
+  const underWay = list.filter((b) => b.status === "building").map((b) => `${b.name} (stands ${b.completesLabel ?? "—"})`);
+  return [...built, ...underWay].join(" · ");
+}
 
 // 1..5 fortification level as filled/empty pips.
 function fortPips(level: number): string {
@@ -66,18 +77,24 @@ export function CitiesView() {
               <span style={{ textAlign: "right" }}>Forts</span>
               <span style={{ textAlign: "right" }}>Garrison</span>
             </div>
-            {inGroup.map((c) => (
-              <div key={c.id} className="atlas-row" style={cityRowStyle}>
-                <span style={{ color: "var(--dash-parchment)", fontWeight: 600 }}>{c.name}</span>
-                <span style={numCellStyle}>{c.population.toLocaleString()}</span>
-                <span style={numCellStyle}>{c.tax.toLocaleString()}</span>
-                <span style={numCellStyle}>{c.stability}</span>
-                <span style={{ ...numCellStyle, color: "var(--dash-gold-bright)", letterSpacing: "1px" }} title={`${c.fortifications}/5`}>
-                  {fortPips(c.fortifications)}
-                </span>
-                <span style={numCellStyle}>{c.garrison.toLocaleString()}</span>
-              </div>
-            ))}
+            {inGroup.map((c) => {
+              const line = buildingsLine(c.buildings);
+              return (
+                <div key={c.id}>
+                  <div className="atlas-row" style={line ? { ...cityRowStyle, borderBottom: "none" } : cityRowStyle}>
+                    <span style={{ color: "var(--dash-parchment)", fontWeight: 600 }}>{c.name}</span>
+                    <span style={numCellStyle}>{c.population.toLocaleString()}</span>
+                    <span style={numCellStyle}>{c.tax.toLocaleString()}</span>
+                    <span style={numCellStyle}>{c.stability}</span>
+                    <span style={{ ...numCellStyle, color: "var(--dash-gold-bright)", letterSpacing: "1px" }} title={`${c.fortifications}/5`}>
+                      {fortPips(c.fortifications)}
+                    </span>
+                    <span style={numCellStyle}>{c.garrison.toLocaleString()}</span>
+                  </div>
+                  {line ? <div className="atlas-row-buildings" style={buildingsLineStyle}>{line}</div> : null}
+                </div>
+              );
+            })}
           </DashboardCard>
         );
       })}

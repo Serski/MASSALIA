@@ -755,7 +755,8 @@ export type OfficesView = {
 
 export type AgendaScope = "league" | "palaioi" | "dynatoi";
 
-export type AgendaCardView = { id: string; title: string; description: string; cost: number; partyLean: string };
+// `group` (the polis) and `seasons` (build time) ride on a League building project (government prompt 2a); a card has neither.
+export type AgendaCardView = { id: string; title: string; description: string; cost: number; partyLean: string; group?: string; seasons?: number };
 
 export type TreasuryView = {
   owner: AgendaScope;
@@ -793,12 +794,16 @@ export type AgendaView = {
 
 export type GovernmentSeatView = { office: "archon" | "ephor" | "strategos"; side: "palaioi" | "dynatoi" | null };
 export type GovernmentLedgerLine = { delta: number; label: string; dateLabel: string; createdAt: string };
+// A League building project (government prompt 2a), under way or standing.
+export type GovernmentProjectView = { cityId: string; polis: string; buildingId: string; title: string; status: "building" | "built"; completesAt: string; completesLabel: string };
 export type GovernmentView =
   | { member: false }
   | {
       member: true;
       seats: GovernmentSeatView[];
       treasury: { balance: number; taxPerSeason: number; ledger: GovernmentLedgerLine[] };
+      // Under way first, then built. Optional: Pages can go live before Railway does, and an old server sends none.
+      projects?: GovernmentProjectView[];
       league: AgendaScopeView;
     };
 
@@ -831,6 +836,9 @@ export type StandingsResponse = {
 export type CityGroup = "metropolis" | "eastern" | "western";
 
 // A colony with its five current stats (real values; not rank-hidden).
+// A League building in a polis (government prompt 2a): standing, or under way with the date it stands.
+export type CityBuildingView = { buildingId: string; name: string; status: "building" | "built"; completesLabel: string | null };
+
 export type CityView = {
   id: string;
   name: string;
@@ -838,9 +846,11 @@ export type CityView = {
   population: number;
   tax: number;
   stability: number;
-  // 1..5 fortification level (display-only this phase).
+  // 1..5 fortification level: the Walls raise it when they stand.
   fortifications: number;
   garrison: number;
+  // In the buildings' content order. Optional: an old server sends none.
+  buildings?: CityBuildingView[];
 };
 
 export type LeagueCitiesResponse = { cities: CityView[] };
