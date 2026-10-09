@@ -1,10 +1,11 @@
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { api, ApiError, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView } from "../../api.js";
+import { api, ApiError, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type GovernmentView as GovernmentData } from "../../api.js";
 import { assetPath } from "../../data/league.js";
 import { AssetIcon, DashboardCard, DigestList, PanelBanner, type PanelProps, PanelRow, PersonRow, formatDuration, ideologyReadout, useCountdownSeconds } from "../shared.js";
 import { PublicProfile, type ProfileTarget } from "../PublicProfile.js";
 import { CitiesView } from "./CitiesView.js";
 import { AgendaScopeSection } from "./AgendaSection.js";
+import { GovernmentView } from "./GovernmentView.js";
 import { DiplomacyView } from "./DiplomacyView.js";
 import { KoinonView } from "./KoinonView.js";
 
@@ -696,7 +697,7 @@ function LeagueAgendaSection({ onRefresh }: { onRefresh: () => void }) {
   useEffect(() => { load(); }, [load]);
   const refresh = () => { load(); onRefresh(); };
   if (!view) return null;
-  return <AgendaScopeSection view={view.league} onRefresh={refresh} />;
+  return <AgendaScopeSection view={view.league} onRefresh={refresh} treasury="amount" />;
 }
 
 // The party government for the party tab: its treasury, agenda, and for-life leaders.
@@ -727,9 +728,19 @@ function PartyGovernmentSection({ party, onRefresh }: { party: "palaioi" | "dyna
 }
 
 export default function PoliticsPanel({ player, onRefresh }: PanelProps) {
-  const [tab, setTab] = useState<"council" | "party" | "koinon" | "cities" | "diplomacy">("council");
+  const [tab, setTab] = useState<"council" | "government" | "party" | "koinon" | "cities" | "diplomacy">("council");
   const [note, setNote] = useState("");
   const censureSeconds = useCountdownSeconds(player.censured ? player.censureExpiresAt : null);
+  // The Government tab (government prompt 1): loaded once on mount; it exists
+  // while the answer is `member: true`, and losing the seat sends the player
+  // back to the Council tab.
+  const [government, setGovernment] = useState<GovernmentData | null>(null);
+  const loadGovernment = useCallback(() => { api.government().then(setGovernment).catch(() => {}); }, []);
+  useEffect(() => { loadGovernment(); }, [loadGovernment]);
+  const isMember = government?.member === true;
+  useEffect(() => {
+    if (tab === "government" && government && !government.member) setTab("council");
+  }, [tab, government]);
   const joined = player.party !== "Unaligned";
   // The unfree hold no seat and no party — the assembly is locked until manumission.
   // Keyed off live player state, so freedom releases it on the next refresh.
@@ -773,6 +784,11 @@ export default function PoliticsPanel({ player, onRefresh }: PanelProps) {
         <button type="button" role="tab" aria-selected={tab === "council"} className={`cs-tab${tab === "council" ? " on" : ""}`} onClick={() => setTab("council")}>
           Oligarchy Council
         </button>
+        {isMember ? (
+          <button type="button" role="tab" aria-selected={tab === "government"} className={`cs-tab${tab === "government" ? " on" : ""}`} onClick={() => setTab("government")}>
+            Government
+          </button>
+        ) : null}
         <button type="button" role="tab" aria-selected={tab === "party"} className={`cs-tab${tab === "party" ? " on" : ""}`} onClick={() => setTab("party")}>
           Your Party {joined ? <span className="party-tab-tag">{PARTY_ICON[player.party.toLowerCase()] ? <AssetIcon file={PARTY_ICON[player.party.toLowerCase()]!} alt="" className="asset-icon party-icon" /> : null} · {player.party}</span> : <span className="party-tab-lock">· Unaligned</span>}
         </button>
@@ -794,6 +810,8 @@ export default function PoliticsPanel({ player, onRefresh }: PanelProps) {
           <OfficesSection player={player} onRefresh={onRefresh} />
           {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
         </div>
+      ) : tab === "government" && government?.member ? (
+        <GovernmentView view={government} onRefresh={() => { loadGovernment(); onRefresh(); }} />
       ) : tab === "koinon" ? (
         <KoinonView player={player} onRefresh={onRefresh} />
       ) : tab === "cities" ? (

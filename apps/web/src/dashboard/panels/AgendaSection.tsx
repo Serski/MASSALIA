@@ -8,14 +8,16 @@ import { DashboardCard, titleCase } from "../shared.js";
 // drafting docket, the officials' draft and veto controls, and the card before
 // the chamber.
 
-export function TreasuryCard({ treasury }: { treasury: AgendaScopeView["treasury"] }) {
+// `ledger` false shows the label and the balance alone (the League treasury's
+// amount on the Council tab, government prompt 1): no rows, no empty-books line.
+export function TreasuryCard({ treasury, ledger = true }: { treasury: AgendaScopeView["treasury"]; ledger?: boolean }) {
   const label = treasury.owner === "league" ? "League treasury" : `${titleCase(treasury.owner)} treasury`;
   return (
     <DashboardCard className="treasury-card">
       <div className="event-body">
         <span className="dashboard-label">{label}</span>
-        <p className="treasury-balance">{treasury.balance} <span className="treasury-unit">drachmae</span></p>
-        {treasury.ledger.length > 0 ? (
+        <p className="treasury-balance">{treasury.balance.toLocaleString()} <span className="treasury-unit">drachmae</span></p>
+        {!ledger ? null : treasury.ledger.length > 0 ? (
           <ul className="treasury-ledger">
             {treasury.ledger.slice(0, 6).map((l, i) => (
               <li key={i}><span className={l.delta >= 0 ? "ledger-pos" : "ledger-neg"}>{l.delta >= 0 ? "+" : ""}{l.delta}</span> <span className="ledger-reason">{l.reason}</span></li>
@@ -29,7 +31,10 @@ export function TreasuryCard({ treasury }: { treasury: AgendaScopeView["treasury
 
 // One government's agenda: the drafting docket (with the officials' draft/veto
 // controls) or the drafted card going to the chamber, plus the treasury.
-export function AgendaScopeSection({ view, onRefresh }: { view: AgendaScopeView; onRefresh: () => void }) {
+// `treasury`: "full" is the treasury card with its ledger (the party tab),
+// "amount" the label and balance alone (the Council tab), "none" no treasury
+// (the Government tab shows the books itself).
+export function AgendaScopeSection({ view, onRefresh, treasury = "full" }: { view: AgendaScopeView; onRefresh: () => void; treasury?: "full" | "amount" | "none" }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const act = async (fn: () => Promise<unknown>, ok: string) => {
@@ -77,11 +82,11 @@ export function AgendaScopeSection({ view, onRefresh }: { view: AgendaScopeView;
             ) : null}
           </>
         ) : view.phase === "voting" ? (
-          <h3>{drafted ? `"${drafted.title}" is before the chamber — cast your vote below.` : "The chamber is in session."}</h3>
+          <h3>{drafted ? `"${drafted.title}" is before the chamber.` : "The chamber is in session."}</h3>
         ) : (
           <p className="dashboard-todo">No measure is in session.</p>
         )}
-        <TreasuryCard treasury={view.treasury} />
+        {treasury === "none" ? null : <TreasuryCard treasury={view.treasury} ledger={treasury === "full"} />}
         {note ? <p className="dashboard-todo" role="status">{note}</p> : null}
       </div>
     </DashboardCard>

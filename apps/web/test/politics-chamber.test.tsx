@@ -65,6 +65,7 @@ async function mount(view: ChamberView, party: "Dynatoi" | "Unaligned", koinonPe
   vi.spyOn(api, "agenda").mockImplementation(never);
   vi.spyOn(api, "offices").mockImplementation(never);
   vi.spyOn(api, "elections").mockImplementation(never);
+  vi.spyOn(api, "government").mockImplementation(never);
   const utils = render(<PoliticsPanel player={player(party, koinonPending)} onRefresh={() => {}} />);
   await flush();
   return utils;

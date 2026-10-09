@@ -595,6 +595,9 @@ export const api = {
     apiFetch<{ ok: true }>("/api/agenda/draft", { method: "POST", body: { scope, cardId } }),
   vetoAgenda: (scope: AgendaScope) =>
     apiFetch<{ ok: true }>("/api/agenda/veto", { method: "POST", body: { scope } }),
+  // The Government tab (government prompt 1): the sitting Archons, Ephors and
+  // Strategoi get the League's books and docket; everyone else `member: false`.
+  government: () => apiFetch<GovernmentView>("/api/government"),
   endorse: (electionId: string, candidateCharacterId: string) =>
     apiFetch<{ ok: true }>("/api/agenda/endorse", { method: "POST", body: { electionId, candidateCharacterId } }),
   // The Ledger / player economy (Economy Build 1): the building catalog, owned
@@ -785,6 +788,19 @@ export type AgendaView = {
   dynatoi: AgendaScopeView;
   leaders: PartyLeaderView[];
 };
+
+// --- The Government (government prompt 1) -----------------------------------
+
+export type GovernmentSeatView = { office: "archon" | "ephor" | "strategos"; side: "palaioi" | "dynatoi" | null };
+export type GovernmentLedgerLine = { delta: number; label: string; dateLabel: string; createdAt: string };
+export type GovernmentView =
+  | { member: false }
+  | {
+      member: true;
+      seats: GovernmentSeatView[];
+      treasury: { balance: number; taxPerSeason: number; ledger: GovernmentLedgerLine[] };
+      league: AgendaScopeView;
+    };
 
 export type OfficeAppointee = { characterId: string; name: string; houseName: string; party: string };
 
