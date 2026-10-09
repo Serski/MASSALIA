@@ -6,6 +6,7 @@ import {
   accrueTreasuries,
   advanceAgendaCycles,
   closeDueChamberVotes,
+  collectLeagueRevenue,
   createDb,
   ensurePartyLeaders,
   ensureTreasuries,
@@ -86,6 +87,10 @@ export async function syncAgenda(now: Date = new Date()): Promise<{ accrued: boo
   await ensureTreasuries(world.id);
 
   const accrued = (await accrueTreasuries(cfg, now)) !== null;
+  // The League's income (government prompt 1): the opening balance once, the
+  // poleis' tax and the fee sweep once a season. Cheap when nothing is due.
+  const revenue = await collectLeagueRevenue(cfg, now);
+  const credited = revenue.opened + revenue.tax + revenue.fees > 0;
   const leaders = (await ensurePartyLeaders(now)).filled.length;
 
   let opened = 0;
@@ -98,7 +103,7 @@ export async function syncAgenda(now: Date = new Date()): Promise<{ accrued: boo
   const advance = await advanceAgendaCycles(getCalendarConfig(), cfg, getAgendaPools(), now);
   const advanced = advance.toVoting.length + advance.resolved.length;
 
-  if (accrued || opened || advanced || leaders) await broadcastState();
+  if (accrued || credited || opened || advanced || leaders) await broadcastState();
   return { accrued, opened, advanced, leaders };
 }
 

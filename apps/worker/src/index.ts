@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Queue, Worker, type Job } from "bullmq";
 import { BACKUP_JOB_NAME, BACKUP_SCHEDULE, runBackup } from "./jobs/backup.js";
 import { completionDelayMs, parseAgeConfig, parseAgendaFile, parseCalendarConfig, parseContractsContent, parseFamilyConfig, parsePoliticsConfig, parseTraitsFile, REAL_MS_PER_SEASON, type AgeConfig, type AgendaScope, type CalendarConfig, type ContractsContent, type FamilyConfig, type PoliticsConfig, type Trait } from "@massalia/shared";
-import { accrueLeagueCities, accrueTreasuries, advanceAgendaCycles, advanceElections, advanceOlympiads, characterInActiveWorld, closeDueChamberVotes, closeDueFestivals, createDb, deleteExpiredSessions, deliverOlympicNominationToAll, drawFamilyCandidates, endDbPools, ensurePartyLeaders, fireFestivalsForAll, openAgendaCycleIfDue, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, sweepMercenaryContracts, sweepSpouseDeaths, type AgendaPools, type MercContractCfgMap } from "@massalia/db";
+import { accrueLeagueCities, accrueTreasuries, advanceAgendaCycles, advanceElections, advanceOlympiads, characterInActiveWorld, closeDueChamberVotes, closeDueFestivals, collectLeagueRevenue, createDb, deleteExpiredSessions, deliverOlympicNominationToAll, drawFamilyCandidates, endDbPools, ensurePartyLeaders, fireFestivalsForAll, openAgendaCycleIfDue, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, sweepMercenaryContracts, sweepSpouseDeaths, type AgendaPools, type MercContractCfgMap } from "@massalia/db";
 
 const redisUrl = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
 const connection = {
@@ -180,6 +180,9 @@ const SWEEPS: Sweep[] = [
       const { calendar, politics } = await bothConfigs();
       const pools = await agendaPools();
       const accrued = (await accrueTreasuries(politics)) !== null;
+      // The League's income (government prompt 1): opening balance once, the
+      // poleis' tax and the fee sweep once a season.
+      const revenue = await collectLeagueRevenue(politics);
       const leaders = (await ensurePartyLeaders()).filled.length;
       let opened = 0;
       for (const scope of ["league", "palaioi", "dynatoi"] as AgendaScope[]) {
@@ -187,7 +190,7 @@ const SWEEPS: Sweep[] = [
       }
       await closeDueChamberVotes(politics);
       const adv = await advanceAgendaCycles(calendar, politics, pools);
-      return `Agenda sweep: accrued ${accrued ? "yes" : "—"}, ${leaders} leader(s) seated, opened ${opened}, ${adv.toVoting.length} to vote, resolved ${adv.resolved.length}`;
+      return `Agenda sweep: accrued ${accrued ? "yes" : "—"}, revenue: opening ${revenue.opened}, fees ${revenue.fees}, tax ${revenue.tax}, ${leaders} leader(s) seated, opened ${opened}, ${adv.toVoting.length} to vote, resolved ${adv.resolved.length}`;
     },
   },
   {

@@ -952,8 +952,9 @@ export const bandOffers = pgTable("band_offers", {
   pk: primaryKey({ columns: [table.worldId, table.ownerPlayerId, table.seasonIndex, table.bandId] }),
 }));
 
-// Stub treasury sink: routine fees accrue here (one row per world). NO spending
-// in this build — a counter the future treasury system will read.
+// The world's fee pot (one row per world): the market tax, routine fees, koinon
+// fees and purses accrue here, and once a season the League treasury takes its
+// balance (collectLeagueRevenue, government prompt 1). Nothing spends from it.
 export const worldTreasury = pgTable("world_treasury", {
   worldId: uuid("world_id").primaryKey().references(() => worlds.id),
   balance: integer("balance").notNull().default(0),
