@@ -195,8 +195,8 @@ export function isChronicleMusterKind(kind: string): kind is "koinon_muster" {
   return kind === "koinon_muster";
 }
 
-// A muster line, dated at the launch instant: the army's outcome and the
-// character's own part in it (see MusterChronicle).
+// A muster line, dated at the army's arrival (raids prompt 5): the army's
+// outcome and the character's own part in it (see MusterChronicle).
 export type ChronicleMusterRow = {
   id: string;
   at: number;

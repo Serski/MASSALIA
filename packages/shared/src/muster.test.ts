@@ -154,6 +154,9 @@ describe("renderMusterReportLine", () => {
     expect(renderMusterReportLine({ ...base, men: 1, killed: 1, lost: 0 })).toBe("Raided Vocontii: 1 man sent, 1 tribesman slain, none lost, 240 drachmae and 30 grain taken.");
     expect(renderMusterReportLine({ ...base, townId: "reii", townName: "Reii", outcome: "driven_off", killed: 1, plunder: null })).toBe("Raided Reii and were driven off: 60 men sent, 1 soldier slain, 3 lost.");
     expect(renderMusterReportLine({ ...base, townId: "reii", townName: "Reii", outcome: "repulsed", killed: 0, lost: 0, plunder: null })).toBe("Sailed against Reii and were driven off by its fleet before landing.");
+    // The march (raids prompt 5): the army turned back, or broke up on the road.
+    expect(renderMusterReportLine({ ...base, outcome: "turned_back", killed: 0, lost: 0, plunder: null })).toBe("Found Vocontii held by one of our own and turned back.");
+    expect(renderMusterReportLine({ ...base, townId: "reii", townName: "Reii", outcome: "dispersed", killed: 0, lost: 0, plunder: null })).toBe("The army sent to Reii broke up on the road.");
   });
 
   it("a plunder with the third good names it", () => {
