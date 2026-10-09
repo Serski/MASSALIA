@@ -118,7 +118,7 @@ export async function syncAgenda(now: Date = new Date()): Promise<{ accrued: boo
   // The League's income (government prompt 1): the opening balance once, the
   // poleis' tax and the fee sweep once a season. Cheap when nothing is due.
   const revenue = await collectLeagueRevenue(cfg, now);
-  const credited = revenue.opened + revenue.tax + revenue.fees > 0;
+  const credited = revenue.opened + revenue.tax + revenue.dues + revenue.fees > 0;
   const leaders = (await ensurePartyLeaders(now)).filled.length;
 
   let opened = 0;

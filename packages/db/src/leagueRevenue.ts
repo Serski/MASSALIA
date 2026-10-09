@@ -2,9 +2,10 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, eq, gte, inArray, sql } from "drizzle-orm";
-import { gameDate, leagueTax, parseCitiesContent, treasuryClaimReason, type CitiesContent, type PoliticsConfig } from "@massalia/shared";
+import { gameDate, leagueDues, leagueTax, parseCitiesContent, REAL_MS_PER_SEASON, treasuryClaimReason, type CitiesContent, type PoliticsConfig } from "@massalia/shared";
 import { createDb, type DbExec } from "./client.js";
 import { ensureTreasuries } from "./agenda.js";
+import { loadLeagueBuildings, projectTimings } from "./leagueProjects.js";
 import { leagueCities, treasuries, treasuryLedger, worldTreasury } from "./schema.js";
 import { activeWorld } from "./world.js";
 
@@ -12,13 +13,15 @@ const db = createDb();
 
 // ---------------------------------------------------------------------------
 // The League treasury's income (government prompt 1). Once per world it opens
-// with the config's balance; once a season it takes the poleis' tax and sweeps
-// world_treasury (the market tax, routine fees, koinon fees and purses) into
-// the League's books. Each credit is claimed by its ledger row: the unique
-// partial index of migration 0070 makes 'opening', 'tax:s<N>' and 'fees:s<N>'
-// once-only at the database, and the lock + re-read below make it so even
-// before that migration has run (the worker can be on this code first).
-// Season-correct like the levy: only the current season is ever taxed.
+// with the config's balance; once a season it takes the poleis' tax, the dues
+// of the standing Bazaars and Ports (government prompt 2b: the buildings
+// standing when the season began) and sweeps world_treasury (the market tax,
+// routine fees, koinon fees and purses) into the League's books. Each credit is
+// claimed by its ledger row: the unique partial index of migration 0070,
+// widened by 0072, makes 'opening', 'tax:s<N>', 'fees:s<N>' and
+// 'buildings:s<N>' once-only at the database, and the lock + re-read below make
+// it so even before those migrations have run (the worker can be on this code
+// first). Season-correct like the levy: only the current season is ever taxed.
 // ---------------------------------------------------------------------------
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -57,9 +60,10 @@ export interface LeagueRevenue {
   opened: number;
   fees: number;
   tax: number;
+  dues: number;
 }
 
-const NOTHING: LeagueRevenue = { opened: 0, fees: 0, tax: 0 };
+const NOTHING: LeagueRevenue = { opened: 0, fees: 0, tax: 0, dues: 0 };
 
 async function claimedReasons(exec: DbExec, worldId: string, reasons: string[]): Promise<Set<string>> {
   const rows = await exec
@@ -99,16 +103,22 @@ export async function collectLeagueRevenue(cfg: PoliticsConfig, now: Date = new 
   const world = await activeWorld();
   if (!world) return NOTHING;
   const season = gameDate(now.getTime(), world.startedMs).seasonIndex;
-  const reason = { opening: treasuryClaimReason.opening, tax: treasuryClaimReason.tax(season), fees: treasuryClaimReason.fees(season) };
-  const reasons = [reason.opening, reason.tax, reason.fees];
+  const seasonStartMs = world.startedMs + season * REAL_MS_PER_SEASON;
+  const reason = { opening: treasuryClaimReason.opening, tax: treasuryClaimReason.tax(season), fees: treasuryClaimReason.fees(season), buildings: treasuryClaimReason.buildings(season) };
+  const reasons = [reason.opening, reason.tax, reason.fees, reason.buildings];
 
-  // 1. The cheap read, no lock.
+  // 1. The cheap read, no lock. The dues count the buildings standing when the
+  // season began; a world with no Bazaar or Port standing opens no transaction
+  // for them.
   const claimed = await claimedReasons(db, world.id, reasons);
   const pot = await worldTreasuryBalance(db, world.id);
+  const buildings = await loadLeagueBuildings();
+  const duesNow = async (exec: DbExec) => leagueDues(await projectTimings(exec, world.id), buildings, seasonStartMs);
   const openingDue = cfg.treasury.openingBalance > 0 && !claimed.has(reason.opening);
   const taxDue = cfg.treasury.taxPerHead > 0 && !claimed.has(reason.tax);
+  const duesDue = !claimed.has(reason.buildings) && (await duesNow(db)) > 0;
   const feesDue = pot > 0 && !claimed.has(reason.fees);
-  if (!openingDue && !taxDue && !feesDue) return NOTHING;
+  if (!openingDue && !taxDue && !duesDue && !feesDue) return NOTHING;
 
   // 2. The idempotent inserts, outside any transaction (see ensureLeagueCities).
   await ensureTreasuries(world.id);
@@ -118,7 +128,7 @@ export async function collectLeagueRevenue(cfg: PoliticsConfig, now: Date = new 
   return db.transaction(async (tx) => {
     await tx.select({ id: treasuries.id }).from(treasuries).where(and(eq(treasuries.worldId, world.id), eq(treasuries.owner, "league"))).for("update");
     const claimedNow = await claimedReasons(tx, world.id, reasons);
-    const out: LeagueRevenue = { opened: 0, fees: 0, tax: 0 };
+    const out: LeagueRevenue = { opened: 0, fees: 0, tax: 0, dues: 0 };
 
     if (openingDue && !claimedNow.has(reason.opening)) {
       out.opened = await claimAndCredit(tx, world.id, reason.opening, cfg.treasury.openingBalance, now);
@@ -128,6 +138,12 @@ export async function collectLeagueRevenue(cfg: PoliticsConfig, now: Date = new 
       const rows = await tx.select({ population: leagueCities.population }).from(leagueCities).where(eq(leagueCities.worldId, world.id));
       const amount = leagueTax(rows.map((r) => r.population), cfg.treasury);
       if (amount > 0) out.tax = await claimAndCredit(tx, world.id, reason.tax, amount, now);
+    }
+
+    // The building dues (government prompt 2b), recomputed under the lock.
+    if (duesDue && !claimedNow.has(reason.buildings)) {
+      const amount = await duesNow(tx);
+      if (amount > 0) out.dues = await claimAndCredit(tx, world.id, reason.buildings, amount, now);
     }
 
     // Fees last: the world_treasury lock that market sales wait on is held for the

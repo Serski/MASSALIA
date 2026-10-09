@@ -48,7 +48,7 @@ suite("the League treasury's income (integration)", () => {
   });
 
   beforeEach(async () => {
-    await db.execute(sql`TRUNCATE TABLE treasury_ledger, treasuries, league_cities, world_treasury, worlds CASCADE`);
+    await db.execute(sql`TRUNCATE TABLE league_projects, treasury_ledger, treasuries, league_cities, world_treasury, worlds CASCADE`);
     worldId = (await db.insert(dbPkg.worlds).values({ name: "Revenue", seed: "rev-live", startedAt: new Date(T0), endsAt: new Date(T0 + 182 * SEASON), status: "active" }).returning())[0]!.id;
   });
 
@@ -57,7 +57,7 @@ suite("the League treasury's income (integration)", () => {
     expect(startTax).toBe(910);
 
     const got = await dbPkg.collectLeagueRevenue(cfg, at(0));
-    expect(got).toEqual({ opened: 60_000, tax: 910, fees: 0 });
+    expect(got).toEqual({ opened: 60_000, tax: 910, fees: 0, dues: 0 });
 
     expect(await ledger("opening")).toEqual([{ delta: 60_000, reason: "opening" }]);
     expect(await ledger("tax:s%")).toEqual([{ delta: 910, reason: "tax:s0" }]);
@@ -69,7 +69,7 @@ suite("the League treasury's income (integration)", () => {
 
   it("a second call in the same season writes nothing", async () => {
     await dbPkg.collectLeagueRevenue(cfg, at(0));
-    expect(await dbPkg.collectLeagueRevenue(cfg, at(0))).toEqual({ opened: 0, tax: 0, fees: 0 });
+    expect(await dbPkg.collectLeagueRevenue(cfg, at(0))).toEqual({ opened: 0, tax: 0, fees: 0, dues: 0 });
     expect(await balance()).toBe(60_910);
     expect((await ledger("%")).length).toBe(2);
   });
@@ -78,21 +78,21 @@ suite("the League treasury's income (integration)", () => {
     await dbPkg.collectLeagueRevenue(cfg, at(0));
     await setPot(37);
 
-    expect(await dbPkg.collectLeagueRevenue(cfg, at(0))).toEqual({ opened: 0, tax: 0, fees: 37 });
+    expect(await dbPkg.collectLeagueRevenue(cfg, at(0))).toEqual({ opened: 0, tax: 0, fees: 37, dues: 0 });
     expect(await ledger("fees:s%")).toEqual([{ delta: 37, reason: "fees:s0" }]);
     expect(await pot()).toBe(0);
     expect(await balance()).toBe(60_947);
 
     // Money that comes in later this season waits for the next season's sweep.
     await setPot(5);
-    expect(await dbPkg.collectLeagueRevenue(cfg, at(0))).toEqual({ opened: 0, tax: 0, fees: 0 });
+    expect(await dbPkg.collectLeagueRevenue(cfg, at(0))).toEqual({ opened: 0, tax: 0, fees: 0, dues: 0 });
     expect(await pot()).toBe(5);
     expect(await balance()).toBe(60_947);
   });
 
   it("the next season brings one new tax row and nothing else", async () => {
     await dbPkg.collectLeagueRevenue(cfg, at(0));
-    expect(await dbPkg.collectLeagueRevenue(cfg, at(1))).toEqual({ opened: 0, tax: 910, fees: 0 });
+    expect(await dbPkg.collectLeagueRevenue(cfg, at(1))).toEqual({ opened: 0, tax: 910, fees: 0, dues: 0 });
     expect((await ledger("tax:s%")).map((r) => r.reason).sort()).toEqual(["tax:s0", "tax:s1"]);
     expect(await ledger("opening")).toHaveLength(1);
     expect(await balance()).toBe(60_000 + 2 * 910);
@@ -113,6 +113,46 @@ suite("the League treasury's income (integration)", () => {
     expect(await ledger("%", ended)).toEqual([]);
     expect(await balance(ended)).toBe(0);
     expect((await db.select().from(dbPkg.leagueCities).where(eq(dbPkg.leagueCities.worldId, ended))).length).toBe(0);
+  });
+
+  // --- The building dues (government prompt 2b) -------------------------------
+  // A project here stands at a season's first instant, T0 + n × SEASON, not at
+  // at(n), which is the middle of it.
+  const stands = (cityId: string, buildingId: string, season: number) =>
+    db.insert(dbPkg.leagueProjects).values({ worldId, cityId, buildingId, cost: 1, startedAt: new Date(T0 + (season - 1) * SEASON), completesAt: new Date(T0 + season * SEASON) });
+
+  it("the standing Bazaars and Ports pay their dues once a season, counted from the buildings standing when the season began", async () => {
+    await stands("massalia", "bazaar", 1);
+    await stands("nikaia", "port", 2);
+    await stands("olbia", "temple", 1);
+
+    expect(await dbPkg.collectLeagueRevenue(cfg, at(0))).toEqual({ opened: 60_000, tax: startTax, fees: 0, dues: 0 });
+    expect(await ledger("buildings:%")).toEqual([]);
+
+    expect(await dbPkg.collectLeagueRevenue(cfg, at(1))).toEqual({ opened: 0, tax: startTax, fees: 0, dues: 100 });
+    expect(await ledger("buildings:%")).toEqual([{ delta: 100, reason: "buildings:s1" }]);
+    expect(await dbPkg.collectLeagueRevenue(cfg, at(1))).toEqual({ opened: 0, tax: 0, fees: 0, dues: 0 });
+
+    expect(await dbPkg.collectLeagueRevenue(cfg, at(2))).toEqual({ opened: 0, tax: startTax, fees: 0, dues: 150 });
+    expect((await ledger("buildings:%")).map((r) => [r.reason, r.delta])).toEqual([["buildings:s1", 100], ["buildings:s2", 150]]);
+    expect(await balance()).toBe(60_000 + 3 * startTax + 250);
+  });
+
+  it("two calls at once pay the dues exactly once", async () => {
+    await stands("massalia", "bazaar", 0);
+    const [a, b] = await Promise.all([dbPkg.collectLeagueRevenue(cfg, at(0)), dbPkg.collectLeagueRevenue(cfg, at(0))]);
+    expect(a.dues + b.dues).toBe(100);
+    expect(await ledger("buildings:%")).toHaveLength(1);
+    expect(await balance()).toBe(60_000 + startTax + 100);
+  });
+
+  it("a second buildings:s0 row for the same world fails on the index", async () => {
+    await stands("massalia", "bazaar", 0);
+    await dbPkg.collectLeagueRevenue(cfg, at(0));
+    const err = await db.insert(dbPkg.treasuryLedger).values({ worldId, owner: "league", delta: 1, reason: "buildings:s0" }).then(() => null, (e: unknown) => e as Error & { cause?: { constraint?: string } });
+    expect(err).toBeInstanceOf(Error);
+    expect(err!.cause?.constraint).toBe("treasury_ledger_claim_idx");
+    expect(await ledger("buildings:%")).toHaveLength(1);
   });
 
   it("a second opening row for the same world fails on the index", async () => {

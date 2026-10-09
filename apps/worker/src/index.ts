@@ -192,7 +192,7 @@ const SWEEPS: Sweep[] = [
       const adv = await advanceAgendaCycles(calendar, politics, pools);
       // A finished League building stands (government prompt 2a).
       const built = (await completeLeagueProjects()).length;
-      return `Agenda sweep: accrued ${accrued ? "yes" : "—"}, revenue: opening ${revenue.opened}, fees ${revenue.fees}, tax ${revenue.tax}, ${leaders} leader(s) seated, opened ${opened}, ${adv.toVoting.length} to vote, resolved ${adv.resolved.length}, built ${built}`;
+      return `Agenda sweep: accrued ${accrued ? "yes" : "—"}, revenue: opening ${revenue.opened}, fees ${revenue.fees}, tax ${revenue.tax}, dues ${revenue.dues}, ${leaders} leader(s) seated, opened ${opened}, ${adv.toVoting.length} to vote, resolved ${adv.resolved.length}, built ${built}`;
     },
   },
   {

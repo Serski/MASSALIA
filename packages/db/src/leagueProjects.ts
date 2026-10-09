@@ -2,8 +2,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, eq, isNull, lte, sql } from "drizzle-orm";
-import { leagueDocket, parseLeagueBuildings, projectKey, projectMotion, type LeagueBuilding, type ProjectMotion } from "@massalia/shared";
-import { createDb } from "./client.js";
+import { leagueDocket, parseLeagueBuildings, projectKey, projectMotion, type LeagueBuilding, type ProjectMotion, type ProjectTiming } from "@massalia/shared";
+import { createDb, type DbExec } from "./client.js";
 import { ensureLeagueCities, loadCities } from "./leagueRevenue.js";
 import { leagueCities, leagueProjects, treasuries } from "./schema.js";
 import { activeWorld } from "./world.js";
@@ -47,6 +47,13 @@ export async function leagueDocketFor(worldId: string): Promise<ProjectMotion[]>
 export async function leagueProjectMotion(id: string): Promise<ProjectMotion | null> {
   const [defs, cities] = await Promise.all([loadLeagueBuildings(), loadCities()]);
   return projectMotion(id, defs, cities.cities);
+}
+
+// Every project of the world, under way or standing, as the instant it stands.
+// One select; the pure rules in @massalia/shared decide by time from here.
+export async function projectTimings(exec: DbExec, worldId: string): Promise<ProjectTiming[]> {
+  const rows = await exec.select({ cityId: leagueProjects.cityId, buildingId: leagueProjects.buildingId, completesAt: leagueProjects.completesAt }).from(leagueProjects).where(eq(leagueProjects.worldId, worldId));
+  return rows.map((r) => ({ cityId: r.cityId, buildingId: r.buildingId, completesAt: r.completesAt.getTime() }));
 }
 
 export interface CompletedProject {
