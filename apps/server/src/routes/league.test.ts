@@ -6,7 +6,7 @@ import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import cookie from "@fastify/cookie";
-import { parseCitiesContent, polisTax } from "@massalia/shared";
+import { buildingEffects, festivalEffects, leagueDocket, parseCitiesContent, parseLeagueBuildings, parseLeagueFestivals, polisTax } from "@massalia/shared";
 
 // ---------------------------------------------------------------------------
 // GET /api/league/cities (government prompt 1): the Tax column is what each
@@ -23,6 +23,8 @@ const DAY = 86_400_000;
 const HOUR = 3_600_000;
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const cities = parseCitiesContent(JSON.parse(readFileSync(resolve(root, "content/cities/cities.json"), "utf8")));
+const buildings = parseLeagueBuildings(JSON.parse(readFileSync(resolve(root, "content/politics/league-buildings.json"), "utf8"))).buildings;
+const festivals = parseLeagueFestivals(JSON.parse(readFileSync(resolve(root, "content/politics/league-festivals.json"), "utf8"))).festivals;
 
 function hashToken(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
@@ -42,6 +44,7 @@ suite("GET /api/league/cities: the tax each polis pays a season (integration)", 
   let db: ReturnType<Mods["dbPkg"]["createDb"]>;
   let app: FastifyInstance;
   let worldId: string;
+  let worldStartedAt: Date;
 
   beforeAll(async () => {
     m = await loadModules();
@@ -60,8 +63,11 @@ suite("GET /api/league/cities: the tax each polis pays a season (integration)", 
   });
 
   beforeEach(async () => {
-    await db.execute(sql`TRUNCATE TABLE league_projects, league_cities, sessions, users, worlds CASCADE`);
-    worldId = (await db.insert(m.dbPkg.worlds).values({ name: "Cities Test", seed: "ctest", startedAt: new Date(Date.now() - DAY), endsAt: new Date(Date.now() + 181 * DAY), status: "active" }).returning())[0]!.id;
+    await db.execute(sql`TRUNCATE TABLE league_festivals, league_projects, agenda_cycles, treasuries, league_cities, sessions, users, worlds CASCADE`);
+    worldStartedAt = new Date(Date.now() - DAY);
+    worldId = (await db.insert(m.dbPkg.worlds).values({ name: "Cities Test", seed: "ctest", startedAt: worldStartedAt, endsAt: new Date(Date.now() + 181 * DAY), status: "active" }).returning())[0]!.id;
+    // The League treasury at 60,000, so every project and festival is within reach.
+    await db.insert(m.dbPkg.treasuries).values({ worldId, owner: "league", balance: 60_000 });
   });
 
   async function session(): Promise<string> {
@@ -105,6 +111,75 @@ suite("GET /api/league/cities: the tax each polis pays a season (integration)", 
       { buildingId: "port", name: "Port", status: "building", completesLabel: "Winter, 298 BC" },
     ]);
     expect(body.cities.find((c) => c.id === "massalia")!.buildings).toEqual([]);
+  });
+
+  // --- The League's plans, in advance (government prompt 3b) ---------------------
+  type Works = {
+    buildings: { id: string; name: string; cost: number; seasons: number; populationAbove: number | null; partyLean: string; effects: string[] }[];
+    projects: { opensAt: string; opensLabel: string; drafting: boolean; items: { id: string; cityId: string; polis: string; buildingId: string; name: string }[] };
+    festivals: { opensAt: string; opensLabel: string; drafting: boolean; items: { id: string; name: string; cost: number; partyLean: string; effects: string[] }[]; year: number; yearLabel: string };
+  };
+  const works = async () => ((await get(await session())).json() as { works: Works }).works;
+  const startDocket = () => leagueDocket(buildings, cities.cities.map((c) => ({ id: c.id, name: c.name, population: c.start.population })), new Set(), 60_000);
+
+  it("works.buildings is the five content buildings with what each does, for 'The city'", async () => {
+    const w = await works();
+    expect(w.buildings.map((b) => b.id)).toEqual(buildings.map((b) => b.id));
+    expect(w.buildings.map((b) => [b.name, b.cost, b.seasons, b.populationAbove, b.partyLean])).toEqual(buildings.map((b) => [b.name, b.cost, b.seasons, b.populationAbove, b.partyLean]));
+    expect(w.buildings[0]!.effects).toEqual(["Priests +20 dr a season for 4 seasons", "Every army +3 morale for 2 years", "The city +3 stability a year"]);
+    expect(w.buildings[3]!.effects).toEqual(["The city's fortifications +1"]);
+    for (const b of w.buildings) expect(b.effects).toEqual(buildingEffects(buildings.find((x) => x.id === b.id)!, "The city"));
+  });
+
+  it("in a Spring the dockets are the coming ones, as they would open today", async () => {
+    const w = await works();
+    expect(w.projects.drafting).toBe(false);
+    expect(w.projects.opensAt).toBe(new Date(worldStartedAt.getTime() + 4 * DAY).toISOString());
+    expect(w.projects.opensLabel).toBe("Winter, 299 BC");
+    expect(w.projects.items.map((i) => i.id)).toEqual(startDocket().map((p) => p.id));
+    expect(w.projects.items).toHaveLength(36);
+    expect(w.projects.items[0]).toEqual({ id: "project:massalia:temple", cityId: "massalia", polis: "Massalia", buildingId: "temple", name: "Temple of Artemis" });
+
+    expect(w.festivals.drafting).toBe(false);
+    expect(w.festivals.opensLabel).toBe("Summer, 300 BC");
+    expect(w.festivals.year).toBe(1);
+    expect(w.festivals.yearLabel).toBe("299 BC");
+    expect(w.festivals.items.map((i) => i.id)).toEqual(["festival:dionysia:y1", "festival:artemisia:y1", "festival:apollo:y1"]);
+    for (const item of w.festivals.items) {
+      const f = festivals.find((x) => `festival:${x.id}:y1` === item.id)!;
+      expect(item).toEqual({ id: item.id, name: f.name, cost: f.cost, partyLean: f.partyLean, effects: festivalEffects(f) });
+    }
+  });
+
+  it("a project under way is not on the coming docket", async () => {
+    await db.insert(m.dbPkg.leagueProjects).values({ worldId, cityId: "massalia", buildingId: "temple", cost: 1000, startedAt: worldStartedAt, completesAt: new Date(worldStartedAt.getTime() + 4 * DAY) });
+    const w = await works();
+    expect(w.projects.items).toHaveLength(35);
+    expect(w.projects.items.some((i) => i.id === "project:massalia:temple")).toBe(false);
+  });
+
+  it("while the League drafts, the docket is the cycle's own, or as it would open when no sync has fixed it yet", async () => {
+    // The world's first Winter: the League drafting year 0.
+    const startedAt = new Date(Date.now() - HOUR);
+    await db.update(m.dbPkg.worlds).set({ startedAt }).where(sql`id = ${worldId}`);
+    await db.insert(m.dbPkg.agendaCycles).values({ worldId, scope: "league", gameYear: 0, phase: "drafting", cardIds: ["project:nikaia:walls", "project:olbia:port"], opensAt: startedAt, votingEndsAt: new Date(startedAt.getTime() + 2 * DAY) });
+    let w = await works();
+    expect(w.projects.drafting).toBe(true);
+    expect(w.projects.opensLabel).toBe("Winter, 300 BC");
+    expect(w.projects.items.map((i) => [i.id, i.polis, i.name])).toEqual([["project:nikaia:walls", "Nikaia", "Walls"], ["project:olbia:port", "Olbia", "Port"]]);
+
+    await db.delete(m.dbPkg.agendaCycles).where(sql`world_id = ${worldId}`);
+    w = await works();
+    expect(w.projects.drafting).toBe(true);
+    expect(w.projects.items).toHaveLength(36);
+  });
+
+  it("with no treasuries row both dockets are empty", async () => {
+    await db.delete(m.dbPkg.treasuries).where(sql`world_id = ${worldId}`);
+    const w = await works();
+    expect(w.projects.items).toEqual([]);
+    expect(w.festivals.items).toEqual([]);
+    expect(w.buildings).toHaveLength(5);
   });
 
   it("a grown polis pays more: the tax follows the live population, not the stored column", async () => {

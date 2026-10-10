@@ -126,6 +126,7 @@ export async function leagueRoutes(app: FastifyInstance) {
     const { getActiveWorldId } = await import("../services/character.js");
     const { getPoliticsConfig } = await import("../services/oligarchy.js");
     const { getLeagueBuildings } = await import("../services/agenda.js");
+    const { leagueWorksView } = await import("../services/leagueWorks.js");
     const db = (_db ??= createDb());
 
     await requireAuth(request);
@@ -184,7 +185,9 @@ export async function leagueRoutes(app: FastifyInstance) {
         buildings: buildingsOf(c.id),
       };
     });
-    return { cities: out };
+    // The League's plans, in advance (government prompt 3b): the buildings, the
+    // building docket and the festival docket, for everyone.
+    return { cities: out, works: await leagueWorksView({ id: worldId, startedMs }) };
   });
 
   // The nineteen neighbouring factions and their current stance for the world.
