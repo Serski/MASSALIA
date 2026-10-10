@@ -79,3 +79,12 @@ Anything off is a STOP: report it and wait. Do not write to production to fix it
 ## Scope fence
 
 Only `barracks.ts` (the three fields, `rateBounds`, `rollRate`, `raidPlunder` and its comment), `battle.json`'s three numbers, and the three test files named (`battle.test.ts`, `koinonMuster.test.ts`, `mapActions.test.ts`). Do not touch the turnout, the opinion roll, the town multiplier, the march, the two callers, the Chronicle or muster lines, the client or any stylesheet. No migration. No other balance number.
+
+## STOP 1 ruling (Argiris, 11 Oct 2026)
+
+- Deviation 1: keep the two suite helpers.
+- Deviation 2: keep the refusal of a negative plain number.
+- Deviation 3: accepted as written.
+- The two commits left on no branch (8b44b4a, c4b7ef8) are known and wanted gone; leave them.
+
+Append this ruling to docs/barracks/raids-prompt-6.md as its own commit, run the gate at that HEAD and read its last line, then push at or after 00:15 UTC, following the Push section of the prompt. Report as it says.
