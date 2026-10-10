@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeAll, beforeEach } from "vitest";
 import { and, asc, eq, sql } from "drizzle-orm";
 import Fastify from "fastify";
-import { REACH_REASON, splitByShares } from "@massalia/shared";
+import { rateBounds, REACH_REASON, splitByShares } from "@massalia/shared";
 
 // ---------------------------------------------------------------------------
 // The koinon's Raid muster (koinon prompt 3) — integration tests against a REAL
@@ -594,6 +594,19 @@ suite("Koinon muster (integration)", () => {
   type Report = NonNullable<Awaited<ReturnType<Mods["koinon"]["koinonView"]>>["koinon"]>["lastMuster"] extends infer L ? (L extends { report: infer R } ? NonNullable<R> : never) : never;
   const reportOf = async () => (await musters())[0]!.report as unknown as Report;
   const battle = () => m.barracks.getBattleContent();
+  // Raids prompt 6: each amount of a plunder is kills × mult × a whole rate within
+  // its content range (a plain number is its own range), rolled once per raid.
+  const expectRolledPlunder = (plunder: { drachmae: number; grain: number; spoil: { amount: number } }, kills: number, mult: number) => {
+    const within = (amount: number, bounds: { min: number; max: number }) => {
+      const rate = amount / (kills * mult);
+      expect(Number.isInteger(rate), `${amount} for ${kills} kills × ${mult}`).toBe(true);
+      expect(rate).toBeGreaterThanOrEqual(bounds.min);
+      expect(rate).toBeLessThanOrEqual(bounds.max);
+    };
+    within(plunder.drachmae, rateBounds(battle().raid.plunderPerKill));
+    within(plunder.grain, rateBounds(battle().raid.grainPerKill));
+    within(plunder.spoil.amount, rateBounds(battle().raid.spoilPerKill));
+  };
   // The road (raids prompts 4 and 5): the army arrives `steps` × minutesPerStep after the launch and is home twice that later;
   // every muster here marches one land step or by sea.
   const arrival = (steps: number, from = LAUNCH) => new Date(from.getTime() + steps * battle().march.minutesPerStep * MIN);
@@ -715,8 +728,10 @@ suite("Koinon muster (integration)", () => {
     // The plunder is act's total for those kills, the third good included, and the parts add up to it.
     const { good, label } = report.plunder!.spoil!;
     expect(battle().raid.spoilGoods).toContain(good);
-    const total = { drachmae: Math.round(report.killed * battle().raid.plunderPerKill), grain: Math.round(report.killed * battle().raid.grainPerKill), spoil: { good, label, amount: report.killed * battle().raid.spoilPerKill } };
-    expect(report.plunder).toEqual(total);
+    // Each amount is kills × a whole rate within its content range (raids prompt 6; a plain number is its own range).
+    const total = { drachmae: report.plunder!.drachmae, grain: report.plunder!.grain, spoil: report.plunder!.spoil! };
+    expectRolledPlunder(total, report.killed, 1);
+    expect(total.spoil).toMatchObject({ good, label });
     expect(report.parts.reduce((n, p) => n + p.drachmae, 0)).toBe(total.drachmae);
     expect(report.parts.reduce((n, p) => n + p.grain, 0)).toBe(total.grain);
     expect(report.parts.reduce((n, p) => n + p.spoil, 0)).toBe(total.spoil.amount);
@@ -949,8 +964,9 @@ suite("Koinon muster (integration)", () => {
     expect(report.fleet).toEqual({ hulls: { "trade-ship": 2 }, naval: 2, space: 40, filled: 40, defender: null, held: true });
     const { good, label } = report.plunder!.spoil!;
     const mult = battle().raid.townPlunderMultiplier;
-    const total = { drachmae: Math.round(report.killed * battle().raid.plunderPerKill * mult), grain: Math.round(report.killed * battle().raid.grainPerKill * mult), spoil: { good, label, amount: Math.round(report.killed * battle().raid.spoilPerKill * mult) } };
-    expect(report.plunder).toEqual(total);
+    const total = { drachmae: report.plunder!.drachmae, grain: report.plunder!.grain, spoil: report.plunder!.spoil! };
+    expectRolledPlunder(total, report.killed, mult);
+    expect(total.spoil).toMatchObject({ good, label });
     const drachmae = splitByShares(total.drachmae, { [soldier]: 40, [shipowner]: 40 });
     const grains = splitByShares(total.grain, { [soldier]: 40, [shipowner]: 40 });
     const spoils = splitByShares(total.spoil.amount, { [soldier]: 40, [shipowner]: 40 });

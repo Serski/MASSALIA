@@ -49,6 +49,10 @@ export function voyageSupplies(content: ShipsContent, ships: Record<string, numb
 export const NPC_KINDS = ["warband", "garrison"] as const;
 export type NpcKind = (typeof NPC_KINDS)[number];
 export type NpcDef = { label: string; stats: UnitStats };
+// A per-kill rate of the plunder: a plain number is fixed; a range is rolled
+// once per raid to a whole number from min to max inclusive.
+export type RateOrRange = number | { min: number; max: number };
+
 export type BattleContent = {
   version: number;
   source: string;
@@ -61,15 +65,17 @@ export type BattleContent = {
   // turnout.floorOneIn of the pool nor more than one in turnout.capOneIn (the
   // kills still come off the whole pool); each kill pays plunderPerKill
   // drachmae, grainPerKill grain and spoilPerKill of a third good drawn once
-  // per raid from spoilGoods; a town pays townPlunderMultiplier times all three.
+  // per raid from spoilGoods. Each of the three rates is a plain number (fixed)
+  // or a { min, max } range, rolled once per raid, not per kill, on the battle's
+  // seed (raids prompt 6); a town pays townPlunderMultiplier times all three.
   // A raid that lands on a nation's land rolls once: with opinion.chance it
   // lowers that nation's opinion of Massalia by opinion.loss points.
   raid: {
     rounds: number;
     turnout: { floorOneIn: number; capOneIn: number };
-    plunderPerKill: number;
-    grainPerKill: number;
-    spoilPerKill: number;
+    plunderPerKill: RateOrRange;
+    grainPerKill: RateOrRange;
+    spoilPerKill: RateOrRange;
     spoilGoods: string[];
     townPlunderMultiplier: number;
     opinion: { chance: number; loss: number };
@@ -268,6 +274,16 @@ export function parseBandsContent(data: unknown, knownGoods: Iterable<string>): 
   return parsed;
 }
 
+// A non-negative number, or { min, max }: two non-negative whole numbers with
+// min ≤ max, nothing else (a misspelt key fails the boot).
+const rateOrRangeSchema = z.union([
+  z.number().nonnegative(),
+  z
+    .object({ min: z.number().int().nonnegative(), max: z.number().int().nonnegative() })
+    .strict()
+    .refine((r) => r.min <= r.max, { message: "a rate range needs min <= max" }),
+]);
+
 function battleContentSchema(goods: ReadonlySet<string>) {
   return z
   .object({
@@ -282,9 +298,9 @@ function battleContentSchema(goods: ReadonlySet<string>) {
       .object({
         rounds: z.number().int().positive(),
         turnout: z.object({ floorOneIn: z.number().int().positive(), capOneIn: z.number().int().positive() }).strict(),
-        plunderPerKill: z.number().nonnegative(),
-        grainPerKill: z.number().nonnegative(),
-        spoilPerKill: z.number().nonnegative(),
+        plunderPerKill: rateOrRangeSchema,
+        grainPerKill: rateOrRangeSchema,
+        spoilPerKill: rateOrRangeSchema,
         spoilGoods: z
           .array(z.string())
           .min(1)
@@ -434,22 +450,39 @@ export function raidTurnout(raid: BattleContent["raid"], men: number, pool: numb
   return Math.min(pool, Math.max(floor, Math.min(rolled, cap)));
 }
 
-// What a won raid pays for its kills: drachmae, grain and one third good drawn
-// once per raid on the battle's own seed, so a raid's good is fixed by its
-// battle. A town pays townPlunderMultiplier times all three.
 // Whether a raid that lands on a nation's land sours it: one roll per raid on
 // the battle's seed against opinion.chance.
 export function raidAngers(raid: BattleContent["raid"], seed: string): boolean {
   return seededRoll([seed, "opinion"]) < raid.opinion.chance;
 }
 
+// The bounds of a per-kill rate: a plain number is its own min and max.
+export function rateBounds(rate: RateOrRange): { min: number; max: number } {
+  return typeof rate === "number" ? { min: rate, max: rate } : { min: rate.min, max: rate.max };
+}
+
+// A per-kill rate as one raid pays it: a plain number as it is; a range rolled
+// once on the seed parts to a whole number from min to max inclusive.
+export function rollRate(rate: RateOrRange, seedParts: string[]): number {
+  if (typeof rate === "number") return rate;
+  return rate.min + Math.floor(seededRoll(seedParts) * (rate.max - rate.min + 1));
+}
+
+// What a won raid pays for its kills: drachmae, grain and one third good, each
+// rate rolled once per raid on the battle's own seed with its own seed part
+// ("plunder", "grain", "spoilRate"; "spoil" picks the good, so the amount is
+// not tied to it), then kills × rate × the town multiplier. The same battle
+// always pays the same. A town pays townPlunderMultiplier times all three.
 export type RaidPlunder = { drachmae: number; grain: number; spoil: { good: string; amount: number } };
 export function raidPlunder(raid: BattleContent["raid"], kills: number, isTown: boolean, seed: string): RaidPlunder {
   const mult = isTown ? raid.townPlunderMultiplier : 1;
   const good = raid.spoilGoods[Math.floor(seededRoll([seed, "spoil"]) * raid.spoilGoods.length)]!;
+  const plunderRate = rollRate(raid.plunderPerKill, [seed, "plunder"]);
+  const grainRate = rollRate(raid.grainPerKill, [seed, "grain"]);
+  const spoilRate = rollRate(raid.spoilPerKill, [seed, "spoilRate"]);
   return {
-    drachmae: Math.round(kills * raid.plunderPerKill * mult),
-    grain: Math.round(kills * raid.grainPerKill * mult),
-    spoil: { good, amount: Math.round(kills * raid.spoilPerKill * mult) },
+    drachmae: Math.round(kills * plunderRate * mult),
+    grain: Math.round(kills * grainRate * mult),
+    spoil: { good, amount: Math.round(kills * spoilRate * mult) },
   };
 }

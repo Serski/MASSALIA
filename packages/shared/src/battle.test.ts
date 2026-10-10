@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { marchMinutes, parseBattleContent, parseUnitsContent, raidAngers, raidPlunder, raidTurnout, type UnitStats } from "./barracks.js";
+import { marchMinutes, parseBattleContent, parseUnitsContent, raidAngers, raidPlunder, raidTurnout, rateBounds, rollRate, type UnitStats } from "./barracks.js";
 import { resolveBattle, SKIRMISH_MSL, type BattleConfig, type BattleRow } from "./battle.js";
 import { parseBuildingsContent } from "./buildings.js";
 
@@ -116,6 +116,50 @@ describe("raid rules", () => {
     }
     expect(Object.keys(drawn).sort()).toEqual([...battle.raid.spoilGoods].sort());
     for (const good of battle.raid.spoilGoods) expect(drawn[good], good).toBeGreaterThanOrEqual(80);
+  });
+
+  // Raids prompt 6: a per-kill rate may be a range, rolled once per raid.
+  it("raidPlunder with ranges: each rate rolls once per raid to a whole number from min to max, untied from the good", () => {
+    const ranged = { ...battle.raid, plunderPerKill: { min: 20, max: 30 }, grainPerKill: { min: 1, max: 3 }, spoilPerKill: { min: 1, max: 3 } };
+    const plunderRates = new Set<number>();
+    const grainRates = new Set<number>();
+    const spoilRates = new Set<number>();
+    const goodWithRate = new Set<string>();
+    for (let i = 0; i < 400; i++) {
+      const p = raidPlunder(ranged, 1, false, `s${i}`);
+      plunderRates.add(p.drachmae);
+      grainRates.add(p.grain);
+      spoilRates.add(p.spoil.amount);
+      goodWithRate.add(`${p.spoil.good}:${p.spoil.amount}`);
+    }
+    // Every value from min to max is drawn for each rate, and nothing outside it.
+    expect([...plunderRates].sort((a, b) => a - b)).toEqual([20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]);
+    expect([...grainRates].sort()).toEqual([1, 2, 3]);
+    expect([...spoilRates].sort()).toEqual([1, 2, 3]);
+    // Every good comes in every spoil amount: the good's roll and the rate's are separate.
+    expect(goodWithRate.size).toBe(ranged.spoilGoods.length * 3);
+    // The same seed always pays the same.
+    expect(raidPlunder(ranged, 7, true, "s3")).toEqual(raidPlunder(ranged, 7, true, "s3"));
+    // One roll per raid, not per kill: five kills at a town pay 10, 20 or 30 grain, never 17.
+    for (let i = 0; i < 100; i++) expect([10, 20, 30]).toContain(raidPlunder(ranged, 5, true, `t${i}`).grain);
+    // A range of one value pays as the plain number.
+    const fixed = { ...ranged, grainPerKill: 2 };
+    const narrow = { ...ranged, grainPerKill: { min: 2, max: 2 } };
+    for (let i = 0; i < 20; i++) expect(raidPlunder(narrow, 4, false, `n${i}`).grain).toBe(raidPlunder(fixed, 4, false, `n${i}`).grain);
+    expect(rollRate(5, ["x"])).toBe(5);
+    expect(rollRate({ min: 2, max: 2 }, ["x"])).toBe(2);
+    // The bounds of a number and of a range.
+    expect(rateBounds(50)).toEqual({ min: 50, max: 50 });
+    expect(rateBounds({ min: 20, max: 30 })).toEqual({ min: 20, max: 30 });
+    // The schema: a range parses; min above max, a fraction and a stray key are refused.
+    const file = read("content/military/battle.json");
+    const withRate = (plunderPerKill: unknown) => parseBattleContent({ ...file, raid: { ...file.raid, plunderPerKill } }, goods);
+    expect(withRate({ min: 20, max: 30 }).raid.plunderPerKill).toEqual({ min: 20, max: 30 });
+    expect(withRate(50).raid.plunderPerKill).toBe(50);
+    expect(() => withRate({ min: 30, max: 20 })).toThrow();
+    expect(() => withRate({ min: 1.5, max: 3 })).toThrow();
+    expect(() => withRate({ min: 1, max: 3, mode: 2 })).toThrow();
+    expect(() => withRate(-1)).toThrow();
   });
 });
 
