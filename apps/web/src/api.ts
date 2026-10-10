@@ -550,8 +550,9 @@ export const api = {
   oligarchyChamber: () => apiFetch<ChamberView>("/api/oligarchy/chamber"),
   buySeat: () => apiFetch<{ ok: true; seatIndex: number; price: number }>("/api/oligarchy/buy-seat", { method: "POST" }),
   chamberVotes: () => apiFetch<ChamberVotesView>("/api/oligarchy/votes"),
-  castChamberVote: (choice: "yes" | "no") =>
-    apiFetch<{ ok: true; choice: "yes" | "no" }>("/api/oligarchy/vote", { method: "POST", body: { choice } }),
+  // `voteId` names the vote (several can be open at once, government prompt 3); an old server ignores it.
+  castChamberVote: (choice: "yes" | "no", voteId?: string) =>
+    apiFetch<{ ok: true; choice: "yes" | "no" }>("/api/oligarchy/vote", { method: "POST", body: voteId ? { choice, voteId } : { choice } }),
   // Archon & Ephor elections (Politics Prompt 2): the cycle ballot, declaring,
   // the secret vote, the current offices, the ledger, and appointments.
   elections: () => apiFetch<ElectionsView>("/api/elections"),
@@ -980,6 +981,8 @@ export type ChamberPublicBallot = {
 
 export type ChamberVoteView = {
   id: string;
+  // 'league' | 'festival' | 'palaioi' | 'dynatoi'. Optional: an old server sends none.
+  scope?: string;
   gameYear: number;
   title: string;
   description: string;
@@ -991,8 +994,13 @@ export type ChamberVoteView = {
   ballots: ChamberPublicBallot[];
 };
 
+export type OpenChamberVoteView = ChamberVoteView & { yourBallot: "yes" | "no" | null; youMayVote: boolean };
+
 export type ChamberVotesView = {
-  open: (ChamberVoteView & { yourBallot: "yes" | "no" | null; youMayVote: boolean }) | null;
+  // The first open vote (what an old server sends alone).
+  open: OpenChamberVoteView | null;
+  // Every open vote this character may see, ordered league, festival, then the party's own. Optional: an old server sends none.
+  openVotes?: OpenChamberVoteView[];
   past: ChamberVoteView[];
 };
 

@@ -1,5 +1,5 @@
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { api, ApiError, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type GovernmentView as GovernmentData } from "../../api.js";
+import { api, ApiError, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type OpenChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type GovernmentView as GovernmentData } from "../../api.js";
 import { assetPath } from "../../data/league.js";
 import { AssetIcon, DashboardCard, DigestList, PanelBanner, type PanelProps, PanelRow, PersonRow, formatDuration, ideologyReadout, useCountdownSeconds } from "../shared.js";
 import { PublicProfile, type ProfileTarget } from "../PublicProfile.js";
@@ -199,6 +199,41 @@ function BallotLedger({ ballots }: { ballots: ChamberVoteView["ballots"] }) {
   );
 }
 
+// One open chamber vote: its own countdown, ballot buttons and ledger. One
+// component per vote, so the countdown hook is never called in a loop.
+function OpenVoteCard({ vote, busy, onCast }: { vote: OpenChamberVoteView; busy: boolean; onCast: (choice: "yes" | "no", voteId: string) => void }) {
+  const countdown = useCountdownSeconds(vote.closesAt);
+  return (
+    <DashboardCard className="chamber-vote-card">
+      <div className="event-body">
+        <span className="dashboard-label oligarchy-kicker">The chamber votes — closes in {formatDuration(countdown)}</span>
+        <h3>{vote.title}</h3>
+        <p className="chamber-vote-desc">{vote.description}</p>
+        {vote.youMayVote ? (
+          <div className="event-choice-stack chamber-vote-choices">
+            <button type="button" className={`event-choice-button${vote.yourBallot === "yes" ? " ballot-chosen" : ""}`} disabled={busy} onClick={() => onCast("yes", vote.id)}>
+              <strong>Vote AYE</strong>
+              {vote.yourBallot === "yes" ? <span className="choice-costs"><span className="cost-chip cost-positive">✓ your ballot — changeable until close</span></span> : null}
+            </button>
+            <button type="button" className={`event-choice-button${vote.yourBallot === "no" ? " ballot-chosen" : ""}`} disabled={busy} onClick={() => onCast("no", vote.id)}>
+              <strong>Vote NAY</strong>
+              {vote.yourBallot === "no" ? <span className="choice-costs"><span className="cost-chip cost-positive">✓ your ballot — changeable until close</span></span> : null}
+            </button>
+          </div>
+        ) : (
+          <p className="dashboard-todo">Only seat-holders vote in the chamber. Ballots are a public record.</p>
+        )}
+        {vote.ballots.length ? (
+          <>
+            <div className="panel-label panel-label-spaced">Ballots on the floor — public record</div>
+            <BallotLedger ballots={vote.ballots} />
+          </>
+        ) : null}
+      </div>
+    </DashboardCard>
+  );
+}
+
 function OligarchySection({ player, onRefresh }: PanelProps) {
   const [chamber, setChamber] = useState<ChamberView | null>(null);
   const [votes, setVotes] = useState<ChamberVotesView | null>(null);
@@ -217,9 +252,10 @@ function OligarchySection({ player, onRefresh }: PanelProps) {
     load();
   }, [load]);
 
-  const openVote = votes?.open ?? null;
+  // Every open vote this character may see (government prompt 3: the festival
+  // vote sits beside the party votes in an Autumn); an old server sends `open` alone.
+  const openVotes = votes?.openVotes ?? (votes?.open ? [votes.open] : []);
   const lastVote = votes?.past[0] ?? null;
-  const countdown = useCountdownSeconds(openVote ? openVote.closesAt : null);
 
   const buy = async () => {
     setBusy(true);
@@ -236,11 +272,11 @@ function OligarchySection({ player, onRefresh }: PanelProps) {
     }
   };
 
-  const cast = async (choice: "yes" | "no") => {
+  const cast = async (choice: "yes" | "no", voteId: string) => {
     setBusy(true);
     setNote("");
     try {
-      await api.castChamberVote(choice);
+      await api.castChamberVote(choice, voteId);
       load();
     } catch (err) {
       setNote(err instanceof ApiError ? err.message : "Your ballot could not be cast.");
@@ -346,45 +382,9 @@ function OligarchySection({ player, onRefresh }: PanelProps) {
         <PanelRow icon={<img className="good-glyph" src={assetPath(OFFICE_ICON.oligarch ?? "")} alt="" loading="lazy" />} title="A seat among the Three Hundred" sub={you.reason} dim tag="—" />
       ) : null}
 
-      {openVote ? (
-        <DashboardCard className="chamber-vote-card">
-          <div className="event-body">
-            <span className="dashboard-label oligarchy-kicker">The chamber votes — closes in {formatDuration(countdown)}</span>
-            <h3>{openVote.title}</h3>
-            <p className="chamber-vote-desc">{openVote.description}</p>
-            {openVote.youMayVote ? (
-              <div className="event-choice-stack chamber-vote-choices">
-                <button
-                  type="button"
-                  className={`event-choice-button${openVote.yourBallot === "yes" ? " ballot-chosen" : ""}`}
-                  disabled={busy}
-                  onClick={() => cast("yes")}
-                >
-                  <strong>Vote AYE</strong>
-                  {openVote.yourBallot === "yes" ? <span className="choice-costs"><span className="cost-chip cost-positive">✓ your ballot — changeable until close</span></span> : null}
-                </button>
-                <button
-                  type="button"
-                  className={`event-choice-button${openVote.yourBallot === "no" ? " ballot-chosen" : ""}`}
-                  disabled={busy}
-                  onClick={() => cast("no")}
-                >
-                  <strong>Vote NAY</strong>
-                  {openVote.yourBallot === "no" ? <span className="choice-costs"><span className="cost-chip cost-positive">✓ your ballot — changeable until close</span></span> : null}
-                </button>
-              </div>
-            ) : (
-              <p className="dashboard-todo">Only seat-holders vote in the chamber. Ballots are a public record.</p>
-            )}
-            {openVote.ballots.length ? (
-              <>
-                <div className="panel-label panel-label-spaced">Ballots on the floor — public record</div>
-                <BallotLedger ballots={openVote.ballots} />
-              </>
-            ) : null}
-          </div>
-        </DashboardCard>
-      ) : null}
+      {openVotes.map((vote) => (
+        <OpenVoteCard key={vote.id} vote={vote} busy={busy} onCast={cast} />
+      ))}
 
       {lastVote ? (
         <DashboardCard className={`chamber-result-card ${lastVote.status}`}>

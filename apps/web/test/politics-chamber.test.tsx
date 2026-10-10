@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, type ChamberSeat, type ChamberView } from "../src/api.js";
+import { api, type ChamberSeat, type ChamberView, type ChamberVotesView, type OpenChamberVoteView } from "../src/api.js";
 import PoliticsPanel, { hemicycleLayout, hemicycleRows } from "../src/dashboard/panels/PoliticsPanel.js";
 
 // ---------------------------------------------------------------------------
@@ -59,9 +59,9 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function mount(view: ChamberView, party: "Dynatoi" | "Unaligned", koinonPending = 0) {
+async function mount(view: ChamberView, party: "Dynatoi" | "Unaligned", koinonPending = 0, votes: ChamberVotesView = { open: null, past: [] }) {
   vi.spyOn(api, "oligarchyChamber").mockResolvedValue(view);
-  vi.spyOn(api, "chamberVotes").mockResolvedValue({ open: null, past: [] } as unknown as Awaited<ReturnType<typeof api.chamberVotes>>);
+  vi.spyOn(api, "chamberVotes").mockResolvedValue(votes);
   vi.spyOn(api, "agenda").mockImplementation(never);
   vi.spyOn(api, "offices").mockImplementation(never);
   vi.spyOn(api, "elections").mockImplementation(never);
@@ -193,3 +193,36 @@ describe("pottery tab row on a phone", () => {
     expect(css).toContain(".dashboard-shell .cs-tab{ white-space: nowrap; flex: none; }");
   });
 });
+
+// Every open vote in the chamber (government prompt 3): a card per vote, each
+// ballot naming its vote; an old server's `open` alone still renders.
+describe("open votes", () => {
+  const openVote = (id: string, scope: string, title: string): OpenChamberVoteView => ({
+    id, scope, gameYear: 0, title, description: `${title}.`, opensAt: new Date().toISOString(), closesAt: new Date(Date.now() + 3_600_000).toISOString(),
+    status: "open", yesCount: null, noCount: null, ballots: [], yourBallot: null, youMayVote: true,
+  });
+  const festival = openVote("11111111-1111-4111-8111-111111111111", "festival", "A Dionysia for 299 BC");
+  const party = openVote("22222222-2222-4222-8222-222222222222", "palaioi", "A loyalty inquiry");
+
+  it("two open votes render two cards, and each ballot sends its own vote's id", async () => {
+    const cast = vi.spyOn(api, "castChamberVote").mockResolvedValue({ ok: true, choice: "yes" });
+    const { container } = await mount(chamber(true), "Dynatoi", 0, { open: festival, openVotes: [festival, party], past: [] });
+    const cards = [...container.querySelectorAll<HTMLElement>(".chamber-vote-card")];
+    expect(cards.map((c) => c.querySelector("h3")!.textContent)).toEqual(["A Dionysia for 299 BC", "A loyalty inquiry"]);
+    fireEvent.click([...cards[1]!.querySelectorAll("button")].find((b) => b.textContent!.startsWith("Vote NAY"))!);
+    await flush();
+    expect(cast).toHaveBeenLastCalledWith("no", party.id);
+    fireEvent.click([...cards[0]!.querySelectorAll("button")].find((b) => b.textContent!.startsWith("Vote AYE"))!);
+    await flush();
+    expect(cast).toHaveBeenLastCalledWith("yes", festival.id);
+  });
+
+  it("a payload without openVotes renders `open` as before", async () => {
+    const legacy = { open: festival, past: [] } as ChamberVotesView;
+    const { container } = await mount(chamber(true), "Dynatoi", 0, legacy);
+    const cards = [...container.querySelectorAll<HTMLElement>(".chamber-vote-card")];
+    expect(cards).toHaveLength(1);
+    expect(cards[0]!.querySelector("h3")!.textContent).toBe("A Dionysia for 299 BC");
+  });
+});
+

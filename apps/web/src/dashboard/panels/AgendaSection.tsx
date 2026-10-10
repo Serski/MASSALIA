@@ -43,6 +43,8 @@ export function AgendaScopeSection({ view, onRefresh, treasury = "full" }: { vie
   };
   const drafted = view.cards.find((c) => c.id === view.draftedCardId);
   const kicker = view.scope === "league" ? "The League agenda" : view.scope === "festival" ? "The festival of the coming year" : `${titleCase(view.scope)} agenda`;
+  // A festival's effects follow its passing; a project's follow its standing.
+  const effectsPrefix = view.scope === "festival" ? "If it passes:" : "When it stands:";
   // The League's docket is building projects grouped by polis (government prompt
   // 2a): consecutive cards with the same `group` share a heading, in docket
   // order. Cards without a group (a party's) form one unheaded run.
@@ -72,7 +74,7 @@ export function AgendaScopeSection({ view, onRefresh, treasury = "full" }: { vie
                         <div className="event-body">
                           <span className="dashboard-label">{card.title}</span>
                           <p className="agenda-flavor">{card.description}</p>
-                          {card.effects?.length ? <p className="agenda-effects">When it stands: {card.effects.join(" · ")}</p> : null}
+                          {card.effects?.length ? <p className="agenda-effects">{effectsPrefix} {card.effects.join(" · ")}</p> : null}
                           <span className="choice-costs">
                             <span className="cost-chip cost-neutral">{titleCase(card.partyLean)} lean</span>
                             {card.cost > 0 ? <span className="cost-chip cost-negative">{card.cost.toLocaleString()} dr.</span> : <span className="cost-chip cost-positive">Free</span>}
@@ -101,7 +103,7 @@ export function AgendaScopeSection({ view, onRefresh, treasury = "full" }: { vie
         ) : view.phase === "voting" ? (
           <>
             <h3>{drafted ? `"${drafted.title}" is before the chamber.` : "The chamber is in session."}</h3>
-            {drafted?.effects?.length ? <p className="agenda-effects">When it stands: {drafted.effects.join(" · ")}</p> : null}
+            {drafted?.effects?.length ? <p className="agenda-effects">{effectsPrefix} {drafted.effects.join(" · ")}</p> : null}
           </>
         ) : (
           <p className="dashboard-todo">No measure is in session.</p>

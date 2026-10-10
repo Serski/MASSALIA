@@ -199,7 +199,9 @@ describe("the Government tab", () => {
     const cards = [...container.querySelectorAll(".agenda-card")];
     expect(cards).toHaveLength(2);
     expect([...cards[1]!.querySelectorAll(".agenda-choice .dashboard-label")].map((l) => l.textContent)).toEqual(FESTIVALS.map((f) => f.title));
-    expect([...cards[1]!.querySelectorAll(".agenda-effects")].map((l) => l.textContent)).toEqual(FESTIVALS.map((f) => `When it stands: ${f.effects[0]}`));
+    // A festival's effects follow its passing; a project's follow its standing.
+    expect([...cards[1]!.querySelectorAll(".agenda-effects")].map((l) => l.textContent)).toEqual(FESTIVALS.map((f) => `If it passes: ${f.effects[0]}`));
+    expect([...cards[0]!.querySelectorAll(".agenda-effects")].map((l) => l.textContent)).toEqual(DOCKET.map((p) => `When it stands: ${p.effects.join(" · ")}`));
     expect(cards[1]!.querySelectorAll(".event-choice-button")).toHaveLength(2);
   });
 
@@ -210,7 +212,7 @@ describe("the Government tab", () => {
     expect(cards).toHaveLength(2);
     expect(cards[1]!.querySelector(".agenda-kicker")!.textContent).toBe("The festival of the coming year · voting");
     expect(cards[1]!.querySelector("h3")!.textContent).toBe(`"A Festival of Apollo for 299 BC" is before the chamber.`);
-    expect(cards[1]!.querySelector(".agenda-effects")!.textContent).toBe("When it stands: Traders and Shipbuilders +10 dr a season for the year");
+    expect(cards[1]!.querySelector(".agenda-effects")!.textContent).toBe("If it passes: Traders and Shipbuilders +10 dr a season for the year");
     expect(cards[1]!.querySelector(".treasury-card")).toBeNull();
     cleanup();
     vi.restoreAllMocks();
