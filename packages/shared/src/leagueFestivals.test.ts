@@ -30,10 +30,10 @@ const season = (n: number) => n * S;
 describe("league-festivals.json", () => {
   it("parses: four festivals in order with their classes, costs and the Olympiad flag", () => {
     expect(festivals.map((f) => [f.id, f.classes, f.cost, f.bonusPerSeason, f.olympiadOnly, f.partyLean])).toEqual([
-      ["dionysia", ["hetaira", "philosopher"], 500, 10, false, "independent"],
-      ["artemisia", ["priest", "landowner"], 600, 10, false, "independent"],
-      ["apollo", ["trader", "shipbuilder"], 500, 10, false, "independent"],
-      ["olympiad", ["hoplite"], 800, 10, true, "independent"],
+      ["dionysia", ["hetaira", "philosopher"], 500, 10, false, "dynatoi"],
+      ["artemisia", ["priest", "landowner"], 600, 10, false, "palaioi"],
+      ["apollo", ["trader", "shipbuilder"], 500, 10, false, "dynatoi"],
+      ["olympiad", ["hoplite"], 800, 10, true, "palaioi"],
     ]);
   });
 
@@ -68,7 +68,7 @@ describe("festivalDocket", () => {
       cost: 500,
       classes: ["hetaira", "philosopher"],
       bonusPerSeason: 10,
-      partyLean: "independent",
+      partyLean: "dynatoi",
       year: 3,
     });
     const olympiad = festivalDocket(festivals, 8, true, 60_000);

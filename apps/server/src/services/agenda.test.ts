@@ -243,9 +243,9 @@ suite("Agenda & three governments (integration)", () => {
     const voter = await character("voter", "palaioi");
     await setOffice("archon", "palaioi", archon);
     await setOffice("ephor", "palaioi", ephor);
-    // The festivals lean independent and this suite's chamber keeps only the
-    // Palaioi bloc, which would vote no: clear the NPC seats, so the chamber is
-    // the players' ballots alone and the voter's yes carries.
+    // The Dionysia leans Dynatoi and this suite's chamber keeps only the Palaioi
+    // bloc, which would vote no: clear the NPC seats, so the chamber is the
+    // players' ballots alone and the voter's yes carries.
     await db.delete(m.dbPkg.oligarchSeats).where(and(eq(m.dbPkg.oligarchSeats.worldId, worldId), eq(m.dbPkg.oligarchSeats.holderType, "npc")));
     await m.dbPkg.creditTreasury(worldId, "league", 5000, "seed", at(10));
     // Year 2's Summer is season 10: the docket is the festivals year 3 allows.
@@ -263,7 +263,7 @@ suite("Agenda & three governments (integration)", () => {
     const vote = await festivalVote();
     expect(vote.agendaCardId).toBe("festival:dionysia:y3");
     expect(vote.title).toBe("A Dionysia for 297 BC");
-    expect(vote.leans).toEqual({ palaioi: "no", dynatoi: "no", independent: "yes" });
+    expect(vote.leans).toEqual({ palaioi: "no", dynatoi: "yes", independent: "no" });
     await ballot(vote.id, voter, "yes");
     const balBefore = await m.dbPkg.treasuryBalance(worldId, "league");
 

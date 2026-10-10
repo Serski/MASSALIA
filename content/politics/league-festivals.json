@@ -5,44 +5,55 @@
       "name": "Dionysia",
       "title": "A Dionysia for {year}",
       "description": "Wine, masks and a chorus the city will hum for a year. The hetairai and the philosophers keep the best seats.",
-      "classes": ["hetaira", "philosopher"],
+      "classes": [
+        "hetaira",
+        "philosopher"
+      ],
       "cost": 500,
       "bonusPerSeason": 10,
       "olympiadOnly": false,
-      "partyLean": "independent"
+      "partyLean": "dynatoi"
     },
     {
       "id": "artemisia",
       "name": "Artemisia",
       "title": "An Artemisia for {year}",
       "description": "A year of processions to the goddess of the city. Her priests and the landowners who feed her altars prosper.",
-      "classes": ["priest", "landowner"],
+      "classes": [
+        "priest",
+        "landowner"
+      ],
       "cost": 600,
       "bonusPerSeason": 10,
       "olympiadOnly": false,
-      "partyLean": "independent"
+      "partyLean": "palaioi"
     },
     {
       "id": "apollo",
       "name": "Festival of Apollo",
       "title": "A Festival of Apollo for {year}",
       "description": "Games and markets under the god of the harbor. The traders and the shipwrights make the year's best trade.",
-      "classes": ["trader", "shipbuilder"],
+      "classes": [
+        "trader",
+        "shipbuilder"
+      ],
       "cost": 500,
       "bonusPerSeason": 10,
       "olympiadOnly": false,
-      "partyLean": "independent"
+      "partyLean": "dynatoi"
     },
     {
       "id": "olympiad",
       "name": "Olympiad",
       "title": "The Olympiad of {year}",
       "description": "The League sends its athletes to Olympia and feasts their return. The hoplites train in the open all year.",
-      "classes": ["hoplite"],
+      "classes": [
+        "hoplite"
+      ],
       "cost": 800,
       "bonusPerSeason": 10,
       "olympiadOnly": true,
-      "partyLean": "independent"
+      "partyLean": "palaioi"
     }
   ]
 }
