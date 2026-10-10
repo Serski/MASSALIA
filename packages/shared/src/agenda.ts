@@ -194,6 +194,22 @@ export function currentAgendaCycle(seasonIndex: number, scope: MotionScope, cfg:
   return null;
 }
 
+// The docket a scope has open at seasonIndex, or the next one to open
+// (government prompt 3b): the drafting cycle when currentAgendaCycle reports
+// one, with drafting true; otherwise the first agenda year whose drafting
+// season comes after seasonIndex, with drafting false, so a cycle in its voting
+// season points to the next one. The cadence is a positive integer, so the walk
+// up the game years ends.
+export function nextAgendaDocket(seasonIndex: number, scope: MotionScope, cfg: AgendaConfig): { gameYear: number; draftSeasonIndex: number; drafting: boolean } {
+  const live = currentAgendaCycle(seasonIndex, scope, cfg);
+  if (live?.phase === "drafting") return { gameYear: live.gameYear, draftSeasonIndex: agendaCycleSeasons(live.gameYear, scope, cfg).draftSeasonIndex, drafting: true };
+  for (let gameYear = Math.max(0, Math.floor(seasonIndex / SEASONS_PER_YEAR) - 1); ; gameYear++) {
+    if (!isAgendaYear(gameYear, scope, cfg)) continue;
+    const seasons = agendaCycleSeasons(gameYear, scope, cfg);
+    if (seasons.draftSeasonIndex > seasonIndex) return { gameYear, draftSeasonIndex: seasons.draftSeasonIndex, drafting: false };
+  }
+}
+
 // --- Card draw (pure, rng-injectable) ---------------------------------------
 
 // Draw `count` distinct cards from the pool, preferring those not recently used.

@@ -13,6 +13,7 @@ import {
   dues,
   festivalDonationCut,
   isAgendaYear,
+  nextAgendaDocket,
   parseAgendaFile,
   parsePoliticsConfig,
   seatPurchaseCut,
@@ -117,6 +118,36 @@ describe("agenda cadence (season clock, offset, no backlog)", () => {
   it("isAgendaYear is yearly by default", () => {
     expect(isAgendaYear(0, "league", agendaCfg)).toBe(true);
     expect(isAgendaYear(3, "palaioi", agendaCfg)).toBe(true);
+  });
+});
+
+describe("nextAgendaDocket (government prompt 3b): the docket open now, or the next to open", () => {
+  const next = (season: number, scope: "league" | "festival" | "palaioi", cfg: AgendaConfig = agendaCfg) => {
+    const d = nextAgendaDocket(season, scope, cfg);
+    return [d.gameYear, d.draftSeasonIndex, d.drafting] as const;
+  };
+
+  it("the League drafts in Winter: open in a Winter, else the coming Winter", () => {
+    expect(next(0, "league")).toEqual([0, 0, true]);
+    expect(next(1, "league")).toEqual([1, 4, false]);
+    expect(next(3, "league")).toEqual([1, 4, false]);
+    expect(next(4, "league")).toEqual([1, 4, true]);
+    expect(next(25, "league")).toEqual([7, 28, false]);
+    expect(next(29, "league")).toEqual([8, 32, false]);
+  });
+
+  it("the festival drafts in Summer, a party at its offset", () => {
+    expect(next(0, "festival")).toEqual([0, 2, false]);
+    expect(next(2, "festival")).toEqual([0, 2, true]);
+    expect(next(3, "festival")).toEqual([1, 6, false]);
+    expect(next(27, "festival")).toEqual([7, 30, false]);
+    expect(next(0, "palaioi")).toEqual([0, 2, false]);
+  });
+
+  it("a cadence of two years skips the years between", () => {
+    const every2 = { ...agendaCfg, leagueCadenceGameYears: 2 };
+    expect(next(1, "league", every2)).toEqual([2, 8, false]);
+    expect(next(9, "league", every2)).toEqual([4, 16, false]);
   });
 });
 
