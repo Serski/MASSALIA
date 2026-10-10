@@ -70,3 +70,11 @@ Not in the hour before the 00:00 UTC season rollover. Fast-forward only, plain `
 - read only, an hour after the deploy: the marker count again, how many now carry a nonzero amount, and the smallest and largest amount (all from −0.5 up to 0.5)
 
 Anything off is a STOP: report it and wait. Do not write to production to fix it.
+
+## STOP 1 ruling (Argiris, 10 Oct 2026)
+
+- Deviation 1: keep `Math.round(net) || 0`.
+- Deviation 2: fine as is.
+- Deviation 3: keep the clause, made exact: at an earlier clock the carry rides through unchanged unless the wallet is short, in which case it is forgiven like any shortfall. Commit that comment alone: "economy: the earlier-clock comment names the shortfall case".
+
+Then append this ruling to docs/economy/wallet-remainder-prompt-1.md as its own commit, run the gate at that HEAD and read its last line, then push, following the Push section of the prompt. Report as it says.
