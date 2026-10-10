@@ -860,7 +860,21 @@ export type CityView = {
   buildings?: CityBuildingView[];
 };
 
-export type LeagueCitiesResponse = { cities: CityView[] };
+// The League's plans, in advance (government prompt 3b): the five buildings with what each does, the
+// building docket and the festival docket, when they open and what would be on them today (or what is on
+// them, while open). Shown to everyone on the Cities tab.
+export type LeagueWorksBuilding = { id: string; name: string; cost: number; seasons: number; populationAbove: number | null; partyLean: string; effects: string[] };
+export type LeagueWorksProjectItem = { id: string; cityId: string; polis: string; buildingId: string; name: string };
+export type LeagueWorksFestivalItem = { id: string; name: string; cost: number; partyLean: string; effects: string[] };
+export type LeagueWorksDocket<Item> = { opensAt: string; opensLabel: string; drafting: boolean; items: Item[] };
+export type LeagueWorksView = {
+  buildings: LeagueWorksBuilding[];
+  projects: LeagueWorksDocket<LeagueWorksProjectItem>;
+  festivals: LeagueWorksDocket<LeagueWorksFestivalItem> & { year: number; yearLabel: string };
+};
+
+// `works` is optional: Pages can go live before Railway does, and an old server sends none.
+export type LeagueCitiesResponse = { cities: CityView[]; works?: LeagueWorksView };
 
 export type FactionGroup = "gauls" | "celto-ligurian" | "ligurian" | "aquitani" | "iberian" | "major-powers";
 

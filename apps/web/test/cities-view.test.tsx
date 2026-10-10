@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, type CityView } from "../src/api.js";
-import { CitiesView, buildingsLine } from "../src/dashboard/panels/CitiesView.js";
+import { api, type CityView, type LeagueWorksView } from "../src/api.js";
+import { CitiesView, buildingsLine, whereLabel } from "../src/dashboard/panels/CitiesView.js";
 
 // ---------------------------------------------------------------------------
 // The Cities tab (government prompt 2a): under each polis's row, one muted line
@@ -40,8 +40,8 @@ const CITIES: CityView[] = [
   city("olbia", "Olbia", "eastern"),
 ];
 
-async function mount() {
-  vi.spyOn(api, "leagueCities").mockResolvedValue({ cities: CITIES });
+async function mount(works?: LeagueWorksView) {
+  vi.spyOn(api, "leagueCities").mockResolvedValue(works ? { cities: CITIES, works } : { cities: CITIES });
   const utils = render(<CitiesView />);
   await flush();
   return utils;
@@ -67,3 +67,76 @@ describe("the Cities tab's buildings", () => {
     expect(container.textContent).toContain("Olbia");
   });
 });
+
+// The League's plans, in advance (government prompt 3b): three cards after the cities.
+describe("the League's plans on the Cities tab", () => {
+  const works = (over: Partial<LeagueWorksView> = {}): LeagueWorksView => ({
+    buildings: [
+      { id: "temple", name: "Temple of Artemis", cost: 1000, seasons: 4, populationAbove: 2000, partyLean: "palaioi", effects: ["Priests +20 dr a season for 4 seasons", "Every army +3 morale for 2 years", "The city +3 stability a year"] },
+      { id: "walls", name: "Walls", cost: 2000, seasons: 8, populationAbove: null, partyLean: "palaioi", effects: ["The city's fortifications +1"] },
+    ],
+    projects: {
+      opensAt: "2026-10-13T00:00:00.000Z", opensLabel: "Winter, 293 BC", drafting: false,
+      items: [
+        { id: "project:massalia:temple", cityId: "massalia", polis: "Massalia", buildingId: "temple", name: "Temple of Artemis" },
+        { id: "project:massalia:walls", cityId: "massalia", polis: "Massalia", buildingId: "walls", name: "Walls" },
+        { id: "project:nikaia:port", cityId: "nikaia", polis: "Nikaia", buildingId: "port", name: "Port" },
+      ],
+    },
+    festivals: {
+      opensAt: "2026-10-11T00:00:00.000Z", opensLabel: "Summer, 294 BC", drafting: false, year: 7, yearLabel: "293 BC",
+      items: [{ id: "festival:dionysia:y7", name: "Dionysia", cost: 500, partyLean: "dynatoi", effects: ["Hetairai and Philosophers +10 dr a season for the year"] }],
+    },
+    ...over,
+  });
+  const texts = (c: HTMLElement, sel: string) => [...c.querySelectorAll(sel)].map((el) => el.textContent);
+
+  it("whereLabel", () => {
+    expect(whereLabel(2000)).toBe("Cities of more than 2,000 people");
+    expect(whereLabel(null)).toBe("Any city");
+  });
+
+  it("shows the buildings, the building docket and the festival docket, in that order, with every line", async () => {
+    const { container } = await mount(works());
+    const cards = [...container.querySelectorAll<HTMLElement>(".works-buildings, .works-projects, .works-festivals")];
+    expect(cards.map((c) => c.className.replace("dashboard-card ", ""))).toEqual(["works-buildings", "works-projects", "works-festivals"]);
+    expect(texts(container, ".panel-label").slice(-3)).toEqual(["The League's buildings", "The building docket", "The festival docket"]);
+
+    const b = cards[0]!;
+    expect(texts(b, ".works-note")).toEqual(["One of each per city. Each Winter the Archons put one project to the chamber; it votes in Spring."]);
+    expect(texts(b, ".works-item .dashboard-label")).toEqual(["Temple of Artemis", "Walls"]);
+    expect(texts(b, ".works-facts")).toEqual(["1,000 dr · built in 4 seasons · Cities of more than 2,000 people · Palaioi lean", "2,000 dr · built in 8 seasons · Any city · Palaioi lean"]);
+    expect(texts(b, ".agenda-effects")).toEqual(["When it stands: Priests +20 dr a season for 4 seasons · Every army +3 morale for 2 years · The city +3 stability a year", "When it stands: The city's fortifications +1"]);
+
+    const p = cards[1]!;
+    expect(texts(p, ".works-note")).toEqual(["Opens Winter, 293 BC. Shown as it would open today; city sizes change at each new year."]);
+    expect(texts(p, ".works-row")).toEqual(["MassaliaTemple of Artemis · Walls", "NikaiaPort"]);
+
+    const f = cards[2]!;
+    expect(texts(f, ".works-note")).toEqual(["Opens Summer, 294 BC, for the year 293 BC. Shown as it would open today."]);
+    expect(texts(f, ".works-item .dashboard-label")).toEqual(["Dionysia"]);
+    expect(texts(f, ".works-facts")).toEqual(["500 dr · Dynatoi lean"]);
+    expect(texts(f, ".agenda-effects")).toEqual(["If it passes: Hetairai and Philosophers +10 dr a season for the year"]);
+  });
+
+  it("while a docket is open its note says so", async () => {
+    const w = works();
+    const { container } = await mount({ ...w, projects: { ...w.projects, drafting: true }, festivals: { ...w.festivals, drafting: true } });
+    expect(texts(container, ".works-projects .works-note")).toEqual(["Open now. The Archons choose one this season; the chamber votes next season."]);
+    expect(texts(container, ".works-festivals .works-note")).toEqual(["Open now, for the year 293 BC. The Archons choose one this season; the chamber votes next season."]);
+  });
+
+  it("empty dockets say nothing can go on them today", async () => {
+    const w = works();
+    const { container } = await mount({ ...w, projects: { ...w.projects, items: [] }, festivals: { ...w.festivals, items: [] } });
+    expect(texts(container, ".works-projects .works-note")).toEqual(["Opens Winter, 293 BC. Shown as it would open today; city sizes change at each new year.", "No project can go on it today."]);
+    expect(texts(container, ".works-festivals .works-note")).toEqual(["Opens Summer, 294 BC, for the year 293 BC. Shown as it would open today.", "No festival can go on it today."]);
+  });
+
+  it("a payload without works shows none of the cards and the cities as before", async () => {
+    const { container } = await mount();
+    expect(container.querySelector(".works-buildings, .works-projects, .works-festivals")).toBeNull();
+    expect([...container.querySelectorAll(".atlas-row")].map((r) => r.querySelector("span")!.textContent)).toEqual(["Massalia", "Nikaia", "Olbia"]);
+  });
+});
+
