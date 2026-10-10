@@ -7,7 +7,7 @@ MASSALIA is a browser strategy RPG set in the Greek colony of Massalia around 30
 ## Deploy topology
 
 - **Web** — static build on GitHub Pages at `playmassalia.com`, published by `.github/workflows/pages.yml` only after a green `CI` run on `main` (`workflow_run`).
-- **Server** — `apps/server` on Railway (Railpack builder, start `pnpm railway:start`, which applies pending migrations and then starts the server, health check `/health`) at `api.playmassalia.com`. Railway deploys a commit only after its CI check passes. Applied migrations are recorded in `__massalia_migrations`.
+- **Server** — `apps/server` on Railway (Railpack builder) at `api.playmassalia.com`, health check `/health`. Railway runs the pre-deploy command `pnpm db:migrate && pnpm db:seed` and then the start command `pnpm --filter @massalia/server start` (the service settings, not `pnpm railway:start`; check both with the CLI before relying on them). Applied migrations are recorded in `__massalia_migrations`. Railway decides a commit's deployment at the push, from the CI check's first outcome: a commit whose CI went red is SKIPPED, and a green rerun does not deploy it.
 - **Worker** — `apps/worker` on Railway, built from `apps/worker/Dockerfile` (Node 22 + PostgreSQL 18 client), start `pnpm --filter @massalia/worker start`.
 - **Postgres 18** and **Redis** — Railway services (`DATABASE_URL`, `REDIS_URL`).
 - **Email** — Resend (`RESEND_API_KEY`, `EMAIL_FROM`); unset means links are logged, not sent.
@@ -75,6 +75,7 @@ pnpm dev:web                    # Vite on :5174
 - The push gate is a `pnpm gate` run that ends `GATE GREEN … tree clean` at the HEAD being pushed, after the last commit. Earlier runs and per-package runs do not count.
 - Every report lists each commit as `Committed: <SHA> <subject>` and quotes the gate's last line.
 - A failing test is fixed, never rerun until it passes. A CI run that is red only on test timeouts is fixed forward with one test-config commit per package raising `testTimeout` / `hookTimeout`, no source change. A red commit on `main` is fixed forward; Railway and Pages skip red commits, so production is untouched.
+- When CI fails before Checkout (an infrastructure fault), rerun it once. When the rerun is green, deploy the head of main with the public API's `environmentTriggersDeploy` (input: environmentId, projectId, serviceId): the server first, then the worker once the server is live and `__massalia_migrations` shows the new migration. `railway redeploy` redeploys the last successful deployment, never a skipped one, and `railway up` ships the local tree; use neither.
 - Production reads go through `railway run --service Postgres --environment production` with `DATABASE_PUBLIC_URL`. A production write is a guarded script (BEFORE and AFTER selects, one transaction, row-count checks, `--dry-run` first) that Argiris runs himself or allows for the session. Confirm a deployed migration with a select on `__massalia_migrations`.
 
 ## Web client
