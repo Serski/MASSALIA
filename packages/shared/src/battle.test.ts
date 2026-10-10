@@ -23,7 +23,7 @@ describe("battle content", () => {
   it("parses the real file and rejects an unknown key", () => {
     expect(battle.rounds).toBe(3);
     expect(battle.npc.warband.stats.spd).toBe(6);
-    expect(battle.raid).toEqual({ rounds: 1, turnout: { floorOneIn: 50, capOneIn: 4 }, plunderPerKill: 50, grainPerKill: 5, spoilPerKill: 5, spoilGoods: ["oliveoil", "leather", "salt", "wool"], townPlunderMultiplier: 2, opinion: { chance: 0.33, loss: 1 } });
+    expect(battle.raid).toEqual({ rounds: 1, turnout: { floorOneIn: 50, capOneIn: 4 }, plunderPerKill: { min: 20, max: 30 }, grainPerKill: { min: 1, max: 3 }, spoilPerKill: { min: 1, max: 3 }, spoilGoods: ["oliveoil", "leather", "salt", "wool"], townPlunderMultiplier: 2, opinion: { chance: 0.33, loss: 1 } });
     // 3c: towns, tribute, region tribute and moves.
     expect(battle.regen).toEqual({ warbandPerDay: 5, garrisonPerDay: 5 });
     expect(battle.town).toEqual({ wallsDefCap: 3 });
@@ -98,14 +98,20 @@ describe("raid rules", () => {
     expect(raidAngers(battle.raid, "s0")).toBe(raidAngers(battle.raid, "s0"));
   });
 
-  it("raidPlunder: 50 drachmae, 5 grain and 5 of one good per kill, doubled for a town, the good fixed by the seed", () => {
+  it("raidPlunder: 20 to 30 drachmae, 1 to 3 grain and 1 to 3 of one good per kill, rolled once per raid, doubled for a town, the good fixed by the seed", () => {
     const region = raidPlunder(battle.raid, 10, false, "s");
-    expect(region.drachmae).toBe(500);
-    expect(region.grain).toBe(50);
-    expect(region.spoil.amount).toBe(50);
+    const rateOf = (amount: number, bounds: { min: number; max: number }) => {
+      const rate = amount / 10;
+      expect(Number.isInteger(rate), `${amount} for ten kills`).toBe(true);
+      expect(rate).toBeGreaterThanOrEqual(bounds.min);
+      expect(rate).toBeLessThanOrEqual(bounds.max);
+    };
+    rateOf(region.drachmae, { min: 20, max: 30 });
+    rateOf(region.grain, { min: 1, max: 3 });
+    rateOf(region.spoil.amount, { min: 1, max: 3 });
     expect(battle.raid.spoilGoods).toContain(region.spoil.good);
     const town = raidPlunder(battle.raid, 10, true, "s");
-    expect(town).toEqual({ drachmae: 1000, grain: 100, spoil: { good: region.spoil.good, amount: 100 } });
+    expect(town).toEqual({ drachmae: region.drachmae * 2, grain: region.grain * 2, spoil: { good: region.spoil.good, amount: region.spoil.amount * 2 } });
     expect(raidPlunder(battle.raid, 0, false, "s")).toEqual({ drachmae: 0, grain: 0, spoil: { good: region.spoil.good, amount: 0 } });
     expect(raidPlunder(battle.raid, 3, true, "s")).toEqual(raidPlunder(battle.raid, 3, true, "s"));
     // Over 400 seeds each of the four goods is drawn at least 80 times.

@@ -47,6 +47,20 @@ const chronicleLines: string[] = [];
 
 suite("Map actions (integration)", () => {
   let m: Mods;
+  // Raids prompt 6: each amount of a plunder is kills × mult × a whole rate within
+// its content range, rolled once per raid.
+  const expectRolledPlunder = (plunder: { drachmae: number; grain: number; spoil?: { amount: number } }, kills: number, mult: number) => {
+    const raid = m.barracks.getBattleContent().raid;
+    const within = (amount: number, bounds: { min: number; max: number }) => {
+      const rate = amount / (kills * mult);
+      expect(Number.isInteger(rate), `${amount} for ${kills} kills × ${mult}`).toBe(true);
+      expect(rate).toBeGreaterThanOrEqual(bounds.min);
+      expect(rate).toBeLessThanOrEqual(bounds.max);
+    };
+    within(plunder.drachmae, m.shared.rateBounds(raid.plunderPerKill));
+    within(plunder.grain, m.shared.rateBounds(raid.grainPerKill));
+    within(plunder.spoil!.amount, m.shared.rateBounds(raid.spoilPerKill));
+  };
   let db: ReturnType<Mods["dbPkg"]["createDb"]>;
   let worldId: string;
   type Ctx = { playerId: string; worldId: string; worldStartedMs: number };
@@ -368,14 +382,16 @@ suite("Map actions (integration)", () => {
     expect(r.report.defender).toMatchObject({ start: 20, turnout: 5 });
     const killed = r.report.defender!.losses;
     expect([4, 5]).toContain(killed);
-    // The plunder: 50 drachmae, 5 grain and 5 of one of the four goods per kill.
-    const good = r.report.plunder!.spoil!.good;
+    // The plunder: per kill, 20 to 30 drachmae, 1 to 3 grain and 1 to 3 of one of the four goods, each rate rolled once per raid.
+    const plunder = r.report.plunder!;
+    const good = plunder.spoil!.good;
     expect(["oliveoil", "leather", "salt", "wool"]).toContain(good);
     const label = good === "oliveoil" ? "olive oil" : good;
-    expect(r.report.plunder).toEqual({ drachmae: killed * 50, grain: killed * 5, spoil: { good, label, amount: killed * 5 } });
-    expect(await wallet(ctx)).toBe(100 + killed * 50);
-    expect(await stock(ctx, "grain")).toBe(5000 - 3 * 40 + killed * 5); // 3 whole days after ready_at (at 6) × 40 peltasts × 1 grain, then the plunder
-    expect(await stock(ctx, good)).toBe((good === "oliveoil" ? 5000 - 3 * 40 : 0) + killed * 5); // the peltasts eat olive oil too
+    expectRolledPlunder(plunder, killed, 1);
+    expect(plunder.spoil).toMatchObject({ good, label });
+    expect(await wallet(ctx)).toBe(100 + plunder.drachmae);
+    expect(await stock(ctx, "grain")).toBe(5000 - 3 * 40 + plunder.grain); // 3 whole days after ready_at (at 6) × 40 peltasts × 1 grain, then the plunder
+    expect(await stock(ctx, good)).toBe((good === "oliveoil" ? 5000 - 3 * 40 : 0) + plunder.spoil!.amount); // the peltasts eat olive oil too
     expect(await warband("R046")).toBe(20 - killed);
     // Salyes is unclaimed: no nation to sour.
     expect(r.report.opinion).toBeNull();
@@ -387,7 +403,7 @@ suite("Map actions (integration)", () => {
     expect(row).toMatchObject({ movingTo: "R060", arrivesAt: home(at(9), 30), count: 40 - r.report.attacker.losses, mission: { kind: "raid", regionId: "R046", departedAt: at(9).toISOString() } });
     expect((await logs(characterId, "battle_loss")).length).toBe(r.report.attacker.losses > 0 ? 1 : 0);
     expect(await holdingsOf(ctx)).toHaveLength(0);
-    expect(r.report.line).toMatch(new RegExp(`^Raided Salyes with 40 peltasts: ${killed} tribesmen slain, (none|1) of ours lost, ${killed * 50} drachmae, ${killed * 5} grain and ${killed * 5} (olive oil|leather|salt|wool) of plunder\\.$`));
+    expect(r.report.line).toMatch(new RegExp(`^Raided Salyes with 40 peltasts: ${killed} tribesmen slain, (none|1) of ours lost, ${plunder.drachmae} drachmae, ${plunder.grain} grain and ${plunder.spoil!.amount} (olive oil|leather|salt|wool) of plunder\\.$`));
     await recordChronicle(characterId);
   });
 
@@ -410,8 +426,8 @@ suite("Map actions (integration)", () => {
     expect([2, 3, 4, 5]).toContain(killed);
     expect([0, 1]).toContain(r.report.attacker.losses);
     expect(await warband("R046")).toBe(100 - killed);
-    expect(r.report.plunder!.drachmae).toBe(killed * 50);
-    expect(await wallet(ctx)).toBe(100 + killed * 50);
+    expectRolledPlunder(r.report.plunder!, killed, 1);
+    expect(await wallet(ctx)).toBe(100 + r.report.plunder!.drachmae);
     await recordChronicle(characterId);
   });
 
@@ -908,11 +924,13 @@ suite("Map actions (integration)", () => {
     expect(r.report).toMatchObject({ type: "raid", townId: "reii", winner: "attacker", defender: { label: "Town garrison", start: 10, turnout: 3 }, conquest: null });
     const killed = r.report.defender!.losses;
     expect([2, 3]).toContain(killed);
-    const good = r.report.plunder!.spoil!.good;
+    const plunder = r.report.plunder!;
+    const good = plunder.spoil!.good;
     expect(["oliveoil", "leather", "salt", "wool"]).toContain(good);
-    expect(r.report.plunder).toEqual({ drachmae: killed * 50 * 2, grain: killed * 5 * 2, spoil: { good, label: good === "oliveoil" ? "olive oil" : good, amount: killed * 5 * 2 } });
-    expect(await wallet(ctx)).toBe(100 + killed * 100);
-    expect(await stock(ctx, good)).toBe((good === "oliveoil" ? 5000 - 3 * 40 : 0) + killed * 10);
+    expectRolledPlunder(plunder, killed, 2); // double the region rate
+    expect(plunder.spoil).toMatchObject({ good, label: good === "oliveoil" ? "olive oil" : good });
+    expect(await wallet(ctx)).toBe(100 + plunder.drachmae);
+    expect(await stock(ctx, good)).toBe((good === "oliveoil" ? 5000 - 3 * 40 : 0) + plunder.spoil!.amount);
     // Reii is the Saluvii's (start −45): one time in three the raid sours them by a point.
     if (r.report.opinion === null) expect(await relation("saluvii")).toBeUndefined();
     else {
