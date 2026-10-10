@@ -611,7 +611,8 @@ async function settleWallet(exec: Exec, ctx: ActingContext, rows: BuildingRow[],
   if (existing) {
     // The income marker never moves backwards either (GREATEST in SQL). With a
     // clock at or before it the stretch above is empty: incomeAccrued and
-    // continuousUpkeep both clamp at zero, and the carry rides through unchanged.
+    // continuousUpkeep both clamp at zero, and the carry rides through unchanged
+    // unless the wallet is short, in which case it is forgiven like any shortfall.
     await exec
       .update(resources)
       .set({ amount: String(carry), lastUpdatedAt: sql`GREATEST(${resources.lastUpdatedAt}, ${now.toISOString()}::timestamptz)` })
