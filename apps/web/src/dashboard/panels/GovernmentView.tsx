@@ -80,6 +80,7 @@ export function GovernmentView({ view, onRefresh }: { view: MemberView; onRefres
       </DashboardCard>
 
       <AgendaScopeSection view={view.league} onRefresh={onRefresh} treasury="none" />
+      {view.festival ? <AgendaScopeSection view={view.festival} onRefresh={onRefresh} treasury="none" /> : null}
     </div>
   );
 }

@@ -753,7 +753,8 @@ export type OfficesView = {
 
 // --- The Agenda & three governments (Politics Prompt 3) ---------------------
 
-export type AgendaScope = "league" | "palaioi" | "dynatoi";
+// "festival" is the festival motion (government prompt 3): the League's Summer docket of festivals for the coming year.
+export type AgendaScope = "league" | "palaioi" | "dynatoi" | "festival";
 
 // `group` (the polis) and `seasons` (build time) ride on a League building project (government prompt 2a); a card has neither.
 // `effects` is what a project does when it stands, one line per effect (government prompt 2b); a card has none.
@@ -786,6 +787,8 @@ export type PartyLeaderView = {
 
 export type AgendaView = {
   league: AgendaScopeView;
+  // The festival motion's public view (government prompt 3). Optional: an old server sends none.
+  festival?: AgendaScopeView;
   palaioi: AgendaScopeView;
   dynatoi: AgendaScopeView;
   leaders: PartyLeaderView[];
@@ -806,6 +809,8 @@ export type GovernmentView =
       // Under way first, then built. Optional: Pages can go live before Railway does, and an old server sends none.
       projects?: GovernmentProjectView[];
       league: AgendaScopeView;
+      // The festival motion's docket (government prompt 3). Optional: an old server sends none.
+      festival?: AgendaScopeView;
     };
 
 export type OfficeAppointee = { characterId: string; name: string; houseName: string; party: string };

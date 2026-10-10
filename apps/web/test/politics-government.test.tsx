@@ -56,13 +56,19 @@ const PROJECTS: GovernmentProjectView[] = [
   { cityId: "olbia", polis: "Olbia", buildingId: "port", title: "The Port of Olbia", status: "built", completesAt: "2026-10-01T00:00:00.000Z", completesLabel: "Autumn, 299 BC" },
 ];
 // `projects: null` leaves the field out, as an old server would.
-const member = (seats: Extract<GovernmentView, { member: true }>["seats"], league: AgendaScopeView, projects: GovernmentProjectView[] | null = PROJECTS): GovernmentView => ({
+const member = (seats: Extract<GovernmentView, { member: true }>["seats"], league: AgendaScopeView, projects: GovernmentProjectView[] | null = PROJECTS, festival?: AgendaScopeView): GovernmentView => ({
   member: true,
   seats,
   treasury: { balance: BALANCE, taxPerSeason: 910, ledger: LEDGER },
   ...(projects ? { projects } : {}),
   league,
+  ...(festival ? { festival } : {}),
 });
+// The festival motion's docket (government prompt 3).
+const FESTIVALS = [
+  { id: "festival:dionysia:y1", title: "A Dionysia for 299 BC", description: "Wine and masks.", cost: 500, partyLean: "independent", effects: ["Hetairai and Philosophers +10 dr a season for the year"] },
+  { id: "festival:apollo:y1", title: "A Festival of Apollo for 299 BC", description: "Games under the god.", cost: 500, partyLean: "independent", effects: ["Traders and Shipbuilders +10 dr a season for the year"] },
+];
 // A docket of building projects (government prompt 2a): two poleis, in docket order.
 const project = (cityId: string, polis: string, buildingId: string, title: string, cost: number, seasons: number, effects: string[]) => ({
   id: `project:${cityId}:${buildingId}`,
@@ -182,6 +188,36 @@ describe("the Government tab", () => {
     const card = container.querySelector(".agenda-card")!;
     expect(text(card as HTMLElement, "h3")).toBe(`"A Temple of Artemis at Massalia" is before the chamber.`);
     expect(text(card as HTMLElement, ".agenda-effects")).toBe(`When it stands: ${TEMPLE_EFFECTS.join(" · ")}`);
+  });
+
+  it("an Archon sees the project docket and the festival docket, each under its own heading", async () => {
+    const festival = scope("festival", { cards: FESTIVALS, youMayDraft: true });
+    const { container } = await mount(member([{ office: "archon", side: "palaioi" }], scope("league", { cards: DOCKET, youMayDraft: true }), PROJECTS, festival));
+    fireEvent.click(container.querySelectorAll<HTMLButtonElement>(".cs-tab")[1]!);
+    const kickers = [...container.querySelectorAll(".agenda-kicker")].map((k) => k.textContent);
+    expect(kickers).toEqual(["The League agenda · drafting", "The festival of the coming year · drafting"]);
+    const cards = [...container.querySelectorAll(".agenda-card")];
+    expect(cards).toHaveLength(2);
+    expect([...cards[1]!.querySelectorAll(".agenda-choice .dashboard-label")].map((l) => l.textContent)).toEqual(FESTIVALS.map((f) => f.title));
+    expect([...cards[1]!.querySelectorAll(".agenda-effects")].map((l) => l.textContent)).toEqual(FESTIVALS.map((f) => `When it stands: ${f.effects[0]}`));
+    expect(cards[1]!.querySelectorAll(".event-choice-button")).toHaveLength(2);
+  });
+
+  it("a citizen sees the festival before the chamber while it is voting, and nothing of it while drafting", async () => {
+    const voting: AgendaView = { ...agendaView, festival: scope("festival", { phase: "voting", cards: [FESTIVALS[1]!], draftedCardId: FESTIVALS[1]!.id }) };
+    const { container } = await mount({ member: false }, voting);
+    const cards = [...container.querySelectorAll(".agenda-card")];
+    expect(cards).toHaveLength(2);
+    expect(cards[1]!.querySelector(".agenda-kicker")!.textContent).toBe("The festival of the coming year · voting");
+    expect(cards[1]!.querySelector("h3")!.textContent).toBe(`"A Festival of Apollo for 299 BC" is before the chamber.`);
+    expect(cards[1]!.querySelector(".agenda-effects")!.textContent).toBe("When it stands: Traders and Shipbuilders +10 dr a season for the year");
+    expect(cards[1]!.querySelector(".treasury-card")).toBeNull();
+    cleanup();
+    vi.restoreAllMocks();
+    const drafting: AgendaView = { ...agendaView, festival: scope("festival", { phase: "drafting", cards: [] }) };
+    const again = await mount({ member: false }, drafting);
+    expect(again.container.querySelectorAll(".agenda-card")).toHaveLength(1);
+    expect(again.container.textContent).not.toContain("The festival of the coming year");
   });
 
   it("a Strategos sees the cards with no Put forward and no veto", async () => {

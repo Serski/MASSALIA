@@ -697,7 +697,14 @@ function LeagueAgendaSection({ onRefresh }: { onRefresh: () => void }) {
   useEffect(() => { load(); }, [load]);
   const refresh = () => { load(); onRefresh(); };
   if (!view) return null;
-  return <AgendaScopeSection view={view.league} onRefresh={refresh} treasury="amount" />;
+  // The festival before the chamber (government prompt 3) shows beside the League's
+  // card while it is voting; while drafting the docket is the Government's alone.
+  return (
+    <>
+      <AgendaScopeSection view={view.league} onRefresh={refresh} treasury="amount" />
+      {view.festival?.phase === "voting" ? <AgendaScopeSection view={view.festival} onRefresh={refresh} treasury="none" /> : null}
+    </>
+  );
 }
 
 // The party government for the party tab: its treasury, agenda, and for-life leaders.
