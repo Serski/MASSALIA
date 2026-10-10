@@ -16,6 +16,7 @@ import {
   parseAgendaFile,
   parsePoliticsConfig,
   seatPurchaseCut,
+  treasuryOwnerOf,
   type AgendaCard,
   type AgendaConfig,
   type HeldOffice,
@@ -31,6 +32,7 @@ describe("config: agenda/treasury/dues/endorsement blocks parse", () => {
     expect(politics.partyDues.duesPerSeasonPerMember).toBe(5);
     expect(politics.agenda.leagueCardsPerCycle).toBe(3);
     expect(politics.agenda.vetoesPerEphorPerTerm).toBe(1);
+    expect(politics.agenda.festivalCadenceSeasonOffset).toBe(2);
     expect(politics.endorsement.swingVotes).toBe(8);
   });
 });
@@ -115,6 +117,26 @@ describe("agenda cadence (season clock, offset, no backlog)", () => {
   it("isAgendaYear is yearly by default", () => {
     expect(isAgendaYear(0, "league", agendaCfg)).toBe(true);
     expect(isAgendaYear(3, "palaioi", agendaCfg)).toBe(true);
+  });
+});
+
+describe("the festival motion's scope (government prompt 3)", () => {
+  it("drafts in Summer, votes in Autumn and resolves at the Winter boundary of the coming year", () => {
+    expect(agendaCycleSeasons(2, "festival", agendaCfg)).toEqual({ draftSeasonIndex: 10, voteSeasonIndex: 11, resolveSeasonIndex: 12 });
+    expect(currentAgendaCycle(10, "festival", agendaCfg)).toEqual({ gameYear: 2, phase: "drafting" });
+    expect(currentAgendaCycle(11, "festival", agendaCfg)).toEqual({ gameYear: 2, phase: "voting" });
+    expect(currentAgendaCycle(12, "festival", agendaCfg)).toBeNull();
+    expect(isAgendaYear(3, "festival", agendaCfg)).toBe(true);
+  });
+
+  it("the League's Archons draft it and its Ephors veto it; it spends from the League's treasury", () => {
+    expect(canDraft([{ office: "archon", side: "palaioi" }], "festival")).toBe(true);
+    expect(canDraft([{ office: "party_archon", side: "palaioi" }], "festival")).toBe(false);
+    expect(canVeto({ held: [{ office: "ephor", side: "dynatoi" }], vetoesUsedThisTerm: 0, phase: "drafting" }, "festival", agendaCfg)).toBe(true);
+    expect(canVeto({ held: [{ office: "party_ephor", side: "dynatoi" }], vetoesUsedThisTerm: 0, phase: "drafting" }, "festival", agendaCfg)).toBe(false);
+    expect(treasuryOwnerOf("festival")).toBe("league");
+    expect(treasuryOwnerOf("league")).toBe("league");
+    expect(treasuryOwnerOf("palaioi")).toBe("palaioi");
   });
 });
 

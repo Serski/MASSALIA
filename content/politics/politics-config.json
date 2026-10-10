@@ -60,6 +60,7 @@
     "leagueCadenceGameYears": 1,
     "partyCadenceGameYears": 1,
     "partyCadenceSeasonOffset": 2,
+    "festivalCadenceSeasonOffset": 2,
     "vetoesPerEphorPerTerm": 1
   },
   "endorsement": {

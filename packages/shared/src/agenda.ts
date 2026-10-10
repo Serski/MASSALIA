@@ -14,6 +14,21 @@ import { SEASONS_PER_YEAR } from "./calendar.js";
 export const AGENDA_SCOPES = ["league", "palaioi", "dynatoi"] as const;
 export type AgendaScope = (typeof AGENDA_SCOPES)[number];
 
+// The festival motion (government prompt 3) runs as a fourth scope beside the
+// League's project docket: the League's Archons draft it and its Ephors veto
+// it, the whole chamber votes, and it spends from the League's treasury. The
+// pure rules below take a MotionScope; the card pools and the treasuries keep
+// the three AgendaScopes.
+export const FESTIVAL_SCOPE = "festival" as const;
+export type MotionScope = AgendaScope | typeof FESTIVAL_SCOPE;
+export const MOTION_SCOPES: readonly MotionScope[] = [...AGENDA_SCOPES, FESTIVAL_SCOPE];
+
+// The treasury a scope spends from: the League's for the League and the
+// festival motion, a party's own for its agenda.
+export function treasuryOwnerOf(scope: MotionScope): AgendaScope {
+  return scope === FESTIVAL_SCOPE ? "league" : scope;
+}
+
 // --- Agenda card content -----------------------------------------------------
 
 // Effects are deliberately light/representational for now (deep state buildings
@@ -77,6 +92,10 @@ export const agendaConfigSchema = z.object({
   // cycles in different seasons than the league's: league Winter→Spring, party
   // Summer→Autumn at offset 2).
   partyCadenceSeasonOffset: z.number().int().nonnegative(),
+  // Seasons from the year's Winter at which the festival motion opens (government
+  // prompt 3): with 2 it drafts in Summer, votes in Autumn and resolves at the
+  // Winter boundary, so the festival year is exactly the coming game year.
+  festivalCadenceSeasonOffset: z.number().int().nonnegative(),
   vetoesPerEphorPerTerm: z.number().int().nonnegative(),
 });
 export type AgendaConfig = z.infer<typeof agendaConfigSchema>;
@@ -110,13 +129,13 @@ export interface HeldOffice {
 
 // The office that DRAFTS for a scope: the League's Archons (either side) for the
 // league; the party_archon of a party for that party.
-export function draftScopeOffice(scope: AgendaScope): { office: string; side: string | null } {
-  return scope === "league" ? { office: "archon", side: null } : { office: "party_archon", side: scope };
+export function draftScopeOffice(scope: MotionScope): { office: string; side: string | null } {
+  return scope === "league" || scope === FESTIVAL_SCOPE ? { office: "archon", side: null } : { office: "party_archon", side: scope };
 }
 // The office that VETOES for a scope: the League's Ephors for the league; the
 // party_ephor of a party for that party.
-export function vetoScopeOffice(scope: AgendaScope): { office: string; side: string | null } {
-  return scope === "league" ? { office: "ephor", side: null } : { office: "party_ephor", side: scope };
+export function vetoScopeOffice(scope: MotionScope): { office: string; side: string | null } {
+  return scope === "league" || scope === FESTIVAL_SCOPE ? { office: "ephor", side: null } : { office: "party_ephor", side: scope };
 }
 
 function holdsOffice(held: HeldOffice[], want: { office: string; side: string | null }): boolean {
@@ -124,7 +143,7 @@ function holdsOffice(held: HeldOffice[], want: { office: string; side: string | 
 }
 
 // Only a sitting Archon of the scope may draft a card to the chamber.
-export function canDraft(held: HeldOffice[], scope: AgendaScope): boolean {
+export function canDraft(held: HeldOffice[], scope: MotionScope): boolean {
   return holdsOffice(held, draftScopeOffice(scope));
 }
 
@@ -132,7 +151,7 @@ export function canDraft(held: HeldOffice[], scope: AgendaScope): boolean {
 // card is still in DRAFTING (before it reaches the chamber).
 export function canVeto(
   input: { held: HeldOffice[]; vetoesUsedThisTerm: number; phase: AgendaPhase },
-  scope: AgendaScope,
+  scope: MotionScope,
   cfg: AgendaConfig,
 ): boolean {
   if (!holdsOffice(input.held, vetoScopeOffice(scope))) return false;
@@ -144,8 +163,8 @@ export function canVeto(
 
 export type AgendaPhase = "drafting" | "voting" | "resolved";
 
-export function isAgendaYear(gameYear: number, scope: AgendaScope, cfg: AgendaConfig): boolean {
-  const cadence = scope === "league" ? cfg.leagueCadenceGameYears : cfg.partyCadenceGameYears;
+export function isAgendaYear(gameYear: number, scope: MotionScope, cfg: AgendaConfig): boolean {
+  const cadence = scope === "league" || scope === FESTIVAL_SCOPE ? cfg.leagueCadenceGameYears : cfg.partyCadenceGameYears;
   return gameYear % cadence === 0;
 }
 
@@ -155,8 +174,8 @@ export interface AgendaCycleSeasons {
   resolveSeasonIndex: number; // the chamber vote closes / resolves
 }
 
-export function agendaCycleSeasons(gameYear: number, scope: AgendaScope, cfg: AgendaConfig): AgendaCycleSeasons {
-  const offset = scope === "league" ? 0 : cfg.partyCadenceSeasonOffset;
+export function agendaCycleSeasons(gameYear: number, scope: MotionScope, cfg: AgendaConfig): AgendaCycleSeasons {
+  const offset = scope === "league" ? 0 : scope === FESTIVAL_SCOPE ? cfg.festivalCadenceSeasonOffset : cfg.partyCadenceSeasonOffset;
   const draft = gameYear * SEASONS_PER_YEAR + offset;
   return { draftSeasonIndex: draft, voteSeasonIndex: draft + 1, resolveSeasonIndex: draft + 2 };
 }
@@ -164,7 +183,7 @@ export function agendaCycleSeasons(gameYear: number, scope: AgendaScope, cfg: Ag
 // The agenda cycle LIVE at a point on the season clock, or null. Like the election
 // sweep's currentElectionCycle: only reports a cycle whose window actually contains
 // `now`, so a worker that boots mid/after a cycle never retro-fires it.
-export function currentAgendaCycle(seasonIndex: number, scope: AgendaScope, cfg: AgendaConfig): { gameYear: number; phase: "drafting" | "voting" } | null {
+export function currentAgendaCycle(seasonIndex: number, scope: MotionScope, cfg: AgendaConfig): { gameYear: number; phase: "drafting" | "voting" } | null {
   const here = Math.floor(seasonIndex / SEASONS_PER_YEAR);
   for (const gameYear of [here - 1, here]) {
     if (gameYear < 0 || !isAgendaYear(gameYear, scope, cfg)) continue;

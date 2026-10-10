@@ -24,6 +24,7 @@ export * from "./elections.js";
 export * from "./agenda.js";
 export * from "./government.js";
 export * from "./leagueProjects.js";
+export * from "./leagueFestivals.js";
 export * from "./composure.js";
 export * from "./buildings.js";
 export * from "./military.js";
