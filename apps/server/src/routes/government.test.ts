@@ -223,6 +223,7 @@ suite("GET /api/government and the public League scope (integration)", () => {
     await db.insert(m.dbPkg.leagueProjects).values({ worldId, cityId: "nikaia", buildingId: "walls", cost: 2000, startedAt: new Date(startedMs), completesAt: new Date(startedMs + 8 * DAY + HOUR) });
     await db.insert(m.dbPkg.leagueProjects).values({ worldId, cityId: "olbia", buildingId: "port", cost: 2000, startedAt: new Date(startedMs - 9 * DAY), completesAt: new Date(startedMs - DAY), completedAt: new Date(startedMs - DAY) });
     await db.insert(m.dbPkg.treasuryLedger).values({ worldId, owner: "league", delta: -2000, reason: "agenda:project:nikaia:walls" });
+    await db.insert(m.dbPkg.treasuryLedger).values({ worldId, owner: "league", delta: -500, reason: "agenda:festival:dionysia:y1" });
 
     const view = await government(strategos.token);
     expect(view.member).toBe(true);
@@ -233,6 +234,8 @@ suite("GET /api/government and the public League scope (integration)", () => {
     ]);
     expect(view.projects[0]!.completesAt).toBe(new Date(startedMs + 8 * DAY + HOUR).toISOString());
     expect(view.treasury.ledger.map((l) => [l.delta, l.label])).toContainEqual([-2000, "Passed measure: The Walls of Nikaia"]);
+    // A festival's spend reads "Festival held" (government prompt 3).
+    expect(view.treasury.ledger.map((l) => [l.delta, l.label])).toContainEqual([-500, "Festival held: A Dionysia for 299 BC"]);
   });
 
   // --- The festival motion (government prompt 3) -------------------------------

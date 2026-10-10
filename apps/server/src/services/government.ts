@@ -49,6 +49,16 @@ export type GovernmentView =
 
 const LEDGER_LINES = 40;
 
+// The words a League ledger row shows. A festival's spend (government prompt 3)
+// reads "Festival held: <title>"; everything else as treasuryReasonLabel says.
+function ledgerLabel(reason: string): string {
+  if (reason.startsWith("agenda:festival:")) {
+    const title = leagueMeasureTitle(reason.slice("agenda:".length));
+    return title ? `Festival held: ${title}` : "Festival held";
+  }
+  return treasuryReasonLabel(reason, leagueMeasureTitle);
+}
+
 export async function governmentView(actor: CharacterRow, now: Date = new Date()): Promise<GovernmentView> {
   const seats = governmentSeats(await heldOffices(actor.id));
   if (seats.length === 0) return { member: false };
@@ -72,7 +82,7 @@ export async function governmentView(actor: CharacterRow, now: Date = new Date()
       taxPerSeason: leagueTax(poleis.map((p) => p.population), cfg.treasury),
       ledger: rows.map((r) => ({
         delta: r.delta,
-        label: treasuryReasonLabel(r.reason, leagueMeasureTitle),
+        label: ledgerLabel(r.reason),
         dateLabel: dateLabel(Date.parse(r.createdAt)),
         createdAt: r.createdAt,
       })),
