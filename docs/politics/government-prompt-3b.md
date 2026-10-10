@@ -114,3 +114,13 @@ Not in the hour before the 00:00 UTC season rollover, and before 2026-10-12 23:0
 - GET /api/league/cities `works` from production if you hold a session there; otherwise say so, and I check the Cities tab in the game
 
 Anything off is a STOP: report it and wait. Do not write to production to fix it.
+
+## STOP 1 ruling (Argiris, 10 Oct 2026)
+
+- The words stand as reported, all of them.
+- Deviation 1: keep. The Cities line stays tied to a drafting scope with no cards. An empty docket for a Government member is rare, and the Cities tab then says no project can go on it.
+- Deviation 2: keep. Party agendas name their next docket too, as ruling 3 says.
+- Deviation 3: accepted.
+- The Antipolis note is known and stays out of this prompt: the drift and the agenda run on separate sweeps, so year 7's docket holds 36 or 39 depending on which runs first.
+
+Append this ruling to docs/politics/government-prompt-3b.md as its own commit, run the gate at that HEAD and read its last line, then push, following the Push section of the prompt. Report as it says.
