@@ -160,3 +160,36 @@ STOP 1. Report:
 ## Push (only after I reply "push")
 
 Not in the hour before the 00:00 UTC season rollover. Fast-forward only, plain `git push`. Report as the earlier Government pushes did: remote HEAD, the CI run with its Gate and Audit steps, the Pages run, Railway server and worker on the new SHA, 0073 in `__massalia_migrations` and the three scope checks' new definitions from pg_constraint, API health, and after the next sync World 2's agenda_cycles for the festival scope. A red run is a STOP with the log. Do not write to production to fix it.
+
+## STOP 1 ruling (10 Oct 2026)
+
+1. The words are approved as reported, with one change: a festival's effect line reads "If it passes: <effects>" on its card and before the chamber. A project keeps "When it stands: <effects>".
+
+2. The Dionysia and the Festival of Apollo at 500 are approved, with the Artemisia at 600 and the Olympiad at 800.
+
+3. Deviations 1 to 6 are accepted.
+
+4. The leans. With the NPC blocs at 50 Palaioi, 50 Dynatoi and 10 independent, a measure leaning independent opens at 10 yes against 100 no, and even with every swayable NPC flipped it needs about 50 more player yes votes than no; a measure leaning a party opens at 50 against 60. Commit: content: the festivals and the Granary lean to a party. league-festivals.json: the Artemisia and the Olympiad lean palaioi, the Dionysia and the Festival of Apollo dynatoi. league-buildings.json: the Granary leans palaioi. The tests that pin the old leans follow. The festival cycle test may keep or drop its cleared NPC seats; your call.
+
+5. The chamber shows one open vote. openChamberVote (packages/db/src/chamber.ts) returns any open vote of the world, limit 1 with no order, and both GET /api/oligarchy/votes and castChamberBallot use it. The festival vote is open in Autumn, when the party votes are open too, so a player would see one of them at random and his ballot would land on it. Two commits:
+   a. chamber: every open vote, and a ballot names its vote
+      - packages/db/src/chamber.ts: openChamberVotes() returns every open vote of the active world, ordered league, festival, palaioi, dynatoi, then by opens_at. openChamberVote() returns the first of them.
+      - apps/server/src/services/oligarchy.ts: chamberVotesView gains `openVotes`, the open votes this character may see: the League's and the festival's for everyone, a party's only for that party's members; each with yourBallot and youMayVote (holds a seat). `open` becomes the first of openVotes, or null.
+      - castChamberBallot takes an optional voteId. With it, an id not among the character's open votes answers 404 "No such vote is open." and writes nothing; an open vote past its closes_at answers 409 as today. Without it, the ballot goes to the first of the character's open votes, as an old client expects.
+      - apps/server/src/routes/oligarchy.ts: POST /vote reads an optional voteId (a uuid string) and passes it.
+      - Tests: a festival vote and a Palaioi vote open at once. A seated Palaioi member sees both, the festival first; a seated Dynatoi member sees only the festival; `open` is the festival for both. The Palaioi member's ballot with the Palaioi vote's id lands there, with the festival's id there, and with no id on the festival. The Dynatoi member's ballot with the Palaioi vote's id answers 404 and writes nothing.
+   b. web: every open vote in the chamber, and a festival's line reads "If it passes"
+      - api.ts: ChamberVotesView gains `openVotes?`; castChamberVote(choice, voteId?) sends voteId.
+      - PoliticsPanel.tsx: the chamber renders each of `openVotes ?? (open ? [open] : [])` as its own card, with its own countdown, ballot buttons and ledger (one component per vote, so the countdown hook is never called in a loop); a ballot sends that vote's id.
+      - AgendaSection.tsx: the effects line's prefix is "If it passes:" for the festival scope and "When it stands:" otherwise.
+      - Tests: two open votes render two cards and each ballot sends its own vote's id; a payload without openVotes renders `open` as before; a festival card reads "If it passes:" and a project card "When it stands:".
+
+6. AGENTS.md, its own commit: AGENTS.md: deploying a skipped commit, and where migrations run
+   - The Server line under Deploy topology says what Railway runs today in place of `pnpm railway:start`: the pre-deploy command `pnpm db:migrate && pnpm db:seed` and the start command `pnpm --filter @massalia/server start` (check both with the CLI). It also says that Railway decides a commit's deployment at the push, from the CI check's first outcome: a commit whose CI went red is SKIPPED, and a green rerun does not deploy it.
+   - Under Working a prompt, one line: "When CI fails before Checkout (an infrastructure fault), rerun it once. When the rerun is green, deploy the head of main with the public API's environmentTriggersDeploy (input: environmentId, projectId, serviceId): the server first, then the worker once the server is live and __massalia_migrations shows the new migration. `railway redeploy` redeploys the last successful deployment, never a skipped one, and `railway up` ships the local tree; use neither."
+
+7. Append this ruling verbatim to the festival prompt's file under docs/politics/, under "STOP 1 ruling (10 Oct 2026)", as its own commit: docs: the festival prompt's STOP 1 ruling
+
+8. Run the gate and the audit at the new HEAD. If the gate ends GATE GREEN at that HEAD and the audit exits 0, push and report as the prompt's Push section says, plus the number of player-held seats in World 2. Push before 23:00 UTC today so the first festival docket opens at 00:00 UTC. If you cannot push by 22:30 UTC, push after 00:15 UTC on 11 Oct instead, and say whether year 6's festival cycle still opens when the deploy lands in its Summer.
+
+9. If CI fails before Checkout, rerun it once; if the rerun is green and Railway leaves the commit SKIPPED, deploy it as item 6 says, the server first, then confirm 0073 in __massalia_migrations. Anything else red is a STOP with the log.
