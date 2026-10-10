@@ -31,16 +31,23 @@ import {
   canDraft,
   canVeto,
   currentAgendaCycle,
+  festivalEffects,
+  festivalMotion,
   gameDate,
+  MOTION_SCOPES,
   parseAgendaFile,
   parseCitiesContent,
   parseLeagueBuildings,
+  parseLeagueFestivals,
   projectMotion,
+  treasuryOwnerOf,
   type AgendaCard,
   type AgendaScope,
   type CitiesContent,
   type HeldOffice,
   type LeagueBuilding,
+  type LeagueFestival,
+  type MotionScope,
 } from "@massalia/shared";
 import type { CharacterRow } from "./character.js";
 import { getCalendarConfig } from "./festival.js";
@@ -56,6 +63,7 @@ const repoRoot = path.resolve(__dirname, "../../../..");
 let pools: AgendaPools | null = null;
 let leagueBuildings: LeagueBuilding[] | null = null;
 let leagueCities: CitiesContent | null = null;
+let leagueFestivals: LeagueFestival[] | null = null;
 
 export async function loadAgendaContent(): Promise<AgendaPools> {
   const read = async (file: string) => parseAgendaFile(JSON.parse(await fs.readFile(path.join(repoRoot, "content/politics", file), "utf8")));
@@ -69,7 +77,14 @@ export async function loadAgendaContent(): Promise<AgendaPools> {
   // of the cards passed before.
   leagueBuildings = parseLeagueBuildings(JSON.parse(await fs.readFile(path.join(repoRoot, "content/politics/league-buildings.json"), "utf8"))).buildings;
   leagueCities = parseCitiesContent(JSON.parse(await fs.readFile(path.join(repoRoot, "content/cities/cities.json"), "utf8")));
+  // The festival motion's festivals (government prompt 3).
+  leagueFestivals = parseLeagueFestivals(JSON.parse(await fs.readFile(path.join(repoRoot, "content/politics/league-festivals.json"), "utf8"))).festivals;
   return pools;
+}
+
+export function getLeagueFestivals(): LeagueFestival[] {
+  if (!leagueFestivals) throw new Error("Agenda content not loaded — call loadAgendaContent() at boot.");
+  return leagueFestivals;
 }
 
 export function getAgendaPools(): AgendaPools {
@@ -87,12 +102,20 @@ export function getLeagueCities(): CitiesContent {
   return leagueCities;
 }
 
-// The title a League measure id shows: a project's title, or a League card's.
+// The title a League measure id shows: a project's, a festival's, or a League card's.
 export function leagueMeasureTitle(id: string): string | undefined {
-  return projectMotion(id, getLeagueBuildings(), getLeagueCities().cities)?.title ?? getAgendaPools().league.find((c) => c.id === id)?.title;
+  return projectMotion(id, getLeagueBuildings(), getLeagueCities().cities)?.title ?? festivalMotion(id, getLeagueFestivals())?.title ?? getAgendaPools().league.find((c) => c.id === id)?.title;
 }
 
-const SCOPES: AgendaScope[] = ["league", "palaioi", "dynatoi"];
+// The four motions: the League's projects, the two parties' cards and the
+// League's festival (government prompt 3).
+const SCOPES: readonly MotionScope[] = MOTION_SCOPES;
+
+// The scope a veto is recorded under: the festival motion shares the League's
+// one veto per term (government prompt 3, ruling 3), so it writes to "league".
+function vetoScopeOf(scope: MotionScope): AgendaScope {
+  return treasuryOwnerOf(scope);
+}
 
 async function activeWorld(): Promise<{ id: string; startedMs: number } | null> {
   const rows = await db.select({ id: worlds.id, startedAt: worlds.startedAt }).from(worlds).where(eq(worlds.status, "active")).limit(1);
@@ -140,16 +163,16 @@ export async function syncAgenda(now: Date = new Date()): Promise<{ accrued: boo
 
 // --- Draft / veto (officials) -----------------------------------------------
 
-export type DraftResult = { ok: false; code: number; error: string } | { ok: true; scope: AgendaScope; cardId: string };
+export type DraftResult = { ok: false; code: number; error: string } | { ok: true; scope: MotionScope; cardId: string };
 
-export async function draftCard(actor: CharacterRow, scope: AgendaScope, cardId: string, now: Date = new Date()): Promise<DraftResult> {
+export async function draftCard(actor: CharacterRow, scope: MotionScope, cardId: string, now: Date = new Date()): Promise<DraftResult> {
   await syncAgenda(now);
   const world = await activeWorld();
   if (!world) return { ok: false, code: 503, error: "No active world." };
   const cfg = getPoliticsConfig();
 
   if (!canDraft(await heldOffices(actor.id), scope)) {
-    return { ok: false, code: 403, error: scope === "league" ? "Only a sitting Archon may set the league's agenda." : "Only the party Archon may set the party's agenda." };
+    return { ok: false, code: 403, error: scope === "league" || scope === "festival" ? "Only a sitting Archon may set the league's agenda." : "Only the party Archon may set the party's agenda." };
   }
   const live = currentAgendaCycle(gameDate(now.getTime(), world.startedMs).seasonIndex, scope, cfg.agenda);
   if (!live || live.phase !== "drafting") return { ok: false, code: 409, error: "The agenda is not in drafting." };
@@ -164,9 +187,9 @@ export async function draftCard(actor: CharacterRow, scope: AgendaScope, cardId:
   return { ok: true, scope, cardId };
 }
 
-export type VetoResult = { ok: false; code: number; error: string } | { ok: true; scope: AgendaScope };
+export type VetoResult = { ok: false; code: number; error: string } | { ok: true; scope: MotionScope };
 
-export async function vetoCard(actor: CharacterRow, scope: AgendaScope, now: Date = new Date()): Promise<VetoResult> {
+export async function vetoCard(actor: CharacterRow, scope: MotionScope, now: Date = new Date()): Promise<VetoResult> {
   await syncAgenda(now);
   const world = await activeWorld();
   if (!world) return { ok: false, code: 503, error: "No active world." };
@@ -180,11 +203,11 @@ export async function vetoCard(actor: CharacterRow, scope: AgendaScope, now: Dat
   // The Ephor's term-started year scopes their one-per-term veto.
   const term = await ephorTermYear(world.id, actor.id, scope);
   if (term === null) return { ok: false, code: 403, error: "Only a sitting Ephor may veto." };
-  const used = await vetoesUsedThisTerm(actor.id, scope, term);
+  const used = await vetoesUsedThisTerm(actor.id, vetoScopeOf(scope), term);
   if (!canVeto({ held: await heldOffices(actor.id), vetoesUsedThisTerm: used, phase: "drafting" }, scope, cfg.agenda)) {
     return { ok: false, code: 409, error: "You have no veto left this term." };
   }
-  const ok = await setVeto(world.id, cycle.id, actor.id, scope, term);
+  const ok = await setVeto(world.id, cycle.id, actor.id, vetoScopeOf(scope), term);
   if (!ok) return { ok: false, code: 409, error: "The veto could not be recorded." };
   await broadcastState();
   return { ok: true, scope };
@@ -192,13 +215,14 @@ export async function vetoCard(actor: CharacterRow, scope: AgendaScope, now: Dat
 
 // The Ephor seat (league ephor of either side, or the party_ephor) the actor
 // holds for this scope, and its term-started year — or null if they hold none.
-async function ephorTermYear(worldId: string, characterId: string, scope: AgendaScope): Promise<number | null> {
-  const wantOffice = scope === "league" ? "ephor" : "party_ephor";
+async function ephorTermYear(worldId: string, characterId: string, scope: MotionScope): Promise<number | null> {
+  const league = scope === "league" || scope === "festival";
+  const wantOffice = league ? "ephor" : "party_ephor";
   const rows = await db
     .select({ office: offices.office, side: offices.side, term: offices.termStartedYear })
     .from(offices)
     .where(and(eq(offices.worldId, worldId), eq(offices.holderCharacterId, characterId), eq(offices.office, wantOffice)));
-  const seat = scope === "league" ? rows[0] : rows.find((r) => r.side === scope);
+  const seat = league ? rows[0] : rows.find((r) => r.side === scope);
   return seat ? seat.term ?? 0 : null;
 }
 
@@ -246,7 +270,7 @@ export interface AgendaCardView {
 }
 
 export interface AgendaScopeView {
-  scope: AgendaScope;
+  scope: MotionScope;
   phase: "drafting" | "voting" | "resolved" | null;
   gameYear: number | null;
   cards: AgendaCardView[];
@@ -280,6 +304,20 @@ function leagueCardViews(ids: string[]): AgendaCardView[] {
   return out;
 }
 
+// The festival docket (government prompt 3): each id resolves to its motion
+// with what the festival does when held.
+function festivalCardViews(ids: string[]): AgendaCardView[] {
+  const festivals = getLeagueFestivals();
+  const out: AgendaCardView[] = [];
+  for (const id of ids) {
+    const m = festivalMotion(id, festivals);
+    if (!m) continue;
+    const festival = festivals.find((f) => f.id === m.festivalId)!;
+    out.push({ id: m.id, title: m.title, description: m.description, cost: m.cost, partyLean: m.partyLean, effects: festivalEffects(festival) });
+  }
+  return out;
+}
+
 // The League scope as everyone outside the Government sees it (government
 // prompt 1): the treasury's balance without its ledger, no draft or veto power,
 // and of the docket only the card going to the vote — the drafted card while
@@ -300,11 +338,11 @@ export function publicLeagueView(view: AgendaScopeView): AgendaScopeView {
   };
 }
 
-export async function agendaScopeView(actor: CharacterRow, scope: AgendaScope, now: Date = new Date()): Promise<AgendaScopeView> {
+export async function agendaScopeView(actor: CharacterRow, scope: MotionScope, now: Date = new Date()): Promise<AgendaScopeView> {
   await syncAgenda(now);
   const world = await activeWorld();
   const cfg = getPoliticsConfig();
-  const owner: TreasuryOwner = scope;
+  const owner: TreasuryOwner = treasuryOwnerOf(scope);
   if (!world) return { scope, phase: null, gameYear: null, cards: [], draftedCardId: null, vetoedCardId: null, treasury: { owner, balance: 0, ledger: [] }, youMayDraft: false, youMayVeto: false };
 
   const live = currentAgendaCycle(gameDate(now.getTime(), world.startedMs).seasonIndex, scope, cfg.agenda);
@@ -319,7 +357,7 @@ export async function agendaScopeView(actor: CharacterRow, scope: AgendaScope, n
     scope,
     phase: (cycle?.phase as AgendaScopeView["phase"]) ?? null,
     gameYear: cycle?.gameYear ?? null,
-    cards: !cycle ? [] : scope === "league" ? leagueCardViews(cycle.cardIds) : cardViews(getAgendaPools()[scope], cycle.cardIds),
+    cards: !cycle ? [] : scope === "league" ? leagueCardViews(cycle.cardIds) : scope === "festival" ? festivalCardViews(cycle.cardIds) : cardViews(getAgendaPools()[scope], cycle.cardIds),
     draftedCardId: cycle?.draftedCardId ?? null,
     vetoedCardId: cycle?.vetoedCardId ?? null,
     treasury: await treasuryView(world.id, owner),

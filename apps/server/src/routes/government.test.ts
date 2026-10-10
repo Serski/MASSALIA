@@ -6,7 +6,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import cookie from "@fastify/cookie";
-import { buildingEffects, leagueDocket, parseCitiesContent, parseLeagueBuildings } from "@massalia/shared";
+import { buildingEffects, festivalEffects, leagueDocket, parseCitiesContent, parseLeagueBuildings, parseLeagueFestivals } from "@massalia/shared";
 
 // ---------------------------------------------------------------------------
 // GET /api/government and the public League scope of GET /api/agenda
@@ -29,6 +29,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const content = (file: string) => JSON.parse(readFileSync(resolve(root, "content", file), "utf8"));
 const buildings = parseLeagueBuildings(content("politics/league-buildings.json")).buildings;
 const cities = parseCitiesContent(content("cities/cities.json")).cities;
+const festivals = parseLeagueFestivals(content("politics/league-festivals.json")).festivals;
 // The League's docket at the start populations with the treasury full (government prompt 2a).
 const startDocket = leagueDocket(buildings, cities.map((c) => ({ id: c.id, name: c.name, population: c.start.population })), new Set(), Number.MAX_SAFE_INTEGER);
 
@@ -56,6 +57,7 @@ type Gov =
       treasury: { balance: number; taxPerSeason: number; ledger: { delta: number; label: string; dateLabel: string; createdAt: string }[] };
       projects: { cityId: string; polis: string; buildingId: string; title: string; status: string; completesAt: string; completesLabel: string }[];
       league: Scope;
+      festival: Scope;
     };
 
 suite("GET /api/government and the public League scope (integration)", () => {
@@ -112,6 +114,7 @@ suite("GET /api/government and the public League scope (integration)", () => {
   const get = (url: string, token?: string) => app.inject({ method: "GET", url, headers: token ? { cookie: `massalia_session=${app.signCookie(token)}` } : {} });
   const government = async (token: string) => (await get("/api/government", token)).json() as Gov;
   const leagueScope = async (token: string) => ((await get("/api/agenda", token)).json() as { league: Scope }).league;
+  const festivalScope = async (token: string) => ((await get("/api/agenda", token)).json() as { festival: Scope }).festival;
   const draft = (token: string, cardId: string) => app.inject({ method: "POST", url: "/api/agenda/draft", headers: { cookie: `massalia_session=${app.signCookie(token)}` }, payload: { scope: "league", cardId } });
 
   it("answers 401 without a session", async () => {
@@ -230,6 +233,63 @@ suite("GET /api/government and the public League scope (integration)", () => {
     ]);
     expect(view.projects[0]!.completesAt).toBe(new Date(startedMs + 8 * DAY + HOUR).toISOString());
     expect(view.treasury.ledger.map((l) => [l.delta, l.label])).toContainEqual([-2000, "Passed measure: The Walls of Nikaia"]);
+  });
+
+  // --- The festival motion (government prompt 3) -------------------------------
+  describe("the festival motion", () => {
+    // A world in a Summer: season 2 of its first year, so the docket is for year 1.
+    const firstSummer = () => world(new Date(Date.now() - 2 * DAY - HOUR));
+
+    it("an Archon's festival docket in a Summer holds the coming year's three festivals with what they do; the public scope is empty while drafting", async () => {
+      await firstSummer();
+      const archon = await citizen("archon");
+      await seat("archon", "palaioi", archon.characterId);
+      const c = await citizen("citizen");
+
+      const view = await government(archon.token);
+      expect(view.member).toBe(true);
+      if (!view.member) return;
+      expect(view.festival.phase).toBe("drafting");
+      expect(view.festival.cards.map((card) => card.id)).toEqual(["festival:dionysia:y1", "festival:artemisia:y1", "festival:apollo:y1"]);
+      expect(view.festival.cards.map((card) => card.title)).toEqual(["A Dionysia for 299 BC", "An Artemisia for 299 BC", "A Festival of Apollo for 299 BC"]);
+      for (const card of view.festival.cards) expect(card.effects).toEqual(festivalEffects(festivals.find((f) => `festival:${f.id}:y1` === card.id)!));
+      expect(view.festival.youMayDraft).toBe(true);
+      // The League's own docket is closed in a Summer.
+      expect(view.league.phase).toBeNull();
+
+      const scope = await festivalScope(c.token);
+      expect(scope.phase).toBe("drafting");
+      expect(scope.cards).toEqual([]);
+      expect(scope.youMayDraft).toBe(false);
+    });
+
+    it("in an Olympiad year's Summer the docket holds the Olympiad too", async () => {
+      // Year 7's Summer: the coming year, 8, is an Olympiad year (every 8).
+      await world(new Date(Date.now() - (7 * 4 + 2) * DAY - HOUR));
+      const archon = await citizen("archon");
+      await seat("archon", "palaioi", archon.characterId);
+      const view = await government(archon.token);
+      expect(view.member && view.festival.cards.map((card) => card.id)).toEqual(["festival:dionysia:y8", "festival:artemisia:y8", "festival:apollo:y8", "festival:olympiad:y8"]);
+      expect(view.member && view.festival.cards[3]!.title).toBe("The Olympiad of 292 BC");
+    });
+
+    it("once the festival has gone to the vote, the public scope shows the drafted festival alone, with its effects", async () => {
+      // An Autumn: the real clock sits in season 3. The draft happened in its Summer.
+      const startedAt = new Date(Date.now() - 3 * DAY - HOUR);
+      await world(startedAt);
+      const summer = new Date(startedAt.getTime() + 2 * DAY + HOUR);
+      const archon = await citizen("archon");
+      await seat("archon", "palaioi", archon.characterId);
+      const c = await citizen("citizen");
+      await m.agenda.syncAgenda(summer);
+      expect((await m.agenda.draftCard(archon.row, "festival", "festival:apollo:y1", summer)).ok).toBe(true);
+
+      const scope = await festivalScope(c.token);
+      expect(scope.phase).toBe("voting");
+      expect(scope.cards.map((card) => [card.id, card.title, card.effects])).toEqual([["festival:apollo:y1", "A Festival of Apollo for 299 BC", ["Traders and Shipbuilders +10 dr a season for the year"]]]);
+      expect(scope.draftedCardId).toBe("festival:apollo:y1");
+      expect(scope.youMayDraft).toBe(false);
+    });
   });
 
   // A world whose docket has gone to the vote: started a day and an hour back,

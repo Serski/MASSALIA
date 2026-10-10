@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../services/auth.js";
 import { ensureCharacterRow, getActivePlayer, getActiveWorldId, type CharacterRow } from "../services/character.js";
 import { agendaScopeView, draftCard, endorse, partyLeadersView, publicLeagueView, vetoCard } from "../services/agenda.js";
-import type { AgendaScope } from "@massalia/shared";
+import type { MotionScope } from "@massalia/shared";
 
 async function actingRow(userId: string): Promise<{ row: CharacterRow } | { error: string; code: number }> {
   const worldId = await getActiveWorldId();
@@ -12,8 +12,8 @@ async function actingRow(userId: string): Promise<{ row: CharacterRow } | { erro
   return { row: await ensureCharacterRow(player, worldId) };
 }
 
-function parseScope(value: unknown): AgendaScope | null {
-  return value === "league" || value === "palaioi" || value === "dynatoi" ? value : null;
+function parseScope(value: unknown): MotionScope | null {
+  return value === "league" || value === "palaioi" || value === "dynatoi" || value === "festival" ? value : null;
 }
 
 export async function agendaRoutes(app: FastifyInstance) {
@@ -31,6 +31,9 @@ export async function agendaRoutes(app: FastifyInstance) {
     const now = new Date();
     return {
       league: publicLeagueView(await agendaScopeView(acting.row, "league", now)),
+      // The festival motion (government prompt 3), public like the League's: the
+      // festival before the chamber while voting, nothing while drafting.
+      festival: publicLeagueView(await agendaScopeView(acting.row, "festival", now)),
       palaioi: await agendaScopeView(acting.row, "palaioi", now),
       dynatoi: await agendaScopeView(acting.row, "dynatoi", now),
       leaders: await partyLeadersView(acting.row),
