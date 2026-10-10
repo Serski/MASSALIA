@@ -557,6 +557,8 @@ export const oligarchSeats = pgTable("oligarch_seats", {
 }));
 
 // The yearly chamber vote: one per world per game year, open for one season.
+// scope is 'league' | 'palaioi' | 'dynatoi' | 'festival' (the festival motion,
+// government prompt 3, migration 0073); the check in 0023 was widened for it.
 export const chamberVotes = pgTable("chamber_votes", {
   id: uuid("id").primaryKey().defaultRandom(),
   worldId: uuid("world_id").references(() => worlds.id).notNull(),
@@ -694,6 +696,8 @@ export const treasuryLedger = pgTable("treasury_ledger", {
 }));
 
 // Agenda cycle state: drafting → voting → resolved on the season clock.
+// scope admits 'festival' too (government prompt 3, migration 0073): the
+// League's Summer docket of festivals, voted in Autumn for the coming year.
 export const agendaCycles = pgTable("agenda_cycles", {
   id: uuid("id").primaryKey().defaultRandom(),
   worldId: uuid("world_id").references(() => worlds.id).notNull(),
@@ -712,6 +716,8 @@ export const agendaCycles = pgTable("agenda_cycles", {
 }));
 
 // One veto per Ephor per term (scoped by the office term-started year).
+// A festival veto is recorded under scope 'league' (the one veto per term is
+// shared, government prompt 3); the check admits 'festival' since 0073 all the same.
 export const ephorVetoes = pgTable("ephor_vetoes", {
   id: uuid("id").primaryKey().defaultRandom(),
   worldId: uuid("world_id").references(() => worlds.id).notNull(),
@@ -1255,6 +1261,23 @@ export const leagueProjects = pgTable("league_projects", {
   // The due rows: a partial index (WHERE completed_at IS NULL) in the migration;
   // mirrored here for reference, as oligarch_seats mirrors its own.
   dueIdx: index("league_projects_due_idx").on(table.completesAt).where(sql`completed_at IS NULL`),
+}));
+
+// The League's festivals (government prompt 3, migration 0073): one row per
+// festival the chamber has passed, held through the game year it names.
+// starts_at is the first instant of that year, ends_at the first instant of the
+// next. One festival per world per year.
+export const leagueFestivals = pgTable("league_festivals", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  festivalId: text("festival_id").notNull(),
+  gameYear: integer("game_year").notNull(),
+  cost: integer("cost").notNull(),
+  agendaCycleId: uuid("agenda_cycle_id").references(() => agendaCycles.id),
+  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+  endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+}, (table) => ({
+  oneFestivalPerYear: unique("league_festivals_world_id_game_year_key").on(table.worldId, table.gameYear),
 }));
 
 export const factionRelations = pgTable("faction_relations", {
