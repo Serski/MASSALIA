@@ -1048,6 +1048,55 @@ suite("Ledger / building engine (integration)", () => {
     expect(mineV.pops).toMatchObject({ slave: 2 });
   });
 
+  // --- The wallet keeps its fractions (wallet-remainder prompt 1) -----------------
+  // A settle credits whole drachmae and keeps the rest in the income marker's
+  // amount for the next one, so settling often banks what settling once would.
+  // A forgiven shortfall carries nothing.
+
+  it("(wallet remainder) settling every half hour banks what settling once would, within a drachma", async () => {
+    const HOUR = DAY / 24;
+    const often = await freshPlayer(100, "shipbuilder");
+    const once = await freshPlayer(100, "shipbuilder");
+    const ctxOf = async (id: string) => (await m.buildings.buildingContext(id, worldId))!;
+    const walletOf = async (id: string) => (await db.select({ drachmae: m.dbPkg.playerCharacters.drachmae }).from(m.dbPkg.playerCharacters).where(eq(m.dbPkg.playerCharacters.playerId, id)).limit(1))[0]!.drachmae;
+    // Both Slipways stand at T0 + 1 hour and earn 16.8 dr a day (0.35 a half hour) under
+    // the new building's guard, inside the first Winter; tier-1 upkeep is 0.
+    for (const id of [often, once]) expect((await m.buildings.build("shipbuilder", await ctxOf(id), "slipway", new Date(T0))).ok).toBe(true);
+    const cOften = await ctxOf(often);
+    for (let t = T0 + HOUR; t <= T0 + 23 * HOUR; t += HOUR / 2) await m.buildings.collect(cOften, new Date(t));
+    await m.buildings.collect(await ctxOf(once), new Date(T0 + 23 * HOUR));
+    const wOften = await walletOf(often);
+    const wOnce = await walletOf(once);
+    expect(Math.abs(wOften - wOnce)).toBeLessThanOrEqual(1);
+    expect(wOften - 75).toBeGreaterThanOrEqual(14); // 22 hours of 0.7 dr an hour = 15.4 dr of income
+  });
+
+  it("(wallet remainder) after a collect the income marker holds income − upkeep − collected, from −0.5 up to 0.5", async () => {
+    playerId = await freshPlayer(100, "shipbuilder");
+    const c = await ctx();
+    await m.buildings.build("shipbuilder", c, "slipway", new Date(T0));
+    const r = await m.buildings.collect(c, new Date(T0 + DAY / 24 + DAY / 48)); // half an hour after it stands: 0.35 dr
+    const carry = await goodBalance("building_income");
+    expect(carry).toBeCloseTo(r.income - r.upkeep - r.collected, 6);
+    expect(carry).toBeGreaterThanOrEqual(-0.5);
+    expect(carry).toBeLessThan(0.5);
+  });
+
+  it("(wallet remainder) a forgiven shortfall carries nothing: an idled tier-2 estate with an empty purse owes its upkeep and the marker stays at 0", async () => {
+    const c = await ctx();
+    await m.buildings.build("landowner", c, "estate", new Date(T0));
+    await setWallet(300);
+    expect((await m.buildings.upgrade(c, "estate", new Date(T0 + 5 * DAY))).ok).toBe(true); // → T2, completes T0+7d, upkeep 1 dr/day
+    // Lose every slave outside the settle: the estate idles, its upkeep still accrues.
+    await db.update(m.dbPkg.playerPops).set({ count: 0 }).where(and(eq(m.dbPkg.playerPops.ownerPlayerId, playerId), eq(m.dbPkg.playerPops.popType, "slave")));
+    await setWallet(0);
+    const r = await m.buildings.collect(c, new Date(T0 + 8 * DAY));
+    expect(r.income).toBe(0);
+    expect(r.owed).toBeGreaterThan(0);
+    expect(await wallet()).toBe(0);
+    expect(await goodBalance("building_income")).toBe(0);
+  });
+
   // --- The League's class grants (government prompt 2b) -------------------------
   // A standing Temple pays every Priest 20 a season for the 4 seasons after it
   // stands; each season is settled once per character, whole, at his first settle

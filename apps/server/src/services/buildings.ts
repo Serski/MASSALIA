@@ -588,31 +588,38 @@ async function settleWallet(exec: Exec, ctx: ActingContext, rows: BuildingRow[],
   const lastMs = existing ? existing.lastUpdatedAt.getTime() : 0;
   // Income only from STAFFED buildings; building upkeep is owed by every active
   // building (staffed or idled) — the gentle flat tax doesn't pause when idle.
-  const income = Number(existing?.amount ?? 0) + pendingIncome(rows, lastMs, ctx.worldStartedMs, now, idled);
+  const carried = Number(existing?.amount ?? 0); // the remainder the last settle could not credit
+  const income = pendingIncome(rows, lastMs, ctx.worldStartedMs, now, idled);
   const upkeep = continuousUpkeep(rows, lastMs, now);
-  const net = income - upkeep;
+  const net = carried + income - upkeep;
+  const credit = Math.round(net) || 0; // whole drachmae; `|| 0` keeps -0 out of the receipt
 
   // `owed` (the forgiven shortfall) is reported from the wallet read under the
   // player lock; the write itself is relative + clamped so it never depends on it.
   // wallet is an integer, so round(wallet + net) == wallet + round(net).
+  // The settle banks whole drachmae and keeps the rest, net − credit (from −0.5 up
+  // to 0.5), in the marker's amount for the next settle, which adds it to its own
+  // net: settling often banks what settling once would. A shortfall is forgiven
+  // whole and carries nothing, so it never comes back as a carried one.
   const wallet = await readWallet(exec, ctx.playerId);
   const owed = Math.max(0, -(wallet + net));
+  const carry = owed > 0 ? 0 : net - credit;
   await exec
     .update(playerCharacters)
-    .set({ drachmae: sql`GREATEST(0, ${playerCharacters.drachmae} + ${Math.round(net)})` })
+    .set({ drachmae: sql`GREATEST(0, ${playerCharacters.drachmae} + ${credit})` })
     .where(eq(playerCharacters.playerId, ctx.playerId));
   if (existing) {
     // The income marker never moves backwards either (GREATEST in SQL). With a
     // clock at or before it the stretch above is empty: incomeAccrued and
-    // continuousUpkeep both clamp at zero.
+    // continuousUpkeep both clamp at zero, and the carry rides through unchanged.
     await exec
       .update(resources)
-      .set({ amount: "0", lastUpdatedAt: sql`GREATEST(${resources.lastUpdatedAt}, ${now.toISOString()}::timestamptz)` })
+      .set({ amount: String(carry), lastUpdatedAt: sql`GREATEST(${resources.lastUpdatedAt}, ${now.toISOString()}::timestamptz)` })
       .where(eq(resources.id, existing.id));
   } else {
-    await exec.insert(resources).values({ scope: "player", scopeId: ctx.playerId, type: INCOME_TYPE, amount: "0", ratePerSecond: "0", lastUpdatedAt: now }).onConflictDoNothing({ target: [resources.scope, resources.scopeId, resources.type] });
+    await exec.insert(resources).values({ scope: "player", scopeId: ctx.playerId, type: INCOME_TYPE, amount: String(carry), ratePerSecond: "0", lastUpdatedAt: now }).onConflictDoNothing({ target: [resources.scope, resources.scopeId, resources.type] });
   }
-  return { income, upkeep, collected: Math.round(net), owed: Math.round(owed) };
+  return { income, upkeep, collected: credit, owed: Math.round(owed) };
 }
 
 // --- The League's class grants (government prompt 2b) ---------------------------
@@ -1012,7 +1019,7 @@ export async function mine(classId: string, ctx: ActingContext, now: Date): Prom
   // No marker yet → backdate per-building to completesAt (lastMs 0), so pending
   // offering income shows in the Ledger before the first collect, like goods do.
   const lastMs = incomeRow ? incomeRow.lastUpdatedAt.getTime() : 0;
-  const incomePending = pendingIncome(rows, lastMs, ctx.worldStartedMs, now, idled) + Number(incomeRow?.amount ?? 0);
+  const incomePending = pendingIncome(rows, lastMs, ctx.worldStartedMs, now, idled); // the stretch's own income, without the carried remainder
   const upkeep = continuousUpkeep(rows, lastMs, now);
   const charRows = await db.select({ drachmae: playerCharacters.drachmae }).from(playerCharacters).where(eq(playerCharacters.playerId, ctx.playerId)).limit(1);
   const wallet = charRows[0]?.drachmae ?? 0;
