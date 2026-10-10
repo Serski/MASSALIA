@@ -62,6 +62,7 @@ export function AgendaScopeSection({ view, onRefresh, treasury = "full" }: { vie
         {view.phase === "drafting" ? (
           <>
             <h3>{view.youMayDraft ? "Choose the measure that goes before the chamber." : "The officials weigh the docket."}</h3>
+            {view.cards.length === 0 ? <p className="dashboard-todo">The docket is on the Cities tab.</p> : null}
             {sections.map((section, i) => (
               <div key={section.group ?? `run-${i}`} className="agenda-group">
                 {section.group ? <div className="panel-label agenda-group-label">{section.group}</div> : null}
@@ -106,7 +107,7 @@ export function AgendaScopeSection({ view, onRefresh, treasury = "full" }: { vie
             {drafted?.effects?.length ? <p className="agenda-effects">{effectsPrefix} {drafted.effects.join(" · ")}</p> : null}
           </>
         ) : (
-          <p className="dashboard-todo">No measure is in session.</p>
+          <p className="dashboard-todo">{view.nextOpensLabel ? `No measure is in session. The next docket opens ${view.nextOpensLabel}.` : "No measure is in session."}</p>
         )}
         {treasury === "none" ? null : <TreasuryCard treasury={view.treasury} ledger={treasury === "full"} />}
         {note ? <p className="dashboard-todo" role="status">{note}</p> : null}

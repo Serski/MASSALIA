@@ -777,6 +777,8 @@ export type AgendaScopeView = {
   treasury: TreasuryView;
   youMayDraft: boolean;
   youMayVeto: boolean;
+  // The game date the scope's next docket opens (government prompt 3b). Optional: an old server sends none.
+  nextOpensLabel?: string | null;
 };
 
 export type PartyLeaderView = {

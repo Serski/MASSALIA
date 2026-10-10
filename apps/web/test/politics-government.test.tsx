@@ -222,6 +222,27 @@ describe("the Government tab", () => {
     expect(again.container.textContent).not.toContain("The festival of the coming year");
   });
 
+  it("with no measure in session the Council's League card names when the next docket opens, or says nothing more without the field", async () => {
+    const dated: AgendaView = { ...agendaView, league: scope("league", { phase: null, nextOpensLabel: "Winter, 293 BC" }) };
+    const { container } = await mount({ member: false }, dated);
+    expect(text(container, ".agenda-card .dashboard-todo")).toBe("No measure is in session. The next docket opens Winter, 293 BC.");
+    cleanup();
+    vi.restoreAllMocks();
+    const plain: AgendaView = { ...agendaView, league: scope("league", { phase: null }) };
+    const again = await mount({ member: false }, plain);
+    expect(text(again.container, ".agenda-card .dashboard-todo")).toBe("No measure is in session.");
+  });
+
+  it("the public League view while drafting points to the Cities tab; the Archon's docket does not", async () => {
+    const { container } = await mount({ member: false });
+    expect([...container.querySelectorAll(".agenda-card .dashboard-todo")].map((p) => p.textContent)).toContain("The docket is on the Cities tab.");
+    cleanup();
+    vi.restoreAllMocks();
+    const archon = await mount(member([{ office: "archon", side: "palaioi" }], scope("league", { cards: DOCKET, youMayDraft: true })));
+    fireEvent.click(archon.container.querySelectorAll<HTMLButtonElement>(".cs-tab")[1]!);
+    expect(archon.container.textContent).not.toContain("The docket is on the Cities tab.");
+  });
+
   it("a Strategos sees the cards with no Put forward and no veto", async () => {
     const { container } = await mount(member([{ office: "strategos", side: null }], scope("league", { cards: CARDS, draftedCardId: "league-sea-wall" })));
     fireEvent.click(container.querySelectorAll<HTMLButtonElement>(".cs-tab")[1]!);
