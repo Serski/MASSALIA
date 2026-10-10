@@ -93,7 +93,7 @@ suite("Ledger / building engine (integration)", () => {
   });
 
   beforeEach(async () => {
-    await db.execute(sql`TRUNCATE TABLE league_projects, league_cities, world_treasury, player_buildings, player_pops, resources, effect_log, character_traits, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
+    await db.execute(sql`TRUNCATE TABLE league_festivals, league_projects, league_cities, world_treasury, player_buildings, player_pops, resources, effect_log, character_traits, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
     await db.insert(m.dbPkg.houses).values({ slug: "test-house", name: "House Test", initial: "T", alignment: "c", stance: "s", motto: "m", patron: "p", crest: "c" }).onConflictDoNothing();
     const world = (await db.insert(m.dbPkg.worlds).values({ name: "Ledger Test", seed: "ltest", startedAt: new Date(T0), endsAt: new Date(T0 + 182 * DAY), status: "active" }).returning())[0]!;
     worldId = world.id;
@@ -1144,6 +1144,28 @@ suite("Ledger / building engine (integration)", () => {
       expect(await markerOf(p.playerId)).toBe(day(4).getTime());
       await m.buildings.collect(p.ctx, day(9));
       expect(await walletOf(p.playerId)).toBe(140); // season 5
+    });
+
+    it("a festival held in year 1 pays a Hetaira 10 a season through the year, and mine lists it with the motion's title", async () => {
+      // A Dionysia held in year 1 (government prompt 3): seasons 4 to 7.
+      await db.insert(m.dbPkg.leagueFestivals).values({ worldId, festivalId: "dionysia", gameYear: 1, cost: 500, startsAt: day(4), endsAt: day(8) });
+      const h = await grantPlayer("hetaira", day(0));
+      await m.buildings.collect(h.ctx, day(3.5));
+      expect(await walletOf(h.playerId)).toBe(100);
+      await m.buildings.collect(h.ctx, day(5.5)); // seasons 4 and 5
+      expect(await walletOf(h.playerId)).toBe(120);
+      await m.buildings.collect(h.ctx, day(9)); // seasons 6 and 7; season 8 pays nothing
+      expect(await walletOf(h.playerId)).toBe(140);
+      expect(await logsOf(h.characterId)).toEqual([
+        { fromSeason: 4, toSeason: 5, amount: 20 },
+        { fromSeason: 6, toSeason: 9, amount: 20 },
+      ]);
+      const { formatGameDate, gameDate } = await import("@massalia/shared");
+      expect((await m.buildings.mine("hetaira", h.ctx, day(6))).leagueGrants).toEqual([
+        { title: "A Dionysia for 299 BC", perDay: 10, until: day(8).toISOString(), throughLabel: formatGameDate(gameDate(day(8).getTime() - 1, T0)) },
+      ]);
+      expect((await m.buildings.mine("hetaira", h.ctx, day(8))).leagueGrants).toEqual([]);
+      expect((await m.buildings.mine("priest", h.ctx, day(6))).leagueGrants).toEqual([]);
     });
 
     it("mine lists the grants running for the player's class, with the day they run through", async () => {

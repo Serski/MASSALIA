@@ -10,22 +10,26 @@ import {
   gameDate,
   questionForYear,
   REAL_MS_PER_SEASON,
+  SEASONS_PER_YEAR,
   seatPurchaseCut,
   tallyBallot,
   type AgendaCard,
   type AgendaScope,
+  type MotionScope,
   type BallotCandidate,
   type BallotVote,
   type CalendarConfig,
   type PoliticsConfig,
 } from "@massalia/shared";
 import { createDb, type DbExec } from "./client.js";
+import { festivalDocketFor, festivalMotionFor } from "./leagueFestivals.js";
 import { leagueDocketFor, leagueProjectMotion } from "./leagueProjects.js";
 import {
   agendaCycles,
   chamberVotes,
   effectLog,
   ephorVetoes,
+  leagueFestivals,
   leagueProjects,
   offices,
   oligarchSeats,
@@ -256,7 +260,7 @@ type AgendaCycleRow = typeof agendaCycles.$inferSelect;
 export type AgendaPools = Record<AgendaScope, AgendaCard[]>;
 
 
-export async function getAgendaCycle(worldId: string, scope: AgendaScope, gameYear: number): Promise<AgendaCycleRow | null> {
+export async function getAgendaCycle(worldId: string, scope: MotionScope, gameYear: number): Promise<AgendaCycleRow | null> {
   const rows = await db.select().from(agendaCycles).where(and(eq(agendaCycles.worldId, worldId), eq(agendaCycles.scope, scope), eq(agendaCycles.gameYear, gameYear))).limit(1);
   return rows[0] ?? null;
 }
@@ -276,7 +280,7 @@ async function recentDraftedIds(worldId: string, scope: AgendaScope, limit = 4):
 // build and afford (government prompt 2a), all of them, in order; a party's docket
 // is drawn from its card pool. No backlog: currentAgendaCycle only reports a
 // window that contains `now`.
-export async function openAgendaCycleIfDue(scope: AgendaScope, cfg: PoliticsConfig, pools: AgendaPools, now: Date = new Date()): Promise<AgendaCycleRow | null> {
+export async function openAgendaCycleIfDue(scope: MotionScope, cfg: PoliticsConfig, pools: AgendaPools, now: Date = new Date()): Promise<AgendaCycleRow | null> {
   const world = await activeWorld();
   if (!world) return null;
   const live = currentAgendaCycle(gameDate(now.getTime(), world.startedMs).seasonIndex, scope, cfg.agenda);
@@ -287,10 +291,14 @@ export async function openAgendaCycleIfDue(scope: AgendaScope, cfg: PoliticsConf
 
   const seasons = agendaCycleSeasons(live.gameYear, scope, cfg.agenda);
   const startedMs = world.startedMs;
+  // The festival motion's docket (government prompt 3) is the festivals the
+  // COMING year allows and the treasury can afford.
   const cardIds =
     scope === "league"
       ? (await leagueDocketFor(world.id)).map((m) => m.id)
-      : drawAgendaCards(pools[scope], await recentDraftedIds(world.id, scope), cfg.agenda.leagueCardsPerCycle).map((c) => c.id);
+      : scope === "festival"
+        ? (await festivalDocketFor(world.id, live.gameYear + 1)).map((m) => m.id)
+        : drawAgendaCards(pools[scope], await recentDraftedIds(world.id, scope), cfg.agenda.leagueCardsPerCycle).map((c) => c.id);
   const inserted = await db
     .insert(agendaCycles)
     .values({
@@ -320,7 +328,7 @@ export async function setDraftedCard(cycleId: string, cardId: string): Promise<b
 
 // Veto the drafted card (server validates the Ephor + their remaining veto). Marks
 // the cycle's drafted card vetoed and records the per-term veto.
-export async function setVeto(worldId: string, cycleId: string, ephorCharacterId: string, scope: AgendaScope, termStartedYear: number): Promise<boolean> {
+export async function setVeto(worldId: string, cycleId: string, ephorCharacterId: string, scope: MotionScope, termStartedYear: number): Promise<boolean> {
   const cycle = (await db.select().from(agendaCycles).where(eq(agendaCycles.id, cycleId)).limit(1))[0];
   if (!cycle || cycle.phase !== "drafting" || !cycle.draftedCardId) return false;
   const recorded = await db
@@ -333,7 +341,7 @@ export async function setVeto(worldId: string, cycleId: string, ephorCharacterId
   return true;
 }
 
-export async function vetoesUsedThisTerm(ephorCharacterId: string, scope: AgendaScope, termStartedYear: number): Promise<number> {
+export async function vetoesUsedThisTerm(ephorCharacterId: string, scope: MotionScope, termStartedYear: number): Promise<number> {
   const rows = await db
     .select({ id: ephorVetoes.id })
     .from(ephorVetoes)
@@ -342,7 +350,7 @@ export async function vetoesUsedThisTerm(ephorCharacterId: string, scope: Agenda
 }
 
 export interface AgendaResolution {
-  scope: AgendaScope;
+  scope: MotionScope;
   gameYear: number;
   cardId: string | null;
   passed: boolean;
@@ -351,7 +359,7 @@ export interface AgendaResolution {
 }
 
 export interface AgendaAdvance {
-  toVoting: { scope: AgendaScope; cardId: string | null }[];
+  toVoting: { scope: MotionScope; cardId: string | null }[];
   resolved: AgendaResolution[];
 }
 
@@ -368,7 +376,7 @@ export async function advanceAgendaCycles(calendarCfg: CalendarConfig, cfg: Poli
   const rows = await db.select().from(agendaCycles).where(and(eq(agendaCycles.worldId, world.id), sql`${agendaCycles.phase} <> 'resolved'`));
 
   for (const cycle of rows) {
-    const scope = cycle.scope as AgendaScope;
+    const scope = cycle.scope as MotionScope;
     const seasons = agendaCycleSeasons(cycle.gameYear, scope, cfg.agenda);
     const voteOpensMs = world.startedMs + seasons.voteSeasonIndex * SEASON;
     const resolveMs = world.startedMs + seasons.resolveSeasonIndex * SEASON;
@@ -379,7 +387,7 @@ export async function advanceAgendaCycles(calendarCfg: CalendarConfig, cfg: Poli
       // The League's measure is a building project (government prompt 2a); any
       // other drafted id there (a League card from before) opens the year's
       // question, as when nothing was drafted. A party's measure is its card.
-      const card = !drafted ? null : scope === "league" ? await leagueProjectMotion(drafted) : (pools[scope].find((c) => c.id === drafted) ?? null);
+      const card = !drafted ? null : scope === "league" ? await leagueProjectMotion(drafted) : scope === "festival" ? await festivalMotionFor(drafted) : (pools[scope].find((c) => c.id === drafted) ?? null);
       const closesAt = new Date(world.startedMs + seasons.resolveSeasonIndex * SEASON);
       if (card) {
         await db
@@ -408,17 +416,19 @@ export async function advanceAgendaCycles(calendarCfg: CalendarConfig, cfg: Poli
     // league_projects row starts the instant the vote closed. A failed vote, a
     // project the treasury can no longer cover, the year's question or a League
     // card from before resolve the cycle and write nothing else.
-    if (scope === "league" && cycle.phase === "voting" && now.getTime() >= resolveMs) {
+    // The festival motion (government prompt 3) resolves the same way: a passed
+    // festival is paid from the League treasury and held through the coming year.
+    if ((scope === "league" || scope === "festival") && cycle.phase === "voting" && now.getTime() >= resolveMs) {
       const vote = (await db.select().from(chamberVotes).where(and(eq(chamberVotes.worldId, world.id), eq(chamberVotes.scope, scope), eq(chamberVotes.gameYear, cycle.gameYear))).limit(1))[0];
       if (vote && vote.status === "open") continue;
-      const resolved = await resolveLeagueCycle(world.id, cycle, vote ?? null, now);
+      const resolved = await resolveLeagueCycle(world.id, scope, cycle, vote ?? null, now);
       if (resolved) out.resolved.push(resolved);
       continue;
     }
 
     // voting → resolved (a party): the chamber vote has closed (closeDueChamberVotes
     // runs first in the sweep); apply the effect + spend on a passed agenda card.
-    if (cycle.phase === "voting" && now.getTime() >= resolveMs) {
+    if (scope !== "league" && scope !== "festival" && cycle.phase === "voting" && now.getTime() >= resolveMs) {
       const vote = (await db.select().from(chamberVotes).where(and(eq(chamberVotes.worldId, world.id), eq(chamberVotes.scope, scope), eq(chamberVotes.gameYear, cycle.gameYear))).limit(1))[0];
       let resolution: AgendaResolution = { scope, gameYear: cycle.gameYear, cardId: cycle.draftedCardId, passed: false, applied: false, spent: 0 };
       if (vote && vote.agendaCardId && vote.status !== "open") {
@@ -446,15 +456,20 @@ export async function advanceAgendaCycles(calendarCfg: CalendarConfig, cfg: Poli
 
 type ChamberVoteRow = typeof chamberVotes.$inferSelect;
 
-// Resolve a League cycle whose vote has closed (or never opened). Claim first;
-// null when another pass already resolved it.
-async function resolveLeagueCycle(worldId: string, cycle: AgendaCycleRow, vote: ChamberVoteRow | null, now: Date): Promise<AgendaResolution | null> {
-  const motion = vote?.agendaCardId ? await leagueProjectMotion(vote.agendaCardId) : null;
+// Resolve a League cycle (the project motion or the festival motion) whose vote
+// has closed (or never opened). Claim first; null when another pass already
+// resolved it. A passed project starts the instant the vote closed and stands
+// `seasons` later; a passed festival is held through the coming game year, from
+// the instant the vote closed (the Winter boundary) for four seasons. Either
+// is paid from the League treasury under its row lock, only once its own row
+// is in (ON CONFLICT DO NOTHING RETURNING).
+async function resolveLeagueCycle(worldId: string, scope: "league" | "festival", cycle: AgendaCycleRow, vote: ChamberVoteRow | null, now: Date): Promise<AgendaResolution | null> {
+  const motion = !vote?.agendaCardId ? null : scope === "league" ? await leagueProjectMotion(vote.agendaCardId) : await festivalMotionFor(vote.agendaCardId);
   return db.transaction(async (tx) => {
     const claimed = await tx.update(agendaCycles).set({ phase: "resolved" }).where(and(eq(agendaCycles.id, cycle.id), eq(agendaCycles.phase, "voting"))).returning({ id: agendaCycles.id });
     if (claimed.length === 0) return null;
     const passed = vote?.status === "passed";
-    const resolution: AgendaResolution = { scope: "league", gameYear: cycle.gameYear, cardId: vote?.agendaCardId ?? cycle.draftedCardId, passed, applied: false, spent: 0 };
+    const resolution: AgendaResolution = { scope, gameYear: cycle.gameYear, cardId: vote?.agendaCardId ?? cycle.draftedCardId, passed, applied: false, spent: 0 };
     if (!passed || !motion) return resolution;
 
     const locked = await tx.select({ balance: treasuries.balance }).from(treasuries).where(and(eq(treasuries.worldId, worldId), eq(treasuries.owner, "league"))).for("update");
@@ -462,13 +477,23 @@ async function resolveLeagueCycle(worldId: string, cycle: AgendaCycleRow, vote: 
     if (!canAfford(balance, motion.cost)) return resolution; // passed, but the treasury can no longer cover it
 
     const startedAt = cycle.votingEndsAt;
-    const completesAt = new Date(startedAt.getTime() + motion.seasons * REAL_MS_PER_SEASON);
-    const project = await tx
-      .insert(leagueProjects)
-      .values({ worldId, cityId: motion.cityId, buildingId: motion.buildingId, cost: motion.cost, agendaCycleId: cycle.id, startedAt, completesAt })
-      .onConflictDoNothing()
-      .returning({ id: leagueProjects.id });
-    if (project.length === 0) return resolution; // the pair is already built or under way
+    if ("seasons" in motion) {
+      const completesAt = new Date(startedAt.getTime() + motion.seasons * REAL_MS_PER_SEASON);
+      const project = await tx
+        .insert(leagueProjects)
+        .values({ worldId, cityId: motion.cityId, buildingId: motion.buildingId, cost: motion.cost, agendaCycleId: cycle.id, startedAt, completesAt })
+        .onConflictDoNothing()
+        .returning({ id: leagueProjects.id });
+      if (project.length === 0) return resolution; // the pair is already built or under way
+    } else {
+      const endsAt = new Date(startedAt.getTime() + SEASONS_PER_YEAR * REAL_MS_PER_SEASON);
+      const festival = await tx
+        .insert(leagueFestivals)
+        .values({ worldId, festivalId: motion.festivalId, gameYear: motion.year, cost: motion.cost, agendaCycleId: cycle.id, startsAt: startedAt, endsAt })
+        .onConflictDoNothing()
+        .returning({ id: leagueFestivals.id });
+      if (festival.length === 0) return resolution; // the year already has its festival
+    }
     if (motion.cost > 0) {
       const debited = await tx
         .update(treasuries)

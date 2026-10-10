@@ -2,8 +2,9 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, eq, isNull, lte, sql } from "drizzle-orm";
-import { leagueClassGrants, leagueClassPay, leagueDocket, leagueMorale, parseLeagueBuildings, projectKey, projectMotion, type LeagueBuilding, type LeagueClassGrant, type ProjectMotion, type ProjectTiming } from "@massalia/shared";
+import { festivalClassGrants, festivalClassPay, leagueClassGrants, leagueClassPay, leagueDocket, leagueMorale, parseLeagueBuildings, projectKey, projectMotion, type LeagueBuilding, type LeagueClassGrant, type ProjectMotion, type ProjectTiming } from "@massalia/shared";
 import { createDb, type DbExec } from "./client.js";
+import { festivalSpans, loadLeagueFestivals } from "./leagueFestivals.js";
 import { ensureLeagueCities, loadCities } from "./leagueRevenue.js";
 import { leagueCities, leagueProjects, treasuries } from "./schema.js";
 import { activeWorld } from "./world.js";
@@ -57,17 +58,23 @@ export async function projectTimings(exec: DbExec, worldId: string): Promise<Pro
 }
 
 // What the League pays a character of `classId` in this world for the seasons
-// fromSeason to toSeason inclusive (government prompt 2b): leagueClassPay over
-// the world's projects. 0 when the range is empty.
+// fromSeason to toSeason inclusive: the standing buildings' grants (government
+// prompt 2b) and the festivals held (prompt 3). 0 when the range is empty.
 export async function leagueClassPayFor(exec: DbExec, worldId: string, worldStartMs: number, classId: string, fromSeason: number, toSeason: number): Promise<number> {
   if (fromSeason > toSeason) return 0;
-  return leagueClassPay(await projectTimings(exec, worldId), await loadLeagueBuildings(), classId, worldStartMs, fromSeason, toSeason);
+  const buildings = leagueClassPay(await projectTimings(exec, worldId), await loadLeagueBuildings(), classId, worldStartMs, fromSeason, toSeason);
+  const festivals = festivalClassPay(await festivalSpans(exec, worldId), await loadLeagueFestivals(), classId, worldStartMs, fromSeason, toSeason);
+  return buildings + festivals;
 }
 
-// The grants running for `classId` in this world at `at`, titled from the cities content.
+// The grants running for `classId` in this world at `at`: the buildings' (titled
+// from the cities content), then the festivals'.
 export async function leagueClassGrantsFor(exec: DbExec, worldId: string, classId: string, at: Date): Promise<LeagueClassGrant[]> {
-  const [defs, cities] = await Promise.all([loadLeagueBuildings(), loadCities()]);
-  return leagueClassGrants(await projectTimings(exec, worldId), defs, cities.cities, classId, at.getTime());
+  const [defs, cities, fests] = await Promise.all([loadLeagueBuildings(), loadCities(), loadLeagueFestivals()]);
+  return [
+    ...leagueClassGrants(await projectTimings(exec, worldId), defs, cities.cities, classId, at.getTime()),
+    ...festivalClassGrants(await festivalSpans(exec, worldId), fests, classId, at.getTime()),
+  ];
 }
 
 // The blessing every army in this world fights under at `at` (government prompt

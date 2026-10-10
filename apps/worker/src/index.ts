@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Queue, Worker, type Job } from "bullmq";
 import { BACKUP_JOB_NAME, BACKUP_SCHEDULE, runBackup } from "./jobs/backup.js";
-import { completionDelayMs, parseAgeConfig, parseAgendaFile, parseCalendarConfig, parseContractsContent, parseFamilyConfig, parsePoliticsConfig, parseTraitsFile, REAL_MS_PER_SEASON, type AgeConfig, type AgendaScope, type CalendarConfig, type ContractsContent, type FamilyConfig, type PoliticsConfig, type Trait } from "@massalia/shared";
+import { completionDelayMs, parseAgeConfig, parseAgendaFile, parseCalendarConfig, parseContractsContent, parseFamilyConfig, parsePoliticsConfig, parseTraitsFile, MOTION_SCOPES, REAL_MS_PER_SEASON, type AgeConfig, type CalendarConfig, type ContractsContent, type FamilyConfig, type PoliticsConfig, type Trait } from "@massalia/shared";
 import { accrueLeagueCities, accrueTreasuries, advanceAgendaCycles, advanceElections, advanceOlympiads, characterInActiveWorld, closeDueChamberVotes, closeDueFestivals, collectLeagueRevenue, completeLeagueProjects, createDb, deleteExpiredSessions, deliverOlympicNominationToAll, drawFamilyCandidates, endDbPools, ensurePartyLeaders, fireFestivalsForAll, openAgendaCycleIfDue, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, sweepMercenaryContracts, sweepSpouseDeaths, type AgendaPools, type MercContractCfgMap } from "@massalia/db";
 
 const redisUrl = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
@@ -185,7 +185,7 @@ const SWEEPS: Sweep[] = [
       const revenue = await collectLeagueRevenue(politics);
       const leaders = (await ensurePartyLeaders()).filled.length;
       let opened = 0;
-      for (const scope of ["league", "palaioi", "dynatoi"] as AgendaScope[]) {
+      for (const scope of MOTION_SCOPES) {
         if (await openAgendaCycleIfDue(scope, politics, pools)) opened++;
       }
       await closeDueChamberVotes(politics);

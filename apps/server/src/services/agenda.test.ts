@@ -62,7 +62,7 @@ suite("Agenda & three governments (integration)", () => {
   });
 
   beforeEach(async () => {
-    await db.execute(sql`TRUNCATE TABLE league_projects, league_cities, party_endorsements, ephor_vetoes, agenda_cycles, treasury_ledger, treasuries,
+    await db.execute(sql`TRUNCATE TABLE league_festivals, league_projects, league_cities, party_endorsements, ephor_vetoes, agenda_cycles, treasury_ledger, treasuries,
       election_votes, election_candidates, elections, office_history, offices, chamber_ballots, chamber_votes,
       oligarch_seats, party_favor, effect_log, character_traits, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
     await db.insert(m.dbPkg.houses).values({ slug: "test-house", name: "House Test", initial: "T", alignment: "c", stance: "s", motto: "m", patron: "p", crest: "c" }).onConflictDoNothing();
@@ -228,6 +228,67 @@ suite("Agenda & three governments (integration)", () => {
     expect((await m.dbPkg.completeLeagueProjects(completesAt)).map((p) => p.cityId).sort()).toEqual(["massalia", "olbia"]);
     expect(await fortifications("massalia")).toBe(5);
     expect(await fortifications("olbia")).toBe(olbiaBefore);
+  });
+
+  // --- The festival motion (government prompt 3) -------------------------------
+  // Each Summer the Archons put a festival to the chamber for the coming year;
+  // passed, it is paid from the League treasury and its classes draw 10 a season
+  // of that year through the same grants the buildings pay.
+  const festivalVote = async () => (await db.select().from(m.dbPkg.chamberVotes).where(and(eq(m.dbPkg.chamberVotes.worldId, worldId), eq(m.dbPkg.chamberVotes.scope, "festival"))).limit(1))[0]!;
+  const festivalsHeld = () => db.select().from(m.dbPkg.leagueFestivals).where(eq(m.dbPkg.leagueFestivals.worldId, worldId));
+
+  it("runs a festival cycle for the coming year: the Summer docket, draft → veto → re-draft → pass → pay and hold", async () => {
+    const archon = await character("archon", "palaioi");
+    const ephor = await character("ephor", "palaioi", { militia: 5 });
+    const voter = await character("voter", "palaioi");
+    await setOffice("archon", "palaioi", archon);
+    await setOffice("ephor", "palaioi", ephor);
+    // The festivals lean independent and this suite's chamber keeps only the
+    // Palaioi bloc, which would vote no: clear the NPC seats, so the chamber is
+    // the players' ballots alone and the voter's yes carries.
+    await db.delete(m.dbPkg.oligarchSeats).where(and(eq(m.dbPkg.oligarchSeats.worldId, worldId), eq(m.dbPkg.oligarchSeats.holderType, "npc")));
+    await m.dbPkg.creditTreasury(worldId, "league", 5000, "seed", at(10));
+    // Year 2's Summer is season 10: the docket is the festivals year 3 allows.
+    const cyc = (await m.dbPkg.openAgendaCycleIfDue("festival", cfg, pools, at(10)))!;
+    expect(cyc.phase).toBe("drafting");
+    expect(cyc.cardIds).toEqual(["festival:dionysia:y3", "festival:artemisia:y3", "festival:apollo:y3"]);
+
+    await m.dbPkg.setDraftedCard(cyc.id, "festival:artemisia:y3");
+    // The veto is the League's one per term, recorded under the League scope (ruling 3).
+    expect(await m.dbPkg.setVeto(worldId, cyc.id, ephor, "league", 2)).toBe(true);
+    expect(await m.dbPkg.vetoesUsedThisTerm(ephor, "league", 2)).toBe(1);
+    await m.dbPkg.setDraftedCard(cyc.id, "festival:dionysia:y3");
+
+    await m.dbPkg.advanceAgendaCycles(calendar, cfg, pools, at(11)); // Autumn: the chamber vote opens
+    const vote = await festivalVote();
+    expect(vote.agendaCardId).toBe("festival:dionysia:y3");
+    expect(vote.title).toBe("A Dionysia for 297 BC");
+    expect(vote.leans).toEqual({ palaioi: "no", dynatoi: "no", independent: "yes" });
+    await ballot(vote.id, voter, "yes");
+    const balBefore = await m.dbPkg.treasuryBalance(worldId, "league");
+
+    await m.dbPkg.closeDueChamberVotes(cfg, at(12)); // the Winter boundary of year 3
+    const adv = await m.dbPkg.advanceAgendaCycles(calendar, cfg, pools, at(12));
+    expect(adv.resolved).toEqual([{ scope: "festival", gameYear: 2, cardId: "festival:dionysia:y3", passed: true, applied: true, spent: 500 }]);
+    expect(balBefore - (await m.dbPkg.treasuryBalance(worldId, "league"))).toBe(500);
+    expect((await agendaLedger()).map((l) => [l.reason, l.delta])).toEqual([["agenda:festival:dionysia:y3", -500]]);
+
+    const held = await festivalsHeld();
+    expect(held).toHaveLength(1);
+    expect(held[0]).toMatchObject({ festivalId: "dionysia", gameYear: 3, cost: 500 });
+    expect(held[0]!.startsAt.getTime()).toBe(T0 + 12 * SEASON);
+    expect(held[0]!.endsAt.getTime()).toBe(T0 + 16 * SEASON);
+
+    // The grants: a Hetaira draws 10 a season over the festival year, a Priest nothing.
+    expect(await m.dbPkg.leagueClassPayFor(db, worldId, T0, "hetaira", 12, 15)).toBe(40);
+    expect(await m.dbPkg.leagueClassPayFor(db, worldId, T0, "hetaira", 16, 20)).toBe(0);
+    expect(await m.dbPkg.leagueClassPayFor(db, worldId, T0, "priest", 12, 15)).toBe(0);
+
+    // A second advance writes nothing more.
+    const again = await m.dbPkg.advanceAgendaCycles(calendar, cfg, pools, at(12));
+    expect(again.resolved).toEqual([]);
+    expect(await festivalsHeld()).toHaveLength(1);
+    expect(await agendaLedger()).toHaveLength(1);
   });
 
   it("a party vote counts only that party's members + that party's NPC bloc", async () => {
