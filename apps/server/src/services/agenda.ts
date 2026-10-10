@@ -33,13 +33,16 @@ import {
   currentAgendaCycle,
   festivalEffects,
   festivalMotion,
+  formatGameDate,
   gameDate,
   MOTION_SCOPES,
+  nextAgendaDocket,
   parseAgendaFile,
   parseCitiesContent,
   parseLeagueBuildings,
   parseLeagueFestivals,
   projectMotion,
+  REAL_MS_PER_SEASON,
   treasuryOwnerOf,
   type AgendaCard,
   type AgendaScope,
@@ -279,6 +282,9 @@ export interface AgendaScopeView {
   treasury: TreasuryView;
   youMayDraft: boolean;
   youMayVeto: boolean;
+  // The game date the scope's next docket opens, or the open one's (government
+  // prompt 3b); null with no world.
+  nextOpensLabel: string | null;
 }
 
 function cardViews(pool: AgendaCard[], ids: string[]): AgendaCardView[] {
@@ -324,7 +330,8 @@ function festivalCardViews(ids: string[]): AgendaCardView[] {
 // voting, when it is not the vetoed card. After a veto an Archon may draft
 // another card and that one goes to the vote, so the test is
 // `draftedCardId !== vetoedCardId`, not `vetoedCardId === null`. While drafting
-// the docket is the Government's alone, so the cards are empty.
+// the cards are empty here; the docket itself is public on the Cities tab
+// (government prompt 3b), but what is drafted and vetoed is not.
 export function publicLeagueView(view: AgendaScopeView): AgendaScopeView {
   const toVote = view.phase === "voting" && view.draftedCardId && view.draftedCardId !== view.vetoedCardId ? view.draftedCardId : null;
   return {
@@ -343,7 +350,7 @@ export async function agendaScopeView(actor: CharacterRow, scope: MotionScope, n
   const world = await activeWorld();
   const cfg = getPoliticsConfig();
   const owner: TreasuryOwner = treasuryOwnerOf(scope);
-  if (!world) return { scope, phase: null, gameYear: null, cards: [], draftedCardId: null, vetoedCardId: null, treasury: { owner, balance: 0, ledger: [] }, youMayDraft: false, youMayVeto: false };
+  if (!world) return { scope, phase: null, gameYear: null, cards: [], draftedCardId: null, vetoedCardId: null, treasury: { owner, balance: 0, ledger: [] }, youMayDraft: false, youMayVeto: false, nextOpensLabel: null };
 
   const live = currentAgendaCycle(gameDate(now.getTime(), world.startedMs).seasonIndex, scope, cfg.agenda);
   const cycle = live ? await getAgendaCycle(world.id, scope, live.gameYear) : null;
@@ -363,6 +370,7 @@ export async function agendaScopeView(actor: CharacterRow, scope: MotionScope, n
     treasury: await treasuryView(world.id, owner),
     youMayDraft: cycle?.phase === "drafting" && canDraft(held, scope),
     youMayVeto,
+    nextOpensLabel: formatGameDate(gameDate(world.startedMs + nextAgendaDocket(gameDate(now.getTime(), world.startedMs).seasonIndex, scope, cfg.agenda).draftSeasonIndex * REAL_MS_PER_SEASON, world.startedMs)),
   };
 }
 

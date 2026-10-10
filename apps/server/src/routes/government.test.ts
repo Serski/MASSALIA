@@ -48,7 +48,7 @@ async function loadModules() {
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
-type Scope = { phase: string | null; cards: { id: string; title: string; group?: string; seasons?: number; effects?: string[] }[]; draftedCardId: string | null; vetoedCardId: string | null; treasury: { balance: number; ledger: unknown[] }; youMayDraft: boolean; youMayVeto: boolean };
+type Scope = { phase: string | null; nextOpensLabel: string | null; cards: { id: string; title: string; group?: string; seasons?: number; effects?: string[] }[]; draftedCardId: string | null; vetoedCardId: string | null; treasury: { balance: number; ledger: unknown[] }; youMayDraft: boolean; youMayVeto: boolean };
 type Gov =
   | { member: false }
   | {
@@ -264,6 +264,12 @@ suite("GET /api/government and the public League scope (integration)", () => {
       expect(scope.phase).toBe("drafting");
       expect(scope.cards).toEqual([]);
       expect(scope.youMayDraft).toBe(false);
+      // When the next dockets open (government prompt 3b): the League's in the
+      // coming Winter, the festival's now.
+      expect(scope.nextOpensLabel).toBe("Summer, 300 BC");
+      const league = await leagueScope(c.token);
+      expect(league.phase).toBeNull();
+      expect(league.nextOpensLabel).toBe("Winter, 299 BC");
     });
 
     it("in an Olympiad year's Summer the docket holds the Olympiad too", async () => {
@@ -292,6 +298,8 @@ suite("GET /api/government and the public League scope (integration)", () => {
       expect(scope.cards.map((card) => [card.id, card.title, card.effects])).toEqual([["festival:apollo:y1", "A Festival of Apollo for 299 BC", ["Traders and Shipbuilders +10 dr a season for the year"]]]);
       expect(scope.draftedCardId).toBe("festival:apollo:y1");
       expect(scope.youMayDraft).toBe(false);
+      // In an Autumn the festival's next docket is the coming Summer's.
+      expect(scope.nextOpensLabel).toBe("Summer, 299 BC");
     });
   });
 
