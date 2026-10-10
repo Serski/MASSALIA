@@ -246,6 +246,51 @@ suite("the Oligarchy Chamber (integration)", () => {
     ]);
   });
 
+  it("several open votes: each seat-holder sees the League's and the festival's and his own party's, and a ballot names its vote", async () => {
+    // A festival vote and a Palaioi vote open at once (an Autumn, government
+    // prompt 3). Year 0's League vote has closed above; these use their own scopes.
+    const { chamberVotes, chamberBallots } = m.dbPkg;
+    const closesAt = new Date(now.getTime() + 86_400_000);
+    const [festival] = await db.insert(chamberVotes).values({ worldId, scope: "festival", gameYear: 0, title: "A Dionysia for 299 BC", description: "Wine and masks.", agendaCardId: "festival:dionysia:y1", opensAt: now, closesAt, status: "open" }).returning();
+    const [palaioiVote] = await db.insert(chamberVotes).values({ worldId, scope: "palaioi", gameYear: 0, title: "A loyalty inquiry", description: "The party asks.", agendaCardId: "pal-loyalty-inquiry", opensAt: now, closesAt, status: "open" }).returning();
+
+    const pal = await createCharacter("Palaios", { drachmae: 400, party: "palaioi" });
+    expect((await m.oligarchy.buySeat(pal, now)).ok).toBe(true);
+    const palRow = await freshRow(pal.id);
+    const dyn = await createCharacter("Dynatos", { drachmae: 400, party: "dynatoi" });
+    expect((await m.oligarchy.buySeat(dyn, now)).ok).toBe(true);
+    const dynRow = await freshRow(dyn.id);
+
+    const palView = await m.oligarchy.chamberVotesView(palRow, now);
+    expect(palView.openVotes.map((v) => [v.scope, v.id])).toEqual([["festival", festival!.id], ["palaioi", palaioiVote!.id]]);
+    expect(palView.open?.id).toBe(festival!.id);
+    expect(palView.openVotes.every((v) => v.youMayVote)).toBe(true);
+    const dynView = await m.oligarchy.chamberVotesView(dynRow, now);
+    expect(dynView.openVotes.map((v) => v.scope)).toEqual(["festival"]);
+    expect(dynView.open?.id).toBe(festival!.id);
+
+    // The ballot lands on the vote it names; without an id, on the first open vote.
+    expect(await m.oligarchy.castChamberBallot(palRow, "yes", now, palaioiVote!.id)).toEqual({ ok: true, choice: "yes" });
+    expect(await m.oligarchy.castChamberBallot(palRow, "no", now, festival!.id)).toEqual({ ok: true, choice: "no" });
+    const ballotsOf = async (voteId: string) => db.select().from(chamberBallots).where(eq(chamberBallots.voteId, voteId));
+    expect((await ballotsOf(palaioiVote!.id)).map((b) => [b.voterCharacterId, b.choice])).toEqual([[pal.id, "yes"]]);
+    expect((await ballotsOf(festival!.id)).map((b) => [b.voterCharacterId, b.choice])).toEqual([[pal.id, "no"]]);
+    expect(await m.oligarchy.castChamberBallot(palRow, "yes", now)).toEqual({ ok: true, choice: "yes" });
+    expect((await ballotsOf(festival!.id)).map((b) => b.choice)).toEqual(["yes"]); // changed on the festival, the first open vote
+    expect((await ballotsOf(palaioiVote!.id))).toHaveLength(1);
+
+    // A vote the character may not see is no vote: 404 and nothing written.
+    expect(await m.oligarchy.castChamberBallot(dynRow, "yes", now, palaioiVote!.id)).toEqual({ ok: false, code: 404, error: "No such vote is open." });
+    expect(await ballotsOf(palaioiVote!.id)).toHaveLength(1);
+    expect((await m.oligarchy.chamberVotesView(palRow, now)).openVotes.map((v) => v.yourBallot)).toEqual(["yes", "yes"]);
+
+    // Leave the shared world as the later tests expect it: no open vote.
+    await db.delete(chamberBallots).where(eq(chamberBallots.voteId, festival!.id));
+    await db.delete(chamberBallots).where(eq(chamberBallots.voteId, palaioiVote!.id));
+    await db.delete(chamberVotes).where(eq(chamberVotes.id, festival!.id));
+    await db.delete(chamberVotes).where(eq(chamberVotes.id, palaioiVote!.id));
+  });
+
   it("succession: the dynastic seat rides the slot row to the heir", async () => {
     const { children, players } = m.dbPkg;
     const holder = await createCharacter("Patroklos", { drachmae: 400 });

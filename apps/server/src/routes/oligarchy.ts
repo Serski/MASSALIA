@@ -59,12 +59,16 @@ export async function oligarchyRoutes(app: FastifyInstance) {
       reply.code(acting.code);
       return { error: acting.error };
     }
-    const choice = (request.body as { choice?: string } | undefined)?.choice;
+    const body = request.body as { choice?: string; voteId?: unknown } | undefined;
+    const choice = body?.choice;
     if (choice !== "yes" && choice !== "no") {
       reply.code(400);
       return { error: "A choice of 'yes' or 'no' is required." };
     }
-    const result = await castChamberBallot(acting.row, choice);
+    // The vote the ballot is for (government prompt 3: several can be open at
+    // once); an old client sends none and gets the first open vote.
+    const voteId = typeof body?.voteId === "string" && /^[0-9a-f-]{36}$/i.test(body.voteId) ? body.voteId : undefined;
+    const result = await castChamberBallot(acting.row, choice, new Date(), voteId);
     if (!result.ok) {
       reply.code(result.code);
       return { error: result.error };

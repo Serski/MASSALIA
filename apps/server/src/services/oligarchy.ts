@@ -11,7 +11,7 @@ import {
   creditSeatPurchaseCut,
   effectLog,
   oligarchSeats,
-  openChamberVote,
+  openChamberVotes,
   openChamberVoteIfDue,
   players,
   playerCharacters,
@@ -245,11 +245,22 @@ export type CastBallotResult = { ok: false; code: number; error: string } | { ok
 
 // POST /api/oligarchy/vote: seat-holders cast yes/no on the open vote — one
 // ballot per voter, changeable while open (upsert), 409 after close.
-export async function castChamberBallot(row: CharacterRow, choice: ChamberChoice, now: Date = new Date()): Promise<CastBallotResult> {
+// The open votes this character may see: the League's and the festival's for
+// everyone, a party's only for that party's members (government prompt 3).
+async function visibleOpenVotes(row: CharacterRow) {
+  return (await openChamberVotes()).filter((vote) => vote.scope === "league" || vote.scope === "festival" || vote.scope === row.party);
+}
+
+// `voteId` names the vote (the web sends it since several can be open at once);
+// without it the ballot goes to the first of the character's open votes, as an
+// old client expects. An id not among them answers 404 and writes nothing.
+export async function castChamberBallot(row: CharacterRow, choice: ChamberChoice, now: Date = new Date(), voteId?: string): Promise<CastBallotResult> {
   if (!(await seatOf(row.id))) return { ok: false, code: 403, error: "Only seat-holders vote in the chamber." };
 
   await syncChamberVotes(now);
-  const vote = await openChamberVote();
+  const visible = await visibleOpenVotes(row);
+  const vote = voteId ? visible.find((v) => v.id === voteId) : visible[0];
+  if (voteId && !vote) return { ok: false, code: 404, error: "No such vote is open." };
   if (!vote || vote.closesAt.getTime() <= now.getTime()) {
     return { ok: false, code: 409, error: "No chamber vote is open." };
   }
@@ -274,6 +285,7 @@ export interface PublicBallot {
 
 export interface ChamberVoteView {
   id: string;
+  scope: string; // 'league' | 'festival' | 'palaioi' | 'dynatoi'
   gameYear: number;
   title: string;
   description: string;
@@ -286,8 +298,14 @@ export interface ChamberVoteView {
   ballots: PublicBallot[];
 }
 
+export type OpenChamberVoteView = ChamberVoteView & { yourBallot: ChamberChoice | null; youMayVote: boolean };
+
 export interface ChamberVotesView {
-  open: (ChamberVoteView & { yourBallot: ChamberChoice | null; youMayVote: boolean }) | null;
+  // The first of openVotes, or null (what an old client reads).
+  open: OpenChamberVoteView | null;
+  // Every open vote this character may see, ordered league, festival, then the
+  // party's own (government prompt 3).
+  openVotes: OpenChamberVoteView[];
   past: ChamberVoteView[];
 }
 
@@ -323,6 +341,7 @@ async function publicBallots(voteIds: string[]): Promise<Map<string, PublicBallo
 function toVoteView(vote: typeof chamberVotes.$inferSelect, ballots: PublicBallot[]): ChamberVoteView {
   return {
     id: vote.id,
+    scope: vote.scope,
     gameYear: vote.gameYear,
     title: vote.title,
     description: vote.description,
@@ -339,24 +358,20 @@ function toVoteView(vote: typeof chamberVotes.$inferSelect, ballots: PublicBallo
 // past results — every ballot named, the public record of the chamber.
 export async function chamberVotesView(row: CharacterRow, now: Date = new Date()): Promise<ChamberVotesView> {
   await syncChamberVotes(now);
-  const open = await openChamberVote();
+  const open = await visibleOpenVotes(row);
   const past = await closedChamberVotes();
-  const ballotMap = await publicBallots([...(open ? [open.id] : []), ...past.map((vote) => vote.id)]);
+  const ballotMap = await publicBallots([...open.map((vote) => vote.id), ...past.map((vote) => vote.id)]);
+  const youMayVote = (await seatOf(row.id)) !== null;
 
-  let openView: ChamberVotesView["open"] = null;
-  if (open) {
-    const ballots = ballotMap.get(open.id) ?? [];
+  const openVotes: OpenChamberVoteView[] = [];
+  for (const vote of open) {
     const yours = await db
       .select({ choice: chamberBallots.choice })
       .from(chamberBallots)
-      .where(and(eq(chamberBallots.voteId, open.id), eq(chamberBallots.voterCharacterId, row.id)))
+      .where(and(eq(chamberBallots.voteId, vote.id), eq(chamberBallots.voterCharacterId, row.id)))
       .limit(1);
-    openView = {
-      ...toVoteView(open, ballots),
-      yourBallot: (yours[0]?.choice as ChamberChoice | undefined) ?? null,
-      youMayVote: (await seatOf(row.id)) !== null,
-    };
+    openVotes.push({ ...toVoteView(vote, ballotMap.get(vote.id) ?? []), yourBallot: (yours[0]?.choice as ChamberChoice | undefined) ?? null, youMayVote });
   }
 
-  return { open: openView, past: past.map((vote) => toVoteView(vote, ballotMap.get(vote.id) ?? [])) };
+  return { open: openVotes[0] ?? null, openVotes, past: past.map((vote) => toVoteView(vote, ballotMap.get(vote.id) ?? [])) };
 }

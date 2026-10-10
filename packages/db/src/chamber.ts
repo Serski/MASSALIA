@@ -54,17 +54,24 @@ export async function ensureChamberSeats(worldId: string, chamber: ChamberConfig
   await exec.insert(oligarchSeats).values(values).onConflictDoNothing();
 }
 
-// The open chamber vote of the active world, if any (regardless of closes_at —
-// callers run closeDueChamberVotes first to settle an overdue one).
-export async function openChamberVote(): Promise<ChamberVoteRow | null> {
+// Every open chamber vote of the active world (regardless of closes_at — callers
+// run closeDueChamberVotes first to settle an overdue one), ordered league,
+// festival, palaioi, dynatoi, then by opens_at. In an Autumn the festival vote
+// and the party votes are open together (government prompt 3).
+const SCOPE_ORDER: Record<string, number> = { league: 0, festival: 1, palaioi: 2, dynatoi: 3 };
+export async function openChamberVotes(): Promise<ChamberVoteRow[]> {
   const world = await activeWorld();
-  if (!world) return null;
+  if (!world) return [];
   const rows = await db
     .select()
     .from(chamberVotes)
-    .where(and(eq(chamberVotes.worldId, world.id), eq(chamberVotes.status, "open")))
-    .limit(1);
-  return rows[0] ?? null;
+    .where(and(eq(chamberVotes.worldId, world.id), eq(chamberVotes.status, "open")));
+  return rows.sort((a, b) => (SCOPE_ORDER[a.scope] ?? 9) - (SCOPE_ORDER[b.scope] ?? 9) || a.opensAt.getTime() - b.opensAt.getTime());
+}
+
+// The first open chamber vote of the active world, if any.
+export async function openChamberVote(): Promise<ChamberVoteRow | null> {
+  return (await openChamberVotes())[0] ?? null;
 }
 
 // Open this game year's chamber vote if it is due and not yet opened (idempotent
