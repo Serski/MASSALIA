@@ -161,3 +161,22 @@ Expected: two rows, archon and ephor, game_year 6, phase `declaration`, declarat
 7. Push after my "push" as above, and never at or after 23:00 UTC: if it cannot go out by then, STOP, the notice needs a new date. If item 1 set commits aside, once the push is done: `git rebase main held-main` (none of this prompt's files are in them; on any conflict `git rebase --abort` and STOP), then `git switch main`, `git merge --ff-only held-main`, `git branch -d held-main`. Show each commit's `git patch-id` unchanged and report the new SHAs. Their gate runs again before their own push.
 
 8. Push report, besides the usual (remote HEAD, CI with Gate and Audit, Pages, Railway server and worker on the new SHA, no migration, API health): the time the server went live, and an hour later, read only, `SELECT count(*), count(*) FILTER (WHERE resolved) FROM daily_decisions WHERE event_id = '<the notice's id>'`.
+
+## Rulings on STOP 1 (12 Oct)
+
+1. Fix the notice, and its opening too, which also says only the Three Hundred vote. Scene, verbatim:
+`Heralds in the agora: Massalia goes to the vote. The city chooses two Archons and two Ephors, one seat of each for the Palaioi and one for the Dynatoi. Candidacies are open now and close when Winter opens; the vote runs the season through, and the winners take office in Spring. A seat in the chamber is needed to stand; every citizen may vote.`
+Result, verbatim: `The heralds move on down the quay. Candidacies and the ballot are under Politics, on the Oligarchy Council tab.`
+The choice `Noted` stays. Check the new words against the code as before.
+
+2. Keep the councilors' prestige 20.
+
+3. Noted, keep: a purse left alone lapses as `expired` with nothing paid.
+
+4. No cast. The file already has `ctx` at events.test.ts:34, a Dynatoi trader who is not a councilor. Use it for the citizen and `{ ...ctx, isCouncilor: true }` for the councilor, as line 151 does.
+
+Then two commits, staged by path:
+- `content: the election notice says every citizen may vote` (events-dated.json, events.test.ts, and any other test that pins the notice's words)
+- `docs: the dated cards 2 prompt's STOP 1 rulings` (these rulings appended to docs/events/dated-cards-prompt-2.md)
+
+Gate at HEAD, then the audit. If the gate ends `GATE GREEN: HEAD <sha>, tree clean` and the audit exits 0: push, plain `git push`, without another STOP, and report as corrections item 8 says. Any red is a STOP with the log. Never at or after 23:00 UTC.
