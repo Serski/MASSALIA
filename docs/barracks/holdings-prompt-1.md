@@ -75,3 +75,12 @@ Anything off is a STOP: report it and wait. Do not write to production to fix it
 ## Scope fence
 
 Only `holdings.ts` (the one new reader), `routes/map.ts` (the one new field on `/military`, its type and comment), `World2Map.tsx`, `map/mapActions.ts` (the Attack helper), and the tests named. Do not touch the reach route, the actions route, the conquest, reversion and tribute rules, the intel rules (a held town's garrison stays as private as today), the polity content files, the shared legality matrix, the server's `HOME_POLITY` rules, any stylesheet beyond what the marker needs, or the Chronicle. No migration. Nothing under `apps/web/public` changes.
+
+## STOP 1 rulings (Argiris, 12 Oct 2026), all four kept
+
+1. `houseName` nullable, with the line falling back to "Held by {characterName}". Keep.
+2. Attack's sentence also becomes the touch caption when reach left none. Keep.
+3. No holder line on a flipped region whose towns are all the viewer's; the town list says it. Keep.
+4. Noted: the Atlas check is mine.
+
+Append these rulings to docs/barracks/holdings-prompt-1.md as `docs: the holdings 1 prompt's STOP 1 rulings`, run the gate at HEAD and the audit, then push as the prompt says (plain git push, not at or after 23:00 UTC) and report.
