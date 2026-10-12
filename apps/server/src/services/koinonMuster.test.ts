@@ -791,6 +791,40 @@ suite("Koinon muster (integration)", () => {
     expect((await reportOf()).defender).toMatchObject({ start: 12 });
   });
 
+  // Holdings prompt 2: a muster is a raid, and a raid on a holding is refused.
+  it("a held place is no muster target: the call is refused with the server's sentence, and the targets list leaves it out", async () => {
+    const [leader, other] = [await freshPlayer("Kallias", 100_000, 1), await freshPlayer("Xenos", 100_000, 9)];
+    await koinonOf("The Sacred Band", [leader]);
+    const [townId, townRegion] = [...m.mapGraph.getTopology().townRegion].find(([, r]) => r === regionWithTowns)!;
+    const holding = (regionId: string, town: string, owner: string) => ({ worldId, regionId, townId: town, ownerPlayerId: owner, kind: "conquest" as const, previousOwner: "unclaimed", since: NOW, lastGarrisonedAt: NOW, lastTributeAt: NOW });
+    await db.insert(m.dbPkg.playerHoldings).values([holding(landRegion, "", other), holding(townRegion, townId, other)]);
+    expect(await open(leader)).toEqual({ ok: false, code: 409, error: "Another house holds this land." });
+    expect(await open(leader, { regionId: undefined, townId })).toEqual({ ok: false, code: 409, error: "Another house holds this town." });
+    const view = await m.muster.musterTargets(await ctx(leader), massalia, NOW);
+    if ("error" in view) throw new Error(view.error);
+    expect(view.targets.some((t) => t.townId === null && t.regionId === landRegion)).toBe(false);
+    expect(view.targets.some((t) => t.townId === townId)).toBe(false);
+    expect(view.targets.length).toBeGreaterThan(0);
+    // The caller's own holding reads as his own.
+    await db.update(m.dbPkg.playerHoldings).set({ ownerPlayerId: leader }).where(eq(m.dbPkg.playerHoldings.regionId, landRegion));
+    expect(await open(leader)).toEqual({ ok: false, code: 409, error: "You hold this land." });
+  });
+
+  it("an army that finds the place held by another house turns back too", async () => {
+    const { a, b, c, musterId } = await landRaid();
+    const other = await freshPlayer("Xenos", 100_000, 9);
+    expect(await m.muster.resolveMuster(musterId, LAUNCH)).toEqual({ outcome: "marched" });
+    // A house outside the koinon takes the land a minute after the launch.
+    await db.insert(m.dbPkg.playerHoldings).values({ worldId, regionId: landRegion, townId: "", ownerPlayerId: other, kind: "conquest", previousOwner: "unclaimed", since: at(2 * HOUR + MIN), lastGarrisonedAt: at(2 * HOUR + MIN), lastTributeAt: at(2 * HOUR + MIN) });
+    expect(await m.muster.resolveMuster(musterId, arrival(1))).toEqual({ outcome: "resolved" });
+    const report = await reportOf();
+    expect(report).toMatchObject({ outcome: "turned_back", heldBy: "another", line: `Found ${report.regionName} held by another house and turned back.`, men: 120, lost: 0, killed: 0, rounds: 0, defender: null, fleet: null, plunder: null, opinion: null, homeAt: homeAt(1).toISOString() });
+    expect(await warbandOf(landRegion)).toBe(30); // nothing was fought
+    for (const p of [a, b, c]) {
+      for (const r of await rowsOf(p)) expect(r).toMatchObject({ movingTo: massalia, arrivesAt: homeAt(1), mission: { kind: "raid", regionId: landRegion } });
+    }
+  });
+
   it("an army that finds the place held by one of its own houses turns back", async () => {
     const { a, b, c, musterId } = await landRaid();
     expect(await m.muster.resolveMuster(musterId, LAUNCH)).toEqual({ outcome: "marched" });
@@ -798,7 +832,7 @@ suite("Koinon muster (integration)", () => {
     await db.insert(m.dbPkg.playerHoldings).values({ worldId, regionId: landRegion, townId: "", ownerPlayerId: b, kind: "conquest", previousOwner: "unclaimed", since: at(2 * HOUR + MIN), lastGarrisonedAt: at(2 * HOUR + MIN), lastTributeAt: at(2 * HOUR + MIN) });
     expect(await m.muster.resolveMuster(musterId, arrival(1))).toEqual({ outcome: "resolved" });
     const report = await reportOf();
-    expect(report).toMatchObject({ outcome: "turned_back", line: `Found ${report.regionName} held by one of our own and turned back.`, men: 120, lost: 0, killed: 0, rounds: 0, defender: null, fleet: null, plunder: null, opinion: null, homeAt: homeAt(1).toISOString() });
+    expect(report).toMatchObject({ outcome: "turned_back", heldBy: "ours", line: `Found ${report.regionName} held by one of our own and turned back.`, men: 120, lost: 0, killed: 0, rounds: 0, defender: null, fleet: null, plunder: null, opinion: null, homeAt: homeAt(1).toISOString() });
     expect(report.parts.map((p) => [p.playerId, p.men, p.shares, p.drachmae])).toEqual([[a, 40, 40, 0], [b, 30, 30, 0], [c, 50, 50, 0]]);
     for (const p of [a, b, c]) {
       for (const r of await rowsOf(p)) {

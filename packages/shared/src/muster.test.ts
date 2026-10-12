@@ -156,6 +156,9 @@ describe("renderMusterReportLine", () => {
     expect(renderMusterReportLine({ ...base, townId: "reii", townName: "Reii", outcome: "repulsed", killed: 0, lost: 0, plunder: null })).toBe("Sailed against Reii and were driven off by its fleet before landing.");
     // The march (raids prompt 5): the army turned back, or broke up on the road.
     expect(renderMusterReportLine({ ...base, outcome: "turned_back", killed: 0, lost: 0, plunder: null })).toBe("Found Vocontii held by one of our own and turned back.");
+    // Holdings prompt 2: another house's holding turns the army back too; an old report without heldBy reads as ours.
+    expect(renderMusterReportLine({ ...base, outcome: "turned_back", heldBy: "another", killed: 0, lost: 0, plunder: null })).toBe("Found Vocontii held by another house and turned back.");
+    expect(renderMusterReportLine({ ...base, outcome: "turned_back", heldBy: "ours", killed: 0, lost: 0, plunder: null })).toBe("Found Vocontii held by one of our own and turned back.");
     expect(renderMusterReportLine({ ...base, townId: "reii", townName: "Reii", outcome: "dispersed", killed: 0, lost: 0, plunder: null })).toBe("The army sent to Reii broke up on the road.");
   });
 

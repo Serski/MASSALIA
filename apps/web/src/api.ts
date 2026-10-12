@@ -1498,8 +1498,10 @@ export type KoinonMuster = {
 // `spoil` is the member's part of the plunder's third good; a report stored before the raids prompt has none.
 export type KoinonMusterPart = { playerId: string; name: string; men: number; lost: number; hulls: number; seats: number; shares: number; drachmae: number; grain: number; spoil?: number };
 export type KoinonMusterReport = {
-  // "turned_back": the army found the place held by one of its own houses; "dispersed": its men all left on the road (raids prompt 5).
+  // "turned_back": the army found the place held, by one of its own houses or by another (`heldBy`, holdings
+  // prompt 2; absent on other outcomes and on older reports); "dispersed": its men all left on the road (raids prompt 5).
   outcome: "won" | "driven_off" | "repulsed" | "stood_down" | "turned_back" | "dispersed";
+  heldBy?: "ours" | "another";
   reason: string | null;
   line: string | null;
   // The place, as the server has always stored it (optional: an older client type left them out).
@@ -1934,8 +1936,8 @@ export type MapActReport = {
   destination: string;
   ships: Record<string, number>;
   shipLabels?: Record<string, string>; // display names from ships.json by ship id
-  // "turned_back": the place was its own house's, or another house's for an attack, when the party
-  // arrived; "dispersed": its men all left the roster on the road. Neither fought.
+  // "turned_back": the place was its own house's, or another house's for an attack or a raid (holdings
+  // prompt 2), when the party arrived; "dispersed": its men all left the roster on the road. Neither fought.
   winner: "attacker" | "defender" | "stand" | "repulsed" | "turned_back" | "dispersed" | null;
   rounds: number;
   attacker: { rows: { id: string; unitId: string; label: string; icon: string; start: number; end: number; broke: boolean }[]; losses: number };

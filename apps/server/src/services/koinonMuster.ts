@@ -38,7 +38,7 @@ import {
 import { drawSupplies, fleetInStock, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, moraleBonusFor, sailHulls, type UnitRow } from "./barracks.js";
 import { applyComposureDelta } from "./composure.js";
 import { settleAll, type ActingContext } from "./buildings.js";
-import { creditDrachmae, creditGood, holderOf, listHoldings } from "./holdings.js";
+import { creditDrachmae, creditGood, holderOf, listHoldings, listWorldHoldings } from "./holdings.js";
 import { getKoinonContent, inOwnKoinon, lockKoinon, memberRow, type KoinonError, type KoinonRole, type KoinonRow } from "./koinon.js";
 import { lockPlayer } from "./lock.js";
 import { describeForce, resolveMarch, selectForce, spoilLabel, splitRows, writeIntel } from "./mapActions.js";
@@ -125,21 +125,33 @@ export const musterTargetName = (m: Pick<MusterRow, "regionId" | "townId">) => p
 export const musterGatherName = (m: Pick<MusterRow, "gatherId" | "gatherRegionId">) => placeName(m.gatherId, m.gatherId === m.gatherRegionId ? null : m.gatherId);
 
 // The target rules are `act`'s, with its sentences: a town, or a townless land
-// region; never fog, never Massalia's own.
-async function musterTarget(input: { regionId?: unknown; townId?: unknown }): Promise<KoinonError | { regionId: string; townId: string | null }> {
+// region; never fog, never Massalia's own, and never a place a house holds
+// (holdings prompt 2): the caller's own holding answers "You hold this …", any
+// other house's "Another house holds this …", as a raid is refused.
+async function musterTarget(input: { regionId?: unknown; townId?: unknown }, ctx: ActingContext): Promise<KoinonError | { regionId: string; townId: string | null }> {
   const topology = getTopology();
   const home = await homeRegions(topology);
+  const heldRefusal = async (regionId: string, townId: string) => {
+    const holder = await holderOf(db, ctx.worldId, regionId, townId);
+    if (holder === null) return null;
+    const place = townId ? "town" : "land";
+    return holder === ctx.playerId ? fail(409, `You hold this ${place}.`) : fail(409, `Another house holds this ${place}.`);
+  };
   if (input.townId !== undefined && input.townId !== null) {
     const regionId = typeof input.townId === "string" ? topology.townRegion.get(input.townId) : undefined;
     if (!regionId) return fail(404, "No such town.");
     const townId = input.townId as string;
     if (regionId === topology.massaliaRegion || (await townContentOwner(townId)) === HOME_POLITY_ID || home.has(regionId)) return fail(409, "Massalia does not act against her own.");
+    const held = await heldRefusal(regionId, townId);
+    if (held) return held;
     return { regionId, townId };
   }
   if (typeof input.regionId !== "string" || !topology.land.has(input.regionId)) return fail(404, "No such region.");
   const regionId = input.regionId;
   if (regionId === topology.massaliaRegion || home.has(regionId)) return fail(409, "Massalia does not act against her own.");
   if ([...topology.townRegion.values()].some((r) => r === regionId)) return fail(409, "This land answers to its towns: choose one.");
+  const held = await heldRefusal(regionId, "");
+  if (held) return held;
   return { regionId, townId: null };
 }
 
@@ -195,7 +207,7 @@ export async function openMuster(ctx: ActingContext, input: OpenMusterInput, now
   const c = getKoinonContent();
   const gather = await gatherPlace(input.gatherId);
   if (!gather) return fail(400, "Choose a gathering place on Massalia's own ground.");
-  const target = await musterTarget(input);
+  const target = await musterTarget(input, ctx);
   if ("ok" in target) return target;
   const launch = musterLaunch(now.getTime(), input.leadMinutes, ctx.worldStartedMs, c);
   if (!launch.ok) {
@@ -387,8 +399,11 @@ export async function musterTargets(ctx: ActingContext, gatherId: unknown, now: 
   const topology = getTopology();
   const home = await homeRegions(topology);
   const from = distancesFrom(topology, gather.regionId);
+  // A place any house holds is no target (holdings prompt 2): the call would refuse it.
+  const heldPlaces = new Set((await listWorldHoldings(db, ctx.worldId)).map((h) => h.townId || h.regionId));
   const targets: MusterTargetView[] = [];
   const consider = async (regionId: string, townId: string | null) => {
+    if (heldPlaces.has(townId ?? regionId)) return;
     const steps = stepsTo(topology, from, regionId);
     if (!reachableInPrinciple(steps)) return;
     const route = routeFor("raid", steps);
@@ -635,9 +650,12 @@ export async function unseenMuster(exec: Exec, playerId: string, worldId: string
 export type MusterPart = { playerId: string; name: string; men: number; lost: number; hulls: number; seats: number; shares: number; drachmae: number; grain: number; spoil: number };
 // The report stored on the muster and shown to every member as the last muster.
 export type MusterReport = {
-  // "turned_back": the army found the place held by one of its own houses when
-  // it arrived; "dispersed": its men all left the roster on the road (raids prompt 5).
+  // "turned_back": the army found the place held when it arrived, by one of its
+  // own houses or by another (`heldBy`, holdings prompt 2; absent on every other
+  // outcome and on a report stored before); "dispersed": its men all left the
+  // roster on the road (raids prompt 5).
   outcome: "won" | "driven_off" | "repulsed" | "stood_down" | "turned_back" | "dispersed";
+  heldBy?: "ours" | "another";
   reason: string | null;
   line: string | null;
   regionId: string;
@@ -973,6 +991,7 @@ async function arriveMuster(tx: DbTx, due: MusterRow, now: Date): Promise<Resolv
   let grainOf: Record<string, number> = {};
   let spoilOf: Record<string, number> = {};
   let outcome: MusterReport["outcome"];
+  let heldBy: MusterReport["heldBy"];
   let killed = 0;
   let rounds = 0;
   let defender: MusterReport["defender"] = null;
@@ -989,9 +1008,12 @@ async function arriveMuster(tx: DbTx, due: MusterRow, now: Date): Promise<Resolv
     // 5. No army left: it broke up on the road. No fight, nobody comes home.
     outcome = "dispersed";
     survivors = rows;
-  } else if (holder !== null && participantIds.includes(holder)) {
-    // 6. The place is one of our own houses' now: the army turns back whole.
+  } else if (holder !== null) {
+    // 6. The place is held now, by one of our own houses or by another (holdings
+    // prompt 2): the army turns back whole. A muster is a raid, and a raid on a
+    // holding is refused.
     outcome = "turned_back";
+    heldBy = participantIds.includes(holder) ? "ours" : "another";
   } else {
     // 7. By sea against a town: the pooled naval power must match its fleet as
     // it stands at the arrival (ruling 3); with less, the landing is repulsed.
@@ -1118,8 +1140,9 @@ async function arriveMuster(tx: DbTx, due: MusterRow, now: Date): Promise<Resolv
   const report: MusterReport = {
     ...blank,
     outcome,
+    ...(heldBy ? { heldBy } : {}),
     reason: null,
-    line: renderMusterReportLine({ ...place, outcome, men: force.men, killed, lost, plunder }),
+    line: renderMusterReportLine({ ...place, outcome, heldBy, men: force.men, killed, lost, plunder }),
     homeAt: home.length > 0 ? homeAt.toISOString() : null,
     rounds,
     men: force.men,

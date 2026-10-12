@@ -141,12 +141,14 @@ export function renderMusterLine(p: MusterChronicle): string {
 
 // The koinon's own line for a marched muster, on the Koinon tab's last-muster
 // report: the whole army's outcome, where renderMusterLine tells one member's.
-// "turned_back": the army found the place held by one of its own houses when
-// it arrived; "dispersed": its men all left the roster on the road (raids prompt 5).
-export type MusterReportLine = { regionId: string; regionName?: string; townId?: string | null; townName?: string | null; outcome: "won" | "driven_off" | "repulsed" | "turned_back" | "dispersed"; men: number; killed: number; lost: number; plunder: PlunderPayload | null };
+// "turned_back": the army found the place held when it arrived, by one of its
+// own houses (`heldBy` "ours", the default an old report reads) or by another
+// house (holdings prompt 2); "dispersed": its men all left the roster on the
+// road (raids prompt 5).
+export type MusterReportLine = { regionId: string; regionName?: string; townId?: string | null; townName?: string | null; outcome: "won" | "driven_off" | "repulsed" | "turned_back" | "dispersed"; heldBy?: "ours" | "another"; men: number; killed: number; lost: number; plunder: PlunderPayload | null };
 export function renderMusterReportLine(p: MusterReportLine): string {
   const place = p.townName ?? p.regionName ?? p.regionId;
-  if (p.outcome === "turned_back") return `Found ${place} held by one of our own and turned back.`;
+  if (p.outcome === "turned_back") return p.heldBy === "another" ? `Found ${place} held by another house and turned back.` : `Found ${place} held by one of our own and turned back.`;
   if (p.outcome === "dispersed") return `The army sent to ${place} broke up on the road.`;
   if (p.outcome === "repulsed") return `Sailed against ${place} and were driven off by its fleet before landing.`;
   const isTown = p.townId !== undefined && p.townId !== null;
