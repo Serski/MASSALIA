@@ -56,14 +56,21 @@ const PROJECTS: GovernmentProjectView[] = [
   { cityId: "olbia", polis: "Olbia", buildingId: "port", title: "The Port of Olbia", status: "built", completesAt: "2026-10-01T00:00:00.000Z", completesLabel: "Autumn, 299 BC" },
 ];
 // `projects: null` leaves the field out, as an old server would.
-const member = (seats: Extract<GovernmentView, { member: true }>["seats"], league: AgendaScopeView, projects: GovernmentProjectView[] | null = PROJECTS, festival?: AgendaScopeView): GovernmentView => ({
+const member = (seats: Extract<GovernmentView, { member: true }>["seats"], league: AgendaScopeView, projects: GovernmentProjectView[] | null = PROJECTS, festival?: AgendaScopeView, war?: AgendaScopeView): GovernmentView => ({
   member: true,
   seats,
   treasury: { balance: BALANCE, taxPerSeason: 910, ledger: LEDGER },
   ...(projects ? { projects } : {}),
   league,
   ...(festival ? { festival } : {}),
+  ...(war ? { war } : {}),
 });
+// The war motion's docket (government prompt 4).
+const WAR_EFFECTS = ["Raids on the enemy's land +50% plunder", "Peace after 2 years, at Hostile"];
+const WARS = [
+  { id: "war:cadurci:y1", title: "War on the Cadurci", description: "The League takes up arms against the Cadurci. Every raid on their land becomes an act of war, and pays like one.", cost: 2000, partyLean: "palaioi", effects: WAR_EFFECTS },
+  { id: "war:carthage:y1", title: "War on Carthage", description: "The League takes up arms against Carthage. Every raid on their land becomes an act of war, and pays like one.", cost: 2000, partyLean: "palaioi", effects: WAR_EFFECTS },
+];
 // The festival motion's docket (government prompt 3).
 const FESTIVALS = [
   { id: "festival:dionysia:y1", title: "A Dionysia for 299 BC", description: "Wine and masks.", cost: 500, partyLean: "independent", effects: ["Hetairai and Philosophers +10 dr a season for the year"] },
@@ -220,6 +227,44 @@ describe("the Government tab", () => {
     const again = await mount({ member: false }, drafting);
     expect(again.container.querySelectorAll(".agenda-card")).toHaveLength(1);
     expect(again.container.textContent).not.toContain("The festival of the coming year");
+  });
+
+  // The war motion (government prompt 4).
+  it("an Archon sees the war docket under its own heading, each war with what it does if it passes, its cost and its lean", async () => {
+    const draft = vi.spyOn(api, "draftAgenda").mockResolvedValue({ ok: true });
+    const war = scope("war", { cards: WARS, youMayDraft: true, treasury: { owner: "league", balance: BALANCE, ledger: [] } });
+    const { container } = await mount(member([{ office: "archon", side: "palaioi" }], scope("league", { phase: "voting" }), PROJECTS, undefined, war));
+    fireEvent.click(container.querySelectorAll<HTMLButtonElement>(".cs-tab")[1]!);
+    const kickers = [...container.querySelectorAll(".agenda-kicker")].map((k) => k.textContent);
+    expect(kickers).toEqual(["The League agenda · voting", "The war motion · drafting"]);
+    const docket = [...container.querySelectorAll(".agenda-card")][1]!;
+    expect([...docket.querySelectorAll(".agenda-choice .dashboard-label")].map((l) => l.textContent)).toEqual(["War on the Cadurci", "War on Carthage"]);
+    expect([...docket.querySelectorAll(".agenda-flavor")].map((l) => l.textContent)).toEqual(WARS.map((w) => w.description));
+    expect([...docket.querySelectorAll(".agenda-effects")].map((l) => l.textContent)).toEqual(WARS.map(() => "If it passes: Raids on the enemy's land +50% plunder · Peace after 2 years, at Hostile"));
+    expect([...docket.querySelectorAll(".agenda-choice")].map((c) => [...c.querySelectorAll(".cost-chip")].map((chip) => chip.textContent))).toEqual(WARS.map(() => ["Palaioi lean", "2,000 dr."]));
+    // The books are the Government tab's own: the war card carries no treasury.
+    expect(docket.querySelector(".treasury-card")).toBeNull();
+    const buttons = [...docket.querySelectorAll<HTMLButtonElement>(".event-choice-button")];
+    expect(buttons).toHaveLength(2);
+    await act(async () => { fireEvent.click(buttons[1]!); });
+    expect(draft).toHaveBeenCalledWith("war", "war:carthage:y1");
+  });
+
+  it("a citizen sees the war before the chamber while it is voting, and nothing of it while drafting", async () => {
+    const voting: AgendaView = { ...agendaView, war: scope("war", { phase: "voting", cards: [WARS[1]!], draftedCardId: WARS[1]!.id }) };
+    const { container } = await mount({ member: false }, voting);
+    const cards = [...container.querySelectorAll(".agenda-card")];
+    expect(cards).toHaveLength(2);
+    expect(cards[1]!.querySelector(".agenda-kicker")!.textContent).toBe("The war motion · voting");
+    expect(cards[1]!.querySelector("h3")!.textContent).toBe(`"War on Carthage" is before the chamber.`);
+    expect(cards[1]!.querySelector(".agenda-effects")!.textContent).toBe("If it passes: Raids on the enemy's land +50% plunder · Peace after 2 years, at Hostile");
+    expect(cards[1]!.querySelector(".treasury-card")).toBeNull();
+    cleanup();
+    vi.restoreAllMocks();
+    const drafting: AgendaView = { ...agendaView, war: scope("war", { phase: "drafting", cards: [] }) };
+    const again = await mount({ member: false }, drafting);
+    expect(again.container.querySelectorAll(".agenda-card")).toHaveLength(1);
+    expect(again.container.textContent).not.toContain("The war motion");
   });
 
   it("with no measure in session the Council's League card names when the next docket opens, or says nothing more without the field", async () => {

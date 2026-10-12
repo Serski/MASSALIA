@@ -120,7 +120,7 @@ function signedOpinion(n: number): string {
 function FactionStatusBadges({ faction }: { faction: FactionView }) {
   return (
     <>
-      {faction.atWar ? <StatusBadge label="⚔ War" title="At war with Massalia" color="var(--dash-bad)" /> : null}
+      {faction.atWar ? <StatusBadge label={faction.warThroughLabel ? `⚔ War through ${faction.warThroughLabel}` : "⚔ War"} title="At war with Massalia" color="var(--dash-bad)" /> : null}
       {faction.allied ? <StatusBadge label="🤝 Allied" title="Allied with Massalia" color="var(--dash-good)" /> : null}
       {faction.vassal ? <StatusBadge label="⛓ Vassal" title="Vassal of Massalia" color="var(--dash-gold-bright)" /> : null}
     </>

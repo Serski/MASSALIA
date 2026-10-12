@@ -37,7 +37,8 @@ export function buildingsLine(buildings: CityView["buildings"]): string {
   return [...built, ...underWay].join(" · ");
 }
 
-// The League's plans (government prompt 3b): the muted lines of the three cards.
+// The League's plans (government prompt 3b): the muted lines of the three cards,
+// and of the war docket's (government prompt 4).
 const worksNoteStyle: CSSProperties = { margin: "0 0 8px", color: "var(--dash-stone-dim)", fontSize: "0.85em" };
 const worksItemStyle: CSSProperties = { padding: "7px 4px", borderBottom: "1px solid var(--dash-line)" };
 const worksFactsStyle: CSSProperties = { margin: "2px 0 4px", color: "var(--dash-stone-dim)", fontSize: "0.85em" };
@@ -59,6 +60,7 @@ function LeagueWorks({ works }: { works: LeagueWorksView }) {
     else byCity.push({ cityId: item.cityId, polis: item.polis, names: [item.name] });
   }
   const f = works.festivals;
+  const wars = works.wars;
   return (
     <>
       <DashboardCard className="works-buildings">
@@ -109,6 +111,29 @@ function LeagueWorks({ works }: { works: LeagueWorksView }) {
           ))
         )}
       </DashboardCard>
+      {wars ? (
+        <DashboardCard className="works-wars">
+          <div className="panel-label">The war docket</div>
+          <p className="works-note" style={worksNoteStyle}>
+            {wars.drafting ? "Open now. The Archons choose one this season; the chamber votes next season." : `Opens ${wars.opensLabel}. Shown as it would open today; a raid can sour a nation.`}
+          </p>
+          {wars.items.length === 0 ? (
+            <p className="works-note" style={worksNoteStyle}>No nation can go on it today.</p>
+          ) : (
+            wars.items.map((item) => (
+              <div key={item.id} className="works-row" style={worksRowStyle}>
+                <span style={{ color: "var(--dash-parchment)", fontWeight: 600 }}>{item.name}</span>
+                <span>{item.bandLabel}</span>
+              </div>
+            ))
+          )}
+          {wars.atWar.map((w) => (
+            <p key={w.factionId} className="works-note works-at-war" style={{ ...worksNoteStyle, margin: "8px 0 0" }}>
+              At war with {w.name} through {w.throughLabel}
+            </p>
+          ))}
+        </DashboardCard>
+      ) : null}
     </>
   );
 }

@@ -133,9 +133,50 @@ describe("the League's plans on the Cities tab", () => {
     expect(texts(container, ".works-festivals .works-note")).toEqual(["Opens Summer, 294 BC, for the year 293 BC. Shown as it would open today.", "No festival can go on it today."]);
   });
 
+  // The war docket (government prompt 4): a fourth card, after the festival docket.
+  const wars = (over: Partial<NonNullable<LeagueWorksView["wars"]>> = {}): NonNullable<LeagueWorksView["wars"]> => ({
+    opensAt: "2026-10-14T00:00:00.000Z",
+    opensLabel: "Spring, 293 BC",
+    drafting: false,
+    items: [
+      { id: "war:cadurci:y7", factionId: "cadurci", name: "Cadurci", bandLabel: "Unfriendly" },
+      { id: "war:carthage:y7", factionId: "carthage", name: "Carthage", bandLabel: "Hostile" },
+    ],
+    atWar: [],
+    ...over,
+  });
+
+  it("the war docket comes last: when it opens, each nation with its band, and the wars under way", async () => {
+    const { container } = await mount(works({ wars: wars({ atWar: [{ factionId: "volcae", name: "Volcae", throughLabel: "Summer, 291 BC" }] }) }));
+    const cards = [...container.querySelectorAll<HTMLElement>(".works-buildings, .works-projects, .works-festivals, .works-wars")];
+    expect(cards.map((c) => c.className.replace("dashboard-card ", ""))).toEqual(["works-buildings", "works-projects", "works-festivals", "works-wars"]);
+    const w = cards[3]!;
+    expect(texts(w, ".panel-label")).toEqual(["The war docket"]);
+    expect(texts(w, ".works-note")).toEqual(["Opens Spring, 293 BC. Shown as it would open today; a raid can sour a nation.", "At war with Volcae through Summer, 291 BC"]);
+    expect(texts(w, ".works-row")).toEqual(["CadurciUnfriendly", "CarthageHostile"]);
+    expect([...w.querySelectorAll(".works-row")].map((row) => [...row.querySelectorAll("span")].map((span) => span.textContent))).toEqual([["Cadurci", "Unfriendly"], ["Carthage", "Hostile"]]);
+  });
+
+  it("while the war docket is open its note says so, and an empty one says no nation can go on it today", async () => {
+    const open = await mount(works({ wars: wars({ drafting: true }) }));
+    expect(texts(open.container, ".works-wars .works-note")).toEqual(["Open now. The Archons choose one this season; the chamber votes next season."]);
+    cleanup();
+    vi.restoreAllMocks();
+    const empty = await mount(works({ wars: wars({ items: [] }) }));
+    expect(texts(empty.container, ".works-wars .works-note")).toEqual(["Opens Spring, 293 BC. Shown as it would open today; a raid can sour a nation.", "No nation can go on it today."]);
+    expect(empty.container.querySelectorAll(".works-wars .works-row")).toHaveLength(0);
+  });
+
+  it("works without wars, as an old server sends it, shows the three cards and no war docket", async () => {
+    const { container } = await mount(works());
+    expect(container.querySelectorAll(".works-buildings, .works-projects, .works-festivals")).toHaveLength(3);
+    expect(container.querySelector(".works-wars")).toBeNull();
+    expect(container.textContent).not.toContain("The war docket");
+  });
+
   it("a payload without works shows none of the cards and the cities as before", async () => {
     const { container } = await mount();
-    expect(container.querySelector(".works-buildings, .works-projects, .works-festivals")).toBeNull();
+    expect(container.querySelector(".works-buildings, .works-projects, .works-festivals, .works-wars")).toBeNull();
     expect([...container.querySelectorAll(".atlas-row")].map((r) => r.querySelector("span")!.textContent)).toEqual(["Massalia", "Nikaia", "Olbia"]);
   });
 });

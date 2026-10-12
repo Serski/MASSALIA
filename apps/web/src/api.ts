@@ -755,7 +755,8 @@ export type OfficesView = {
 // --- The Agenda & three governments (Politics Prompt 3) ---------------------
 
 // "festival" is the festival motion (government prompt 3): the League's Summer docket of festivals for the coming year.
-export type AgendaScope = "league" | "palaioi" | "dynatoi" | "festival";
+// "war" is the war motion (government prompt 4): the League's Spring docket of wars, voted in Summer.
+export type AgendaScope = "league" | "palaioi" | "dynatoi" | "festival" | "war";
 
 // `group` (the polis) and `seasons` (build time) ride on a League building project (government prompt 2a); a card has neither.
 // `effects` is what a project does when it stands, one line per effect (government prompt 2b); a card has none.
@@ -792,6 +793,8 @@ export type AgendaView = {
   league: AgendaScopeView;
   // The festival motion's public view (government prompt 3). Optional: an old server sends none.
   festival?: AgendaScopeView;
+  // The war motion's public view (government prompt 4). Optional: an old server sends none.
+  war?: AgendaScopeView;
   palaioi: AgendaScopeView;
   dynatoi: AgendaScopeView;
   leaders: PartyLeaderView[];
@@ -814,6 +817,8 @@ export type GovernmentView =
       league: AgendaScopeView;
       // The festival motion's docket (government prompt 3). Optional: an old server sends none.
       festival?: AgendaScopeView;
+      // The war motion's docket (government prompt 4). Optional: an old server sends none.
+      war?: AgendaScopeView;
     };
 
 export type OfficeAppointee = { characterId: string; name: string; houseName: string; party: string };
@@ -869,10 +874,15 @@ export type LeagueWorksBuilding = { id: string; name: string; cost: number; seas
 export type LeagueWorksProjectItem = { id: string; cityId: string; polis: string; buildingId: string; name: string };
 export type LeagueWorksFestivalItem = { id: string; name: string; cost: number; partyLean: string; effects: string[] };
 export type LeagueWorksDocket<Item> = { opensAt: string; opensLabel: string; drafting: boolean; items: Item[] };
+// The war docket (government prompt 4): a nation a war could be put on, with the band of its bar now; and a war under way.
+export type LeagueWorksWarItem = { id: string; factionId: string; name: string; bandLabel: string };
+export type LeagueWorksWarUnderWay = { factionId: string; name: string; throughLabel: string };
 export type LeagueWorksView = {
   buildings: LeagueWorksBuilding[];
   projects: LeagueWorksDocket<LeagueWorksProjectItem>;
   festivals: LeagueWorksDocket<LeagueWorksFestivalItem> & { year: number; yearLabel: string };
+  // Optional: an old server sends none.
+  wars?: LeagueWorksDocket<LeagueWorksWarItem> & { atWar: LeagueWorksWarUnderWay[] };
 };
 
 // `works` is optional: Pages can go live before Railway does, and an old server sends none.
@@ -909,6 +919,8 @@ export type FactionView = {
   bandLabel: string;
   bandValue: number;
   atWar: boolean;
+  // While the League is at war with it (government prompt 4): the game date of the war's last season. Optional: an old server sends none.
+  warThroughLabel?: string | null;
   allied: boolean;
   vassal: boolean;
   // Governance + people (Diplomacy D3). personal ⇒ ruler/heir (+ warChief or null);

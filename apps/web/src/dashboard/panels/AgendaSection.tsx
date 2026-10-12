@@ -42,9 +42,9 @@ export function AgendaScopeSection({ view, onRefresh, treasury = "full" }: { vie
     try { await fn(); setNote(ok); onRefresh(); } catch (err) { setNote(err instanceof ApiError ? err.message : "That could not be done."); } finally { setBusy(false); }
   };
   const drafted = view.cards.find((c) => c.id === view.draftedCardId);
-  const kicker = view.scope === "league" ? "The League agenda" : view.scope === "festival" ? "The festival of the coming year" : `${titleCase(view.scope)} agenda`;
-  // A festival's effects follow its passing; a project's follow its standing.
-  const effectsPrefix = view.scope === "festival" ? "If it passes:" : "When it stands:";
+  const kicker = view.scope === "league" ? "The League agenda" : view.scope === "festival" ? "The festival of the coming year" : view.scope === "war" ? "The war motion" : `${titleCase(view.scope)} agenda`;
+  // A festival's and a war's effects follow its passing; a project's follow its standing.
+  const effectsPrefix = view.scope === "festival" || view.scope === "war" ? "If it passes:" : "When it stands:";
   // The League's docket is building projects grouped by polis (government prompt
   // 2a): consecutive cards with the same `group` share a heading, in docket
   // order. Cards without a group (a party's) form one unheaded run.

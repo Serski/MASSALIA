@@ -699,9 +699,11 @@ function LeagueAgendaSection({ onRefresh }: { onRefresh: () => void }) {
   if (!view) return null;
   // The festival before the chamber (government prompt 3) shows beside the League's
   // card while it is voting; while drafting the docket is the Government's alone.
+  // The war before the chamber (government prompt 4) the same.
   return (
     <>
       <AgendaScopeSection view={view.league} onRefresh={refresh} treasury="amount" />
+      {view.war?.phase === "voting" ? <AgendaScopeSection view={view.war} onRefresh={refresh} treasury="none" /> : null}
       {view.festival?.phase === "voting" ? <AgendaScopeSection view={view.festival} onRefresh={refresh} treasury="none" /> : null}
     </>
   );
