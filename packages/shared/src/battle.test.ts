@@ -124,6 +124,21 @@ describe("raid rules", () => {
     for (const good of battle.raid.spoilGoods) expect(drawn[good], good).toBeGreaterThanOrEqual(80);
   });
 
+  // Government prompt 4: on the land of a nation at war the plunder is multiplied
+  // once more, after the rolls.
+  it("raidPlunder at war: the same rates and the same good as at peace, times the war's multiplier", () => {
+    for (const seed of ["s", "s1", "s2", "s3", "s4"]) {
+      const peace = raidPlunder(battle.raid, 3, true, seed);
+      const atWar = raidPlunder(battle.raid, 3, true, seed, 1.5);
+      // 3 kills × the town's 2 × 1.5 × a whole rate: whole, and exactly half again the peace amounts.
+      expect(atWar).toEqual({ drachmae: peace.drachmae * 1.5, grain: peace.grain * 1.5, spoil: { good: peace.spoil.good, amount: peace.spoil.amount * 1.5 } });
+      for (const amount of [atWar.drachmae, atWar.grain, atWar.spoil.amount]) expect(Number.isInteger(amount)).toBe(true);
+      // A multiplier of 1 pays as before, in a region and at a town.
+      expect(raidPlunder(battle.raid, 3, true, seed, 1)).toEqual(peace);
+      expect(raidPlunder(battle.raid, 4, false, seed, 1)).toEqual(raidPlunder(battle.raid, 4, false, seed));
+    }
+  });
+
   // Raids prompt 6: a per-kill rate may be a range, rolled once per raid.
   it("raidPlunder with ranges: each rate rolls once per raid to a whole number from min to max, untied from the good", () => {
     const ranged = { ...battle.raid, plunderPerKill: { min: 20, max: 30 }, grainPerKill: { min: 1, max: 3 }, spoilPerKill: { min: 1, max: 3 } };

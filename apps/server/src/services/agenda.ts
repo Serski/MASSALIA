@@ -364,7 +364,7 @@ export async function agendaScopeView(actor: CharacterRow, scope: MotionScope, n
     scope,
     phase: (cycle?.phase as AgendaScopeView["phase"]) ?? null,
     gameYear: cycle?.gameYear ?? null,
-    cards: !cycle ? [] : scope === "league" ? leagueCardViews(cycle.cardIds) : scope === "festival" ? festivalCardViews(cycle.cardIds) : cardViews(getAgendaPools()[scope], cycle.cardIds),
+    cards: !cycle ? [] : scope === "league" ? leagueCardViews(cycle.cardIds) : scope === "festival" ? festivalCardViews(cycle.cardIds) : scope === "war" ? [] : cardViews(getAgendaPools()[scope], cycle.cardIds),
     draftedCardId: cycle?.draftedCardId ?? null,
     vetoedCardId: cycle?.vetoedCardId ?? null,
     treasury: await treasuryView(world.id, owner),

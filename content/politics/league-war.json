@@ -1,0 +1,10 @@
+{
+  "cost": 2000,
+  "seasons": 8,
+  "opinionBelow": 0,
+  "peaceOpinion": -100,
+  "plunderMultiplier": 1.5,
+  "partyLean": "palaioi",
+  "title": "War on {nation}",
+  "description": "The League takes up arms against {nation}. Every raid on their land becomes an act of war, and pays like one."
+}

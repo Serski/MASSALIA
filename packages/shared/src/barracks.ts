@@ -473,9 +473,12 @@ export function rollRate(rate: RateOrRange, seedParts: string[]): number {
 // ("plunder", "grain", "spoilRate"; "spoil" picks the good, so the amount is
 // not tied to it), then kills × rate × the town multiplier. The same battle
 // always pays the same. A town pays townPlunderMultiplier times all three.
+// On the land of a nation the League is at war with (government prompt 4) all
+// three are multiplied once more by warMultiplier, after the rolls and beside
+// the town's, before rounding; the rolls themselves do not change.
 export type RaidPlunder = { drachmae: number; grain: number; spoil: { good: string; amount: number } };
-export function raidPlunder(raid: BattleContent["raid"], kills: number, isTown: boolean, seed: string): RaidPlunder {
-  const mult = isTown ? raid.townPlunderMultiplier : 1;
+export function raidPlunder(raid: BattleContent["raid"], kills: number, isTown: boolean, seed: string, warMultiplier = 1): RaidPlunder {
+  const mult = (isTown ? raid.townPlunderMultiplier : 1) * warMultiplier;
   const good = raid.spoilGoods[Math.floor(seededRoll([seed, "spoil"]) * raid.spoilGoods.length)]!;
   const plunderRate = rollRate(raid.plunderPerKill, [seed, "plunder"]);
   const grainRate = rollRate(raid.grainPerKill, [seed, "grain"]);

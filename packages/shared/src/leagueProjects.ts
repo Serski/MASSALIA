@@ -246,7 +246,7 @@ export function leagueStabilityBonus(projects: ProjectTiming[], buildings: Leagu
 }
 
 // "1 season", "2 years" (a multiple of 4 that is 8 or more), else "<n> seasons".
-function spanLabel(seasons: number): string {
+export function spanLabel(seasons: number): string {
   if (seasons === 1) return "1 season";
   if (seasons >= 8 && seasons % 4 === 0) return `${seasons / 4} years`;
   return `${seasons} seasons`;

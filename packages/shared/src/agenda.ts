@@ -20,13 +20,25 @@ export type AgendaScope = (typeof AGENDA_SCOPES)[number];
 // pure rules below take a MotionScope; the card pools and the treasuries keep
 // the three AgendaScopes.
 export const FESTIVAL_SCOPE = "festival" as const;
-export type MotionScope = AgendaScope | typeof FESTIVAL_SCOPE;
-export const MOTION_SCOPES: readonly MotionScope[] = [...AGENDA_SCOPES, FESTIVAL_SCOPE];
+// The war motion (government prompt 4) is a fifth scope, the League's like the
+// festival's: its Archons draft a war on one nation in Spring, its Ephors may
+// veto it, the whole chamber votes in Summer, and it spends from the League's
+// treasury.
+export const WAR_SCOPE = "war" as const;
+export type MotionScope = AgendaScope | typeof FESTIVAL_SCOPE | typeof WAR_SCOPE;
+export const MOTION_SCOPES: readonly MotionScope[] = [...AGENDA_SCOPES, FESTIVAL_SCOPE, WAR_SCOPE];
 
-// The treasury a scope spends from: the League's for the League and the
-// festival motion, a party's own for its agenda.
+// The League's own motions: its projects, its festival and its war. They share
+// the League's officers, cadence and treasury; the other two scopes are a party's.
+export type LeagueMotionScope = "league" | typeof FESTIVAL_SCOPE | typeof WAR_SCOPE;
+export function isLeagueMotion(scope: MotionScope): scope is LeagueMotionScope {
+  return scope === "league" || scope === FESTIVAL_SCOPE || scope === WAR_SCOPE;
+}
+
+// The treasury a scope spends from: the League's for the League's motions, a
+// party's own for its agenda.
 export function treasuryOwnerOf(scope: MotionScope): AgendaScope {
-  return scope === FESTIVAL_SCOPE ? "league" : scope;
+  return isLeagueMotion(scope) ? "league" : scope;
 }
 
 // --- Agenda card content -----------------------------------------------------
@@ -96,6 +108,10 @@ export const agendaConfigSchema = z.object({
   // prompt 3): with 2 it drafts in Summer, votes in Autumn and resolves at the
   // Winter boundary, so the festival year is exactly the coming game year.
   festivalCadenceSeasonOffset: z.number().int().nonnegative(),
+  // Seasons from the year's Winter at which the war motion opens (government
+  // prompt 4): with 1 it drafts in Spring, votes in Summer and resolves at the
+  // Autumn boundary.
+  warCadenceSeasonOffset: z.number().int().nonnegative(),
   vetoesPerEphorPerTerm: z.number().int().nonnegative(),
 });
 export type AgendaConfig = z.infer<typeof agendaConfigSchema>;
@@ -130,12 +146,12 @@ export interface HeldOffice {
 // The office that DRAFTS for a scope: the League's Archons (either side) for the
 // league; the party_archon of a party for that party.
 export function draftScopeOffice(scope: MotionScope): { office: string; side: string | null } {
-  return scope === "league" || scope === FESTIVAL_SCOPE ? { office: "archon", side: null } : { office: "party_archon", side: scope };
+  return isLeagueMotion(scope) ? { office: "archon", side: null } : { office: "party_archon", side: scope };
 }
 // The office that VETOES for a scope: the League's Ephors for the league; the
 // party_ephor of a party for that party.
 export function vetoScopeOffice(scope: MotionScope): { office: string; side: string | null } {
-  return scope === "league" || scope === FESTIVAL_SCOPE ? { office: "ephor", side: null } : { office: "party_ephor", side: scope };
+  return isLeagueMotion(scope) ? { office: "ephor", side: null } : { office: "party_ephor", side: scope };
 }
 
 function holdsOffice(held: HeldOffice[], want: { office: string; side: string | null }): boolean {
@@ -164,7 +180,7 @@ export function canVeto(
 export type AgendaPhase = "drafting" | "voting" | "resolved";
 
 export function isAgendaYear(gameYear: number, scope: MotionScope, cfg: AgendaConfig): boolean {
-  const cadence = scope === "league" || scope === FESTIVAL_SCOPE ? cfg.leagueCadenceGameYears : cfg.partyCadenceGameYears;
+  const cadence = isLeagueMotion(scope) ? cfg.leagueCadenceGameYears : cfg.partyCadenceGameYears;
   return gameYear % cadence === 0;
 }
 
@@ -175,7 +191,7 @@ export interface AgendaCycleSeasons {
 }
 
 export function agendaCycleSeasons(gameYear: number, scope: MotionScope, cfg: AgendaConfig): AgendaCycleSeasons {
-  const offset = scope === "league" ? 0 : scope === FESTIVAL_SCOPE ? cfg.festivalCadenceSeasonOffset : cfg.partyCadenceSeasonOffset;
+  const offset = scope === "league" ? 0 : scope === FESTIVAL_SCOPE ? cfg.festivalCadenceSeasonOffset : scope === WAR_SCOPE ? cfg.warCadenceSeasonOffset : cfg.partyCadenceSeasonOffset;
   const draft = gameYear * SEASONS_PER_YEAR + offset;
   return { draftSeasonIndex: draft, voteSeasonIndex: draft + 1, resolveSeasonIndex: draft + 2 };
 }

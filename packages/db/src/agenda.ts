@@ -20,6 +20,7 @@ import {
   type BallotVote,
   type CalendarConfig,
   type PoliticsConfig,
+  WAR_SCOPE,
 } from "@massalia/shared";
 import { createDb, type DbExec } from "./client.js";
 import { festivalDocketFor, festivalMotionFor } from "./leagueFestivals.js";
@@ -272,6 +273,8 @@ async function recentDraftedIds(worldId: string, scope: AgendaScope, limit = 4):
 // is drawn from its card pool. No backlog: currentAgendaCycle only reports a
 // window that contains `now`.
 export async function openAgendaCycleIfDue(scope: MotionScope, cfg: PoliticsConfig, pools: AgendaPools, now: Date = new Date()): Promise<AgendaCycleRow | null> {
+  // The war motion (government prompt 4) opens no cycle until its docket lands.
+  if (scope === WAR_SCOPE) return null;
   const world = await activeWorld();
   if (!world) return null;
   const live = currentAgendaCycle(gameDate(now.getTime(), world.startedMs).seasonIndex, scope, cfg.agenda);
@@ -368,6 +371,7 @@ export async function advanceAgendaCycles(calendarCfg: CalendarConfig, cfg: Poli
 
   for (const cycle of rows) {
     const scope = cycle.scope as MotionScope;
+    if (scope === WAR_SCOPE) continue; // no war cycle exists until its docket lands
     const seasons = agendaCycleSeasons(cycle.gameYear, scope, cfg.agenda);
     const voteOpensMs = world.startedMs + seasons.voteSeasonIndex * SEASON;
     const resolveMs = world.startedMs + seasons.resolveSeasonIndex * SEASON;

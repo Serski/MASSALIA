@@ -13,6 +13,7 @@ import {
   dues,
   festivalDonationCut,
   isAgendaYear,
+  isLeagueMotion,
   nextAgendaDocket,
   parseAgendaFile,
   parsePoliticsConfig,
@@ -34,6 +35,7 @@ describe("config: agenda/treasury/dues/endorsement blocks parse", () => {
     expect(politics.agenda.leagueCardsPerCycle).toBe(3);
     expect(politics.agenda.vetoesPerEphorPerTerm).toBe(1);
     expect(politics.agenda.festivalCadenceSeasonOffset).toBe(2);
+    expect(politics.agenda.warCadenceSeasonOffset).toBe(1);
     expect(politics.endorsement.swingVotes).toBe(8);
   });
 });
@@ -122,7 +124,7 @@ describe("agenda cadence (season clock, offset, no backlog)", () => {
 });
 
 describe("nextAgendaDocket (government prompt 3b): the docket open now, or the next to open", () => {
-  const next = (season: number, scope: "league" | "festival" | "palaioi", cfg: AgendaConfig = agendaCfg) => {
+  const next = (season: number, scope: "league" | "festival" | "war" | "palaioi", cfg: AgendaConfig = agendaCfg) => {
     const d = nextAgendaDocket(season, scope, cfg);
     return [d.gameYear, d.draftSeasonIndex, d.drafting] as const;
   };
@@ -142,6 +144,12 @@ describe("nextAgendaDocket (government prompt 3b): the docket open now, or the n
     expect(next(3, "festival")).toEqual([1, 6, false]);
     expect(next(27, "festival")).toEqual([7, 30, false]);
     expect(next(0, "palaioi")).toEqual([0, 2, false]);
+  });
+
+  it("the war motion drafts in Spring (government prompt 4)", () => {
+    expect(next(0, "war")).toEqual([0, 1, false]);
+    expect(next(1, "war")).toEqual([0, 1, true]);
+    expect(next(2, "war")).toEqual([1, 5, false]);
   });
 
   it("a cadence of two years skips the years between", () => {
@@ -189,5 +197,27 @@ describe("drawAgendaCards", () => {
   it("falls back to the full pool when too few fresh cards remain", () => {
     const drawn = drawAgendaCards(pool, pool.map((c) => c.id), 3, () => 0);
     expect(drawn).toHaveLength(3);
+  });
+});
+
+describe("the war motion's scope (government prompt 4)", () => {
+  it("drafts in Spring, votes in Summer, resolves at the Autumn boundary, every game year", () => {
+    expect(agendaCycleSeasons(2, "war", agendaCfg)).toEqual({ draftSeasonIndex: 9, voteSeasonIndex: 10, resolveSeasonIndex: 11 });
+    expect(currentAgendaCycle(9, "war", agendaCfg)).toEqual({ gameYear: 2, phase: "drafting" });
+    expect(currentAgendaCycle(10, "war", agendaCfg)).toEqual({ gameYear: 2, phase: "voting" });
+    expect(currentAgendaCycle(11, "war", agendaCfg)).toBeNull();
+    expect(isAgendaYear(3, "war", agendaCfg)).toBe(true);
+  });
+
+  it("the League's Archons draft it, its Ephors veto it, and it spends from the League's treasury", () => {
+    expect(canDraft([{ office: "archon", side: "dynatoi" }], "war")).toBe(true);
+    expect(canDraft([{ office: "party_archon", side: "palaioi" }], "war")).toBe(false);
+    expect(canVeto({ held: [{ office: "ephor", side: "palaioi" }], vetoesUsedThisTerm: 0, phase: "drafting" }, "war", agendaCfg)).toBe(true);
+    expect(canVeto({ held: [{ office: "party_ephor", side: "palaioi" }], vetoesUsedThisTerm: 0, phase: "drafting" }, "war", agendaCfg)).toBe(false);
+    expect(treasuryOwnerOf("war")).toBe("league");
+  });
+
+  it("isLeagueMotion: the League's projects, festival and war; not a party's agenda", () => {
+    expect((["league", "festival", "war", "palaioi", "dynatoi"] as const).map((scope) => isLeagueMotion(scope))).toEqual([true, true, true, false, false]);
   });
 });
