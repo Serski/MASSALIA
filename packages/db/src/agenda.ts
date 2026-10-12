@@ -8,6 +8,9 @@ import {
   dues,
   festivalDonationCut,
   gameDate,
+  isLeagueMotion,
+  OPINION_MIN,
+  opinionBand,
   questionForYear,
   REAL_MS_PER_SEASON,
   SEASONS_PER_YEAR,
@@ -15,6 +18,7 @@ import {
   tallyBallot,
   type AgendaCard,
   type AgendaScope,
+  type LeagueMotionScope,
   type MotionScope,
   type BallotCandidate,
   type BallotVote,
@@ -25,13 +29,16 @@ import {
 import { createDb, type DbExec } from "./client.js";
 import { festivalDocketFor, festivalMotionFor } from "./leagueFestivals.js";
 import { leagueDocketFor, leagueProjectMotion } from "./leagueProjects.js";
+import { loadFactions, loadLeagueWar, warDocketFor, warMotionFor } from "./leagueWars.js";
 import {
   agendaCycles,
   chamberVotes,
   effectLog,
   ephorVetoes,
+  factionRelations,
   leagueFestivals,
   leagueProjects,
+  leagueWars,
   offices,
   oligarchSeats,
   partyEndorsements,
@@ -273,8 +280,6 @@ async function recentDraftedIds(worldId: string, scope: AgendaScope, limit = 4):
 // is drawn from its card pool. No backlog: currentAgendaCycle only reports a
 // window that contains `now`.
 export async function openAgendaCycleIfDue(scope: MotionScope, cfg: PoliticsConfig, pools: AgendaPools, now: Date = new Date()): Promise<AgendaCycleRow | null> {
-  // The war motion (government prompt 4) opens no cycle until its docket lands.
-  if (scope === WAR_SCOPE) return null;
   const world = await activeWorld();
   if (!world) return null;
   const live = currentAgendaCycle(gameDate(now.getTime(), world.startedMs).seasonIndex, scope, cfg.agenda);
@@ -286,13 +291,17 @@ export async function openAgendaCycleIfDue(scope: MotionScope, cfg: PoliticsConf
   const seasons = agendaCycleSeasons(live.gameYear, scope, cfg.agenda);
   const startedMs = world.startedMs;
   // The festival motion's docket (government prompt 3) is the festivals the
-  // COMING year allows and the treasury can afford.
+  // COMING year allows and the treasury can afford. The war motion's (government
+  // prompt 4) is the nations below the bar and not at war, while the treasury
+  // can pay for a war.
   const cardIds =
     scope === "league"
       ? (await leagueDocketFor(world.id)).map((m) => m.id)
       : scope === "festival"
         ? (await festivalDocketFor(world.id, live.gameYear + 1)).map((m) => m.id)
-        : drawAgendaCards(pools[scope], await recentDraftedIds(world.id, scope), cfg.agenda.leagueCardsPerCycle).map((c) => c.id);
+        : scope === WAR_SCOPE
+          ? (await warDocketFor(world.id, live.gameYear)).map((m) => m.id)
+          : drawAgendaCards(pools[scope], await recentDraftedIds(world.id, scope), cfg.agenda.leagueCardsPerCycle).map((c) => c.id);
   const inserted = await db
     .insert(agendaCycles)
     .values({
@@ -371,7 +380,6 @@ export async function advanceAgendaCycles(calendarCfg: CalendarConfig, cfg: Poli
 
   for (const cycle of rows) {
     const scope = cycle.scope as MotionScope;
-    if (scope === WAR_SCOPE) continue; // no war cycle exists until its docket lands
     const seasons = agendaCycleSeasons(cycle.gameYear, scope, cfg.agenda);
     const voteOpensMs = world.startedMs + seasons.voteSeasonIndex * SEASON;
     const resolveMs = world.startedMs + seasons.resolveSeasonIndex * SEASON;
@@ -382,7 +390,17 @@ export async function advanceAgendaCycles(calendarCfg: CalendarConfig, cfg: Poli
       // The League's measure is a building project (government prompt 2a); any
       // other drafted id there (a League card from before) opens the year's
       // question, as when nothing was drafted. A party's measure is its card.
-      const card = !drafted ? null : scope === "league" ? await leagueProjectMotion(drafted) : scope === "festival" ? await festivalMotionFor(drafted) : (pools[scope].find((c) => c.id === drafted) ?? null);
+      // A drafted festival or war goes to the vote as its motion; with nothing
+      // drafted neither opens a vote.
+      const card = !drafted
+        ? null
+        : scope === "league"
+          ? await leagueProjectMotion(drafted)
+          : scope === "festival"
+            ? await festivalMotionFor(drafted)
+            : scope === WAR_SCOPE
+              ? await warMotionFor(drafted)
+              : (pools[scope].find((c) => c.id === drafted) ?? null);
       const closesAt = new Date(world.startedMs + seasons.resolveSeasonIndex * SEASON);
       if (card) {
         await db
@@ -413,7 +431,8 @@ export async function advanceAgendaCycles(calendarCfg: CalendarConfig, cfg: Poli
     // card from before resolve the cycle and write nothing else.
     // The festival motion (government prompt 3) resolves the same way: a passed
     // festival is paid from the League treasury and held through the coming year.
-    if ((scope === "league" || scope === "festival") && cycle.phase === "voting" && now.getTime() >= resolveMs) {
+    // The war motion (government prompt 4) too: a passed war is paid and declared.
+    if (isLeagueMotion(scope) && cycle.phase === "voting" && now.getTime() >= resolveMs) {
       const vote = (await db.select().from(chamberVotes).where(and(eq(chamberVotes.worldId, world.id), eq(chamberVotes.scope, scope), eq(chamberVotes.gameYear, cycle.gameYear))).limit(1))[0];
       if (vote && vote.status === "open") continue;
       const resolved = await resolveLeagueCycle(world.id, scope, cycle, vote ?? null, now);
@@ -423,7 +442,7 @@ export async function advanceAgendaCycles(calendarCfg: CalendarConfig, cfg: Poli
 
     // voting → resolved (a party): the chamber vote has closed (closeDueChamberVotes
     // runs first in the sweep); apply the effect + spend on a passed agenda card.
-    if (scope !== "league" && scope !== "festival" && cycle.phase === "voting" && now.getTime() >= resolveMs) {
+    if (!isLeagueMotion(scope) && cycle.phase === "voting" && now.getTime() >= resolveMs) {
       const vote = (await db.select().from(chamberVotes).where(and(eq(chamberVotes.worldId, world.id), eq(chamberVotes.scope, scope), eq(chamberVotes.gameYear, cycle.gameYear))).limit(1))[0];
       let resolution: AgendaResolution = { scope, gameYear: cycle.gameYear, cardId: cycle.draftedCardId, passed: false, applied: false, spent: 0 };
       if (vote && vote.agendaCardId && vote.status !== "open") {
@@ -451,15 +470,25 @@ export async function advanceAgendaCycles(calendarCfg: CalendarConfig, cfg: Poli
 
 type ChamberVoteRow = typeof chamberVotes.$inferSelect;
 
-// Resolve a League cycle (the project motion or the festival motion) whose vote
-// has closed (or never opened). Claim first; null when another pass already
-// resolved it. A passed project starts the instant the vote closed and stands
-// `seasons` later; a passed festival is held through the coming game year, from
-// the instant the vote closed (the Winter boundary) for four seasons. Either
-// is paid from the League treasury under its row lock, only once its own row
-// is in (ON CONFLICT DO NOTHING RETURNING).
-async function resolveLeagueCycle(worldId: string, scope: "league" | "festival", cycle: AgendaCycleRow, vote: ChamberVoteRow | null, now: Date): Promise<AgendaResolution | null> {
-  const motion = !vote?.agendaCardId ? null : scope === "league" ? await leagueProjectMotion(vote.agendaCardId) : await festivalMotionFor(vote.agendaCardId);
+// Resolve a League cycle (the project motion, the festival motion or the war
+// motion) whose vote has closed (or never opened). Claim first; null when
+// another pass already resolved it. A passed project starts the instant the
+// vote closed and stands `seasons` later; a passed festival is held through the
+// coming game year, from the instant the vote closed (the Winter boundary) for
+// four seasons; a passed war (government prompt 4) starts the instant the vote
+// closed and lasts the war's seasons, the nation's flag set and its bar pinned
+// at the floor. Each is paid from the League treasury under its row lock, only
+// once its own row is in (ON CONFLICT DO NOTHING RETURNING).
+async function resolveLeagueCycle(worldId: string, scope: LeagueMotionScope, cycle: AgendaCycleRow, vote: ChamberVoteRow | null, now: Date): Promise<AgendaResolution | null> {
+  const motion = !vote?.agendaCardId
+    ? null
+    : scope === "league"
+      ? await leagueProjectMotion(vote.agendaCardId)
+      : scope === "festival"
+        ? await festivalMotionFor(vote.agendaCardId)
+        : await warMotionFor(vote.agendaCardId);
+  // The war's length and the nation's content start, read before the transaction.
+  const war = motion && "factionId" in motion ? { def: await loadLeagueWar(), start: (await loadFactions()).find((f) => f.id === motion.factionId)?.start } : null;
   return db.transaction(async (tx) => {
     const claimed = await tx.update(agendaCycles).set({ phase: "resolved" }).where(and(eq(agendaCycles.id, cycle.id), eq(agendaCycles.phase, "voting"))).returning({ id: agendaCycles.id });
     if (claimed.length === 0) return null;
@@ -480,6 +509,27 @@ async function resolveLeagueCycle(worldId: string, scope: "league" | "festival",
         .onConflictDoNothing()
         .returning({ id: leagueProjects.id });
       if (project.length === 0) return resolution; // the pair is already built or under way
+    } else if ("factionId" in motion) {
+      if (!war?.start) return resolution; // a nation the content no longer names
+      const endsAt = new Date(startedAt.getTime() + war.def.seasons * REAL_MS_PER_SEASON);
+      const declared = await tx
+        .insert(leagueWars)
+        .values({ worldId, factionId: motion.factionId, gameYear: motion.year, cost: motion.cost, agendaCycleId: cycle.id, startsAt: startedAt, endsAt })
+        .onConflictDoNothing()
+        .returning({ id: leagueWars.id });
+      if (declared.length === 0) return resolution; // the year has its war, or the nation is at war already
+      // The nation's row, seeded from content when no one has read or moved it
+      // yet, then the flag set and the bar pinned at the floor for the war.
+      await tx
+        .insert(factionRelations)
+        .values({ worldId, factionId: motion.factionId, stance: opinionBand(war.start.opinion).id, opinion: war.start.opinion, atWar: war.start.atWar, allied: war.start.allied, vassal: war.start.vassal })
+        .onConflictDoNothing();
+      const pinned = await tx
+        .update(factionRelations)
+        .set({ atWar: true, opinion: OPINION_MIN, stance: opinionBand(OPINION_MIN).id })
+        .where(and(eq(factionRelations.worldId, worldId), eq(factionRelations.factionId, motion.factionId)))
+        .returning({ id: factionRelations.id });
+      if (pinned.length !== 1) throw new Error(`war on ${motion.factionId} touched ${pinned.length} faction rows`);
     } else {
       const endsAt = new Date(startedAt.getTime() + SEASONS_PER_YEAR * REAL_MS_PER_SEASON);
       const festival = await tx

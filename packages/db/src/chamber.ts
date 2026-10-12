@@ -56,9 +56,10 @@ export async function ensureChamberSeats(worldId: string, chamber: ChamberConfig
 
 // Every open chamber vote of the active world (regardless of closes_at — callers
 // run closeDueChamberVotes first to settle an overdue one), ordered league,
-// festival, palaioi, dynatoi, then by opens_at. In an Autumn the festival vote
-// and the party votes are open together (government prompt 3).
-const SCOPE_ORDER: Record<string, number> = { league: 0, festival: 1, palaioi: 2, dynatoi: 3 };
+// war, festival, palaioi, dynatoi, then by opens_at. In an Autumn the festival
+// vote and the party votes are open together (government prompt 3); the war
+// vote (government prompt 4) is a Summer's.
+const SCOPE_ORDER: Record<string, number> = { league: 0, war: 1, festival: 2, palaioi: 3, dynatoi: 4 };
 export async function openChamberVotes(): Promise<ChamberVoteRow[]> {
   const world = await activeWorld();
   if (!world) return [];

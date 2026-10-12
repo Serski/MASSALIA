@@ -62,7 +62,7 @@ suite("Agenda & three governments (integration)", () => {
   });
 
   beforeEach(async () => {
-    await db.execute(sql`TRUNCATE TABLE league_festivals, league_projects, league_cities, party_endorsements, ephor_vetoes, agenda_cycles, treasury_ledger, treasuries,
+    await db.execute(sql`TRUNCATE TABLE league_wars, faction_relations, league_festivals, league_projects, league_cities, party_endorsements, ephor_vetoes, agenda_cycles, treasury_ledger, treasuries,
       election_votes, election_candidates, elections, office_history, offices, chamber_ballots, chamber_votes,
       oligarch_seats, party_favor, effect_log, character_traits, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
     await db.insert(m.dbPkg.houses).values({ slug: "test-house", name: "House Test", initial: "T", alignment: "c", stance: "s", motto: "m", patron: "p", crest: "c" }).onConflictDoNothing();
@@ -289,6 +289,115 @@ suite("Agenda & three governments (integration)", () => {
     expect(again.resolved).toEqual([]);
     expect(await festivalsHeld()).toHaveLength(1);
     expect(await agendaLedger()).toHaveLength(1);
+  });
+
+  // --- The war motion (government prompt 4) --------------------------------------
+  // Each Spring the Archons put a war on one nation to the chamber; passed, it is
+  // paid from the League treasury, the nation's flag is set and its bar pinned at
+  // −200 for 8 seasons, and then peace comes by itself at −100.
+  const warVote = async () => (await db.select().from(m.dbPkg.chamberVotes).where(and(eq(m.dbPkg.chamberVotes.worldId, worldId), eq(m.dbPkg.chamberVotes.scope, "war"))).limit(1))[0];
+  const wars = () => db.select().from(m.dbPkg.leagueWars).where(eq(m.dbPkg.leagueWars.worldId, worldId));
+  const relation = async (factionId: string) =>
+    (await db.select().from(m.dbPkg.factionRelations).where(and(eq(m.dbPkg.factionRelations.worldId, worldId), eq(m.dbPkg.factionRelations.factionId, factionId))).limit(1))[0];
+
+  it("runs a war cycle: the Spring docket, draft → veto → re-draft → pass → pay and declare, and peace by itself 8 seasons on", async () => {
+    const archon = await character("archon", "palaioi");
+    const ephor = await character("ephor", "palaioi", { militia: 5 });
+    const voter = await character("voter", "palaioi");
+    await setOffice("archon", "palaioi", archon);
+    await setOffice("ephor", "palaioi", ephor);
+    await m.dbPkg.creditTreasury(worldId, "league", 5000, "seed", at(9));
+    // Year 2's Spring is season 9: the docket is the six nations below 0 at their content starts.
+    const cyc = (await m.dbPkg.openAgendaCycleIfDue("war", cfg, pools, at(9)))!;
+    expect(cyc.phase).toBe("drafting");
+    expect(cyc.cardIds).toEqual(["war:cadurci:y2", "war:volcae:y2", "war:allobroges:y2", "war:saluvii:y2", "war:tarusates:y2", "war:carthage:y2"]);
+
+    await m.dbPkg.setDraftedCard(cyc.id, "war:volcae:y2");
+    // The veto is the League's one per term, recorded under the League scope (ruling 1).
+    expect(await m.dbPkg.setVeto(worldId, cyc.id, ephor, "league", 2)).toBe(true);
+    expect(await m.dbPkg.vetoesUsedThisTerm(ephor, "league", 2)).toBe(1);
+    await m.dbPkg.setDraftedCard(cyc.id, "war:carthage:y2");
+
+    await m.dbPkg.advanceAgendaCycles(calendar, cfg, pools, at(10)); // Summer: the chamber vote opens
+    const vote = (await warVote())!;
+    expect(vote.agendaCardId).toBe("war:carthage:y2");
+    expect(vote.title).toBe("War on Carthage");
+    expect(vote.description).toBe("The League takes up arms against Carthage. Every raid on their land becomes an act of war, and pays like one.");
+    expect(vote.leans).toEqual({ palaioi: "yes", dynatoi: "no", independent: "no" });
+    await ballot(vote.id, voter, "yes");
+    const balBefore = await m.dbPkg.treasuryBalance(worldId, "league");
+    // Nothing is declared before the vote closes: Carthage has no row yet.
+    expect(await relation("carthage")).toBeUndefined();
+
+    await m.dbPkg.closeDueChamberVotes(cfg, at(11)); // the Autumn boundary
+    const adv = await m.dbPkg.advanceAgendaCycles(calendar, cfg, pools, at(11));
+    expect(adv.resolved).toEqual([{ scope: "war", gameYear: 2, cardId: "war:carthage:y2", passed: true, applied: true, spent: 2000 }]);
+    expect(balBefore - (await m.dbPkg.treasuryBalance(worldId, "league"))).toBe(2000);
+    expect((await agendaLedger()).map((l) => [l.reason, l.delta])).toEqual([["agenda:war:carthage:y2", -2000]]);
+
+    const cycle = (await m.dbPkg.getAgendaCycle(worldId, "war", 2))!;
+    expect(cycle.phase).toBe("resolved");
+    const declared = await wars();
+    expect(declared).toHaveLength(1);
+    expect(declared[0]).toMatchObject({ factionId: "carthage", gameYear: 2, cost: 2000, agendaCycleId: cycle.id, endedAt: null });
+    expect(declared[0]!.startsAt.getTime()).toBe(T0 + 11 * SEASON);
+    expect(declared[0]!.endsAt.getTime()).toBe(T0 + 19 * SEASON);
+    // The nation's row is seeded from content and pinned: at war, at the floor.
+    expect(await relation("carthage")).toMatchObject({ atWar: true, opinion: -200, stance: "hostile" });
+    expect((await m.dbPkg.activeWars(db, worldId)).map((w) => w.factionId)).toEqual(["carthage"]);
+    // A nation at war is off the next docket.
+    expect((await m.dbPkg.warDocketFor(worldId, 3)).map((w) => w.factionId)).toEqual(["cadurci", "volcae", "allobroges", "saluvii", "tarusates"]);
+
+    // A second advance writes nothing more.
+    const again = await m.dbPkg.advanceAgendaCycles(calendar, cfg, pools, at(11));
+    expect(again.resolved).toEqual([]);
+    expect(await wars()).toHaveLength(1);
+    expect(await agendaLedger()).toHaveLength(1);
+    expect(balBefore - (await m.dbPkg.treasuryBalance(worldId, "league"))).toBe(2000);
+
+    // Peace: nothing in the war's last season, then once at the boundary, then nothing.
+    expect(await m.dbPkg.endLeagueWars(at(18))).toEqual([]);
+    expect(await relation("carthage")).toMatchObject({ atWar: true, opinion: -200 });
+    const ended = await m.dbPkg.endLeagueWars(at(19));
+    expect(ended.map((w) => w.factionId)).toEqual(["carthage"]);
+    expect((await wars())[0]!.endedAt!.getTime()).toBe(T0 + 19 * SEASON);
+    expect(await relation("carthage")).toMatchObject({ atWar: false, opinion: -100, stance: "hostile" });
+    expect(await m.dbPkg.activeWars(db, worldId)).toEqual([]);
+    expect(await m.dbPkg.endLeagueWars(at(19))).toEqual([]);
+    expect(await m.dbPkg.endLeagueWars(at(25))).toEqual([]);
+    expect(await relation("carthage")).toMatchObject({ atWar: false, opinion: -100 });
+  });
+
+  it("a war with nothing drafted opens no vote and resolves with nothing written", async () => {
+    await m.dbPkg.creditTreasury(worldId, "league", 5000, "seed", at(9));
+    await m.dbPkg.openAgendaCycleIfDue("war", cfg, pools, at(9));
+    const toVote = await m.dbPkg.advanceAgendaCycles(calendar, cfg, pools, at(10));
+    expect(toVote.toVoting).toEqual([{ scope: "war", cardId: null }]);
+    expect(await warVote()).toBeUndefined();
+    await m.dbPkg.closeDueChamberVotes(cfg, at(11));
+    const adv = await m.dbPkg.advanceAgendaCycles(calendar, cfg, pools, at(11));
+    expect(adv.resolved).toEqual([{ scope: "war", gameYear: 2, cardId: null, passed: false, applied: false, spent: 0 }]);
+    expect(await wars()).toEqual([]);
+    expect(await agendaLedger()).toEqual([]);
+  });
+
+  it("never overspends — a passed war the treasury can no longer cover writes no war, no debit and no ledger row", async () => {
+    const voter = await character("voter", "palaioi");
+    await m.dbPkg.creditTreasury(worldId, "league", 2500, "seed", at(9));
+    const cyc = (await m.dbPkg.openAgendaCycleIfDue("war", cfg, pools, at(9)))!;
+    await m.dbPkg.setDraftedCard(cyc.id, "war:carthage:y2");
+    await m.dbPkg.advanceAgendaCycles(calendar, cfg, pools, at(10));
+    await ballot((await warVote())!.id, voter, "yes");
+    await m.dbPkg.creditTreasury(worldId, "league", -1500, "seed", at(10)); // only 1,000 left
+    const balBefore = await m.dbPkg.treasuryBalance(worldId, "league");
+    await m.dbPkg.closeDueChamberVotes(cfg, at(11));
+    const adv = await m.dbPkg.advanceAgendaCycles(calendar, cfg, pools, at(11));
+    expect(adv.resolved).toEqual([{ scope: "war", gameYear: 2, cardId: "war:carthage:y2", passed: true, applied: false, spent: 0 }]);
+    expect(await m.dbPkg.treasuryBalance(worldId, "league")).toBe(balBefore);
+    expect(await wars()).toEqual([]);
+    expect(await agendaLedger()).toEqual([]);
+    expect(await relation("carthage")).toBeUndefined();
+    expect((await m.dbPkg.getAgendaCycle(worldId, "war", 2))!.phase).toBe("resolved");
   });
 
   it("a party vote counts only that party's members + that party's NPC bloc", async () => {
