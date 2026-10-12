@@ -43,13 +43,13 @@ describe("the holder lines and the Attack grey-out", () => {
     expect(townHeldSuffix(konrad, true)).toBe(" · held by your house");
     expect(townHeldSuffix(null, false)).toBe("");
   });
-  it("withHolder greys Attack alone with the sentence, keeps the rest, and is a no-op without a sentence", () => {
+  it("withHolder greys Attack and Raid with the sentence, keeps Scout, and is a no-op without a sentence", () => {
     const row = { buttons: mapActionButtons({ kind: "town", hasTown: true, ownerId: "saluvii" }), caption: null };
     expect(withHolder(row, null)).toBe(row);
     const greyed = withHolder(row, "Another house holds this town.");
     const by = (type: string) => greyed.buttons.find((b) => b.type === type)!;
     expect(by("attack")).toMatchObject({ enabled: false, title: "Another house holds this town." });
-    expect(by("raid").enabled).toBe(true);
+    expect(by("raid")).toMatchObject({ enabled: false, title: "Another house holds this town." }); // holdings prompt 2
     expect(by("scout").enabled).toBe(true);
     expect(greyed.caption).toBe("Another house holds this town.");
     // A caption the reach already set is kept.
@@ -83,7 +83,7 @@ describe("TownPanel on a held town", () => {
     );
   };
 
-  it("another house's town: the holder line, Massalia's crest, Attack greyed with the sentence, Raid and Scout live", () => {
+  it("another house's town: the holder line, Massalia's crest, Attack and Raid greyed with the sentence, Scout live", () => {
     const { container } = panel(null, konrad);
     expect(container.querySelector(".w2map-held")!.textContent).toBe("Held by House Leonidas · Konrad Curze");
     expect(container.querySelector(".w2map-region-name")!.textContent).toBe("Massalia · Vocontii");
@@ -94,7 +94,8 @@ describe("TownPanel on a held town", () => {
     const by = (label: string) => buttons.find((b) => b.textContent === label)!;
     expect(by("Attack").disabled).toBe(true);
     expect(by("Attack").getAttribute("title")).toBe("Another house holds this town.");
-    expect(by("Raid").disabled).toBe(false);
+    expect(by("Raid").disabled).toBe(true);
+    expect(by("Raid").getAttribute("title")).toBe("Another house holds this town.");
     expect(by("Scout").disabled).toBe(false);
     expect(container.textContent).not.toContain("Massalia does not act against her own");
   });

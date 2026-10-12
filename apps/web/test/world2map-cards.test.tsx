@@ -149,7 +149,7 @@ describe("World2Map region cards", () => {
   });
 
   // Holdings prompt 1: another house's holdings, as every viewer sees them.
-  it("a townless region another house holds is painted Massalia's, reads its holder, and greys Attack with the server's sentence", async () => {
+  it("a townless region another house holds is painted Massalia's, reads its holder, and greys Attack and Raid with the server's sentence", async () => {
     const { view, svg } = await mountMap([], { towns: {}, regions: {}, holdings: { towns: {}, regions: { R046: KONRAD } } });
     expect(MASSALIA_FILLS(svg)).toBe(1);
     await act(async () => tap(svg, "R046"));
@@ -160,7 +160,9 @@ describe("World2Map region cards", () => {
     const by = (label: string) => buttons.find((b) => b.textContent === label)!;
     expect(by("Attack").disabled).toBe(true);
     expect(by("Attack").getAttribute("title")).toBe("Another house holds this land.");
-    expect(by("Raid").disabled).toBe(false);
+    expect(by("Raid").disabled).toBe(true); // holdings prompt 2
+    expect(by("Raid").getAttribute("title")).toBe("Another house holds this land.");
+    expect(by("Scout").disabled).toBe(false);
     expect(card.textContent).not.toContain("Massalia does not act against her own");
   });
 

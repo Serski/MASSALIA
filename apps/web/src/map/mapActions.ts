@@ -40,14 +40,15 @@ export function mapActionButtons(input: { kind: MapTargetKind; hasTown: boolean;
 const REACH_VERDICT: Partial<Record<MapActionType, "attack" | "raid" | "colonise">> = { attack: "attack", raid: "raid", scout: "raid", colonise: "colonise" };
 const ONE_MAN = forceStats([{ spd: 6, space: 1, count: 1 }]);
 
-// Another house's holding (holdings prompt 1): the server refuses an attack
-// there at launch, so the map greys Attack with the server's own sentence and
-// leaves Raid, Scout and Colonise to the matrix and the reach. The sentence is
-// the caption too when the row had none, so a touch screen reads why.
+// Another house's holding (holdings prompts 1 and 2): the server refuses an
+// attack or a raid there at launch, so the map greys Attack and Raid with the
+// server's own sentence and leaves Scout and Colonise to the matrix and the
+// reach. The sentence is the caption too when the row had none, so a touch
+// screen reads why.
 export function withHolder(actions: { buttons: MapActionButton[]; caption: string | null }, sentence: string | null): { buttons: MapActionButton[]; caption: string | null } {
   if (!sentence) return actions;
   return {
-    buttons: actions.buttons.map((b) => (b.type === "attack" ? { ...b, enabled: false, title: sentence } : b)),
+    buttons: actions.buttons.map((b) => (b.type === "attack" || b.type === "raid" ? { ...b, enabled: false, title: sentence } : b)),
     caption: actions.caption ?? sentence,
   };
 }
