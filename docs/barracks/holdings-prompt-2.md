@@ -61,3 +61,12 @@ Rulings for Argiris: <each with the reason, or "none">
 ## Scope fence
 
 Only `mapActions.ts` (the two checks and the arrival condition), `koinonMuster.ts` (the target check, the targets list, the arrival and the report field), `packages/shared/src/muster.ts` (the field and the sentence), `apps/web/src/map/mapActions.ts` (`withHolder`), `apps/web/src/api.ts` (the type and two comments) and the tests named. The scout, the legality matrix, the conquest and tribute rules, the plunder, the Chronicle kinds, the client's muster card and the Barracks reports do not change. No migration.
+
+## STOP 1 rulings (Argiris, 12 Oct 2026), all four kept
+
+1. The muster call refuses the caller's own holding with "You hold this town." / "You hold this land." Keep.
+2. heldBy optional on the muster report. Keep.
+3. Peltasts in the scout test. Keep.
+4. The muster target list follows the server; the 409 reads as other refusals do. Keep.
+
+Append these rulings to this prompt's docs file as its own docs commit, run the gate at HEAD and the audit, then push (plain git push, not at or after 23:00 UTC) and report: remote HEAD, the CI run with Gate and Audit, Pages, Railway server and worker on the new SHA, no migration, API health.
