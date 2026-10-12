@@ -105,6 +105,9 @@ export type FactionView = {
   bandValue: number;
   // Latched status flags (data-only in D1; default false for every faction).
   atWar: boolean;
+  // While the League is at war with it (government prompt 4): the game date of
+  // the war's last season, "Summer, 291 BC"; null otherwise.
+  warThroughLabel: string | null;
   allied: boolean;
   vassal: boolean;
   // Governance + people (Diplomacy D3). personal ⇒ ruler/heir (+ warChief or null);
@@ -236,6 +239,11 @@ export async function leagueRoutes(app: FastifyInstance) {
     const startedMs = startedAt ? new Date(startedAt).getTime() : Date.now();
     const elapsedYears = gameDate(Date.now(), startedMs).yearInGame;
 
+    // The wars under way (government prompt 4): each nation's war runs through
+    // the season before its ends_at.
+    const warRows = await db.execute(sql`SELECT faction_id, ends_at FROM league_wars WHERE world_id = ${worldId} AND ended_at IS NULL`);
+    const warEnds = new Map((warRows.rows as { faction_id: string; ends_at: string | Date }[]).map((r) => [r.faction_id, new Date(r.ends_at).getTime()]));
+
     const nameById = new Map(content.factions.map((cf) => [cf.id, cf.name] as const));
     const refs = (ids: string[]): FactionRefView[] => ids.map((id) => ({ id, name: nameById.get(id) ?? id }));
     const charView = (c: {
@@ -272,6 +280,7 @@ export async function leagueRoutes(app: FastifyInstance) {
         // Reuse the matching stance rung's numeric value for the existing colour scale.
         bandValue: stanceValue(band.id),
         atWar: row?.at_war ?? f.start.atWar,
+        warThroughLabel: (row?.at_war ?? f.start.atWar) && warEnds.has(f.id) ? formatGameDate(gameDate(warEnds.get(f.id)! - 1, startedMs)) : null,
         allied: row?.allied ?? f.start.allied,
         vassal: row?.vassal ?? f.start.vassal,
         governance: f.governance,

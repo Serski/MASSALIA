@@ -13,7 +13,7 @@ async function actingRow(userId: string): Promise<{ row: CharacterRow } | { erro
 }
 
 function parseScope(value: unknown): MotionScope | null {
-  return value === "league" || value === "palaioi" || value === "dynatoi" || value === "festival" ? value : null;
+  return value === "league" || value === "palaioi" || value === "dynatoi" || value === "festival" || value === "war" ? value : null;
 }
 
 export async function agendaRoutes(app: FastifyInstance) {
@@ -34,6 +34,9 @@ export async function agendaRoutes(app: FastifyInstance) {
       // The festival motion (government prompt 3), public like the League's: the
       // festival before the chamber while voting, nothing while drafting.
       festival: publicLeagueView(await agendaScopeView(acting.row, "festival", now)),
+      // The war motion (government prompt 4), public the same way: the war
+      // before the chamber while voting, nothing while drafting.
+      war: publicLeagueView(await agendaScopeView(acting.row, "war", now)),
       palaioi: await agendaScopeView(acting.row, "palaioi", now),
       dynatoi: await agendaScopeView(acting.row, "dynatoi", now),
       leaders: await partyLeadersView(acting.row),

@@ -45,6 +45,7 @@ export type GovernmentView =
       projects: GovernmentProjectView[]; // under way first by completion, then built by completion
       league: AgendaScopeView; // agendaScopeView(actor, "league", now), unfiltered
       festival: AgendaScopeView; // the festival motion (government prompt 3), unfiltered
+      war: AgendaScopeView; // the war motion (government prompt 4), unfiltered
     };
 
 const LEDGER_LINES = 40;
@@ -67,8 +68,9 @@ export async function governmentView(actor: CharacterRow, now: Date = new Date()
   // already in the books it reads next.
   const league = await agendaScopeView(actor, "league", now);
   const festival = await agendaScopeView(actor, "festival", now);
+  const war = await agendaScopeView(actor, "war", now);
   const world = await activeWorld();
-  if (!world) return { member: true, seats, treasury: { balance: 0, taxPerSeason: 0, ledger: [] }, projects: [], league, festival };
+  if (!world) return { member: true, seats, treasury: { balance: 0, taxPerSeason: 0, ledger: [] }, projects: [], league, festival, war };
 
   const cfg = getPoliticsConfig();
   const poleis = await db.select({ population: leagueCities.population }).from(leagueCities).where(eq(leagueCities.worldId, world.id));
@@ -90,6 +92,7 @@ export async function governmentView(actor: CharacterRow, now: Date = new Date()
     projects: await projectViews(world.id, dateLabel),
     league,
     festival,
+    war,
   };
 }
 

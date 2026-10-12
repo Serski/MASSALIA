@@ -1,14 +1,19 @@
-import { festivalDocketFor, getAgendaCycle, leagueDocketFor } from "@massalia/db";
-import { buildingEffects, festivalEffects, festivalMotion, festivalYearLabel, formatGameDate, gameDate, nextAgendaDocket, projectMotion, REAL_MS_PER_SEASON, type MotionScope } from "@massalia/shared";
-import { getLeagueBuildings, getLeagueCities, getLeagueFestivals } from "./agenda.js";
+import { eq } from "drizzle-orm";
+import { activeWars, createDb, factionRelations, festivalDocketFor, getAgendaCycle, leagueDocketFor, warDocketFor } from "@massalia/db";
+import { buildingEffects, festivalEffects, festivalMotion, festivalYearLabel, formatGameDate, gameDate, nextAgendaDocket, opinionBand, projectMotion, REAL_MS_PER_SEASON, warMotion, type MotionScope } from "@massalia/shared";
+import { getLeagueBuildings, getLeagueCities, getLeagueFestivals, getLeagueWar, getWarFactions } from "./agenda.js";
 import { getPoliticsConfig } from "./oligarchy.js";
+
+const db = createDb();
 
 // ---------------------------------------------------------------------------
 // The League's plans, in advance (government prompt 3b): what everyone sees on
 // the Cities tab. The five buildings and what each does; the building docket,
 // when it opens and what would be on it today (or what is on it, while it is
-// open); the festival docket the same, with the year it is for. Nothing here
-// is the Government's: what is drafted and vetoed stays with the agenda views.
+// open); the festival docket the same, with the year it is for; and the war
+// docket (government prompt 4), with each nation's bar now and the wars under
+// way. Nothing here is the Government's: what is drafted and vetoed stays with
+// the agenda views.
 // ---------------------------------------------------------------------------
 
 export interface LeagueWorksBuilding {
@@ -44,10 +49,29 @@ export interface LeagueWorksDocket<Item> {
   items: Item[];
 }
 
+export interface LeagueWorksWarItem {
+  id: string;
+  factionId: string;
+  name: string; // the nation's, as the Diplomacy page shows it
+  bandLabel: string; // the band of its bar now
+}
+
+export interface LeagueWorksWarUnderWay {
+  factionId: string;
+  name: string;
+  throughLabel: string; // the game date of the war's last season
+}
+
 export interface LeagueWorksView {
   buildings: LeagueWorksBuilding[];
   projects: LeagueWorksDocket<LeagueWorksProjectItem>;
   festivals: LeagueWorksDocket<LeagueWorksFestivalItem> & { year: number; yearLabel: string };
+  wars: LeagueWorksDocket<LeagueWorksWarItem> & { atWar: LeagueWorksWarUnderWay[] };
+}
+
+// The game date of a war's last season: its ends_at is the first instant of peace.
+export function warThroughLabel(endsAt: Date, worldStartedMs: number): string {
+  return formatGameDate(gameDate(endsAt.getTime() - 1, worldStartedMs));
 }
 
 const CITY_PLACEHOLDER = "The city";
@@ -91,9 +115,31 @@ export async function leagueWorksView(world: { id: string; startedMs: number }, 
     festivalItems.push({ id: motion.id, name: festival.name, cost: festival.cost, partyLean: festival.partyLean, effects: festivalEffects(festival) });
   }
 
+  // The war docket: the nations a war could be put on, each with the band of
+  // its bar now (its row, else its content start), and the wars under way.
+  const w = docket("war");
+  const nations = getWarFactions();
+  const war = getLeagueWar();
+  const warCycle = w.next.drafting ? await getAgendaCycle(world.id, "war", w.next.gameYear) : null;
+  const warIds = warCycle ? warCycle.cardIds : (await warDocketFor(world.id, w.next.gameYear)).map((m) => m.id);
+  const bars = new Map((await db.select({ factionId: factionRelations.factionId, opinion: factionRelations.opinion }).from(factionRelations).where(eq(factionRelations.worldId, world.id))).map((r) => [r.factionId, r.opinion]));
+  const warItems: LeagueWorksWarItem[] = [];
+  for (const id of warIds) {
+    const motion = warMotion(id, nations, war);
+    const nation = motion ? nations.find((n) => n.id === motion.factionId) : undefined;
+    if (!motion || !nation) continue;
+    warItems.push({ id: motion.id, factionId: motion.factionId, name: motion.name, bandLabel: opinionBand(bars.get(nation.id) ?? nation.start.opinion).label });
+  }
+  const atWar: LeagueWorksWarUnderWay[] = (await activeWars(db, world.id)).map((row) => ({
+    factionId: row.factionId,
+    name: nations.find((n) => n.id === row.factionId)?.name ?? row.factionId,
+    throughLabel: warThroughLabel(row.endsAt, world.startedMs),
+  }));
+
   return {
     buildings: buildings.map((b) => ({ id: b.id, name: b.name, cost: b.cost, seasons: b.seasons, populationAbove: b.populationAbove, partyLean: b.partyLean, effects: buildingEffects(b, CITY_PLACEHOLDER) })),
     projects: { opensAt: p.opensAt, opensLabel: p.opensLabel, drafting: p.next.drafting, items: projectItems },
     festivals: { opensAt: f.opensAt, opensLabel: f.opensLabel, drafting: f.next.drafting, items: festivalItems, year, yearLabel: festivalYearLabel(year) },
+    wars: { opensAt: w.opensAt, opensLabel: w.opensLabel, drafting: w.next.drafting, items: warItems, atWar },
   };
 }

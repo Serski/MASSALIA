@@ -63,7 +63,7 @@ suite("GET /api/league/cities: the tax each polis pays a season (integration)", 
   });
 
   beforeEach(async () => {
-    await db.execute(sql`TRUNCATE TABLE league_festivals, league_projects, agenda_cycles, treasuries, league_cities, sessions, users, worlds CASCADE`);
+    await db.execute(sql`TRUNCATE TABLE league_wars, faction_relations, league_festivals, league_projects, agenda_cycles, treasuries, league_cities, sessions, users, worlds CASCADE`);
     worldStartedAt = new Date(Date.now() - DAY);
     worldId = (await db.insert(m.dbPkg.worlds).values({ name: "Cities Test", seed: "ctest", startedAt: worldStartedAt, endsAt: new Date(Date.now() + 181 * DAY), status: "active" }).returning())[0]!.id;
     // The League treasury at 60,000, so every project and festival is within reach.
@@ -118,6 +118,7 @@ suite("GET /api/league/cities: the tax each polis pays a season (integration)", 
     buildings: { id: string; name: string; cost: number; seasons: number; populationAbove: number | null; partyLean: string; effects: string[] }[];
     projects: { opensAt: string; opensLabel: string; drafting: boolean; items: { id: string; cityId: string; polis: string; buildingId: string; name: string }[] };
     festivals: { opensAt: string; opensLabel: string; drafting: boolean; items: { id: string; name: string; cost: number; partyLean: string; effects: string[] }[]; year: number; yearLabel: string };
+    wars: { opensAt: string; opensLabel: string; drafting: boolean; items: { id: string; factionId: string; name: string; bandLabel: string }[]; atWar: { factionId: string; name: string; throughLabel: string }[] };
   };
   const works = async () => ((await get(await session())).json() as { works: Works }).works;
   const startDocket = () => leagueDocket(buildings, cities.cities.map((c) => ({ id: c.id, name: c.name, population: c.start.population })), new Set(), 60_000);
@@ -179,7 +180,55 @@ suite("GET /api/league/cities: the tax each polis pays a season (integration)", 
     const w = await works();
     expect(w.projects.items).toEqual([]);
     expect(w.festivals.items).toEqual([]);
+    expect(w.wars.items).toEqual([]);
     expect(w.buildings).toHaveLength(5);
+  });
+
+  // --- The war docket (government prompt 4) ---------------------------------------
+  // This suite's world is in its first Spring, the war motion's drafting season.
+  const SIX_NATIONS = [
+    { id: "war:cadurci:y0", factionId: "cadurci", name: "Cadurci", bandLabel: "Unfriendly" },
+    { id: "war:volcae:y0", factionId: "volcae", name: "Volcae", bandLabel: "Hostile" },
+    { id: "war:allobroges:y0", factionId: "allobroges", name: "Allobroges", bandLabel: "Unfriendly" },
+    { id: "war:saluvii:y0", factionId: "saluvii", name: "Saluvii", bandLabel: "Unfriendly" },
+    { id: "war:tarusates:y0", factionId: "tarusates", name: "Tarusates", bandLabel: "Unfriendly" },
+    { id: "war:carthage:y0", factionId: "carthage", name: "Carthage", bandLabel: "Hostile" },
+  ];
+  const diplomacy = async () =>
+    ((await app.inject({ method: "GET", url: "/api/league/diplomacy", headers: { cookie: `massalia_session=${app.signCookie(await session())}` } })).json() as { factions: { id: string; atWar: boolean; warThroughLabel: string | null }[] }).factions;
+
+  it("works.wars in the first Spring: the docket is open with the six nations below 0, each with its band, and no war under way", async () => {
+    const w = await works();
+    expect(w.wars.drafting).toBe(true);
+    expect(w.wars.opensLabel).toBe("Spring, 300 BC");
+    expect(w.wars.opensAt).toBe(new Date(worldStartedAt.getTime() + DAY).toISOString());
+    expect(w.wars.items).toEqual(SIX_NATIONS);
+    expect(w.wars.atWar).toEqual([]);
+    for (const f of await diplomacy()) expect(f.warThroughLabel, f.id).toBeNull();
+  });
+
+  it("works.wars follows the bars: a nation that fell joins the docket with its band, and the cycle's own docket shows once a sync has fixed it", async () => {
+    await db.insert(m.dbPkg.factionRelations).values({ worldId, factionId: "helvii", stance: "hostile", opinion: -160, atWar: false });
+    let w = await works();
+    expect(w.wars.items.map((i) => [i.factionId, i.bandLabel])).toEqual([["cadurci", "Unfriendly"], ["helvii", "Hostile"], ["volcae", "Hostile"], ["allobroges", "Unfriendly"], ["saluvii", "Unfriendly"], ["tarusates", "Unfriendly"], ["carthage", "Hostile"]]);
+
+    await db.insert(m.dbPkg.agendaCycles).values({ worldId, scope: "war", gameYear: 0, phase: "drafting", cardIds: ["war:volcae:y0", "war:carthage:y0"], opensAt: new Date(worldStartedAt.getTime() + DAY), votingEndsAt: new Date(worldStartedAt.getTime() + 3 * DAY) });
+    w = await works();
+    expect(w.wars.drafting).toBe(true);
+    expect(w.wars.items.map((i) => i.id)).toEqual(["war:volcae:y0", "war:carthage:y0"]);
+  });
+
+  it("a war under way shows with the season it runs through, drops its nation from the docket, and the Diplomacy page names that season", async () => {
+    await db.insert(m.dbPkg.factionRelations).values({ worldId, factionId: "carthage", stance: "hostile", opinion: -200, atWar: true });
+    // Declared at the world's start for 8 seasons: its last season is year 1's Autumn.
+    await db.insert(m.dbPkg.leagueWars).values({ worldId, factionId: "carthage", gameYear: 0, cost: 2000, startsAt: worldStartedAt, endsAt: new Date(worldStartedAt.getTime() + 8 * DAY) });
+    const w = await works();
+    expect(w.wars.atWar).toEqual([{ factionId: "carthage", name: "Carthage", throughLabel: "Autumn, 299 BC" }]);
+    expect(w.wars.items).toEqual(SIX_NATIONS.slice(0, 5));
+
+    const factions = await diplomacy();
+    expect(factions.find((f) => f.id === "carthage")).toMatchObject({ atWar: true, warThroughLabel: "Autumn, 299 BC" });
+    expect(factions.filter((f) => f.id !== "carthage").every((f) => f.warThroughLabel === null && !f.atWar)).toBe(true);
   });
 
   it("a grown polis pays more: the tax follows the live population, not the stored column", async () => {

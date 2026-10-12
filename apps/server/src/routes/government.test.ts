@@ -58,6 +58,7 @@ type Gov =
       projects: { cityId: string; polis: string; buildingId: string; title: string; status: string; completesAt: string; completesLabel: string }[];
       league: Scope;
       festival: Scope;
+      war: Scope;
     };
 
 suite("GET /api/government and the public League scope (integration)", () => {
@@ -85,7 +86,7 @@ suite("GET /api/government and the public League scope (integration)", () => {
   });
 
   beforeEach(async () => {
-    await db.execute(sql`TRUNCATE TABLE league_projects, party_endorsements, ephor_vetoes, agenda_cycles, treasury_ledger, treasuries, league_cities, world_treasury,
+    await db.execute(sql`TRUNCATE TABLE league_wars, faction_relations, league_projects, party_endorsements, ephor_vetoes, agenda_cycles, treasury_ledger, treasuries, league_cities, world_treasury,
       election_votes, election_candidates, elections, office_history, offices, chamber_ballots, chamber_votes,
       oligarch_seats, party_favor, effect_log, character_traits, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
     await db.insert(m.dbPkg.houses).values({ slug: "test-house", name: "House Test", initial: "T", alignment: "c", stance: "s", motto: "m", patron: "p", crest: "c" }).onConflictDoNothing();
@@ -300,6 +301,97 @@ suite("GET /api/government and the public League scope (integration)", () => {
       expect(scope.youMayDraft).toBe(false);
       // In an Autumn the festival's next docket is the coming Summer's.
       expect(scope.nextOpensLabel).toBe("Summer, 299 BC");
+    });
+  });
+
+  // The war motion (government prompt 4): drafted in Spring, voted in Summer.
+  describe("the war motion", () => {
+    const warScope = async (token: string) => ((await get("/api/agenda", token)).json() as { war: Scope }).war;
+    const WAR_EFFECTS = ["Raids on the enemy's land +50% plunder", "Peace after 2 years, at Hostile"];
+    // A world in its first Spring: season 1, so the docket is year 0's.
+    const firstSpring = () => world(new Date(Date.now() - DAY - HOUR));
+
+    it("an Archon's war docket in a Spring holds the six nations below 0 with what a war does; the public scope is empty while drafting", async () => {
+      await firstSpring();
+      const archon = await citizen("archon");
+      await seat("archon", "palaioi", archon.characterId);
+      const c = await citizen("citizen");
+
+      const view = await government(archon.token);
+      expect(view.member).toBe(true);
+      if (!view.member) return;
+      expect(view.war.phase).toBe("drafting");
+      expect(view.war.cards.map((card) => [card.id, card.title])).toEqual([
+        ["war:cadurci:y0", "War on the Cadurci"],
+        ["war:volcae:y0", "War on the Volcae"],
+        ["war:allobroges:y0", "War on the Allobroges"],
+        ["war:saluvii:y0", "War on the Saluvii"],
+        ["war:tarusates:y0", "War on the Tarusates"],
+        ["war:carthage:y0", "War on Carthage"],
+      ]);
+      for (const card of view.war.cards) expect(card.effects).toEqual(WAR_EFFECTS);
+      expect(view.war.youMayDraft).toBe(true);
+      expect(view.war.treasury.balance).toBeGreaterThanOrEqual(60_000);
+
+      const scope = await warScope(c.token);
+      expect(scope.phase).toBe("drafting");
+      expect(scope.cards).toEqual([]);
+      expect(scope.draftedCardId).toBeNull();
+      expect(scope.youMayDraft).toBe(false);
+      expect(scope.nextOpensLabel).toBe("Spring, 300 BC");
+    });
+
+    it("once the war has gone to the vote, the public scope shows the drafted war alone, with its effects", async () => {
+      // A Summer: the real clock sits in season 2. The draft happened in its Spring.
+      const startedAt = new Date(Date.now() - 2 * DAY - HOUR);
+      await world(startedAt);
+      const spring = new Date(startedAt.getTime() + DAY + HOUR);
+      const archon = await citizen("archon");
+      await seat("archon", "palaioi", archon.characterId);
+      const c = await citizen("citizen");
+      await m.agenda.syncAgenda(spring);
+      expect((await m.agenda.draftCard(archon.row, "war", "war:carthage:y0", spring)).ok).toBe(true);
+
+      const scope = await warScope(c.token);
+      expect(scope.phase).toBe("voting");
+      expect(scope.cards.map((card) => [card.id, card.title, card.effects])).toEqual([["war:carthage:y0", "War on Carthage", WAR_EFFECTS]]);
+      expect(scope.draftedCardId).toBe("war:carthage:y0");
+      expect(scope.youMayDraft).toBe(false);
+      // In a Summer the war's next docket is the coming Spring's.
+      expect(scope.nextOpensLabel).toBe("Spring, 299 BC");
+    });
+
+    it("an Ephor who used the League's veto this term may not veto a drafted war; another Ephor may", async () => {
+      // A Spring; the League's docket was drafted and vetoed in its Winter.
+      const startedAt = new Date(Date.now() - DAY - HOUR);
+      await world(startedAt);
+      const winter = new Date(startedAt.getTime() + HOUR);
+      const archon = await citizen("archon");
+      const spent = await citizen("spent", "dynatoi");
+      const fresh = await citizen("fresh");
+      await seat("archon", "palaioi", archon.characterId);
+      await seat("ephor", "dynatoi", spent.characterId);
+      await seat("ephor", "palaioi", fresh.characterId);
+      await m.agenda.syncAgenda(winter);
+      const cycle = (await db.select().from(m.dbPkg.agendaCycles).where(and(eq(m.dbPkg.agendaCycles.worldId, worldId), eq(m.dbPkg.agendaCycles.scope, "league"))).limit(1))[0]!;
+      expect((await m.agenda.draftCard(archon.row, "league", (cycle.cardIds as string[])[0]!, winter)).ok).toBe(true);
+      expect((await m.agenda.vetoCard(spent.row, "league", winter)).ok).toBe(true);
+
+      // The Spring: the Archon puts a war forward.
+      expect((await m.agenda.draftCard(archon.row, "war", "war:volcae:y0")).ok).toBe(true);
+      const spentView = await government(spent.token);
+      expect(spentView.member && spentView.war.draftedCardId).toBe("war:volcae:y0");
+      expect(spentView.member && spentView.war.youMayVeto).toBe(false);
+      const freshView = await government(fresh.token);
+      expect(freshView.member && freshView.war.youMayVeto).toBe(true);
+      // The veto itself answers the same way, and a war's veto is recorded under the League.
+      expect(await m.agenda.vetoCard(spent.row, "war")).toMatchObject({ ok: false, code: 409 });
+      expect((await m.agenda.vetoCard(fresh.row, "war")).ok).toBe(true);
+      const vetoes = await db.select({ scope: m.dbPkg.ephorVetoes.scope }).from(m.dbPkg.ephorVetoes).where(eq(m.dbPkg.ephorVetoes.worldId, worldId));
+      expect(vetoes.map((v) => v.scope)).toEqual(["league", "league"]);
+      const after = await government(fresh.token);
+      expect(after.member && after.war.vetoedCardId).toBe("war:volcae:y0");
+      expect(after.member && after.war.youMayVeto).toBe(false);
     });
   });
 

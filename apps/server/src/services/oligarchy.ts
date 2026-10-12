@@ -245,10 +245,11 @@ export type CastBallotResult = { ok: false; code: number; error: string } | { ok
 
 // POST /api/oligarchy/vote: seat-holders cast yes/no on the open vote — one
 // ballot per voter, changeable while open (upsert), 409 after close.
-// The open votes this character may see: the League's and the festival's for
-// everyone, a party's only for that party's members (government prompt 3).
+// The open votes this character may see: the League's, the festival's and the
+// war's (government prompt 4) for everyone, a party's only for that party's
+// members (government prompt 3).
 async function visibleOpenVotes(row: CharacterRow) {
-  return (await openChamberVotes()).filter((vote) => vote.scope === "league" || vote.scope === "festival" || vote.scope === row.party);
+  return (await openChamberVotes()).filter((vote) => vote.scope === "league" || vote.scope === "festival" || vote.scope === "war" || vote.scope === row.party);
 }
 
 // `voteId` names the vote (the web sends it since several can be open at once);

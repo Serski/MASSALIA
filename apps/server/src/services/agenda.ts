@@ -9,6 +9,7 @@ import {
   collectLeagueRevenue,
   completeLeagueProjects,
   createDb,
+  endLeagueWars,
   ensurePartyLeaders,
   ensureTreasuries,
   getAgendaCycle,
@@ -35,21 +36,28 @@ import {
   festivalMotion,
   formatGameDate,
   gameDate,
+  isLeagueMotion,
   MOTION_SCOPES,
   nextAgendaDocket,
   parseAgendaFile,
   parseCitiesContent,
+  parseFactionsContent,
   parseLeagueBuildings,
   parseLeagueFestivals,
+  parseLeagueWar,
   projectMotion,
   REAL_MS_PER_SEASON,
   treasuryOwnerOf,
+  warEffects,
+  warMotion,
   type AgendaCard,
   type AgendaScope,
   type CitiesContent,
+  type FactionDef,
   type HeldOffice,
   type LeagueBuilding,
   type LeagueFestival,
+  type LeagueWar,
   type MotionScope,
 } from "@massalia/shared";
 import type { CharacterRow } from "./character.js";
@@ -67,6 +75,8 @@ let pools: AgendaPools | null = null;
 let leagueBuildings: LeagueBuilding[] | null = null;
 let leagueCities: CitiesContent | null = null;
 let leagueFestivals: LeagueFestival[] | null = null;
+let leagueWar: LeagueWar | null = null;
+let warFactions: FactionDef[] | null = null;
 
 export async function loadAgendaContent(): Promise<AgendaPools> {
   const read = async (file: string) => parseAgendaFile(JSON.parse(await fs.readFile(path.join(repoRoot, "content/politics", file), "utf8")));
@@ -82,7 +92,21 @@ export async function loadAgendaContent(): Promise<AgendaPools> {
   leagueCities = parseCitiesContent(JSON.parse(await fs.readFile(path.join(repoRoot, "content/cities/cities.json"), "utf8")));
   // The festival motion's festivals (government prompt 3).
   leagueFestivals = parseLeagueFestivals(JSON.parse(await fs.readFile(path.join(repoRoot, "content/politics/league-festivals.json"), "utf8"))).festivals;
+  // The war motion (government prompt 4): the war's numbers and the nations.
+  leagueWar = parseLeagueWar(JSON.parse(await fs.readFile(path.join(repoRoot, "content/politics/league-war.json"), "utf8")));
+  warFactions = parseFactionsContent(JSON.parse(await fs.readFile(path.join(repoRoot, "content/diplomacy/factions.json"), "utf8"))).factions;
   return pools;
+}
+
+export function getLeagueWar(): LeagueWar {
+  if (!leagueWar) throw new Error("Agenda content not loaded — call loadAgendaContent() at boot.");
+  return leagueWar;
+}
+
+// The nations of the Diplomacy page, in content order.
+export function getWarFactions(): FactionDef[] {
+  if (!warFactions) throw new Error("Agenda content not loaded — call loadAgendaContent() at boot.");
+  return warFactions;
 }
 
 export function getLeagueFestivals(): LeagueFestival[] {
@@ -105,17 +129,23 @@ export function getLeagueCities(): CitiesContent {
   return leagueCities;
 }
 
-// The title a League measure id shows: a project's, a festival's, or a League card's.
+// The title a League measure id shows: a project's, a festival's, a war's, or a League card's.
 export function leagueMeasureTitle(id: string): string | undefined {
-  return projectMotion(id, getLeagueBuildings(), getLeagueCities().cities)?.title ?? festivalMotion(id, getLeagueFestivals())?.title ?? getAgendaPools().league.find((c) => c.id === id)?.title;
+  return (
+    projectMotion(id, getLeagueBuildings(), getLeagueCities().cities)?.title ??
+    festivalMotion(id, getLeagueFestivals())?.title ??
+    warMotion(id, getWarFactions(), getLeagueWar())?.title ??
+    getAgendaPools().league.find((c) => c.id === id)?.title
+  );
 }
 
-// The four motions: the League's projects, the two parties' cards and the
-// League's festival (government prompt 3).
+// The five motions: the League's projects, the two parties' cards, the League's
+// festival (government prompt 3) and its war (government prompt 4).
 const SCOPES: readonly MotionScope[] = MOTION_SCOPES;
 
 // The scope a veto is recorded under: the festival motion shares the League's
-// one veto per term (government prompt 3, ruling 3), so it writes to "league".
+// one veto per term (government prompt 3, ruling 3), so it writes to "league";
+// the war motion (government prompt 4) does the same.
 function vetoScopeOf(scope: MotionScope): AgendaScope {
   return treasuryOwnerOf(scope);
 }
@@ -159,8 +189,10 @@ export async function syncAgenda(now: Date = new Date()): Promise<{ accrued: boo
   const advanced = advance.toVoting.length + advance.resolved.length;
   // A finished building stands (government prompt 2a).
   const built = (await completeLeagueProjects(now)).length;
+  // A war whose seasons have run ends in peace (government prompt 4).
+  const peace = (await endLeagueWars(now)).length;
 
-  if (accrued || credited || opened || advanced || leaders || built) await broadcastState();
+  if (accrued || credited || opened || advanced || leaders || built || peace) await broadcastState();
   return { accrued, opened, advanced, leaders };
 }
 
@@ -175,7 +207,7 @@ export async function draftCard(actor: CharacterRow, scope: MotionScope, cardId:
   const cfg = getPoliticsConfig();
 
   if (!canDraft(await heldOffices(actor.id), scope)) {
-    return { ok: false, code: 403, error: scope === "league" || scope === "festival" ? "Only a sitting Archon may set the league's agenda." : "Only the party Archon may set the party's agenda." };
+    return { ok: false, code: 403, error: isLeagueMotion(scope) ? "Only a sitting Archon may set the league's agenda." : "Only the party Archon may set the party's agenda." };
   }
   const live = currentAgendaCycle(gameDate(now.getTime(), world.startedMs).seasonIndex, scope, cfg.agenda);
   if (!live || live.phase !== "drafting") return { ok: false, code: 409, error: "The agenda is not in drafting." };
@@ -219,7 +251,7 @@ export async function vetoCard(actor: CharacterRow, scope: MotionScope, now: Dat
 // The Ephor seat (league ephor of either side, or the party_ephor) the actor
 // holds for this scope, and its term-started year — or null if they hold none.
 async function ephorTermYear(worldId: string, characterId: string, scope: MotionScope): Promise<number | null> {
-  const league = scope === "league" || scope === "festival";
+  const league = isLeagueMotion(scope);
   const wantOffice = league ? "ephor" : "party_ephor";
   const rows = await db
     .select({ office: offices.office, side: offices.side, term: offices.termStartedYear })
@@ -324,6 +356,19 @@ function festivalCardViews(ids: string[]): AgendaCardView[] {
   return out;
 }
 
+// The war docket (government prompt 4): each id resolves to its motion with
+// what a passed war does.
+function warCardViews(ids: string[]): AgendaCardView[] {
+  const war = getLeagueWar();
+  const out: AgendaCardView[] = [];
+  for (const id of ids) {
+    const m = warMotion(id, getWarFactions(), war);
+    if (!m) continue;
+    out.push({ id: m.id, title: m.title, description: m.description, cost: m.cost, partyLean: m.partyLean, effects: warEffects(war) });
+  }
+  return out;
+}
+
 // The League scope as everyone outside the Government sees it (government
 // prompt 1): the treasury's balance without its ledger, no draft or veto power,
 // and of the docket only the card going to the vote — the drafted card while
@@ -358,13 +403,15 @@ export async function agendaScopeView(actor: CharacterRow, scope: MotionScope, n
   let youMayVeto = false;
   if (cycle?.phase === "drafting" && cycle.draftedCardId) {
     const term = await ephorTermYear(world.id, actor.id, scope);
-    if (term !== null) youMayVeto = canVeto({ held, vetoesUsedThisTerm: await vetoesUsedThisTerm(actor.id, scope, term), phase: "drafting" }, scope, cfg.agenda);
+    // Counted under the scope the veto is recorded in, as vetoCard counts it: a
+    // veto used on the League's docket is the one for the festival's and the war's too.
+    if (term !== null) youMayVeto = canVeto({ held, vetoesUsedThisTerm: await vetoesUsedThisTerm(actor.id, vetoScopeOf(scope), term), phase: "drafting" }, scope, cfg.agenda);
   }
   return {
     scope,
     phase: (cycle?.phase as AgendaScopeView["phase"]) ?? null,
     gameYear: cycle?.gameYear ?? null,
-    cards: !cycle ? [] : scope === "league" ? leagueCardViews(cycle.cardIds) : scope === "festival" ? festivalCardViews(cycle.cardIds) : scope === "war" ? [] : cardViews(getAgendaPools()[scope], cycle.cardIds),
+    cards: !cycle ? [] : scope === "league" ? leagueCardViews(cycle.cardIds) : scope === "festival" ? festivalCardViews(cycle.cardIds) : scope === "war" ? warCardViews(cycle.cardIds) : cardViews(getAgendaPools()[scope], cycle.cardIds),
     draftedCardId: cycle?.draftedCardId ?? null,
     vetoedCardId: cycle?.vetoedCardId ?? null,
     treasury: await treasuryView(world.id, owner),

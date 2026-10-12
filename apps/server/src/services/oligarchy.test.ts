@@ -291,6 +291,38 @@ suite("the Oligarchy Chamber (integration)", () => {
     await db.delete(chamberVotes).where(eq(chamberVotes.id, palaioiVote!.id));
   });
 
+  // Government prompt 4: the war vote is the League's, so everyone sees it.
+  it("the war vote is everyone's: a seated Dynatoi member sees it beside a Palaioi vote he cannot, and his ballot with its id lands there", async () => {
+    const { chamberVotes, chamberBallots } = m.dbPkg;
+    const closesAt = new Date(now.getTime() + 86_400_000);
+    const [warVote] = await db.insert(chamberVotes).values({ worldId, scope: "war", gameYear: 0, title: "War on Carthage", description: "The League takes up arms against Carthage.", agendaCardId: "war:carthage:y0", opensAt: now, closesAt, status: "open" }).returning();
+    const [palaioiVote] = await db.insert(chamberVotes).values({ worldId, scope: "palaioi", gameYear: 0, title: "A loyalty inquiry", description: "The party asks.", agendaCardId: "pal-loyalty-inquiry", opensAt: now, closesAt, status: "open" }).returning();
+
+    const pal = await createCharacter("Palaios-polemios", { drachmae: 400, party: "palaioi" });
+    expect((await m.oligarchy.buySeat(pal, now)).ok).toBe(true);
+    const palRow = await freshRow(pal.id);
+    const dyn = await createCharacter("Dynatos-polemios", { drachmae: 400, party: "dynatoi" });
+    expect((await m.oligarchy.buySeat(dyn, now)).ok).toBe(true);
+    const dynRow = await freshRow(dyn.id);
+
+    // The war vote comes before a party's in the list.
+    expect((await m.oligarchy.chamberVotesView(palRow, now)).openVotes.map((v) => [v.scope, v.id])).toEqual([["war", warVote!.id], ["palaioi", palaioiVote!.id]]);
+    const dynView = await m.oligarchy.chamberVotesView(dynRow, now);
+    expect(dynView.openVotes.map((v) => [v.scope, v.title, v.youMayVote])).toEqual([["war", "War on Carthage", true]]);
+    expect(dynView.open?.id).toBe(warVote!.id);
+
+    expect(await m.oligarchy.castChamberBallot(dynRow, "no", now, warVote!.id)).toEqual({ ok: true, choice: "no" });
+    const ballotsOf = async (voteId: string) => db.select().from(chamberBallots).where(eq(chamberBallots.voteId, voteId));
+    expect((await ballotsOf(warVote!.id)).map((b) => [b.voterCharacterId, b.choice])).toEqual([[dyn.id, "no"]]);
+    expect(await m.oligarchy.castChamberBallot(dynRow, "yes", now, palaioiVote!.id)).toEqual({ ok: false, code: 404, error: "No such vote is open." });
+    expect(await ballotsOf(palaioiVote!.id)).toHaveLength(0);
+
+    // Leave the shared world as the later tests expect it: no open vote.
+    await db.delete(chamberBallots).where(eq(chamberBallots.voteId, warVote!.id));
+    await db.delete(chamberVotes).where(eq(chamberVotes.id, warVote!.id));
+    await db.delete(chamberVotes).where(eq(chamberVotes.id, palaioiVote!.id));
+  });
+
   it("succession: the dynastic seat rides the slot row to the heir", async () => {
     const { children, players } = m.dbPkg;
     const holder = await createCharacter("Patroklos", { drachmae: 400 });
