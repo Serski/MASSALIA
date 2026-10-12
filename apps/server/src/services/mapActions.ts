@@ -29,7 +29,7 @@ import {
 import { applyComposureDelta } from "./composure.js";
 import { barracksView, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, moraleBonusFor, PLEDGED_REFUSAL, sailHulls, takeSupplies, type BarracksView, type UnitRow } from "./barracks.js";
 import { getBuildingsContent, settleAll, type ActingContext } from "./buildings.js";
-import { raidOpinion, type RaidOpinion } from "./factionOpinion.js";
+import { raidOpinion, raidWarMultiplier, type RaidOpinion } from "./factionOpinion.js";
 import { creditDrachmae, creditGood, holderOf, insertConquest, insertTownConquest, listHoldings } from "./holdings.js";
 import { lockPlayer } from "./lock.js";
 import { getTopology } from "./mapGraph.js";
@@ -657,11 +657,13 @@ export async function resolveMarch(marchId: string, now: Date): Promise<MarchRes
         if (kind === "raid") {
           await writeDefender(remaining);
           // Any raid that fights, won or lost, can sour the nation whose land it is.
-          opinion = await raidOpinion(tx, ctx.worldId, isTown ? await townContentOwner(townId) : await regionContentOwner(regionId), seed);
+          const land = isTown ? await townContentOwner(townId) : await regionContentOwner(regionId);
+          opinion = await raidOpinion(tx, ctx.worldId, land, seed);
           if (result.winner === "attacker") {
             // Drachmae, grain and one third good drawn on the battle's seed; a
-            // town's stores pay townPlunderMultiplier times the region rate.
-            const p = raidPlunder(battleC.raid, defLosses, isTown, seed);
+            // town's stores pay townPlunderMultiplier times the region rate, and
+            // the land of a nation at war the war's multiplier on top.
+            const p = raidPlunder(battleC.raid, defLosses, isTown, seed, await raidWarMultiplier(tx, ctx.worldId, land));
             plunder = { drachmae: p.drachmae, grain: p.grain, spoil: { good: p.spoil.good, label: spoilLabel(p.spoil.good), amount: p.spoil.amount } };
             await creditDrachmae(tx, ctx.playerId, p.drachmae);
             await creditGood(tx, ctx.playerId, "grain", p.grain, at);

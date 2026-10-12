@@ -280,6 +280,9 @@ export async function applyEffectsInTx(
             .limit(1);
           const row = rows[0];
           if (!row) break;
+          // A nation the League is at war with keeps its bar pinned (government
+          // prompt 4): the event leaves it as it is and logs nothing.
+          if (row.atWar) break;
           // `amount` is now POINTS of opinion (not rungs). Reaching ±200 does NOT
           // latch the at_war/allied flag in D1 — declaring war/alliance is a later
           // action; opinion can sit at the edge with the flag false.

@@ -954,6 +954,45 @@ suite("Map actions (integration)", () => {
     await recordChronicle(characterId);
   });
 
+  // Government prompt 4: on the land of a nation the League is at war with, a
+  // raid takes the war's 1.5 on top of the town's double and rolls no grudge.
+  it("town raid on a nation at war: half again the plunder on top of the town's double, no grudge, and the bar stays pinned", async () => {
+    const { ctx } = await makePlayer({ drachmae: 100 });
+    await db.insert(m.dbPkg.factionRelations).values({ worldId, factionId: "saluvii", stance: "hostile", opinion: -200, atWar: true });
+    await setGarrison("reii", 10, at(9));
+    const peltasts = await insertRow(ctx, { unitId: "peltast", count: 40 });
+    const r = await actTown(ctx, "raid", "reii", [peltasts.id]);
+    expect(r).toMatchObject({ ok: true });
+    if (!r.ok) return;
+    expect(r.report).toMatchObject({ type: "raid", townId: "reii", winner: "attacker" });
+    const killed = r.report.defender!.losses;
+    expect([2, 3]).toContain(killed);
+    const plunder = r.report.plunder!;
+    const good = plunder.spoil!.good;
+    expectRolledPlunder(plunder, killed, 3); // the town's 2 times the war's 1.5
+    expect(await wallet(ctx)).toBe(100 + plunder.drachmae);
+    expect(await stock(ctx, good)).toBe((good === "oliveoil" ? 5000 - 3 * 40 : 0) + plunder.spoil!.amount);
+    expect(await stock(ctx, "grain")).toBe(5000 - 3 * 40 + plunder.grain);
+    expect(r.report.opinion).toBeNull();
+    expect(await relation("saluvii")).toMatchObject({ atWar: true, opinion: -200, stance: "hostile" });
+
+    // On every seed, the ones that sour a nation at peace included: no grudge at
+    // war, and the multiplier is the war's for the Saluvii alone.
+    const { raidOpinion, raidWarMultiplier } = await import("./factionOpinion.js");
+    const polity = (id: string) => m.dbPkg.loadFactions().then((all) => { const f = all.find((x) => x.id === id)!; return (f.polities ?? [f.id])[0]!; });
+    const [saluvii, volcae] = [await polity("saluvii"), await polity("volcae")];
+    const seeds = Array.from({ length: 30 }, (_, i) => `war-seed-${i}`);
+    expect(seeds.some((seed) => m.shared.raidAngers(m.barracks.getBattleContent().raid, seed))).toBe(true);
+    await db.transaction(async (tx) => {
+      for (const seed of seeds) expect(await raidOpinion(tx, worldId, saluvii, seed)).toBeNull();
+      expect(await raidWarMultiplier(tx, worldId, saluvii)).toBe(1.5);
+      expect(await raidWarMultiplier(tx, worldId, volcae)).toBe(1); // at peace, no row
+      expect(await raidWarMultiplier(tx, worldId, null)).toBe(1); // land no nation holds
+    });
+    expect(await relation("saluvii")).toMatchObject({ atWar: true, opinion: -200 });
+    expect(await relation("volcae")).toBeUndefined();
+  });
+
   it("sea assault: a fleet weaker than the town's is repulsed with no battle, no losses and no garrison change; a stronger one lands", async () => {
     const { ctx, characterId, dynastyId } = await makePlayer();
     // Aleria (R073): two seas out, no land route, fleet 4 pentekonters and 4 triremes (naval 24).

@@ -202,6 +202,35 @@ suite("applyEffectsInTx + applyChoiceEffects (integration)", () => {
     expect(r2!.ideologyTouched).toBe(true);
   });
 
+  // Government prompt 4: a nation the League is at war with keeps its bar pinned.
+  it("change_faction_stance leaves a nation at war as it is and logs nothing; one at peace moves as before", async () => {
+    const envoy = await createCharacter("Envoy");
+    const start = { atWar: false, allied: false, vassal: false };
+    const FACTION_DEF = new Map([
+      ["fx-at-war", { ...start, opinion: -50 }],
+      ["fx-at-peace", { ...start, opinion: 10 }],
+    ]);
+    await db.insert(m.dbPkg.factionRelations).values({ worldId, factionId: "fx-at-war", stance: "hostile", opinion: -200, atWar: true });
+    await db.transaction(async (tx) => {
+      await m.engine.applyEffectsInTx(tx, {
+        characterId: envoy.id,
+        eventId: "test:stance",
+        effects: [
+          { type: "change_faction_stance", factionId: "fx-at-war", amount: 30 },
+          { type: "change_faction_stance", factionId: "fx-at-peace", amount: -30 },
+        ],
+        cityDef: null,
+        factionDef: FACTION_DEF,
+      });
+    });
+    const rows = await db.select().from(m.dbPkg.factionRelations).where(eq(m.dbPkg.factionRelations.worldId, worldId));
+    const by = (id: string) => rows.find((r) => r.factionId === id)!;
+    expect(by("fx-at-war")).toMatchObject({ opinion: -200, atWar: true, stance: "hostile" });
+    expect(by("fx-at-peace")).toMatchObject({ opinion: -20, atWar: false, stance: "unfriendly" });
+    const logged = await effectLogRows(envoy.id, "change_faction_stance");
+    expect(logged.map((l) => l.detail)).toEqual([{ factionId: "fx-at-peace", amount: -30, from: 10, to: -20, source: "event", eventId: "test:stance" }]);
+  });
+
   it("applyChoiceEffects is unchanged: same deltas, and exactly one event_history row", async () => {
     const before = await createCharacter("Wrapper", { prestige: 10, drachmae: 100 });
     const choice = {

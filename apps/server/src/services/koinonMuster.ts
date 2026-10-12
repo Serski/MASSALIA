@@ -44,7 +44,7 @@ import { lockPlayer } from "./lock.js";
 import { describeForce, resolveMarch, selectForce, spoilLabel, splitRows, writeIntel } from "./mapActions.js";
 import { getTopology } from "./mapGraph.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
-import { raidOpinion, type RaidOpinion } from "./factionOpinion.js";
+import { raidOpinion, raidWarMultiplier, type RaidOpinion } from "./factionOpinion.js";
 import { readRegionWarband, readTownFleet, readTownGarrison, regionContentOwner, townContentOwner, writeRegionWarband, writeTownGarrison } from "./mapPools.js";
 import { forceRowOf, homePlaces, homeRegions } from "./mapReach.js";
 import { townStats } from "./townStats.js";
@@ -1077,12 +1077,13 @@ async function arriveMuster(tx: DbTx, due: MusterRow, now: Date): Promise<Resolv
       seen = { pool: remaining, fleet: muster.townId !== null ? await readTownFleet(tx, muster.worldId, muster.townId, at) : null };
       outcome = result.winner === "attacker" ? "won" : "driven_off";
       // Won or driven off, the army's one raid can sour the nation whose land it is.
-      opinion = await raidOpinion(tx, muster.worldId, muster.townId !== null ? await townContentOwner(muster.townId) : await regionContentOwner(muster.regionId), seed);
+      const land = muster.townId !== null ? await townContentOwner(muster.townId) : await regionContentOwner(muster.regionId);
+      opinion = await raidOpinion(tx, muster.worldId, land, seed);
 
       // 10. On a win: the plunder by `act`'s formula, split by shares (ruling
       // 5, P7, P8) and credited to each participant.
       if (result.winner === "attacker") {
-        const p = raidPlunder(battleC.raid, killed, isTown, seed);
+        const p = raidPlunder(battleC.raid, killed, isTown, seed, await raidWarMultiplier(tx, muster.worldId, land));
         plunder = { drachmae: p.drachmae, grain: p.grain, spoil: { good: p.spoil.good, label: spoilLabel(p.spoil.good), amount: p.spoil.amount } };
         drachmaeOf = splitByShares(p.drachmae, shares);
         grainOf = splitByShares(p.grain, shares);

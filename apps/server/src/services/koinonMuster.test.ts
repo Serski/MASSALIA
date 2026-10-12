@@ -1208,6 +1208,21 @@ suite("Koinon muster (integration)", () => {
     expect(await relation("saluvii")).toBeUndefined();
   });
 
+  // Government prompt 4: a nation the League is at war with takes the war's 1.5
+  // on top of the town's double, and its bar stays pinned.
+  it("a nation at war: the army's raid on Reii takes half again the town's plunder and the Saluvii's bar stays", async () => {
+    await db.insert(m.dbPkg.factionRelations).values({ worldId, factionId: "saluvii", stance: "hostile", opinion: -200, atWar: true });
+    const report = await raidOnReii(uid(900)); // the seed that sours them at peace
+    expect(report.opinion).toBeNull();
+    expect(await relation("saluvii")).toMatchObject({ atWar: true, opinion: -200, stance: "hostile" });
+    const total = { drachmae: report.plunder!.drachmae, grain: report.plunder!.grain, spoil: report.plunder!.spoil! };
+    expectRolledPlunder(total, report.killed, battle().raid.townPlunderMultiplier * 1.5); // a town keeps the amounts whole
+    expect(report.parts.reduce((n, p) => n + p.drachmae, 0)).toBe(total.drachmae);
+    expect(report.parts.reduce((n, p) => n + p.grain, 0)).toBe(total.grain);
+    expect(report.parts.reduce((n, p) => n + p.spoil, 0)).toBe(total.spoil.amount);
+    for (const p of report.parts) expect(await wallet(p.playerId)).toBe(100_000 + p.drachmae);
+  });
+
   it("claim first: two launches at once send the army out once, and two arrivals at once leave one report and credit the wallets once, 10 runs", async () => {
     for (let run = 0; run < 10; run++) {
       const [a, b] = [await freshPlayer(`A${run}`), await freshPlayer(`B${run}`)];
