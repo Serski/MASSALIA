@@ -240,17 +240,16 @@ describe("dated cards — content date on events", () => {
       expect(defaultChoiceFor(e)?.effects).toEqual([{ type: "change_drachmae", amount: 50 }]);
     }
     // Dated cards prompt 2: the notice reaches everyone and settles itself with no effect.
-    const citizen = { classId: "trader", party: "none", isCouncilor: false, traitIds: [], stats: { prestige: 10, devotion: 10, militia: 10, intelligence: 10 } } as unknown as Parameters<typeof isEventEligible>[1];
-    const councilor = { ...citizen, isCouncilor: true } as unknown as Parameters<typeof isEventEligible>[1];
+    const councilor = { ...ctx, isCouncilor: true };
     const notice = out[2]!;
     expect(eventArena(notice)).toBe("general");
-    expect(isEventEligible(notice, citizen)).toBe(true);
+    expect(isEventEligible(notice, ctx)).toBe(true);
     expect(defaultChoiceFor(notice)?.id).toBe("noted");
     expect(defaultChoiceFor(notice)?.effects).toEqual([]);
     // The purse is a seated oligarch's choice with no default: unanswered, it lapses.
     const purse = out[3]!;
     expect(eventArena(purse)).toBe("council");
-    expect(isEventEligible(purse, citizen)).toBe(false);
+    expect(isEventEligible(purse, ctx)).toBe(false);
     expect(isEventEligible(purse, councilor)).toBe(true);
     expect(defaultChoiceFor(purse)).toBeNull();
     expect(purse.choices.map((c) => c.id)).toEqual(["take", "refuse"]);

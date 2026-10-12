@@ -38,13 +38,13 @@
     "weight": 0,
     "trigger": "calendar",
     "date": { "yearBC": 294, "season": 4 },
-    "scene": "Heralds in the agora: the Three Hundred go to the vote. The oligarchy chooses two Archons and two Ephors, one seat of each for the Palaioi and one for the Dynatoi. Candidacies are open now and close when Winter opens; the vote runs the season through, and the winners take office in Spring. A seat in the chamber is needed to stand or to vote.",
+    "scene": "Heralds in the agora: Massalia goes to the vote. The city chooses two Archons and two Ephors, one seat of each for the Palaioi and one for the Dynatoi. Candidacies are open now and close when Winter opens; the vote runs the season through, and the winners take office in Spring. A seat in the chamber is needed to stand; every citizen may vote.",
     "choices": [
       {
         "id": "noted",
         "label": "Noted",
         "effects": [],
-        "resultText": "The heralds move on down the quay."
+        "resultText": "The heralds move on down the quay. Candidacies and the ballot are under Politics, on the Oligarchy Council tab."
       }
     ],
     "defaultChoiceId": "noted"
