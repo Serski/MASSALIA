@@ -466,4 +466,78 @@ suite("daily decisions — lazy default for expired cards (integration)", () => 
     expect(await drachmaeOf(lapsed.id)).toBe(500 + DATED_PAY);
     expect(await card(stale.id)).toMatchObject({ resolved: true, resolvedChoiceId: "take", resolvedByDefault: true });
   });
+
+  // Dated cards prompt 2: the two shipped cards, read from content. The notice
+  // (Autumn 294 BC, season 27) reaches everyone and settles itself with no effect;
+  // the shipper's purse (Winter 293 BC, season 28) is a seated oligarch's choice
+  // with no default: 100 drachmae and −5 prestige, or +10 prestige.
+  it("(l) the election notice reaches everyone in Autumn 294 and the shipper's purse reaches councilors in Winter 293; the purse pays once and lapses unpaid", async () => {
+    const NOTICE = "dated-election-notice-294";
+    const PURSE = "dated-shippers-purse-293";
+    const shipped = (await m.engine.listEvents()).filter((e) => e.id === NOTICE || e.id === PURSE);
+    expect(shipped.map((e) => e.id).sort()).toEqual([NOTICE, PURSE]);
+    const content = [...pool, ...shipped];
+    const autumn294 = now.getTime() - 27 * DAY - 10 * 60 * 1000;
+    const later = new Date(now.getTime() + DAY);
+    expect(m.shared.gameDate(now.getTime(), autumn294).seasonIndex).toBe(27);
+    expect(m.shared.gameDate(later.getTime(), autumn294).seasonIndex).toBe(28);
+    const applied = (amount: number, row: { growthMultiplier: unknown }) => m.shared.applyStatGrowth(amount, Number(row.growthMultiplier));
+    const cap = (value: number) => m.shared.capStat(value, m.age.getAgeConfig());
+
+    // Autumn 294: the notice to a citizen and to a councilor alike; the purse to neither yet.
+    const citizen = await createCharacter("Polites", 500);
+    expect(datedRows(await m.daily.ensureDailySet(citizen.id, ctx, now, autumn294, content)).map((r) => r.eventId)).toEqual([NOTICE]);
+    const earlySeat = await createCharacter("Proto-bouleutes", 500);
+    expect(datedRows(await m.daily.ensureDailySet(earlySeat.id, councilor, now, autumn294, content)).map((r) => r.eventId)).toEqual([NOTICE]);
+
+    // Winter 293: the purse to a councilor, nothing to a citizen (and no notice: its season is over).
+    const seated = await createCharacter("Bouleutes-293", 500);
+    // The fixture starts every stat at 0, where −5 would clamp to 0; give him some standing to lose.
+    await db.update(m.dbPkg.playerCharacters).set({ prestige: 20 }).where(eq(m.dbPkg.playerCharacters.id, seated.id));
+    const seatedSet = await m.daily.ensureDailySet(seated.id, councilor, later, autumn294, content);
+    expect(datedRows(seatedSet).map((r) => r.eventId)).toEqual([PURSE]);
+    const idiotes = await createCharacter("Idiotes-293", 500);
+    expect(datedRows(await m.daily.ensureDailySet(idiotes.id, ctx, later, autumn294, content))).toEqual([]);
+
+    // Taking the purse: 100 drachmae and the engine's applied −5 prestige, once.
+    const purse = shipped.find((e) => e.id === PURSE)!;
+    const take = purse.choices.find((c) => c.id === "take")!;
+    const before = await charRow(seated.id);
+    const first = await m.daily.resolveDailyCard(datedRows(seatedSet)[0]!, take);
+    expect(first).toEqual({ claimed: true, resultText: take.resultText });
+    expect(await drachmaeOf(seated.id)).toBe(600);
+    expect((await charRow(seated.id)).prestige).toBe(cap(before.prestige + applied(-5, before)));
+    expect((await charRow(seated.id)).prestige).toBeLessThan(before.prestige);
+    const second = await m.daily.resolveDailyCard(datedRows(seatedSet)[0]!, take);
+    expect(second).toEqual({ claimed: false });
+    expect(await drachmaeOf(seated.id)).toBe(600);
+    expect((await historyRows(seated.id, PURSE)).length).toBe(1);
+
+    // Refusing it: +10 prestige as applied, no drachmae.
+    const refuse = purse.choices.find((c) => c.id === "refuse")!;
+    const upright = await createCharacter("Orthos-bouleutes", 500);
+    await db.update(m.dbPkg.playerCharacters).set({ prestige: 20 }).where(eq(m.dbPkg.playerCharacters.id, upright.id));
+    const uprightBefore = await charRow(upright.id);
+    const uprightSet = await m.daily.ensureDailySet(upright.id, councilor, later, autumn294, content);
+    expect(await m.daily.resolveDailyCard(datedRows(uprightSet)[0]!, refuse)).toEqual({ claimed: true, resultText: refuse.resultText });
+    expect(await drachmaeOf(upright.id)).toBe(500);
+    expect((await charRow(upright.id)).prestige).toBe(cap(uprightBefore.prestige + applied(10, uprightBefore)));
+    expect((await charRow(upright.id)).prestige).toBeGreaterThan(uprightBefore.prestige);
+
+    // A purse left unanswered has no default: the next load applies nothing.
+    const ameles = await createCharacter("Ameles-293", 500);
+    const stalePurse = await insertCard(ameles.id, yesterday, PURSE, "dated");
+    expect(await m.daily.applyExpiredDefaults(ameles.id, now, content)).toEqual([]);
+    expect(await drachmaeOf(ameles.id)).toBe(500);
+    expect(await effectLogCount(ameles.id)).toBe(0);
+    expect(await card(stalePurse.id)).toMatchObject({ resolved: true, resolvedChoiceId: "expired", resolvedByDefault: false });
+
+    // A notice left unanswered settles to "noted" with nothing written to the effect log.
+    const reader = await createCharacter("Anagnostes", 500);
+    const staleNotice = await insertCard(reader.id, yesterday, NOTICE, "dated");
+    expect(await m.daily.applyExpiredDefaults(reader.id, now, content)).toEqual([{ cardId: staleNotice.id, eventId: NOTICE, choiceId: "noted", composureDelta: 0 }]);
+    expect(await card(staleNotice.id)).toMatchObject({ resolved: true, resolvedChoiceId: "noted", resolvedByDefault: true });
+    expect(await effectLogCount(reader.id)).toBe(0);
+    expect(await drachmaeOf(reader.id)).toBe(500);
+  });
 });

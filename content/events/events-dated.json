@@ -32,5 +32,48 @@
       }
     ],
     "defaultChoiceId": "take"
+  },
+  {
+    "id": "dated-election-notice-294",
+    "weight": 0,
+    "trigger": "calendar",
+    "date": { "yearBC": 294, "season": 4 },
+    "scene": "Heralds in the agora: the Three Hundred go to the vote. The oligarchy chooses two Archons and two Ephors, one seat of each for the Palaioi and one for the Dynatoi. Candidacies are open now and close when Winter opens; the vote runs the season through, and the winners take office in Spring. A seat in the chamber is needed to stand or to vote.",
+    "choices": [
+      {
+        "id": "noted",
+        "label": "Noted",
+        "effects": [],
+        "resultText": "The heralds move on down the quay."
+      }
+    ],
+    "defaultChoiceId": "noted"
+  },
+  {
+    "id": "dated-shippers-purse-293",
+    "weight": 0,
+    "trigger": "calendar",
+    "date": { "yearBC": 293, "season": 1 },
+    "requires": { "office": "councilor" },
+    "scene": "The Three Hundred take up the quay fees this season. Tonight a Chian wine shipper is in your courtyard with a purse of a hundred drachmae and a quiet request: that your voice be absent when the fees are read. His slave waits at the gate, where the street can see him.",
+    "choices": [
+      {
+        "id": "take",
+        "label": "Take the purse and say nothing (100 drachmae, −5 prestige)",
+        "effects": [
+          { "type": "change_drachmae", "amount": 100 },
+          { "type": "change_stat", "stat": "prestige", "amount": -5 }
+        ],
+        "resultText": "The purse is heavy and the street is dark. Somebody at the gate counted the slave's steps all the same."
+      },
+      {
+        "id": "refuse",
+        "label": "Send him and his purse back through the gate, in sight of the street (+10 prestige)",
+        "effects": [
+          { "type": "change_stat", "stat": "prestige", "amount": 10 }
+        ],
+        "resultText": "He goes without a word. By morning the quay knows which door would not open."
+      }
+    ]
   }
 ]

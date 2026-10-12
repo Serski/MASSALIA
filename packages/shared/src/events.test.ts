@@ -223,17 +223,39 @@ describe("dated cards — content date on events", () => {
     expect(isCalendarEvent(dated("d", { yearBC: 300, season: 3 }))).toBe(true);
     expect(eventArena(dated("d", { yearBC: 300, season: 3 }))).toBe("council");
   });
-  it("content/events/events-dated.json: the Emporion Convoy and the Rhodanos Tolls", () => {
+  it("content/events/events-dated.json: the Emporion Convoy, the Rhodanos Tolls, the election notice and the shipper's purse", () => {
     const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
     const out = parseEventFile(JSON.parse(readFileSync(resolve(root, "content/events/events-dated.json"), "utf8")));
-    expect(out.map((e) => e.id)).toEqual(["dated-emporion-convoy", "dated-rhodanos-tolls"]);
-    expect(out.map((e) => datedSeasonIndex(e.date!))).toEqual([2, 5]);
+    expect(out.map((e) => e.id)).toEqual(["dated-emporion-convoy", "dated-rhodanos-tolls", "dated-election-notice-294", "dated-shippers-purse-293"]);
+    expect(out.map((e) => datedSeasonIndex(e.date!))).toEqual([2, 5, 27, 28]);
     for (const e of out) {
       expect(isCalendarEvent(e)).toBe(true);
+      // A dated card with no choice could never be resolved; the schema alone allows it.
+      expect(e.choices.length).toBeGreaterThan(0);
+    }
+    // The two payouts of prompt 1: council cards whose default takes 50 drachmae.
+    for (const e of out.slice(0, 2)) {
       expect(eventArena(e)).toBe("council");
       expect(defaultChoiceFor(e)?.id).toBe("take");
       expect(defaultChoiceFor(e)?.effects).toEqual([{ type: "change_drachmae", amount: 50 }]);
     }
+    // Dated cards prompt 2: the notice reaches everyone and settles itself with no effect.
+    const citizen = { classId: "trader", party: "none", isCouncilor: false, traitIds: [], stats: { prestige: 10, devotion: 10, militia: 10, intelligence: 10 } } as unknown as Parameters<typeof isEventEligible>[1];
+    const councilor = { ...citizen, isCouncilor: true } as unknown as Parameters<typeof isEventEligible>[1];
+    const notice = out[2]!;
+    expect(eventArena(notice)).toBe("general");
+    expect(isEventEligible(notice, citizen)).toBe(true);
+    expect(defaultChoiceFor(notice)?.id).toBe("noted");
+    expect(defaultChoiceFor(notice)?.effects).toEqual([]);
+    // The purse is a seated oligarch's choice with no default: unanswered, it lapses.
+    const purse = out[3]!;
+    expect(eventArena(purse)).toBe("council");
+    expect(isEventEligible(purse, citizen)).toBe(false);
+    expect(isEventEligible(purse, councilor)).toBe(true);
+    expect(defaultChoiceFor(purse)).toBeNull();
+    expect(purse.choices.map((c) => c.id)).toEqual(["take", "refuse"]);
+    expect(purse.choices[0]!.effects).toEqual([{ type: "change_drachmae", amount: 100 }, { type: "change_stat", stat: "prestige", amount: -5 }]);
+    expect(purse.choices[1]!.effects).toEqual([{ type: "change_stat", stat: "prestige", amount: 10 }]);
     expect(() => assertOneDatedEventPerSeason(out)).not.toThrow();
   });
 });
