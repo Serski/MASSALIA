@@ -172,3 +172,16 @@ Not in the hour before the 00:00 UTC season rollover, and before 2026-10-13 23:0
 - read only, after the next sync: World 2's war agenda_cycles (none until 14 Oct) and league_wars (none)
 
 Anything off is a STOP: report it and wait. Do not write to production to fix it.
+
+## Rulings on STOP 1 (12 Oct)
+
+1. Keep commit 2's three bridging lines; no squash.
+2. The Cities line takes nationName: "At war with the Volcae through …", "At war with Carthage through …".
+3. The League ledger row reads "War declared on Carthage" / "War declared on the Cadurci" (nationName), in the place of "Passed measure: …".
+4. The docket note reads "Opens <opensLabel>. Shown as it would open today; raids and events can change it."
+5. Noted: spanLabel exported from leagueProjects.ts. Fine.
+6. War before the festival on the Council tab. Fine.
+7. Keep the three extra tests.
+8. Keep: the League's shared veto now hides the button, as intended.
+
+Make 2, 3 and 4 one commit, `war: the words as ruled at STOP 1`, with the tests that pin those strings updated. Then append these rulings to docs/politics/government-prompt-4.md as its own docs commit, run the gate at HEAD and the audit, and push as the prompt says (plain git push, not at or after 23:00 UTC) with its full push report, including 0074 in __massalia_migrations and the three scope checks.
