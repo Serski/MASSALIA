@@ -96,7 +96,6 @@ describe("canDeclare", () => {
     isRegent: false,
     party: "palaioi",
     side: "palaioi" as const,
-    barredFromLeagueOffice: false,
     electedTermsInOffice: 0,
   };
 
@@ -113,8 +112,12 @@ describe("canDeclare", () => {
     expect(canDeclare({ ...base, isRegent: true }, cfg).ok).toBe(false);
   });
 
-  it("bars party leaders via the barredFromLeagueOffice hook", () => {
-    expect(canDeclare({ ...base, barredFromLeagueOffice: true }, cfg).ok).toBe(false);
+  it("a party leader may stand: there is no leadership bar in the input (politics prompt 3b)", () => {
+    // The bar was a field the server set from the party_archon / party_ephor
+    // seats; it is gone, so the input has no way to express it and a living,
+    // seated leader on their own side passes like any other member.
+    expect("barredFromLeagueOffice" in base).toBe(false);
+    expect(canDeclare(base, cfg)).toEqual({ ok: true });
   });
 
   it("a party member may only stand on their own side", () => {

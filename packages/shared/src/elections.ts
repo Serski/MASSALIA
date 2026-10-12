@@ -110,7 +110,6 @@ export interface DeclareInput {
   isRegent: boolean; // regents are barred from elected office (reuse regentMayHoldOffice)
   party: string; // 'none' | 'palaioi' | 'dynatoi'
   side: OfficeSide; // the side they wish to stand on
-  barredFromLeagueOffice: boolean; // party Archon/Ephor hook (Prompt 3) — false for now
   electedTermsInOffice: number; // prior acquired_via='elected' terms in THIS office (this character)
 }
 
@@ -120,7 +119,6 @@ export function canDeclare(input: DeclareInput, cfg: ElectionConfig): DeclareChe
   if (input.status !== "alive") return { ok: false, reason: "The dead cannot stand for office." };
   if (!input.isSeatHolder) return { ok: false, reason: "Only a seat-holder of the Three Hundred may stand." };
   if (input.isRegent) return { ok: false, reason: "A regent may not hold elected office while holding a seat in trust." };
-  if (input.barredFromLeagueOffice) return { ok: false, reason: "A party leader may not stand for league office." };
   if (input.party !== "none" && input.party !== input.side) {
     return { ok: false, reason: "You may only stand on your own party's side." };
   }

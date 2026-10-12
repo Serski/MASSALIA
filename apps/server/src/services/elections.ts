@@ -63,17 +63,6 @@ async function currentGameYear(now: Date): Promise<number> {
   return world ? gameDate(now.getTime(), world.startedMs).yearInGame : 0;
 }
 
-// Prompt 3: a for-life party leader (party_archon / party_ephor) may NOT stand for
-// league office — the career fork between machine boss and magistrate. canDeclare
-// reads this flag and rejects them.
-async function barredFromLeagueOffice(characterId: string): Promise<boolean> {
-  const rows = await db
-    .select({ office: offices.office })
-    .from(offices)
-    .where(eq(offices.holderCharacterId, characterId));
-  return rows.some((r) => r.office === "party_archon" || r.office === "party_ephor");
-}
-
 // --- The lazy-on-read net + worker delegator --------------------------------
 
 // Open due declarations + advance phases + reconcile vacancies. Idempotent and
@@ -118,7 +107,6 @@ export async function declareCandidacy(row: CharacterRow, office: LeagueOffice, 
       isRegent: !regentMayHoldOffice(row, office),
       party: row.party,
       side,
-      barredFromLeagueOffice: await barredFromLeagueOffice(row.id),
       electedTermsInOffice: await electedTermCount(row.id, office),
     },
     ecfg(),
@@ -202,7 +190,6 @@ export async function electionsView(row: CharacterRow, now: Date = new Date()): 
           isRegent: isRegentBarred(election.office as LeagueOffice),
           party: row.party,
           side,
-          barredFromLeagueOffice: await barredFromLeagueOffice(row.id),
           electedTermsInOffice: terms,
         },
         cfg,

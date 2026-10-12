@@ -724,7 +724,7 @@ function PartyGovernmentSection({ party, onRefresh }: { party: "palaioi" | "dyna
             key={l.office}
             name={l.holder ? l.holder.name : "— vacant —"}
             nameSuffix={<span className="person-suffix"> · {l.office === "party_archon" ? "Party Archon" : "Party Ephor"}</span>}
-            role={l.youHold ? "You hold this seat (for life)" : "For life · barred from league office"}
+            role={l.youHold ? "You hold this seat (for life)" : "For life"}
             traits={l.youHold ? [{ label: "You", tone: "good" }] : []}
           />
         ))}

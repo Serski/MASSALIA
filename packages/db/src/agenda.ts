@@ -227,15 +227,6 @@ async function internalPartyBallotPool(worldId: string, party: Party, exclude: s
   return tallyBallot(candidates, votes, 1).winners[0] ?? null;
 }
 
-// Characters barred from LEAGUE office: anyone holding a party_archon / party_ephor.
-export async function partyLeaderCharacterIds(worldId: string): Promise<Set<string>> {
-  const rows = await db
-    .select({ holder: offices.holderCharacterId })
-    .from(offices)
-    .where(and(eq(offices.worldId, worldId), inArray(offices.office, ["party_archon", "party_ephor"])));
-  return new Set(rows.map((r) => r.holder).filter((h): h is string => !!h));
-}
-
 // --- Endorsement (party leader shifts swing weight to an endorsee) -----------
 
 export async function recordEndorsement(worldId: string, electionId: string, endorserCharacterId: string, party: Party, endorseeCharacterId: string): Promise<void> {
