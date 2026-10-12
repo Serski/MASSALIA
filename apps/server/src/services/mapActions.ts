@@ -338,8 +338,8 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
     // 1. Target: a town, or a townless land region; neither fog, Massalia's,
     // nor ours. Massalia's own ground answers as such before the towns rule
     // (R060 holds a town). A region with towns is attacked through its towns.
-    // An attack on another house's holding is refused (raids prompt 3); a raid
-    // or a scout there is not.
+    // An attack (raids prompt 3) or a raid (holdings prompt 2) on another
+    // house's holding is refused; a scout there is not.
     const holdings = await listHoldings(tx, ctx);
     const townId = input.townId ?? null;
     let regionId: string;
@@ -349,7 +349,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
       regionId = region;
       if (regionId === topology.massaliaRegion || (await townContentOwner(townId)) === HOME_POLITY_ID || (await homeRegions(topology)).has(regionId)) return fail(409, "Massalia does not act against her own.");
       if (holdings.some((h) => h.townId === townId)) return fail(409, "You hold this town.");
-      if (input.type === "attack" && (await holderOf(tx, ctx.worldId, regionId, townId)) !== null) return fail(409, "Another house holds this town.");
+      if (input.type !== "scout" && (await holderOf(tx, ctx.worldId, regionId, townId)) !== null) return fail(409, "Another house holds this town.");
     } else {
       if (typeof input.regionId !== "string" || !topology.land.has(input.regionId)) return fail(404, "No such region.");
       regionId = input.regionId;
@@ -357,7 +357,7 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
       const townsHere = [...topology.townRegion.entries()].some(([, r]) => r === regionId);
       if (townsHere) return fail(409, "This land answers to its towns: choose one.");
       if (holdings.some((h) => h.regionId === regionId && h.townId === "")) return fail(409, "You hold this land.");
-      if (input.type === "attack" && (await holderOf(tx, ctx.worldId, regionId, "")) !== null) return fail(409, "Another house holds this land.");
+      if (input.type !== "scout" && (await holderOf(tx, ctx.worldId, regionId, "")) !== null) return fail(409, "Another house holds this land.");
     }
 
     // 2. Rows: ours, active, not moving, one base, at least one; a scout needs speed.
@@ -577,8 +577,9 @@ export async function resolveMarch(marchId: string, now: Date): Promise<MarchRes
     const holder = await holderOf(tx, ctx.worldId, regionId, townId ?? "");
     if (rows.length === 0) {
       report = { type: kind, ...common, homeAt: null, town: null, fleet: null, destination, winner: "dispersed", rounds: 0, attacker: { rows: [], losses: 0 }, defender: null, plunder: null, conquest: null, intel: null, opinion: null, line: renderMarchLine({ stage: "dispersed", action: kind, force: [], place: placeName }) };
-    } else if (holder === ctx.playerId || (holder !== null && kind === "attack")) {
-      // 5b. The place is its own house's now, or another house's for an attack: the party turns back whole.
+    } else if (holder === ctx.playerId || (holder !== null && kind !== "scout")) {
+      // 5b. The place is its own house's now, or another house's for an attack or a
+      // raid (holdings prompt 2): the party turns back whole. A scout still reads it.
       const stage = holder === ctx.playerId ? "ours" : "taken";
       report = { type: kind, ...common, homeAt: homeAt.toISOString(), town: null, fleet: null, destination, winner: "turned_back", rounds: 0, attacker: { rows: attackerRows(), losses: 0 }, defender: null, plunder: null, conquest: null, intel: null, opinion: null, line: renderMarchLine({ stage, action: kind, force: forceText, place: placeName }) };
     } else {

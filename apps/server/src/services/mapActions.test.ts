@@ -251,18 +251,23 @@ suite("Map actions (integration)", () => {
     const hoplitesA = await insertRow(a.ctx, { unitId: "hoplite", count: 30 });
     const peltastsA = await insertRow(a.ctx, { unitId: "peltast", count: 20 });
     const hoplitesB = await insertRow(b.ctx, { unitId: "hoplite", count: 30 });
+    const peltastsB = await insertRow(b.ctx, { unitId: "peltast", count: 20 });
     const attackA = await launch(a.ctx, "attack", "R046", [hoplitesA.id], at(9));
     const raidA = await launch(a.ctx, "raid", "R046", [peltastsA.id], fought(at(9), 5));
     const attackB = await launch(b.ctx, "attack", "R046", [hoplitesB.id], fought(at(9), 10));
-    expect([attackA.ok, raidA.ok, attackB.ok]).toEqual([true, true, true]);
-    if (!attackA.ok || !raidA.ok || !attackB.ok) return;
-    // In arrival order: A takes the place; A's own raid finds it ours; B's attack finds it another house's.
-    for (const sent of [attackA, raidA, attackB]) expect(await m.actions.resolveMarch(sent.report.marchId, new Date(sent.report.arrivesAt))).toEqual({ outcome: "resolved" });
+    const raidB = await launch(b.ctx, "raid", "R046", [peltastsB.id], fought(at(9), 15));
+    expect([attackA.ok, raidA.ok, attackB.ok, raidB.ok]).toEqual([true, true, true, true]);
+    if (!attackA.ok || !raidA.ok || !attackB.ok || !raidB.ok) return;
+    // In arrival order: A takes the place; A's own raid finds it ours; B's attack, and
+    // B's raid (holdings prompt 2), find it another house's.
+    for (const sent of [attackA, raidA, attackB, raidB]) expect(await m.actions.resolveMarch(sent.report.marchId, new Date(sent.report.arrivesAt))).toEqual({ outcome: "resolved" });
     expect((await marchRow(attackA.report.marchId)).report).toMatchObject({ winner: "attacker", conquest: { regionId: "R046" } });
     expect((await marchRow(raidA.report.marchId)).report).toMatchObject({ winner: "turned_back", line: "20 peltasts found Salyes already ours and turned back." });
     expect((await marchRow(attackB.report.marchId)).report).toMatchObject({ winner: "turned_back", defender: null, line: "30 hoplites found Salyes held by another house and turned back." });
+    expect((await marchRow(raidB.report.marchId)).report).toMatchObject({ winner: "turned_back", defender: null, plunder: null, line: "20 peltasts found Salyes held by another house and turned back." });
     expect((await rows(a.ctx)).find((x) => x.id === peltastsA.id)).toMatchObject({ count: 20, movingTo: "R060", arrivesAt: home(fought(at(9), 5), 30) });
     expect((await rows(b.ctx)).find((x) => x.id === hoplitesB.id)).toMatchObject({ count: 30, movingTo: "R060", arrivesAt: home(fought(at(9), 10), 30) });
+    expect((await rows(b.ctx)).find((x) => x.id === peltastsB.id)).toMatchObject({ count: 20, movingTo: "R060", arrivesAt: home(fought(at(9), 15), 30) });
     expect((await holdingsOf(a.ctx)).map((h) => h.regionId)).toEqual(["R046"]);
     expect(await warband("R046")).toBe(0);
   });
@@ -536,7 +541,7 @@ suite("Map actions (integration)", () => {
     await recordChronicle(characterId);
   });
 
-  it("another house's holding: an attack is refused at launch and nothing moves; a raid there still goes", async () => {
+  it("another house's holding: an attack or a raid is refused at launch and nothing moves; a scout there still goes", async () => {
     const a = await makePlayer();
     const b = await makePlayer();
     await m.holdings.insertConquest(db, a.ctx, "R046", "unclaimed", at(8));
@@ -544,12 +549,16 @@ suite("Map actions (integration)", () => {
     const hoplites = await insertRow(b.ctx, { unitId: "hoplite", count: 30 });
     expect(await act(b.ctx, "attack", "R046", [hoplites.id])).toEqual({ ok: false, code: 409, error: "Another house holds this land." });
     expect(await actTown(b.ctx, "attack", "reii", [hoplites.id])).toEqual({ ok: false, code: 409, error: "Another house holds this town." });
+    // A raid too (holdings prompt 2).
+    expect(await act(b.ctx, "raid", "R046", [hoplites.id])).toEqual({ ok: false, code: 409, error: "Another house holds this land." });
+    expect(await actTown(b.ctx, "raid", "reii", [hoplites.id])).toEqual({ ok: false, code: 409, error: "Another house holds this town." });
     expect((await rows(b.ctx)).find((x) => x.id === hoplites.id)).toMatchObject({ basedAt: "R060", count: 30, movingTo: null });
     expect((await holdingsOf(a.ctx)).map((h) => [h.regionId, h.townId])).toEqual([["R046", ""], ["R047", "reii"]]);
-    // A raid on the held land goes on as before.
+    // A scout of the held land goes on as before: it reads the place and fights nothing.
     await setWarband("R046", 100, at(9));
-    const raid = await act(b.ctx, "raid", "R046", [hoplites.id]);
-    expect(raid).toMatchObject({ ok: true, report: { type: "raid" } });
+    const peltasts = await insertRow(b.ctx, { unitId: "peltast", count: 10 });
+    const scout = await act(b.ctx, "scout", "R046", [peltasts.id]);
+    expect(scout).toMatchObject({ ok: true, report: { type: "scout", intel: { warband: 100 } } });
   });
 
   it("the altar: a bull lit before the fight raises every row's morale; a blessing that went cold before it gives nothing", async () => {
