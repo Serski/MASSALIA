@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import Fastify, { type FastifyInstance } from "fastify";
 import cookie from "@fastify/cookie";
 
@@ -48,7 +48,7 @@ suite("GET /api/map/military (integration)", () => {
 
   beforeEach(async () => {
     await db.execute(
-      sql`TRUNCATE TABLE town_intel, region_intel, town_military, region_military, sessions, player_characters, players, dynasties, worlds, users CASCADE`,
+      sql`TRUNCATE TABLE player_holdings, town_intel, region_intel, town_military, region_military, sessions, player_characters, players, dynasties, worlds, users CASCADE`,
     );
     await db
       .insert(m.dbPkg.houses)
@@ -68,14 +68,15 @@ suite("GET /api/map/military (integration)", () => {
   // A user + active player + dynasty + character row + live session. The character
   // row is inserted directly so the route's ensureCharacterRow finds it and never
   // reaches the content-config-dependent creation path.
-  async function freshPlayer() {
+  async function freshPlayer(opts: { name?: string; houseSlug?: string } = {}) {
     const user = (await db.insert(m.dbPkg.users).values({ email: `u-${crypto.randomUUID()}@t`, passwordHash: "x" }).returning())[0]!;
-    const player = (await db.insert(m.dbPkg.players).values({ worldId, userId: user.id, name: `P-${crypto.randomUUID().slice(0, 8)}`, color: "#123456" }).returning())[0]!;
+    const name = opts.name ?? `P-${crypto.randomUUID().slice(0, 8)}`;
+    const player = (await db.insert(m.dbPkg.players).values({ worldId, userId: user.id, name, color: "#123456", ...(opts.houseSlug ? { houseSlug: opts.houseSlug } : {}) }).returning())[0]!;
     const dynasty = (await db.insert(m.dbPkg.dynasties).values({ worldId, name: "House Test" }).returning())[0]!;
     await db.insert(m.dbPkg.playerCharacters).values({ playerId: player.id, worldId, dynastyId: dynasty.id, houseSlug: "test-house", classId: "trader" });
     const raw = crypto.randomBytes(32).toString("base64url");
     await db.insert(m.dbPkg.sessions).values({ userId: user.id, tokenHash: crypto.createHash("sha256").update(raw).digest("hex"), expiresAt: new Date(Date.now() + DAY) });
-    return { dynastyId: dynasty.id, cookie: `massalia_session=${app.signCookie(raw)}` };
+    return { playerId: player.id, name, dynastyId: dynasty.id, cookie: `massalia_session=${app.signCookie(raw)}` };
   }
 
   const get = (cookieHeader?: string) =>
@@ -123,5 +124,36 @@ suite("GET /api/map/military (integration)", () => {
     expect(mine.regions.R129).toBeDefined();
     expect(theirs.towns.rome).toBeUndefined();
     expect(theirs.regions.R129).toBeUndefined();
+  });
+
+  // Holdings prompt 1: who holds a conquered place is public to every player.
+  it("every holding's holder is public to every player, by house and character name, and nothing more", async () => {
+    // The houses row is shared across the DB suites: read its name back, never pin it.
+    const house = (await db.select({ name: m.dbPkg.houses.name }).from(m.dbPkg.houses).where(eq(m.dbPkg.houses.slug, "test-house")))[0]!;
+    const townHolder = await freshPlayer({ name: "Konrad", houseSlug: "test-house" });
+    const landHolder = await freshPlayer({ name: "Damon" }); // no house: the join is a left join
+    const onlooker = await freshPlayer();
+    const at = new Date(T0 + 10 * DAY);
+    await db.insert(m.dbPkg.playerHoldings).values([
+      { worldId, regionId: "R047", townId: "reii", ownerPlayerId: townHolder.playerId, kind: "conquest", previousOwner: "saluvii", since: at, lastGarrisonedAt: at, lastTributeAt: at },
+      { worldId, regionId: "R046", townId: "", ownerPlayerId: landHolder.playerId, kind: "conquest", previousOwner: "unclaimed", since: at, lastGarrisonedAt: at, lastTributeAt: at },
+    ]);
+
+    type Body = { towns: Record<string, unknown>; regions: Record<string, unknown>; holdings: { towns: Record<string, unknown>; regions: Record<string, unknown> } };
+    const expected = {
+      towns: { reii: { playerId: townHolder.playerId, characterName: "Konrad", houseName: house.name } },
+      regions: { R046: { playerId: landHolder.playerId, characterName: "Damon", houseName: null } },
+    };
+    for (const viewer of [townHolder, landHolder, onlooker]) {
+      const body = (await get(viewer.cookie)).json() as Body;
+      expect(body.holdings).toEqual(expected);
+      // Exactly the three keys: never the garrison, the tribute or a date.
+      expect(Object.keys(body.holdings.towns.reii as object).sort()).toEqual(["characterName", "houseName", "playerId"]);
+      expect(Object.keys(body.holdings.regions.R046 as object).sort()).toEqual(["characterName", "houseName", "playerId"]);
+      // The pools are as they were: home towns only, no foreign region.
+      expect(body.towns.massalia).toEqual({ garrison: 1000, pentekonters: 10, triremes: 30, source: "home" });
+      expect(body.towns.reii).toBeUndefined();
+      expect(body.regions.R046).toBeUndefined();
+    }
   });
 });

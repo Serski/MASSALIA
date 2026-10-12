@@ -29,9 +29,13 @@ type ChangeType = "occupy" | "annex";
 // dynasty's scouting snapshot. Anything without an entry is simply unknown.
 const HOME_POLITY = "massalia";
 type MilitarySource = "home" | "intel";
+// Who holds a conquered place (holdings prompt 1): public to every player, and
+// only these three fields — never the garrison, the tribute or a date.
+type Holder = { playerId: string; characterName: string; houseName: string | null };
 interface MilitaryPayload {
   towns: Record<string, { garrison: number; pentekonters: number; triremes: number; source: MilitarySource; scoutedGameDate?: string }>;
   regions: Record<string, { warband: number; source: MilitarySource; scoutedGameDate?: string }>;
+  holdings: { towns: Record<string, Holder>; regions: Record<string, Holder> };
 }
 
 // Open /stream connections per user id. A user may hold at most MAX_STREAMS_PER_USER
@@ -122,13 +126,17 @@ export async function mapRoutes(app: FastifyInstance) {
   // requester is entitled to see: live pools for anything Massalia owns ("home",
   // visible to every authenticated player) and the requester's own dynasty's intel
   // snapshots ("intel", frozen numbers + the game date scouted). Nothing else is
-  // ever included — no other dynasty's intel, no foreign live pool. Read-only, so
-  // it is deliberately NOT behind MAP_MUTATIONS_ENABLED.
+  // ever included — no other dynasty's intel, no foreign live pool. The holders
+  // of every conquered town and region are public (holdings prompt 1): every
+  // player sees who holds what, by house and character name, and nothing more
+  // about the holding. Read-only, so it is deliberately NOT behind
+  // MAP_MUTATIONS_ENABLED.
   app.get("/military", async (request, reply) => {
     const { createDb, townIntel, regionIntel, townMilitary, regionMilitary } = await import("@massalia/db");
     const { requireAuth } = await import("../services/auth.js");
     const { ensureCharacterRow, getActivePlayer, getActiveWorldId } = await import("../services/character.js");
     const { loadMilitaryOwners } = await import("../services/mapMilitary.js");
+    const { listWorldHoldings } = await import("../services/holdings.js");
     const { and, eq, inArray } = await import("drizzle-orm");
     const db = (_db ??= createDb());
     const user = await requireAuth(request);
@@ -170,7 +178,13 @@ export async function mapRoutes(app: FastifyInstance) {
         regions[r.regionId] = { warband: r.warband, source: "intel", scoutedGameDate: r.scoutedGameDate };
       }
     }
-    return { towns, regions } satisfies MilitaryPayload;
+    const holdings: MilitaryPayload["holdings"] = { towns: {}, regions: {} };
+    for (const h of await listWorldHoldings(db, worldId)) {
+      const holder: Holder = { playerId: h.playerId, characterName: h.characterName, houseName: h.houseName };
+      if (h.townId) holdings.towns[h.townId] = holder;
+      else holdings.regions[h.regionId] = holder;
+    }
+    return { towns, regions, holdings } satisfies MilitaryPayload;
   });
 
   // Reach (barracks prompt 3a): which land provinces the player's force can

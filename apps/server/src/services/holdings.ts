@@ -1,5 +1,5 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { createDb, effectLog, playerCharacters, playerHoldings, playerUnits } from "@massalia/db";
+import { createDb, effectLog, houses, playerCharacters, playerHoldings, players, playerUnits } from "@massalia/db";
 import { renderCampaignLine, type CampaignPayload } from "@massalia/shared";
 import { creditResource, getOrCreateResource, type ActingContext } from "./buildings.js";
 import { getBattleContent, isActive } from "./barracks.js";
@@ -45,6 +45,24 @@ export async function listHoldings(exec: Exec, ctx: ActingContext): Promise<Hold
     .select()
     .from(playerHoldings)
     .where(and(eq(playerHoldings.worldId, ctx.worldId), eq(playerHoldings.ownerPlayerId, ctx.playerId)))
+    .orderBy(playerHoldings.since, playerHoldings.regionId, playerHoldings.townId);
+}
+
+// Every holding in the world with who holds it (holdings prompt 1): the place
+// and the holder's player id, character name and house name, for the map every
+// player sees. Nothing else about the holding — no garrison, tribute or date —
+// and no filter on the holder: every holding the server would refuse an attack
+// on appears, so the map never offers what the server refuses. The house is a
+// left join: a player without one still shows.
+export type WorldHolding = { regionId: string; townId: string; playerId: string; characterName: string; houseName: string | null };
+
+export async function listWorldHoldings(exec: Exec, worldId: string): Promise<WorldHolding[]> {
+  return exec
+    .select({ regionId: playerHoldings.regionId, townId: playerHoldings.townId, playerId: playerHoldings.ownerPlayerId, characterName: players.name, houseName: houses.name })
+    .from(playerHoldings)
+    .innerJoin(players, eq(players.id, playerHoldings.ownerPlayerId))
+    .leftJoin(houses, eq(houses.slug, players.houseSlug))
+    .where(eq(playerHoldings.worldId, worldId))
     .orderBy(playerHoldings.since, playerHoldings.regionId, playerHoldings.townId);
 }
 
