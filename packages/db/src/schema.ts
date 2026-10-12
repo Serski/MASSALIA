@@ -558,7 +558,8 @@ export const oligarchSeats = pgTable("oligarch_seats", {
 
 // The yearly chamber vote: one per world per game year, open for one season.
 // scope is 'league' | 'palaioi' | 'dynatoi' | 'festival' (the festival motion,
-// government prompt 3, migration 0073); the check in 0023 was widened for it.
+// government prompt 3, migration 0073) | 'war' (the war motion, government
+// prompt 4, migration 0074); the check in 0023 was widened for each.
 export const chamberVotes = pgTable("chamber_votes", {
   id: uuid("id").primaryKey().defaultRandom(),
   worldId: uuid("world_id").references(() => worlds.id).notNull(),
@@ -698,6 +699,8 @@ export const treasuryLedger = pgTable("treasury_ledger", {
 // Agenda cycle state: drafting → voting → resolved on the season clock.
 // scope admits 'festival' too (government prompt 3, migration 0073): the
 // League's Summer docket of festivals, voted in Autumn for the coming year.
+// And 'war', the fifth scope (government prompt 4, migration 0074): the
+// League's Spring docket of wars, voted in Summer.
 export const agendaCycles = pgTable("agenda_cycles", {
   id: uuid("id").primaryKey().defaultRandom(),
   worldId: uuid("world_id").references(() => worlds.id).notNull(),
@@ -718,6 +721,8 @@ export const agendaCycles = pgTable("agenda_cycles", {
 // One veto per Ephor per term (scoped by the office term-started year).
 // A festival veto is recorded under scope 'league' (the one veto per term is
 // shared, government prompt 3); the check admits 'festival' since 0073 all the same.
+// A war veto is recorded under 'league' too (government prompt 4); the check
+// admits 'war', the fifth scope, since 0074.
 export const ephorVetoes = pgTable("ephor_vetoes", {
   id: uuid("id").primaryKey().defaultRandom(),
   worldId: uuid("world_id").references(() => worlds.id).notNull(),
@@ -1278,6 +1283,26 @@ export const leagueFestivals = pgTable("league_festivals", {
   endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
 }, (table) => ({
   oneFestivalPerYear: unique("league_festivals_world_id_game_year_key").on(table.worldId, table.gameYear),
+}));
+
+// The League's wars (government prompt 4, migration 0074): one row per war the
+// chamber has passed. starts_at is the instant the vote closed, ends_at the
+// instant peace comes, ended_at stamped once when it does. One war declared per
+// world per year, and one open war per nation (the partial index, created in
+// the migration and mirrored here for reference).
+export const leagueWars = pgTable("league_wars", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  factionId: text("faction_id").notNull(),
+  gameYear: integer("game_year").notNull(),
+  cost: integer("cost").notNull(),
+  agendaCycleId: uuid("agenda_cycle_id").references(() => agendaCycles.id),
+  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+  endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+}, (table) => ({
+  oneWarPerYear: unique("league_wars_world_id_game_year_key").on(table.worldId, table.gameYear),
+  oneOpenPerFaction: uniqueIndex("league_wars_one_open_per_faction").on(table.worldId, table.factionId).where(sql`ended_at IS NULL`),
 }));
 
 export const factionRelations = pgTable("faction_relations", {
