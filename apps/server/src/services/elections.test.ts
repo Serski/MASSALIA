@@ -193,6 +193,25 @@ suite("Archon & Ephor elections (integration)", () => {
     expect(await m.elections.declareCandidacy(await fresh(seatless.id), "archon", undefined, declareNow)).toMatchObject({ ok: false }); // no oligarch seat
   });
 
+  // --- A party leader may stand (politics prompt 3b) ------------------------
+  it("a seated Palaioi party_archon declares for Archon on the Palaioi bench: eligible before, a candidate after", async () => {
+    const leader = await createCharacter("Hegemon", { party: "palaioi" });
+    // The for-life party seat, as the world's first sync hands it out: interim, no end.
+    await db.insert(m.dbPkg.offices).values({ worldId, office: "party_archon", side: "palaioi", seatSlot: 0, holderCharacterId: leader.id, independentHolder: false, acquiredVia: "interim", termStartedYear: 0, termEndsYear: null });
+    await m.dbPkg.openElectionsIfDue(m.festival.getCalendarConfig(), declareNow);
+
+    const before = (await m.elections.electionsView(await fresh(leader.id), declareNow)).offices.find((o) => o.office === "archon")!;
+    expect(before.youMayDeclare).toEqual({ palaioi: true, dynatoi: false });
+    expect(before.youAreCandidate).toBe(false);
+
+    expect(await m.elections.declareCandidacy(await fresh(leader.id), "archon", "palaioi", declareNow)).toEqual({ ok: true, office: "archon", side: "palaioi" });
+
+    const after = (await m.elections.electionsView(await fresh(leader.id), declareNow)).offices.find((o) => o.office === "archon")!;
+    expect(after.youAreCandidate).toBe(true);
+    // The party seat is untouched by the declaration.
+    expect((await officeSeat("party_archon", "palaioi")).holderCharacterId).toBe(leader.id);
+  });
+
   // --- Death cascade ---------------------------------------------------------
   it("death cascade: Archon dies → same-side Ephor ascends → appoints a new Ephor", async () => {
     const archon = await seatHolderOffice("archon", "palaioi", "Archelaos", "palaioi");

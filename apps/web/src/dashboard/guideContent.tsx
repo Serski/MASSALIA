@@ -103,7 +103,7 @@ export const GUIDE_SECTIONS: GuideSection[] = [
     id: "politics",
     title: "The City's Politics",
     paragraphs: [
-      "Two parties contest the city: the PALAIOI, keepers of the old ways, and the DYNATOI, men of the new. Join one and build favor. The Archons and Ephors are elected — declare, campaign, win the vote, take office; the Strategoi are appointed. The wealthy may buy a seat among the Three Hundred. But choose your ambition: a party's for-life leader may never stand for the city's offices — machine boss or magistrate, not both. The unfree have no voice until freedom.",
+      "Two parties contest the city: the PALAIOI, keepers of the old ways, and the DYNATOI, men of the new. Join one and build favor. The Archons and Ephors are elected — declare, campaign, win the vote, take office; the Strategoi are appointed. The wealthy may buy a seat among the Three Hundred. A party's for-life leaders may stand for the city's offices too. The unfree have no voice until freedom.",
     ],
   },
 ];
