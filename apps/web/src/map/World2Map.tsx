@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { forceStats, HOME_POLITY_ID, marchMinutes, moveVerdict, REACH_REASON, renderForce, renderPlunder, routeFor, verdictsFor, type CampaignForcePart, type MapActionType } from "@massalia/shared";
 import { api, apiBaseUrl, ApiError, type BarracksRosterRow, type BaseView, type MapActReport, type MapActType, type MapMoveReport, type MapReachView, type MapSetOutReport, type MoveTargetView, type ReachEntry } from "../api.js";
 import { AssetIcon, ChoicePicker, CULTURE_WEBP, formatClock, formatDuration, marchLine, POLITY_CREST, titleCase, useCountdownSeconds } from "../dashboard/shared.js";
-import { mapActionButtons, withReach, type MapActionButton } from "./mapActions.js";
+import { mapActionButtons, withHolder, withReach, type MapActionButton } from "./mapActions.js";
 
 // Attack, Raid and Scout are the actions that resolve (Colonise waits for 3d).
 const actionable = (type: MapActionType): type is MapActType => type === "attack" || type === "raid" || type === "scout";
@@ -26,6 +26,39 @@ export function holdingLine(b: BaseView): string {
   }
   const goods = [h.perDay.grain ? `${h.perDay.grain} grain` : null, h.perDay.timber ? `${h.perDay.timber} timber` : null].filter(Boolean).join(", ");
   return `Held by your house · ${goods} a day · +${h.levyPerYear} levy a year`;
+}
+
+// Who holds a conquered place, as GET /api/map/military publishes it to every
+// player (holdings prompt 1): three fields and nothing more about the holding.
+export type HoldingHolder = { playerId: string; characterName: string; houseName: string | null };
+export type PublicHoldings = { towns: Record<string, HoldingHolder>; regions: Record<string, HoldingHolder> };
+const NO_HOLDINGS: PublicHoldings = { towns: {}, regions: {} };
+
+// The line another house's holding reads: "Held by House Leonidas · Konrad Curze".
+export function holderLine(h: HoldingHolder): string {
+  return h.houseName ? `Held by House ${h.houseName} · ${h.characterName}` : `Held by ${h.characterName}`;
+}
+// The suffix a held town carries in its region's town list.
+export function townHeldSuffix(h: HoldingHolder | null, yours: boolean): string {
+  if (yours) return " · held by your house";
+  if (!h) return "";
+  return h.houseName ? ` · held by House ${h.houseName}` : ` · held by ${h.characterName}`;
+}
+
+// Whether a region with towns flips to its towns' holder (holdings prompt 1,
+// ruling 2a): every one of its towns held, all by the same player. A region with
+// no towns never flips through this rule, and a town held by a second house, or
+// by nobody, blocks it.
+export function regionFlipHolder(townIds: readonly string[], townHoldings: Record<string, HoldingHolder>): HoldingHolder | null {
+  if (townIds.length === 0) return null;
+  let holder: HoldingHolder | null = null;
+  for (const id of townIds) {
+    const h = townHoldings[id];
+    if (!h) return null;
+    if (holder && holder.playerId !== h.playerId) return null;
+    holder ??= h;
+  }
+  return holder;
 }
 
 /**
@@ -72,11 +105,13 @@ type TownStats = { population: number; walls: number };
 type TownStatsFile = { version: number; towns: Record<string, TownStats> };
 // GET /api/map/military: Massalia's live pools ("home", every player) and this
 // dynasty's scouting snapshots ("intel", frozen at scoutedGameDate). A target with
-// no entry is simply unknown to the player ("No survey yet").
+// no entry is simply unknown to the player ("No survey yet"). `holdings` is who
+// holds every conquered place, public to every player (holdings prompt 1);
+// optional, since an older server sends none.
 type MilitarySource = "home" | "intel";
 type TownMilitaryView = { garrison: number; pentekonters: number; triremes: number; source: MilitarySource; scoutedGameDate?: string };
 type RegionMilitaryView = { warband: number; source: MilitarySource; scoutedGameDate?: string };
-type MilitaryPayload = { towns: Record<string, TownMilitaryView>; regions: Record<string, RegionMilitaryView> };
+type MilitaryPayload = { towns: Record<string, TownMilitaryView>; regions: Record<string, RegionMilitaryView>; holdings?: PublicHoldings };
 
 type Rect = { x: number; y: number; w: number; h: number };
 type Box = { w: number; h: number };
@@ -395,7 +430,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
     fetch(MILITARY_SRC, { credentials: "include" })
       .then((response) => (response.ok ? (response.json() as Promise<MilitaryPayload>) : null))
       .then((payload) => {
-        if (payload) setMilitary({ towns: payload.towns ?? {}, regions: payload.regions ?? {} });
+        if (payload) setMilitary({ towns: payload.towns ?? {}, regions: payload.regions ?? {}, holdings: payload.holdings ?? NO_HOLDINGS });
       })
       .catch(() => {});
   }, []);
@@ -498,6 +533,25 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
     for (const id of held) owners[id] = HOME_POLITY_ID;
     return { ...politics, owners };
   }, [politics, held]);
+  // Every house's holdings, public (holdings prompt 1). A place is the viewer's
+  // when it is in reachBases (heldTowns / heldRegions), and another house's when
+  // it is here and not there.
+  const holdings = military.holdings ?? NO_HOLDINGS;
+  const otherTownHolder = (townId: string): HoldingHolder | null => (heldTowns.has(townId) ? null : holdings.towns[townId] ?? null);
+  const otherRegionHolder = (regionId: string): HoldingHolder | null => (heldRegions.has(regionId) ? null : holdings.regions[regionId] ?? null);
+  // The paint: what every viewer sees coloured. politicsView plus every house's
+  // held region and every region whose towns are all held by one house (ruling
+  // 2a). Display only — the legality (regionActions, townOwnerId) keeps reading
+  // politicsView, so another house's holding never reads as Massalia's own.
+  const paintView = useMemo<Politics | null>(() => {
+    if (!politicsView || !world) return politicsView;
+    const flipped = new Set<string>(Object.keys(holdings.regions));
+    for (const province of world.provinces) if (regionFlipHolder(province.towns, holdings.towns)) flipped.add(province.id);
+    if (flipped.size === 0) return politicsView;
+    const owners = { ...politicsView.owners };
+    for (const id of flipped) owners[id] = HOME_POLITY_ID;
+    return { ...politicsView, owners };
+  }, [politicsView, world, holdings]);
 
   // Display names for every place a picker or a mission line may mention:
   // regions from the names file, towns from the world file, and whatever the
@@ -537,11 +591,11 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   // layer and the name labels; stable across camera moves.
   const realms = useMemo(() => {
     const out: { id: string; name: string; regions: Province[]; area: number; x: number; y: number }[] = [];
-    if (!world || !politicsView) return out;
+    if (!world || !paintView) return out;
     const byPolity = new Map<string, Province[]>();
     for (const province of land) {
-      const owner = politicsView.owners[province.id];
-      if (!owner || owner === "unclaimed" || !politicsView.polities[owner]) continue;
+      const owner = paintView.owners[province.id];
+      if (!owner || owner === "unclaimed" || !paintView.polities[owner]) continue;
       const list = byPolity.get(owner) ?? [];
       list.push(province);
       byPolity.set(owner, list);
@@ -554,25 +608,29 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
         area += m.area;
         if (m.area > largest.area) largest = m;
       }
-      out.push({ id, name: politicsView.polities[id]!.name, regions, area, x: largest.x, y: largest.y });
+      out.push({ id, name: paintView.polities[id]!.name, regions, area, x: largest.x, y: largest.y });
     }
     return out;
-  }, [world, land, politicsView]);
+  }, [world, land, paintView]);
 
   // Town id -> culture icon URL, for towns whose region has a culture-bearing
-  // owner. Stable across camera moves (depends only on world + politics).
+  // owner. A held town (anyone's) carries Massalia's own culture icon whether or
+  // not its region flipped (holdings prompt 1). Stable across camera moves.
   const townCultureIcon = useMemo(() => {
     const out = new Map<string, string>();
-    if (!world || !politicsView) return out;
+    if (!world || !paintView) return out;
     for (const province of world.provinces) {
-      const owner = politicsView.owners[province.id];
-      const culture = owner ? politicsView.polities[owner]?.culture : undefined;
+      const owner = paintView.owners[province.id];
+      const culture = owner ? paintView.polities[owner]?.culture : undefined;
       const icon = culture ? CULTURE_WEBP[culture] : undefined;
       if (!icon) continue;
       for (const townId of province.towns) out.set(townId, icon);
     }
+    const homeCulture = paintView.polities[HOME_POLITY_ID]?.culture;
+    const homeIcon = homeCulture ? CULTURE_WEBP[homeCulture] : undefined;
+    if (homeIcon) for (const townId of [...heldTowns.keys(), ...Object.keys(holdings.towns)]) out.set(townId, homeIcon);
     return out;
-  }, [world, politicsView]);
+  }, [world, paintView, heldTowns, holdings]);
 
   // --- Camera plumbing ------------------------------------------------------
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -966,8 +1024,8 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
             Unowned regions are skipped — the terrain shows through anyway. */}
         <g pointerEvents="none">
           {land.map((province) => {
-            const polityId = politicsView?.owners[province.id];
-            const color = polityId ? politicsView?.polities[polityId]?.color : undefined;
+            const polityId = paintView?.owners[province.id];
+            const color = polityId ? paintView?.polities[polityId]?.color : undefined;
             if (!color) return null;
             return (
               <path
@@ -1064,13 +1122,17 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   const townOpacity = camera ? townOpacityFor(camera, worldRect) : 0;
 
   const selectedProvince = selected ? provincesById.get(selected) ?? null : null;
+  // The legality's owner (politicsView) and the paint's owner (paintView): they
+  // differ only on another house's holding, which is painted Massalia's but is
+  // not hers for the matrix (holdings prompt 1, ruling 4).
   const selectedOwnerId = selectedProvince ? politicsView?.owners[selectedProvince.id] ?? null : null;
-  const selectedOwner = selectedOwnerId ? politicsView?.polities[selectedOwnerId] ?? null : null;
+  const paintOwnerId = selectedProvince ? paintView?.owners[selectedProvince.id] ?? null : null;
+  const paintOwner = paintOwnerId ? paintView?.polities[paintOwnerId] ?? null : null;
   const selectedHeld = selectedProvince ? held.has(selectedProvince.id) : false;
   const selectedTownObj = selectedTown ? townsById.get(selectedTown) ?? null : null;
-  const stateName = selectedOwner?.name ?? "Unclaimed";
-  const stateColor = selectedOwner?.color ?? UNCLAIMED_GREY;
-  const cultureIcon = selectedOwner?.culture ? CULTURE_WEBP[selectedOwner.culture] : undefined;
+  const stateName = paintOwner?.name ?? "Unclaimed";
+  const stateColor = paintOwner?.color ?? UNCLAIMED_GREY;
+  const cultureIcon = paintOwner?.culture ? CULTURE_WEBP[paintOwner.culture] : undefined;
   // Land regions are named in names2.json; sea zones read as open water. The id
   // itself is never shown: it rides along on the dialog as data-region only
   // (not data-rid, so the map's tap hit-test can never match the dialog).
@@ -1102,7 +1164,10 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
     return { buttons, caption: buttons.some((b) => b.title === winterLine) ? winterLine : actions.caption };
   };
   const regionActions = selectedProvince
-    ? withWinter(withReach(mapActionButtons({ kind: "region", hasTown: selectedProvince.towns.length > 0, ownerId: selectedOwnerId }), regionReach, reachFleet))
+    ? withHolder(
+        withWinter(withReach(mapActionButtons({ kind: "region", hasTown: selectedProvince.towns.length > 0, ownerId: selectedOwnerId }), regionReach, reachFleet)),
+        otherRegionHolder(selectedProvince.id) ? "Another house holds this land." : null,
+      )
     : null;
   // "Your garrison: 30 hoplites · Your men: 20 peltasts returning in 02:14:07".
   const forceParts = (rows: BarracksRosterRow[]): CampaignForcePart[] => {
@@ -1155,7 +1220,12 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   // legality matrix), while its region keeps its owner.
   const selectedTownHeld = selectedTown ? heldTowns.get(selectedTown) ?? null : null;
   const townOwnerId = selectedTownHeld ? HOME_POLITY_ID : selectedOwnerId;
-  const townActions = selectedTown ? withWinter(withReach(mapActionButtons({ kind: "town", hasTown: true, ownerId: townOwnerId }), townReach, reachFleet)) : null;
+  // Another house's town (holdings prompt 1): painted Massalia's, Attack greyed
+  // with the server's sentence, the rest as the matrix and the reach say.
+  const townHolderOther = selectedTown ? otherTownHolder(selectedTown) : null;
+  const townActions = selectedTown
+    ? withHolder(withWinter(withReach(mapActionButtons({ kind: "town", hasTown: true, ownerId: townOwnerId }), townReach, reachFleet)), townHolderOther ? "Another house holds this town." : null)
+    : null;
   // "Your men here: 20 hoplites" on a place of ours, "Your garrison" on a held region.
   const menLabel = selectedTown || !selectedHeld ? "Your men here" : "Your garrison";
   const yourMenHere = yourMenLine?.replace("Your garrison", menLabel) ?? null;
@@ -1169,13 +1239,18 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
     </div>
   ) : null;
   const heldLine = (b: BaseView | null) => (b?.holding ? holdingLine(b) : null);
+  // Another house's region, or a region flipped by its towns (ruling 2a) that
+  // are not all the viewer's: the holder line under the town list.
+  const regionHolderOther = selectedProvince
+    ? otherRegionHolder(selectedProvince.id) ?? (selectedProvince.towns.every((t) => heldTowns.has(t)) ? null : regionFlipHolder(selectedProvince.towns, holdings.towns))
+    : null;
 
   const regionBody = selectedProvince ? (
     <>
       <button type="button" className="w2map-info-close" onClick={closeInfo} aria-label="Close">Close</button>
       <div className="w2map-info-body">
         <div className="w2map-state">
-          <StateCrest polityId={selectedOwnerId} color={stateColor} />
+          <StateCrest polityId={paintOwnerId} color={stateColor} />
           <div className="w2map-state-text">
             <h2 className="w2map-state-name">
               {stateName}
@@ -1185,7 +1260,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
           </div>
         </div>
         <div className="w2map-info-label">Culture</div>
-        <div className="w2map-info-row">{selectedOwner?.culture ? titleCase(selectedOwner.culture) : "—"}</div>
+        <div className="w2map-info-row">{paintOwner?.culture ? titleCase(paintOwner.culture) : "—"}</div>
         <div className="w2map-info-label">Terrain</div>
         <div className="w2map-info-row">{terrain}</div>
         {selectedProvince.type === "land" && selectedProvince.towns.length === 0 ? (
@@ -1206,7 +1281,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
               {selectedProvince.towns.map((townId) => (
                 <li key={townId}>
                   <button type="button" className="w2map-town-entry" onClick={() => setSelectedTown(townId)}>
-                    <span>{townsById.get(townId)?.name ?? "Unnamed town"}</span>
+                    <span>{(townsById.get(townId)?.name ?? "Unnamed town") + townHeldSuffix(holdings.towns[townId] ?? null, heldTowns.has(townId))}</span>
                     <span className="w2map-town-entry-go" aria-hidden="true">›</span>
                   </button>
                 </li>
@@ -1221,6 +1296,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
           <>
             {yourMenHere ? <p className="w2map-your-men">{yourMenHere}</p> : null}
             {selectedHeld ? <p className="w2map-held">{heldLine(heldRegions.get(selectedProvince.id) ?? null) ?? "Held by your house — a base for your forces."}</p> : null}
+            {!selectedHeld && regionHolderOther ? <p className="w2map-held">{holderLine(regionHolderOther)}</p> : null}
             {sendMenHere || selectedProvince.towns.length === 0 ? <div className="w2map-info-label">Actions</div> : null}
             {sendMenHere ?? (selectedProvince.towns.length > 0 ? null : (
               <div className="w2map-actions">
@@ -1252,12 +1328,13 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
     <TownPanel
       town={selectedTownObj}
       regionName={regionName}
-      stateName={selectedTownHeld ? (politicsView?.polities[HOME_POLITY_ID]?.name ?? "Massalia") : stateName}
-      ownerId={townOwnerId}
-      color={selectedTownHeld ? politicsView?.polities[HOME_POLITY_ID]?.color ?? stateColor : stateColor}
+      stateName={selectedTownHeld || townHolderOther ? (paintView?.polities[HOME_POLITY_ID]?.name ?? "Massalia") : stateName}
+      ownerId={selectedTownHeld || townHolderOther ? HOME_POLITY_ID : townOwnerId}
+      color={selectedTownHeld || townHolderOther ? paintView?.polities[HOME_POLITY_ID]?.color ?? stateColor : stateColor}
       stats={townStats[selectedTownObj.id]}
       mil={military.towns[selectedTownObj.id]}
       held={selectedTownHeld}
+      holder={townHolderOther}
       yourMen={yourMenHere}
       actions={townActions!}
       canSendMen={sendMenHere !== null}
@@ -1423,8 +1500,10 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
 // The town panel: "Walls 2 · Population 4,000" from the public survey (every
 // town), garrison and fleet only when the player is entitled to them (home or
 // intel) with "No survey yet" otherwise, the player's men standing there, the
-// holding line for a held town, and the actions — Attack, Raid and Scout open
+// holding line for a held town (the viewer's, with its tribute; another
+// house's, with its holder), and the actions — Attack, Raid and Scout open
 // the picker; on a place of the player's, SEND MEN HERE replaces the row.
+// `ownerId` is the crest only: the actions come in computed.
 // ---------------------------------------------------------------------------
 
 export function TownPanel({
@@ -1436,6 +1515,7 @@ export function TownPanel({
   stats,
   mil,
   held,
+  holder,
   yourMen,
   actions,
   canSendMen,
@@ -1453,6 +1533,7 @@ export function TownPanel({
   stats: TownStats | undefined;
   mil: TownMilitaryView | undefined;
   held: BaseView | null;
+  holder: HoldingHolder | null;
   yourMen: string | null;
   actions: { buttons: MapActionButton[]; caption: string | null };
   canSendMen: boolean;
@@ -1506,7 +1587,7 @@ export function TownPanel({
         </dl>
         {mil?.source === "intel" ? <p className="w2map-stat-asof">as of {mil.scoutedGameDate}</p> : null}
         {yourMen ? <p className="w2map-your-men">{yourMen}</p> : null}
-        {held ? <p className="w2map-held">{holdingLine(held)}</p> : null}
+        {held ? <p className="w2map-held">{holdingLine(held)}</p> : holder ? <p className="w2map-held">{holderLine(holder)}</p> : null}
         <div className="w2map-info-label">Actions</div>
         {canSendMen ? (
           <div className="w2map-actions">

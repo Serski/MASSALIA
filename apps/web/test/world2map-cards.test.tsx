@@ -57,16 +57,25 @@ afterEach(() => {
 
 const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 40)); });
 
+// Massalia's polity is in the politics file (crest, colour, culture) but owns no
+// region here: a Massalia-coloured fill or a Greek town icon on this map can
+// only come from a holding (holdings prompt 1).
+const POLITICS = { polities: { boii: { name: "Boii", color: "#123" }, massalia: { name: "Massalia", color: "#e0a33c", culture: "greek" } }, owners: { R046: "boii", R047: "boii" } };
+const MASSALIA_FILLS = (svg: SVGSVGElement) => svg.querySelectorAll('path[fill="#e0a33c"]').length;
+// A holder as GET /api/map/military publishes it.
+const KONRAD = { playerId: "p-konrad", characterName: "Konrad Curze", houseName: "Leonidas" };
+
 // The roster /api/barracks answers (a party on the march, for the arrival case),
-// and the reach's `now` taken when it answers, so the clock offset is nil.
-async function mountMap(roster: BarracksRosterRow[] = []) {
+// and the reach's `now` taken when it answers, so the clock offset is nil. The
+// military read answers `military` (no holdings unless given, as an old server).
+async function mountMap(roster: BarracksRosterRow[] = [], military: Record<string, unknown> = { towns: {}, regions: {} }) {
   const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = String(input);
     if (url.endsWith("/map2/world2.json")) return jsonResponse(WORLD);
-    if (url.endsWith("/map2/politics2.json")) return jsonResponse({ polities: { boii: { name: "Boii", color: "#123" } }, owners: { R046: "boii", R047: "boii" } });
+    if (url.endsWith("/map2/politics2.json")) return jsonResponse(POLITICS);
     if (url.endsWith("/map2/names2.json")) return jsonResponse({ version: 1, names: { R060: "Massalia", R046: "Salyes", R047: "Vocontii" } });
     if (url.endsWith("/map2/townstats.json")) return jsonResponse({ version: 1, towns: {} });
-    if (url.includes("/api/map/military")) return jsonResponse({ towns: {}, regions: {} });
+    if (url.includes("/api/map/military")) return jsonResponse(military);
     if (url.includes("/api/map/reach")) return jsonResponse({ ...REACH, now: new Date().toISOString() });
     if (url.includes("/api/barracks")) return jsonResponse({ roster });
     return jsonResponse({ error: "not found" }, 404);
@@ -137,6 +146,52 @@ describe("World2Map region cards", () => {
     const town = view.container.querySelector('[role="dialog"][data-town-id="album"]')!;
     expect(town).not.toBeNull();
     expect(town.querySelector(".w2map-state-name")!.textContent).toBe("Album");
+  });
+
+  // Holdings prompt 1: another house's holdings, as every viewer sees them.
+  it("a townless region another house holds is painted Massalia's, reads its holder, and greys Attack with the server's sentence", async () => {
+    const { view, svg } = await mountMap([], { towns: {}, regions: {}, holdings: { towns: {}, regions: { R046: KONRAD } } });
+    expect(MASSALIA_FILLS(svg)).toBe(1);
+    await act(async () => tap(svg, "R046"));
+    const card = view.container.querySelector('[role="dialog"][data-region="R046"]')!;
+    expect(card.querySelector(".w2map-state-name")!.textContent).toContain("Massalia");
+    expect(card.querySelector(".w2map-held")!.textContent).toBe("Held by House Leonidas · Konrad Curze");
+    const buttons = [...card.querySelectorAll<HTMLButtonElement>(".w2map-action")];
+    const by = (label: string) => buttons.find((b) => b.textContent === label)!;
+    expect(by("Attack").disabled).toBe(true);
+    expect(by("Attack").getAttribute("title")).toBe("Another house holds this land.");
+    expect(by("Raid").disabled).toBe(false);
+    expect(card.textContent).not.toContain("Massalia does not act against her own");
+  });
+
+  it("one held town of two shows its holder and Massalia's icon but leaves the region's colour; both held by one house flip it", async () => {
+    const one = await mountMap([], { towns: {}, regions: {}, holdings: { towns: { reii: KONRAD }, regions: {} } });
+    expect(MASSALIA_FILLS(one.svg)).toBe(0);
+    // The held town carries the Greek icon; its unheld neighbour keeps the plain dot (Boii has no culture here).
+    expect(one.svg.querySelector('[data-town="reii"] image')?.getAttribute("href")).toContain("greek");
+    expect(one.svg.querySelector('[data-town="album"] image')).toBeNull();
+    await act(async () => tap(one.svg, "R047"));
+    const card = one.view.container.querySelector('[role="dialog"][data-region="R047"]')!;
+    expect(card.querySelector(".w2map-state-name")!.textContent).toContain("Boii");
+    const entries = [...card.querySelectorAll('[data-testid="town-entries"] .w2map-town-entry')];
+    expect(entries.map((e) => e.textContent?.replace("›", "").trim())).toEqual(["Reii · held by House Leonidas", "Album"]);
+    expect(card.querySelector(".w2map-held")).toBeNull();
+    await act(async () => {
+      fireEvent.click(entries[0]!);
+    });
+    const town = one.view.container.querySelector('[role="dialog"][data-town-id="reii"]')!;
+    expect(town.querySelector(".w2map-region-name")!.textContent).toBe("Massalia · Vocontii");
+    expect(town.querySelector(".w2map-held")!.textContent).toBe("Held by House Leonidas · Konrad Curze");
+    expect((town.querySelector("img.w2map-crest") as HTMLImageElement).getAttribute("src")).toContain("MASSALIA");
+    cleanup();
+    vi.restoreAllMocks();
+
+    const both = await mountMap([], { towns: {}, regions: {}, holdings: { towns: { reii: KONRAD, album: KONRAD }, regions: {} } });
+    expect(MASSALIA_FILLS(both.svg)).toBe(1);
+    await act(async () => tap(both.svg, "R047"));
+    const flipped = both.view.container.querySelector('[role="dialog"][data-region="R047"]')!;
+    expect(flipped.querySelector(".w2map-state-name")!.textContent).toContain("Massalia");
+    expect(flipped.querySelector(".w2map-held")!.textContent).toBe("Held by House Leonidas · Konrad Curze");
   });
 
   it("a townless region keeps its action row, and Massalia's own region shows Send Men Here", async () => {
