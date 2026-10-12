@@ -118,7 +118,7 @@ suite("GET /api/league/cities: the tax each polis pays a season (integration)", 
     buildings: { id: string; name: string; cost: number; seasons: number; populationAbove: number | null; partyLean: string; effects: string[] }[];
     projects: { opensAt: string; opensLabel: string; drafting: boolean; items: { id: string; cityId: string; polis: string; buildingId: string; name: string }[] };
     festivals: { opensAt: string; opensLabel: string; drafting: boolean; items: { id: string; name: string; cost: number; partyLean: string; effects: string[] }[]; year: number; yearLabel: string };
-    wars: { opensAt: string; opensLabel: string; drafting: boolean; items: { id: string; factionId: string; name: string; bandLabel: string }[]; atWar: { factionId: string; name: string; throughLabel: string }[] };
+    wars: { opensAt: string; opensLabel: string; drafting: boolean; items: { id: string; factionId: string; name: string; bandLabel: string }[]; atWar: { factionId: string; name: string; nation: string; throughLabel: string }[] };
   };
   const works = async () => ((await get(await session())).json() as { works: Works }).works;
   const startDocket = () => leagueDocket(buildings, cities.cities.map((c) => ({ id: c.id, name: c.name, population: c.start.population })), new Set(), 60_000);
@@ -223,8 +223,15 @@ suite("GET /api/league/cities: the tax each polis pays a season (integration)", 
     // Declared at the world's start for 8 seasons: its last season is year 1's Autumn.
     await db.insert(m.dbPkg.leagueWars).values({ worldId, factionId: "carthage", gameYear: 0, cost: 2000, startsAt: worldStartedAt, endsAt: new Date(worldStartedAt.getTime() + 8 * DAY) });
     const w = await works();
-    expect(w.wars.atWar).toEqual([{ factionId: "carthage", name: "Carthage", throughLabel: "Autumn, 299 BC" }]);
+    expect(w.wars.atWar).toEqual([{ factionId: "carthage", name: "Carthage", nation: "Carthage", throughLabel: "Autumn, 299 BC" }]);
     expect(w.wars.items).toEqual(SIX_NATIONS.slice(0, 5));
+
+    // A people takes the article where a sentence names it; a major power does not.
+    await db.insert(m.dbPkg.factionRelations).values({ worldId, factionId: "volcae", stance: "hostile", opinion: -200, atWar: true });
+    await db.insert(m.dbPkg.leagueWars).values({ worldId, factionId: "volcae", gameYear: 1, cost: 2000, startsAt: worldStartedAt, endsAt: new Date(worldStartedAt.getTime() + 10 * DAY) });
+    expect((await works()).wars.atWar.map((x) => [x.name, x.nation, x.throughLabel]).sort()).toEqual([["Carthage", "Carthage", "Autumn, 299 BC"], ["Volcae", "the Volcae", "Spring, 298 BC"]]);
+    await db.delete(m.dbPkg.leagueWars).where(sql`world_id = ${worldId} AND faction_id = 'volcae'`);
+    await db.delete(m.dbPkg.factionRelations).where(sql`world_id = ${worldId} AND faction_id = 'volcae'`);
 
     const factions = await diplomacy();
     expect(factions.find((f) => f.id === "carthage")).toMatchObject({ atWar: true, warThroughLabel: "Autumn, 299 BC" });

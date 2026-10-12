@@ -147,12 +147,12 @@ describe("the League's plans on the Cities tab", () => {
   });
 
   it("the war docket comes last: when it opens, each nation with its band, and the wars under way", async () => {
-    const { container } = await mount(works({ wars: wars({ atWar: [{ factionId: "volcae", name: "Volcae", throughLabel: "Summer, 291 BC" }] }) }));
+    const { container } = await mount(works({ wars: wars({ atWar: [{ factionId: "volcae", name: "Volcae", nation: "the Volcae", throughLabel: "Summer, 291 BC" }, { factionId: "carthage", name: "Carthage", nation: "Carthage", throughLabel: "Winter, 290 BC" }] }) }));
     const cards = [...container.querySelectorAll<HTMLElement>(".works-buildings, .works-projects, .works-festivals, .works-wars")];
     expect(cards.map((c) => c.className.replace("dashboard-card ", ""))).toEqual(["works-buildings", "works-projects", "works-festivals", "works-wars"]);
     const w = cards[3]!;
     expect(texts(w, ".panel-label")).toEqual(["The war docket"]);
-    expect(texts(w, ".works-note")).toEqual(["Opens Spring, 293 BC. Shown as it would open today; a raid can sour a nation.", "At war with Volcae through Summer, 291 BC"]);
+    expect(texts(w, ".works-note")).toEqual(["Opens Spring, 293 BC. Shown as it would open today; raids and events can change it.", "At war with the Volcae through Summer, 291 BC", "At war with Carthage through Winter, 290 BC"]);
     expect(texts(w, ".works-row")).toEqual(["CadurciUnfriendly", "CarthageHostile"]);
     expect([...w.querySelectorAll(".works-row")].map((row) => [...row.querySelectorAll("span")].map((span) => span.textContent))).toEqual([["Cadurci", "Unfriendly"], ["Carthage", "Hostile"]]);
   });
@@ -163,7 +163,7 @@ describe("the League's plans on the Cities tab", () => {
     cleanup();
     vi.restoreAllMocks();
     const empty = await mount(works({ wars: wars({ items: [] }) }));
-    expect(texts(empty.container, ".works-wars .works-note")).toEqual(["Opens Spring, 293 BC. Shown as it would open today; a raid can sour a nation.", "No nation can go on it today."]);
+    expect(texts(empty.container, ".works-wars .works-note")).toEqual(["Opens Spring, 293 BC. Shown as it would open today; raids and events can change it.", "No nation can go on it today."]);
     expect(empty.container.querySelectorAll(".works-wars .works-row")).toHaveLength(0);
   });
 

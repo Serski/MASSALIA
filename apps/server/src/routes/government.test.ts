@@ -225,6 +225,8 @@ suite("GET /api/government and the public League scope (integration)", () => {
     await db.insert(m.dbPkg.leagueProjects).values({ worldId, cityId: "olbia", buildingId: "port", cost: 2000, startedAt: new Date(startedMs - 9 * DAY), completesAt: new Date(startedMs - DAY), completedAt: new Date(startedMs - DAY) });
     await db.insert(m.dbPkg.treasuryLedger).values({ worldId, owner: "league", delta: -2000, reason: "agenda:project:nikaia:walls" });
     await db.insert(m.dbPkg.treasuryLedger).values({ worldId, owner: "league", delta: -500, reason: "agenda:festival:dionysia:y1" });
+    await db.insert(m.dbPkg.treasuryLedger).values({ worldId, owner: "league", delta: -2000, reason: "agenda:war:carthage:y1" });
+    await db.insert(m.dbPkg.treasuryLedger).values({ worldId, owner: "league", delta: -2001, reason: "agenda:war:cadurci:y2" });
 
     const view = await government(strategos.token);
     expect(view.member).toBe(true);
@@ -237,6 +239,10 @@ suite("GET /api/government and the public League scope (integration)", () => {
     expect(view.treasury.ledger.map((l) => [l.delta, l.label])).toContainEqual([-2000, "Passed measure: The Walls of Nikaia"]);
     // A festival's spend reads "Festival held" (government prompt 3).
     expect(view.treasury.ledger.map((l) => [l.delta, l.label])).toContainEqual([-500, "Festival held: A Dionysia for 299 BC"]);
+    // A war's spend reads "War declared on <nation>" (government prompt 4): a major
+    // power by its name, a people with the article.
+    expect(view.treasury.ledger.map((l) => [l.delta, l.label])).toContainEqual([-2000, "War declared on Carthage"]);
+    expect(view.treasury.ledger.map((l) => [l.delta, l.label])).toContainEqual([-2001, "War declared on the Cadurci"]);
   });
 
   // --- The festival motion (government prompt 3) -------------------------------

@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { activeWorld, createDb, leagueCities, leagueProjects, treasuryBalance, treasuryLedgerRows } from "@massalia/db";
-import { formatGameDate, gameDate, governmentSeats, leagueTax, projectMotion, projectMotionId, treasuryReasonLabel, type GovernmentSeat } from "@massalia/shared";
-import { agendaScopeView, getLeagueBuildings, getLeagueCities, heldOffices, leagueMeasureTitle, type AgendaScopeView } from "./agenda.js";
+import { formatGameDate, gameDate, governmentSeats, leagueTax, nationName, parseWarMotionId, projectMotion, projectMotionId, treasuryReasonLabel, type GovernmentSeat } from "@massalia/shared";
+import { agendaScopeView, getLeagueBuildings, getLeagueCities, getWarFactions, heldOffices, leagueMeasureTitle, type AgendaScopeView } from "./agenda.js";
 import type { CharacterRow } from "./character.js";
 import { getPoliticsConfig } from "./oligarchy.js";
 
@@ -51,11 +51,18 @@ export type GovernmentView =
 const LEDGER_LINES = 40;
 
 // The words a League ledger row shows. A festival's spend (government prompt 3)
-// reads "Festival held: <title>"; everything else as treasuryReasonLabel says.
+// reads "Festival held: <title>"; a war's (government prompt 4) "War declared on
+// <nation>", the nation as nationName gives it; everything else as
+// treasuryReasonLabel says.
 function ledgerLabel(reason: string): string {
   if (reason.startsWith("agenda:festival:")) {
     const title = leagueMeasureTitle(reason.slice("agenda:".length));
     return title ? `Festival held: ${title}` : "Festival held";
+  }
+  if (reason.startsWith("agenda:war:")) {
+    const parsed = parseWarMotionId(reason.slice("agenda:".length));
+    const nation = parsed ? getWarFactions().find((f) => f.id === parsed.factionId) : undefined;
+    return nation ? `War declared on ${nationName(nation)}` : "War declared";
   }
   return treasuryReasonLabel(reason, leagueMeasureTitle);
 }

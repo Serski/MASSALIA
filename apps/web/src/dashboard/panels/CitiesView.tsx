@@ -115,7 +115,7 @@ function LeagueWorks({ works }: { works: LeagueWorksView }) {
         <DashboardCard className="works-wars">
           <div className="panel-label">The war docket</div>
           <p className="works-note" style={worksNoteStyle}>
-            {wars.drafting ? "Open now. The Archons choose one this season; the chamber votes next season." : `Opens ${wars.opensLabel}. Shown as it would open today; a raid can sour a nation.`}
+            {wars.drafting ? "Open now. The Archons choose one this season; the chamber votes next season." : `Opens ${wars.opensLabel}. Shown as it would open today; raids and events can change it.`}
           </p>
           {wars.items.length === 0 ? (
             <p className="works-note" style={worksNoteStyle}>No nation can go on it today.</p>
@@ -129,7 +129,7 @@ function LeagueWorks({ works }: { works: LeagueWorksView }) {
           )}
           {wars.atWar.map((w) => (
             <p key={w.factionId} className="works-note works-at-war" style={{ ...worksNoteStyle, margin: "8px 0 0" }}>
-              At war with {w.name} through {w.throughLabel}
+              At war with {w.nation} through {w.throughLabel}
             </p>
           ))}
         </DashboardCard>

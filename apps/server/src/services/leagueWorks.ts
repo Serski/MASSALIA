@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { activeWars, createDb, factionRelations, festivalDocketFor, getAgendaCycle, leagueDocketFor, warDocketFor } from "@massalia/db";
-import { buildingEffects, festivalEffects, festivalMotion, festivalYearLabel, formatGameDate, gameDate, nextAgendaDocket, opinionBand, projectMotion, REAL_MS_PER_SEASON, warMotion, type MotionScope } from "@massalia/shared";
+import { buildingEffects, festivalEffects, festivalMotion, festivalYearLabel, formatGameDate, gameDate, nationName, nextAgendaDocket, opinionBand, projectMotion, REAL_MS_PER_SEASON, warMotion, type MotionScope } from "@massalia/shared";
 import { getLeagueBuildings, getLeagueCities, getLeagueFestivals, getLeagueWar, getWarFactions } from "./agenda.js";
 import { getPoliticsConfig } from "./oligarchy.js";
 
@@ -59,6 +59,7 @@ export interface LeagueWorksWarItem {
 export interface LeagueWorksWarUnderWay {
   factionId: string;
   name: string;
+  nation: string; // as a sentence names it: "Carthage", "the Volcae"
   throughLabel: string; // the game date of the war's last season
 }
 
@@ -130,11 +131,10 @@ export async function leagueWorksView(world: { id: string; startedMs: number }, 
     if (!motion || !nation) continue;
     warItems.push({ id: motion.id, factionId: motion.factionId, name: motion.name, bandLabel: opinionBand(bars.get(nation.id) ?? nation.start.opinion).label });
   }
-  const atWar: LeagueWorksWarUnderWay[] = (await activeWars(db, world.id)).map((row) => ({
-    factionId: row.factionId,
-    name: nations.find((n) => n.id === row.factionId)?.name ?? row.factionId,
-    throughLabel: warThroughLabel(row.endsAt, world.startedMs),
-  }));
+  const atWar: LeagueWorksWarUnderWay[] = (await activeWars(db, world.id)).map((row) => {
+    const nation = nations.find((n) => n.id === row.factionId);
+    return { factionId: row.factionId, name: nation?.name ?? row.factionId, nation: nation ? nationName(nation) : row.factionId, throughLabel: warThroughLabel(row.endsAt, world.startedMs) };
+  });
 
   return {
     buildings: buildings.map((b) => ({ id: b.id, name: b.name, cost: b.cost, seasons: b.seasons, populationAbove: b.populationAbove, partyLean: b.partyLean, effects: buildingEffects(b, CITY_PLACEHOLDER) })),

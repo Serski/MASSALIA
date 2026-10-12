@@ -876,7 +876,8 @@ export type LeagueWorksFestivalItem = { id: string; name: string; cost: number; 
 export type LeagueWorksDocket<Item> = { opensAt: string; opensLabel: string; drafting: boolean; items: Item[] };
 // The war docket (government prompt 4): a nation a war could be put on, with the band of its bar now; and a war under way.
 export type LeagueWorksWarItem = { id: string; factionId: string; name: string; bandLabel: string };
-export type LeagueWorksWarUnderWay = { factionId: string; name: string; throughLabel: string };
+// `nation` is the nation as a sentence names it: "Carthage", "the Volcae".
+export type LeagueWorksWarUnderWay = { factionId: string; name: string; nation: string; throughLabel: string };
 export type LeagueWorksView = {
   buildings: LeagueWorksBuilding[];
   projects: LeagueWorksDocket<LeagueWorksProjectItem>;
