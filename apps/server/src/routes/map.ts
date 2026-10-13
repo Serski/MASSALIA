@@ -281,7 +281,7 @@ export async function mapRoutes(app: FastifyInstance) {
     const { applyComposureDelta } = await import("../services/composure.js");
     const { lockPlayer } = await import("../services/lock.js");
     const { reachView } = await import("../services/mapReach.js");
-    const { ordererFor } = await import("../services/leagueOrders.js");
+    const { leagueHarvestMap, ordererFor } = await import("../services/leagueOrders.js");
     const db = (_db ??= createDb());
     const user = await requireAuth(request);
     const worldId = await getActiveWorldId();
@@ -311,7 +311,10 @@ export async function mapRoutes(app: FastifyInstance) {
     // offers the League's army (government prompt 5b). The server checks the
     // seat again at GET /league and at every order.
     const commander = (await ordererFor(db, { id: character.id, worldId })) !== null;
-    return { ...view, commander };
+    // `harvest`, for a commander alone: where the League's army fought within
+    // the year, with the sentence his own raid or attack there is refused with
+    // (ruling 3 at STOP 1), by town and by townless region.
+    return { ...view, commander, ...(commander ? { harvest: await leagueHarvestMap(db, ctx, now) } : {}) };
   });
 
   // Map actions (barracks prompts 3b, 3c; raids prompt 4): Scout, Raid or

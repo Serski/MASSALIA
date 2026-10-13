@@ -23,6 +23,10 @@ export const leagueArmySchema = z
     source: z.string(),
     // What the League treasury pays per man per season.
     upkeepPerManPerSeason: z.number().positive(),
+    // For how many seasons after the League's army fights at a place the house
+    // of a sitting Archon or Strategos may not raid or attack it (government
+    // prompt 5b, ruling 3 at STOP 1): a year.
+    harvestBanSeasons: z.number().int().nonnegative(),
     // The town the whole fleet stands at; one of `towns`.
     fleetAt: z.string().min(1),
     // The army as it is raised, town by town, in the order the Government tab lists them.

@@ -444,6 +444,9 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   const [mode, setMode] = useState<MapMode>("house");
   const [commander, setCommander] = useState(false);
   const [leagueView, setLeagueView] = useState<LeagueExtras | null>(null);
+  // In the house's mode, for a commander: where the League's army fought within
+  // the year, with the server's refusal for his own raid or attack there.
+  const [harvest, setHarvest] = useState<MapReachView["harvest"] | null>(null);
   const league = mode === "league";
   // Military entitlements, read once per map load and again when a party bound
   // for the open place gets there (after the roster has answered, so the fight
@@ -556,6 +559,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
         if (cancelled) return;
         applyReach(view);
         setCommander(view.commander === true);
+        setHarvest(view.harvest ?? null);
       })
       .catch(() => {});
     return () => {
@@ -1210,16 +1214,18 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   };
   // Why Attack and Raid are greyed beyond the matrix, the reach and the winter,
   // in the server's own sentence: a holder (another house's holding, or the
-  // League's to a house), else, in the League's mode, the war gate (a nation at
-  // peace, or land of no nation). The server checks them in that order.
-  const refusalFor = (holder: HoldingHolder | null, place: "town" | "land", gate: string | undefined): string | null => {
+  // League's to a house); else, in the League's mode, the war gate (a nation at
+  // peace, or land of no nation), and in the house's mode, for a commander, a
+  // place the League's army fought at within the year. The server checks them
+  // in that order.
+  const refusalFor = (holder: HoldingHolder | null, place: "town" | "land", gate: string | undefined, fought: string | undefined): string | null => {
     if (holder) return holderRefusal(holder.league && !league ? "league" : "house", place);
-    return league ? gate ?? null : null;
+    return (league ? gate : fought) ?? null;
   };
   const regionActions = selectedProvince
     ? withHolder(
         withWinter(withReach(mapActionButtons({ kind: "region", hasTown: selectedProvince.towns.length > 0, ownerId: selectedOwnerId }), regionReach, reachFleet)),
-        refusalFor(otherRegionHolder(selectedProvince.id), "land", leagueView?.gate.regions[selectedProvince.id]),
+        refusalFor(otherRegionHolder(selectedProvince.id), "land", leagueView?.gate.regions[selectedProvince.id], harvest?.regions[selectedProvince.id]),
       )
     : null;
   // "Your garrison: 30 hoplites · Your men: 20 peltasts returning in 02:14:07".
@@ -1270,6 +1276,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
     setMoveTargets([]);
     setRoster(null);
     setLeagueView(null);
+    setHarvest(null);
     setMode(next);
   };
   // An action's answer is the set-out card (raids prompt 4): nothing is known
@@ -1298,7 +1305,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   // with the server's sentence, the rest as the matrix and the reach say.
   const townHolderOther = selectedTown ? otherTownHolder(selectedTown) : null;
   const townActions = selectedTown
-    ? withHolder(withWinter(withReach(mapActionButtons({ kind: "town", hasTown: true, ownerId: townOwnerId }), townReach, reachFleet)), refusalFor(townHolderOther, "town", leagueView?.gate.towns[selectedTown]))
+    ? withHolder(withWinter(withReach(mapActionButtons({ kind: "town", hasTown: true, ownerId: townOwnerId }), townReach, reachFleet)), refusalFor(townHolderOther, "town", leagueView?.gate.towns[selectedTown], harvest?.towns[selectedTown]))
     : null;
   // "Your men here: 20 hoplites" on a place of ours, "Your garrison" on a held region.
   const menLabel = selectedTown || !selectedHeld ? `${whose} men here` : `${whose} garrison`;

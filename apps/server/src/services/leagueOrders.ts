@@ -1,11 +1,12 @@
-import { and, eq, gte, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, gt, gte, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import { activeWorld, createDb, leagueOrders, leaguePlayerId, leagueWars, loadFactions, loadLeagueArmy, offices, playerCharacters, players, playerHoldings, playerMarches, playerUnits, playerVoyages, treasuries, treasuryLedger, type LeagueOrderForce, type LeagueOrderKind } from "@massalia/db";
-import { commandSeat, factionOfPolity, goodCategoryFor, HOME_POLITY_ID, leagueAtWarWith, leagueLedgerReason, leagueWarRefusal, seasonAt, vendorUnitPrice, type FactionDef, type LeagueWarSpan, type VendorAction } from "@massalia/shared";
+import { commandSeat, factionOfPolity, formatGameDate, gameDate, goodCategoryFor, harvestBanEndsMs, harvestRefusal, HOME_POLITY_ID, isLeagueFight, leagueAtWarWith, leagueLedgerReason, leagueWarRefusal, seasonAt, vendorUnitPrice, type FactionDef, type LeagueWarSpan, type VendorAction } from "@massalia/shared";
 import { isActive, type UnitRow } from "./barracks.js";
 import { creditResource, getBuildingsContent, getOrCreateResource, type ActingContext } from "./buildings.js";
 import { garrisonCount, holdingBaseId, listHoldings, settleHoldings, tributeRateOf, type HoldingsSettle } from "./holdings.js";
 import { lockPlayer } from "./lock.js";
 import { loadMilitaryOwners } from "./mapMilitary.js";
+import { regionDisplayName, townDisplayName } from "./mapNames.js";
 import { regionContentOwner, townContentOwner } from "./mapPools.js";
 
 // ---------------------------------------------------------------------------
@@ -386,6 +387,44 @@ export async function leagueSightings(exec: Exec, ctx: Pick<ActingContext, "play
     else out.regions[m.regionId] = { warband: intel.warband, scoutedGameDate: intel.scoutedGameDate };
   }
   return out;
+}
+
+// --- No harvest of the League's work ---------------------------------------------------
+
+// Where the League's army has fought within the ban (league-army.json's
+// harvestBanSeasons, a year), with the sentence the house of a sitting Archon
+// or Strategos is refused a raid or an attack there with: by town, and by
+// townless region. A fight is a raid or an attack that met the defenders
+// (isLeagueFight); the newest at a place sets the date the ban ends. Read from
+// the League's own resolved marches, as its sightings are.
+export async function leagueHarvestMap(exec: Exec, ctx: Pick<ActingContext, "worldId" | "worldStartedMs">, at: Date): Promise<{ towns: Record<string, string>; regions: Record<string, string> }> {
+  const out = { towns: {} as Record<string, string>, regions: {} as Record<string, string> };
+  const seasons = (await loadLeagueArmy()).harvestBanSeasons;
+  const leagueId = seasons > 0 ? await leaguePlayerId(exec, ctx.worldId) : null;
+  if (!leagueId) return out;
+  const since = new Date(harvestBanEndsMs(at.getTime(), -seasons));
+  const fought = await exec
+    .select({ kind: playerMarches.kind, regionId: playerMarches.regionId, townId: playerMarches.townId, arrivesAt: playerMarches.arrivesAt, report: playerMarches.report })
+    .from(playerMarches)
+    .where(and(eq(playerMarches.worldId, ctx.worldId), eq(playerMarches.ownerPlayerId, leagueId), eq(playerMarches.status, "resolved"), gt(playerMarches.arrivesAt, since), lte(playerMarches.arrivesAt, at)))
+    .orderBy(playerMarches.arrivesAt, playerMarches.id);
+  // Oldest first, so the newest fight at a place is the one that stands.
+  for (const m of fought) {
+    if (!isLeagueFight(m.kind, (m.report as { winner?: unknown } | null)?.winner)) continue;
+    const until = formatGameDate(gameDate(harvestBanEndsMs(m.arrivesAt.getTime(), seasons), ctx.worldStartedMs));
+    if (m.townId) out.towns[m.townId] = harvestRefusal(await townDisplayName(m.townId), until);
+    else out.regions[m.regionId] = harvestRefusal(await regionDisplayName(m.regionId), until);
+  }
+  return out;
+}
+
+// The refusal for one house's raid or attack on one place, or null: only for
+// the house of a character who sits as an Archon or a Strategos at this instant.
+export async function harvestRefusalFor(exec: Exec, ctx: ActingContext, characterId: string, regionId: string, townId: string | null, at: Date): Promise<string | null> {
+  const map = await leagueHarvestMap(exec, ctx, at);
+  const sentence = townId !== null ? map.towns[townId] : map.regions[regionId];
+  if (!sentence) return null;
+  return (await ordererFor(exec, { id: characterId, worldId: ctx.worldId })) ? sentence : null;
 }
 
 // The League treasury's balance, unlocked: for a view.

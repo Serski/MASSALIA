@@ -1955,6 +1955,10 @@ export type MapReachView = {
   // Whether the player sits as an Archon or a Strategos, so the map offers the
   // League's army (government prompt 5b). Optional: an older server sends none.
   commander?: boolean;
+  // For a commander alone: where the League's army fought within the year, with
+  // the server's refusal for his own raid or attack there, by town and by
+  // townless region (ruling 3 at STOP 1 of government prompt 5b).
+  harvest?: { towns: Record<string, string>; regions: Record<string, string> };
 };
 
 // GET /api/map/league (mirrors LeagueMapView in apps/server/src/services/mapReach.ts):

@@ -66,6 +66,10 @@ describe("league-army.json", () => {
     expect(() => parseLeagueArmy({ ...raw, towns: [{ townId: "massalia", units: { ...raw.towns[0].units, hoplite: 1.5 } }] })).toThrow();
     expect(() => parseLeagueArmy({ ...raw, extra: 1 })).toThrow();
     expect(() => parseLeagueArmy({ ...raw, upkeepPerManPerSeason: 0 })).toThrow();
+    // The harvest ban is whole seasons, never negative; the content's is a year of four.
+    expect(army.harvestBanSeasons).toBe(4);
+    expect(() => parseLeagueArmy({ ...raw, harvestBanSeasons: -1 })).toThrow();
+    expect(() => parseLeagueArmy({ ...raw, harvestBanSeasons: 1.5 })).toThrow();
   });
 });
 

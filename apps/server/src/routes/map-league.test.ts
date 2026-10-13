@@ -193,6 +193,30 @@ suite("the League's army on the map routes (integration)", () => {
     expect(marches.map((x) => x.owner).sort()).toEqual([archon.playerId, leagueId].sort());
   });
 
+  it("no harvest: GET /reach tells a commander where the League's army fought within the year, and POST /act refuses his own raid there in the same words; a citizen is told and refused nothing", async () => {
+    const archon = await freshPlayer({ office: "archon", side: "dynatoi" });
+    const citizen = await freshPlayer();
+    // The League's army fought at Reii an hour ago.
+    await db.insert(m.dbPkg.playerMarches).values({ worldId, ownerPlayerId: leagueId, kind: "raid", regionId: "R047", townId: "reii", baseId: "massalia", route: "land", steps: 1, minutes: 30, departedAt: new Date(Date.now() - 90 * 60_000), arrivesAt: new Date(Date.now() - 60 * 60_000), status: "resolved", resolvedAt: new Date(Date.now() - 60 * 60_000), report: { type: "raid", winner: "attacker", line: "Raided Reii." } });
+    const reach = async (cookieHeader: string) => (await get("/reach", cookieHeader)).json() as { commander: boolean; harvest?: { towns: Record<string, string>; regions: Record<string, string> } };
+    const told = await reach(archon.cookie);
+    expect(told.commander).toBe(true);
+    expect(Object.keys(told.harvest!.towns)).toEqual(["reii"]);
+    expect(told.harvest!.regions).toEqual({});
+    const sentence = told.harvest!.towns.reii!;
+    expect(sentence).toMatch(/^The League's army fought at Reii\. No Archon or Strategos may raid or attack it with his own men until (Winter|Spring|Summer|Autumn), \d+ BC\.$/);
+    const untold = await reach(citizen.cookie);
+    expect(untold.commander).toBe(false);
+    expect("harvest" in untold).toBe(false);
+
+    const row = (playerId: string) => db.insert(m.dbPkg.playerUnits).values({ worldId, ownerPlayerId: playerId, source: "trained", unitId: "peltast", count: 20, startCount: 20, recruitedSeason: 0, readyAt: new Date(Date.now() - DAY), basedAt: "R060" }).returning();
+    const raid = async (who: { playerId: string; cookie: string }) => app.inject({ method: "POST", url: "/api/map/act", headers: { cookie: who.cookie }, payload: { type: "raid", townId: "reii", rows: [{ rowId: (await row(who.playerId))[0]!.id, count: 20 }] } });
+    const refused = await raid(archon);
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json()).toEqual({ error: sentence });
+    expect((await raid(citizen)).statusCode).toBe(200);
+  });
+
   it("GET /military: a home town's garrison is the League's men standing in it, and a League holding is shown as the League's", async () => {
     const viewer = await freshPlayer();
     const archon = await freshPlayer({ office: "archon", side: "dynatoi" });

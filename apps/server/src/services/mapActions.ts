@@ -37,7 +37,7 @@ import { barracksView, getBandsContent, getBattleContent, getShipsContent, getUn
 import { getBuildingsContent, settleAll, type ActingContext } from "./buildings.js";
 import { raidOpinion, raidWarMultiplier, type RaidOpinion } from "./factionOpinion.js";
 import { creditDrachmae, creditGood, holderOf, insertConquest, insertTownConquest, listHoldings } from "./holdings.js";
-import { creditLeagueTreasury, debitLeagueTreasury, isLeague, leagueBalance, leagueWarGate, lockLeagueWrite, marketPrice, recordLeagueOrder, settleLeague, type LeagueContext } from "./leagueOrders.js";
+import { creditLeagueTreasury, debitLeagueTreasury, harvestRefusalFor, isLeague, leagueBalance, leagueWarGate, lockLeagueWrite, marketPrice, recordLeagueOrder, settleLeague, type LeagueContext } from "./leagueOrders.js";
 import { lockPlayer } from "./lock.js";
 import { getTopology } from "./mapGraph.js";
 import { basesOf, fleetInStock, forceRowOf, homeRegions, leagueMapView, reachView, type ReachView } from "./mapReach.js";
@@ -388,6 +388,14 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
         const holder = await holderOf(tx, ctx.worldId, regionId, "");
         if (holder !== null) return fail(409, holderRefusal(!league && holder === (await leaguePlayerId(tx, ctx.worldId)) ? "league" : "house", "land"));
       }
+    }
+
+    // 1a. No harvest of the League's work (ruling 3 at STOP 1): for a year after
+    // the League's army fights at a place, the house of a sitting Archon or
+    // Strategos may not raid or attack it. A scout is not refused.
+    if (!league && input.type !== "scout") {
+      const harvest = await harvestRefusalFor(tx, ctx, (await characterOf(tx, ctx.playerId)).id, regionId, townId, now);
+      if (harvest) return fail(409, harvest);
     }
 
     // 1b. The League raids and attacks only a nation it is at war with at this

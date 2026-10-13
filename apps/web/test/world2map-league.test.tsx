@@ -89,7 +89,7 @@ afterEach(() => {
 
 // `commander`: what GET /api/map/reach says of the seat (absent on an older
 // server). `leagueStatus`: what GET /api/map/league answers with.
-async function mountMap(opts: { commander?: boolean; military?: Record<string, unknown>; leagueStatus?: number } = {}) {
+async function mountMap(opts: { commander?: boolean; military?: Record<string, unknown>; leagueStatus?: number; harvest?: { towns: Record<string, string>; regions: Record<string, string> } } = {}) {
   const posts: { url: string; body: unknown }[] = [];
   const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
@@ -104,7 +104,7 @@ async function mountMap(opts: { commander?: boolean; military?: Record<string, u
       if (url.includes("/api/map/act")) return jsonResponse({ report: { ...SET_OUT, base: "R060" }, reach: { ...HOUSE_REACH, now: iso(Date.now()) }, force: HOUSE_REACH.force, fleet: HOUSE_REACH.fleet, roster: HOUSE_ROSTER });
     }
     if (url.includes("/api/map/league")) return (opts.leagueStatus ?? 200) === 200 ? jsonResponse({ ...LEAGUE_VIEW, now: iso(Date.now()) }) : jsonResponse({ error: "Only a sitting Archon or Strategos commands the League's army." }, opts.leagueStatus);
-    if (url.includes("/api/map/reach")) return jsonResponse({ ...HOUSE_REACH, now: iso(Date.now()), ...(opts.commander === undefined ? {} : { commander: opts.commander }) });
+    if (url.includes("/api/map/reach")) return jsonResponse({ ...HOUSE_REACH, now: iso(Date.now()), ...(opts.commander === undefined ? {} : { commander: opts.commander }), ...(opts.harvest ? { harvest: opts.harvest } : {}) });
     if (url.includes("/api/barracks")) return jsonResponse({ roster: HOUSE_ROSTER });
     return jsonResponse({ error: "not found" }, 404);
   });
@@ -276,6 +276,28 @@ describe("the house's mode, for a commander", () => {
     expect(m.posts[0]!.url).not.toContain("/league");
     expect(m.posts[0]!.body).toEqual({ type: "raid", townId: "reii", rows: [{ rowId: "h-1", count: 20 }] });
     expect(m.calls("/api/map/league")).toBe(0);
+  });
+
+  // Ruling 3 at STOP 1: no harvest of the League's work.
+  it("where the League's army fought within the year, a commander's own Raid and Attack are greyed with the server's sentence; Scout is not, and the next town is untouched", async () => {
+    const sentence = "The League's army fought at Reii. No Archon or Strategos may raid or attack it with his own men until Summer, 297 BC.";
+    const m = await mountMap({ commander: true, harvest: { towns: { reii: sentence }, regions: {} } });
+    await vi.waitFor(() => expect(m.modeButtons()).toHaveLength(2));
+    const reii = actionsOf(await openTown(m, "R047", "reii"));
+    expect(reii("Attack").disabled).toBe(true);
+    expect(reii("Attack").getAttribute("title")).toBe(sentence);
+    expect(reii("Raid").disabled).toBe(true);
+    expect(reii("Raid").getAttribute("title")).toBe(sentence);
+    expect(reii("Scout").disabled).toBe(false);
+    await act(async () => {
+      fireEvent.click(m.q<HTMLButtonElement>(".w2map-back")!);
+    });
+    await act(async () => {
+      fireEvent.click([...m.q('[role="dialog"][data-region="R047"]')!.querySelectorAll<HTMLButtonElement>(".w2map-town-entry")][1]!);
+    });
+    const album = actionsOf(m.q('[role="dialog"][data-town-id="album"]')!);
+    expect(album("Attack").disabled).toBe(false);
+    expect(album("Raid").disabled).toBe(false);
   });
 
   it("a League holding reads as the League's to every house: its line, its town entry, and Attack and Raid greyed with the server's sentence", async () => {

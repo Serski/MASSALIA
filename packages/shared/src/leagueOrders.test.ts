@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commandSeat, heldByLeagueLine, holderRefusal, LEAGUE_COMMAND_REFUSAL, LEAGUE_MOVE_REFUSAL, leagueAtWarWith, leaguePeaceLine, leagueSuppliesRefusal, leagueWarRefusal } from "./index.js";
+import { commandSeat, harvestBanEndsMs, harvestRefusal, heldByLeagueLine, holderRefusal, isLeagueFight, LEAGUE_COMMAND_REFUSAL, LEAGUE_MOVE_REFUSAL, leagueAtWarWith, leaguePeaceLine, leagueSuppliesRefusal, leagueWarRefusal } from "./index.js";
 
 // ---------------------------------------------------------------------------
 // The League's orders (government prompt 5b), pure rules and words: who
@@ -61,5 +61,21 @@ describe("a party that turned back", () => {
     expect(leaguePeaceLine([], "Karalis", { name: "Carthage", group: "major-powers" })).toBe("The League's men reached Karalis after the peace with Carthage and turned back.");
     expect(heldByLeagueLine(force, "Reii")).toBe("40 hoplites found Reii held by the League and turned back.");
     expect(heldByLeagueLine([], "Reii")).toBe("Our men found Reii held by the League and turned back.");
+  });
+});
+
+describe("no harvest of the League's work", () => {
+  it("a fight is a raid or an attack that met the defenders: won, broken or withdrawn; nothing else", () => {
+    for (const kind of ["raid", "attack"]) for (const winner of ["attacker", "defender", "stand"]) expect(isLeagueFight(kind, winner), `${kind} ${winner}`).toBe(true);
+    // A landing driven off, a party that turned back or broke up, and a scout.
+    for (const winner of ["repulsed", "turned_back", "dispersed", null, undefined]) expect(isLeagueFight("raid", winner), String(winner)).toBe(false);
+    expect(isLeagueFight("scout", null)).toBe(false);
+    expect(isLeagueFight("scout", "attacker")).toBe(false);
+    expect(isLeagueFight("move", "attacker")).toBe(false);
+  });
+  it("the ban ends a year of four seasons after the fight, and the refusal names the place and that date", () => {
+    expect(harvestBanEndsMs(10 * SEASON, 4)).toBe(14 * SEASON);
+    expect(harvestBanEndsMs(10 * SEASON, 0)).toBe(10 * SEASON);
+    expect(harvestRefusal("Reii", "Summer, 297 BC")).toBe("The League's army fought at Reii. No Archon or Strategos may raid or attack it with his own men until Summer, 297 BC.");
   });
 });

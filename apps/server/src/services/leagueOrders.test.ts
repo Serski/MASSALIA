@@ -496,6 +496,88 @@ suite("the League's orders (integration)", () => {
     expect(await ledger()).toEqual([]);
   });
 
+  // Ruling 3 at STOP 1: no harvest of the League's work.
+  it("no harvest: for a year after the League's army fights at a place, the house of a sitting Archon or Strategos may not raid or attack it; a scout may, and so may an Ephor's house and a citizen's", async () => {
+    const a = await archon();
+    await war("saluvii", at(8), at(20));
+    await setGarrison("reii", 10, at(9));
+    const sent = await m.actions.act(a.lctx, { type: "raid", townId: "reii", rows: [{ rowId: (await leagueRow("massalia", "peltast")).id, count: 40 }] }, at(9));
+    if (!sent.ok) throw new Error(sent.error);
+    const fought = plus(at(9), 30);
+    expect((await arrive(sent.report.marchId, fought)).winner).toBe("attacker");
+
+    // A year of four seasons from the fight: season 13, half an hour in.
+    const ends = plus(at(13), 30);
+    const until = m.shared.formatGameDate(m.shared.gameDate(ends.getTime(), T0));
+    const sentence = `The League's army fought at Reii. No Archon or Strategos may raid or attack it with his own men until ${until}.`;
+    expect(await m.league.leagueHarvestMap(db, a.lctx, at(10))).toEqual({ towns: { reii: sentence }, regions: {} });
+
+    const strategos = await makePlayer({ office: "strategos", side: null });
+    const ephor = await makePlayer({ office: "ephor", side: "palaioi" });
+    const citizen = await makePlayer();
+    // Each house has 200 peltasts at its base and sends 20 of them at a time (the
+    // house's settle folds its standing rows into one, so the row is read back each time).
+    for (const who of [a, strategos, ephor, citizen]) await houseRow(who.ctx, "peltast", 200);
+    const send = async (who: { ctx: Ctx }, type: "raid" | "attack" | "scout", when: Date) => {
+      const row = (await units(who.ctx.playerId)).find((r) => r.movingTo === null)!;
+      return m.actions.act(who.ctx, { type, townId: "reii", rows: [{ rowId: row.id, count: 20 }] }, when);
+    };
+    const refused = { ok: false, code: 409, error: sentence };
+    // The Archon who ordered it, and a Strategos who did not: both sit, both are refused.
+    expect(await send(a, "raid", at(10))).toEqual(refused);
+    expect(await send(a, "attack", at(10))).toEqual(refused);
+    expect(await send(strategos, "raid", at(10))).toEqual(refused);
+    expect(await send(strategos, "attack", at(10))).toEqual(refused);
+    // A scout is no harvest; an Ephor commands no army, and a citizen none.
+    expect(await send(a, "scout", at(10))).toMatchObject({ ok: true });
+    expect(await send(ephor, "raid", at(10))).toMatchObject({ ok: true });
+    expect(await send(citizen, "raid", at(10))).toMatchObject({ ok: true });
+    // The refusals wrote nothing for the two officials but the Archon's scout.
+    expect((await marches()).filter((x) => x.ownerPlayerId === strategos.ctx.playerId)).toEqual([]);
+    expect((await marches()).filter((x) => x.ownerPlayerId === a.ctx.playerId).map((x) => x.kind)).toEqual(["scout"]);
+
+    // To the last minute of the year, and no longer.
+    expect(await send(strategos, "raid", plus(at(13), 29))).toEqual(refused);
+    expect(await m.league.leagueHarvestMap(db, a.lctx, ends)).toEqual({ towns: {}, regions: {} });
+    expect(await send(strategos, "raid", ends)).toMatchObject({ ok: true });
+  });
+
+  it("no harvest reads the seat at the order: an official who has left his seat is refused nothing", async () => {
+    const a = await archon();
+    // A raid that fights at Reii; then the Archon leaves his seat.
+    await war("saluvii", at(8), plus(at(9), 60));
+    await setGarrison("reii", 10, at(9));
+    const sent = await m.actions.act(a.lctx, { type: "raid", townId: "reii", rows: [{ rowId: (await leagueRow("massalia", "peltast")).id, count: 40 }] }, at(9));
+    if (!sent.ok) throw new Error(sent.error);
+    expect((await arrive(sent.report.marchId, plus(at(9), 30))).winner).toBe("attacker");
+    const own = await houseRow(a.ctx, "peltast", 40);
+    const raid = (townId: string, when: Date) => m.actions.act(a.ctx, { type: "raid", townId, rows: [{ rowId: own.id, count: 40 }] }, when);
+    expect(await raid("reii", at(10))).toMatchObject({ ok: false, error: expect.stringMatching(/^The League's army fought at Reii\./) });
+    await db.delete(m.dbPkg.offices).where(eq(m.dbPkg.offices.holderCharacterId, a.characterId));
+    expect(await raid("reii", at(10))).toMatchObject({ ok: true });
+  });
+
+  it("a scout, a party that turned back and a landing driven off are no fight: the officials' houses are refused nothing there", async () => {
+    const a = await archon();
+    // A scout of the Salyes; an attack on Reii that arrives after the peace; a raid on Thapsus driven off at sea.
+    await war("saluvii", at(8), plus(at(9), 10));
+    await war("carthage", at(8), at(20));
+    const riders = await leagueRow("massalia", "hippeis");
+    const scouted = await m.actions.act(a.lctx, { type: "scout", regionId: "R046", rows: [{ rowId: riders.id, count: 5 }] }, at(9));
+    const turned = await m.actions.act(a.lctx, { type: "attack", townId: "reii", rows: [{ rowId: (await leagueRow("massalia", "hoplite")).id, count: 60 }] }, at(9));
+    const landed = await m.actions.act(a.lctx, { type: "raid", townId: "thapsus", rows: [{ rowId: (await leagueRow("massalia", "peltast")).id, count: 40 }] }, at(9));
+    if (!scouted.ok || !turned.ok || !landed.ok) throw new Error("an order was refused");
+    expect((await arrive(scouted.report.marchId, plus(at(9), 30))).winner).toBeNull();
+    expect((await arrive(turned.report.marchId, plus(at(9), 30))).winner).toBe("turned_back");
+    expect((await arrive(landed.report.marchId, new Date(landed.report.arrivesAt))).winner).toBe("repulsed");
+    expect(await m.league.leagueHarvestMap(db, a.lctx, at(10))).toEqual({ towns: {}, regions: {} });
+    // The Archon's own men raid the Salyes and Reii as any house's may.
+    const own = await houseRow(a.ctx, "peltast", 80);
+    expect(await m.actions.act(a.ctx, { type: "raid", regionId: "R046", rows: [{ rowId: own.id, count: 40 }] }, at(10))).toMatchObject({ ok: true });
+    const rest = (await units(a.ctx.playerId)).find((r) => r.movingTo === null)!;
+    expect(await m.actions.act(a.ctx, { type: "raid", townId: "reii", rows: [{ rowId: rest.id, count: 40 }] }, at(10))).toMatchObject({ ok: true });
+  });
+
   it("a League battle with the Temple standing: its blessing is the League's army's too", async () => {
     const { lctx } = await archon();
     // The Temple of Artemis stood at season 4: every army's morale is raised for 8 seasons.

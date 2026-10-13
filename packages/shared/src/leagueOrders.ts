@@ -1,4 +1,5 @@
 import type { HeldOffice } from "./agenda.js";
+import { REAL_MS_PER_SEASON } from "./calendar.js";
 import { renderForce, type CampaignForcePart } from "./chronicle.js";
 import type { FactionDef } from "./league.js";
 import { nationName } from "./leagueWars.js";
@@ -59,4 +60,23 @@ export function leaguePeaceLine(force: CampaignForcePart[], place: string, natio
 }
 export function heldByLeagueLine(force: CampaignForcePart[], place: string): string {
   return `${renderForce(force) || "Our men"} found ${place} held by the League and turned back.`;
+}
+
+// --- No harvest of the League's work (ruling 3 at STOP 1) ----------------------
+// The Archons and Strategoi may not use the army for their own gain: for a year
+// after the League's army fights at a town or a land, the house of a sitting
+// Archon or Strategos may not raid or attack it. A fight is a raid or an attack
+// that met the defenders: the attackers won, were broken, or stood and
+// withdrew. A scout, a party that turned back or broke up on the road, and a
+// landing driven off at sea are no fight.
+export function isLeagueFight(kind: string, winner: unknown): boolean {
+  return (kind === "raid" || kind === "attack") && (winner === "attacker" || winner === "defender" || winner === "stand");
+}
+// The instant the ban on a place ends: `seasons` (league-army.json's harvestBanSeasons) after the fight.
+export function harvestBanEndsMs(foughtAtMs: number, seasons: number): number {
+  return foughtAtMs + seasons * REAL_MS_PER_SEASON;
+}
+// What the house of a sitting official is answered, with the game date the ban ends.
+export function harvestRefusal(place: string, untilLabel: string): string {
+  return `The League's army fought at ${place}. No Archon or Strategos may raid or attack it with his own men until ${untilLabel}.`;
 }

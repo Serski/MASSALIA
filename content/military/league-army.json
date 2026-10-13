@@ -2,6 +2,7 @@
   "version": 1,
   "source": "server-side military content; never copy into apps/web/public",
   "upkeepPerManPerSeason": 0.25,
+  "harvestBanSeasons": 4,
   "fleetAt": "massalia",
   "towns": [
     { "townId": "massalia", "units": { "hoplite": 500, "peltast": 250, "ekdromos": 150, "hippeis": 100 } },
