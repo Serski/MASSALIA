@@ -66,7 +66,8 @@ async function getOrCreateUser(email: string) {
   return expectOne(await db.select().from(users).where(eq(users.email, email)).limit(1), `${email} user`);
 }
 
-async function getOrCreatePlayer(input: typeof players.$inferInsert) {
+// A seeded player always has its user (only the League's row has none, migration 0075).
+async function getOrCreatePlayer(input: typeof players.$inferInsert & { userId: string }) {
   const existing = await db
     .select()
     .from(players)

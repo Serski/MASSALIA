@@ -88,6 +88,8 @@ async function charactersOf(userIds: string[]) {
     .where(inArray(players.userId, userIds));
   const byUser = new Map<string, AdminCharacterRow[]>();
   for (const row of rows) {
+    // Only the League's row has no user (migration 0075), and it has no character to join.
+    if (row.userId === null) continue;
     const list = byUser.get(row.userId) ?? [];
     list.push({
       characterId: row.characterId, playerId: row.playerId, worldId: row.worldId, name: row.name, drachmae: row.drachmae, status: row.status, isActive: row.isActive,

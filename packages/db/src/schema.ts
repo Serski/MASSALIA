@@ -160,10 +160,18 @@ export const professionLadders = pgTable("profession_ladders", {
   upkeep: text("upkeep"),
 });
 
+export const PLAYER_KINDS = ["player", "league"] as const;
+export type PlayerKind = (typeof PLAYER_KINDS)[number];
+
 export const players = pgTable("players", {
   id: uuid("id").primaryKey().defaultRandom(),
   worldId: uuid("world_id").references(() => worlds.id).notNull(),
-  userId: uuid("user_id").references(() => users.id).notNull(),
+  // NULL only on the League's row (migration 0075); every 'player' row has its user.
+  userId: uuid("user_id").references(() => users.id),
+  // 'player', or 'league': the one row per world that stands for the League
+  // itself (government prompt 5a, migration 0075), with no user and no
+  // character, owning the League's units and ships.
+  kind: text("kind").$type<PlayerKind>().notNull().default("player"),
   name: text("name").notNull(),
   color: text("color").notNull(),
   professionSlug: text("profession_slug").references(() => professions.slug),
@@ -190,6 +198,11 @@ export const players = pgTable("players", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   oneActivePlayerPerWorld: uniqueIndex("players_one_active_user_world_idx").on(table.worldId, table.userId),
+  // Migration 0075: a 'player' row has a user, the 'league' row has none; one
+  // League row per world. Created in the migration, mirrored here for reference.
+  kindCheck: check("players_kind_check", sql`${table.kind} IN ('player', 'league')`),
+  kindUserCheck: check("players_kind_user_check", sql`(${table.kind} = 'player' AND ${table.userId} IS NOT NULL) OR (${table.kind} = 'league' AND ${table.userId} IS NULL)`),
+  oneLeaguePerWorld: uniqueIndex("players_one_league_per_world_idx").on(table.worldId).where(sql`kind = 'league'`),
 }));
 
 export const dynasties = pgTable("dynasties", {
@@ -692,8 +705,9 @@ export const treasuryLedger = pgTable("treasury_ledger", {
   // The League's once-only credits are claimed by their ledger row (migration
   // 0070): 'opening' once per world, 'tax:s<N>' and 'fees:s<N>' once per world
   // per season; 0072 adds the building dues, 'buildings:s<N>', once per world
-  // per season. A unique partial index in the migration; mirrored here for reference.
-  claimIdx: uniqueIndex("treasury_ledger_claim_idx").on(table.worldId, table.owner, table.reason).where(sql`reason = 'opening' OR reason LIKE 'tax:s%' OR reason LIKE 'fees:s%' OR reason LIKE 'buildings:s%'`),
+  // per season; 0075 the army's upkeep, 'army:s<N>', the League's one
+  // once-only debit. A unique partial index in the migration; mirrored here for reference.
+  claimIdx: uniqueIndex("treasury_ledger_claim_idx").on(table.worldId, table.owner, table.reason).where(sql`reason = 'opening' OR reason LIKE 'tax:s%' OR reason LIKE 'fees:s%' OR reason LIKE 'buildings:s%' OR reason LIKE 'army:s%'`),
 }));
 
 // Agenda cycle state: drafting → voting → resolved on the season clock.

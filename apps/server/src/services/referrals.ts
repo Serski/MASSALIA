@@ -56,7 +56,8 @@ export type ReferralPayout = { inviteeUserId: string; worldId: string; inviterPl
 // no character, not alive) is null and the purchase runs as it always has.
 export async function referralPayoutFor(buyer: CharacterRow, reward: number): Promise<ReferralPayout | null> {
   const buyerPlayer = (await db.select({ userId: players.userId }).from(players).where(eq(players.id, buyer.playerId)).limit(1))[0];
-  if (!buyerPlayer) return null;
+  // A character's player always has its user; only the League's row has none (migration 0075).
+  if (!buyerPlayer || buyerPlayer.userId === null) return null;
   const referral = (
     await db
       .select({ inviteeUserId: referrals.inviteeUserId, inviterUserId: referrals.inviterUserId, worldId: referrals.worldId })
