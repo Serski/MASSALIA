@@ -145,3 +145,11 @@ Words:
 10. Every other string as built, except those the new sheet replaces.
 
 The first war can start on 16 Oct 00:00 UTC, so come back today if you can.
+
+## Rulings at STOP 1, second round (Argiris, 14 Oct 2026)
+
+Append these to docs/politics/government-prompt-5b.md as their own commit, then run the gate at the new HEAD. Nothing else changes.
+
+1. Every word as proposed: the harvest ban's line, the band, the order sheet and the sightings.
+2. Your 1 to 8 accepted. The ban falls on the official's own men, never on the rest of his noble house, and on every sitting Archon and Strategos, not only the one who ordered the fight.
+3. Hold the push until tomorrow, 15 Oct. Tonight's 00:00 rollover opens the war vote through the sync this changes. I want it to run on the code it has been running on, and then a full day of clean sweeps under 5b before a war can start at 16 Oct 00:00. I will send "push" in the morning.
