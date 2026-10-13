@@ -9,7 +9,7 @@
     "assassinate": { "hostile": true, "respectsPrestigeFloor": true,
       "costDrachmae": 200,
       "baseChance": 0.45, "statScale": 40, "clampMin": 0.05, "clampMax": 0.95,
-      "bodyguardModMax": 24, "bodyguardDecay": 0.5 }
+      "bodyguardModMax": 24, "bodyguardDecay": 0.5, "militiaDefenseWeight": 0.5 }
   },
   "spymaster": { "guardMod": 10, "huntMod": 10, "postureCooldownHours": 24 }
 }

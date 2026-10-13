@@ -37,7 +37,7 @@ suite("the Interaction Pipeline (integration)", () => {
   const now = new Date();
 
   // One fresh character slot (user + player + player_characters row).
-  async function createCharacter(name: string, opts: { drachmae?: number; classId?: string; party?: string; prestige?: number; intelligence?: number } = {}) {
+  async function createCharacter(name: string, opts: { drachmae?: number; classId?: string; party?: string; prestige?: number; intelligence?: number; militia?: number } = {}) {
     const { users, players, playerCharacters } = m.dbPkg;
     const user = (await db.insert(users).values({ email: `${name}-${Math.random().toString(36).slice(2)}@test`, passwordHash: "x" }).returning())[0]!;
     const player = (await db.insert(players).values({ worldId, userId: user.id, name, color: "#123456", houseSlug: "test-house" }).returning())[0]!;
@@ -53,6 +53,7 @@ suite("the Interaction Pipeline (integration)", () => {
           party: opts.party ?? "none",
           prestige: opts.prestige ?? 0,
           intelligence: opts.intelligence ?? 0,
+          militia: opts.militia ?? 0,
           startAge: 30,
           deathAge: 90,
         })
@@ -278,8 +279,8 @@ suite("the Interaction Pipeline (integration)", () => {
   // --- Poison channel (Prompt 2) --------------------------------------------
 
   // A standing, poisonable target: prestige at/above the floor (10).
-  async function standingTarget(name: string, opts: { intelligence?: number } = {}) {
-    return createCharacter(name, { drachmae: 0, prestige: 20, intelligence: opts.intelligence ?? 0 });
+  async function standingTarget(name: string, opts: { intelligence?: number; militia?: number } = {}) {
+    return createCharacter(name, { drachmae: 0, prestige: 20, intelligence: opts.intelligence ?? 0, militia: opts.militia ?? 0 });
   }
   // Force the two poison rolls (success roll, then severity roll). See forcedPoisonRng.
   const seq = (...vals: number[]) => {
@@ -606,6 +607,28 @@ suite("the Interaction Pipeline (integration)", () => {
     const warded = await standingTarget("Warded", { intelligence: 50 }); // default posture 'guard'
     await seedSpymaster(warded.playerId);
     expect(await m.interactions.assassinateAttempt(await freshRow(actor.id), warded.id, now, () => 0.3)).toMatchObject({ ok: true, outcome: "failed" });
+  });
+
+  it("a target's MILITIA lowers the odds in the ASSASSINATE channel, at half the weight of intelligence", async () => {
+    // No militia: p = 0.45; militia 20 (+10 to D): p = 0.20. A roll of 0.3 flips outcome.
+    const actor = await seatedActor("Cutthroat", { drachmae: 1000, intelligence: 50 });
+    const soft = await standingTarget("Scholar", { intelligence: 50 });
+    expect(await m.interactions.assassinateAttempt(actor, soft.id, now, () => 0.3)).toMatchObject({ ok: true, outcome: "dead" });
+
+    const hard = await standingTarget("Soldier", { intelligence: 50, militia: 20 });
+    expect(await m.interactions.assassinateAttempt(await freshRow(actor.id), hard.id, now, () => 0.3)).toMatchObject({ ok: true, outcome: "failed" });
+
+    // Half weight exactly: militia 18 adds 9 to D → p = 0.225, and a roll of 0.21 still lands.
+    const nearly = await standingTarget("Recruit", { intelligence: 50, militia: 18 });
+    expect(await m.interactions.assassinateAttempt(await freshRow(actor.id), nearly.id, now, () => 0.21)).toMatchObject({ ok: true, outcome: "dead" });
+  });
+
+  it("a target's militia is NO defense in the POISON channel", async () => {
+    // Evenly matched intelligence: p = 0.50 whatever the militia. A roll of 0.45 succeeds.
+    const actor = await seatedActor("Apothecary", { drachmae: 0, intelligence: 50 });
+    await seedResource(actor.playerId, "poison", 1);
+    const veteran = await standingTarget("Veteran", { intelligence: 50, militia: 100 });
+    expect(await m.interactions.poisonAttempt(actor, veteran.id, now, seq(0.45, 0))).toMatchObject({ ok: true, outcome: "ill" });
   });
 
   it("a target's GUARD posture lowers the odds in the POISON channel too", async () => {

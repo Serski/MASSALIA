@@ -37,8 +37,10 @@ export type PoisonConfig = z.infer<typeof poisonActionSchema>;
 
 // The assassination action (Prompt 3). Same clamped intel-gap shape as poison, but
 // the defense unit (bodyguards) is countable with DIMINISHING RETURNS — each extra
-// guard adds less, asymptoting at bodyguardModMax. Success is always death, and the
-// attempt costs a flat costDrachmae whatever the outcome.
+// guard adds less, asymptoting at bodyguardModMax. The target's militia defends
+// too, at militiaDefenseWeight a point beside intelligence's one (a blade, unlike
+// a cup, meets the man himself). Success is always death, and the attempt costs a
+// flat costDrachmae whatever the outcome.
 export const assassinateActionSchema = z.object({
   hostile: z.boolean(),
   respectsPrestigeFloor: z.boolean(),
@@ -49,6 +51,7 @@ export const assassinateActionSchema = z.object({
   clampMax: z.number().min(0).max(1),
   bodyguardModMax: z.number().nonnegative(),
   bodyguardDecay: z.number().min(0).max(1),
+  militiaDefenseWeight: z.number().nonnegative(),
 });
 export type AssassinateConfig = z.infer<typeof assassinateActionSchema>;
 
@@ -108,11 +111,12 @@ export function bodyguardDefense(n: number, cfg: AssassinateConfig): number {
 }
 
 // The assassination success probability (pure) — same shape as poisonSuccessChance,
-// but the defender's unit bonus is the diminishing-returns bodyguard curve. The
-// target's spymaster guard (guardMod, or 0 — caller-resolved) adds to D on this
-// channel too. The clamp floor is the same untouchable-elite guard.
-export function assassinateSuccessChance(actorIntel: number, targetIntel: number, bodyguardCount: number, targetSpymasterGuard: number, cfg: AssassinateConfig): number {
-  const defense = targetIntel + bodyguardDefense(bodyguardCount, cfg) + targetSpymasterGuard;
+// but the defender's unit bonus is the diminishing-returns bodyguard curve, and the
+// target's effective militia counts at militiaDefenseWeight a point. The target's
+// spymaster guard (guardMod, or 0 — caller-resolved) adds to D on this channel
+// too. The clamp floor is the same untouchable-elite guard.
+export function assassinateSuccessChance(actorIntel: number, targetIntel: number, targetMilitia: number, bodyguardCount: number, targetSpymasterGuard: number, cfg: AssassinateConfig): number {
+  const defense = targetIntel + targetMilitia * cfg.militiaDefenseWeight + bodyguardDefense(bodyguardCount, cfg) + targetSpymasterGuard;
   const raw = cfg.baseChance + (actorIntel - defense) / cfg.statScale;
   return Math.min(cfg.clampMax, Math.max(cfg.clampMin, raw));
 }

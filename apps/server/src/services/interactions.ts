@@ -554,7 +554,8 @@ function forcedAssassinateRng(): (() => number) | undefined {
 // a standing target. Gates mirror poison's order (actor alive → holds a seat → target
 // exists/alive/same-world/not-self → prestige floor → actor affords the cost). The
 // success chance is the hidden bodyguard-defense channel (assassinateSuccessChance);
-// each bodyguard the target retains adds diminishing defense. On success the target
+// each bodyguard the target retains adds diminishing defense, and the target's own
+// militia defends at half the weight of intelligence. On success the target
 // dies (reuses the succession path). The blade is paid whatever the outcome; failure
 // leaves a target-visible chronicle line (an anonymous "a blade was turned aside").
 export async function assassinateAttempt(
@@ -604,13 +605,14 @@ export async function assassinateAttempt(
   // Resolution — every read server-side. The bodyguard + spymaster counts are read
   // through the SETTLED path (settleAll → player_pops), the same channel physicians
   // use. The attacker's spymaster (in 'hunt') lifts A; the target's spymaster (in
-  // 'guard') lifts D alongside the bodyguards.
+  // 'guard') lifts D alongside the bodyguards, and so does the target's own
+  // militia (traits included, as intelligence is read), at militiaDefenseWeight.
   const targetCtx = await buildingContext(target.playerId, actorRow.worldId);
   const { huntBonus, targetGuard } = await spymasterMods(actorRow, target, targetCtx, now);
   const attackIntel = (await effectiveIntelligence(actorRow.id, baseStatsOf(actorRow))) + huntBonus;
   const bodyguards = targetCtx ? await settledPopCount(targetCtx, "bodyguard", now) : 0;
-  const defenderIntel = await effectiveIntelligence(target.id, baseStatsOf(target));
-  const chance = assassinateSuccessChance(attackIntel, defenderIntel, bodyguards, targetGuard, assassinate);
+  const defender = effectiveStats(baseStatsOf(target), await getHeldTraits(target.id));
+  const chance = assassinateSuccessChance(attackIntel, defender.intelligence, defender.militia, bodyguards, targetGuard, assassinate);
 
   const outcome: AssassinateOutcome = rng() < chance ? "dead" : "failed";
   const deathAge = Math.floor(currentAge(target.startAge, target.createdAt.getTime(), now.getTime(), getAgeConfig()));

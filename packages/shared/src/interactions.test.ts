@@ -29,6 +29,7 @@ const acfg: AssassinateConfig = {
   clampMax: 0.95,
   bodyguardModMax: 24,
   bodyguardDecay: 0.5,
+  militiaDefenseWeight: 0.5,
 };
 
 // The spymaster guard mod the caller resolves and passes in (guardMod, or 0).
@@ -90,13 +91,13 @@ describe("bodyguardDefense (diminishing returns)", () => {
 
 describe("assassinateSuccessChance", () => {
   it("is baseChance when evenly matched with no defenders", () => {
-    expect(assassinateSuccessChance(50, 50, 0, 0, acfg)).toBeCloseTo(0.45, 10);
+    expect(assassinateSuccessChance(50, 50, 0, 0, 0, acfg)).toBeCloseTo(0.45, 10);
   });
 
   it("more bodyguards lower the odds, with diminishing effect", () => {
-    const g0 = assassinateSuccessChance(50, 50, 0, 0, acfg);
-    const g1 = assassinateSuccessChance(50, 50, 1, 0, acfg);
-    const g2 = assassinateSuccessChance(50, 50, 2, 0, acfg);
+    const g0 = assassinateSuccessChance(50, 50, 0, 0, 0, acfg);
+    const g1 = assassinateSuccessChance(50, 50, 0, 1, 0, acfg);
+    const g2 = assassinateSuccessChance(50, 50, 0, 2, 0, acfg);
     expect(g1).toBeLessThan(g0);
     expect(g2).toBeLessThan(g1);
     // The 1st guard removes more chance than the 2nd (diminishing returns).
@@ -104,8 +105,22 @@ describe("assassinateSuccessChance", () => {
   });
 
   it("the clamp floor holds at clampMin vs max intel + many guards + a spymaster (untouchable-elite guard)", () => {
-    expect(assassinateSuccessChance(0, 100, 50, 0, acfg)).toBe(acfg.clampMin);
-    expect(assassinateSuccessChance(1, 100, 1000, GUARD, acfg)).toBe(0.05);
+    expect(assassinateSuccessChance(0, 100, 0, 50, 0, acfg)).toBe(acfg.clampMin);
+    expect(assassinateSuccessChance(1, 100, 0, 1000, GUARD, acfg)).toBe(0.05);
+  });
+
+  it("the target's militia defends at militiaDefenseWeight a point: half of what intelligence gives", () => {
+    // 50 vs (50 + 20 militia × 0.5 = 60) → 0.45 + (−10/40) = 0.20.
+    expect(assassinateSuccessChance(50, 50, 20, 0, 0, acfg)).toBeCloseTo(0.2, 10);
+    // Twenty points of militia defend as ten of intelligence do.
+    expect(assassinateSuccessChance(50, 50, 20, 0, 0, acfg)).toBeCloseTo(assassinateSuccessChance(50, 60, 0, 0, 0, acfg), 10);
+    // A weight of 0 takes militia out of the defense.
+    expect(assassinateSuccessChance(50, 50, 100, 0, 0, { ...acfg, militiaDefenseWeight: 0 })).toBeCloseTo(0.45, 10);
+  });
+
+  it("militia stacks with bodyguards and the spymaster's guard", () => {
+    // 80 vs (30 + 40 × 0.5 + 12 + 10 = 72) → 0.45 + 8/40 = 0.65.
+    expect(assassinateSuccessChance(80, 30, 40, 1, GUARD, acfg)).toBeCloseTo(0.65, 10);
   });
 });
 
@@ -119,8 +134,8 @@ describe("spymaster guard (Prompt 4)", () => {
   });
 
   it("raises D in the ASSASSINATE channel — the guard mod lowers the success chance", () => {
-    const without = assassinateSuccessChance(50, 50, 0, 0, acfg);
-    const withGuard = assassinateSuccessChance(50, 50, 0, GUARD, acfg);
+    const without = assassinateSuccessChance(50, 50, 0, 0, 0, acfg);
+    const withGuard = assassinateSuccessChance(50, 50, 0, 0, GUARD, acfg);
     expect(withGuard).toBeLessThan(without);
     // 50 vs (50 + 10) → 0.45 + (−10/40) = 0.20.
     expect(withGuard).toBeCloseTo(0.2, 10);
@@ -135,8 +150,8 @@ describe("spymaster guard (Prompt 4)", () => {
 describe("cross-channel isolation", () => {
   it("a physician does NOT affect the assassinate channel (only bodyguards + the spymaster do)", () => {
     // assassinateSuccessChance has no physician input at all — its unit is bodyguards.
-    const noGuards = assassinateSuccessChance(50, 50, 0, 0, acfg);
-    expect(assassinateSuccessChance(50, 50, 2, 0, acfg)).not.toBe(noGuards);
+    const noGuards = assassinateSuccessChance(50, 50, 0, 0, 0, acfg);
+    expect(assassinateSuccessChance(50, 50, 0, 2, 0, acfg)).not.toBe(noGuards);
   });
 
   it("bodyguards do NOT affect the poison channel (only a physician + the spymaster do)", () => {
@@ -146,21 +161,28 @@ describe("cross-channel isolation", () => {
     expect(withPhysician).toBeLessThan(noPhysician);
   });
 
+  it("militia does NOT affect the poison channel (it has no militia input at all)", () => {
+    // poisonSuccessChance (actorIntel, targetIntel, hasPhysician, spymasterGuard, cfg):
+    // a soldier's arm is no defense against the cup.
+    expect(poisonSuccessChance(50, 50, false, 0, cfg)).toBeCloseTo(0.5, 10);
+    expect(assassinateSuccessChance(50, 50, 100, 0, 0, acfg)).toBeLessThan(assassinateSuccessChance(50, 50, 0, 0, 0, acfg));
+  });
+
   it("the SPYMASTER guard is the sanctioned exception — present in BOTH channels", () => {
     // The same guard mod moves both functions (the cross-channel generalist).
     expect(poisonSuccessChance(50, 50, false, GUARD, cfg)).toBeLessThan(poisonSuccessChance(50, 50, false, 0, cfg));
-    expect(assassinateSuccessChance(50, 50, 0, GUARD, acfg)).toBeLessThan(assassinateSuccessChance(50, 50, 0, 0, acfg));
+    expect(assassinateSuccessChance(50, 50, 0, 0, GUARD, acfg)).toBeLessThan(assassinateSuccessChance(50, 50, 0, 0, 0, acfg));
   });
 
   it("each function's own unit is exclusive: physician lever exists only on poison, bodyguard only on assassinate", () => {
     // Signatures: poison (actorIntel, targetIntel, hasPhysician, spymasterGuard, cfg);
-    // assassinate (actorIntel, targetIntel, bodyguardCount, spymasterGuard, cfg).
+    // assassinate (actorIntel, targetIntel, targetMilitia, bodyguardCount, spymasterGuard, cfg).
     expect(poisonSuccessChance.length).toBe(5);
-    expect(assassinateSuccessChance.length).toBe(5);
+    expect(assassinateSuccessChance.length).toBe(6);
     // Physician is a boolean flag unique to poison; a physician cannot be expressed on
     // the assassinate signature, and a bodyguard count cannot be expressed on poison.
     expect(poisonSuccessChance(50, 50, true, 0, cfg)).not.toBe(poisonSuccessChance(50, 50, false, 0, cfg));
-    expect(assassinateSuccessChance(50, 50, 3, 0, acfg)).not.toBe(assassinateSuccessChance(50, 50, 0, 0, acfg));
+    expect(assassinateSuccessChance(50, 50, 0, 3, 0, acfg)).not.toBe(assassinateSuccessChance(50, 50, 0, 0, 0, acfg));
   });
 });
 
@@ -172,13 +194,14 @@ describe("parseInteractionsConfig", () => {
       actions: {
         give: { hostile: false, respectsPrestigeFloor: false, minAmount: 1, maxAmount: 10000 },
         poison: { hostile: true, respectsPrestigeFloor: true, baseChance: 0.5, statScale: 40, clampMin: 0.05, clampMax: 0.95, physicianMod: 15, illnessChance: 0.6 },
-        assassinate: { hostile: true, respectsPrestigeFloor: true, costDrachmae: 200, baseChance: 0.45, statScale: 40, clampMin: 0.05, clampMax: 0.95, bodyguardModMax: 24, bodyguardDecay: 0.5 },
+        assassinate: { hostile: true, respectsPrestigeFloor: true, costDrachmae: 200, baseChance: 0.45, statScale: 40, clampMin: 0.05, clampMax: 0.95, bodyguardModMax: 24, bodyguardDecay: 0.5, militiaDefenseWeight: 0.5 },
       },
       spymaster: { guardMod: 10, huntMod: 10, postureCooldownHours: 24 },
     });
     expect(parsed.actions.poison.illnessChance).toBe(0.6);
     expect(parsed.actions.assassinate.costDrachmae).toBe(200);
     expect(parsed.hostileCooldownHours).toBe(96);
+    expect(parsed.actions.assassinate.militiaDefenseWeight).toBe(0.5);
     expect(parsed.spymaster).toEqual({ guardMod: 10, huntMod: 10, postureCooldownHours: 24 });
     // deathChance is derived (1 − illnessChance), never stored.
     expect(parsed.actions.poison).not.toHaveProperty("deathChance");
