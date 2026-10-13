@@ -171,13 +171,16 @@ export function CitiesView() {
         return (
           <DashboardCard key={group.id}>
             <div className="panel-label">{group.label}</div>
-            <div style={cityHeadStyle}>
+            {/* The last column is the city's `garrison` stat, headed "Levy" (government
+                prompt 5a): the men the city could raise, as a player's levy is in his
+                Barracks. The men under arms are the League's army, on the Government tab. */}
+            <div className="atlas-head" style={cityHeadStyle}>
               <span>City</span>
               <span style={{ textAlign: "right" }}>Pop.</span>
               <span style={{ textAlign: "right" }}>Tax</span>
               <span style={{ textAlign: "right" }}>Stability</span>
               <span style={{ textAlign: "right" }}>Forts</span>
-              <span style={{ textAlign: "right" }}>Garrison</span>
+              <span style={{ textAlign: "right" }}>Levy</span>
             </div>
             {inGroup.map((c) => {
               const line = buildingsLine(c.buildings);

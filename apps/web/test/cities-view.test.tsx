@@ -68,6 +68,20 @@ describe("the Cities tab's buildings", () => {
   });
 });
 
+// The city's `garrison` stat is headed "Levy" (government prompt 5a): the men
+// the city could raise. Only the header changed; the number is the stat's.
+describe("the Cities tab's Levy column", () => {
+  it("each group's last column is headed Levy, never Garrison, and shows the city's garrison stat", async () => {
+    const { container } = await mount();
+    const heads = [...container.querySelectorAll(".atlas-head")];
+    expect(heads).toHaveLength(2); // Metropolis and Eastern Colonies
+    for (const head of heads) expect([...head.querySelectorAll("span")].map((s) => s.textContent)).toEqual(["City", "Pop.", "Tax", "Stability", "Forts", "Levy"]);
+    expect(container.textContent).not.toContain("Garrison");
+    const massalia = container.querySelector(".atlas-row")!;
+    expect([...massalia.querySelectorAll(":scope > span")].map((s) => s.textContent)).toEqual(["Massalia", "20,000", "400", "70", "■■■□□", "500"]);
+  });
+});
+
 // The League's plans, in advance (government prompt 3b): three cards after the cities.
 describe("the League's plans on the Cities tab", () => {
   const works = (over: Partial<LeagueWorksView> = {}): LeagueWorksView => ({
