@@ -19,6 +19,8 @@
   --lobby-radius-control: 0;
   --lobby-radius-pill: 0;
   --lobby-ease: 160ms ease;
+  /* The side gutter the header, the grid, the single-column page and the footer share. */
+  --lobby-gutter: clamp(14px, 3vw, 40px);
 
   position: relative;
   min-height: 100vh;
@@ -60,7 +62,7 @@
   gap: 20px;
   max-width: 1280px;
   margin: 0 auto;
-  padding: 16px clamp(14px, 3vw, 40px);
+  padding: 16px var(--lobby-gutter);
   border-bottom: 1px solid rgba(var(--accent-rgb), 0.28);
 }
 
@@ -135,7 +137,7 @@
   align-items: start;
   max-width: 1280px;
   margin: 28px auto 0;
-  padding: 0 clamp(14px, 3vw, 40px) 48px;
+  padding: 0 var(--lobby-gutter) 48px;
 }
 
 .lobby-aside-left,
@@ -715,10 +717,12 @@
   font-weight: 700;
 }
 
-/* A single-column lobby page (news, guides, the sub-views): same width as the grid. */
+/* A single-column lobby page (news, guides): the header's width and side gutter,
+   so the text lines up under the brand and never meets the screen edge. */
 .lobby-page {
-  max-width: 1240px;
+  max-width: 1280px;
   margin: 24px auto 0;
+  padding: 0 var(--lobby-gutter);
 }
 
 .lobby-section {
@@ -1252,7 +1256,7 @@
   gap: 10px 20px;
   max-width: 1280px;
   margin: 48px auto 0;
-  padding: 18px clamp(14px, 3vw, 40px) 28px;
+  padding: 18px var(--lobby-gutter) 28px;
   color: rgba(236, 224, 204, 0.5);
   font-size: 12px;
   letter-spacing: 0.08em;
