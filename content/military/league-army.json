@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "source": "server-side military content; never copy into apps/web/public",
+  "upkeepPerManPerSeason": 0.25,
+  "fleetAt": "massalia",
+  "towns": [
+    { "townId": "massalia", "units": { "hoplite": 500, "peltast": 250, "ekdromos": 150, "hippeis": 100 } },
+    { "townId": "emporion", "units": { "hoplite": 126, "peltast": 62, "ekdromos": 37, "hippeis": 25 } },
+    { "townId": "nikaia", "units": { "hoplite": 76, "peltast": 37, "ekdromos": 22, "hippeis": 15 } },
+    { "townId": "olbia-provence", "units": { "hoplite": 76, "peltast": 37, "ekdromos": 22, "hippeis": 15 } },
+    { "townId": "rhoda", "units": { "hoplite": 60, "peltast": 30, "ekdromos": 18, "hippeis": 12 } },
+    { "townId": "agathe", "units": { "hoplite": 50, "peltast": 25, "ekdromos": 15, "hippeis": 10 } },
+    { "townId": "antipolis", "units": { "hoplite": 50, "peltast": 25, "ekdromos": 15, "hippeis": 10 } },
+    { "townId": "arelate", "units": { "hoplite": 50, "peltast": 25, "ekdromos": 15, "hippeis": 10 } },
+    { "townId": "athinopolis", "units": { "hoplite": 26, "peltast": 12, "ekdromos": 7, "hippeis": 5 } },
+    { "townId": "monoikos", "units": { "hoplite": 16, "peltast": 7, "ekdromos": 4, "hippeis": 3 } }
+  ]
+}

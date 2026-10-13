@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { governmentSeats, leagueTax, parseCitiesContent, parsePoliticsConfig, polisTax, treasuryClaimReason, treasuryReasonLabel, type HeldOffice } from "./index.js";
+import { desertionReason, governmentSeats, leagueTax, menLabel, parseCitiesContent, parseDesertionReason, parsePoliticsConfig, polisTax, treasuryClaimReason, treasuryReasonLabel, type HeldOffice } from "./index.js";
 
 // ---------------------------------------------------------------------------
 // The Government (government prompt 1), pure rules: who sits, what the poleis
@@ -63,6 +63,16 @@ describe("the ledger's reasons", () => {
     expect(treasuryClaimReason.tax(7)).toBe("tax:s7");
     expect(treasuryClaimReason.fees(0)).toBe("fees:s0");
     expect(treasuryClaimReason.buildings(3)).toBe("buildings:s3");
+    expect(treasuryClaimReason.army(28)).toBe("army:s28");
+  });
+
+  it("a desertion's reason carries its season and its men, and parses back", () => {
+    expect(desertionReason(28, 1650)).toBe("desertion:s28:1650");
+    expect(parseDesertionReason("desertion:s28:1650")).toEqual({ season: 28, men: 1650 });
+    expect(parseDesertionReason("desertion:s28")).toBeNull();
+    expect(parseDesertionReason("army:s28")).toBeNull();
+    expect(menLabel(1650)).toBe("1,650 men");
+    expect(menLabel(1)).toBe("1 man");
   });
 
   it("every stored reason has its words", () => {
@@ -71,6 +81,9 @@ describe("the ledger's reasons", () => {
     expect(treasuryReasonLabel("tax:s24")).toBe("Taxes of the poleis");
     expect(treasuryReasonLabel("fees:s24")).toBe("Market tax and fees");
     expect(treasuryReasonLabel("buildings:s3")).toBe("Bazaar and harbor dues");
+    expect(treasuryReasonLabel("army:s28")).toBe("Army upkeep");
+    expect(treasuryReasonLabel("desertion:s28:1650")).toBe("Deserted for want of pay: 1,650 men");
+    expect(treasuryReasonLabel("desertion:s28:1")).toBe("Deserted for want of pay: 1 man");
     expect(treasuryReasonLabel("cut:seat_purchase")).toBe("Share of a seat sale");
     expect(treasuryReasonLabel("cut:festival_donation")).toBe("Share of a festival gift");
   });

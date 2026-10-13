@@ -52,13 +52,32 @@ export function leagueTax(populations: number[], cfg: TreasuryConfig): number {
 // The reasons the League treasury credits exactly once (the unique partial index
 // of migration 0070, widened by 0072, is keyed on them): the opening balance
 // once per world; the poleis' tax, the swept fees and the standing Bazaars' and
-// Ports' dues once per world per season.
+// Ports' dues once per world per season. The army's upkeep (government prompt
+// 5a, migration 0075) is the one once-only debit, once per world per season.
 export const treasuryClaimReason = {
   opening: "opening",
   tax: (season: number): string => `tax:s${season}`,
   fees: (season: number): string => `fees:s${season}`,
   buildings: (season: number): string => `buildings:s${season}`,
+  army: (season: number): string => `army:s${season}`,
 } as const;
+
+// The row a season's desertion leaves on the ledger (government prompt 5a): its
+// delta is 0 and its reason carries the season and the men who left, since the
+// ledger has no other place for a count.
+export function desertionReason(season: number, men: number): string {
+  return `desertion:s${season}:${men}`;
+}
+
+export function parseDesertionReason(reason: string): { season: number; men: number } | null {
+  const m = /^desertion:s(\d+):(\d+)$/.exec(reason);
+  return m ? { season: Number(m[1]), men: Number(m[2]) } : null;
+}
+
+// "1,650 men", "1 man".
+export function menLabel(men: number): string {
+  return `${men.toLocaleString("en-US")} ${men === 1 ? "man" : "men"}`;
+}
 
 // The words a ledger row shows for its stored reason. `cardTitle` resolves a
 // passed measure's card id to its title; without one, or for an unknown id,
@@ -69,6 +88,11 @@ export function treasuryReasonLabel(reason: string, cardTitle?: (cardId: string)
   if (reason.startsWith("tax:s")) return "Taxes of the poleis";
   if (reason.startsWith("fees:s")) return "Market tax and fees";
   if (reason.startsWith("buildings:s")) return "Bazaar and harbor dues";
+  if (reason.startsWith("army:s")) return "Army upkeep";
+  if (reason.startsWith("desertion:s")) {
+    const parsed = parseDesertionReason(reason);
+    return parsed ? `Deserted for want of pay: ${menLabel(parsed.men)}` : "Deserted for want of pay";
+  }
   if (reason === "cut:seat_purchase") return "Share of a seat sale";
   if (reason === "cut:festival_donation") return "Share of a festival gift";
   if (reason.startsWith("agenda:")) {
