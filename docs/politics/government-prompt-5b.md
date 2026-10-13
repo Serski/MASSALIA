@@ -120,3 +120,28 @@ Three more, on the design note:
 7. The war gate read from league_wars at the instant is accepted. For a League party that one answer drives three things: the gate, the war's plunder multiplier and the opinion roll (none at war), so they never disagree while faction_relations.at_war waits for the sync. A house's raid keeps reading the flag as today. No nation starts at war in content, so league_wars is the whole truth for the League.
 8. The Temple of Artemis's morale is every army's in the world, the League's included; only the altar is a house's. Keep moraleBonusFor in the League's battle path, and test a League battle with the Temple standing.
 9. The cheap read in (b) covers both of a holding's markers: the tribute marker and the empty-for-a-day one.
+
+## Rulings at STOP 1 (Argiris, 14 Oct 2026)
+
+Append these to docs/politics/government-prompt-5b.md as their own commit. Build the changes below as new commits, one concern each, staged by path, with their tests. Then run the gate, take the screenshots again, and STOP again with the same report. No push yet.
+
+Argiris, 14 Oct: the Archons and Strategoi may not use the army and the fleet for their own gain, and commanding the army must be different from choosing their own troops. So:
+
+1. No personal intel. What a League party sees goes to the League, not to the orderer's house: on its report, on the Government tab for every member, and on the map in the League's mode, where a place's panel shows the League's last sighting of it with its date. Remove the write to the orderer's dynasty. This replaces that part of ruling 8 of the prompt.
+2. Nothing the army takes reaches an official. Plunder and tribute go to the treasury, League hulls carry only League men, and League men stand only in the League's places, as built. Add the tests that prove a mix is refused both ways: a League order naming a house's row, and a house order naming a League row.
+3. No harvest of the League's work. For a year (96 hours) after the League's army fights at a town or land, the house of a sitting Archon or Strategos may not raid or attack it. A fight is a raid or an attack that met the defenders, not a scout, a turn-back or a landing driven off. The server refuses it at the house's order, and the map greys Raid and Attack with the same words in the house's mode. Propose the words. A koinon muster is left alone; name it as a known gap.
+4. The League's orders get their own sheet, apart from the house's force picker. In the League's mode a place's buttons open an order sheet of the League's own: the League's colour and crest at its head; the line "Ordered by <name>, <seat>"; the League's men standing in each of its places, chosen by type and number; the hulls; the cost to the treasury and its balance; and a button that gives the order. The house's force picker stays as it is. Switching modes closes any open sheet or picker and drops its choice. While the League's mode is on, a band across the map in the League's colour says so. Propose the sheet's words.
+
+On your list:
+
+5. Your 1, 2, 3, 4, 5, 7, 8 and 9: accepted.
+6. Your 6: the order keeps the official's name as it was given. 0076 has never been applied outside your test database, so add the column to it in a new commit, recreate massalia_5b_test, and say so in the report.
+7. Your 10: yes, one line in AGENTS.md under "Server and data", in its own docs commit: the League's army is the players row of kind 'league', with no character; it writes no effect_log row and never runs settleAll or settleBarracks; every write to its men or its treasury takes its player lock first, then its treasuries row.
+
+Words:
+
+8. Mid-sentence it is "the League", lower case: "Held by the League", "Held by the League · tribute 120 dr a day", "Held by the League · garrison too small for tribute (15 men needed)", "Held by the League · 15 grain, 8 timber a day", "Held by the League.", "· held by the League". At the start of a sentence, "The League".
+9. "The League makes war on nations alone, and this land answers to none." becomes "The League makes war only on nations, and no nation holds this land."
+10. Every other string as built, except those the new sheet replaces.
+
+The first war can start on 16 Oct 00:00 UTC, so come back today if you can.
