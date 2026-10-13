@@ -637,11 +637,15 @@ suite("the Interaction Pipeline (integration)", () => {
     expect((await freshRow(spy.id)).drachmae).toBe(350); // only the first 150 charged
   });
 
-  // --- Hostile attempt cooldown: one poison-OR-assassinate per pair per window ----
-  // The clock starts from any attempt (failures included, since they hit the ledger),
-  // and the two channels share it. Second attempts use `new Date()` (just after the
-  // first ledger write) for "inside window"; +97h for "after window".
+  // --- Hostile attempt cooldown: one poison-OR-assassinate per TARGET per window ----
+  // The clock starts from any attempt by any hand (failures included, since they hit
+  // the ledger), and the two channels share it. Second attempts use `new Date()` (just
+  // after the first ledger write) for "inside window"; +97h for "after window".
   const AFTER_WINDOW = () => new Date(Date.now() + 97 * 3_600_000);
+  // The two lines (rulings of 13 Oct 2026): the one the character who struck reads,
+  // and the one any other house reads when its own attempt is refused.
+  const OWN_LOCK = /^Your hand is already turned against them\. A year must pass before anyone may strike again \(\d[^)]* left\)\.$/;
+  const GUARD_LOCK = /^Their household is on guard\. A year must pass before anyone may strike at them \(\d[^)]* left\)\.$/;
 
   it("(cooldown) a second poison inside the window is refused with the lock copy — no vial spent", async () => {
     const actor = await oligarch("SerialP", 0);
@@ -651,7 +655,7 @@ suite("the Interaction Pipeline (integration)", () => {
     expect(await resourceAmount(actor.playerId, "poison")).toBe(1); // the first vial was spent
     const second = await m.interactions.poisonAttempt(actor, target.id, new Date(), forceFail);
     expect(second).toMatchObject({ ok: false, code: 429 });
-    expect(second.ok ? "" : second.error).toMatch(/two seasons/);
+    expect(second.ok ? "" : second.error).toMatch(OWN_LOCK);
     expect(await resourceAmount(actor.playerId, "poison")).toBe(1); // the refusal consumed nothing
   });
 
@@ -672,7 +676,7 @@ suite("the Interaction Pipeline (integration)", () => {
     expect(await m.interactions.poisonAttempt(actor, target.id, new Date(), forceFail)).toMatchObject({ ok: true, outcome: "failed" });
     const blade = await m.interactions.assassinateAttempt(actor, target.id, new Date(), forceDead);
     expect(blade).toMatchObject({ ok: false, code: 429 });
-    expect(blade.ok ? "" : blade.error).toMatch(/two seasons/);
+    expect(blade.ok ? "" : blade.error).toMatch(OWN_LOCK);
     expect((await freshRow(actor.id)).drachmae).toBe(500); // the blade was never paid
     expect((await freshRow(target.id)).status).toBe("alive"); // and the target still lives
   });
@@ -705,14 +709,69 @@ suite("the Interaction Pipeline (integration)", () => {
     const profile = await m.interactions.publicProfile(await freshRow(actor.id), target.id, new Date());
     expect(profile!.viewer.canPoison).toBe(false);
     expect(profile!.viewer.canAssassinate).toBe(false);
-    expect(profile!.viewer.poisonLockReason).toMatch(/two seasons/);
-    expect(profile!.viewer.assassinateLockReason).toMatch(/two seasons/);
+    expect(profile!.viewer.poisonLockReason).toMatch(OWN_LOCK);
+    expect(profile!.viewer.assassinateLockReason).toMatch(OWN_LOCK);
   });
 
-  // --- Concurrency: the hostile gate + spend are ONE step under the actor's lock ---
-  // Two attempts fired together both pass the early (unlocked) cooldown read; inside
-  // the transaction the second re-reads the cooldown after the first committed its
-  // ledger row and is refused — and a refusal spends nothing.
+  it("(cooldown) the window guards the target against EVERY hand and the attempt stays secret: a third oligarch's profile shows no lock, his attempt is refused and spends nothing", async () => {
+    const first = await oligarch("FirstHand", 0);
+    await seedResource(first.playerId, "poison", 1);
+    const third = await oligarch("ThirdHand", 500);
+    await seedResource(third.playerId, "poison", 1);
+    const target = await standingTarget("SharedMark");
+    expect(await m.interactions.poisonAttempt(first, target.id, new Date(), forceFail)).toMatchObject({ ok: true, outcome: "failed" });
+
+    // The character who struck reads his own line on the profile, on both channels.
+    const own = await m.interactions.publicProfile(await freshRow(first.id), target.id, new Date());
+    expect(own!.viewer).toMatchObject({ canPoison: false, canAssassinate: false });
+    expect(own!.viewer.poisonLockReason).toBe("Your hand is already turned against them. A year must pass before anyone may strike again (4d left).");
+    expect(own!.viewer.assassinateLockReason).toMatch(OWN_LOCK);
+
+    // A third oligarch, who never struck, sees no lock: both buttons stand as usual.
+    const before = await m.interactions.publicProfile(await freshRow(third.id), target.id, new Date());
+    expect(before!.viewer).toMatchObject({ canPoison: true, poisonLockReason: null, canAssassinate: true, assassinateLockReason: null });
+
+    // The victim's own profile shows nothing.
+    const self = await m.interactions.publicProfile(await freshRow(target.id), target.id, new Date());
+    expect(self!.viewer).toMatchObject({ canPoison: false, poisonLockReason: null, canAssassinate: false, assassinateLockReason: null });
+
+    // Only the third oligarch's own attempt tells him, on either channel.
+    const vial = await m.interactions.poisonAttempt(third, target.id, new Date(), forceIll);
+    expect(vial).toEqual({ ok: false, code: 429, error: "Their household is on guard. A year must pass before anyone may strike at them (4d left)." });
+    const blade = await m.interactions.assassinateAttempt(third, target.id, new Date(), forceDead);
+    expect(blade).toMatchObject({ ok: false, code: 429 });
+    expect(blade.ok ? "" : blade.error).toMatch(GUARD_LOCK);
+
+    // Nothing was spent and nothing was done: the refusals leave no trace.
+    expect(await resourceAmount(third.playerId, "poison")).toBe(1); // the vial stayed
+    expect((await freshRow(third.id)).drachmae).toBe(500); // the blade was never paid
+    expect((await freshRow(target.id)).status).toBe("alive");
+    expect(await heldTraitIds(target.id)).not.toContain("poisoned");
+    expect(await interactionRows(target.id)).toHaveLength(1); // only the first attempt is on the ledger
+    const after = await m.interactions.publicProfile(await freshRow(third.id), target.id, new Date());
+    expect(after!.viewer).toMatchObject({ canPoison: true, poisonLockReason: null, canAssassinate: true, assassinateLockReason: null });
+
+    // Past the window the third oligarch may strike.
+    expect(await m.interactions.poisonAttempt(await freshRow(third.id), target.id, AFTER_WINDOW(), forceFail)).toMatchObject({ ok: true, outcome: "failed" });
+    expect(await resourceAmount(third.playerId, "poison")).toBe(0);
+  });
+
+  it("(cooldown) the second house is still free to strike a DIFFERENT target", async () => {
+    const first = await oligarch("FirstFree", 0);
+    await seedResource(first.playerId, "poison", 1);
+    const second = await oligarch("SecondFree", 0);
+    await seedResource(second.playerId, "poison", 1);
+    const a = await standingTarget("GuardedA");
+    const b = await standingTarget("OpenB");
+    expect(await m.interactions.poisonAttempt(first, a.id, new Date(), forceFail)).toMatchObject({ ok: true });
+    expect(await m.interactions.poisonAttempt(second, b.id, new Date(), forceFail)).toMatchObject({ ok: true, outcome: "failed" });
+  });
+
+  // --- Concurrency: the hostile gate + spend are ONE step under both players' locks ---
+  // Two attempts fired together, by one house or by two, both pass the early
+  // (unlocked) cooldown read; inside the transaction the second waits on the target's
+  // lock, re-reads the cooldown after the first committed its ledger row and is
+  // refused — and a refusal spends nothing.
   type HostileResult = { ok: true; outcome: string } | { ok: false; code: number; error: string };
   function expectOneAttemptOneCooldown(results: HostileResult[]) {
     const accepted = results.filter((r) => r.ok);
@@ -720,7 +779,7 @@ suite("the Interaction Pipeline (integration)", () => {
     expect(accepted).toHaveLength(1);
     expect(refused).toHaveLength(1);
     expect(refused[0]).toMatchObject({ code: 429 });
-    expect(refused[0]!.error).toMatch(/two seasons/);
+    expect(refused[0]!.error).toMatch(OWN_LOCK);
   }
 
   it("(race) two parallel assassinations: one commits, the other is the 429 cooldown, one blade paid, one row", async () => {
@@ -770,6 +829,68 @@ suite("the Interaction Pipeline (integration)", () => {
       expect(wallet).toBe(300); // the blade was paid...
       expect(vials).toBe(1); // ...and the vial stayed
     }
+  });
+
+  it("(race) a second HOUSE strikes while the first attempt is still in flight: it waits on the target and is refused, nothing paid", async () => {
+    const poisoner = await oligarch("RacePoison", 0);
+    await seedResource(poisoner.playerId, "poison", 1);
+    const bladesman = await oligarch("RaceBlade", 500);
+    const target = await standingTarget("ContestedMark");
+    // Backends of this database waiting on a lock, by kind (the suites never run side by side).
+    const waiters = async () =>
+      ((await db.execute(sql`
+        SELECT count(*) FILTER (WHERE l.locktype = 'advisory')::int AS advisory, count(*) FILTER (WHERE l.locktype <> 'advisory')::int AS row
+        FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid
+        WHERE NOT l.granted AND a.datname = current_database()
+      `)).rows as { advisory: number; row: number }[])[0]!;
+    const until = async (reached: () => Promise<boolean>) => {
+      const deadline = Date.now() + 5000;
+      while (!(await reached()) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 20));
+    };
+
+    let poison!: Promise<HostileResult>;
+    let blade!: Promise<HostileResult>;
+    await db.transaction(async (tx) => {
+      // Hold the poisoner's vial row: his attempt takes its locks, re-reads the
+      // cooldown and stops at the vial, mid-transaction, with nothing committed.
+      await tx.execute(sql`SELECT id FROM resources WHERE scope = 'player' AND scope_id = ${poisoner.playerId} AND type = 'poison' FOR UPDATE`);
+      poison = m.interactions.poisonAttempt(poisoner, target.id, new Date(), forceFail);
+      await until(async () => (await waiters()).row >= 1);
+      expect((await waiters()).row).toBe(1);
+
+      // The second house finds no attempt on the ledger yet. It must not strike
+      // past the first: it queues on the target's lock until the first commits.
+      blade = m.interactions.assassinateAttempt(bladesman, target.id, new Date(), forceFail);
+      const state = await Promise.race([blade.then(() => "struck"), until(async () => (await waiters()).advisory >= 1).then(() => "waiting")]);
+      expect(state).toBe("waiting");
+      expect(await interactionRows(target.id)).toHaveLength(0);
+    });
+
+    expect(await poison).toMatchObject({ ok: true, outcome: "failed" });
+    const refused = await blade;
+    expect(refused).toMatchObject({ ok: false, code: 429 });
+    expect(refused.ok ? "" : refused.error).toMatch(GUARD_LOCK);
+    const rows = await interactionRows(target.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.type).toBe("poison");
+    expect(await resourceAmount(poisoner.playerId, "poison")).toBe(0); // the vial went...
+    expect((await freshRow(bladesman.id)).drachmae).toBe(500); // ...and the other house's blade was never paid
+  });
+
+  it("(race) two houses striking at EACH OTHER in parallel both resolve — no deadlock on the two locks", async () => {
+    const left = await oligarch("LeftHand", 500);
+    const right = await oligarch("RightHand", 500);
+    await db.update(m.dbPkg.playerCharacters).set({ prestige: 20 }).where(eq(m.dbPkg.playerCharacters.id, left.id));
+    await db.update(m.dbPkg.playerCharacters).set({ prestige: 20 }).where(eq(m.dbPkg.playerCharacters.id, right.id));
+    const [l, r] = [await freshRow(left.id), await freshRow(right.id)];
+    const results = await Promise.all([
+      m.interactions.assassinateAttempt(l, r.id, new Date(), forceFail),
+      m.interactions.assassinateAttempt(r, l.id, new Date(), forceFail),
+    ]);
+    // Different targets, so both attempts stand; each paid its own blade.
+    expect(results).toEqual([{ ok: true, outcome: "failed" }, { ok: true, outcome: "failed" }]);
+    expect((await freshRow(left.id)).drachmae).toBe(300);
+    expect((await freshRow(right.id)).drachmae).toBe(300);
   });
 
   it("(race) two parallel posture switches: one commits, the other hits the cooldown, one changed_at written", async () => {

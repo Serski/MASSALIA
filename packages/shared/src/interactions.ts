@@ -68,9 +68,9 @@ export const interactionsConfigSchema = z
   .object({
     // The standing below which a target is shielded from hostile interactions.
     prestigeFloor: z.number().int().nonnegative(),
-    // One hostile attempt (poison OR assassinate, combined) per attacker→target pair
-    // per this many hours, counted from the attempt regardless of outcome. The
-    // in-fiction lock copy calls this "two seasons".
+    // One hostile attempt (poison OR assassinate, combined) per TARGET per this many
+    // hours, whoever made it, counted from the attempt regardless of outcome. The
+    // in-fiction lock copy calls this "a year" (four seasons).
     hostileCooldownHours: z.number().positive(),
     actions: z.object({
       // dailyInboundCap: the most drachmae one character may RECEIVE in gifts per
