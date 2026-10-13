@@ -123,7 +123,8 @@ export async function mapRoutes(app: FastifyInstance) {
   // Full map ownership state: polities + per-province state + towns. Geometry is
   // loaded separately by the client from static files.
   // World 2 military read (infrastructure only, no actions). Returns ONLY what the
-  // requester is entitled to see: live pools for anything Massalia owns ("home",
+  // requester is entitled to see: the League's army in the home towns and the live
+  // pools of Massalia's townless regions ("home",
   // visible to every authenticated player) and the requester's own dynasty's intel
   // snapshots ("intel", frozen numbers + the game date scouted). Nothing else is
   // ever included — no other dynasty's intel, no foreign live pool. The holders
@@ -132,7 +133,7 @@ export async function mapRoutes(app: FastifyInstance) {
   // about the holding. Read-only, so it is deliberately NOT behind
   // MAP_MUTATIONS_ENABLED.
   app.get("/military", async (request, reply) => {
-    const { createDb, townIntel, regionIntel, townMilitary, regionMilitary } = await import("@massalia/db");
+    const { createDb, ensureLeagueArmy, leagueArmyRows, leagueFleet, loadLeagueArmy, townIntel, regionIntel, regionMilitary } = await import("@massalia/db");
     const { requireAuth } = await import("../services/auth.js");
     const { ensureCharacterRow, getActivePlayer, getActiveWorldId } = await import("../services/character.js");
     const { loadMilitaryOwners } = await import("../services/mapMilitary.js");
@@ -159,8 +160,19 @@ export async function mapRoutes(app: FastifyInstance) {
     const towns: MilitaryPayload["towns"] = {};
     const regions: MilitaryPayload["regions"] = {};
     if (homeTowns.length) {
-      const rows = await db.select().from(townMilitary).where(and(eq(townMilitary.worldId, worldId), inArray(townMilitary.townId, homeTowns)));
-      for (const r of rows) towns[r.townId] = { garrison: r.garrison, pentekonters: r.pentekonters, triremes: r.triremes, source: "home" };
+      // The home towns' garrisons are the League's army (government prompt 5a):
+      // a town's garrison is the League's men based there, never a player's own
+      // men standing in the town, and the whole fleet is at one town. The army
+      // is raised first when the world has none (a cheap read otherwise).
+      await ensureLeagueArmy(worldId);
+      const men = new Map<string, number>();
+      for (const r of await leagueArmyRows(db, worldId)) men.set(r.basedAt, (men.get(r.basedAt) ?? 0) + r.count);
+      const fleet = await leagueFleet(db, worldId);
+      const fleetAt = (await loadLeagueArmy()).fleetAt;
+      for (const townId of homeTowns) {
+        const here = townId === fleetAt;
+        towns[townId] = { garrison: men.get(townId) ?? 0, pentekonters: here ? fleet.pentekonters : 0, triremes: here ? fleet.triremes : 0, source: "home" };
+      }
     }
     if (homeRegions.length) {
       const rows = await db.select().from(regionMilitary).where(and(eq(regionMilitary.worldId, worldId), inArray(regionMilitary.regionId, homeRegions)));

@@ -1,8 +1,9 @@
-import { eq } from "drizzle-orm";
-import { activeWorld, createDb, leagueCities, leagueProjects, treasuryBalance, treasuryLedgerRows } from "@massalia/db";
-import { formatGameDate, gameDate, governmentSeats, leagueTax, nationName, parseWarMotionId, projectMotion, projectMotionId, treasuryReasonLabel, type GovernmentSeat } from "@massalia/shared";
+import { and, desc, eq, like } from "drizzle-orm";
+import { activeWorld, createDb, leagueArmyRows, leagueCities, leagueFleet, leagueProjects, loadLeagueArmy, treasuryBalance, treasuryLedger, treasuryLedgerRows } from "@massalia/db";
+import { armyUpkeep, formatGameDate, gameDate, governmentSeats, LEAGUE_UNIT_IDS, leagueTax, nationName, parseDesertionReason, parseWarMotionId, projectMotion, projectMotionId, REAL_MS_PER_SEASON, treasuryReasonLabel, type GovernmentSeat, type LeagueUnitId, type LeagueUnits } from "@massalia/shared";
 import { agendaScopeView, getLeagueBuildings, getLeagueCities, getWarFactions, heldOffices, leagueMeasureTitle, type AgendaScopeView } from "./agenda.js";
 import type { CharacterRow } from "./character.js";
+import { townDisplayName } from "./mapNames.js";
 import { getPoliticsConfig } from "./oligarchy.js";
 
 const db = createDb();
@@ -32,6 +33,19 @@ export interface GovernmentProjectView {
   completesLabel: string; // "Summer, 292 BC": the game date the building stands
 }
 
+// The League's army (government prompt 5a), whole, for every member: the men in
+// each home town by type in the content's order, the fleet and where it stands,
+// what a season costs, and the last time men deserted for want of pay.
+export interface GovernmentArmyView {
+  towns: { townId: string; name: string; units: LeagueUnits; men: number }[];
+  fleet: { at: string; pentekonters: number; triremes: number };
+  men: number;
+  upkeepPerSeason: number; // armyUpkeep of the men now
+  lastDesertion: { men: number; label: string } | null; // label: the season's game date
+}
+
+const NO_ARMY: GovernmentArmyView = { towns: [], fleet: { at: "", pentekonters: 0, triremes: 0 }, men: 0, upkeepPerSeason: 0, lastDesertion: null };
+
 export type GovernmentView =
   | { member: false }
   | {
@@ -46,6 +60,7 @@ export type GovernmentView =
       league: AgendaScopeView; // agendaScopeView(actor, "league", now), unfiltered
       festival: AgendaScopeView; // the festival motion (government prompt 3), unfiltered
       war: AgendaScopeView; // the war motion (government prompt 4), unfiltered
+      army: GovernmentArmyView; // the League's army (government prompt 5a)
     };
 
 const LEDGER_LINES = 40;
@@ -77,7 +92,7 @@ export async function governmentView(actor: CharacterRow, now: Date = new Date()
   const festival = await agendaScopeView(actor, "festival", now);
   const war = await agendaScopeView(actor, "war", now);
   const world = await activeWorld();
-  if (!world) return { member: true, seats, treasury: { balance: 0, taxPerSeason: 0, ledger: [] }, projects: [], league, festival, war };
+  if (!world) return { member: true, seats, treasury: { balance: 0, taxPerSeason: 0, ledger: [] }, projects: [], league, festival, war, army: NO_ARMY };
 
   const cfg = getPoliticsConfig();
   const poleis = await db.select({ population: leagueCities.population }).from(leagueCities).where(eq(leagueCities.worldId, world.id));
@@ -100,6 +115,40 @@ export async function governmentView(actor: CharacterRow, now: Date = new Date()
     league,
     festival,
     war,
+    army: await armyView(world),
+  };
+}
+
+// The army as it stands now. The scope views above have synced, so a fresh
+// world's army is raised and its season paid before this reads.
+async function armyView(world: { id: string; startedMs: number }): Promise<GovernmentArmyView> {
+  const content = await loadLeagueArmy();
+  const rows = await leagueArmyRows(db, world.id);
+  const towns: GovernmentArmyView["towns"] = [];
+  for (const town of content.towns) {
+    const units = Object.fromEntries(LEAGUE_UNIT_IDS.map((id) => [id, 0])) as LeagueUnits;
+    for (const row of rows) {
+      if (row.basedAt === town.townId && (LEAGUE_UNIT_IDS as readonly string[]).includes(row.unitId)) units[row.unitId as LeagueUnitId] += row.count;
+    }
+    towns.push({ townId: town.townId, name: await townDisplayName(town.townId), units, men: LEAGUE_UNIT_IDS.reduce((n, id) => n + units[id], 0) });
+  }
+  const men = rows.reduce((n, r) => n + r.count, 0);
+  const fleet = await leagueFleet(db, world.id);
+  const last = (
+    await db
+      .select({ reason: treasuryLedger.reason })
+      .from(treasuryLedger)
+      .where(and(eq(treasuryLedger.worldId, world.id), eq(treasuryLedger.owner, "league"), like(treasuryLedger.reason, "desertion:s%")))
+      .orderBy(desc(treasuryLedger.createdAt))
+      .limit(1)
+  )[0];
+  const deserted = last ? parseDesertionReason(last.reason) : null;
+  return {
+    towns,
+    fleet: { at: await townDisplayName(content.fleetAt), ...fleet },
+    men,
+    upkeepPerSeason: armyUpkeep(men, content.upkeepPerManPerSeason),
+    lastDesertion: deserted ? { men: deserted.men, label: formatGameDate(gameDate(world.startedMs + deserted.season * REAL_MS_PER_SEASON, world.startedMs)) } : null,
   };
 }
 

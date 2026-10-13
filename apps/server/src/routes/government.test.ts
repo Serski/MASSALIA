@@ -59,6 +59,13 @@ type Gov =
       league: Scope;
       festival: Scope;
       war: Scope;
+      army: {
+        towns: { townId: string; name: string; units: { hoplite: number; peltast: number; ekdromos: number; hippeis: number }; men: number }[];
+        fleet: { at: string; pentekonters: number; triremes: number };
+        men: number;
+        upkeepPerSeason: number;
+        lastDesertion: { men: number; label: string } | null;
+      };
     };
 
 suite("GET /api/government and the public League scope (integration)", () => {
@@ -310,6 +317,64 @@ suite("GET /api/government and the public League scope (integration)", () => {
       expect(scope.youMayDraft).toBe(false);
       // In an Autumn the festival's next docket is the coming Summer's.
       expect(scope.nextOpensLabel).toBe("Summer, 299 BC");
+    });
+  });
+
+  // The League's army (government prompt 5a): every member sees the whole of it.
+  describe("the League's army", () => {
+    it("a member sees the ten home towns by type, the fleet at Massalia, the season's upkeep and no desertion; a citizen sees none of it", async () => {
+      await firstWinter();
+      const strategos = await citizen("strategos");
+      await seat("strategos", null, strategos.characterId);
+      const c = await citizen("citizen");
+
+      const view = await government(strategos.token);
+      expect(view.member).toBe(true);
+      if (!view.member) return;
+      expect(view.army.men).toBe(2050);
+      expect(view.army.upkeepPerSeason).toBe(513);
+      expect(view.army.fleet).toEqual({ at: "Massalia", pentekonters: 29, triremes: 40 });
+      expect(view.army.lastDesertion).toBeNull();
+      expect(view.army.towns.map((t) => [t.townId, t.name, t.men])).toEqual([
+        ["massalia", "Massalia", 1000],
+        ["emporion", "Emporion", 250],
+        ["nikaia", "Nikaia", 150],
+        ["olbia-provence", "Olbia", 150],
+        ["rhoda", "Rhoda", 120],
+        ["agathe", "Agathe", 100],
+        ["antipolis", "Antipolis", 100],
+        ["arelate", "Arelate", 100],
+        ["athinopolis", "Athinopolis", 50],
+        ["monoikos", "Monoikos", 30],
+      ]);
+      expect(view.army.towns[0]!.units).toEqual({ hoplite: 500, peltast: 250, ekdromos: 150, hippeis: 100 });
+      expect(view.army.towns[9]!.units).toEqual({ hoplite: 16, peltast: 7, ekdromos: 4, hippeis: 3 });
+      expect(view.army.towns.reduce((n, t) => n + t.men, 0)).toBe(2050);
+
+      expect(await government(c.token)).toEqual({ member: false });
+    });
+
+    it("once men have deserted the view names how many and the season, the towns show what stands, and the ledger reads the count", async () => {
+      await firstWinter();
+      const archon = await citizen("archon");
+      await seat("archon", "palaioi", archon.characterId);
+      await government(archon.token); // the first sync raises the army
+      const league = (await m.dbPkg.leaguePlayerId(db, worldId))!;
+      // As a season the treasury could not pay would leave it: Monoikos emptied,
+      // Massalia's hoplites thinned, and the desertion's row on the ledger.
+      await db.delete(m.dbPkg.playerUnits).where(and(eq(m.dbPkg.playerUnits.ownerPlayerId, league), eq(m.dbPkg.playerUnits.basedAt, "monoikos")));
+      await db.update(m.dbPkg.playerUnits).set({ count: 98 }).where(and(eq(m.dbPkg.playerUnits.ownerPlayerId, league), eq(m.dbPkg.playerUnits.basedAt, "massalia"), eq(m.dbPkg.playerUnits.unitId, "hoplite")));
+      await db.insert(m.dbPkg.treasuryLedger).values({ worldId, owner: "league", delta: 0, reason: "desertion:s2:432" });
+
+      const view = await government(archon.token);
+      expect(view.member).toBe(true);
+      if (!view.member) return;
+      expect(view.army.men).toBe(2050 - 30 - 402);
+      expect(view.army.upkeepPerSeason).toBe(Math.round((2050 - 30 - 402) * 0.25));
+      expect(view.army.towns[0]).toMatchObject({ name: "Massalia", units: { hoplite: 98, peltast: 250, ekdromos: 150, hippeis: 100 }, men: 598 });
+      expect(view.army.towns[9]).toEqual({ townId: "monoikos", name: "Monoikos", units: { hoplite: 0, peltast: 0, ekdromos: 0, hippeis: 0 }, men: 0 });
+      expect(view.army.lastDesertion).toEqual({ men: 432, label: "Summer, 300 BC" });
+      expect(view.treasury.ledger.map((l) => [l.delta, l.label])).toContainEqual([0, "Deserted for want of pay: 432 men"]);
     });
   });
 

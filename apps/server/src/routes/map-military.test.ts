@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import Fastify, { type FastifyInstance } from "fastify";
 import cookie from "@fastify/cookie";
 
@@ -92,7 +92,16 @@ suite("GET /api/map/military (integration)", () => {
     const res = await get(c);
     expect(res.statusCode).toBe(200);
     const body = res.json() as { towns: Record<string, unknown>; regions: Record<string, unknown> };
-    expect(body.towns.massalia).toEqual({ garrison: 1000, pentekonters: 10, triremes: 30, source: "home" });
+    // The home towns' garrisons are the League's army (government prompt 5a): its
+    // men based in each town, and the whole fleet at Massalia.
+    expect(body.towns.massalia).toEqual({ garrison: 1000, pentekonters: 29, triremes: 40, source: "home" });
+    expect(body.towns.nikaia).toEqual({ garrison: 150, pentekonters: 0, triremes: 0, source: "home" });
+    expect(Object.fromEntries(Object.entries(body.towns).map(([id, t]) => [id, (t as { garrison: number }).garrison]))).toEqual({
+      massalia: 1000, emporion: 250, nikaia: 150, "olbia-provence": 150, rhoda: 120, agathe: 100, antipolis: 100, arelate: 100, athinopolis: 50, monoikos: 30,
+    });
+    for (const [id, t] of Object.entries(body.towns)) {
+      if (id !== "massalia") expect(t, id).toMatchObject({ pentekonters: 0, triremes: 0, source: "home" });
+    }
     // Exactly the ten Massaliote towns (content owners), no foreign town or region.
     expect(Object.keys(body.towns).sort()).toEqual(
       ["agathe", "antipolis", "athinopolis", "emporion", "massalia", "monoikos", "nikaia", "olbia-provence", "rhoda", "arelate"].sort(),
@@ -100,6 +109,27 @@ suite("GET /api/map/military (integration)", () => {
     expect(body.towns.carthage).toBeUndefined();
     expect(body.regions.R105).toBeUndefined();
     expect(Object.keys(body.regions)).toEqual([]);
+  });
+
+  it("a home town's garrison is the League's men alone: a player's own men standing there do not count, and it follows the army as it thins", async () => {
+    const viewer = await freshPlayer();
+    // The first read raises the army; the town_military rows are no longer read.
+    await get(viewer.cookie);
+    await db.update(m.dbPkg.townMilitary).set({ garrison: 7, pentekonters: 7, triremes: 7 }).where(eq(m.dbPkg.townMilitary.worldId, worldId));
+    // A player bases 140 of his own men at Agathe, as players do.
+    await db.insert(m.dbPkg.playerUnits).values({ worldId, ownerPlayerId: viewer.playerId, source: "trained", unitId: "hoplite", count: 140, startCount: 140, recruitedSeason: 0, readyAt: new Date(T0), basedAt: "agathe" });
+    let body = (await get(viewer.cookie)).json() as { towns: Record<string, { garrison: number; pentekonters: number; triremes: number }> };
+    expect(body.towns.agathe).toMatchObject({ garrison: 100, pentekonters: 0, triremes: 0 });
+    expect(body.towns.massalia).toMatchObject({ garrison: 1000, pentekonters: 29, triremes: 40 });
+
+    // The League's hoplites at Agathe thin to 19: the panel shows what stands.
+    const league = (await m.dbPkg.leaguePlayerId(db, worldId))!;
+    await db.update(m.dbPkg.playerUnits).set({ count: 19 }).where(and(eq(m.dbPkg.playerUnits.ownerPlayerId, league), eq(m.dbPkg.playerUnits.basedAt, "agathe"), eq(m.dbPkg.playerUnits.unitId, "hoplite")));
+    await db.delete(m.dbPkg.playerUnits).where(and(eq(m.dbPkg.playerUnits.ownerPlayerId, league), eq(m.dbPkg.playerUnits.basedAt, "monoikos")));
+    body = (await get(viewer.cookie)).json() as typeof body;
+    expect(body.towns.agathe!.garrison).toBe(19 + 25 + 15 + 10);
+    // A home town with no man left still shows, at 0.
+    expect(body.towns.monoikos).toMatchObject({ garrison: 0, pentekonters: 0, triremes: 0 });
   });
 
   it("surfaces the requester's own intel snapshots with their scouted date, never the live pool", async () => {
@@ -110,7 +140,7 @@ suite("GET /api/map/military (integration)", () => {
     expect(body.towns.carthage).toEqual({ garrison: 25000, pentekonters: 9, triremes: 55, source: "intel", scoutedGameDate: "Spring, 299 BC" });
     expect(body.regions.R105).toEqual({ warband: 3900, source: "intel", scoutedGameDate: "Spring, 299 BC" });
     // Home entries are untouched by intel.
-    expect(body.towns.massalia).toEqual({ garrison: 1000, pentekonters: 10, triremes: 30, source: "home" });
+    expect(body.towns.massalia).toEqual({ garrison: 1000, pentekonters: 29, triremes: 40, source: "home" });
   });
 
   it("never leaks another dynasty's intel", async () => {
@@ -151,7 +181,7 @@ suite("GET /api/map/military (integration)", () => {
       expect(Object.keys(body.holdings.towns.reii as object).sort()).toEqual(["characterName", "houseName", "playerId"]);
       expect(Object.keys(body.holdings.regions.R046 as object).sort()).toEqual(["characterName", "houseName", "playerId"]);
       // The pools are as they were: home towns only, no foreign region.
-      expect(body.towns.massalia).toEqual({ garrison: 1000, pentekonters: 10, triremes: 30, source: "home" });
+      expect(body.towns.massalia).toEqual({ garrison: 1000, pentekonters: 29, triremes: 40, source: "home" });
       expect(body.towns.reii).toBeUndefined();
       expect(body.regions.R046).toBeUndefined();
     }
