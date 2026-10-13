@@ -172,8 +172,13 @@ export async function settleLeagueArmy(now: Date = new Date()): Promise<LeagueAr
   if ((await armyOf(db)).reduce((n, r) => n + r.count, 0) === 0) return out;
   const rate = (await loadLeagueArmy()).upkeepPerManPerSeason;
 
-  // 2. One transaction: the League's treasuries row first, then the claim.
+  // 2. One transaction, in the one lock order of every write to the League's
+  // men or its treasury (government prompt 5b): the League's player lock first,
+  // the same advisory lock the server's lockPlayer takes on its row id, then its
+  // treasuries row, then the claim and the unit rows. An order holds the same
+  // two locks in the same order, so the settle and an order never deadlock.
   return db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${leagueId}::text))`);
     const locked = await tx.select({ balance: treasuries.balance }).from(treasuries).where(and(eq(treasuries.worldId, world.id), eq(treasuries.owner, "league"))).for("update");
     if (!locked[0]) return out; // the treasury has not been opened yet
     if (await isClaimed(tx)) return out;
