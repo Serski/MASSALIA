@@ -133,3 +133,27 @@ origin/main is now db933ff: today's lobby gutter (72696f2, 36208a1) and the Pois
 - Run the gate against your own test database, so no other session's suites collide with yours: create massalia_5a_test, point DATABASE_URL at it, and drop it once 5a is pushed.
 - At STOP 1, give the branch and the origin/main SHA you built on.
 - At the push: git fetch. If origin/main moved after your gate, rebase onto it, show each commit's git patch-id unchanged (AGENTS.md:74), and run the gate again. Then git push origin HEAD:main, a fast-forward, never forced.
+
+## Rulings at STOP 1 (Argiris, 13 Oct 2026)
+
+Append these to docs/politics/government-prompt-5a.md as their own commit. The build stands except for the changes below. Make them in new commits, one concern each, staged by path, with their tests.
+
+1. Keep the name fallback, "The League of Massalia".
+2. A ledger row whose delta is 0 shows no amount. No "+0".
+3. Keep "a quarter drachma a man". Add a test that fails when upkeepPerManPerSeason in league-army.json is not 0.25, so the words cannot drift from content.
+4. Keep the unpaid row; it is the season's claim. At delta 0 it reads "Army upkeep unpaid". With no men standing nothing is due, so the settle writes no row at all, and an army that has deserted to nothing leaves no line each season. Test it.
+5. Accept GET /military raising the army, guarded as in 9.
+6. Accept: no treasury row, no charge.
+7. Accept where the guards and the ledger words landed.
+8. Accept the small additions.
+9. New: the army must never stop anything else. GET /me/state awaits syncAgenda with no catch, and the worker's agenda sweep runs its steps one after another, so a throw from ensureLeagueArmy or settleLeagueArmy would break every player's dashboard and stop the agenda sweep, which opens the first war docket at tonight's rollover. Wrap the army calls in syncAgenda, in the worker's agenda sweep and in GET /military, each in its own try/catch: log "army: failed <message>" and go on. The settle's transaction has rolled back by then, so the next sync retries it. Test: with the army settle forced to throw, syncAgenda still completes and opens a due cycle.
+
+Words: all as built, except the card's desertion line, which takes the ledger's separator: "Deserted for want of pay: 1,650 men · Winter, 293 BC".
+
+Then the gate at HEAD (it must end GATE GREEN: HEAD <sha>, tree clean) and pnpm audit --audit-level=high (exit 0).
+
+Push: as the prompt and "Where to build" say, and only if it can go out by 21:00 UTC. If it cannot, STOP and hold it for tomorrow: tonight's 00:00 rollover (the new officials, the first war docket) runs through the same sync, and I want some hours of clean sweeps before it.
+
+Push report, besides the prompt's list:
+- the first agenda sweep's line from the worker log after the deploy, with "army: paid 513, deserted 0"
+- GET /me/state answering 200 in the server log after the deploy
