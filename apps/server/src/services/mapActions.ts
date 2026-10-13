@@ -37,7 +37,7 @@ import { barracksView, getBandsContent, getBattleContent, getShipsContent, getUn
 import { getBuildingsContent, settleAll, type ActingContext } from "./buildings.js";
 import { raidOpinion, raidWarMultiplier, type RaidOpinion } from "./factionOpinion.js";
 import { creditDrachmae, creditGood, holderOf, insertConquest, insertTownConquest, listHoldings } from "./holdings.js";
-import { creditLeagueTreasury, debitLeagueTreasury, isLeague, leagueBalance, leagueWarGate, lockLeagueWrite, marketPrice, ordererDynastyOf, recordLeagueOrder, settleLeague, type LeagueContext } from "./leagueOrders.js";
+import { creditLeagueTreasury, debitLeagueTreasury, isLeague, leagueBalance, leagueWarGate, lockLeagueWrite, marketPrice, recordLeagueOrder, settleLeague, type LeagueContext } from "./leagueOrders.js";
 import { lockPlayer } from "./lock.js";
 import { getTopology } from "./mapGraph.js";
 import { basesOf, fleetInStock, forceRowOf, homeRegions, leagueMapView, reachView, type ReachView } from "./mapReach.js";
@@ -69,7 +69,7 @@ import { townStats } from "./townStats.js";
 // treasuries row first, its own settle in the place of settleAll, no character
 // and so no effect_log row, the treasury as its purse (naval supplies bought,
 // plunder sold), a raid or an attack only on a nation it is at war with at the
-// instant, and what the party sees into the house of the official who ordered it.
+// instant, and what the party sees kept on its report as the League's own.
 //
 // A town (ruling 1–4): the defender is its garrison with the garrison stat
 // block, every row's def raised by min(walls, wallsDefCap); the region's
@@ -626,10 +626,11 @@ export async function resolveMarch(marchId: string, now: Date): Promise<MarchRes
     const men = rows.reduce((n, r) => n + r.count, 0);
     const forceText = describeForce(rows);
     // A house's character, for its log and its dynasty's intel. The League has
-    // none: it logs nothing, and what its party sees goes to the house of the
-    // official who ordered the march.
+    // none: it logs nothing, and what its party sees is the League's alone, on
+    // the march's report (leagueSightings reads it back). No house's intel is
+    // written, the house of the official who ordered the march least of all.
     const character = league ? null : await characterOf(tx, ctx.playerId);
-    const intelDynasty = league ? await ordererDynastyOf(tx, march.id) : character!.dynastyId;
+    const intelDynasty = league ? null : character!.dynastyId;
     // When the survivors are home: the same road back from the arrival.
     const homeAt = new Date(at.getTime() + minutes * 60_000);
     const common = { regionId, regionName, townId, townName, base, route, steps, marchId: march.id, minutes, arrivedAt: at.toISOString(), ships, shipLabels };

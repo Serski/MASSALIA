@@ -310,7 +310,7 @@ export async function mapRoutes(app: FastifyInstance) {
     // `commander`: whether he sits as an Archon or a Strategos now, so the map
     // offers the League's army (government prompt 5b). The server checks the
     // seat again at GET /league and at every order.
-    const commander = (await ordererFor(db, { id: character.id, worldId, dynastyId: character.dynastyId })) !== null;
+    const commander = (await ordererFor(db, { id: character.id, worldId })) !== null;
     return { ...view, commander };
   });
 
@@ -370,7 +370,7 @@ export async function mapRoutes(app: FastifyInstance) {
       return { error: "No active character found." };
     }
     const character = await ensureCharacterRow(player, worldId);
-    const orderer = await ordererFor(db, { id: character.id, worldId, dynastyId: character.dynastyId });
+    const orderer = await ordererFor(db, { id: character.id, worldId });
     if (!orderer) {
       reply.code(403);
       return { error: LEAGUE_COMMAND_REFUSAL };

@@ -19,7 +19,7 @@ import { fleetInStock, getBandsContent, getBattleContent, getShipsContent, getUn
 export { fleetInStock };
 import type { ActingContext } from "./buildings.js";
 import { garrisonCount, holdingBaseId, listHoldings, tributeRateOf } from "./holdings.js";
-import { isLeague, leagueBalance, leagueGateMap, leagueHomeTowns, marketPrice, type LeagueContext } from "./leagueOrders.js";
+import { isLeague, leagueBalance, leagueGateMap, leagueHomeTowns, leagueSightings, marketPrice, type LeagueContext, type LeagueSightings } from "./leagueOrders.js";
 import { getTopology } from "./mapGraph.js";
 import { loadMilitaryOwners } from "./mapMilitary.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
@@ -266,12 +266,15 @@ function leagueRoster(rows: UnitRow[], now: Date): RosterView[] {
 // voyage with what a unit of naval supplies costs it now, and the war gate (the
 // refusal a raid or an attack would meet, by town and by townless region). The
 // gate is its own field, never a reach verdict: Scout reads the raid verdict,
-// and the League's scouts go where a house's may.
+// and the League's scouts go where a house's may. `sightings` is what the
+// League's own parties last saw of each place, with the game date: the map's
+// panels show it in the League's mode, in the place of the viewer's own intel.
 export type LeagueMapView = ReachView & {
   roster: RosterView[];
   treasury: { balance: number };
   supplyPrice: number;
   gate: { towns: Record<string, string>; regions: Record<string, string> };
+  sightings: LeagueSightings;
 };
 export async function leagueMapView(exec: Exec, ctx: LeagueContext, now: Date): Promise<LeagueMapView> {
   const reach = await reachView(exec, ctx, now);
@@ -281,5 +284,6 @@ export async function leagueMapView(exec: Exec, ctx: LeagueContext, now: Date): 
     treasury: { balance: await leagueBalance(exec, ctx.worldId) },
     supplyPrice: leagueSupplyPrice(now, ctx.worldStartedMs),
     gate: await leagueGateMap(exec, ctx.worldId, now),
+    sightings: await leagueSightings(exec, ctx),
   };
 }

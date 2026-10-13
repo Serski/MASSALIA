@@ -4,6 +4,7 @@ import { armyUpkeep, formatGameDate, gameDate, governmentSeats, LEAGUE_UNIT_IDS,
 import { agendaScopeView, getLeagueBuildings, getLeagueCities, getWarFactions, heldOffices, leagueMeasureTitle, type AgendaScopeView } from "./agenda.js";
 import type { CharacterRow } from "./character.js";
 import { tributeRateOf } from "./holdings.js";
+import { leagueSightings } from "./leagueOrders.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
 import { getPoliticsConfig } from "./oligarchy.js";
 
@@ -82,9 +83,12 @@ export interface GovernmentArmyView {
   lastDesertion: { men: number; label: string } | null; // label: the season's game date
   orders: GovernmentArmyOrder[]; // the 10 newest
   reports: GovernmentArmyReport[]; // the 10 newest
+  // What the League's parties last saw of each place (the League's alone: no
+  // house's intel holds it), by name. `men` is a town's garrison or a land's warband.
+  sightings: { id: string; name: string; town: boolean; men: number; pentekonters: number; triremes: number; asOf: string }[];
 }
 
-const NO_ARMY: GovernmentArmyView = { towns: [], holdings: [], parties: [], fleet: { at: "", pentekonters: 0, triremes: 0, atSea: [] }, men: 0, upkeepPerSeason: 0, lastDesertion: null, orders: [], reports: [] };
+const NO_ARMY: GovernmentArmyView = { towns: [], holdings: [], parties: [], fleet: { at: "", pentekonters: 0, triremes: 0, atSea: [] }, men: 0, upkeepPerSeason: 0, lastDesertion: null, orders: [], reports: [], sightings: [] };
 const ARMY_LINES = 10;
 
 export type GovernmentView =
@@ -252,6 +256,13 @@ async function armyView(world: { id: string; startedMs: number }, dateLabel: (ms
     reports.push({ id: march.id, kind: march.kind, to: await placeName(march.townId ?? march.regionId), line, dateLabel: dateLabel(march.arrivesAt.getTime()), arrivedAt: march.arrivesAt.toISOString() });
   }
 
+  // What the League has seen, by the place's name.
+  const seen = await leagueSightings(db, { playerId: leagueId, worldId: world.id });
+  const sightings: GovernmentArmyView["sightings"] = [];
+  for (const [id, s] of Object.entries(seen.towns)) sightings.push({ id, name: await placeName(id), town: true, men: s.garrison, pentekonters: s.pentekonters, triremes: s.triremes, asOf: s.scoutedGameDate });
+  for (const [id, s] of Object.entries(seen.regions)) sightings.push({ id, name: await placeName(id), town: false, men: s.warband, pentekonters: 0, triremes: 0, asOf: s.scoutedGameDate });
+  sightings.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+
   const men = rows.reduce((n, r) => n + r.count, 0);
   const fleet = await leagueFleet(db, world.id);
   const last = (
@@ -273,6 +284,7 @@ async function armyView(world: { id: string; startedMs: number }, dateLabel: (ms
     lastDesertion: deserted ? { men: deserted.men, label: formatGameDate(gameDate(world.startedMs + deserted.season * REAL_MS_PER_SEASON, world.startedMs)) } : null,
     orders,
     reports,
+    sightings,
   };
 }
 

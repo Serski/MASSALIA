@@ -65,7 +65,7 @@ suite("the League's orders (integration)", () => {
     const ctx: Ctx = { playerId: player.id, worldId, worldStartedMs: T0 };
     // Stock for the upkeep a house's settle charges, and supplies for its voyages.
     for (const [type, amount] of Object.entries({ grain: 5000, oliveoil: 5000, chicken: 5000, "naval-supplies": 100 })) await db.insert(resources).values({ scope: "player", scopeId: player.id, type, amount: String(amount), ratePerSecond: "0", lastUpdatedAt: at(0) });
-    return { ctx, characterId: ch.id, dynastyId: dynasty.id, seatOf: () => m.league.ordererFor(db, { id: ch.id, worldId, dynastyId: dynasty.id }) };
+    return { ctx, characterId: ch.id, dynastyId: dynasty.id, seatOf: () => m.league.ordererFor(db, { id: ch.id, worldId }) };
   }
   // An Archon of the Dynatoi and the League's context with him ordering.
   async function archon() {
@@ -156,7 +156,7 @@ suite("the League's orders (integration)", () => {
     expect(view.fleet.ships).toEqual({ "trade-ship": 29, galley: 40 });
     const unit = price("naval-supplies", "buy", at(9));
     expect(unit).toBeGreaterThan(0);
-    expect(view).toMatchObject({ treasury: { balance: 5000 }, supplyPrice: unit });
+    expect(view).toMatchObject({ treasury: { balance: 5000 }, supplyPrice: unit, sightings: { towns: {}, regions: {} } });
     expect(view.fleet.supplies).toBe(Math.floor(5000 / unit));
     // The war gate, by place: a nation at peace, land of no nation; Massalia's own is not in it.
     expect(view.gate.towns.reii).toBe("The League is not at war with the Saluvii.");
@@ -242,8 +242,11 @@ suite("the League's orders (integration)", () => {
     expect(await db.select().from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scopeId, leagueId), sql`type NOT IN ('trade-ship', 'galley')`))).toEqual([]);
     expect(await db.select().from(m.dbPkg.factionRelations)).toEqual([]);
     expect(await garrison("reii")).toBe(10 - killed);
-    // What the men saw is the orderer's house's.
-    expect(await townIntelOf(dynastyId, "reii")).toMatchObject({ garrison: 10 - killed, pentekonters: 0, triremes: 0 });
+    // What the men saw is the League's, on the report and in its sightings; the orderer's house learns nothing.
+    expect(report.intel).toMatchObject({ warband: 10 - killed, pentekonters: 0, triremes: 0 });
+    expect((await m.league.leagueSightings(db, lctx)).towns.reii).toEqual({ garrison: 10 - killed, pentekonters: 0, triremes: 0, scoutedGameDate: report.intel!.scoutedGameDate });
+    expect(await townIntelOf(dynastyId, "reii")).toBeUndefined();
+    expect(await db.select().from(m.dbPkg.townIntel)).toEqual([]);
     // The League has no character: not one effect_log row, for the split, the losses or the report.
     expect(await effectLogs()).toEqual([]);
     // The men are on the road home, and the League's settle lands them and folds them in.
@@ -289,7 +292,8 @@ suite("the League's orders (integration)", () => {
     expect(held[0]).toMatchObject({ regionId: "R047", townId: "reii", kind: "conquest", previousOwner: "saluvii", lastGarrisonedAt: arrival, lastTributeAt: arrival });
     const survivors = 60 - report.attacker.losses;
     expect(await standing("reii", "hoplite")).toMatchObject([{ count: survivors, mission: null }]);
-    expect(await townIntelOf(dynastyId, "reii")).toMatchObject({ garrison: 0 });
+    expect((await m.league.leagueSightings(db, lctx)).towns.reii).toMatchObject({ garrison: 0 });
+    expect(await townIntelOf(dynastyId, "reii")).toBeUndefined();
     // Every player's map reads the holder: the League's name, no house, and the League's mark.
     const world = await m.holdings.listWorldHoldings(db, worldId);
     expect(world).toEqual([{ regionId: "R047", townId: "reii", playerId: leagueId, characterName: "The League", houseName: null, league: true }]);
@@ -310,14 +314,24 @@ suite("the League's orders (integration)", () => {
     captures.conquest = { report: { ...report, marchId: "<march id>" }, holding: world.map((h) => ({ ...h, playerId: "<the League>" })), ledger: await ledger(), balance: await balance() };
   });
 
-  it("a scout goes where a house's may, at peace and on land of no nation, and what it sees is the orderer's house's", async () => {
+  it("a scout goes where a house's may, at peace and on land of no nation, and what it sees is the League's: on its report and the League's map, never in the orderer's house's intel", async () => {
     const { lctx, dynastyId } = await archon();
     const riders = await leagueRow("massalia", "hippeis");
     const res = await m.actions.act(lctx, { type: "scout", regionId: "R046", rows: [{ rowId: riders.id, count: 5 }] }, at(9));
     if (!res.ok) throw new Error(res.error);
     const report = await arrive(res.report.marchId, plus(at(9), 30));
     expect(report).toMatchObject({ type: "scout", winner: null });
-    expect(await regionIntelOf(dynastyId, "R046")).toMatchObject({ warband: report.intel!.warband });
+    expect(report.intel!.warband).toBeGreaterThan(0);
+    expect(await regionIntelOf(dynastyId, "R046")).toBeUndefined();
+    expect(await db.select().from(m.dbPkg.regionIntel)).toEqual([]);
+    // The League's map carries the sighting for whoever commands next; before it, there was none.
+    const view = await m.mapReach.leagueMapView(db, lctx, plus(at(9), 31));
+    expect(view.sightings).toEqual({ towns: {}, regions: { R046: { warband: report.intel!.warband, scoutedGameDate: report.intel!.scoutedGameDate } } });
+    // A second official, of another house, reads the same sighting; neither house has it.
+    const other = await makePlayer({ office: "strategos", side: null });
+    const otherCtx = (await m.league.leagueContext(db, { id: worldId, startedMs: T0 }, (await other.seatOf())!))!;
+    expect((await m.mapReach.leagueMapView(db, otherCtx, plus(at(9), 31))).sightings.regions.R046).toBeDefined();
+    expect(await regionIntelOf(other.dynastyId, "R046")).toBeUndefined();
     expect((await orders())[0]).toMatchObject({ kind: "scout", regionId: "R046", townId: null, men: 5, force: [{ unitId: "hippeis", count: 5 }] });
     // A town of a nation at peace is scouted too.
     const more = await m.actions.act(lctx, { type: "scout", townId: "reii", rows: [{ rowId: (await leagueRow("massalia", "hippeis")).id, count: 5 }] }, at(9));

@@ -1,5 +1,5 @@
 import { and, eq, gte, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
-import { activeWorld, createDb, leagueOrders, leaguePlayerId, leagueWars, loadFactions, loadLeagueArmy, offices, playerCharacters, players, playerHoldings, playerUnits, playerVoyages, treasuries, treasuryLedger, type LeagueOrderForce, type LeagueOrderKind } from "@massalia/db";
+import { activeWorld, createDb, leagueOrders, leaguePlayerId, leagueWars, loadFactions, loadLeagueArmy, offices, playerCharacters, players, playerHoldings, playerMarches, playerUnits, playerVoyages, treasuries, treasuryLedger, type LeagueOrderForce, type LeagueOrderKind } from "@massalia/db";
 import { commandSeat, factionOfPolity, goodCategoryFor, HOME_POLITY_ID, leagueAtWarWith, leagueLedgerReason, leagueWarRefusal, seasonAt, vendorUnitPrice, type FactionDef, type LeagueWarSpan, type VendorAction } from "@massalia/shared";
 import { isActive, type UnitRow } from "./barracks.js";
 import { creditResource, getBuildingsContent, getOrCreateResource, type ActingContext } from "./buildings.js";
@@ -33,9 +33,9 @@ type Exec = DbTx | Db;
 const MS_PER_DAY = 86_400_000;
 
 // The official an order is given by: his character, his name as it stands when
-// he gives it (kept on the order), his house's dynasty (for what the party
-// sees) and the seat he gave it from.
-export type LeagueOrderer = { characterId: string; name: string; dynastyId: string | null; office: "archon" | "strategos"; side: string | null };
+// he gives it (kept on the order) and the seat he gave it from. Nothing of his
+// house's: an order is the League's, and so is what its party sees.
+export type LeagueOrderer = { characterId: string; name: string; office: "archon" | "strategos"; side: string | null };
 // The League's acting context: the three fields every map action takes, with
 // the League's mark. `orderer` is null where no one is ordering (the settle, a
 // read).
@@ -242,12 +242,12 @@ export async function settleLeagueQuietly(now: Date = new Date()): Promise<void>
 // The official behind an order: the character's seat as it stands now (a
 // sitting Archon's, else a Strategos's), or null for anyone else. Read at every
 // order; the client only hides what this would refuse.
-export async function ordererFor(exec: Exec, character: { id: string; worldId: string; dynastyId: string | null }): Promise<LeagueOrderer | null> {
+export async function ordererFor(exec: Exec, character: { id: string; worldId: string }): Promise<LeagueOrderer | null> {
   const held = await exec.select({ office: offices.office, side: offices.side }).from(offices).where(and(eq(offices.worldId, character.worldId), eq(offices.holderCharacterId, character.id)));
   const seat = commandSeat(held);
   if (!seat) return null;
   const named = await exec.select({ name: players.name }).from(playerCharacters).innerJoin(players, eq(players.id, playerCharacters.playerId)).where(eq(playerCharacters.id, character.id)).limit(1);
-  return { characterId: character.id, name: named[0]?.name ?? "", dynastyId: character.dynastyId, office: seat.office, side: seat.side };
+  return { characterId: character.id, name: named[0]?.name ?? "", office: seat.office, side: seat.side };
 }
 
 // --- The League's places ------------------------------------------------------------
@@ -359,17 +359,33 @@ export async function recordLeagueOrder(tx: DbTx, ctx: LeagueContext, input: Lea
   });
 }
 
-// The dynasty of the official who ordered a march, for what the party sees
-// (ruling 8): his house's, as it stands when the party arrives; null when the
-// march has no order or he has no house.
-export async function ordererDynastyOf(exec: Exec, marchId: string): Promise<string | null> {
-  const rows = await exec
-    .select({ dynastyId: playerCharacters.dynastyId })
-    .from(leagueOrders)
-    .innerJoin(playerCharacters, eq(playerCharacters.id, leagueOrders.orderedByCharacterId))
-    .where(eq(leagueOrders.marchId, marchId))
-    .limit(1);
-  return rows[0]?.dynastyId ?? null;
+// --- What the League has seen --------------------------------------------------------
+
+// What a League party sees is the League's, never the house's of the official
+// who sent it (ruling at STOP 1): a scout's snapshot, or the place as a fight
+// left it, is on the party's report and nowhere else. The League's last
+// sighting of each place is read back from its own marches' reports: the
+// newest resolved one that carries what the men saw. A party that turned back
+// or broke up saw nothing.
+export type LeagueSightings = {
+  towns: Record<string, { garrison: number; pentekonters: number; triremes: number; scoutedGameDate: string }>;
+  regions: Record<string, { warband: number; scoutedGameDate: string }>;
+};
+export async function leagueSightings(exec: Exec, ctx: Pick<ActingContext, "playerId" | "worldId">): Promise<LeagueSightings> {
+  const marches = await exec
+    .select({ regionId: playerMarches.regionId, townId: playerMarches.townId, report: playerMarches.report })
+    .from(playerMarches)
+    .where(and(eq(playerMarches.worldId, ctx.worldId), eq(playerMarches.ownerPlayerId, ctx.playerId), eq(playerMarches.status, "resolved")))
+    .orderBy(playerMarches.arrivesAt, playerMarches.id);
+  const out: LeagueSightings = { towns: {}, regions: {} };
+  // Oldest first, so the newest sighting of a place is the one left standing.
+  for (const m of marches) {
+    const intel = (m.report as { intel?: { warband?: unknown; pentekonters?: unknown; triremes?: unknown; scoutedGameDate?: unknown } | null } | null)?.intel;
+    if (!intel || typeof intel.warband !== "number" || typeof intel.scoutedGameDate !== "string") continue;
+    if (m.townId) out.towns[m.townId] = { garrison: intel.warband, pentekonters: typeof intel.pentekonters === "number" ? intel.pentekonters : 0, triremes: typeof intel.triremes === "number" ? intel.triremes : 0, scoutedGameDate: intel.scoutedGameDate };
+    else out.regions[m.regionId] = { warband: intel.warband, scoutedGameDate: intel.scoutedGameDate };
+  }
+  return out;
 }
 
 // The League treasury's balance, unlocked: for a view.

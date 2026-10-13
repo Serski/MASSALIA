@@ -72,6 +72,7 @@ type Gov =
         lastDesertion: { men: number; label: string } | null;
         orders: { id: string; kind: string; by: string; office: string; side: string | null; from: string; to: string; units: Units; men: number; suppliesCost: number; dateLabel: string; orderedAt: string }[];
         reports: { id: string; kind: string; to: string; line: string; dateLabel: string; arrivedAt: string }[];
+        sightings: { id: string; name: string; town: boolean; men: number; pentekonters: number; triremes: number; asOf: string }[];
       };
     };
 
@@ -346,7 +347,7 @@ suite("GET /api/government and the public League scope (integration)", () => {
       expect(view.army.fleet).toEqual({ at: "Massalia", pentekonters: 29, triremes: 40, atSea: [] });
       expect(view.army.lastDesertion).toBeNull();
       // Before any order: no holding, no party, no order, no report.
-      expect(view.army).toMatchObject({ holdings: [], parties: [], orders: [], reports: [] });
+      expect(view.army).toMatchObject({ holdings: [], parties: [], orders: [], reports: [], sightings: [] });
       expect(view.army.towns.map((t) => [t.townId, t.name, t.men])).toEqual([
         ["massalia", "Massalia", 1000],
         ["emporion", "Emporion", 250],
@@ -410,7 +411,7 @@ suite("GET /api/government and the public League scope (integration)", () => {
       const standing = (unitId: string, count: number) => db.update(playerUnits).set({ count }).where(and(eq(playerUnits.ownerPlayerId, league), eq(playerUnits.basedAt, "massalia"), eq(playerUnits.unitId, unitId)));
       const onTheRoad = (unitId: string, count: number, movingTo: string, arrivesAt: Date, mission: Record<string, unknown>) =>
         db.insert(playerUnits).values({ worldId, ownerPlayerId: league, source: "trained", unitId, count, startCount: count, recruitedSeason: 0, readyAt: now, basedAt: "massalia", movingTo, arrivesAt, mission: { departedAt: now.toISOString(), ...mission } as never });
-      const march = async (kind: "scout" | "raid", regionId: string, townId: string | null, arrivesAt: Date, done?: { line: string }) =>
+      const march = async (kind: "scout" | "raid", regionId: string, townId: string | null, arrivesAt: Date, done?: { line: string; intel?: Record<string, unknown> }) =>
         (await db.insert(playerMarches).values({ worldId, ownerPlayerId: league, kind, regionId, townId, baseId: "massalia", route: "land", steps: 1, minutes: 30, departedAt: new Date(arrivesAt.getTime() - 30 * 60_000), arrivesAt, ...(done ? { status: "resolved" as const, resolvedAt: arrivesAt, report: done } : {}) }).returning())[0]!.id;
       const orderRow = (o: { kind: "move" | "scout" | "raid" | "attack"; regionId: string; townId: string | null; force: { unitId: string; count: number }[]; marchId: string | null; orderedAt: Date; suppliesCost?: number }) =>
         db.insert(leagueOrders).values({ worldId, orderedByCharacterId: archon.characterId, orderedByName: "Seskios", office: "archon", side: "dynatoi", kind: o.kind, baseId: "massalia", regionId: o.regionId, townId: o.townId, men: o.force.reduce((n, f) => n + f.count, 0), force: o.force, ships: {}, supplies: 0, suppliesCost: o.suppliesCost ?? 0, marchId: o.marchId, report: null, orderedAt: o.orderedAt, arrivesAt: inMinutes(30) }).returning();
@@ -421,7 +422,9 @@ suite("GET /api/government and the public League scope (integration)", () => {
       await onTheRoad("peltast", 40, "reii", inMinutes(20), { kind: "raid", regionId: "R047", townId: "reii", marchId: raid });
       const raidOrder = (await orderRow({ kind: "raid", regionId: "R047", townId: "reii", force: [{ unitId: "peltast", count: 40 }], marchId: raid, orderedAt: new Date(now.getTime() - 10 * 60_000) }))[0]!;
       // 5 riders are on their way home from a scout of the Salyes, which reported.
-      const scout = await march("scout", "R046", null, new Date(now.getTime() - 20 * 60_000), { line: "Scouted Salyes with 5 hippeis: a warband of 100." });
+      const scout = await march("scout", "R046", null, new Date(now.getTime() - 20 * 60_000), { line: "Scouted Salyes with 5 hippeis: a warband of 100.", intel: { warband: 100, scoutedGameDate: "Winter, 300 BC" } });
+      // An older scout of Aleria saw its garrison and its ships.
+      await march("scout", "R073", "aleria", new Date(now.getTime() - 90 * 60_000), { line: "Scouted Aleria with 5 hippeis.", intel: { warband: 150, pentekonters: 4, triremes: 4, scoutedGameDate: "Winter, 300 BC" } });
       await standing("hippeis", 95);
       await onTheRoad("hippeis", 5, "massalia", inMinutes(10), { kind: "scout", regionId: "R046" });
       await orderRow({ kind: "scout", regionId: "R046", townId: null, force: [{ unitId: "hippeis", count: 5 }], marchId: scout, orderedAt: new Date(now.getTime() - 50 * 60_000) });
@@ -476,7 +479,16 @@ suite("GET /api/government and the public League scope (integration)", () => {
       expect(army.orders[0]!.units).toEqual({ hoplite: 30, peltast: 0, ekdromos: 10, hippeis: 0 });
       expect(army.orders[0]!.dateLabel).toBe(view.treasury.ledger[0]!.dateLabel);
       // The reports: the party that has arrived, in the server's sentence. The raid has not.
-      expect(army.reports).toEqual([{ id: scout, kind: "scout", to: "Salyes", line: "Scouted Salyes with 5 hippeis: a warband of 100.", dateLabel: expect.any(String), arrivedAt: new Date(now.getTime() - 20 * 60_000).toISOString() }]);
+      expect(army.reports[0]).toEqual({ id: scout, kind: "scout", to: "Salyes", line: "Scouted Salyes with 5 hippeis: a warband of 100.", dateLabel: expect.any(String), arrivedAt: new Date(now.getTime() - 20 * 60_000).toISOString() });
+      expect(army.reports.map((r) => r.to)).toEqual(["Salyes", "Aleria"]);
+      // What the League's parties saw is the League's, for every member: by place, with its date.
+      expect(army.sightings).toEqual([
+        { id: "aleria", name: "Aleria", town: true, men: 150, pentekonters: 4, triremes: 4, asOf: "Winter, 300 BC" },
+        { id: "R046", name: "Salyes", town: false, men: 100, pentekonters: 0, triremes: 0, asOf: "Winter, 300 BC" },
+      ]);
+      // No house's intel holds any of it.
+      expect(await db.select().from(m.dbPkg.townIntel)).toEqual([]);
+      expect(await db.select().from(m.dbPkg.regionIntel)).toEqual([]);
       // The ledger names the army's rows, the place by its name.
       expect(view.treasury.ledger.slice(0, 3).map((l) => [l.delta, l.label])).toEqual([[40, "Tribute of Corsi"], [310, "Plunder of Reii"], [-28, "Naval supplies"]]);
 
