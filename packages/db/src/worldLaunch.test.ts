@@ -98,6 +98,9 @@ suite("world:launch (integration)", () => {
   });
 
   it("--dry-run prints BEFORE and the plan and writes nothing", async () => {
+    // The old world's League (government prompt 5a) owns an army; its row is no
+    // player to count and has no user to stamp.
+    expect(await dbPkg.ensureLeagueArmy(oldWorldId, new Date(T0))).toBe(true);
     const lines: string[] = [];
     const report = await launch.launchWorld(db, opts({ dryRun: true }), (l) => lines.push(l));
     expect(report.after).toBeNull();

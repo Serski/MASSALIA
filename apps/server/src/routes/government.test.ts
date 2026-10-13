@@ -136,8 +136,9 @@ suite("GET /api/government and the public League scope (integration)", () => {
     expect(scope.treasury.ledger).toEqual([]);
     expect(scope.youMayDraft).toBe(false);
     expect(scope.youMayVeto).toBe(false);
-    // The sync credited the opening balance, the first Winter's tax and the levy.
-    expect(scope.treasury.balance).toBe(60_000 + 910 + m.getPoliticsConfig().treasury.leviedPerSeason);
+    // The sync credited the opening balance, the first Winter's tax and the levy,
+    // then raised the League's army and paid its season: 513 for 2,050 men.
+    expect(scope.treasury.balance).toBe(60_000 + 910 + m.getPoliticsConfig().treasury.leviedPerSeason - 513);
   });
 
   it("an Archon is a member with the docket, the draft power, the tax and the labelled ledger; their draft stays off the public scope", async () => {
@@ -165,9 +166,11 @@ suite("GET /api/government and the public League scope (integration)", () => {
     expect(view.league.cards[0]!.effects).toEqual(["Priests +20 dr a season for 4 seasons", "Every army +3 morale for 2 years", "Massalia +3 stability a year"]);
     expect(view.league.youMayDraft).toBe(true);
     expect(view.league.youMayVeto).toBe(false);
-    expect(view.treasury.balance).toBe(60_000 + 910 + m.getPoliticsConfig().treasury.leviedPerSeason);
+    expect(view.treasury.balance).toBe(60_000 + 910 + m.getPoliticsConfig().treasury.leviedPerSeason - 513);
     expect(view.treasury.taxPerSeason).toBe(910);
     const lines = view.treasury.ledger.map((l) => [l.delta, l.label, l.dateLabel]);
+    // The army's first season is paid in the same sync (government prompt 5a).
+    expect(lines).toContainEqual([-513, "Army upkeep", "Winter, 300 BC"]);
     expect(lines).toContainEqual([60_000, "Opening balance", "Winter, 300 BC"]);
     expect(lines).toContainEqual([910, "Taxes of the poleis", "Winter, 300 BC"]);
     expect(lines).toContainEqual([m.getPoliticsConfig().treasury.leviedPerSeason, "Levy", "Winter, 300 BC"]);

@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Queue, Worker, type Job } from "bullmq";
 import { BACKUP_JOB_NAME, BACKUP_SCHEDULE, runBackup } from "./jobs/backup.js";
 import { completionDelayMs, parseAgeConfig, parseAgendaFile, parseCalendarConfig, parseContractsContent, parseFamilyConfig, parsePoliticsConfig, parseTraitsFile, MOTION_SCOPES, REAL_MS_PER_SEASON, type AgeConfig, type CalendarConfig, type ContractsContent, type FamilyConfig, type PoliticsConfig, type Trait } from "@massalia/shared";
-import { accrueLeagueCities, accrueTreasuries, advanceAgendaCycles, advanceElections, advanceOlympiads, characterInActiveWorld, closeDueChamberVotes, closeDueFestivals, collectLeagueRevenue, completeLeagueProjects, createDb, deleteExpiredSessions, deliverOlympicNominationToAll, drawFamilyCandidates, endDbPools, endLeagueWars, ensurePartyLeaders, fireFestivalsForAll, openAgendaCycleIfDue, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, sweepMercenaryContracts, sweepSpouseDeaths, type AgendaPools, type MercContractCfgMap } from "@massalia/db";
+import { accrueLeagueCities, accrueTreasuries, advanceAgendaCycles, advanceElections, advanceOlympiads, characterInActiveWorld, closeDueChamberVotes, closeDueFestivals, collectLeagueRevenue, completeLeagueProjects, createDb, deleteExpiredSessions, deliverOlympicNominationToAll, drawFamilyCandidates, endDbPools, endLeagueWars, ensurePartyLeaders, fireFestivalsForAll, openAgendaCycleIfDue, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, settleLeagueArmy, sweepMercenaryContracts, sweepSpouseDeaths, type AgendaPools, type MercContractCfgMap } from "@massalia/db";
 
 const redisUrl = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
 const connection = {
@@ -183,6 +183,9 @@ const SWEEPS: Sweep[] = [
       // The League's income (government prompt 1): opening balance once, the
       // poleis' tax and the fee sweep once a season.
       const revenue = await collectLeagueRevenue(politics);
+      // The League's army (government prompt 5a): raised once per world, then
+      // paid once a season from the treasury the revenue has just filled.
+      const army = await settleLeagueArmy();
       const leaders = (await ensurePartyLeaders()).filled.length;
       let opened = 0;
       for (const scope of MOTION_SCOPES) {
@@ -194,7 +197,7 @@ const SWEEPS: Sweep[] = [
       const built = (await completeLeagueProjects()).length;
       // A war whose seasons have run ends in peace (government prompt 4).
       const peace = (await endLeagueWars()).length;
-      return `Agenda sweep: accrued ${accrued ? "yes" : "—"}, revenue: opening ${revenue.opened}, fees ${revenue.fees}, tax ${revenue.tax}, dues ${revenue.dues}, ${leaders} leader(s) seated, opened ${opened}, ${adv.toVoting.length} to vote, resolved ${adv.resolved.length}, built ${built}, peace ${peace}`;
+      return `Agenda sweep: accrued ${accrued ? "yes" : "—"}, revenue: opening ${revenue.opened}, fees ${revenue.fees}, tax ${revenue.tax}, dues ${revenue.dues}, ${leaders} leader(s) seated, opened ${opened}, ${adv.toVoting.length} to vote, resolved ${adv.resolved.length}, built ${built}, peace ${peace}, army: ${army.raised ? "raised, " : ""}paid ${army.paid}, deserted ${army.deserted}`;
     },
   },
   {

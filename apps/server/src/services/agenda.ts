@@ -19,6 +19,7 @@ import {
   playerCharacters,
   recordEndorsement,
   setDraftedCard,
+  settleLeagueArmy,
   setVeto,
   treasuryBalance,
   treasuryLedgerRows,
@@ -176,6 +177,9 @@ export async function syncAgenda(now: Date = new Date()): Promise<{ accrued: boo
   // poleis' tax and the fee sweep once a season. Cheap when nothing is due.
   const revenue = await collectLeagueRevenue(cfg, now);
   const credited = revenue.opened + revenue.tax + revenue.dues + revenue.fees > 0;
+  // The League's army (government prompt 5a): raised once per world, then paid
+  // once a season, after the season's revenue is in. Cheap when nothing is due.
+  const army = await settleLeagueArmy(now);
   const leaders = (await ensurePartyLeaders(now)).filled.length;
 
   let opened = 0;
@@ -192,7 +196,7 @@ export async function syncAgenda(now: Date = new Date()): Promise<{ accrued: boo
   // A war whose seasons have run ends in peace (government prompt 4).
   const peace = (await endLeagueWars(now)).length;
 
-  if (accrued || credited || opened || advanced || leaders || built || peace) await broadcastState();
+  if (accrued || credited || opened || advanced || leaders || built || peace || army.raised || army.charged) await broadcastState();
   return { accrued, opened, advanced, leaders };
 }
 

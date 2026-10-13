@@ -92,7 +92,8 @@ export async function launchWorld(db: DbHandle, opts: LaunchOptions, log: (line:
   const sameName = await db.select({ id: worlds.id }).from(worlds).where(eq(worlds.name, opts.name)).limit(1);
   if (sameName[0]) throw new LaunchRefused(`Refused: a world named "${opts.name}" already exists (${sameName[0].id}).`);
 
-  const playerCount = (await db.select({ n: count() }).from(players).where(eq(players.worldId, old.id)))[0]!.n;
+  // Citizens only: the League's own row (kind 'league') is not a player to report.
+  const playerCount = (await db.select({ n: count() }).from(players).where(and(eq(players.worldId, old.id), eq(players.kind, "player"))))[0]!.n;
   const toStamp = (await unstampedIn(db, old.id)).length;
   const before = { id: old.id, name: old.name, startedAt: old.startedAt.toISOString(), players: playerCount, toStamp };
   log(`BEFORE active world ${old.id} "${old.name}" started ${before.startedAt}: ${playerCount} player(s), ${toStamp} user(s) to stamp`);

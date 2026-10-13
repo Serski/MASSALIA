@@ -300,6 +300,34 @@ suite("GET /api/lobby (integration)", () => {
     expect(body.record.worldsPlayed).toBe(1);
   });
 
+  // The League's own players row (government prompt 5a) owns the army. It has no
+  // character and is no citizen: no board ranks it, the lobby neither lists nor
+  // counts it, in the active world or an ended one.
+  it("the League's own row is no citizen: on no board, not among the citizens, not counted in any world", async () => {
+    const { users, players } = m.dbPkg;
+    const viewer = await freshUser({ character: { name: "Kleon", prestige: 0 } });
+    await freshUser({ character: { name: "Gyptis", prestige: 0 } });
+    expect(await m.dbPkg.ensureLeagueArmy(worldId)).toBe(true);
+    const ended = (await db.insert(m.dbPkg.worlds).values({ name: "Season Zero", seed: "s0", tagline: "Gone", startedAt: new Date(now.getTime() - 400 * DAY), endsAt: new Date(now.getTime() - 218 * DAY), status: "ended" }).returning())[0]!;
+    const other = (await db.insert(users).values({ email: `o-${Math.random().toString(36).slice(2)}@t`, passwordHash: "x" }).returning())[0]!;
+    await db.insert(players).values({ worldId: ended.id, userId: other.id, name: "Old Rival", color: "#000000" });
+    await db.insert(players).values({ worldId: ended.id, kind: "league", userId: null, name: "The League", color: "#000000" });
+    const leagueIds = (await db.select({ id: players.id }).from(players).where(eq(players.kind, "league"))).map((r) => r.id);
+    expect(leagueIds).toHaveLength(2);
+
+    const standings = await app.inject({ method: "GET", url: "/api/standings", headers: sessionCookie(viewer.token) });
+    expect(standings.statusCode).toBe(200);
+    for (const [name, board] of Object.entries((standings.json() as StandingsResponse).boards)) {
+      expect(board.map((row) => row.name).sort(), name).toEqual(["Gyptis", "Kleon"]);
+      expect(board.some((row) => leagueIds.includes(row.playerId)), name).toBe(false);
+    }
+
+    const body = await lobby(viewer.token);
+    expect(body.worlds.active!.playerCount).toBe(2);
+    expect(body.worlds.active!.citizens.map((c) => c.name).sort()).toEqual(["Gyptis", "Kleon"]);
+    expect(body.worlds.ended.map((w) => [w.name, w.playerCount])).toEqual([["Season Zero", 1]]);
+  });
+
   it("an office_history row for the user's character appears in record.offices with the world name", async () => {
     const viewer = await freshUser({ character: { name: "Protis", prestige: 10 } });
     const rival = await freshUser({ character: { name: "Rival", prestige: 10 } });

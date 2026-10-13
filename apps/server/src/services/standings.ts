@@ -34,7 +34,8 @@ export async function loadStandingsRoster(worldId: string): Promise<StandingsInp
     .from(players)
     .leftJoin(playerCharacters, and(eq(playerCharacters.playerId, players.id), eq(playerCharacters.worldId, worldId)))
     .leftJoin(houses, eq(houses.slug, players.houseSlug))
-    .where(and(eq(players.worldId, worldId), eq(players.isActive, true)));
+    // The League's own row (kind 'league', government prompt 5a) is no citizen: it ranks nowhere.
+    .where(and(eq(players.worldId, worldId), eq(players.isActive, true), eq(players.kind, "player")));
 
   const roster: StandingsInput[] = rows.map((r) => ({
     playerId: r.playerId,

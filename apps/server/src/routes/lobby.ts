@@ -84,7 +84,8 @@ async function activeWorldSection(userId: string, now: number): Promise<LobbyRes
   )[0];
   if (!world) return null;
 
-  const playerCount = (await db.select({ n: count() }).from(players).where(and(eq(players.worldId, world.id), eq(players.isActive, true))))[0]?.n ?? 0;
+  // Citizens only: the League's own row (kind 'league', government prompt 5a) is not counted.
+  const playerCount = (await db.select({ n: count() }).from(players).where(and(eq(players.worldId, world.id), eq(players.isActive, true), eq(players.kind, "player"))))[0]?.n ?? 0;
 
   // One ranking per request — the same roster + ranker as /api/standings — shared
   // by the viewer's own rank and the Citizens list. Only positions survive.
@@ -132,9 +133,12 @@ async function citizensSection(top: StandingRow[], worldId: string, now: number)
     .leftJoin(houses, eq(houses.slug, players.houseSlug))
     .leftJoin(professions, eq(professions.slug, players.professionSlug))
     .where(
-      inArray(
-        players.id,
-        top.map((row) => row.playerId),
+      and(
+        eq(players.kind, "player"),
+        inArray(
+          players.id,
+          top.map((row) => row.playerId),
+        ),
       ),
     );
   const byPlayer = new Map(rows.map((row) => [row.playerId, row]));
@@ -214,7 +218,7 @@ export async function lobbyRoutes(app: FastifyInstance) {
     const ended = await db
       .select({ id: worlds.id, name: worlds.name, tagline: worlds.tagline, startedAt: worlds.startedAt, endsAt: worlds.endsAt, playerCount: count(players.id) })
       .from(worlds)
-      .leftJoin(players, eq(players.worldId, worlds.id))
+      .leftJoin(players, and(eq(players.worldId, worlds.id), eq(players.kind, "player")))
       .where(eq(worlds.status, "ended"))
       .groupBy(worlds.id)
       .orderBy(desc(worlds.endsAt));
