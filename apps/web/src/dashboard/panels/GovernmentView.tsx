@@ -47,7 +47,12 @@ export function GovernmentView({ view, onRefresh }: { view: MemberView; onRefres
             <ul className="treasury-ledger">
               {treasury.ledger.map((l, i) => (
                 <li key={i}>
-                  <span className={l.delta >= 0 ? "ledger-pos" : "ledger-neg"}>{l.delta >= 0 ? "+" : ""}{l.delta.toLocaleString()}</span>{" "}
+                  {/* A row of 0 (an unpaid season, a desertion) shows its words alone: no "+0". */}
+                  {l.delta !== 0 ? (
+                    <>
+                      <span className={l.delta > 0 ? "ledger-pos" : "ledger-neg"}>{l.delta > 0 ? "+" : ""}{l.delta.toLocaleString()}</span>{" "}
+                    </>
+                  ) : null}
                   <span className="ledger-reason">{l.label} · {l.dateLabel}</span>
                 </li>
               ))}

@@ -243,6 +243,28 @@ describe("the Government tab", () => {
     lastDesertion: null,
   };
 
+  it("a ledger row of 0 shows its words with no amount: an unpaid season and a desertion carry no \"+0\"", async () => {
+    const ledger = [
+      { delta: 0, label: "Deserted for want of pay: 432 men", dateLabel: "Spring, 299 BC", createdAt: "2026-10-13T00:00:03.000Z" },
+      { delta: 0, label: "Army upkeep unpaid", dateLabel: "Spring, 299 BC", createdAt: "2026-10-13T00:00:02.000Z" },
+      { delta: -513, label: "Army upkeep", dateLabel: "Winter, 299 BC", createdAt: "2026-10-12T00:00:01.000Z" },
+      { delta: 910, label: "Taxes of the poleis", dateLabel: "Winter, 299 BC", createdAt: "2026-10-12T00:00:00.000Z" },
+    ];
+    const base = member([{ office: "ephor", side: "dynatoi" }], scope("league", { phase: "voting" }));
+    const { container } = await mount({ ...base, treasury: { balance: 397, taxPerSeason: 910, ledger } } as GovernmentView);
+    fireEvent.click(container.querySelectorAll<HTMLButtonElement>(".cs-tab")[1]!);
+    const rows = [...container.querySelectorAll(".government-treasury .treasury-ledger li")];
+    expect(rows.map((li) => li.textContent)).toEqual([
+      "Deserted for want of pay: 432 men · Spring, 299 BC",
+      "Army upkeep unpaid · Spring, 299 BC",
+      "-513 Army upkeep · Winter, 299 BC",
+      "+910 Taxes of the poleis · Winter, 299 BC",
+    ]);
+    // The two rows of 0 have no amount element at all; the others keep theirs.
+    expect(rows.map((li) => li.querySelectorAll(".ledger-pos, .ledger-neg").length)).toEqual([0, 0, 1, 1]);
+    expect(container.querySelector(".government-treasury")!.textContent).not.toContain("+0");
+  });
+
   it("a member sees the League's army: each town's men by type, the fleet at Massalia and the season's upkeep", async () => {
     const { container } = await mount({ ...member([{ office: "strategos", side: null }], scope("league", { phase: "voting" })), army: ARMY });
     fireEvent.click(container.querySelectorAll<HTMLButtonElement>(".cs-tab")[1]!);
