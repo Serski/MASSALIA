@@ -112,7 +112,7 @@ suite("the League's army on the map routes (integration)", () => {
       expect(body.fleet.supplies).toBe(Math.floor(5000 / body.supplyPrice));
       expect(body.campaign.open).toBe(true);
       expect(body.gate.towns.reii).toBe("The League is not at war with the Saluvii.");
-      expect(body.gate.regions.R046).toBe("The League makes war on nations alone, and this land answers to none.");
+      expect(body.gate.regions.R046).toBe("The League makes war only on nations, and no nation holds this land.");
       expect(Object.keys(body.reach).length).toBeGreaterThan(0);
     }
     // Reading wrote nothing.

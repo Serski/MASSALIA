@@ -35,7 +35,7 @@ export function leagueAtWarWith(wars: readonly LeagueWarSpan[], factionId: strin
 // League is at peace with, or no nation's at all (unclaimed land and the
 // peoples no nation holds are the houses' to raid; the League only scouts there).
 export function leagueWarRefusal(nation: Pick<FactionDef, "name" | "group"> | null): string {
-  return nation ? `The League is not at war with ${nationName(nation)}.` : "The League makes war on nations alone, and this land answers to none.";
+  return nation ? `The League is not at war with ${nationName(nation)}.` : "The League makes war only on nations, and no nation holds this land.";
 }
 
 // Who holds a place an order would raid or attack: the League (to a house), or

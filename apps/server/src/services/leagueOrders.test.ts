@@ -160,8 +160,8 @@ suite("the League's orders (integration)", () => {
     expect(view.fleet.supplies).toBe(Math.floor(5000 / unit));
     // The war gate, by place: a nation at peace, land of no nation; Massalia's own is not in it.
     expect(view.gate.towns.reii).toBe("The League is not at war with the Saluvii.");
-    expect(view.gate.towns.aleria).toBe("The League makes war on nations alone, and this land answers to none.");
-    expect(view.gate.regions.R046).toBe("The League makes war on nations alone, and this land answers to none.");
+    expect(view.gate.towns.aleria).toBe("The League makes war only on nations, and no nation holds this land.");
+    expect(view.gate.regions.R046).toBe("The League makes war only on nations, and no nation holds this land.");
     expect(view.gate.towns.nikaia).toBeUndefined();
     // At war with the Saluvii, their town passes the gate.
     await war("saluvii", at(8), at(16));
@@ -175,7 +175,7 @@ suite("the League's orders (integration)", () => {
     const send = (type: "raid" | "attack" | "scout", target: { townId: string } | { regionId: string }, when = at(9)) => m.actions.act(lctx, { type, ...target, rows: [{ rowId: peltasts.id, count: 40 }] }, when);
     for (const type of ["raid", "attack"] as const) {
       expect(await send(type, { townId: "reii" })).toEqual({ ok: false, code: 409, error: "The League is not at war with the Saluvii." });
-      expect(await send(type, { regionId: "R046" })).toEqual({ ok: false, code: 409, error: "The League makes war on nations alone, and this land answers to none." });
+      expect(await send(type, { regionId: "R046" })).toEqual({ ok: false, code: 409, error: "The League makes war only on nations, and no nation holds this land." });
     }
     // The flag alone is no war, and a war that has not begun or is over is none.
     await db.insert(m.dbPkg.factionRelations).values({ worldId, factionId: "saluvii", stance: "hostile", opinion: -200, atWar: true });
@@ -273,7 +273,7 @@ suite("the League's orders (integration)", () => {
     expect(await effectLogs()).toEqual([]);
   });
 
-  it("an attack at war takes the town as a League holding: every map shows it held by The League, its men stand there, and its tribute goes to the treasury", async () => {
+  it("an attack at war takes the town as a League holding: every map shows it held by the League, its men stand there, and its tribute goes to the treasury", async () => {
     const { lctx, dynastyId } = await archon();
     await war("saluvii", at(8), at(16));
     await setGarrison("reii", 10, at(9));

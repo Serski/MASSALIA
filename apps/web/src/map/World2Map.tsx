@@ -27,7 +27,7 @@ type LeagueExtras = Pick<LeagueMapView, "treasury" | "supplyPrice" | "gate">;
 // holdings add no levy.
 export function holdingLine(b: BaseView, league = false): string {
   const h = b.holding;
-  const held = league ? "Held by The League" : "Held by your house";
+  const held = league ? "Held by the League" : "Held by your house";
   if (!h) return league ? `${held}.` : `${held} — a base for your forces.`;
   if (b.townId) {
     if (h.garrison < h.minGarrison) return `${held} · garrison too small for tribute (${h.minGarrison} men needed)`;
@@ -46,13 +46,16 @@ export type PublicHoldings = { towns: Record<string, HoldingHolder>; regions: Re
 const NO_HOLDINGS: PublicHoldings = { towns: {}, regions: {} };
 
 // The line another house's holding reads: "Held by House Leonidas · Konrad Curze".
+// The League's reads "Held by the League": mid-sentence the League takes a lower-case article.
 export function holderLine(h: HoldingHolder): string {
+  if (h.league) return "Held by the League";
   return h.houseName ? `Held by House ${h.houseName} · ${h.characterName}` : `Held by ${h.characterName}`;
 }
 // The suffix a held town carries in its region's town list.
 export function townHeldSuffix(h: HoldingHolder | null, yours: boolean): string {
   if (yours) return " · held by your house";
   if (!h) return "";
+  if (h.league) return " · held by the League";
   return h.houseName ? ` · held by House ${h.houseName}` : ` · held by ${h.characterName}`;
 }
 
@@ -1366,7 +1369,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
         {selectedProvince.type === "land" ? (
           <>
             {yourMenHere ? <p className="w2map-your-men">{yourMenHere}</p> : null}
-            {selectedHeld ? <p className="w2map-held">{heldLine(heldRegions.get(selectedProvince.id) ?? null) ?? (league ? "Held by The League." : "Held by your house — a base for your forces.")}</p> : null}
+            {selectedHeld ? <p className="w2map-held">{heldLine(heldRegions.get(selectedProvince.id) ?? null) ?? (league ? "Held by the League." : "Held by your house — a base for your forces.")}</p> : null}
             {!selectedHeld && regionHolderOther ? <p className="w2map-held">{holderLine(regionHolderOther)}</p> : null}
             {sendMenHere || selectedProvince.towns.length === 0 ? <div className="w2map-info-label">Actions</div> : null}
             {sendMenHere ?? (selectedProvince.towns.length > 0 ? null : (

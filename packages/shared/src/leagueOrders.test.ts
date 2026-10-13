@@ -38,7 +38,7 @@ describe("the refusals, verbatim", () => {
   it("the war gate: a nation at peace by its name, and land that answers to no nation", () => {
     expect(leagueWarRefusal({ name: "Saluvii", group: "celto-ligurian" })).toBe("The League is not at war with the Saluvii.");
     expect(leagueWarRefusal({ name: "Carthage", group: "major-powers" })).toBe("The League is not at war with Carthage.");
-    expect(leagueWarRefusal(null)).toBe("The League makes war on nations alone, and this land answers to none.");
+    expect(leagueWarRefusal(null)).toBe("The League makes war only on nations, and no nation holds this land.");
   });
 
   it("a holding: the League's to a house, another house's to anyone", () => {

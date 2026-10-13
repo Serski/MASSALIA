@@ -63,7 +63,7 @@ const LEAGUE_VIEW = {
   roster: LEAGUE_ROSTER,
   treasury: { balance: 5000 },
   supplyPrice: 14,
-  gate: { towns: { reii: "The League is not at war with the Saluvii." }, regions: { R046: "The League makes war on nations alone, and this land answers to none." } },
+  gate: { towns: { reii: "The League is not at war with the Saluvii." }, regions: { R046: "The League makes war only on nations, and no nation holds this land." } },
 };
 const SET_OUT = {
   type: "setout", action: "raid", marchId: "m-1", regionId: "R047", regionName: "Vocontii", townId: "album", townName: "Album", base: "massalia", route: "land", steps: 1, minutes: 30,
@@ -231,8 +231,8 @@ describe("the League's mode", () => {
     await act(async () => tap(m.svg, "R046"));
     const land = actionsOf(m.q('[role="dialog"][data-region="R046"]')!);
     expect(land("Attack").disabled).toBe(true);
-    expect(land("Attack").getAttribute("title")).toBe("The League makes war on nations alone, and this land answers to none.");
-    expect(land("Raid").getAttribute("title")).toBe("The League makes war on nations alone, and this land answers to none.");
+    expect(land("Attack").getAttribute("title")).toBe("The League makes war only on nations, and no nation holds this land.");
+    expect(land("Raid").getAttribute("title")).toBe("The League makes war only on nations, and no nation holds this land.");
     expect(land("Scout").disabled).toBe(false);
   });
 
@@ -283,12 +283,12 @@ describe("the house's mode, for a commander", () => {
     const m = await mountMap({ commander: false, military: { towns: {}, regions: {}, holdings: { towns: { reii: leagueHolder }, regions: {} } } });
     await act(async () => tap(m.svg, "R047"));
     const card = m.q('[role="dialog"][data-region="R047"]')!;
-    expect([...card.querySelectorAll(".w2map-town-entry")].map((e) => e.textContent?.replace("›", "").trim())).toEqual(["Reii · held by The League", "Album"]);
+    expect([...card.querySelectorAll(".w2map-town-entry")].map((e) => e.textContent?.replace("›", "").trim())).toEqual(["Reii · held by the League", "Album"]);
     await act(async () => {
       fireEvent.click(card.querySelector<HTMLButtonElement>(".w2map-town-entry")!);
     });
     const town = m.q('[role="dialog"][data-town-id="reii"]')!;
-    expect(town.querySelector(".w2map-held")!.textContent).toBe("Held by The League");
+    expect(town.querySelector(".w2map-held")!.textContent).toBe("Held by the League");
     const reii = actionsOf(town);
     expect(reii("Attack").disabled).toBe(true);
     expect(reii("Attack").getAttribute("title")).toBe("The League holds this town.");
@@ -339,9 +339,9 @@ describe("holdingLine in the League's mode", () => {
   const town: BaseView = { id: "reii", regionId: "R047", townId: "reii", kind: "conquest", name: "Reii", holding: { garrison: 47, minGarrison: 15, perDay: { drachmae: 120, grain: 0, timber: 0 }, levyPerYear: 0 } };
   const land: BaseView = { id: "R046", regionId: "R046", townId: null, kind: "conquest", name: "Salyes", holding: { garrison: 5, minGarrison: 1, perDay: { drachmae: 0, grain: 15, timber: 8 }, levyPerYear: 0 } };
   it("names the League as the holder, and a land holding adds no levy", () => {
-    expect(holdingLine(town, true)).toBe("Held by The League · tribute 120 dr a day");
-    expect(holdingLine({ ...town, holding: { ...town.holding!, garrison: 3 } }, true)).toBe("Held by The League · garrison too small for tribute (15 men needed)");
-    expect(holdingLine(land, true)).toBe("Held by The League · 15 grain, 8 timber a day");
+    expect(holdingLine(town, true)).toBe("Held by the League · tribute 120 dr a day");
+    expect(holdingLine({ ...town, holding: { ...town.holding!, garrison: 3 } }, true)).toBe("Held by the League · garrison too small for tribute (15 men needed)");
+    expect(holdingLine(land, true)).toBe("Held by the League · 15 grain, 8 timber a day");
   });
   it("a house's lines are as they were", () => {
     expect(holdingLine(town)).toBe("Held by your house · tribute 120 dr a day");
