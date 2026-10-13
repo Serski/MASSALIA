@@ -806,6 +806,15 @@ export type GovernmentSeatView = { office: "archon" | "ephor" | "strategos"; sid
 export type GovernmentLedgerLine = { delta: number; label: string; dateLabel: string; createdAt: string };
 // A League building project (government prompt 2a), under way or standing.
 export type GovernmentProjectView = { cityId: string; polis: string; buildingId: string; title: string; status: "building" | "built"; completesAt: string; completesLabel: string };
+// The League's army (government prompt 5a): the men in each home town by type, the fleet and where it stands,
+// what a season costs, and the last time men deserted for want of pay (`label` is that season's game date).
+export type GovernmentArmyView = {
+  towns: { townId: string; name: string; units: { hoplite: number; peltast: number; ekdromos: number; hippeis: number }; men: number }[];
+  fleet: { at: string; pentekonters: number; triremes: number };
+  men: number;
+  upkeepPerSeason: number;
+  lastDesertion: { men: number; label: string } | null;
+};
 export type GovernmentView =
   | { member: false }
   | {
@@ -819,6 +828,8 @@ export type GovernmentView =
       festival?: AgendaScopeView;
       // The war motion's docket (government prompt 4). Optional: an old server sends none.
       war?: AgendaScopeView;
+      // The League's army (government prompt 5a). Optional: an old server sends none.
+      army?: GovernmentArmyView;
     };
 
 export type OfficeAppointee = { characterId: string; name: string; houseName: string; party: string };

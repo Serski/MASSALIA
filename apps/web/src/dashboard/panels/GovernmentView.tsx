@@ -1,3 +1,4 @@
+import { leagueUnitsLine, menLabel } from "@massalia/shared";
 import type { GovernmentSeatView, GovernmentView as GovernmentData } from "../../api.js";
 import { DashboardCard } from "../shared.js";
 import { AgendaScopeSection } from "./AgendaSection.js";
@@ -14,6 +15,9 @@ const SIDE_LABEL: Record<"palaioi" | "dynatoi", string> = { palaioi: "Palaioi", 
 export function seatLabel(seat: GovernmentSeatView): string {
   return seat.side ? `${OFFICE_LABEL[seat.office]} (${SIDE_LABEL[seat.side]})` : OFFICE_LABEL[seat.office];
 }
+
+// "29 pentekonters", "1 trireme".
+const hulls = (n: number, one: string) => `${n.toLocaleString()} ${one}${n === 1 ? "" : "s"}`;
 
 type MemberView = Extract<GovernmentData, { member: true }>;
 
@@ -78,6 +82,25 @@ export function GovernmentView({ view, onRefresh }: { view: MemberView; onRefres
           ) : null}
         </div>
       </DashboardCard>
+
+      {/* The League's army (government prompt 5a): every member sees the whole of it. An old server sends none. */}
+      {view.army ? (
+        <DashboardCard className="treasury-card government-army">
+          <div className="event-body">
+            <span className="dashboard-label">The League's army</span>
+            <ul className="treasury-ledger government-army-towns">
+              {view.army.towns.map((t) => (
+                <li key={t.townId}>{t.name} · {leagueUnitsLine(t.units)}</li>
+              ))}
+            </ul>
+            <p className="government-army-fleet">The fleet at {view.army.fleet.at}: {hulls(view.army.fleet.pentekonters, "pentekonter")}, {hulls(view.army.fleet.triremes, "trireme")}</p>
+            <p className="government-army-upkeep">Upkeep: {view.army.upkeepPerSeason.toLocaleString()} drachmae a season, a quarter drachma a man, paid by the treasury</p>
+            {view.army.lastDesertion ? (
+              <p className="government-army-desertion">Deserted for want of pay: {menLabel(view.army.lastDesertion.men)}, {view.army.lastDesertion.label}</p>
+            ) : null}
+          </div>
+        </DashboardCard>
+      ) : null}
 
       <AgendaScopeSection view={view.league} onRefresh={onRefresh} treasury="none" />
       {view.festival ? <AgendaScopeSection view={view.festival} onRefresh={onRefresh} treasury="none" /> : null}

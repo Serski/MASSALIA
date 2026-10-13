@@ -229,6 +229,53 @@ describe("the Government tab", () => {
     expect(again.container.textContent).not.toContain("The festival of the coming year");
   });
 
+  // The League's army (government prompt 5a).
+  const ARMY: NonNullable<Extract<GovernmentView, { member: true }>["army"]> = {
+    towns: [
+      { townId: "massalia", name: "Massalia", units: { hoplite: 500, peltast: 250, ekdromos: 150, hippeis: 100 }, men: 1000 },
+      { townId: "athinopolis", name: "Athinopolis", units: { hoplite: 26, peltast: 12, ekdromos: 7, hippeis: 5 }, men: 50 },
+      { townId: "monoikos", name: "Monoikos", units: { hoplite: 1, peltast: 0, ekdromos: 0, hippeis: 0 }, men: 1 },
+      { townId: "arelate", name: "Arelate", units: { hoplite: 0, peltast: 0, ekdromos: 0, hippeis: 0 }, men: 0 },
+    ],
+    fleet: { at: "Massalia", pentekonters: 29, triremes: 40 },
+    men: 2050,
+    upkeepPerSeason: 513,
+    lastDesertion: null,
+  };
+
+  it("a member sees the League's army: each town's men by type, the fleet at Massalia and the season's upkeep", async () => {
+    const { container } = await mount({ ...member([{ office: "strategos", side: null }], scope("league", { phase: "voting" })), army: ARMY });
+    fireEvent.click(container.querySelectorAll<HTMLButtonElement>(".cs-tab")[1]!);
+    const card = container.querySelector(".government-army")!;
+    expect(text(card as HTMLElement, ".dashboard-label")).toBe("The League's army");
+    expect([...card.querySelectorAll(".government-army-towns li")].map((li) => li.textContent)).toEqual([
+      "Massalia · 500 hoplites, 250 peltasts, 150 ekdromoi, 100 hippeis",
+      "Athinopolis · 26 hoplites, 12 peltasts, 7 ekdromoi, 5 hippeis",
+      "Monoikos · 1 hoplite",
+      "Arelate · no men",
+    ]);
+    expect(text(card as HTMLElement, ".government-army-fleet")).toBe("The fleet at Massalia: 29 pentekonters, 40 triremes");
+    expect(text(card as HTMLElement, ".government-army-upkeep")).toBe("Upkeep: 513 drachmae a season, a quarter drachma a man, paid by the treasury");
+    expect(card.querySelector(".government-army-desertion")).toBeNull();
+    // The army stands between the Projects and the dockets.
+    expect(card.previousElementSibling!.className).toContain("government-projects");
+  });
+
+  it("once men have deserted the army card says how many and when; a view without an army, as an old server sends it, shows no card", async () => {
+    const deserted = { ...ARMY, men: 400, upkeepPerSeason: 100, fleet: { at: "Massalia", pentekonters: 1, triremes: 1 }, lastDesertion: { men: 1650, label: "Winter, 293 BC" } };
+    const { container } = await mount({ ...member([{ office: "archon", side: "palaioi" }], scope("league", { phase: "voting" })), army: deserted });
+    fireEvent.click(container.querySelectorAll<HTMLButtonElement>(".cs-tab")[1]!);
+    expect(text(container, ".government-army-desertion")).toBe("Deserted for want of pay: 1,650 men, Winter, 293 BC");
+    expect(text(container, ".government-army-upkeep")).toBe("Upkeep: 100 drachmae a season, a quarter drachma a man, paid by the treasury");
+    expect(text(container, ".government-army-fleet")).toBe("The fleet at Massalia: 1 pentekonter, 1 trireme");
+    cleanup();
+    vi.restoreAllMocks();
+    const old = await mount(member([{ office: "archon", side: "palaioi" }], scope("league", { phase: "voting" })));
+    fireEvent.click(old.container.querySelectorAll<HTMLButtonElement>(".cs-tab")[1]!);
+    expect(old.container.querySelector(".government-army")).toBeNull();
+    expect(old.container.querySelector(".government-projects")).not.toBeNull();
+  });
+
   // The war motion (government prompt 4).
   it("an Archon sees the war docket under its own heading, each war with what it does if it passes, its cost and its lean", async () => {
     const draft = vi.spyOn(api, "draftAgenda").mockResolvedValue({ ok: true });
