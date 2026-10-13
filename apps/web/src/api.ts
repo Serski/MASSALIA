@@ -816,12 +816,24 @@ export type GovernmentLedgerLine = { delta: number; label: string; dateLabel: st
 export type GovernmentProjectView = { cityId: string; polis: string; buildingId: string; title: string; status: "building" | "built"; completesAt: string; completesLabel: string };
 // The League's army (government prompt 5a): the men in each home town by type, the fleet and where it stands,
 // what a season costs, and the last time men deserted for want of pay (`label` is that season's game date).
+// Since the army takes orders (government prompt 5b) a town's men are those standing in it, and the view
+// carries the rest: the League's holdings, the parties on the road, the hulls at sea, the latest orders and
+// the latest reports. Those fields are optional: an older server sends none.
+export type LeagueUnitsView = { hoplite: number; peltast: number; ekdromos: number; hippeis: number };
+export type LeagueOrderKind = "move" | "scout" | "raid" | "attack";
+export type GovernmentArmyParty = { kind: LeagueOrderKind; returning: boolean; from: string; to: string; units: LeagueUnitsView; men: number; arrivesAt: string };
+export type GovernmentArmyOrder = { id: string; kind: LeagueOrderKind; by: string; office: "archon" | "strategos"; side: string | null; from: string; to: string; units: LeagueUnitsView; men: number; suppliesCost: number; dateLabel: string; orderedAt: string };
+export type GovernmentArmyReport = { id: string; kind: LeagueOrderKind; to: string; line: string; dateLabel: string; arrivedAt: string };
 export type GovernmentArmyView = {
-  towns: { townId: string; name: string; units: { hoplite: number; peltast: number; ekdromos: number; hippeis: number }; men: number }[];
-  fleet: { at: string; pentekonters: number; triremes: number };
+  towns: { townId: string; name: string; units: LeagueUnitsView; men: number }[];
+  holdings?: { id: string; name: string; units: LeagueUnitsView; men: number; minGarrison: number }[];
+  parties?: GovernmentArmyParty[];
+  fleet: { at: string; pentekonters: number; triremes: number; atSea?: { pentekonters: number; triremes: number; to: string; returnsAt: string }[] };
   men: number;
   upkeepPerSeason: number;
   lastDesertion: { men: number; label: string } | null;
+  orders?: GovernmentArmyOrder[];
+  reports?: GovernmentArmyReport[];
 };
 export type GovernmentView =
   | { member: false }

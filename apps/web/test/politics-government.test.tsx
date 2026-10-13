@@ -308,6 +308,82 @@ describe("the Government tab", () => {
     expect(old.container.querySelector(".government-projects")).not.toBeNull();
   });
 
+  // Government prompt 5b: the army takes orders, and the card follows it.
+  it("once the army has orders the card shows its holdings, the parties on the road, the hulls at sea, the latest orders with who gave them, and the latest reports", async () => {
+    const inMinutes = (n: number) => new Date(Date.now() + n * 60_000).toISOString();
+    const none = { hoplite: 0, peltast: 0, ekdromos: 0, hippeis: 0 };
+    const ordered: typeof ARMY = {
+      ...ARMY,
+      towns: [{ townId: "massalia", name: "Massalia", units: { hoplite: 470, peltast: 210, ekdromos: 140, hippeis: 95 }, men: 915 }],
+      holdings: [
+        { id: "reii", name: "Reii", units: { ...none, hoplite: 47 }, men: 47, minGarrison: 15 },
+        { id: "R078", name: "Corsi", units: none, men: 0, minGarrison: 1 },
+      ],
+      parties: [
+        { kind: "scout", returning: true, from: "Salyes", to: "Massalia", units: { ...none, hippeis: 5 }, men: 5, arrivesAt: inMinutes(10) },
+        { kind: "raid", returning: false, from: "Massalia", to: "Album", units: { ...none, peltast: 40 }, men: 40, arrivesAt: inMinutes(20) },
+        { kind: "move", returning: false, from: "Massalia", to: "Arelate", units: { ...none, hoplite: 30, ekdromos: 10 }, men: 40, arrivesAt: inMinutes(30) },
+        { kind: "attack", returning: false, from: "Reii", to: "Album", units: { ...none, hoplite: 1 }, men: 1, arrivesAt: inMinutes(40) },
+      ],
+      fleet: { at: "Massalia", pentekonters: 27, triremes: 39, atSea: [{ pentekonters: 2, triremes: 0, to: "Thapsus", returnsAt: inMinutes(300) }, { pentekonters: 0, triremes: 1, to: "Aleria", returnsAt: inMinutes(60) }] },
+      orders: [
+        { id: "o-3", kind: "raid", by: "Seskios", office: "archon", side: "dynatoi", from: "Massalia", to: "Thapsus", units: { ...none, peltast: 40 }, men: 40, suppliesCost: 1568, dateLabel: "Spring, 293 BC", orderedAt: inMinutes(-5) },
+        { id: "o-2", kind: "move", by: "Kleon", office: "strategos", side: null, from: "Massalia", to: "Arelate", units: { ...none, hoplite: 30, ekdromos: 10 }, men: 40, suppliesCost: 0, dateLabel: "Spring, 293 BC", orderedAt: inMinutes(-10) },
+        { id: "o-1", kind: "scout", by: "Seskios", office: "archon", side: "dynatoi", from: "Massalia", to: "Salyes", units: { ...none, hippeis: 5 }, men: 5, suppliesCost: 0, dateLabel: "Spring, 293 BC", orderedAt: inMinutes(-50) },
+        { id: "o-0", kind: "attack", by: "Seskios", office: "archon", side: "dynatoi", from: "Massalia", to: "Reii", units: { ...none, hoplite: 60 }, men: 60, suppliesCost: 0, dateLabel: "Winter, 293 BC", orderedAt: inMinutes(-900) },
+      ],
+      reports: [
+        { id: "m-2", kind: "scout", to: "Salyes", line: "Scouted Salyes with 5 hippeis: a warband of 100.", dateLabel: "Spring, 293 BC", arrivedAt: inMinutes(-20) },
+        { id: "m-1", kind: "attack", to: "Reii", line: "Took Reii with 60 hoplites: 10 soldiers slain, 13 of ours lost. The town is ours.", dateLabel: "Winter, 293 BC", arrivedAt: inMinutes(-870) },
+      ],
+    };
+    const { container } = await mount({ ...member([{ office: "ephor", side: "palaioi" }], scope("league", { phase: "voting" })), army: ordered });
+    fireEvent.click(container.querySelectorAll<HTMLButtonElement>(".cs-tab")[1]!);
+    const card = container.querySelector(".government-army") as HTMLElement;
+    const lines = (sel: string) => [...card.querySelectorAll(`${sel} li`)].map((li) => li.textContent);
+    expect([...card.querySelectorAll(".government-projects-head")].map((p) => p.textContent)).toEqual(["Holdings", "On the road", "Orders", "Reports"]);
+    expect(lines(".government-army-towns")).toEqual(["Massalia · 470 hoplites, 210 peltasts, 140 ekdromoi, 95 hippeis"]);
+    expect(lines(".government-army-holdings")).toEqual(["Reii · 47 hoplites", "Corsi · no men · garrison too small for tribute (1 man needed)"]);
+    const parties = lines(".government-army-parties");
+    expect(parties).toHaveLength(4);
+    expect(parties[0]).toMatch(/^5 hippeis returning from Salyes to Massalia · arriving in 00:(09|10):\d\d$/);
+    expect(parties[1]).toMatch(/^40 peltasts from Massalia to raid Album · arriving in 00:(19|20):\d\d$/);
+    expect(parties[2]).toMatch(/^30 hoplites, 10 ekdromoi moving from Massalia to Arelate · arriving in 00:(29|30):\d\d$/);
+    expect(parties[3]).toMatch(/^1 hoplite from Reii to attack Album · arriving in 00:(39|40):\d\d$/);
+    expect(text(card, ".government-army-fleet")).toBe("The fleet at Massalia: 27 pentekonters, 39 triremes");
+    const sea = lines(".government-army-sea");
+    expect(sea[0]).toMatch(/^2 pentekonters at sea for Thapsus · back in 0(4:59|5:00):\d\d$/);
+    expect(sea[1]).toMatch(/^1 trireme at sea for Aleria · back in (00:59|01:00):\d\d$/);
+    expect(lines(".government-army-orders")).toEqual([
+      "Seskios, Archon (Dynatoi) · Raid on Thapsus from Massalia · 40 peltasts · naval supplies 1,568 dr · Spring, 293 BC",
+      "Kleon, Strategos · Move to Arelate from Massalia · 30 hoplites, 10 ekdromoi · Spring, 293 BC",
+      "Seskios, Archon (Dynatoi) · Scout of Salyes from Massalia · 5 hippeis · Spring, 293 BC",
+      "Seskios, Archon (Dynatoi) · Attack on Reii from Massalia · 60 hoplites · Winter, 293 BC",
+    ]);
+    expect(lines(".government-army-reports")).toEqual([
+      "Scouted Salyes with 5 hippeis: a warband of 100. · Spring, 293 BC",
+      "Took Reii with 60 hoplites: 10 soldiers slain, 13 of ours lost. The town is ours. · Winter, 293 BC",
+    ]);
+    // The order of the card: towns, holdings, the road, the fleet and the sea, upkeep, orders, reports.
+    expect([...card.querySelectorAll(".event-body > ul, .event-body > p")].map((el) => el.className.replace("treasury-ledger ", ""))).toEqual([
+      "government-army-towns", "government-projects-head", "government-army-holdings", "government-projects-head", "government-army-parties", "government-army-fleet", "government-army-sea", "government-army-upkeep", "government-projects-head", "government-army-orders", "government-projects-head", "government-army-reports",
+    ]);
+  });
+
+  it("an army with no holding, no party, no hull at sea, no order and no report shows none of those sections, as before any order and from an older server", async () => {
+    const quiet: typeof ARMY = { ...ARMY, holdings: [], parties: [], fleet: { ...ARMY.fleet, atSea: [] }, orders: [], reports: [] };
+    for (const army of [quiet, ARMY]) {
+      const { container } = await mount({ ...member([{ office: "archon", side: "palaioi" }], scope("league", { phase: "voting" })), army });
+      fireEvent.click(container.querySelectorAll<HTMLButtonElement>(".cs-tab")[1]!);
+      const card = container.querySelector(".government-army")!;
+      expect(card.querySelectorAll(".government-projects-head")).toHaveLength(0);
+      expect(card.querySelector(".government-army-holdings, .government-army-parties, .government-army-sea, .government-army-orders, .government-army-reports")).toBeNull();
+      expect(card.querySelectorAll(".government-army-towns li")).toHaveLength(4);
+      cleanup();
+      vi.restoreAllMocks();
+    }
+  });
+
   // The war motion (government prompt 4).
   it("an Archon sees the war docket under its own heading, each war with what it does if it passes, its cost and its lean", async () => {
     const draft = vi.spyOn(api, "draftAgenda").mockResolvedValue({ ok: true });
