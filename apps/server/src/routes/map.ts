@@ -163,8 +163,13 @@ export async function mapRoutes(app: FastifyInstance) {
       // The home towns' garrisons are the League's army (government prompt 5a):
       // a town's garrison is the League's men based there, never a player's own
       // men standing in the town, and the whole fleet is at one town. The army
-      // is raised first when the world has none (a cheap read otherwise).
-      await ensureLeagueArmy(worldId);
+      // is raised first when the world has none (a cheap read otherwise); a
+      // failure there is logged and the panel reads what stands.
+      try {
+        await ensureLeagueArmy(worldId);
+      } catch (error) {
+        console.error(`army: failed ${error instanceof Error ? error.message : String(error)}`);
+      }
       const men = new Map<string, number>();
       for (const r of await leagueArmyRows(db, worldId)) men.set(r.basedAt, (men.get(r.basedAt) ?? 0) + r.count);
       const fleet = await leagueFleet(db, worldId);

@@ -184,8 +184,17 @@ const SWEEPS: Sweep[] = [
       // poleis' tax and the fee sweep once a season.
       const revenue = await collectLeagueRevenue(politics);
       // The League's army (government prompt 5a): raised once per world, then
-      // paid once a season from the treasury the revenue has just filled.
-      const army = await settleLeagueArmy();
+      // paid once a season from the treasury the revenue has just filled. The
+      // army must never stop the sweep: a failure is logged in the sweep's line
+      // and the steps below still run; the next sweep retries the settle.
+      let army: string;
+      try {
+        const settled = await settleLeagueArmy();
+        army = `${settled.raised ? "raised, " : ""}paid ${settled.paid}, deserted ${settled.deserted}`;
+      } catch (error) {
+        army = `failed ${error instanceof Error ? error.message : String(error)}`;
+        console.error(`army: ${army}`);
+      }
       const leaders = (await ensurePartyLeaders()).filled.length;
       let opened = 0;
       for (const scope of MOTION_SCOPES) {
@@ -197,7 +206,7 @@ const SWEEPS: Sweep[] = [
       const built = (await completeLeagueProjects()).length;
       // A war whose seasons have run ends in peace (government prompt 4).
       const peace = (await endLeagueWars()).length;
-      return `Agenda sweep: accrued ${accrued ? "yes" : "—"}, revenue: opening ${revenue.opened}, fees ${revenue.fees}, tax ${revenue.tax}, dues ${revenue.dues}, ${leaders} leader(s) seated, opened ${opened}, ${adv.toVoting.length} to vote, resolved ${adv.resolved.length}, built ${built}, peace ${peace}, army: ${army.raised ? "raised, " : ""}paid ${army.paid}, deserted ${army.deserted}`;
+      return `Agenda sweep: accrued ${accrued ? "yes" : "—"}, revenue: opening ${revenue.opened}, fees ${revenue.fees}, tax ${revenue.tax}, dues ${revenue.dues}, ${leaders} leader(s) seated, opened ${opened}, ${adv.toVoting.length} to vote, resolved ${adv.resolved.length}, built ${built}, peace ${peace}, army: ${army}`;
     },
   },
   {

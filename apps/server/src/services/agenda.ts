@@ -179,7 +179,14 @@ export async function syncAgenda(now: Date = new Date()): Promise<{ accrued: boo
   const credited = revenue.opened + revenue.tax + revenue.dues + revenue.fees > 0;
   // The League's army (government prompt 5a): raised once per world, then paid
   // once a season, after the season's revenue is in. Cheap when nothing is due.
-  const army = await settleLeagueArmy(now);
+  // The army must never stop anything else: a failure is logged and the sync
+  // goes on. The settle's transaction has rolled back, so the next sync retries.
+  let army = { raised: false, charged: false };
+  try {
+    army = await settleLeagueArmy(now);
+  } catch (error) {
+    console.error(`army: failed ${error instanceof Error ? error.message : String(error)}`);
+  }
   const leaders = (await ensurePartyLeaders(now)).filled.length;
 
   let opened = 0;
