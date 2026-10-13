@@ -82,6 +82,10 @@ describe("the ledger's reasons", () => {
     expect(treasuryReasonLabel("fees:s24")).toBe("Market tax and fees");
     expect(treasuryReasonLabel("buildings:s3")).toBe("Bazaar and harbor dues");
     expect(treasuryReasonLabel("army:s28")).toBe("Army upkeep");
+    // A season the treasury could not pay at all is the claim at 0.
+    expect(treasuryReasonLabel("army:s28", undefined, -513)).toBe("Army upkeep");
+    expect(treasuryReasonLabel("army:s28", undefined, 0)).toBe("Army upkeep unpaid");
+    expect(treasuryReasonLabel("tax:s28", undefined, 0)).toBe("Taxes of the poleis");
     expect(treasuryReasonLabel("desertion:s28:1650")).toBe("Deserted for want of pay: 1,650 men");
     expect(treasuryReasonLabel("desertion:s28:1")).toBe("Deserted for want of pay: 1 man");
     expect(treasuryReasonLabel("cut:seat_purchase")).toBe("Share of a seat sale");

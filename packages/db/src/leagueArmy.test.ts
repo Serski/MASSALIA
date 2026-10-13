@@ -161,9 +161,12 @@ suite("the League's army (integration)", () => {
     expect(await db.select().from(dbPkg.playerUnits).where(eq(dbPkg.playerUnits.worldId, worldId))).toEqual([]);
     expect(await ledger()).toEqual([["army:s3", -100], ["desertion:s3:1650", 0], ["army:s4", 0], ["desertion:s4:400", 0]]);
 
-    // An army of no men pays nothing and writes nothing, however full the treasury.
+    // With no men standing nothing is due: season after season the settle writes
+    // no row at all, whether the treasury is empty or full.
+    for (const season of [5, 6, 7]) expect(await dbPkg.settleLeagueArmy(at(season))).toEqual({ raised: false, charged: false, paid: 0, deserted: 0 });
+    expect(await ledger()).toHaveLength(4);
     await db.update(dbPkg.treasuries).set({ balance: 9000 }).where(and(eq(dbPkg.treasuries.worldId, worldId), eq(dbPkg.treasuries.owner, "league")));
-    expect(await dbPkg.settleLeagueArmy(at(5))).toEqual({ raised: false, charged: false, paid: 0, deserted: 0 });
+    for (const season of [8, 9]) expect(await dbPkg.settleLeagueArmy(at(season))).toEqual({ raised: false, charged: false, paid: 0, deserted: 0 });
     expect(await dbPkg.ensureLeagueArmy(worldId, at(5))).toBe(false);
     expect(await men()).toBe(0);
     expect(await balance()).toBe(9000);

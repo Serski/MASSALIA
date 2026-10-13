@@ -82,13 +82,15 @@ export function menLabel(men: number): string {
 // The words a ledger row shows for its stored reason. `cardTitle` resolves a
 // passed measure's card id to its title; without one, or for an unknown id,
 // the line says only that a measure passed. An unknown reason shows as stored.
-export function treasuryReasonLabel(reason: string, cardTitle?: (cardId: string) => string | undefined): string {
+// `delta` is the row's amount, where the words depend on it: a season's army
+// upkeep the treasury could not pay at all is its claim at 0, "Army upkeep unpaid".
+export function treasuryReasonLabel(reason: string, cardTitle?: (cardId: string) => string | undefined, delta?: number): string {
   if (reason === treasuryClaimReason.opening) return "Opening balance";
   if (reason.startsWith("levy:s")) return "Levy";
   if (reason.startsWith("tax:s")) return "Taxes of the poleis";
   if (reason.startsWith("fees:s")) return "Market tax and fees";
   if (reason.startsWith("buildings:s")) return "Bazaar and harbor dues";
-  if (reason.startsWith("army:s")) return "Army upkeep";
+  if (reason.startsWith("army:s")) return delta === 0 ? "Army upkeep unpaid" : "Army upkeep";
   if (reason.startsWith("desertion:s")) {
     const parsed = parseDesertionReason(reason);
     return parsed ? `Deserted for want of pay: ${menLabel(parsed.men)}` : "Deserted for want of pay";

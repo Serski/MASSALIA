@@ -365,6 +365,8 @@ suite("GET /api/government and the public League scope (integration)", () => {
       await db.delete(m.dbPkg.playerUnits).where(and(eq(m.dbPkg.playerUnits.ownerPlayerId, league), eq(m.dbPkg.playerUnits.basedAt, "monoikos")));
       await db.update(m.dbPkg.playerUnits).set({ count: 98 }).where(and(eq(m.dbPkg.playerUnits.ownerPlayerId, league), eq(m.dbPkg.playerUnits.basedAt, "massalia"), eq(m.dbPkg.playerUnits.unitId, "hoplite")));
       await db.insert(m.dbPkg.treasuryLedger).values({ worldId, owner: "league", delta: 0, reason: "desertion:s2:432" });
+      // A later season the treasury could not pay at all: its claim at 0.
+      await db.insert(m.dbPkg.treasuryLedger).values({ worldId, owner: "league", delta: 0, reason: "army:s3" });
 
       const view = await government(archon.token);
       expect(view.member).toBe(true);
@@ -375,6 +377,9 @@ suite("GET /api/government and the public League scope (integration)", () => {
       expect(view.army.towns[9]).toEqual({ townId: "monoikos", name: "Monoikos", units: { hoplite: 0, peltast: 0, ekdromos: 0, hippeis: 0 }, men: 0 });
       expect(view.army.lastDesertion).toEqual({ men: 432, label: "Summer, 300 BC" });
       expect(view.treasury.ledger.map((l) => [l.delta, l.label])).toContainEqual([0, "Deserted for want of pay: 432 men"]);
+      // The first season was paid; the one at 0 reads as unpaid.
+      expect(view.treasury.ledger.map((l) => [l.delta, l.label])).toContainEqual([-513, "Army upkeep"]);
+      expect(view.treasury.ledger.map((l) => [l.delta, l.label])).toContainEqual([0, "Army upkeep unpaid"]);
     });
   });
 

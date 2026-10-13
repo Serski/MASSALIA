@@ -69,7 +69,7 @@ const LEDGER_LINES = 40;
 // reads "Festival held: <title>"; a war's (government prompt 4) "War declared on
 // <nation>", the nation as nationName gives it; everything else as
 // treasuryReasonLabel says.
-function ledgerLabel(reason: string): string {
+function ledgerLabel(reason: string, delta: number): string {
   if (reason.startsWith("agenda:festival:")) {
     const title = leagueMeasureTitle(reason.slice("agenda:".length));
     return title ? `Festival held: ${title}` : "Festival held";
@@ -79,7 +79,7 @@ function ledgerLabel(reason: string): string {
     const nation = parsed ? getWarFactions().find((f) => f.id === parsed.factionId) : undefined;
     return nation ? `War declared on ${nationName(nation)}` : "War declared";
   }
-  return treasuryReasonLabel(reason, leagueMeasureTitle);
+  return treasuryReasonLabel(reason, leagueMeasureTitle, delta);
 }
 
 export async function governmentView(actor: CharacterRow, now: Date = new Date()): Promise<GovernmentView> {
@@ -106,7 +106,7 @@ export async function governmentView(actor: CharacterRow, now: Date = new Date()
       taxPerSeason: leagueTax(poleis.map((p) => p.population), cfg.treasury),
       ledger: rows.map((r) => ({
         delta: r.delta,
-        label: ledgerLabel(r.reason),
+        label: ledgerLabel(r.reason, r.delta),
         dateLabel: dateLabel(Date.parse(r.createdAt)),
         createdAt: r.createdAt,
       })),
