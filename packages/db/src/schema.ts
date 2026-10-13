@@ -1482,6 +1482,40 @@ export const interactions = pgTable("interactions", {
   byActor: index("interactions_actor_idx").on(table.actorCharacterId, table.createdAt),
 }));
 
+// The record of the League's orders (government prompt 5b, migration 0076): one
+// row per order a sitting Archon or Strategos gives the League's army. A scout,
+// raid or attack carries its march's id (the report is the march's own); a move
+// has no march and keeps its report here. `force` is the men sent by type.
+export const LEAGUE_ORDER_KINDS = ["move", "scout", "raid", "attack"] as const;
+export type LeagueOrderKind = (typeof LEAGUE_ORDER_KINDS)[number];
+export type LeagueOrderForce = { unitId: string; count: number }[];
+
+export const leagueOrders = pgTable("league_orders", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  orderedByCharacterId: uuid("ordered_by_character_id").references(() => playerCharacters.id).notNull(),
+  office: text("office").$type<"archon" | "strategos">().notNull(),
+  side: text("side"),
+  kind: text("kind").$type<LeagueOrderKind>().notNull(),
+  baseId: text("base_id").notNull(), // the League's place the men set out from
+  regionId: text("region_id").notNull(),
+  townId: text("town_id"), // the target or destination town, when it is one
+  men: integer("men").notNull(),
+  force: jsonb("force").$type<LeagueOrderForce>().notNull().default(sql`'[]'::jsonb`),
+  ships: jsonb("ships").$type<Record<string, number>>().notNull().default(sql`'{}'::jsonb`),
+  supplies: integer("supplies").notNull().default(0),
+  suppliesCost: integer("supplies_cost").notNull().default(0),
+  marchId: uuid("march_id").references(() => playerMarches.id),
+  report: jsonb("report").$type<Record<string, unknown> | null>(),
+  orderedAt: timestamp("ordered_at", { withTimezone: true }).notNull(),
+  arrivesAt: timestamp("arrives_at", { withTimezone: true }).notNull(),
+}, (table) => ({
+  officeCheck: check("league_orders_office_check", sql`${table.office} IN ('archon', 'strategos')`),
+  kindCheck: check("league_orders_kind_check", sql`${table.kind} IN ('move', 'scout', 'raid', 'attack')`),
+  worldIdx: index("league_orders_world_idx").on(table.worldId, table.orderedAt),
+  marchIdx: uniqueIndex("league_orders_march_idx").on(table.marchId).where(sql`march_id IS NOT NULL`),
+}));
+
 // --- World 2 military pools (migration 0049) --------------------------------
 // Server-side only. Towns hold a garrison plus a fleet (pentekonters, triremes);
 // townless regions hold a warband. One row per (world, id), seeded from
