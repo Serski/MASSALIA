@@ -93,6 +93,7 @@ pnpm dev:web                    # Vite on :5174
 - Exactly one world is `active` at any instant. Characters, players and names are per world.
 - A new Chronicle kind touches five places together: the `ChronicleType` union, `TYPE_ORDER` and `CHRONICLE_EFFECT_LOG_KINDS` in `packages/shared/src/chronicle.ts`, the renderer in `apps/web/src/dashboard/panels/FamilyPanel.tsx`, and the client's own `ChronicleType` in `apps/web/src/api.ts`.
 - A db package test imports only from `packages/db/src` (the tsconfig `rootDir`): a script's core lives in `src`, with a thin CLI shell in `scripts/`.
+- The League's army is the `players` row of kind 'league', with no character: it writes no `effect_log` row and never runs `settleAll` or `settleBarracks`; every write to its men or its treasury takes its player lock first, then its treasuries row (`lockLeagueWrite` in `services/leagueOrders.ts`).
 - Naming traps: the stat is `militia`, not "military". `merc.ts`, `contracts.json` and `merc-cards.json` are the Hoplite's personal contracts and have nothing to do with Barracks bands. The goods `trade-ship` and `galley` are the Pentekonter and the Trireme.
 
 ## Tests
