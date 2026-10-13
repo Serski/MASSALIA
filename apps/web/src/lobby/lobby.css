@@ -19,8 +19,9 @@
   --lobby-radius-control: 0;
   --lobby-radius-pill: 0;
   --lobby-ease: 160ms ease;
-  /* The side gutter the header, the grid, the single-column page and the footer share. */
-  --lobby-gutter: clamp(14px, 3vw, 40px);
+  /* The side gutter the header, the grid, the single-column page and the footer share:
+     never under 16px, so text keeps clear of a phone's edge. */
+  --lobby-gutter: clamp(16px, 3vw, 40px);
 
   position: relative;
   min-height: 100vh;

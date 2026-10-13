@@ -34,7 +34,11 @@ describe("lobby side gutter", () => {
     for (const name of ["lobby-header", "lobby-shell-grid", "lobby-page", "lobby-footer"]) {
       expect(sidePadding(name), name).toBe("var(--lobby-gutter)");
     }
-    expect(rule("lobby-shell")).toMatch(/--lobby-gutter: clamp\(\d+px, [\d.]+vw, \d+px\);/);
+  });
+
+  it("keeps the gutter at 16px or more on a phone", () => {
+    const floor = rule("lobby-shell").match(/--lobby-gutter: clamp\((\d+)px, [\d.]+vw, \d+px\);/)?.[1];
+    expect(Number(floor)).toBeGreaterThanOrEqual(16);
   });
 
   it("makes the page as wide as the header, centred, with no width of its own to overflow", () => {
