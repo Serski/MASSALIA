@@ -1,5 +1,5 @@
 import { and, desc, eq, isNull, like } from "drizzle-orm";
-import { activeWorld, createDb, leagueCities, leagueFleet, leagueOrders, leaguePlayerId, leagueProjects, loadLeagueArmy, playerCharacters, playerHoldings, playerMarches, players, playerUnits, playerVoyages, treasuryBalance, treasuryLedger, treasuryLedgerRows, type LeagueOrderKind } from "@massalia/db";
+import { activeWorld, createDb, leagueCities, leagueFleet, leagueOrders, leaguePlayerId, leagueProjects, loadLeagueArmy, playerHoldings, playerMarches, playerUnits, playerVoyages, treasuryBalance, treasuryLedger, treasuryLedgerRows, type LeagueOrderKind } from "@massalia/db";
 import { armyUpkeep, formatGameDate, gameDate, governmentSeats, LEAGUE_UNIT_IDS, leagueLedgerPlace, leagueTax, nationName, parseDesertionReason, parseWarMotionId, projectMotion, projectMotionId, REAL_MS_PER_SEASON, treasuryReasonLabel, type GovernmentSeat, type LeagueUnitId, type LeagueUnits } from "@massalia/shared";
 import { agendaScopeView, getLeagueBuildings, getLeagueCities, getWarFactions, heldOffices, leagueMeasureTitle, type AgendaScopeView } from "./agenda.js";
 import type { CharacterRow } from "./character.js";
@@ -53,7 +53,7 @@ export interface GovernmentArmyParty {
 export interface GovernmentArmyOrder {
   id: string;
   kind: LeagueOrderKind;
-  by: string; // the official's name
+  by: string; // the official's name as it was when he gave the order
   office: "archon" | "strategos";
   side: string | null;
   from: string;
@@ -228,17 +228,11 @@ async function armyView(world: { id: string; startedMs: number }, dateLabel: (ms
   const atSea: GovernmentArmyView["fleet"]["atSea"] = [];
   for (const v of away) atSea.push({ pentekonters: Math.floor(v.ships["trade-ship"] ?? 0), triremes: Math.floor(v.ships.galley ?? 0), to: await placeName(v.townId ?? v.regionId), returnsAt: v.returnsAt.toISOString() });
 
-  // The latest orders, with who gave each and from which seat.
-  const given = await db
-    .select({ order: leagueOrders, by: players.name })
-    .from(leagueOrders)
-    .innerJoin(playerCharacters, eq(playerCharacters.id, leagueOrders.orderedByCharacterId))
-    .innerJoin(players, eq(players.id, playerCharacters.playerId))
-    .where(eq(leagueOrders.worldId, world.id))
-    .orderBy(desc(leagueOrders.orderedAt), desc(leagueOrders.id))
-    .limit(ARMY_LINES);
+  // The latest orders, with who gave each (by the name he bore then) and from which seat.
+  const given = await db.select().from(leagueOrders).where(eq(leagueOrders.worldId, world.id)).orderBy(desc(leagueOrders.orderedAt), desc(leagueOrders.id)).limit(ARMY_LINES);
   const orders: GovernmentArmyOrder[] = [];
-  for (const { order, by } of given) {
+  for (const order of given) {
+    const by = order.orderedByName;
     const units = noUnits();
     for (const f of order.force) add(units, f.unitId, f.count);
     orders.push({ id: order.id, kind: order.kind, by, office: order.office, side: order.side, from: await placeName(order.baseId), to: await placeName(order.townId ?? order.regionId), units, men: order.men, suppliesCost: order.suppliesCost, dateLabel: dateLabel(order.orderedAt.getTime()), orderedAt: order.orderedAt.toISOString() });

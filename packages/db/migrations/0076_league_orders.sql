@@ -5,12 +5,14 @@
 -- the naval supplies bought and what they cost the treasury, when it was given
 -- and when it arrives. A scout, raid or attack carries its march's id (its
 -- report is the march's own); a move has no march and keeps its report here.
--- Read when the party arrives, for the house of the official who ordered it,
--- and by the Government tab. Idempotent, one transaction.
+-- The official's name is kept as it was when he gave the order: the players row
+-- is reused by his heirs, and an old order must not take the heir's name. Read
+-- by the Government tab. Idempotent, one transaction.
 CREATE TABLE IF NOT EXISTS league_orders (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   world_id uuid NOT NULL REFERENCES worlds(id),
   ordered_by_character_id uuid NOT NULL REFERENCES player_characters(id),
+  ordered_by_name text NOT NULL,
   office text NOT NULL CHECK (office IN ('archon', 'strategos')),
   side text,
   kind text NOT NULL CHECK (kind IN ('move', 'scout', 'raid', 'attack')),

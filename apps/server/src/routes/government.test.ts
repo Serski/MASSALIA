@@ -413,7 +413,7 @@ suite("GET /api/government and the public League scope (integration)", () => {
       const march = async (kind: "scout" | "raid", regionId: string, townId: string | null, arrivesAt: Date, done?: { line: string }) =>
         (await db.insert(playerMarches).values({ worldId, ownerPlayerId: league, kind, regionId, townId, baseId: "massalia", route: "land", steps: 1, minutes: 30, departedAt: new Date(arrivesAt.getTime() - 30 * 60_000), arrivesAt, ...(done ? { status: "resolved" as const, resolvedAt: arrivesAt, report: done } : {}) }).returning())[0]!.id;
       const orderRow = (o: { kind: "move" | "scout" | "raid" | "attack"; regionId: string; townId: string | null; force: { unitId: string; count: number }[]; marchId: string | null; orderedAt: Date; suppliesCost?: number }) =>
-        db.insert(leagueOrders).values({ worldId, orderedByCharacterId: archon.characterId, office: "archon", side: "dynatoi", kind: o.kind, baseId: "massalia", regionId: o.regionId, townId: o.townId, men: o.force.reduce((n, f) => n + f.count, 0), force: o.force, ships: {}, supplies: 0, suppliesCost: o.suppliesCost ?? 0, marchId: o.marchId, report: null, orderedAt: o.orderedAt, arrivesAt: inMinutes(30) }).returning();
+        db.insert(leagueOrders).values({ worldId, orderedByCharacterId: archon.characterId, orderedByName: "Seskios", office: "archon", side: "dynatoi", kind: o.kind, baseId: "massalia", regionId: o.regionId, townId: o.townId, men: o.force.reduce((n, f) => n + f.count, 0), force: o.force, ships: {}, supplies: 0, suppliesCost: o.suppliesCost ?? 0, marchId: o.marchId, report: null, orderedAt: o.orderedAt, arrivesAt: inMinutes(30) }).returning();
 
       // As four orders leave it. 40 peltasts are out on a raid on Reii.
       const raid = await march("raid", "R047", "reii", inMinutes(20));
@@ -466,7 +466,8 @@ suite("GET /api/government and the public League scope (integration)", () => {
       expect(army.upkeepPerSeason).toBe(Math.round((2050 + 12) * 0.25));
       expect(army.fleet).toEqual({ at: "Massalia", pentekonters: 27, triremes: 40, atSea: [{ pentekonters: 2, triremes: 0, to: "Thapsus", returnsAt: inMinutes(300).toISOString() }] });
       // The orders, newest first, each with who gave it and from which seat.
-      const by = (await db.select({ name: m.dbPkg.players.name }).from(m.dbPkg.players).innerJoin(m.dbPkg.playerCharacters, eq(m.dbPkg.playerCharacters.playerId, m.dbPkg.players.id)).where(eq(m.dbPkg.playerCharacters.id, archon.characterId)))[0]!.name;
+      // The name is the one the order kept, whatever the players row is called now (an heir takes the row).
+      const by = "Seskios";
       expect(army.orders.map((o) => [o.kind, o.by, o.office, o.side, o.from, o.to, o.men, o.suppliesCost])).toEqual([
         ["move", by, "archon", "dynatoi", "Massalia", "Arelate", 40, 28],
         ["raid", by, "archon", "dynatoi", "Massalia", "Reii", 40, 0],

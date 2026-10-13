@@ -84,7 +84,7 @@ suite("the League's army on the map routes (integration)", () => {
     if (seat) await db.insert(m.dbPkg.offices).values({ worldId, office: seat.office, side: seat.side, seatSlot: 0, holderCharacterId: character.id, acquiredVia: "elected" });
     const raw = crypto.randomBytes(32).toString("base64url");
     await db.insert(m.dbPkg.sessions).values({ userId: user.id, tokenHash: crypto.createHash("sha256").update(raw).digest("hex"), expiresAt: new Date(Date.now() + DAY) });
-    return { playerId: player.id, characterId: character.id, cookie: `massalia_session=${app.signCookie(raw)}` };
+    return { playerId: player.id, name: player.name, characterId: character.id, cookie: `massalia_session=${app.signCookie(raw)}` };
   }
   const get = (url: string, cookieHeader?: string) => app.inject({ method: "GET", url: `/api/map${url}`, headers: cookieHeader ? { cookie: cookieHeader } : {} });
   const order = (cookieHeader: string, payload: Record<string, unknown>) => app.inject({ method: "POST", url: "/api/map/league/act", headers: { cookie: cookieHeader }, payload });
@@ -157,7 +157,7 @@ suite("the League's army on the map routes (integration)", () => {
     expect(body.force.men).toBe(2020); // the men on the road are no one's to send
     expect(body.reach.treasury).toEqual({ balance: 5000 });
     expect(body.reach.bases).toHaveLength(10);
-    expect(await orders()).toMatchObject([{ orderedByCharacterId: archon.characterId, office: "archon", side: "dynatoi", kind: "move", baseId: "massalia", townId: "arelate", men: 30 }]);
+    expect(await orders()).toMatchObject([{ orderedByCharacterId: archon.characterId, orderedByName: archon.name, office: "archon", side: "dynatoi", kind: "move", baseId: "massalia", townId: "arelate", men: 30 }]);
     // His own men and his own log are untouched: the order was the League's.
     expect(await db.select().from(m.dbPkg.playerUnits).where(eq(m.dbPkg.playerUnits.ownerPlayerId, archon.playerId))).toEqual([]);
     expect(await db.select().from(m.dbPkg.effectLog)).toEqual([]);

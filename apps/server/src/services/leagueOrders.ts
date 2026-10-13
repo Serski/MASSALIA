@@ -1,5 +1,5 @@
 import { and, eq, gte, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
-import { activeWorld, createDb, leagueOrders, leaguePlayerId, leagueWars, loadFactions, loadLeagueArmy, offices, playerCharacters, playerHoldings, playerUnits, playerVoyages, treasuries, treasuryLedger, type LeagueOrderForce, type LeagueOrderKind } from "@massalia/db";
+import { activeWorld, createDb, leagueOrders, leaguePlayerId, leagueWars, loadFactions, loadLeagueArmy, offices, playerCharacters, players, playerHoldings, playerUnits, playerVoyages, treasuries, treasuryLedger, type LeagueOrderForce, type LeagueOrderKind } from "@massalia/db";
 import { commandSeat, factionOfPolity, goodCategoryFor, HOME_POLITY_ID, leagueAtWarWith, leagueLedgerReason, leagueWarRefusal, seasonAt, vendorUnitPrice, type FactionDef, type LeagueWarSpan, type VendorAction } from "@massalia/shared";
 import { isActive, type UnitRow } from "./barracks.js";
 import { creditResource, getBuildingsContent, getOrCreateResource, type ActingContext } from "./buildings.js";
@@ -32,9 +32,10 @@ type Exec = DbTx | Db;
 
 const MS_PER_DAY = 86_400_000;
 
-// The official an order is given by: his character, his house's dynasty (for
-// what the party sees) and the seat he gave it from.
-export type LeagueOrderer = { characterId: string; dynastyId: string | null; office: "archon" | "strategos"; side: string | null };
+// The official an order is given by: his character, his name as it stands when
+// he gives it (kept on the order), his house's dynasty (for what the party
+// sees) and the seat he gave it from.
+export type LeagueOrderer = { characterId: string; name: string; dynastyId: string | null; office: "archon" | "strategos"; side: string | null };
 // The League's acting context: the three fields every map action takes, with
 // the League's mark. `orderer` is null where no one is ordering (the settle, a
 // read).
@@ -244,7 +245,9 @@ export async function settleLeagueQuietly(now: Date = new Date()): Promise<void>
 export async function ordererFor(exec: Exec, character: { id: string; worldId: string; dynastyId: string | null }): Promise<LeagueOrderer | null> {
   const held = await exec.select({ office: offices.office, side: offices.side }).from(offices).where(and(eq(offices.worldId, character.worldId), eq(offices.holderCharacterId, character.id)));
   const seat = commandSeat(held);
-  return seat ? { characterId: character.id, dynastyId: character.dynastyId, office: seat.office, side: seat.side } : null;
+  if (!seat) return null;
+  const named = await exec.select({ name: players.name }).from(playerCharacters).innerJoin(players, eq(players.id, playerCharacters.playerId)).where(eq(playerCharacters.id, character.id)).limit(1);
+  return { characterId: character.id, name: named[0]?.name ?? "", dynastyId: character.dynastyId, office: seat.office, side: seat.side };
 }
 
 // --- The League's places ------------------------------------------------------------
@@ -337,6 +340,7 @@ export async function recordLeagueOrder(tx: DbTx, ctx: LeagueContext, input: Lea
     id: input.id,
     worldId: ctx.worldId,
     orderedByCharacterId: orderer.characterId,
+    orderedByName: orderer.name,
     office: orderer.office,
     side: orderer.side,
     kind: input.kind,

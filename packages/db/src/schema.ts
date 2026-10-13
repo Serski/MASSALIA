@@ -1494,6 +1494,7 @@ export const leagueOrders = pgTable("league_orders", {
   id: uuid("id").primaryKey().defaultRandom(),
   worldId: uuid("world_id").references(() => worlds.id).notNull(),
   orderedByCharacterId: uuid("ordered_by_character_id").references(() => playerCharacters.id).notNull(),
+  orderedByName: text("ordered_by_name").notNull(), // his name as it was when he gave the order
   office: text("office").$type<"archon" | "strategos">().notNull(),
   side: text("side"),
   kind: text("kind").$type<LeagueOrderKind>().notNull(),

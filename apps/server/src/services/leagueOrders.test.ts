@@ -194,7 +194,8 @@ suite("the League's orders (integration)", () => {
   });
 
   it("a raid at war: the party fights, the plunder is sold to the treasury as one ledger row, no grudge is rolled, the order is recorded, the orderer's house sees what the men saw, and the men come home", async () => {
-    const { lctx, characterId, dynastyId } = await archon();
+    const { lctx, ctx: own, characterId, dynastyId, orderer } = await archon();
+    expect(orderer.name).toMatch(/^Kleon-/);
     await war("saluvii", at(8), at(16));
     await setGarrison("reii", 10, at(9)); // 3 meet the raid behind walls 1: 2 or 3 are slain on every seed
     const peltasts = await leagueRow("massalia", "peltast");
@@ -204,7 +205,10 @@ suite("the League's orders (integration)", () => {
     // The order: who gave it, from which seat, what he sent, and its march.
     const order = (await orders())[0]!;
     expect(await orders()).toHaveLength(1);
-    expect(order).toMatchObject({ orderedByCharacterId: characterId, office: "archon", side: "dynatoi", kind: "raid", baseId: "massalia", regionId: "R047", townId: "reii", men: 40, force: [{ unitId: "peltast", count: 40 }], ships: {}, supplies: 0, suppliesCost: 0, marchId, report: null, orderedAt: at(9), arrivesAt: plus(at(9), 30) });
+    expect(order).toMatchObject({ orderedByCharacterId: characterId, orderedByName: orderer.name, office: "archon", side: "dynatoi", kind: "raid", baseId: "massalia", regionId: "R047", townId: "reii", men: 40, force: [{ unitId: "peltast", count: 40 }], ships: {}, supplies: 0, suppliesCost: 0, marchId, report: null, orderedAt: at(9), arrivesAt: plus(at(9), 30) });
+    // The order keeps his name as he gave it: an heir who takes the players row later does not rename it.
+    await db.update(m.dbPkg.players).set({ name: "Kleon II" }).where(eq(m.dbPkg.players.id, own.playerId));
+    expect((await orders())[0]!.orderedByName).toBe(orderer.name);
     // 40 split from the 250 and are on the road; the answer is the League's map again.
     expect((await leagueRow("massalia", "peltast")).count).toBe(210);
     expect(res.roster).toHaveLength(41);
