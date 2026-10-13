@@ -70,6 +70,59 @@
   aspect-ratio: auto;
 }
 
+/* Whose men the map orders (government prompt 5b): a two-button switch at the
+   top-left of the stage, shown to a sitting Archon or Strategos alone. */
+.w2map-mode {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  display: flex;
+  z-index: 3;
+}
+
+.w2map-mode-btn {
+  min-height: 34px;
+  padding: 0 12px;
+  font-family: "Cinzel", "Spectral", serif;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--dash-parchment, #ece0cc);
+  background: rgba(20, 13, 10, 0.82);
+  border: 1px solid rgba(var(--accent-rgb), 0.5);
+  border-radius: 0;
+  cursor: pointer;
+  backdrop-filter: blur(3px);
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.w2map-mode-btn + .w2map-mode-btn {
+  border-left: 0;
+}
+
+.w2map-mode-btn[aria-pressed="true"] {
+  color: var(--dash-gold-bright, var(--accent-bright));
+  border-color: var(--dash-gold, var(--accent));
+  background: rgba(30, 20, 14, 0.94);
+}
+
+.w2map-mode-btn:focus-visible {
+  outline: none;
+  border-color: var(--dash-gold-bright, var(--accent-bright));
+}
+
+/* The picker's head in the League's mode, and the treasury's line in its footer. */
+.w2map-pick-whose {
+  font-family: "Cinzel", "Spectral", serif;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dash-gold-bright, var(--accent-bright));
+}
+
+.w2map-pick-treasury {
+  display: block;
+}
+
 /* Camera controls, bottom-right of the stage. */
 .w2map-controls {
   position: absolute;
@@ -452,7 +505,17 @@ p.w2map-stat-asof {
     min-height: 460px;
   }
 
-  /* At least 44px touch targets for the camera controls. */
+  /* At least 44px touch targets for the mode switch and the camera controls. */
+  .w2map-mode {
+    left: 12px;
+    top: 12px;
+  }
+
+  .w2map-mode-btn {
+    min-height: 44px;
+    font-size: 13px;
+  }
+
   .w2map-controls {
     gap: 8px;
     right: 12px;

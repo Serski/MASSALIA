@@ -677,6 +677,14 @@ export const api = {
   // (Massalia's region, home ground, or a holding). Same response shape as an action.
   mapMove: (baseId: string, rows: { rowId: string; count: number }[]) =>
     apiFetch<MapActResponse<MapMoveReport>>("/api/map/act", { method: "POST", body: { type: "move", baseId, rows } }),
+  // The League's army on the map (government prompt 5b), for a sitting Archon or
+  // Strategos; anyone else is answered 403. One GET is everything the map needs
+  // to order it, and the orders take the bodies of mapAct and mapMove.
+  leagueMap: () => apiFetch<LeagueMapView>("/api/map/league"),
+  leagueAct: (type: MapActType, target: MapActTarget, rows: { rowId: string; count: number }[], ships?: Record<string, number>) =>
+    apiFetch<MapActResponse<MapSetOutReport>>("/api/map/league/act", { method: "POST", body: { type, ...target, rows, ...(ships ? { ships } : {}) } }),
+  leagueMove: (baseId: string, rows: { rowId: string; count: number }[]) =>
+    apiFetch<MapActResponse<MapMoveReport>>("/api/map/league/act", { method: "POST", body: { type: "move", baseId, rows } }),
   craftGood: (good: string) => apiFetch<CraftResult>("/api/buildings/craft", { method: "POST", body: { good } }),
   // The hoplite's home army (Hoplite Step 1): rank ladder + daily salary.
   service: () => apiFetch<ServiceView>("/api/service"),
@@ -1932,6 +1940,21 @@ export type MapReachView = {
   // Keyed by region id; a region absent here keeps the legality matrix's own verdict.
   reach: Record<string, ReachEntry>;
   moveTargets: MoveTargetView[];
+  // Whether the player sits as an Archon or a Strategos, so the map offers the
+  // League's army (government prompt 5b). Optional: an older server sends none.
+  commander?: boolean;
+};
+
+// GET /api/map/league (mirrors LeagueMapView in apps/server/src/services/mapReach.ts):
+// the League's reach, places, rows and fleet, the treasury that pays for a
+// voyage with what a unit of naval supplies costs it now, and the war gate:
+// the server's refusal for a raid or an attack, by town and by townless region.
+// A place in neither map passes the gate.
+export type LeagueMapView = MapReachView & {
+  roster: BarracksRosterRow[];
+  treasury: { balance: number };
+  supplyPrice: number;
+  gate: { towns: Record<string, string>; regions: Record<string, string> };
 };
 
 // --- Map actions (POST /api/map/act; mirrors apps/server/src/services/mapActions.ts) ---

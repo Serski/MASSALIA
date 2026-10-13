@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { forceStats, HOME_POLITY_ID, marchMinutes, moveVerdict, REACH_REASON, renderForce, renderPlunder, routeFor, verdictsFor, type CampaignForcePart, type MapActionType } from "@massalia/shared";
-import { api, apiBaseUrl, ApiError, type BarracksRosterRow, type BaseView, type MapActReport, type MapActType, type MapMoveReport, type MapReachView, type MapSetOutReport, type MoveTargetView, type ReachEntry } from "../api.js";
+import { forceStats, holderRefusal, HOME_POLITY_ID, LEAGUE_MOVE_REFUSAL, leagueSuppliesRefusal, marchMinutes, moveVerdict, REACH_REASON, renderForce, renderPlunder, routeFor, verdictsFor, type CampaignForcePart, type MapActionType } from "@massalia/shared";
+import { api, apiBaseUrl, ApiError, type BarracksRosterRow, type BaseView, type LeagueMapView, type MapActReport, type MapActType, type MapMoveReport, type MapReachView, type MapSetOutReport, type MoveTargetView, type ReachEntry } from "../api.js";
 import { AssetIcon, ChoicePicker, CULTURE_WEBP, formatClock, formatDuration, marchLine, POLITY_CREST, titleCase, useCountdownSeconds } from "../dashboard/shared.js";
 import { mapActionButtons, withHolder, withReach, type MapActionButton } from "./mapActions.js";
 
@@ -14,23 +14,34 @@ const EMPTY_FLEET: MapReachView["fleet"] = { ships: {}, range: 0, space: 0, tier
 // the player's places by base id.
 export type PickTarget = { kind: "region" | "town"; id: string; regionId: string; name: string };
 
+// Whose men the map orders (government prompt 5b): the player's house, or, for
+// a sitting Archon or Strategos, the League's army.
+export type MapMode = "house" | "league";
+// What the League's orders need beyond the reach: the treasury that pays for a
+// voyage, what a unit of naval supplies costs it, and the war gate by place.
+type LeagueExtras = Pick<LeagueMapView, "treasury" | "supplyPrice" | "gate">;
+
 // "Held by your house · tribute 120 dr a day", "· garrison too small for
 // tribute (30 men needed)", or for a region "· 15 grain, 8 timber a day · +5
-// levy a year".
-export function holdingLine(b: BaseView): string {
+// levy a year". In the League's mode the holder is the League, whose land
+// holdings add no levy.
+export function holdingLine(b: BaseView, league = false): string {
   const h = b.holding;
-  if (!h) return "Held by your house — a base for your forces.";
+  const held = league ? "Held by The League" : "Held by your house";
+  if (!h) return league ? `${held}.` : `${held} — a base for your forces.`;
   if (b.townId) {
-    if (h.garrison < h.minGarrison) return `Held by your house · garrison too small for tribute (${h.minGarrison} men needed)`;
-    return `Held by your house · tribute ${h.perDay.drachmae} dr a day`;
+    if (h.garrison < h.minGarrison) return `${held} · garrison too small for tribute (${h.minGarrison} men needed)`;
+    return `${held} · tribute ${h.perDay.drachmae} dr a day`;
   }
   const goods = [h.perDay.grain ? `${h.perDay.grain} grain` : null, h.perDay.timber ? `${h.perDay.timber} timber` : null].filter(Boolean).join(", ");
-  return `Held by your house · ${goods} a day · +${h.levyPerYear} levy a year`;
+  return `${held} · ${goods} a day${h.levyPerYear > 0 ? ` · +${h.levyPerYear} levy a year` : ""}`;
 }
 
 // Who holds a conquered place, as GET /api/map/military publishes it to every
 // player (holdings prompt 1): three fields and nothing more about the holding.
-export type HoldingHolder = { playerId: string; characterName: string; houseName: string | null };
+// `league` marks a holding of the League's army (government prompt 5b): its
+// name is the League's and it has no house.
+export type HoldingHolder = { playerId: string; characterName: string; houseName: string | null; league?: boolean };
 export type PublicHoldings = { towns: Record<string, HoldingHolder>; regions: Record<string, HoldingHolder> };
 const NO_HOLDINGS: PublicHoldings = { towns: {}, regions: {} };
 
@@ -422,6 +433,15 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   const [picker, setPicker] = useState<{ type: MapActType | "move"; target: PickTarget } | null>(null);
   const [roster, setRoster] = useState<BarracksRosterRow[] | null>(null);
   const [report, setReport] = useState<PickerReport | null>(null);
+  // Whose men the map orders (government prompt 5b). `commander` is the server's
+  // word on the seat (GET /api/map/reach), and shows the switch; in the League's
+  // mode the same state below (reach, bases, fleet, move targets, roster) holds
+  // the League's, read from GET /api/map/league, with `leagueView` beside it.
+  // Declared with the other hooks, above the early return below.
+  const [mode, setMode] = useState<MapMode>("house");
+  const [commander, setCommander] = useState(false);
+  const [leagueView, setLeagueView] = useState<LeagueExtras | null>(null);
+  const league = mode === "league";
   // Military entitlements, read once per map load and again when a party bound
   // for the open place gets there (after the roster has answered, so the fight
   // has committed and the strength shown is what it left). Not signed in (or
@@ -457,14 +477,13 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
     const key = `${placeId}:${menHere.earliest}`;
     if (rosterRefetched.current.has(key)) return;
     rosterRefetched.current.add(key);
-    api
-      .barracks()
+    (mode === "league" ? api.leagueMap() : api.barracks())
       .then((view) => {
         setRoster(view.roster);
         loadMilitary();
       })
       .catch(() => {});
-  }, [menHere.earliest, menLeft, placeId, clockOffset, loadMilitary]);
+  }, [menHere.earliest, menLeft, placeId, clockOffset, loadMilitary, mode]);
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" && "matchMedia" in window ? window.matchMedia(MOBILE_QUERY).matches : false,
   );
@@ -493,8 +512,35 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
 
   // Reach: fetched when the map opens and again whenever the dashboard refreshes
   // the player (a barracks change). Not signed in leaves the matrix's verdicts.
+  // In the League's mode one call fills the same state with the League's reach,
+  // places, fleet and rows; a refusal (the seat is gone) puts the map back on
+  // the player's own men.
   useEffect(() => {
     let cancelled = false;
+    const applyReach = (view: MapReachView) => {
+      setReach(view.reach ?? {});
+      setReachBases(view.bases ?? []);
+      setReachFleet(view.fleet ?? EMPTY_FLEET);
+      setMoveTargets(view.moveTargets ?? []);
+      setCampaign(view.campaign ?? null);
+      setClockOffset(view.now ? Date.parse(view.now) - Date.now() : 0);
+    };
+    if (mode === "league") {
+      api
+        .leagueMap()
+        .then((view) => {
+          if (cancelled) return;
+          applyReach(view);
+          setRoster(view.roster ?? []);
+          setLeagueView({ treasury: view.treasury, supplyPrice: view.supplyPrice, gate: view.gate });
+        })
+        .catch(() => {
+          if (!cancelled) setMode("house");
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
     api
       .barracks()
       .then((view) => {
@@ -505,18 +551,14 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
       .mapReach()
       .then((view) => {
         if (cancelled) return;
-        setReach(view.reach ?? {});
-        setReachBases(view.bases ?? []);
-        setReachFleet(view.fleet ?? EMPTY_FLEET);
-        setMoveTargets(view.moveTargets ?? []);
-        setCampaign(view.campaign ?? null);
-        setClockOffset(view.now ? Date.parse(view.now) - Date.now() : 0);
+        applyReach(view);
+        setCommander(view.commander === true);
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [refreshToken]);
+  }, [refreshToken, mode]);
 
   // Regions the player holds render as Massalia's own (colour, crest, and the
   // legality matrix's home rule), with a note in the panel. Nothing else on the
@@ -1163,10 +1205,18 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
     const buttons = actions.buttons.map((b) => (b.enabled && actionable(b.type) ? { ...b, enabled: false, title: winterLine } : b));
     return { buttons, caption: buttons.some((b) => b.title === winterLine) ? winterLine : actions.caption };
   };
+  // Why Attack and Raid are greyed beyond the matrix, the reach and the winter,
+  // in the server's own sentence: a holder (another house's holding, or the
+  // League's to a house), else, in the League's mode, the war gate (a nation at
+  // peace, or land of no nation). The server checks them in that order.
+  const refusalFor = (holder: HoldingHolder | null, place: "town" | "land", gate: string | undefined): string | null => {
+    if (holder) return holderRefusal(holder.league && !league ? "league" : "house", place);
+    return league ? gate ?? null : null;
+  };
   const regionActions = selectedProvince
     ? withHolder(
         withWinter(withReach(mapActionButtons({ kind: "region", hasTown: selectedProvince.towns.length > 0, ownerId: selectedOwnerId }), regionReach, reachFleet)),
-        otherRegionHolder(selectedProvince.id) ? "Another house holds this land." : null,
+        refusalFor(otherRegionHolder(selectedProvince.id), "land", leagueView?.gate.regions[selectedProvince.id]),
       )
     : null;
   // "Your garrison: 30 hoplites · Your men: 20 peltasts returning in 02:14:07".
@@ -1180,12 +1230,14 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
     }
     return [...merged.values()];
   };
+  // In the League's mode the men are the League's: "The League's garrison: …".
+  const whose = league ? "The League's" : "Your";
   const yourMenLine = (() => {
     const parts: string[] = [];
-    if (menHere.garrison.length > 0) parts.push(`Your garrison: ${renderForce(forceParts(menHere.garrison))}`);
+    if (menHere.garrison.length > 0) parts.push(`${whose} garrison: ${renderForce(forceParts(menHere.garrison))}`);
     if (menHere.heading.length > 0) {
       const returning = menHere.heading.every((r) => r.basedAt === r.movingTo);
-      parts.push(`Your men: ${renderForce(forceParts(menHere.heading))} ${returning ? "returning" : "arriving"} in ${formatClock(menLeft)}`);
+      parts.push(`${whose} men: ${renderForce(forceParts(menHere.heading))} ${returning ? "returning" : "arriving"} in ${formatClock(menLeft)}`);
     }
     return parts.length ? parts.join(" · ") : null;
   })();
@@ -1196,10 +1248,26 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   const openPicker = (type: MapActType | "move", target: PickTarget) => {
     setPicker({ type, target });
     setRoster(null);
-    api
-      .barracks()
+    (league ? api.leagueMap() : api.barracks())
       .then((view) => setRoster(view.roster))
       .catch(() => setRoster([]));
+  };
+  // The switch: the map's reach, places, fleet and rows are the other owner's
+  // from here, so what is on screen from the last one is cleared and any open
+  // card closed; the load effect fills them again.
+  const switchMode = (next: MapMode) => {
+    if (next === mode) return;
+    setPicker(null);
+    setReport(null);
+    setSelected(null);
+    setSelectedTown(null);
+    setReach(null);
+    setReachBases([]);
+    setReachFleet(EMPTY_FLEET);
+    setMoveTargets([]);
+    setRoster(null);
+    setLeagueView(null);
+    setMode(next);
   };
   // An action's answer is the set-out card (raids prompt 4): nothing is known
   // of the place yet. The numbers are read again when the party gets there.
@@ -1210,6 +1278,9 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
     setMoveTargets(res.reach.moveTargets ?? []);
     setCampaign(res.reach.campaign ?? null);
     setClockOffset(res.reach.now ? Date.parse(res.reach.now) - Date.now() : 0);
+    // The League's order answers with the League's map again: the treasury after the voyage.
+    const leagueReach = res.reach as Partial<LeagueMapView>;
+    if (league && leagueReach.treasury && leagueReach.gate) setLeagueView({ treasury: leagueReach.treasury, supplyPrice: leagueReach.supplyPrice ?? 0, gate: leagueReach.gate });
     setRoster(res.roster);
     setPicker(null);
     setReport(res.report);
@@ -1224,11 +1295,11 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   // with the server's sentence, the rest as the matrix and the reach say.
   const townHolderOther = selectedTown ? otherTownHolder(selectedTown) : null;
   const townActions = selectedTown
-    ? withHolder(withWinter(withReach(mapActionButtons({ kind: "town", hasTown: true, ownerId: townOwnerId }), townReach, reachFleet)), townHolderOther ? "Another house holds this town." : null)
+    ? withHolder(withWinter(withReach(mapActionButtons({ kind: "town", hasTown: true, ownerId: townOwnerId }), townReach, reachFleet)), refusalFor(townHolderOther, "town", leagueView?.gate.towns[selectedTown]))
     : null;
   // "Your men here: 20 hoplites" on a place of ours, "Your garrison" on a held region.
-  const menLabel = selectedTown || !selectedHeld ? "Your men here" : "Your garrison";
-  const yourMenHere = yourMenLine?.replace("Your garrison", menLabel) ?? null;
+  const menLabel = selectedTown || !selectedHeld ? `${whose} men here` : `${whose} garrison`;
+  const yourMenHere = yourMenLine?.replace(`${whose} garrison`, menLabel) ?? null;
   // SEND MEN HERE replaces the attack row on any place the player may move men to.
   const moveTargetHere = placeId ? moveTargetById.get(placeId) ?? null : null;
   const sendMenHere = moveTargetHere ? (
@@ -1238,7 +1309,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
       </button>
     </div>
   ) : null;
-  const heldLine = (b: BaseView | null) => (b?.holding ? holdingLine(b) : null);
+  const heldLine = (b: BaseView | null) => (b?.holding ? holdingLine(b, league) : null);
   // Another house's region, or a region flipped by its towns (ruling 2a) that
   // are not all the viewer's: the holder line under the town list.
   const regionHolderOther = selectedProvince
@@ -1281,7 +1352,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
               {selectedProvince.towns.map((townId) => (
                 <li key={townId}>
                   <button type="button" className="w2map-town-entry" onClick={() => setSelectedTown(townId)}>
-                    <span>{(townsById.get(townId)?.name ?? "Unnamed town") + townHeldSuffix(holdings.towns[townId] ?? null, heldTowns.has(townId))}</span>
+                    <span>{(townsById.get(townId)?.name ?? "Unnamed town") + townHeldSuffix(holdings.towns[townId] ?? null, !league && heldTowns.has(townId))}</span>
                     <span className="w2map-town-entry-go" aria-hidden="true">›</span>
                   </button>
                 </li>
@@ -1295,7 +1366,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
         {selectedProvince.type === "land" ? (
           <>
             {yourMenHere ? <p className="w2map-your-men">{yourMenHere}</p> : null}
-            {selectedHeld ? <p className="w2map-held">{heldLine(heldRegions.get(selectedProvince.id) ?? null) ?? "Held by your house — a base for your forces."}</p> : null}
+            {selectedHeld ? <p className="w2map-held">{heldLine(heldRegions.get(selectedProvince.id) ?? null) ?? (league ? "Held by The League." : "Held by your house — a base for your forces.")}</p> : null}
             {!selectedHeld && regionHolderOther ? <p className="w2map-held">{holderLine(regionHolderOther)}</p> : null}
             {sendMenHere || selectedProvince.towns.length === 0 ? <div className="w2map-info-label">Actions</div> : null}
             {sendMenHere ?? (selectedProvince.towns.length > 0 ? null : (
@@ -1334,6 +1405,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
       stats={townStats[selectedTownObj.id]}
       mil={military.towns[selectedTownObj.id]}
       held={selectedTownHeld}
+      league={league}
       holder={townHolderOther}
       yourMen={yourMenHere}
       actions={townActions!}
@@ -1479,11 +1551,21 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
             moveTargets={moveTargets}
             fleet={reachFleet}
             roster={roster}
+            league={league ? { balance: leagueView?.treasury.balance ?? 0, supplyPrice: leagueView?.supplyPrice ?? 0 } : null}
             onClose={() => setPicker(null)}
             onActed={onActed}
           />
         ) : null}
         {report ? <BattleReport report={report} onClose={() => setReport(null)} /> : null}
+
+        {/* Whose men the map orders: shown to a sitting Archon or Strategos alone
+            (the server checks the seat again at every order). */}
+        {commander ? (
+          <div className="w2map-mode" role="group" aria-label="Whose men the map orders" data-mode={mode}>
+            <button type="button" className="w2map-mode-btn" aria-pressed={!league} onClick={() => switchMode("house")}>Your house</button>
+            <button type="button" className="w2map-mode-btn" aria-pressed={league} onClick={() => switchMode("league")}>The League's army</button>
+          </div>
+        ) : null}
 
         <div className="w2map-controls">
           <button type="button" className="w2map-btn" aria-label="Zoom in" title="Zoom in" disabled={overlayOpen} onClick={() => stepZoom(1.3)}>+</button>
@@ -1515,6 +1597,7 @@ export function TownPanel({
   stats,
   mil,
   held,
+  league = false,
   holder,
   yourMen,
   actions,
@@ -1533,6 +1616,8 @@ export function TownPanel({
   stats: TownStats | undefined;
   mil: TownMilitaryView | undefined;
   held: BaseView | null;
+  /** the League's mode: a held town is the League's holding */
+  league?: boolean;
   holder: HoldingHolder | null;
   yourMen: string | null;
   actions: { buttons: MapActionButton[]; caption: string | null };
@@ -1587,7 +1672,7 @@ export function TownPanel({
         </dl>
         {mil?.source === "intel" ? <p className="w2map-stat-asof">as of {mil.scoutedGameDate}</p> : null}
         {yourMen ? <p className="w2map-your-men">{yourMen}</p> : null}
-        {held ? <p className="w2map-held">{holdingLine(held)}</p> : holder ? <p className="w2map-held">{holderLine(holder)}</p> : null}
+        {held ? <p className="w2map-held">{holdingLine(held, league)}</p> : holder ? <p className="w2map-held">{holderLine(holder)}</p> : null}
         <div className="w2map-info-label">Actions</div>
         {canSendMen ? (
           <div className="w2map-actions">
@@ -1687,6 +1772,7 @@ export function ForcePicker({
   preselect = [],
   fleet,
   roster,
+  league = null,
   onClose,
   onActed,
 }: {
@@ -1704,6 +1790,10 @@ export function ForcePicker({
   preselect?: string[];
   fleet: MapReachView["fleet"];
   roster: BarracksRosterRow[] | null;
+  /** the League's mode (government prompt 5b): the rows are the League's, the
+   *  order is posted as the League's, and a voyage's naval supplies are bought
+   *  from the treasury at `supplyPrice` each, out of `balance` */
+  league?: { balance: number; supplyPrice: number } | null;
   onClose: () => void;
   onActed: (res: PickerResult) => void;
 }) {
@@ -1750,7 +1840,7 @@ export function ForcePicker({
   const baseVerdict = (baseId: string): { ok: boolean; reason?: string } => {
     if (isMove && baseId === destId) return { ok: false, reason: "The men already stand there." };
     const steps = stepsFrom(baseId);
-    if (!steps) return { ok: false, reason: isMove ? "Men may only be sent to Massalia's own ground or a holding of yours." : "That land cannot be reached." };
+    if (!steps) return { ok: false, reason: isMove ? (league ? LEAGUE_MOVE_REFUSAL : "Men may only be sent to Massalia's own ground or a holding of yours.") : "That land cannot be reached." };
     return verdictOf(steps, forceStats([{ spd: FAST_SPD, space: 1, count: 1 }]));
   };
 
@@ -1807,8 +1897,15 @@ export function ForcePicker({
     if (slowest < seaSteps) verdict = { ok: false, reason: `Beyond the fleet's range (${seaSteps} seas, fleet reaches ${slowest}).` };
     else if (carries < force.space) verdict = { ok: false, reason: `Not enough hulls: ${force.space} space needed, ${carries} aboard.` };
   }
-  // After the hull and range checks: the supplies in store against what the voyage uses.
-  if (verdict.ok && suppliesNeed > 0 && fleet.supplies !== undefined && fleet.supplies < suppliesNeed) verdict = { ok: false, reason: REACH_REASON.supplies(suppliesNeed, fleet.supplies) };
+  // After the hull and range checks: the supplies in store against what the
+  // voyage uses. The League keeps none: the treasury buys them, and a voyage it
+  // cannot pay for is refused in the server's sentence.
+  const suppliesCost = league ? suppliesNeed * league.supplyPrice : 0;
+  if (verdict.ok && suppliesNeed > 0) {
+    if (league) {
+      if (suppliesCost > league.balance) verdict = { ok: false, reason: leagueSuppliesRefusal(suppliesCost, league.balance) };
+    } else if (fleet.supplies !== undefined && fleet.supplies < suppliesNeed) verdict = { ok: false, reason: REACH_REASON.supplies(suppliesNeed, fleet.supplies) };
+  }
   const suppliesText = suppliesNeed > 0 ? ` · ${suppliesNeed} naval ${suppliesNeed === 1 ? "supply" : "supplies"}` : "";
   const setShip = (id: string, value: number) => {
     const h = hulls.find((x) => x.id === id);
@@ -1835,7 +1932,14 @@ export function ForcePicker({
     setError("");
     try {
       const sent = selected.map((r) => ({ rowId: r.id, count: sentOf(r) }));
-      const res = isMove ? await api.mapMove(destId, sent) : await api.mapAct(type, target.kind === "town" ? { townId: target.id } : { regionId: target.id }, sent, chosenShips ?? undefined);
+      const place = target.kind === "town" ? { townId: target.id } : { regionId: target.id };
+      const res = league
+        ? isMove
+          ? await api.leagueMove(destId, sent)
+          : await api.leagueAct(type, place, sent, chosenShips ?? undefined)
+        : isMove
+          ? await api.mapMove(destId, sent)
+          : await api.mapAct(type, place, sent, chosenShips ?? undefined);
       onActed(res);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "That could not be done.");
@@ -1863,6 +1967,7 @@ export function ForcePicker({
       <div className="w2map-modal-card">
         <button type="button" className="w2map-info-close" onClick={onClose} aria-label="Close">Close</button>
         <div className="w2map-modal-head">
+          {league ? <div className="w2map-pick-whose">The League's army</div> : null}
           <div className="w2map-info-label">{ACTION_LABEL[type]} · {targetName}</div>
           {destinations ? (
             <div className="w2map-pick-dest">
@@ -1977,6 +2082,12 @@ export function ForcePicker({
                           : `by sea · ${route.steps} sea${route.steps === 1 ? "" : "s"} · space ${force.space} of ${fleet.space} aboard${shipsText(moveShips ?? fleet.ships, fleet.labels, " · ") ? ` · ${shipsText(moveShips ?? fleet.ships, fleet.labels, " · ")}` : ""}`}
                     {suppliesText}
                     {` · arrives in ${travelClock("minutes" in route ? route.minutes : marchMinutes(MARCH_CLOCK, route))}`}
+                  </span>
+                ) : null}
+                {/* Before he sends (ruling 3): what the voyage takes, what it costs the treasury, and what the treasury holds. */}
+                {league && suppliesNeed > 0 ? (
+                  <span className="w2map-pick-treasury" data-testid="league-supplies">
+                    {suppliesNeed} naval {suppliesNeed === 1 ? "supply" : "supplies"} · {suppliesCost.toLocaleString()} drachmae from the treasury · {league.balance.toLocaleString()} in the treasury
                   </span>
                 ) : null}
                 <span>{verdict.ok ? (isMove ? "Ready to march." : "Within reach.") : verdict.reason}</span>
