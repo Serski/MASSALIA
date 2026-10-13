@@ -44,10 +44,13 @@ async function loadModules() {
   const agenda = await import("../services/agenda.js");
   const { loadPoliticsConfig, getPoliticsConfig } = await import("../services/oligarchy.js");
   const { loadCalendarConfig } = await import("../services/festival.js");
-  return { dbPkg, agendaRoutes, governmentRoutes, agenda, loadPoliticsConfig, getPoliticsConfig, loadCalendarConfig };
+  const { loadBuildingsContent } = await import("../services/buildings.js");
+  const { loadBarracksContent } = await import("../services/barracks.js");
+  return { dbPkg, agendaRoutes, governmentRoutes, agenda, loadPoliticsConfig, getPoliticsConfig, loadCalendarConfig, loadBuildingsContent, loadBarracksContent };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
+type Units = { hoplite: number; peltast: number; ekdromos: number; hippeis: number };
 type Scope = { phase: string | null; nextOpensLabel: string | null; cards: { id: string; title: string; group?: string; seasons?: number; effects?: string[] }[]; draftedCardId: string | null; vetoedCardId: string | null; treasury: { balance: number; ledger: unknown[] }; youMayDraft: boolean; youMayVeto: boolean };
 type Gov =
   | { member: false }
@@ -61,10 +64,14 @@ type Gov =
       war: Scope;
       army: {
         towns: { townId: string; name: string; units: { hoplite: number; peltast: number; ekdromos: number; hippeis: number }; men: number }[];
-        fleet: { at: string; pentekonters: number; triremes: number };
+        holdings: { id: string; name: string; units: Units; men: number; minGarrison: number }[];
+        parties: { kind: string; returning: boolean; from: string; to: string; units: Units; men: number; arrivesAt: string }[];
+        fleet: { at: string; pentekonters: number; triremes: number; atSea: { pentekonters: number; triremes: number; to: string; returnsAt: string }[] };
         men: number;
         upkeepPerSeason: number;
         lastDesertion: { men: number; label: string } | null;
+        orders: { id: string; kind: string; by: string; office: string; side: string | null; from: string; to: string; units: Units; men: number; suppliesCost: number; dateLabel: string; orderedAt: string }[];
+        reports: { id: string; kind: string; to: string; line: string; dateLabel: string; arrivedAt: string }[];
       };
     };
 
@@ -81,6 +88,9 @@ suite("GET /api/government and the public League scope (integration)", () => {
     await m.loadPoliticsConfig();
     await m.loadCalendarConfig();
     await m.agenda.loadAgendaContent();
+    // A League holding's minimum garrison is battle.json's, which loads after the goods.
+    await m.loadBuildingsContent();
+    await m.loadBarracksContent();
     app = Fastify();
     await app.register(cookie, { secret: "test-session-secret-at-least-32-chars-long" });
     await app.register(m.agendaRoutes, { prefix: "/api/agenda" });
@@ -333,8 +343,10 @@ suite("GET /api/government and the public League scope (integration)", () => {
       if (!view.member) return;
       expect(view.army.men).toBe(2050);
       expect(view.army.upkeepPerSeason).toBe(513);
-      expect(view.army.fleet).toEqual({ at: "Massalia", pentekonters: 29, triremes: 40 });
+      expect(view.army.fleet).toEqual({ at: "Massalia", pentekonters: 29, triremes: 40, atSea: [] });
       expect(view.army.lastDesertion).toBeNull();
+      // Before any order: no holding, no party, no order, no report.
+      expect(view.army).toMatchObject({ holdings: [], parties: [], orders: [], reports: [] });
       expect(view.army.towns.map((t) => [t.townId, t.name, t.men])).toEqual([
         ["massalia", "Massalia", 1000],
         ["emporion", "Emporion", 250],
@@ -380,6 +392,97 @@ suite("GET /api/government and the public League scope (integration)", () => {
       // The first season was paid; the one at 0 reads as unpaid.
       expect(view.treasury.ledger.map((l) => [l.delta, l.label])).toContainEqual([-513, "Army upkeep"]);
       expect(view.treasury.ledger.map((l) => [l.delta, l.label])).toContainEqual([0, "Army upkeep unpaid"]);
+    });
+
+    // Government prompt 5b: the army takes orders, and every member sees the whole of it.
+    it("once the army has orders, every member sees it whole: the men standing in each town and holding, the parties on the road, the hulls at sea, the latest orders with who gave them, the latest reports, and the army's rows on the ledger by place", async () => {
+      await firstWinter();
+      const archon = await citizen("archon");
+      await seat("archon", "dynatoi", archon.characterId);
+      const ephor = await citizen("ephor");
+      await seat("ephor", "palaioi", ephor.characterId);
+      const c = await citizen("citizen");
+      await government(ephor.token); // the first sync raises the army
+      const league = (await m.dbPkg.leaguePlayerId(db, worldId))!;
+      const { playerUnits, playerMarches, playerVoyages, playerHoldings, leagueOrders, resources, treasuryLedger } = m.dbPkg;
+      const now = new Date();
+      const inMinutes = (n: number) => new Date(now.getTime() + n * 60_000);
+      const standing = (unitId: string, count: number) => db.update(playerUnits).set({ count }).where(and(eq(playerUnits.ownerPlayerId, league), eq(playerUnits.basedAt, "massalia"), eq(playerUnits.unitId, unitId)));
+      const onTheRoad = (unitId: string, count: number, movingTo: string, arrivesAt: Date, mission: Record<string, unknown>) =>
+        db.insert(playerUnits).values({ worldId, ownerPlayerId: league, source: "trained", unitId, count, startCount: count, recruitedSeason: 0, readyAt: now, basedAt: "massalia", movingTo, arrivesAt, mission: { departedAt: now.toISOString(), ...mission } as never });
+      const march = async (kind: "scout" | "raid", regionId: string, townId: string | null, arrivesAt: Date, done?: { line: string }) =>
+        (await db.insert(playerMarches).values({ worldId, ownerPlayerId: league, kind, regionId, townId, baseId: "massalia", route: "land", steps: 1, minutes: 30, departedAt: new Date(arrivesAt.getTime() - 30 * 60_000), arrivesAt, ...(done ? { status: "resolved" as const, resolvedAt: arrivesAt, report: done } : {}) }).returning())[0]!.id;
+      const orderRow = (o: { kind: "move" | "scout" | "raid" | "attack"; regionId: string; townId: string | null; force: { unitId: string; count: number }[]; marchId: string | null; orderedAt: Date; suppliesCost?: number }) =>
+        db.insert(leagueOrders).values({ worldId, orderedByCharacterId: archon.characterId, office: "archon", side: "dynatoi", kind: o.kind, baseId: "massalia", regionId: o.regionId, townId: o.townId, men: o.force.reduce((n, f) => n + f.count, 0), force: o.force, ships: {}, supplies: 0, suppliesCost: o.suppliesCost ?? 0, marchId: o.marchId, report: null, orderedAt: o.orderedAt, arrivesAt: inMinutes(30) }).returning();
+
+      // As four orders leave it. 40 peltasts are out on a raid on Reii.
+      const raid = await march("raid", "R047", "reii", inMinutes(20));
+      await standing("peltast", 210);
+      await onTheRoad("peltast", 40, "reii", inMinutes(20), { kind: "raid", regionId: "R047", townId: "reii", marchId: raid });
+      const raidOrder = (await orderRow({ kind: "raid", regionId: "R047", townId: "reii", force: [{ unitId: "peltast", count: 40 }], marchId: raid, orderedAt: new Date(now.getTime() - 10 * 60_000) }))[0]!;
+      // 5 riders are on their way home from a scout of the Salyes, which reported.
+      const scout = await march("scout", "R046", null, new Date(now.getTime() - 20 * 60_000), { line: "Scouted Salyes with 5 hippeis: a warband of 100." });
+      await standing("hippeis", 95);
+      await onTheRoad("hippeis", 5, "massalia", inMinutes(10), { kind: "scout", regionId: "R046" });
+      await orderRow({ kind: "scout", regionId: "R046", townId: null, force: [{ unitId: "hippeis", count: 5 }], marchId: scout, orderedAt: new Date(now.getTime() - 50 * 60_000) });
+      // 30 hoplites and 10 ekdromoi are moving to Arelate.
+      await standing("hoplite", 470);
+      await standing("ekdromos", 140);
+      await onTheRoad("hoplite", 30, "arelate", inMinutes(30), { kind: "move", regionId: "R052", townId: "arelate" });
+      await onTheRoad("ekdromos", 10, "arelate", inMinutes(30), { kind: "move", regionId: "R052", townId: "arelate" });
+      await orderRow({ kind: "move", regionId: "R052", townId: "arelate", force: [{ unitId: "hoplite", count: 30 }, { unitId: "ekdromos", count: 10 }], marchId: null, orderedAt: new Date(now.getTime() - 5 * 60_000), suppliesCost: 28 });
+      // The League holds the Corsi's land with 12 peltasts, and two pentekonters are at sea for Thapsus.
+      await db.insert(playerHoldings).values({ worldId, regionId: "R078", townId: "", ownerPlayerId: league, kind: "conquest", previousOwner: "unclaimed", since: now, lastGarrisonedAt: now, lastTributeAt: now });
+      await db.insert(playerUnits).values({ worldId, ownerPlayerId: league, source: "trained", unitId: "peltast", count: 12, startCount: 12, recruitedSeason: 0, readyAt: now, basedAt: "R078" });
+      await db.update(resources).set({ amount: "27" }).where(and(eq(resources.scopeId, league), eq(resources.type, "trade-ship")));
+      await db.insert(playerVoyages).values({ worldId, ownerPlayerId: league, ships: { "trade-ship": 2 }, kind: "raid", regionId: "R135", townId: "thapsus", sailedAt: now, returnsAt: inMinutes(300) });
+      // The army's three kinds of ledger row, after the first sync's own rows.
+      const after = (seconds: number) => new Date(now.getTime() + seconds * 1000);
+      await db.insert(treasuryLedger).values([
+        { worldId, owner: "league", delta: -28, reason: `supplies:${raidOrder.id}`, createdAt: after(1) },
+        { worldId, owner: "league", delta: 310, reason: `plunder:reii:${raid}`, createdAt: after(2) },
+        { worldId, owner: "league", delta: 40, reason: "tribute:R078:d20000", createdAt: after(3) },
+      ]);
+
+      // An Ephor orders nothing, and sees all of it.
+      const view = await government(ephor.token);
+      expect(view.member).toBe(true);
+      if (!view.member) return;
+      const army = view.army;
+      // Massalia shows the men standing in it; Arelate does not yet count the men marching to it.
+      expect(army.towns[0]).toEqual({ townId: "massalia", name: "Massalia", units: { hoplite: 470, peltast: 210, ekdromos: 140, hippeis: 95 }, men: 915 });
+      expect(army.towns.find((t) => t.townId === "arelate")).toMatchObject({ men: 100 });
+      expect(army.holdings).toEqual([{ id: "R078", name: "Corsi", units: { hoplite: 0, peltast: 12, ekdromos: 0, hippeis: 0 }, men: 12, minGarrison: expect.any(Number) }]);
+      // The parties, soonest first: the riders home, the raid out, the move as one party of two types.
+      expect(army.parties.map(({ arrivesAt: _arrivesAt, ...p }) => p)).toEqual([
+        { kind: "scout", returning: true, from: "Salyes", to: "Massalia", units: { hoplite: 0, peltast: 0, ekdromos: 0, hippeis: 5 }, men: 5 },
+        { kind: "raid", returning: false, from: "Massalia", to: "Reii", units: { hoplite: 0, peltast: 40, ekdromos: 0, hippeis: 0 }, men: 40 },
+        { kind: "move", returning: false, from: "Massalia", to: "Arelate", units: { hoplite: 30, peltast: 0, ekdromos: 10, hippeis: 0 }, men: 40 },
+      ]);
+      expect(army.parties[1]!.arrivesAt).toBe(inMinutes(20).toISOString());
+      // Every man is under arms and paid for, wherever he is.
+      expect(army.men).toBe(2050 + 12);
+      expect(army.towns.reduce((n, t) => n + t.men, 0) + army.holdings[0]!.men + army.parties.reduce((n, p) => n + p.men, 0)).toBe(2050 + 12);
+      expect(army.upkeepPerSeason).toBe(Math.round((2050 + 12) * 0.25));
+      expect(army.fleet).toEqual({ at: "Massalia", pentekonters: 27, triremes: 40, atSea: [{ pentekonters: 2, triremes: 0, to: "Thapsus", returnsAt: inMinutes(300).toISOString() }] });
+      // The orders, newest first, each with who gave it and from which seat.
+      const by = (await db.select({ name: m.dbPkg.players.name }).from(m.dbPkg.players).innerJoin(m.dbPkg.playerCharacters, eq(m.dbPkg.playerCharacters.playerId, m.dbPkg.players.id)).where(eq(m.dbPkg.playerCharacters.id, archon.characterId)))[0]!.name;
+      expect(army.orders.map((o) => [o.kind, o.by, o.office, o.side, o.from, o.to, o.men, o.suppliesCost])).toEqual([
+        ["move", by, "archon", "dynatoi", "Massalia", "Arelate", 40, 28],
+        ["raid", by, "archon", "dynatoi", "Massalia", "Reii", 40, 0],
+        ["scout", by, "archon", "dynatoi", "Massalia", "Salyes", 5, 0],
+      ]);
+      expect(army.orders[0]!.units).toEqual({ hoplite: 30, peltast: 0, ekdromos: 10, hippeis: 0 });
+      expect(army.orders[0]!.dateLabel).toBe(view.treasury.ledger[0]!.dateLabel);
+      // The reports: the party that has arrived, in the server's sentence. The raid has not.
+      expect(army.reports).toEqual([{ id: scout, kind: "scout", to: "Salyes", line: "Scouted Salyes with 5 hippeis: a warband of 100.", dateLabel: expect.any(String), arrivedAt: new Date(now.getTime() - 20 * 60_000).toISOString() }]);
+      // The ledger names the army's rows, the place by its name.
+      expect(view.treasury.ledger.slice(0, 3).map((l) => [l.delta, l.label])).toEqual([[40, "Tribute of Corsi"], [310, "Plunder of Reii"], [-28, "Naval supplies"]]);
+
+      // The Archon sees the same; a citizen none of it.
+      const same = await government(archon.token);
+      expect(same.member && same.army).toEqual(army);
+      expect(await government(c.token)).toEqual({ member: false });
     });
   });
 
