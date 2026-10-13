@@ -6,7 +6,15 @@ import type { IconName } from "./shared.js";
 
 export type GuideTab = { icon: IconName; name: string; line: string };
 export type GuideReading = { name: string; line: string };
-export type GuideSection = { id: string; title: string; paragraphs: string[] };
+// A section is its paragraphs, then any richer blocks (a reference entry's
+// headings, lists and tables), rendered by GuideBlocks on both surfaces.
+export type GuideTable = { caption: string; columns: string[]; rows: string[][] };
+export type GuideBlock =
+  | { kind: "heading"; text: string }
+  | { kind: "text"; text: string }
+  | { kind: "list"; items: string[] }
+  | { kind: "table"; table: GuideTable };
+export type GuideSection = { id: string; title: string; paragraphs: string[]; blocks?: GuideBlock[] };
 
 export const GUIDE_TITLE = "Welcome to Massalia";
 

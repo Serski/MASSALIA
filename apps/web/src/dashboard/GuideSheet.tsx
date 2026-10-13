@@ -1,5 +1,6 @@
 import { BottomSheet, SheetLabel } from "./sheets.js";
 import { SvgIcon } from "./shared.js";
+import { GuideBlocks } from "./GuideBlocks.js";
 import { GUIDE_CLOSER, GUIDE_FRAMING, GUIDE_READING, GUIDE_SECTIONS, GUIDE_TABS, GUIDE_TIP } from "./guideContent.js";
 
 // The always-available in-game Guide. Lazy-loaded (see Dashboard) and opened via the
@@ -44,6 +45,7 @@ export default function GuideSheet({ open, onClose }: { open: boolean; onClose: 
           {section.paragraphs.map((paragraph, index) => (
             <p className="guide-p" key={index}>{paragraph}</p>
           ))}
+          <GuideBlocks blocks={section.blocks} textClass="guide-p" />
         </div>
       ))}
 

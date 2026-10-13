@@ -1,3 +1,4 @@
+import { GuideBlocks } from "../dashboard/GuideBlocks.js";
 import { SvgIcon } from "../dashboard/shared.js";
 import { GUIDE_CLOSER, GUIDE_FRAMING, GUIDE_READING, GUIDE_READING_HEADER, GUIDE_SECTIONS, GUIDE_TABS, GUIDE_TIP } from "../dashboard/guideContent.js";
 import { LobbyFrame, LobbySectionHeading } from "./LobbyFrame.js";
@@ -52,6 +53,7 @@ export function GuidesPage() {
               {section.paragraphs.map((paragraph, index) => (
                 <p className="lobby-guide-p" key={index}>{paragraph}</p>
               ))}
+              <GuideBlocks blocks={section.blocks} textClass="lobby-guide-p" />
             </details>
           ))}
 

@@ -1,0 +1,65 @@
+/* The Guide's richer blocks (GuideBlocks.tsx), shared by the in-game Guide sheet
+   and the public /guides page. Type and color come from the surface's own
+   paragraph class on the wrapper; this sheet adds only layout, with a neutral
+   rule that reads on both. */
+.guide-blocks p {
+  margin: 0 0 10px;
+}
+
+.guide-block-h {
+  margin: 16px 0 6px;
+  font-size: 1em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.guide-block-list {
+  margin: 0 0 12px;
+  padding-left: 1.2em;
+}
+
+.guide-block-list li {
+  margin: 0 0 4px;
+}
+
+/* A wide table scrolls inside its own box, never the page. */
+.guide-table-wrap {
+  margin: 0 0 14px;
+  overflow-x: auto;
+}
+
+.guide-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.guide-table caption {
+  padding: 0 0 4px;
+  font-weight: 700;
+  text-align: left;
+  caption-side: top;
+}
+
+.guide-table th,
+.guide-table td {
+  /* 8px between columns: the five-column table fits a 320px phone (288px of text). */
+  padding: 6px 8px 6px 0;
+  font-weight: 400;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid rgba(150, 135, 110, 0.38);
+}
+
+.guide-table thead th {
+  font-weight: 700;
+  border-bottom-color: rgba(150, 135, 110, 0.7);
+}
+
+.guide-table tbody th {
+  font-weight: 600;
+}
+
+.guide-table th:last-child,
+.guide-table td:last-child {
+  padding-right: 0;
+}
