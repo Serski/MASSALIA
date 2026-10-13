@@ -435,9 +435,9 @@ suite("the Interaction Pipeline (integration)", () => {
 
     expect(await m.interactions.poisonAttempt(actor, target.id, now, forceIll)).toMatchObject({ ok: true, outcome: "ill" });
     // The two channels share a per-target cooldown now, so the SECOND illness poison
-    // must fall past the window (49h) to land — this test is about the trait/ledger,
+    // must fall past the window (97h) to land — this test is about the trait/ledger,
     // not the cooldown.
-    expect(await m.interactions.poisonAttempt(actor, target.id, new Date(now.getTime() + 49 * 3_600_000), forceIll)).toMatchObject({ ok: true, outcome: "ill" });
+    expect(await m.interactions.poisonAttempt(actor, target.id, new Date(now.getTime() + 97 * 3_600_000), forceIll)).toMatchObject({ ok: true, outcome: "ill" });
 
     // Exactly one trait row (ON CONFLICT DO NOTHING against the unique index)…
     const traitRows = await db.select().from(characterTraits).where(and(eq(characterTraits.characterId, target.id), eq(characterTraits.traitId, "poisoned")));
@@ -640,8 +640,8 @@ suite("the Interaction Pipeline (integration)", () => {
   // --- Hostile attempt cooldown: one poison-OR-assassinate per pair per window ----
   // The clock starts from any attempt (failures included, since they hit the ledger),
   // and the two channels share it. Second attempts use `new Date()` (just after the
-  // first ledger write) for "inside window"; +49h for "after window".
-  const AFTER_WINDOW = () => new Date(Date.now() + 49 * 3_600_000);
+  // first ledger write) for "inside window"; +97h for "after window".
+  const AFTER_WINDOW = () => new Date(Date.now() + 97 * 3_600_000);
 
   it("(cooldown) a second poison inside the window is refused with the lock copy — no vial spent", async () => {
     const actor = await oligarch("SerialP", 0);
@@ -692,7 +692,7 @@ suite("the Interaction Pipeline (integration)", () => {
     await seedResource(actor.playerId, "poison", 2);
     const target = await standingTarget("Later");
     expect(await m.interactions.poisonAttempt(actor, target.id, new Date(), forceFail)).toMatchObject({ ok: true });
-    // 49h later — past the 48h window → allowed, and the second vial is spent.
+    // 97h later — past the 96h window → allowed, and the second vial is spent.
     expect(await m.interactions.poisonAttempt(actor, target.id, AFTER_WINDOW(), forceFail)).toMatchObject({ ok: true, outcome: "failed" });
     expect(await resourceAmount(actor.playerId, "poison")).toBe(0); // both vials spent
   });
