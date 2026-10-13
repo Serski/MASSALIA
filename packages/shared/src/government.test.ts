@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { desertionReason, governmentSeats, leagueTax, menLabel, parseCitiesContent, parseDesertionReason, parsePoliticsConfig, polisTax, treasuryClaimReason, treasuryReasonLabel, type HeldOffice } from "./index.js";
+import { desertionReason, governmentSeats, leagueLedgerPlace, leagueLedgerReason, leagueTax, menLabel, parseCitiesContent, parseDesertionReason, parsePoliticsConfig, polisTax, treasuryClaimReason, treasuryReasonLabel, type HeldOffice } from "./index.js";
 
 // ---------------------------------------------------------------------------
 // The Government (government prompt 1), pure rules: who sits, what the poleis
@@ -90,6 +90,24 @@ describe("the ledger's reasons", () => {
     expect(treasuryReasonLabel("desertion:s28:1")).toBe("Deserted for want of pay: 1 man");
     expect(treasuryReasonLabel("cut:seat_purchase")).toBe("Share of a seat sale");
     expect(treasuryReasonLabel("cut:festival_donation")).toBe("Share of a festival gift");
+  });
+
+  it("the army's purse: naval supplies, plunder and tribute, the place riding in the reason", () => {
+    expect(leagueLedgerReason.supplies("o-1")).toBe("supplies:o-1");
+    expect(leagueLedgerReason.plunder("reii", "m-1")).toBe("plunder:reii:m-1");
+    expect(leagueLedgerReason.tribute("R046", 10513)).toBe("tribute:R046:d10513");
+    expect(leagueLedgerPlace("plunder:reii:m-1")).toBe("reii");
+    expect(leagueLedgerPlace("tribute:R046:d10513")).toBe("R046");
+    expect(leagueLedgerPlace("supplies:o-1")).toBeNull();
+    expect(leagueLedgerPlace("army:s28")).toBeNull();
+    const names: Record<string, string> = { reii: "Reii", R046: "Salyes" };
+    const name = (id: string) => names[id];
+    expect(treasuryReasonLabel("supplies:o-1")).toBe("Naval supplies");
+    expect(treasuryReasonLabel("plunder:reii:m-1", undefined, 120, name)).toBe("Plunder of Reii");
+    expect(treasuryReasonLabel("tribute:R046:d10513", undefined, 35, name)).toBe("Tribute of Salyes");
+    // Without a name the row still reads.
+    expect(treasuryReasonLabel("plunder:carthage:m-2")).toBe("Plunder");
+    expect(treasuryReasonLabel("tribute:carthage:d1", undefined, 5, name)).toBe("Tribute");
   });
 
   it("a passed measure names its card when the title is known", () => {

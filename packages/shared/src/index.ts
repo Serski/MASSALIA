@@ -27,6 +27,7 @@ export * from "./leagueProjects.js";
 export * from "./leagueFestivals.js";
 export * from "./leagueWars.js";
 export * from "./leagueArmy.js";
+export * from "./leagueOrders.js";
 export * from "./composure.js";
 export * from "./buildings.js";
 export * from "./military.js";

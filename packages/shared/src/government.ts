@@ -74,6 +74,23 @@ export function parseDesertionReason(reason: string): { season: number; men: num
   return m ? { season: Number(m[1]), men: Number(m[2]) } : null;
 }
 
+// The League treasury as the army's purse (government prompt 5b). Three reasons,
+// each written once by something that happens once: a voyage's naval supplies
+// (bought with the order), a raid's plunder (credited when its march resolves)
+// and a holding's tribute (credited as its marker advances). The place rides
+// in the reason, since the ledger has no other column for it.
+export const leagueLedgerReason = {
+  supplies: (orderId: string): string => `supplies:${orderId}`,
+  plunder: (placeId: string, marchId: string): string => `plunder:${placeId}:${marchId}`,
+  tribute: (placeId: string, day: number): string => `tribute:${placeId}:d${day}`,
+} as const;
+
+// The place a plunder or tribute row names (a town slug or a region id); null for any other reason.
+export function leagueLedgerPlace(reason: string): string | null {
+  const m = /^(?:plunder|tribute):([^:]+):/.exec(reason);
+  return m ? m[1]! : null;
+}
+
 // "1,650 men", "1 man".
 export function menLabel(men: number): string {
   return `${men.toLocaleString("en-US")} ${men === 1 ? "man" : "men"}`;
@@ -84,7 +101,8 @@ export function menLabel(men: number): string {
 // the line says only that a measure passed. An unknown reason shows as stored.
 // `delta` is the row's amount, where the words depend on it: a season's army
 // upkeep the treasury could not pay at all is its claim at 0, "Army upkeep unpaid".
-export function treasuryReasonLabel(reason: string, cardTitle?: (cardId: string) => string | undefined, delta?: number): string {
+// `placeName` resolves the place a plunder or tribute row names to its display name.
+export function treasuryReasonLabel(reason: string, cardTitle?: (cardId: string) => string | undefined, delta?: number, placeName?: (placeId: string) => string | undefined): string {
   if (reason === treasuryClaimReason.opening) return "Opening balance";
   if (reason.startsWith("levy:s")) return "Levy";
   if (reason.startsWith("tax:s")) return "Taxes of the poleis";
@@ -94,6 +112,13 @@ export function treasuryReasonLabel(reason: string, cardTitle?: (cardId: string)
   if (reason.startsWith("desertion:s")) {
     const parsed = parseDesertionReason(reason);
     return parsed ? `Deserted for want of pay: ${menLabel(parsed.men)}` : "Deserted for want of pay";
+  }
+  if (reason.startsWith("supplies:")) return "Naval supplies";
+  if (reason.startsWith("plunder:") || reason.startsWith("tribute:")) {
+    const what = reason.startsWith("plunder:") ? "Plunder" : "Tribute";
+    const place = leagueLedgerPlace(reason);
+    const name = place ? placeName?.(place) : undefined;
+    return name ? `${what} of ${name}` : what;
   }
   if (reason === "cut:seat_purchase") return "Share of a seat sale";
   if (reason === "cut:festival_donation") return "Share of a festival gift";
