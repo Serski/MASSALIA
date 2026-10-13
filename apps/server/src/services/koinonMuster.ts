@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { and, asc, desc, eq, inArray, isNull, lte, ne, notInArray, sql } from "drizzle-orm";
-import { createDb, effectLog, koinonMembers, koinonMusterHulls, koinonMusterParts, koinonMusters, playerCharacters, playerMarches, players, playerUnits, resources, worlds, type UnitMission } from "@massalia/db";
+import { createDb, effectLog, leaguePlayerId, koinonMembers, koinonMusterHulls, koinonMusterParts, koinonMusters, playerCharacters, playerMarches, players, playerUnits, resources, worlds, type UnitMission } from "@massalia/db";
 import {
   bandDef,
   distancesFrom,
@@ -10,6 +10,7 @@ import {
   forceStats,
   formatGameDate,
   gameDate,
+  holderRefusal,
   HOME_POLITY_ID,
   loadMusterHulls,
   marchMinutes,
@@ -127,7 +128,8 @@ export const musterGatherName = (m: Pick<MusterRow, "gatherId" | "gatherRegionId
 // The target rules are `act`'s, with its sentences: a town, or a townless land
 // region; never fog, never Massalia's own, and never a place a house holds
 // (holdings prompt 2): the caller's own holding answers "You hold this …", any
-// other house's "Another house holds this …", as a raid is refused.
+// other house's "Another house holds this …", the League's "The League holds
+// this …" (government prompt 5b), as a raid is refused.
 async function musterTarget(input: { regionId?: unknown; townId?: unknown }, ctx: ActingContext): Promise<KoinonError | { regionId: string; townId: string | null }> {
   const topology = getTopology();
   const home = await homeRegions(topology);
@@ -135,7 +137,8 @@ async function musterTarget(input: { regionId?: unknown; townId?: unknown }, ctx
     const holder = await holderOf(db, ctx.worldId, regionId, townId);
     if (holder === null) return null;
     const place = townId ? "town" : "land";
-    return holder === ctx.playerId ? fail(409, `You hold this ${place}.`) : fail(409, `Another house holds this ${place}.`);
+    if (holder === ctx.playerId) return fail(409, `You hold this ${place}.`);
+    return fail(409, holderRefusal(holder === (await leaguePlayerId(db, ctx.worldId)) ? "league" : "house", place));
   };
   if (input.townId !== undefined && input.townId !== null) {
     const regionId = typeof input.townId === "string" ? topology.townRegion.get(input.townId) : undefined;

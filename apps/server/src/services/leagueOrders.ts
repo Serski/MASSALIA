@@ -1,10 +1,12 @@
 import { and, eq, gte, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
-import { activeWorld, createDb, leaguePlayerId, playerHoldings, playerUnits, playerVoyages, treasuries, treasuryLedger } from "@massalia/db";
-import { goodCategoryFor, leagueLedgerReason, seasonAt, vendorUnitPrice, type VendorAction } from "@massalia/shared";
+import { activeWorld, createDb, leagueOrders, leaguePlayerId, leagueWars, loadFactions, loadLeagueArmy, offices, playerCharacters, playerHoldings, playerUnits, playerVoyages, treasuries, treasuryLedger, type LeagueOrderForce, type LeagueOrderKind } from "@massalia/db";
+import { commandSeat, factionOfPolity, goodCategoryFor, HOME_POLITY_ID, leagueAtWarWith, leagueLedgerReason, leagueWarRefusal, seasonAt, vendorUnitPrice, type FactionDef, type LeagueWarSpan, type VendorAction } from "@massalia/shared";
 import { isActive, type UnitRow } from "./barracks.js";
 import { creditResource, getBuildingsContent, getOrCreateResource, type ActingContext } from "./buildings.js";
 import { garrisonCount, holdingBaseId, listHoldings, settleHoldings, tributeRateOf, type HoldingsSettle } from "./holdings.js";
 import { lockPlayer } from "./lock.js";
+import { loadMilitaryOwners } from "./mapMilitary.js";
+import { regionContentOwner, townContentOwner } from "./mapPools.js";
 
 // ---------------------------------------------------------------------------
 // The League's army takes orders (government prompt 5b). The League's men and
@@ -232,4 +234,141 @@ export async function settleLeagueQuietly(now: Date = new Date()): Promise<void>
   } catch (error) {
     console.error(`army: failed ${error instanceof Error ? error.message : String(error)}`);
   }
+}
+
+// --- Who commands -----------------------------------------------------------------
+
+// The official behind an order: the character's seat as it stands now (a
+// sitting Archon's, else a Strategos's), or null for anyone else. Read at every
+// order; the client only hides what this would refuse.
+export async function ordererFor(exec: Exec, character: { id: string; worldId: string; dynastyId: string | null }): Promise<LeagueOrderer | null> {
+  const held = await exec.select({ office: offices.office, side: offices.side }).from(offices).where(and(eq(offices.worldId, character.worldId), eq(offices.holderCharacterId, character.id)));
+  const seat = commandSeat(held);
+  return seat ? { characterId: character.id, dynastyId: character.dynastyId, office: seat.office, side: seat.side } : null;
+}
+
+// --- The League's places ------------------------------------------------------------
+
+// The ten home towns the army was raised in, by town slug, in the content's order.
+export async function leagueHomeTowns(): Promise<string[]> {
+  return (await loadLeagueArmy()).towns.map((t) => t.townId);
+}
+
+// --- The war gate -------------------------------------------------------------------
+
+// The world's wars as spans of time: the whole truth of whom the League is at
+// war with at an instant, whether or not the sync has yet set or dropped a
+// nation's flag. No nation starts at war in content.
+export async function leagueWarSpans(exec: Exec, worldId: string): Promise<LeagueWarSpan[]> {
+  const rows = await exec.select({ factionId: leagueWars.factionId, startsAt: leagueWars.startsAt, endsAt: leagueWars.endsAt }).from(leagueWars).where(eq(leagueWars.worldId, worldId));
+  return rows.map((r) => ({ factionId: r.factionId, startsAt: r.startsAt.getTime(), endsAt: r.endsAt.getTime() }));
+}
+
+// The nation whose land a place is (a town by its owner, a townless region by
+// its own): one of the Diplomacy page's, or null for unclaimed land and for a
+// people no nation holds.
+export async function nationOfPlace(regionId: string, townId: string | null): Promise<FactionDef | null> {
+  const polity = townId !== null ? await townContentOwner(townId) : await regionContentOwner(regionId);
+  return factionOfPolity({ factions: await loadFactions() }, polity);
+}
+
+// Whether the League may raid or attack a place at an instant: only on the land
+// of a nation it is at war with then. One answer for the gate at the order, the
+// gate at the arrival, the war's plunder and the opinion roll.
+export type LeagueWarGate = { ok: true; nation: FactionDef } | { ok: false; nation: FactionDef | null; reason: string };
+export async function leagueWarGate(exec: Exec, worldId: string, regionId: string, townId: string | null, at: Date): Promise<LeagueWarGate> {
+  const nation = await nationOfPlace(regionId, townId);
+  if (nation && leagueAtWarWith(await leagueWarSpans(exec, worldId), nation.id, at.getTime())) return { ok: true, nation };
+  return { ok: false, nation, reason: leagueWarRefusal(nation) };
+}
+
+// The war gate for the whole map at an instant, for the League's map view: the
+// refusal a raid or an attack would meet, by town and by townless region, for
+// every place that is not Massalia's own and not a nation's at war. A place
+// absent from both maps passes the gate.
+export async function leagueGateMap(exec: Exec, worldId: string, at: Date): Promise<{ towns: Record<string, string>; regions: Record<string, string> }> {
+  const owners = await loadMilitaryOwners();
+  const content = { factions: await loadFactions() };
+  const spans = await leagueWarSpans(exec, worldId);
+  const refusal = (polity: string): string | null => {
+    if (polity === HOME_POLITY_ID) return null;
+    const nation = factionOfPolity(content, polity);
+    return nation && leagueAtWarWith(spans, nation.id, at.getTime()) ? null : leagueWarRefusal(nation);
+  };
+  const out = { towns: {} as Record<string, string>, regions: {} as Record<string, string> };
+  for (const [id, polity] of Object.entries(owners.towns)) {
+    const r = refusal(polity);
+    if (r) out.towns[id] = r;
+  }
+  for (const [id, polity] of Object.entries(owners.regions)) {
+    const r = refusal(polity);
+    if (r) out.regions[id] = r;
+  }
+  return out;
+}
+
+// --- The record of an order -----------------------------------------------------------
+
+export type LeagueOrderInput = {
+  id: string;
+  kind: LeagueOrderKind;
+  baseId: string;
+  regionId: string;
+  townId: string | null;
+  rows: Pick<UnitRow, "unitId" | "count">[];
+  ships: Record<string, number>;
+  supplies: number;
+  suppliesCost: number;
+  marchId: string | null;
+  report: Record<string, unknown> | null;
+  orderedAt: Date;
+  arrivesAt: Date;
+};
+
+// Write the order's row, in the order's own transaction. The men sent are
+// summed by type.
+export async function recordLeagueOrder(tx: DbTx, ctx: LeagueContext, input: LeagueOrderInput): Promise<void> {
+  const orderer = ctx.league.orderer;
+  if (!orderer) throw new Error("league order: no official is ordering");
+  const byUnit = new Map<string, number>();
+  for (const r of input.rows) byUnit.set(r.unitId, (byUnit.get(r.unitId) ?? 0) + r.count);
+  const force: LeagueOrderForce = [...byUnit.entries()].map(([unitId, count]) => ({ unitId, count }));
+  await tx.insert(leagueOrders).values({
+    id: input.id,
+    worldId: ctx.worldId,
+    orderedByCharacterId: orderer.characterId,
+    office: orderer.office,
+    side: orderer.side,
+    kind: input.kind,
+    baseId: input.baseId,
+    regionId: input.regionId,
+    townId: input.townId,
+    men: input.rows.reduce((n, r) => n + r.count, 0),
+    force,
+    ships: input.ships,
+    supplies: input.supplies,
+    suppliesCost: input.suppliesCost,
+    marchId: input.marchId,
+    report: input.report,
+    orderedAt: input.orderedAt,
+    arrivesAt: input.arrivesAt,
+  });
+}
+
+// The dynasty of the official who ordered a march, for what the party sees
+// (ruling 8): his house's, as it stands when the party arrives; null when the
+// march has no order or he has no house.
+export async function ordererDynastyOf(exec: Exec, marchId: string): Promise<string | null> {
+  const rows = await exec
+    .select({ dynastyId: playerCharacters.dynastyId })
+    .from(leagueOrders)
+    .innerJoin(playerCharacters, eq(playerCharacters.id, leagueOrders.orderedByCharacterId))
+    .where(eq(leagueOrders.marchId, marchId))
+    .limit(1);
+  return rows[0]?.dynastyId ?? null;
+}
+
+// The League treasury's balance, unlocked: for a view.
+export async function leagueBalance(exec: Exec, worldId: string): Promise<number> {
+  return (await exec.select({ balance: treasuries.balance }).from(treasuries).where(and(eq(treasuries.worldId, worldId), eq(treasuries.owner, "league"))).limit(1))[0]?.balance ?? 0;
 }

@@ -15,10 +15,11 @@ import {
   type ReachSteps,
   type Topology,
 } from "@massalia/shared";
-import { fleetInStock, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, type FleetStripView, type UnitRow } from "./barracks.js";
+import { fleetInStock, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, type FleetStripView, type RosterView, type UnitRow } from "./barracks.js";
 export { fleetInStock };
 import type { ActingContext } from "./buildings.js";
 import { garrisonCount, holdingBaseId, listHoldings, tributeRateOf } from "./holdings.js";
+import { isLeague, leagueBalance, leagueGateMap, leagueHomeTowns, marketPrice, type LeagueContext } from "./leagueOrders.js";
 import { getTopology } from "./mapGraph.js";
 import { loadMilitaryOwners } from "./mapMilitary.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
@@ -30,6 +31,12 @@ import { regionDisplayName, townDisplayName } from "./mapNames.js";
 // the rows a caller selects), the fleet from the ship goods in stock, the home
 // set from the military content, and the pure computeReach over them. Callers
 // run it under the player lock after settleAll.
+//
+// The League's army (government prompt 5b) reads through the same code with a
+// League context: its bases are the ten home towns its men were raised in (the
+// Massalia town among them, never the Massalia region) and its holdings, its
+// move targets the same places, and its naval supplies what the treasury can
+// buy that season. leagueMapView is the whole of its map payload.
 
 type Db = ReturnType<typeof createDb>;
 type DbTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -108,17 +115,33 @@ async function ownedRows(exec: Exec, ctx: ActingContext): Promise<UnitRow[]> {
 // and every home place where at least one active, non-moving row stands.
 const placeName = (id: string, townId: string | null) => (townId ? townDisplayName(townId) : regionDisplayName(id));
 
+// The League's home towns as places, in the content's order.
+async function leagueHomePlaces(topology: Topology): Promise<{ id: string; regionId: string; townId: string }[]> {
+  const out: { id: string; regionId: string; townId: string }[] = [];
+  for (const town of await leagueHomeTowns()) {
+    const regionId = topology.townRegion.get(town);
+    if (regionId) out.push({ id: town, regionId, townId: town });
+  }
+  return out;
+}
+
 export async function basesOf(exec: Exec, ctx: ActingContext, now: Date, rows?: UnitRow[]): Promise<BaseView[]> {
   const topology = getTopology();
   const holdings = await listHoldings(exec, ctx);
-  const out: BaseView[] = [{ id: topology.massaliaRegion, regionId: topology.massaliaRegion, townId: null, kind: "massalia", name: await regionDisplayName(topology.massaliaRegion), holding: null }];
-  const levyPerYear = getBattleContent().regionTribute.levyPerYear;
+  const league = isLeague(ctx);
+  // A house always has the Massalia region. The League has its ten home towns,
+  // with or without men standing there, and no levy from a held region.
+  const out: BaseView[] = [];
+  if (league) for (const p of await leagueHomePlaces(topology)) out.push({ ...p, kind: "home", name: await placeName(p.id, p.townId), holding: null });
+  else out.push({ id: topology.massaliaRegion, regionId: topology.massaliaRegion, townId: null, kind: "massalia", name: await regionDisplayName(topology.massaliaRegion), holding: null });
+  const levyPerYear = league ? 0 : getBattleContent().regionTribute.levyPerYear;
   for (const h of holdings) {
     const id = holdingBaseId(h);
     const rate = await tributeRateOf(h);
     const holding: HoldingView = { garrison: await garrisonCount(exec, ctx, id, now), minGarrison: rate.minGarrison, perDay: { drachmae: rate.drachmae, grain: rate.grain, timber: rate.timber }, levyPerYear: h.townId ? 0 : levyPerYear };
     out.push({ id, regionId: h.regionId, townId: h.townId || null, kind: h.kind, name: await placeName(id, h.townId || null), holding });
   }
+  if (league) return out;
   const standing = new Set((rows ?? (await ownedRows(exec, ctx))).filter((r) => isActive(r, now) && r.movingTo === null).map((r) => r.basedAt));
   for (const p of await homePlaces(topology)) if (standing.has(p.id)) out.push({ ...p, kind: "home", name: await placeName(p.id, p.townId), holding: null });
   return out;
@@ -143,8 +166,14 @@ function stepsByBase(topology: Topology, bases: BaseView[], regionId: string): R
 // Every place the player may move men to (ruling 10): the Massalia region,
 // every home place, and every holding — each with its steps from every base.
 export async function moveTargetsOf(topology: Topology, bases: BaseView[], ctx: ActingContext, exec: Exec): Promise<MoveTargetView[]> {
-  const places: { id: string; regionId: string; townId: string | null; kind: BaseKind }[] = [{ id: topology.massaliaRegion, regionId: topology.massaliaRegion, townId: null, kind: "massalia" }];
-  for (const p of await homePlaces(topology)) places.push({ ...p, kind: "home" });
+  // A house: the Massalia region and every home place. The League: its ten
+  // home towns. Both: their own holdings.
+  const places: { id: string; regionId: string; townId: string | null; kind: BaseKind }[] = [];
+  if (isLeague(ctx)) for (const p of await leagueHomePlaces(topology)) places.push({ ...p, kind: "home" });
+  else {
+    places.push({ id: topology.massaliaRegion, regionId: topology.massaliaRegion, townId: null, kind: "massalia" });
+    for (const p of await homePlaces(topology)) places.push({ ...p, kind: "home" });
+  }
   for (const h of await listHoldings(exec, ctx)) places.push({ id: holdingBaseId(h), regionId: h.regionId, townId: h.townId || null, kind: h.kind });
   const out: MoveTargetView[] = [];
   for (const p of places) out.push({ ...p, name: await placeName(p.id, p.townId), byBase: stepsByBase(topology, bases, p.regionId) });
@@ -167,7 +196,11 @@ export async function reachView(exec: Exec, ctx: ActingContext, now: Date, opts:
     const f = forceRowOf(r);
     if (f) force.push(f);
   }
-  const { counts, fleet, strip, supplies } = await fleetInStock(exec, ctx);
+  const inStock = await fleetInStock(exec, ctx);
+  const { counts, fleet, strip } = inStock;
+  // A house's supplies are its stock. The League keeps none: it has what the
+  // treasury can buy at what the market asks this season.
+  const supplies = isLeague(ctx) ? leagueSuppliesAfford(await leagueBalance(exec, ctx.worldId), leagueSupplyPrice(now, ctx.worldStartedMs)) : inStock.supplies;
   const home = await homeRegions(topology);
   // Region holdings are never targets; the region of a held town or of home
   // ground with men stays a target for its other towns (home ground is already
@@ -185,4 +218,68 @@ export async function reachView(exec: Exec, ctx: ActingContext, now: Date, opts:
   const moveTargets = await moveTargetsOf(topology, allBases, ctx, exec);
   const labels = Object.fromEntries(Object.entries(getShipsContent().ships).map(([id, d]) => [id, d.label]));
   return { now: now.toISOString(), campaign, bases, force: forceStats(force), fleet: { ships: counts, labels, ...fleetStats(fleet), hulls: strip.ships, supplies }, reach, moveTargets };
+}
+
+// --- The League's map view (government prompt 5b) -----------------------------
+
+// What a unit of naval supplies costs the treasury at an instant.
+export function leagueSupplyPrice(at: Date, worldStartedMs: number): number {
+  return marketPrice(getShipsContent().supplyGood, "buy", at, worldStartedMs);
+}
+function leagueSuppliesAfford(balance: number, price: number): number {
+  return price > 0 ? Math.max(0, Math.floor(balance / price)) : 0;
+}
+
+// The League's rows as the force picker reads a roster: no row of the League's
+// is disbanded from the map.
+function leagueRoster(rows: UnitRow[], now: Date): RosterView[] {
+  const unitsC = getUnitsContent();
+  const bandsC = getBandsContent();
+  return rows.map((r) => {
+    const def = r.source === "trained" ? unitDef(unitsC, r.unitId) : bandDef(bandsC, r.unitId);
+    return {
+      id: r.id,
+      source: r.source,
+      unitId: r.unitId,
+      label: def?.label ?? r.unitId,
+      plural: r.source === "trained" ? (unitDef(unitsC, r.unitId)?.plural ?? `${def?.label ?? r.unitId}s`) : (def?.label ?? r.unitId),
+      icon: def?.icon ?? "",
+      count: r.count,
+      startCount: r.startCount,
+      recruitedSeason: r.recruitedSeason,
+      readyAt: r.readyAt?.toISOString() ?? null,
+      contractEndAt: r.contractEndAt?.toISOString() ?? null,
+      basedAt: r.basedAt,
+      movingTo: r.movingTo,
+      arrivesAt: r.arrivesAt?.toISOString() ?? null,
+      mission: r.mission ?? null,
+      createdAt: r.createdAt.toISOString(),
+      stats: def?.stats ?? {},
+      active: isActive(r, now),
+      canDisband: false,
+    };
+  });
+}
+
+// Everything the map needs to give the League's army an order, in one payload:
+// the reach of its men from its places, its rows, the treasury that pays for a
+// voyage with what a unit of naval supplies costs it now, and the war gate (the
+// refusal a raid or an attack would meet, by town and by townless region). The
+// gate is its own field, never a reach verdict: Scout reads the raid verdict,
+// and the League's scouts go where a house's may.
+export type LeagueMapView = ReachView & {
+  roster: RosterView[];
+  treasury: { balance: number };
+  supplyPrice: number;
+  gate: { towns: Record<string, string>; regions: Record<string, string> };
+};
+export async function leagueMapView(exec: Exec, ctx: LeagueContext, now: Date): Promise<LeagueMapView> {
+  const reach = await reachView(exec, ctx, now);
+  return {
+    ...reach,
+    roster: leagueRoster(await ownedRows(exec, ctx), now),
+    treasury: { balance: await leagueBalance(exec, ctx.worldId) },
+    supplyPrice: leagueSupplyPrice(now, ctx.worldStartedMs),
+    gate: await leagueGateMap(exec, ctx.worldId, now),
+  };
 }

@@ -808,6 +808,11 @@ suite("Koinon muster (integration)", () => {
     // The caller's own holding reads as his own.
     await db.update(m.dbPkg.playerHoldings).set({ ownerPlayerId: leader }).where(eq(m.dbPkg.playerHoldings.regionId, landRegion));
     expect(await open(leader)).toEqual({ ok: false, code: 409, error: "You hold this land." });
+    // What the League's army holds reads as the League's (government prompt 5b).
+    const league = (await db.insert(m.dbPkg.players).values({ worldId, kind: "league", userId: null, name: "The League", color: "#000000" }).returning())[0]!.id;
+    await db.update(m.dbPkg.playerHoldings).set({ ownerPlayerId: league });
+    expect(await open(leader)).toEqual({ ok: false, code: 409, error: "The League holds this land." });
+    expect(await open(leader, { regionId: undefined, townId })).toEqual({ ok: false, code: 409, error: "The League holds this town." });
   });
 
   it("an army that finds the place held by another house turns back too", async () => {

@@ -1,8 +1,9 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { sql } from "drizzle-orm";
 import { gameDate } from "@massalia/shared";
 import { publishMapChange, subscribeMap } from "../services/mapRealtime.js";
 import { canActAs, canConquer } from "../services/mapWar.js";
+import type { ActingContext } from "../services/buildings.js";
 
 // The province/map system API. Isolated from the older world.ts prototype. Reads
 // the map_ tables seeded by @massalia/db seedMap.ts. Geometry/terrain/rivers stay
@@ -30,8 +31,10 @@ type ChangeType = "occupy" | "annex";
 const HOME_POLITY = "massalia";
 type MilitarySource = "home" | "intel";
 // Who holds a conquered place (holdings prompt 1): public to every player, and
-// only these three fields — never the garrison, the tribute or a date.
-type Holder = { playerId: string; characterName: string; houseName: string | null };
+// only these three fields — never the garrison, the tribute or a date. A
+// holding of the League's army (government prompt 5b) carries `league: true`,
+// its name the League's and no house.
+type Holder = { playerId: string; characterName: string; houseName: string | null; league?: true };
 interface MilitaryPayload {
   towns: Record<string, { garrison: number; pentekonters: number; triremes: number; source: MilitarySource; scoutedGameDate?: string }>;
   regions: Record<string, { warband: number; source: MilitarySource; scoutedGameDate?: string }>;
@@ -119,6 +122,62 @@ async function buildState(db: Db): Promise<MapState> {
   };
 }
 
+// The body of an order, a house's (POST /act) or the League's (POST
+// /league/act): a move (rows to a place, by base id), or a scout, a raid or an
+// attack on a townless region (regionId) or a town (townId), with an optional
+// choice of hulls.
+async function runOrder(ctx: ActingContext, raw: unknown, reply: FastifyReply) {
+  const { act, move } = await import("../services/mapActions.js");
+  const body = raw as { type?: unknown; regionId?: unknown; townId?: unknown; baseId?: unknown; rows?: unknown; ships?: unknown } | undefined;
+  const type = body?.type;
+  const regionId = body?.regionId;
+  const townId = body?.townId;
+  const baseId = body?.baseId;
+  const rows = body?.rows;
+  const rowOk = (r: unknown): r is { rowId: string; count: number } =>
+    typeof r === "object" && r !== null && typeof (r as { rowId?: unknown }).rowId === "string" && Number.isInteger((r as { count?: unknown }).count) && ((r as { count: number }).count) >= 1;
+  const rowsOk = Array.isArray(rows) && rows.every(rowOk);
+  // A move (3c): rows to one of the player's places, by base id.
+  if (type === "move") {
+    if (typeof baseId !== "string" || !rowsOk) {
+      reply.code(400);
+      return { error: "type, baseId and rows [{ rowId, count }] are required." };
+    }
+    const moved = await move(ctx, { baseId, rows: rows as { rowId: string; count: number }[] }, new Date());
+    if (!moved.ok) {
+      reply.code(moved.code);
+      return { error: moved.error };
+    }
+    return { report: moved.report, reach: moved.reach, campaign: moved.campaign, force: moved.force, fleet: moved.fleet, roster: moved.roster };
+  }
+  const targetOk = (typeof regionId === "string") !== (typeof townId === "string");
+  if ((type !== "scout" && type !== "raid" && type !== "attack") || !targetOk || !rowsOk) {
+    reply.code(400);
+    return { error: "type, regionId or townId, and rows [{ rowId, count }] are required." };
+  }
+  const target = typeof townId === "string" ? { townId } : { regionId: regionId as string };
+  // An optional ships map { "trade-ship": n, "galley": n }: whole numbers by ship id.
+  const shipsIn = body?.ships;
+  let ships: Record<string, number> | undefined;
+  if (shipsIn !== undefined) {
+    const ok = typeof shipsIn === "object" && shipsIn !== null && !Array.isArray(shipsIn) && Object.values(shipsIn as Record<string, unknown>).every((n) => Number.isInteger(n) && (n as number) >= 0);
+    if (!ok) {
+      reply.code(400);
+      return { error: "ships must map ship ids to whole numbers." };
+    }
+    ships = shipsIn as Record<string, number>;
+  }
+  const result = await act(ctx, { type, ...target, rows: rows as { rowId: string; count: number }[], ...(ships ? { ships } : {}) }, new Date());
+  if (!result.ok) {
+    reply.code(result.code);
+    return { error: result.error };
+  }
+  return { report: result.report, reach: result.reach, campaign: result.campaign, force: result.force, fleet: result.fleet, roster: result.roster };
+}
+
+// Answered when a world has no League army to order (its raising failed).
+const LEAGUE_ARMY_MISSING = "The League has no army to command.";
+
 export async function mapRoutes(app: FastifyInstance) {
   // Full map ownership state: polities + per-province state + towns. Geometry is
   // loaded separately by the client from static files.
@@ -138,6 +197,7 @@ export async function mapRoutes(app: FastifyInstance) {
     const { ensureCharacterRow, getActivePlayer, getActiveWorldId } = await import("../services/character.js");
     const { loadMilitaryOwners } = await import("../services/mapMilitary.js");
     const { listWorldHoldings } = await import("../services/holdings.js");
+    const { settleLeagueQuietly } = await import("../services/leagueOrders.js");
     const { and, eq, inArray } = await import("drizzle-orm");
     const db = (_db ??= createDb());
     const user = await requireAuth(request);
@@ -170,8 +230,12 @@ export async function mapRoutes(app: FastifyInstance) {
       } catch (error) {
         console.error(`army: failed ${error instanceof Error ? error.message : String(error)}`);
       }
+      // Its men on the road land first (government prompt 5b; guarded, and
+      // nothing unless something is due), and a town's garrison is the men
+      // standing in it: a row marching out, or home, is in no town.
+      await settleLeagueQuietly();
       const men = new Map<string, number>();
-      for (const r of await leagueArmyRows(db, worldId)) men.set(r.basedAt, (men.get(r.basedAt) ?? 0) + r.count);
+      for (const r of await leagueArmyRows(db, worldId)) if (r.movingTo === null) men.set(r.basedAt, (men.get(r.basedAt) ?? 0) + r.count);
       const fleet = await leagueFleet(db, worldId);
       const fleetAt = (await loadLeagueArmy()).fleetAt;
       for (const townId of homeTowns) {
@@ -197,7 +261,7 @@ export async function mapRoutes(app: FastifyInstance) {
     }
     const holdings: MilitaryPayload["holdings"] = { towns: {}, regions: {} };
     for (const h of await listWorldHoldings(db, worldId)) {
-      const holder: Holder = { playerId: h.playerId, characterName: h.characterName, houseName: h.houseName };
+      const holder: Holder = { playerId: h.playerId, characterName: h.characterName, houseName: h.houseName, ...(h.league ? { league: true as const } : {}) };
       if (h.townId) holdings.towns[h.townId] = holder;
       else holdings.regions[h.regionId] = holder;
     }
@@ -217,6 +281,7 @@ export async function mapRoutes(app: FastifyInstance) {
     const { applyComposureDelta } = await import("../services/composure.js");
     const { lockPlayer } = await import("../services/lock.js");
     const { reachView } = await import("../services/mapReach.js");
+    const { ordererFor } = await import("../services/leagueOrders.js");
     const db = (_db ??= createDb());
     const user = await requireAuth(request);
     const worldId = await getActiveWorldId();
@@ -242,7 +307,11 @@ export async function mapRoutes(app: FastifyInstance) {
       return { composureDays: settled.composureDays, view: await reachView(tx, ctx, now) };
     });
     if (composureDays > 0) await applyComposureDelta(character.id, composureDays, "building:shrine", now);
-    return view;
+    // `commander`: whether he sits as an Archon or a Strategos now, so the map
+    // offers the League's army (government prompt 5b). The server checks the
+    // seat again at GET /league and at every order.
+    const commander = (await ordererFor(db, { id: character.id, worldId, dynastyId: character.dynastyId })) !== null;
+    return { ...view, commander };
   });
 
   // Map actions (barracks prompts 3b, 3c; raids prompt 4): Scout, Raid or
@@ -255,7 +324,6 @@ export async function mapRoutes(app: FastifyInstance) {
     const { requireAuth } = await import("../services/auth.js");
     const { ensureCharacterRow, getActivePlayer, getActiveWorldId } = await import("../services/character.js");
     const { buildingContext } = await import("../services/buildings.js");
-    const { act, move } = await import("../services/mapActions.js");
     const user = await requireAuth(request);
     const worldId = await getActiveWorldId();
     if (!worldId) {
@@ -273,51 +341,75 @@ export async function mapRoutes(app: FastifyInstance) {
       reply.code(503);
       return { error: "No active world exists." };
     }
-    const body = request.body as { type?: unknown; regionId?: unknown; townId?: unknown; baseId?: unknown; rows?: unknown; ships?: unknown } | undefined;
-    const type = body?.type;
-    const regionId = body?.regionId;
-    const townId = body?.townId;
-    const baseId = body?.baseId;
-    const rows = body?.rows;
-    const rowOk = (r: unknown): r is { rowId: string; count: number } =>
-      typeof r === "object" && r !== null && typeof (r as { rowId?: unknown }).rowId === "string" && Number.isInteger((r as { count?: unknown }).count) && ((r as { count: number }).count) >= 1;
-    const rowsOk = Array.isArray(rows) && rows.every(rowOk);
-    // A move (3c): rows to one of the player's places, by base id.
-    if (type === "move") {
-      if (typeof baseId !== "string" || !rowsOk) {
-        reply.code(400);
-        return { error: "type, baseId and rows [{ rowId, count }] are required." };
-      }
-      const moved = await move(ctx, { baseId, rows: rows as { rowId: string; count: number }[] }, new Date());
-      if (!moved.ok) {
-        reply.code(moved.code);
-        return { error: moved.error };
-      }
-      return { report: moved.report, reach: moved.reach, campaign: moved.campaign, force: moved.force, fleet: moved.fleet, roster: moved.roster };
+    return runOrder(ctx, request.body, reply);
+  });
+
+  // The League's army on the map (government prompt 5b). A sitting Archon or
+  // Strategos reads it and orders it as he does his own men: GET /league is the
+  // whole payload the map needs (reach, places, rows, fleet, the treasury that
+  // pays for a voyage, the war gate), POST /league/act the same body as /act.
+  // The seat is read at every call; anyone else is answered 403. Not behind
+  // MAP_MUTATIONS_ENABLED (same footing as /act).
+  const leagueCommand = async (request: FastifyRequest, reply: FastifyReply) => {
+    const { createDb, ensureLeagueArmy } = await import("@massalia/db");
+    const { LEAGUE_COMMAND_REFUSAL } = await import("@massalia/shared");
+    const { requireAuth } = await import("../services/auth.js");
+    const { ensureCharacterRow, getActivePlayer, getActiveWorldId } = await import("../services/character.js");
+    const { buildingContext } = await import("../services/buildings.js");
+    const { leagueContext, ordererFor } = await import("../services/leagueOrders.js");
+    const db = (_db ??= createDb());
+    const user = await requireAuth(request);
+    const worldId = await getActiveWorldId();
+    if (!worldId) {
+      reply.code(503);
+      return { error: "No active world exists." };
     }
-    const targetOk = (typeof regionId === "string") !== (typeof townId === "string");
-    if ((type !== "scout" && type !== "raid" && type !== "attack") || !targetOk || !rowsOk) {
-      reply.code(400);
-      return { error: "type, regionId or townId, and rows [{ rowId, count }] are required." };
+    const player = await getActivePlayer(user.id, worldId);
+    if (!player) {
+      reply.code(404);
+      return { error: "No active character found." };
     }
-    const target = typeof townId === "string" ? { townId } : { regionId: regionId as string };
-    // An optional ships map { "trade-ship": n, "galley": n }: whole numbers by ship id.
-    const shipsIn = body?.ships;
-    let ships: Record<string, number> | undefined;
-    if (shipsIn !== undefined) {
-      const ok = typeof shipsIn === "object" && shipsIn !== null && !Array.isArray(shipsIn) && Object.values(shipsIn as Record<string, unknown>).every((n) => Number.isInteger(n) && (n as number) >= 0);
-      if (!ok) {
-        reply.code(400);
-        return { error: "ships must map ship ids to whole numbers." };
-      }
-      ships = shipsIn as Record<string, number>;
+    const character = await ensureCharacterRow(player, worldId);
+    const orderer = await ordererFor(db, { id: character.id, worldId, dynastyId: character.dynastyId });
+    if (!orderer) {
+      reply.code(403);
+      return { error: LEAGUE_COMMAND_REFUSAL };
     }
-    const result = await act(ctx, { type, ...target, rows: rows as { rowId: string; count: number }[], ...(ships ? { ships } : {}) }, new Date());
-    if (!result.ok) {
-      reply.code(result.code);
-      return { error: result.error };
+    const own = await buildingContext(player.id, worldId);
+    if (!own) {
+      reply.code(503);
+      return { error: "No active world exists." };
     }
-    return { report: result.report, reach: result.reach, campaign: result.campaign, force: result.force, fleet: result.fleet, roster: result.roster };
+    // The army is raised first when the world has none, as GET /military does.
+    try {
+      await ensureLeagueArmy(worldId);
+    } catch (error) {
+      console.error(`army: failed ${error instanceof Error ? error.message : String(error)}`);
+    }
+    const ctx = await leagueContext(db, { id: worldId, startedMs: own.worldStartedMs }, orderer);
+    if (!ctx) {
+      reply.code(503);
+      return { error: LEAGUE_ARMY_MISSING };
+    }
+    return { ctx };
+  };
+
+  app.get("/league", async (request, reply) => {
+    const { createDb } = await import("@massalia/db");
+    const { leagueMapView } = await import("../services/mapReach.js");
+    const { settleLeagueQuietly } = await import("../services/leagueOrders.js");
+    const db = (_db ??= createDb());
+    const command = await leagueCommand(request, reply);
+    if ("error" in command) return command;
+    const now = new Date();
+    await settleLeagueQuietly(now);
+    return leagueMapView(db, command.ctx, now);
+  });
+
+  app.post("/league/act", async (request, reply) => {
+    const command = await leagueCommand(request, reply);
+    if ("error" in command) return command;
+    return runOrder(command.ctx, request.body, reply);
   });
 
   app.get("/state", async (request) => {

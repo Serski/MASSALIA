@@ -112,12 +112,14 @@ export interface LeagueArmyRow {
   unitId: string;
   count: number;
   basedAt: string;
+  /** where the row is marching to, or null while it stands at basedAt (government prompt 5b) */
+  movingTo: string | null;
 }
 
 // The League's units in a world, town by town; empty before the army is raised.
 export async function leagueArmyRows(exec: DbExec, worldId: string): Promise<LeagueArmyRow[]> {
   return exec
-    .select({ id: playerUnits.id, unitId: playerUnits.unitId, count: playerUnits.count, basedAt: playerUnits.basedAt })
+    .select({ id: playerUnits.id, unitId: playerUnits.unitId, count: playerUnits.count, basedAt: playerUnits.basedAt, movingTo: playerUnits.movingTo })
     .from(playerUnits)
     .innerJoin(players, eq(players.id, playerUnits.ownerPlayerId))
     .where(and(eq(playerUnits.worldId, worldId), eq(players.kind, "league")))

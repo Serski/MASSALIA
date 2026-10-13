@@ -54,16 +54,19 @@ export async function listHoldings(exec: Exec, ctx: ActingContext): Promise<Hold
 // and no filter on the holder: every holding the server would refuse an attack
 // on appears, so the map never offers what the server refuses. The house is a
 // left join: a player without one still shows.
-export type WorldHolding = { regionId: string; townId: string; playerId: string; characterName: string; houseName: string | null };
+// `league` marks a holding of the League's army (government prompt 5b): its
+// row has no house and no character, and its name is the League's.
+export type WorldHolding = { regionId: string; townId: string; playerId: string; characterName: string; houseName: string | null; league: boolean };
 
 export async function listWorldHoldings(exec: Exec, worldId: string): Promise<WorldHolding[]> {
-  return exec
-    .select({ regionId: playerHoldings.regionId, townId: playerHoldings.townId, playerId: playerHoldings.ownerPlayerId, characterName: players.name, houseName: houses.name })
+  const rows = await exec
+    .select({ regionId: playerHoldings.regionId, townId: playerHoldings.townId, playerId: playerHoldings.ownerPlayerId, characterName: players.name, houseName: houses.name, kind: players.kind })
     .from(playerHoldings)
     .innerJoin(players, eq(players.id, playerHoldings.ownerPlayerId))
     .leftJoin(houses, eq(houses.slug, players.houseSlug))
     .where(eq(playerHoldings.worldId, worldId))
     .orderBy(playerHoldings.since, playerHoldings.regionId, playerHoldings.townId);
+  return rows.map(({ kind, ...h }) => ({ ...h, league: kind === "league" }));
 }
 
 // Men standing at a base (a region id or a town id): active, non-moving rows

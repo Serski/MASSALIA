@@ -63,6 +63,7 @@ import {
 } from "@massalia/shared";
 import type { CharacterRow } from "./character.js";
 import { getCalendarConfig } from "./festival.js";
+import { settleLeagueQuietly } from "./leagueOrders.js";
 import { getPoliticsConfig } from "./oligarchy.js";
 import { broadcastState } from "./worldState.js";
 
@@ -187,6 +188,10 @@ export async function syncAgenda(now: Date = new Date()): Promise<{ accrued: boo
   } catch (error) {
     console.error(`army: failed ${error instanceof Error ? error.message : String(error)}`);
   }
+  // Its men, ships and holdings (government prompt 5b): hulls home, arrivals,
+  // tribute to the treasury. Nothing, and no lock, unless something is due; a
+  // failure is logged as the army's and the sync goes on.
+  await settleLeagueQuietly(now);
   const leaders = (await ensurePartyLeaders(now)).filled.length;
 
   let opened = 0;
