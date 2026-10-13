@@ -447,6 +447,55 @@ suite("the League's orders (integration)", () => {
     expect(report).toMatchObject({ winner: "turned_back", attacker: { losses: 0 }, line: "40 peltasts found Reii held by the League and turned back." });
   });
 
+  // Ruling at STOP 1: nothing of the army's reaches an official. Its men, its
+  // hulls and its places are never mixed with a house's, in either direction.
+  it("no mix, both ways: a League order naming a house's row is refused, a house's order naming a League row is refused, a house cannot sail the League's hulls, and neither stands men in the other's holding", async () => {
+    const { lctx, ctx: own } = await archon();
+    await war("saluvii", at(8), at(16));
+    // The Archon's own men, at his house's base, and the League's, in Massalia.
+    const mine = await houseRow(own, "peltast", 40);
+    const leagues = await leagueRow("massalia", "peltast");
+    const noSuch = { ok: false, code: 404, error: "No such unit." };
+
+    // The League's order, naming his own row, alone or beside a League row.
+    for (const rows of [[{ rowId: mine.id, count: 40 }], [{ rowId: leagues.id, count: 40 }, { rowId: mine.id, count: 40 }]]) {
+      expect(await m.actions.act(lctx, { type: "raid", townId: "reii", rows }, at(9))).toEqual(noSuch);
+      expect(await m.actions.act(lctx, { type: "scout", regionId: "R046", rows }, at(9))).toEqual(noSuch);
+      expect(await m.actions.move(lctx, { baseId: "arelate", rows }, at(9))).toEqual(noSuch);
+    }
+    // His own order, naming a League row, alone or beside his own.
+    for (const rows of [[{ rowId: leagues.id, count: 40 }], [{ rowId: mine.id, count: 40 }, { rowId: leagues.id, count: 40 }]]) {
+      expect(await m.actions.act(own, { type: "raid", townId: "reii", rows }, at(9))).toEqual(noSuch);
+      expect(await m.actions.act(own, { type: "scout", regionId: "R046", rows }, at(9))).toEqual(noSuch);
+      expect(await m.actions.move(own, { baseId: "arelate", rows }, at(9))).toEqual(noSuch);
+    }
+
+    // The League's hulls carry the League's men alone. His house has no ship,
+    // so to him the fleet reaches nowhere, whether he names the League's hulls
+    // or leaves the crossing to the server: 29 pentekonters in port are not his.
+    const noFleet = { ok: false, code: 409, error: "Beyond the fleet's range (5 seas, fleet reaches 0)." };
+    expect(await m.actions.act(own, { type: "raid", townId: "thapsus", rows: [{ rowId: mine.id, count: 40 }], ships: { "trade-ship": 2 } }, at(9))).toEqual(noFleet);
+    expect(await m.actions.act(own, { type: "raid", townId: "thapsus", rows: [{ rowId: mine.id, count: 40 }] }, at(9))).toEqual(noFleet);
+    expect((await m.mapReach.reachView(db, own, at(9))).fleet.ships).toEqual({ "trade-ship": 0, galley: 0 });
+    expect(await fleet()).toEqual({ pentekonters: 29, triremes: 40 });
+    expect(await voyages()).toEqual([]);
+
+    // Places: the League's men move only between the League's, and a house's
+    // men are not sent to a League holding (taken this instant, so no tribute is yet due).
+    await m.holdings.insertTownConquest(db, lctx, "R047", "reii", "saluvii", at(9));
+    await db.insert(m.dbPkg.playerUnits).values({ worldId, ownerPlayerId: leagueId, source: "trained", unitId: "hoplite", count: 30, startCount: 30, recruitedSeason: 0, readyAt: at(0), basedAt: "reii", createdAt: at(8) });
+    expect(await m.actions.move(own, { baseId: "reii", rows: [{ rowId: mine.id, count: 40 }] }, at(9))).toEqual({ ok: false, code: 409, error: "Men may only be sent to Massalia's own ground or a holding of yours." });
+    await m.holdings.insertConquest(db, own, "R046", "unclaimed", at(8));
+    expect(await m.actions.move(lctx, { baseId: "R046", rows: [{ rowId: leagues.id, count: 40 }] }, at(9))).toEqual({ ok: false, code: 409, error: "The League's men move only between its towns and its holdings." });
+
+    // Nothing moved and nothing was written: every row whole and standing, no march, no order, no ledger row.
+    expect(await standing("massalia", "peltast")).toMatchObject([{ count: 250 }]);
+    expect((await units(own.playerId)).map((r) => [r.count, r.basedAt, r.movingTo])).toEqual([[40, "R060", null]]);
+    expect(await marches()).toEqual([]);
+    expect(await orders()).toEqual([]);
+    expect(await ledger()).toEqual([]);
+  });
+
   it("a League battle with the Temple standing: its blessing is the League's army's too", async () => {
     const { lctx } = await archon();
     // The Temple of Artemis stood at season 4: every army's morale is raised for 8 seasons.

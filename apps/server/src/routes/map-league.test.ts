@@ -170,6 +170,29 @@ suite("the League's army on the map routes (integration)", () => {
     expect(await orders()).toHaveLength(1);
   });
 
+  it("the two orders never mix: POST /league/act refuses the Archon's own row, and POST /act refuses a League row", async () => {
+    const archon = await freshPlayer({ office: "archon", side: "dynatoi" });
+    const own = (await db.insert(m.dbPkg.playerUnits).values({ worldId, ownerPlayerId: archon.playerId, source: "trained", unitId: "hippeis", count: 10, startCount: 10, recruitedSeason: 0, readyAt: new Date(Date.now() - DAY), basedAt: "R060" }).returning())[0]!;
+    const riders = await leagueRow("massalia", "hippeis");
+    const house = (payload: Record<string, unknown>) => app.inject({ method: "POST", url: "/api/map/act", headers: { cookie: archon.cookie }, payload });
+
+    const asLeague = await order(archon.cookie, { type: "scout", regionId: "R046", rows: [{ rowId: own.id, count: 5 }] });
+    expect(asLeague.statusCode).toBe(404);
+    expect(asLeague.json()).toEqual({ error: "No such unit." });
+    const asHouse = await house({ type: "scout", regionId: "R046", rows: [{ rowId: riders.id, count: 5 }] });
+    expect(asHouse.statusCode).toBe(404);
+    expect(asHouse.json()).toEqual({ error: "No such unit." });
+    const mixed = await house({ type: "scout", regionId: "R046", rows: [{ rowId: own.id, count: 5 }, { rowId: riders.id, count: 5 }] });
+    expect(mixed.statusCode).toBe(404);
+    expect(await orders()).toEqual([]);
+    expect(await db.select().from(m.dbPkg.playerMarches)).toEqual([]);
+    // Each alone, with its own men, sets out.
+    expect((await order(archon.cookie, { type: "scout", regionId: "R046", rows: [{ rowId: riders.id, count: 5 }] })).statusCode).toBe(200);
+    expect((await house({ type: "scout", regionId: "R046", rows: [{ rowId: own.id, count: 5 }] })).statusCode).toBe(200);
+    const marches = await db.select({ owner: m.dbPkg.playerMarches.ownerPlayerId }).from(m.dbPkg.playerMarches);
+    expect(marches.map((x) => x.owner).sort()).toEqual([archon.playerId, leagueId].sort());
+  });
+
   it("GET /military: a home town's garrison is the League's men standing in it, and a League holding is shown as the League's", async () => {
     const viewer = await freshPlayer();
     const archon = await freshPlayer({ office: "archon", side: "dynatoi" });
