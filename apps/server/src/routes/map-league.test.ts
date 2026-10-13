@@ -102,7 +102,7 @@ suite("the League's army on the map routes (integration)", () => {
     for (const seat of [{ office: "archon", side: "palaioi" }, { office: "strategos", side: null }]) {
       const res = await get("/league", (await freshPlayer(seat)).cookie);
       expect(res.statusCode, seat.office).toBe(200);
-      const body = res.json() as { bases: { id: string; kind: string }[]; roster: { canDisband: boolean }[]; force: { men: number }; fleet: { ships: Record<string, number>; supplies: number }; treasury: { balance: number }; supplyPrice: number; gate: { towns: Record<string, string>; regions: Record<string, string> }; campaign: { open: boolean }; moveTargets: { id: string }[]; reach: Record<string, unknown> };
+      const body = res.json() as { bases: { id: string; kind: string }[]; roster: { canDisband: boolean }[]; force: { men: number }; fleet: { ships: Record<string, number>; supplies: number }; treasury: { balance: number }; supplyPrice: number; gate: { towns: Record<string, string>; regions: Record<string, string> }; sightings: unknown; orderedBy: { name: string; office: string; side: string | null }; campaign: { open: boolean }; moveTargets: { id: string }[]; reach: Record<string, unknown> };
       expect(body.bases.map((b) => b.id)).toEqual(["massalia", "emporion", "nikaia", "olbia-provence", "rhoda", "agathe", "antipolis", "arelate", "athinopolis", "monoikos"]);
       expect(body.roster).toHaveLength(40);
       expect(body.force.men).toBe(2050);
@@ -113,6 +113,9 @@ suite("the League's army on the map routes (integration)", () => {
       expect(body.campaign.open).toBe(true);
       expect(body.gate.towns.reii).toBe("The League is not at war with the Saluvii.");
       expect(body.gate.regions.R046).toBe("The League makes war only on nations, and no nation holds this land.");
+      expect(body.sightings).toEqual({ towns: {}, regions: {} });
+      expect(body.orderedBy).toMatchObject({ office: seat.office, side: seat.side });
+      expect(body.orderedBy.name).toMatch(/^P-/);
       expect(Object.keys(body.reach).length).toBeGreaterThan(0);
     }
     // Reading wrote nothing.

@@ -275,6 +275,8 @@ export type LeagueMapView = ReachView & {
   supplyPrice: number;
   gate: { towns: Record<string, string>; regions: Record<string, string> };
   sightings: LeagueSightings;
+  // The official reading the map, as the order sheet names him: "Ordered by <name>, <seat>".
+  orderedBy: { name: string; office: "archon" | "strategos"; side: string | null } | null;
 };
 export async function leagueMapView(exec: Exec, ctx: LeagueContext, now: Date): Promise<LeagueMapView> {
   const reach = await reachView(exec, ctx, now);
@@ -285,5 +287,6 @@ export async function leagueMapView(exec: Exec, ctx: LeagueContext, now: Date): 
     supplyPrice: leagueSupplyPrice(now, ctx.worldStartedMs),
     gate: await leagueGateMap(exec, ctx.worldId, now),
     sightings: await leagueSightings(exec, ctx),
+    orderedBy: ctx.league.orderer ? { name: ctx.league.orderer.name, office: ctx.league.orderer.office, side: ctx.league.orderer.side } : null,
   };
 }

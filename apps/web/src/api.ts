@@ -1965,12 +1965,19 @@ export type MapReachView = {
 // the League's reach, places, rows and fleet, the treasury that pays for a
 // voyage with what a unit of naval supplies costs it now, and the war gate:
 // the server's refusal for a raid or an attack, by town and by townless region.
-// A place in neither map passes the gate.
+// A place in neither map passes the gate. `sightings` is what the League's own
+// parties last saw of each place, with the game date; `orderedBy` the official
+// reading it, as the order sheet names him.
 export type LeagueMapView = MapReachView & {
   roster: BarracksRosterRow[];
   treasury: { balance: number };
   supplyPrice: number;
   gate: { towns: Record<string, string>; regions: Record<string, string> };
+  sightings: {
+    towns: Record<string, { garrison: number; pentekonters: number; triremes: number; scoutedGameDate: string }>;
+    regions: Record<string, { warband: number; scoutedGameDate: string }>;
+  };
+  orderedBy: { name: string; office: "archon" | "strategos"; side: string | null } | null;
 };
 
 // --- Map actions (POST /api/map/act; mirrors apps/server/src/services/mapActions.ts) ---

@@ -157,6 +157,9 @@ suite("the League's orders (integration)", () => {
     const unit = price("naval-supplies", "buy", at(9));
     expect(unit).toBeGreaterThan(0);
     expect(view).toMatchObject({ treasury: { balance: 5000 }, supplyPrice: unit, sightings: { towns: {}, regions: {} } });
+    // The sheet names the official who reads it, by the seat he sits in.
+    expect(view.orderedBy).toMatchObject({ office: "archon", side: "dynatoi" });
+    expect(view.orderedBy!.name).toMatch(/^Kleon-/);
     expect(view.fleet.supplies).toBe(Math.floor(5000 / unit));
     // The war gate, by place: a nation at peace, land of no nation; Massalia's own is not in it.
     expect(view.gate.towns.reii).toBe("The League is not at war with the Saluvii.");

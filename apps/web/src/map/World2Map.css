@@ -110,16 +110,58 @@
   border-color: var(--dash-gold-bright, var(--accent-bright));
 }
 
-/* The picker's head in the League's mode, and the treasury's line in its footer. */
-.w2map-pick-whose {
+/* While the League's mode is on: a band across the top of the map in the
+   League's colour (set inline from the map's own polity colour). */
+.w2map-league-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 2;
+  padding: 6px 12px 6px 300px;
   font-family: "Cinzel", "Spectral", serif;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--dash-gold-bright, var(--accent-bright));
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: #1c120b;
+  text-align: right;
+  pointer-events: none;
 }
 
-.w2map-pick-treasury {
+/* The League's order sheet: its own head in the League's colour, with its crest. */
+.w2map-order-card {
+  border-top: 3px solid transparent;
+}
+
+.w2map-order-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  color: #1c120b;
+}
+
+.w2map-order-crest {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  flex: none;
+}
+
+.w2map-order-whose {
+  font-family: "Cinzel", "Spectral", serif;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.w2map-order-by {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--dash-stone, #c9bb9f);
+}
+
+.w2map-order-cost {
   display: block;
 }
 
@@ -514,6 +556,13 @@ p.w2map-stat-asof {
   .w2map-mode-btn {
     min-height: 44px;
     font-size: 13px;
+  }
+
+  /* On a phone the band sits under the switch, full width. */
+  .w2map-league-band {
+    top: 60px;
+    padding: 6px 12px;
+    text-align: left;
   }
 
   .w2map-controls {
