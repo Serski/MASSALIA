@@ -834,6 +834,9 @@ export type GovernmentArmyView = {
   lastDesertion: { men: number; label: string } | null;
   orders?: GovernmentArmyOrder[];
   reports?: GovernmentArmyReport[];
+  // What the League's own parties last saw of each place: the League's alone, for every member.
+  // `men` is a town's garrison or a land's warband; `asOf` the game date of the sighting.
+  sightings?: { id: string; name: string; town: boolean; men: number; pentekonters: number; triremes: number; asOf: string }[];
 };
 export type GovernmentView =
   | { member: false }

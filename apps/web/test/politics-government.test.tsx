@@ -336,12 +336,17 @@ describe("the Government tab", () => {
         { id: "m-2", kind: "scout", to: "Salyes", line: "Scouted Salyes with 5 hippeis: a warband of 100.", dateLabel: "Spring, 293 BC", arrivedAt: inMinutes(-20) },
         { id: "m-1", kind: "attack", to: "Reii", line: "Took Reii with 60 hoplites: 10 soldiers slain, 13 of ours lost. The town is ours.", dateLabel: "Winter, 293 BC", arrivedAt: inMinutes(-870) },
       ],
+      sightings: [
+        { id: "aleria", name: "Aleria", town: true, men: 150, pentekonters: 4, triremes: 1, asOf: "Winter, 293 BC" },
+        { id: "reii", name: "Reii", town: true, men: 0, pentekonters: 0, triremes: 0, asOf: "Winter, 293 BC" },
+        { id: "R046", name: "Salyes", town: false, men: 1100, pentekonters: 0, triremes: 0, asOf: "Spring, 293 BC" },
+      ],
     };
     const { container } = await mount({ ...member([{ office: "ephor", side: "palaioi" }], scope("league", { phase: "voting" })), army: ordered });
     fireEvent.click(container.querySelectorAll<HTMLButtonElement>(".cs-tab")[1]!);
     const card = container.querySelector(".government-army") as HTMLElement;
     const lines = (sel: string) => [...card.querySelectorAll(`${sel} li`)].map((li) => li.textContent);
-    expect([...card.querySelectorAll(".government-projects-head")].map((p) => p.textContent)).toEqual(["Holdings", "On the road", "Orders", "Reports"]);
+    expect([...card.querySelectorAll(".government-projects-head")].map((p) => p.textContent)).toEqual(["Holdings", "On the road", "Orders", "Reports", "Sightings"]);
     expect(lines(".government-army-towns")).toEqual(["Massalia · 470 hoplites, 210 peltasts, 140 ekdromoi, 95 hippeis"]);
     expect(lines(".government-army-holdings")).toEqual(["Reii · 47 hoplites", "Corsi · no men · garrison too small for tribute (1 man needed)"]);
     const parties = lines(".government-army-parties");
@@ -364,20 +369,26 @@ describe("the Government tab", () => {
       "Scouted Salyes with 5 hippeis: a warband of 100. · Spring, 293 BC",
       "Took Reii with 60 hoplites: 10 soldiers slain, 13 of ours lost. The town is ours. · Winter, 293 BC",
     ]);
+    // What the League's parties last saw, by place: the League's, for every member.
+    expect(lines(".government-army-sightings")).toEqual([
+      "Aleria · garrison 150 · 4 pentekonters, 1 trireme · Winter, 293 BC",
+      "Reii · garrison 0 · no ships · Winter, 293 BC",
+      "Salyes · warband 1,100 · Spring, 293 BC",
+    ]);
     // The order of the card: towns, holdings, the road, the fleet and the sea, upkeep, orders, reports.
     expect([...card.querySelectorAll(".event-body > ul, .event-body > p")].map((el) => el.className.replace("treasury-ledger ", ""))).toEqual([
-      "government-army-towns", "government-projects-head", "government-army-holdings", "government-projects-head", "government-army-parties", "government-army-fleet", "government-army-sea", "government-army-upkeep", "government-projects-head", "government-army-orders", "government-projects-head", "government-army-reports",
+      "government-army-towns", "government-projects-head", "government-army-holdings", "government-projects-head", "government-army-parties", "government-army-fleet", "government-army-sea", "government-army-upkeep", "government-projects-head", "government-army-orders", "government-projects-head", "government-army-reports", "government-projects-head", "government-army-sightings",
     ]);
   });
 
   it("an army with no holding, no party, no hull at sea, no order and no report shows none of those sections, as before any order and from an older server", async () => {
-    const quiet: typeof ARMY = { ...ARMY, holdings: [], parties: [], fleet: { ...ARMY.fleet, atSea: [] }, orders: [], reports: [] };
+    const quiet: typeof ARMY = { ...ARMY, holdings: [], parties: [], fleet: { ...ARMY.fleet, atSea: [] }, orders: [], reports: [], sightings: [] };
     for (const army of [quiet, ARMY]) {
       const { container } = await mount({ ...member([{ office: "archon", side: "palaioi" }], scope("league", { phase: "voting" })), army });
       fireEvent.click(container.querySelectorAll<HTMLButtonElement>(".cs-tab")[1]!);
       const card = container.querySelector(".government-army")!;
       expect(card.querySelectorAll(".government-projects-head")).toHaveLength(0);
-      expect(card.querySelector(".government-army-holdings, .government-army-parties, .government-army-sea, .government-army-orders, .government-army-reports")).toBeNull();
+      expect(card.querySelector(".government-army-holdings, .government-army-parties, .government-army-sea, .government-army-orders, .government-army-reports, .government-army-sightings")).toBeNull();
       expect(card.querySelectorAll(".government-army-towns li")).toHaveLength(4);
       cleanup();
       vi.restoreAllMocks();

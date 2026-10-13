@@ -37,6 +37,14 @@ export function orderLine(o: GovernmentArmyOrder): string {
   const supplies = o.suppliesCost > 0 ? ` · naval supplies ${o.suppliesCost.toLocaleString()} dr` : "";
   return `${o.by}, ${seat} · ${ORDER_WORDS[o.kind]} ${o.to} from ${o.from} · ${leagueUnitsLine(o.units)}${supplies} · ${o.dateLabel}`;
 }
+// What the League last saw of a place: "Aleria · garrison 150 · 4 pentekonters,
+// 4 triremes · Winter, 300 BC", "Salyes · warband 100 · Winter, 300 BC".
+type Sighting = NonNullable<GovernmentArmyView["sightings"]>[number];
+export function sightingLine(s: Sighting): string {
+  if (!s.town) return `${s.name} · warband ${s.men.toLocaleString()} · ${s.asOf}`;
+  const ships = [s.pentekonters > 0 ? hulls(s.pentekonters, "pentekonter") : null, s.triremes > 0 ? hulls(s.triremes, "trireme") : null].filter(Boolean).join(", ") || "no ships";
+  return `${s.name} · garrison ${s.men.toLocaleString()} · ${ships} · ${s.asOf}`;
+}
 type AtSea = NonNullable<GovernmentArmyView["fleet"]["atSea"]>[number];
 // "2 pentekonters", "2 pentekonters, 1 trireme".
 const hullsAtSea = (v: AtSea) => [v.pentekonters > 0 ? hulls(v.pentekonters, "pentekonter") : null, v.triremes > 0 ? hulls(v.triremes, "trireme") : null].filter(Boolean).join(", ");
@@ -66,6 +74,7 @@ export function GovernmentView({ view, onRefresh }: { view: MemberView; onRefres
   const atSea = view.army?.fleet.atSea ?? [];
   const orders = view.army?.orders ?? [];
   const reports = view.army?.reports ?? [];
+  const sightings = view.army?.sightings ?? [];
   return (
     <div className="pol-page">
       <DashboardCard className="treasury-card government-seats">
@@ -186,6 +195,17 @@ export function GovernmentView({ view, onRefresh }: { view: MemberView; onRefres
                 <ul className="treasury-ledger government-army-reports">
                   {reports.map((r) => (
                     <li key={r.id}>{r.line} · {r.dateLabel}</li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+            {/* What the League's parties last saw: the League's alone, for every member (ruling 1 at STOP 1). */}
+            {sightings.length > 0 ? (
+              <>
+                <p className="government-projects-head">Sightings</p>
+                <ul className="treasury-ledger government-army-sightings">
+                  {sightings.map((s) => (
+                    <li key={s.id}>{sightingLine(s)}</li>
                   ))}
                 </ul>
               </>
