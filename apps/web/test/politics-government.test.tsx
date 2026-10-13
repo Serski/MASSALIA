@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, type AgendaScopeView, type AgendaView, type GovernmentProjectView, type GovernmentView } from "../src/api.js";
@@ -283,11 +286,18 @@ describe("the Government tab", () => {
     expect(card.previousElementSibling!.className).toContain("government-projects");
   });
 
+  it("the card's words \"a quarter drachma a man\" hold only while league-army.json's upkeep is 0.25 a man a season", () => {
+    // The phrase is written out on the card; the rate is content. If this fails,
+    // the content moved: change the card's words with it.
+    const content = JSON.parse(readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../../content/military/league-army.json"), "utf8")) as { upkeepPerManPerSeason: number };
+    expect(content.upkeepPerManPerSeason).toBe(0.25);
+  });
+
   it("once men have deserted the army card says how many and when; a view without an army, as an old server sends it, shows no card", async () => {
     const deserted = { ...ARMY, men: 400, upkeepPerSeason: 100, fleet: { at: "Massalia", pentekonters: 1, triremes: 1 }, lastDesertion: { men: 1650, label: "Winter, 293 BC" } };
     const { container } = await mount({ ...member([{ office: "archon", side: "palaioi" }], scope("league", { phase: "voting" })), army: deserted });
     fireEvent.click(container.querySelectorAll<HTMLButtonElement>(".cs-tab")[1]!);
-    expect(text(container, ".government-army-desertion")).toBe("Deserted for want of pay: 1,650 men, Winter, 293 BC");
+    expect(text(container, ".government-army-desertion")).toBe("Deserted for want of pay: 1,650 men · Winter, 293 BC");
     expect(text(container, ".government-army-upkeep")).toBe("Upkeep: 100 drachmae a season, a quarter drachma a man, paid by the treasury");
     expect(text(container, ".government-army-fleet")).toBe("The fleet at Massalia: 1 pentekonter, 1 trireme");
     cleanup();

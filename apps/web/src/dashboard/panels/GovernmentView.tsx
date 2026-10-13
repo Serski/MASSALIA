@@ -99,9 +99,10 @@ export function GovernmentView({ view, onRefresh }: { view: MemberView; onRefres
               ))}
             </ul>
             <p className="government-army-fleet">The fleet at {view.army.fleet.at}: {hulls(view.army.fleet.pentekonters, "pentekonter")}, {hulls(view.army.fleet.triremes, "trireme")}</p>
+            {/* "a quarter drachma a man" is league-army.json's upkeepPerManPerSeason, 0.25; a render test fails if the content moves. */}
             <p className="government-army-upkeep">Upkeep: {view.army.upkeepPerSeason.toLocaleString()} drachmae a season, a quarter drachma a man, paid by the treasury</p>
             {view.army.lastDesertion ? (
-              <p className="government-army-desertion">Deserted for want of pay: {menLabel(view.army.lastDesertion.men)}, {view.army.lastDesertion.label}</p>
+              <p className="government-army-desertion">Deserted for want of pay: {menLabel(view.army.lastDesertion.men)} · {view.army.lastDesertion.label}</p>
             ) : null}
           </div>
         </DashboardCard>
