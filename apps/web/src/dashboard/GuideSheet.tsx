@@ -6,7 +6,7 @@ import { GUIDE_CLOSER, GUIDE_FRAMING, GUIDE_READING, GUIDE_SECTIONS, GUIDE_TABS,
 // The always-available in-game Guide. Lazy-loaded (see Dashboard) and opened via the
 // shared activeSheet mechanism; the BottomSheet shell supplies Esc / backdrop / close
 // / focus-trap, matching the other sheets. All copy comes from the shared guide module:
-// it reprises the onboarding overlay's blocks, then adds the four longer sections.
+// it reprises the onboarding overlay's blocks, then adds the longer sections.
 
 export default function GuideSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (

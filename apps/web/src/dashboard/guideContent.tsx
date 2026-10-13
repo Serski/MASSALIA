@@ -114,4 +114,109 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       "Two parties contest the city: the PALAIOI, keepers of the old ways, and the DYNATOI, men of the new. Join one and build favor. The Archons and Ephors are elected — declare, campaign, win the vote, take office; the Strategoi are appointed. The wealthy may buy a seat among the Three Hundred. A party's for-life leaders may stand for the city's offices too. The unfree have no voice until freedom.",
     ],
   },
+  // A reference entry, plain on purpose. Every number in it comes from
+  // content/politics/interactions.json (and the poisoned trait); the examples
+  // are worked from the same file. apps/web/test/guide-intrigue.test.tsx reads
+  // the content and recomputes each of them, so the words cannot drift from it.
+  {
+    id: "intrigue",
+    title: "Poison & Assassination",
+    paragraphs: [
+      "A citizen with a seat among the Three Hundred can strike at another citizen in two ways: poison and assassination. Both are on the target's profile, which opens from the chamber or the standings.",
+    ],
+    blocks: [
+      { kind: "heading", text: "Who can strike, and at whom" },
+      {
+        kind: "list",
+        items: [
+          "You need a seat among the Three Hundred.",
+          "The target must be alive and have at least 10 prestige. Below that the action is locked: \"Target lacks standing.\"",
+          "You cannot strike at yourself.",
+        ],
+      },
+      {
+        kind: "table",
+        table: {
+          caption: "The two actions",
+          columns: ["", "Poison", "Assassination"],
+          rows: [
+            ["Cost", "1 vial of poison", "200 drachmae"],
+            ["If it fails", "The vial is still spent", "The drachmae are still paid"],
+            ["If it succeeds", "The target falls ill (6 in 10) or dies (4 in 10)", "The target dies"],
+            ["What the target learns", "The illness, if it works. Nothing at all, if it fails", "That a blade was turned aside, if it fails"],
+            ["Who struck", "Never told", "Never told"],
+          ],
+        },
+      },
+      { kind: "heading", text: "The chance of success" },
+      {
+        kind: "list",
+        items: [
+          "Poison starts at 50%. Assassination starts at 45%.",
+          "Each point of your Intelligence above the target's defense adds 2.5%. Each point below takes 2.5% away.",
+          "The chance is never below 5% and never above 95%.",
+          "A spymaster set to Hunt adds 10 to your Intelligence for your own attempts.",
+          "A spymaster holds one posture at a time, Guard or Hunt, and can change it once a day.",
+          "Intelligence and Militia count with the bonuses and penalties of traits.",
+          "You are never shown the chance. The standings rank citizens by Intelligence and Militia but show no numbers, and no one can see another citizen's physician, bodyguards or spymaster.",
+        ],
+      },
+      {
+        kind: "table",
+        table: {
+          caption: "What counts as defense",
+          columns: ["", "Against poison", "Against assassination"],
+          rows: [
+            ["Intelligence", "1 per point", "1 per point"],
+            ["Militia", "Nothing", "Half a point per point"],
+            ["Physician", "+15", "Nothing"],
+            ["Bodyguards", "Nothing", "+12 with one, +18 with two, +21 with three, never above +24"],
+            ["Spymaster set to Guard", "+10", "+10"],
+          ],
+        },
+      },
+      { kind: "text", text: "Poison and remedies are goods, bought at the Market. Physicians, bodyguards and spymasters are hired there, under People: one physician and one spymaster at most, bodyguards without limit." },
+      { kind: "heading", text: "Examples" },
+      { kind: "text", text: "In every example the attacker has Intelligence 60 and no spymaster." },
+      {
+        kind: "table",
+        table: {
+          caption: "Poison",
+          columns: ["Target", "Defense", "Chance", "Falls ill", "Dies"],
+          rows: [
+            ["Intelligence 35", "35", "95%", "57%", "38%"],
+            ["Intelligence 35, physician", "50", "75%", "45%", "30%"],
+            ["Intelligence 35, physician, spymaster on Guard", "60", "50%", "30%", "20%"],
+            ["Intelligence 55, physician, spymaster on Guard", "80", "5%", "3%", "2%"],
+          ],
+        },
+      },
+      {
+        kind: "table",
+        table: {
+          caption: "Assassination",
+          columns: ["Target", "Defense", "Chance"],
+          rows: [
+            ["Intelligence 30, Militia 0", "30", "95%"],
+            ["Intelligence 30, Militia 0, two bodyguards", "48", "75%"],
+            ["Intelligence 30, Militia 0, two bodyguards, spymaster on Guard", "58", "50%"],
+            ["Intelligence 30, Militia 40", "50", "70%"],
+            ["Intelligence 30, Militia 80", "70", "20%"],
+            ["Intelligence 30, Militia 100", "80", "5%"],
+          ],
+        },
+      },
+      { kind: "heading", text: "Afterwards" },
+      {
+        kind: "list",
+        items: [
+          "Illness: Militia −3, Intelligence −2 and Prestige −1. It does not pass on its own. The cure needs a physician in your household and spends one remedy.",
+          "Death: the house passes to the heir. The death is recorded as a poisoning or a murder, without a name.",
+          "The target's chronicle records an illness, a cure and a failed blade, each without a name. A failed poisoning leaves no trace.",
+          "The guard: after any attempt, successful or not, nobody can use poison or assassination on that citizen for one year (four days). A refused attempt costs nothing.",
+          "The one who struck sees the guard on the target's profile. Everyone else finds out only by trying.",
+        ],
+      },
+    ],
+  },
 ];
