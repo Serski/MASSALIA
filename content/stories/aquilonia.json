@@ -1,0 +1,61 @@
+{
+  "id": "aquilonia",
+  "version": 1,
+  "tree": {
+    "title": "News from Campania",
+    "start": "OPEN",
+    "nodes": [
+      {
+        "type": "scene",
+        "id": "OPEN",
+        "body": {
+          "paragraphs": [
+            "A Campanian grain ship is in, and her crew are shouting the news up the quay before the lines are fast: Rome has taken Samnium. The last Samnite army is broken, and the hill towns have opened their gates to the consuls.",
+            "Her master has found a bench at the wine-shop on the Lakydon, and he is telling it again to anyone who will stand him a cup."
+          ]
+        },
+        "image": "/stories/story-samnite-00-news.webp",
+        "choices": [
+          {
+            "id": "cup",
+            "text": "Buy him a cup",
+            "requires": { "drachmae": 1 },
+            "rewards": [{ "type": "change_drachmae", "amount": -1 }],
+            "next": "END"
+          },
+          {
+            "id": "walk",
+            "text": "Walk on",
+            "next": "END-walk"
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "id": "END",
+        "body": {
+          "paragraphs": [
+            "For the price of a cup you get all of it. The Samnites swore their best men in a camp walled with linen, under an oath of death for any who ran: sixteen thousand of them, all in white. The consul Papirius met them at Aquilonia. His keeper of the sacred chickens lied about the omens, so Papirius put him in the front rank, and a Samnite javelin found him before the lines closed. The legions took it for a sign. The linen legion broke, Aquilonia fell that evening, and the other consul, Carvilius, took Cominium the same day.",
+            "Before the jug is empty he has news from Greece as well, though he swears to less of it. The Boeotians have risen against Demetrius the Besieger, King of Macedon now, and the Aetolians and the Spartans are said to have sent them help.",
+            "On the quay they drink to Rome, Massalia's old friend."
+          ]
+        },
+        "image": "/stories/story-samnite-01-wine.webp",
+        "rewards": [],
+        "chronicle": [
+          "A Campanian crew brought word up the Lakydon that Rome had taken Samnium."
+        ]
+      },
+      {
+        "type": "terminal",
+        "id": "END-walk",
+        "body": {
+          "paragraphs": [
+            "You leave him to his listeners. By evening the whole quay has Rome at the gates of every town between Campania and the Adriatic."
+          ]
+        },
+        "rewards": []
+      }
+    ]
+  }
+}

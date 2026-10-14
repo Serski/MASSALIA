@@ -87,6 +87,8 @@ export const STORY_TRIGGERS: Record<string, StoryTrigger> = {
   "samnite-war": { kind: "dated", date: { yearBC: 298, season: 2 } },
   // Summer 295 BC only (seasonIndex 22, the twenty-third day of a world's run), every class.
   "sentinum": { kind: "dated", date: { yearBC: 295, season: 3 } },
+  // Summer 293 BC only (seasonIndex 30, the thirty-first day of a world's run), every class.
+  "aquilonia": { kind: "dated", date: { yearBC: 293, season: 3 } },
   // No opening date: every Landowner at once, and a new one from his first day.
   "tenth-short": { kind: "class", classId: "landowner" },
   // No opening date: every Hoplite at once, and a new one from his first day.

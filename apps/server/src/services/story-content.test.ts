@@ -786,4 +786,18 @@ suite("loadStories seed (integration)", () => {
       date: { yearBC: 295, season: 3 },
     });
   });
+
+  it("35. News from Campania is seeded, and its trigger offers it to every class in Summer 293 BC only", async () => {
+    await m.story.loadStories();
+
+    const rows = await db.select().from(m.dbPkg.stories).where(eq(m.dbPkg.stories.id, "aquilonia"));
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.version).toBe(1);
+    expect((rows[0]!.tree as { nodes: unknown[] }).nodes.length).toBe(3);
+
+    expect(m.story.STORY_TRIGGERS["aquilonia"]).toEqual({
+      kind: "dated",
+      date: { yearBC: 293, season: 3 },
+    });
+  });
 });
