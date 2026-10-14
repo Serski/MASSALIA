@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, type BarracksReport, type BarracksRosterRow, type BarracksView, type KoinonMusterReport, type MapActReport } from "../src/api.js";
+import { api, type BarracksReport, type BarracksRosterRow, type BarracksView, type BaseView, type KoinonMusterReport, type MapActReport } from "../src/api.js";
 import BarracksPanel, { countText } from "../src/dashboard/panels/BarracksPanel.js";
 
 // ---------------------------------------------------------------------------
@@ -63,7 +63,8 @@ afterEach(() => {
 });
 
 // `then`: what the second /api/barracks read answers (the refetch a timer at zero asks for).
-async function mount(view: BarracksView, then?: BarracksView) {
+// `bases`: what the reach names the places (Massalia, a home town and a holding of the player's, by default).
+async function mount(view: BarracksView, then?: BarracksView, bases?: BaseView[]) {
   hookWarnings = [];
   // The names file the mission lines read (restoreAllMocks clears it after each test).
   vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ version: 1, names: { R060: "Massalia", R046: "Salyes" } }), { status: 200, headers: { "content-type": "application/json" } }));
@@ -75,7 +76,7 @@ async function mount(view: BarracksView, then?: BarracksView) {
   barracks.mockResolvedValueOnce(view);
   vi.spyOn(api, "mapReach").mockResolvedValue({
     now: iso(NOW), campaign: { season: "Spring", open: true, opensAt: null }, force: { men: 0, space: 0 }, fleet: { ships: {}, range: 0, space: 0 }, reach: {}, moveTargets: [],
-    bases: [
+    bases: bases ?? [
       { id: "R060", regionId: "R060", townId: null, kind: "massalia", name: "Massalia", holding: null },
       { id: "nikaia", regionId: "R059", townId: "nikaia", kind: "home", name: "Nikaia", holding: null },
       { id: "R046", regionId: "R046", townId: null, kind: "conquest", name: "Salyes", holding: null },
@@ -439,6 +440,26 @@ describe("BarracksPanel", () => {
     expect(card.textContent).toContain("Short of 2 timber.");
     expect(hookWarnings).toEqual([]);
   });
+  // Holdings prompt 3: another house's holding where the player's men stand comes after his own holdings.
+  it("At Home lists another house's holding where his men stand after his own holdings, and before home ground", async () => {
+    const bases: BaseView[] = [
+      { id: "R060", regionId: "R060", townId: null, kind: "massalia", name: "Massalia", holding: null },
+      { id: "nikaia", regionId: "R059", townId: "nikaia", kind: "home", name: "Nikaia", holding: null },
+      { id: "reii", regionId: "R047", townId: "reii", kind: "guest", name: "Reii", holding: null },
+      { id: "R046", regionId: "R046", townId: null, kind: "conquest", name: "Salyes", holding: null },
+    ];
+    const roster = [
+      row({ id: "nikaia-peltasts", count: 20, basedAt: "nikaia" }),
+      row({ id: "reii-peltasts", count: 30, basedAt: "reii" }),
+      row({ id: "salyes-hoplites", unitId: "hoplite", label: "Hoplite", plural: "Hoplites", count: 84, startCount: 84, basedAt: "R046" }),
+      homeLevy,
+    ];
+    const { container } = await mount(payload({ roster, places: { R060: "Massalia", R046: "Salyes", nikaia: "Nikaia", reii: "Reii" } }), undefined, bases);
+    const places = [...container.querySelectorAll('[data-section="home"] .barracks-place')];
+    expect(places.map((p) => p.getAttribute("data-place"))).toEqual(["R060", "R046", "reii", "nikaia"]);
+    expect(places.map((p) => p.querySelector(".barracks-place-head")!.textContent)).toEqual(["Massalia · 26 men", "Salyes · 84 men", "Reii · 30 men", "Nikaia · 20 men"]);
+  });
+
   it("At Home groups rows by place — Massalia first, then holdings, then home ground — with the Levy and Mercenaries split and the Fleet under Massalia", async () => {
     const roster = [
       homeLevy,

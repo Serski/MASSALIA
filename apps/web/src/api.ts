@@ -1936,7 +1936,8 @@ export type ReachEntry = {
 // town or a home town), `regionId` the region it stands in. A holding carries what
 // it pays: the men standing there against the minimum its tribute needs, the
 // tribute a day, and the levy it adds a year (regions only).
-export type BaseKind = "massalia" | "colony" | "conquest" | "home";
+// "guest": another house's holding where the player's men stand (holdings prompt 3); its holding is always null.
+export type BaseKind = "massalia" | "colony" | "conquest" | "home" | "guest";
 export type HoldingView = { garrison: number; minGarrison: number; perDay: { drachmae: number; grain: number; timber: number }; levyPerYear: number };
 export type BaseView = { id: string; regionId: string; townId: string | null; kind: BaseKind; name: string; holding: HoldingView | null };
 // A place the player may move men to, with the steps from each base (by base id).

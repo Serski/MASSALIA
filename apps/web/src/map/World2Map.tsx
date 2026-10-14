@@ -1337,8 +1337,11 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   // "Your men here: 20 hoplites" on a place of ours, "Your garrison" on a held region.
   const menLabel = selectedTown || !selectedHeld ? `${whose} men here` : `${whose} garrison`;
   const yourMenHere = yourMenLine?.replace(`${whose} garrison`, menLabel) ?? null;
-  // SEND MEN HERE replaces the attack row on any place the player may move men to.
+  // SEND MEN HERE replaces the attack row on any place the player may move men
+  // to, except another house's holding (holdings prompt 3): there it stands
+  // beside the action row, which keeps its holder's refusals.
   const moveTargetHere = placeId ? moveTargetById.get(placeId) ?? null : null;
+  const sendMenBeside = moveTargetHere?.kind === "guest";
   const sendMenHere = moveTargetHere ? (
     <div className="w2map-actions">
       <button type="button" className="w2map-action w2map-action-move" onClick={() => openPicker("move", { kind: moveTargetHere.townId ? "town" : "region", id: moveTargetHere.id, regionId: moveTargetHere.regionId, name: moveTargetHere.name })}>
@@ -1407,7 +1410,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
             {selectedHeld ? <p className="w2map-held">{heldLine(heldRegions.get(selectedProvince.id) ?? null) ?? (league ? "Held by the League." : "Held by your house — a base for your forces.")}</p> : null}
             {!selectedHeld && regionHolderOther ? <p className="w2map-held">{holderLine(regionHolderOther)}</p> : null}
             {sendMenHere || selectedProvince.towns.length === 0 ? <div className="w2map-info-label">Actions</div> : null}
-            {sendMenHere ?? (selectedProvince.towns.length > 0 ? null : (
+            {sendMenHere && !sendMenBeside ? sendMenHere : (selectedProvince.towns.length > 0 ? null : (
               <div className="w2map-actions">
                 {regionActions!.buttons.map((b) => (
                   <button
@@ -1424,7 +1427,8 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
                 ))}
               </div>
             ))}
-            {!sendMenHere && selectedProvince.towns.length === 0 && isMobile && regionActions!.caption ? <p className="w2map-action-why">{regionActions!.caption}</p> : null}
+            {sendMenBeside ? sendMenHere : null}
+            {(!sendMenHere || sendMenBeside) && selectedProvince.towns.length === 0 && isMobile && regionActions!.caption ? <p className="w2map-action-why">{regionActions!.caption}</p> : null}
           </>
         ) : null}
       </div>
@@ -1449,6 +1453,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
       yourMen={yourMenHere}
       actions={townActions!}
       canSendMen={sendMenHere !== null}
+      sendMenBeside={sendMenBeside}
       isMobile={isMobile}
       onClose={closeInfo}
       onBack={() => setSelectedTown(null)}
@@ -1666,6 +1671,7 @@ export function TownPanel({
   yourMen,
   actions,
   canSendMen,
+  sendMenBeside = false,
   isMobile,
   onClose,
   onBack,
@@ -1688,6 +1694,8 @@ export function TownPanel({
   yourMen: string | null;
   actions: { buttons: MapActionButton[]; caption: string | null };
   canSendMen: boolean;
+  /** another house's holding (holdings prompt 3): SEND MEN HERE stands beside the action row instead of replacing it */
+  sendMenBeside?: boolean;
   isMobile: boolean;
   onClose: () => void;
   onBack: () => void;
@@ -1740,7 +1748,7 @@ export function TownPanel({
         {yourMen ? <p className="w2map-your-men">{yourMen}</p> : null}
         {held ? <p className="w2map-held">{holdingLine(held, league)}</p> : holder ? <p className="w2map-held">{holderLine(holder)}</p> : null}
         <div className="w2map-info-label">Actions</div>
-        {canSendMen ? (
+        {canSendMen && !sendMenBeside ? (
           <div className="w2map-actions">
             <button type="button" className="w2map-action w2map-action-move" onClick={onSendMen}>Send men here</button>
           </div>
@@ -1761,7 +1769,12 @@ export function TownPanel({
             ))}
           </div>
         )}
-        {!canSendMen && isMobile && actions.caption ? <p className="w2map-action-why">{actions.caption}</p> : null}
+        {canSendMen && sendMenBeside ? (
+          <div className="w2map-actions">
+            <button type="button" className="w2map-action w2map-action-move" onClick={onSendMen}>Send men here</button>
+          </div>
+        ) : null}
+        {(!canSendMen || sendMenBeside) && isMobile && actions.caption ? <p className="w2map-action-why">{actions.caption}</p> : null}
       </div>
     </>
   );
@@ -1882,7 +1895,7 @@ export function ForcePicker({
   const baseVerdict = (baseId: string): { ok: boolean; reason?: string } => {
     if (isMove && baseId === destId) return { ok: false, reason: "The men already stand there." };
     const steps = stepsFrom(baseId);
-    if (!steps) return { ok: false, reason: isMove ? "Men may only be sent to Massalia's own ground or a holding of yours." : "That land cannot be reached." };
+    if (!steps) return { ok: false, reason: isMove ? "Men may only be sent to Massalia's own ground or to a house's holding." : "That land cannot be reached." };
     return verdictOf(steps, forceStats([{ spd: FAST_SPD, space: 1, count: 1 }]));
   };
 

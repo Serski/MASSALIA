@@ -786,15 +786,17 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
   // The ships in port, listed under Massalia (their only place on the panel);
   // ships at sea are listed under Away · Returning, one row per sailing.
   const fleetShips = view.fleet?.ships ?? [];
-  // At Home by place: Massalia first, then holdings, then home ground, then
-  // anything the reach payload did not name; only places with men (Massalia
-  // also with ships alone, since the fleet lies there).
+  // At Home by place: Massalia first, then the house's own holdings, then
+  // another house's holdings where its men stand (holdings prompt 3), then home
+  // ground, then anything the reach payload did not name; only places with men
+  // (Massalia also with ships alone, since the fleet lies there).
   const rank = (id: string) => {
     const b = bases.find((x) => x.id === id);
     if (b?.kind === "massalia") return 0;
     if (b?.kind === "colony" || b?.kind === "conquest") return 1;
-    if (b?.kind === "home") return 2;
-    return 3;
+    if (b?.kind === "guest") return 2;
+    if (b?.kind === "home") return 3;
+    return 4;
   };
   const massaliaId = bases.find((b) => b.kind === "massalia")?.id ?? home[0]?.basedAt ?? "R060";
   const placeIds = [...new Set([massaliaId, ...home.map((r) => r.basedAt)])].filter((id) => id === massaliaId ? home.some((r) => r.basedAt === id) || fleetShips.length > 0 : true);
