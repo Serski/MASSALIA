@@ -487,7 +487,7 @@ suite("the League's orders (integration)", () => {
     // men are not sent to a League holding (taken this instant, so no tribute is yet due).
     await m.holdings.insertTownConquest(db, lctx, "R047", "reii", "saluvii", at(9));
     await db.insert(m.dbPkg.playerUnits).values({ worldId, ownerPlayerId: leagueId, source: "trained", unitId: "hoplite", count: 30, startCount: 30, recruitedSeason: 0, readyAt: at(0), basedAt: "reii", createdAt: at(8) });
-    expect(await m.actions.move(own, { baseId: "reii", rows: [{ rowId: mine.id, count: 40 }] }, at(9))).toEqual({ ok: false, code: 409, error: "Men may only be sent to Massalia's own ground or a holding of yours." });
+    expect(await m.actions.move(own, { baseId: "reii", rows: [{ rowId: mine.id, count: 40 }] }, at(9))).toEqual({ ok: false, code: 409, error: "Men may only be sent to Massalia's own ground or to a house's holding." });
     await m.holdings.insertConquest(db, own, "R046", "unclaimed", at(8));
     expect(await m.actions.move(lctx, { baseId: "R046", rows: [{ rowId: leagues.id, count: 40 }] }, at(9))).toEqual({ ok: false, code: 409, error: "The League's men move only between its towns and its holdings." });
 

@@ -365,14 +365,15 @@ suite("Barracks (integration)", () => {
       await giveAll(ctx, { grain: 100, oliveoil: 100 });
       const landed = await insertRow(ctx, { source: "trained", unitId: "hoplite", count: 5, recruitedSeason: 7, readyAt: 9, createdSeason: 9 });
       const flying = await insertRow(ctx, { source: "trained", unitId: "peltast", count: 5, recruitedSeason: 7, readyAt: 9, createdSeason: 9 });
-      await db.update(m.dbPkg.playerUnits).set({ movingTo: "R046", arrivesAt: at(9.5) }).where(eq(m.dbPkg.playerUnits.id, landed.id));
-      await db.update(m.dbPkg.playerUnits).set({ movingTo: "R047", arrivesAt: at(10.5) }).where(eq(m.dbPkg.playerUnits.id, flying.id));
+      // Both bound for places a house may stand in (holdings prompt 3): Agathe and Arelate, home towns.
+      await db.update(m.dbPkg.playerUnits).set({ movingTo: "agathe", arrivesAt: at(9.5) }).where(eq(m.dbPkg.playerUnits.id, landed.id));
+      await db.update(m.dbPkg.playerUnits).set({ movingTo: "arelate", arrivesAt: at(10.5) }).where(eq(m.dbPkg.playerUnits.id, flying.id));
       const s = await settle(ctx, 10);
       expect(s.arrived.map((a) => a.rowId)).toEqual([landed.id]);
       const after = await rows(ctx);
-      expect(after.find((r) => r.id === landed.id)).toMatchObject({ basedAt: "R046", movingTo: null, arrivesAt: null });
-      expect(after.find((r) => r.id === flying.id)).toMatchObject({ basedAt: "R060", movingTo: "R047", arrivesAt: at(10.5) });
-      expect((await logs(characterId, "barracks_arrive")).map((e) => e.detail)).toEqual([{ unitId: "hoplite", count: 5, from: "R060", to: "R046", source: "barracks" }]);
+      expect(after.find((r) => r.id === landed.id)).toMatchObject({ basedAt: "agathe", movingTo: null, arrivesAt: null });
+      expect(after.find((r) => r.id === flying.id)).toMatchObject({ basedAt: "R060", movingTo: "arelate", arrivesAt: at(10.5) });
+      expect((await logs(characterId, "barracks_arrive")).map((e) => e.detail)).toEqual([{ unitId: "hoplite", count: 5, from: "R060", to: "agathe", source: "barracks" }]);
     });
 
     it("a short stock with more precision than a double drains to exactly zero instead of failing the settle (the production 500)", async () => {

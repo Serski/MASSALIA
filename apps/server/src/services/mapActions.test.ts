@@ -1262,8 +1262,8 @@ suite("Map actions (integration)", () => {
   it("move refusals: a foreign region, the men's own base, a second base in the selection, and a sea crossing short of hulls", async () => {
     const { ctx } = await makePlayer();
     const peltasts = await insertRow(ctx, { unitId: "peltast", count: 40 });
-    expect(await moveTo(ctx, "R047", [peltasts.id])).toMatchObject({ ok: false, code: 409, error: "Men may only be sent to Massalia's own ground or a holding of yours." });
-    expect(await moveTo(ctx, "reii", [peltasts.id])).toMatchObject({ ok: false, code: 409, error: "Men may only be sent to Massalia's own ground or a holding of yours." });
+    expect(await moveTo(ctx, "R047", [peltasts.id])).toMatchObject({ ok: false, code: 409, error: "Men may only be sent to Massalia's own ground or to a house's holding." });
+    expect(await moveTo(ctx, "reii", [peltasts.id])).toMatchObject({ ok: false, code: 409, error: "Men may only be sent to Massalia's own ground or to a house's holding." });
     expect(await moveTo(ctx, "R060", [peltasts.id])).toMatchObject({ ok: false, code: 409, error: "The men already stand there." });
     // Emporion (R065): four land steps, one sea; 40 space on one trade-ship's 20.
     await give(ctx, "trade-ship", 1);

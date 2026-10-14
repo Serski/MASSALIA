@@ -903,7 +903,7 @@ export async function move(ctx: ActingContext, input: MapMoveInput, now: Date): 
     // 2. The destination: a place the player may station men, with its steps from the base.
     const view = await reachView(tx, ctx, now, { rows, bases: [base] });
     const target = view.moveTargets.find((t) => t.id === input.baseId);
-    if (!target) return fail(409, league ? LEAGUE_MOVE_REFUSAL : "Men may only be sent to Massalia's own ground or a holding of yours.");
+    if (!target) return fail(409, league ? LEAGUE_MOVE_REFUSAL : "Men may only be sent to Massalia's own ground or to a house's holding.");
     const steps = target.byBase[base];
     if (!steps) return fail(409, "That base is not yours.");
     const verdict = moveVerdict(steps, view.force, { range: view.fleet.range, space: view.fleet.space });

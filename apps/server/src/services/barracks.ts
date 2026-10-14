@@ -5,6 +5,7 @@ import { and, asc, desc, eq, gte, isNull, lte, or, sql, inArray } from "drizzle-
 import { bandOffers, createDb, effectLog, koinonMembers, koinonMusterParts, koinonMusters, leagueMoraleAt, playerCharacters, playerLevy, playerMarches, playerUnits, players, playerVoyages, resources, type MarchKind, type UnitMission, type VoyageKind } from "@massalia/db";
 import {
   bandDef,
+  distancesFrom,
   formatGameDate,
   gameDate,
   goodCategoryFor,
@@ -15,18 +16,21 @@ import {
   seasonAt,
   seasonIndexAt,
   seededRoll,
+  stepsTo,
   unitDef,
   vendorUnitPrice,
   wholeDaysBetween,
   type BandsContent,
   type BattleContent,
+  type ReachShip,
   type ShipsContent,
   type UnitsContent,
- type ReachShip } from "@massalia/shared";
+} from "@massalia/shared";
 import { getBuildingsContent, settleAll, type ActingContext } from "./buildings.js";
 import { applyComposureDelta } from "./composure.js";
 import { lockPlayer } from "./lock.js";
 import { getTopology } from "./mapGraph.js";
+import { housePlaces } from "./mapReach.js";
 import { heldGarrisonedRegions, settleHoldings, settleTribute, type HoldingsSettle, type TributeSettle } from "./holdings.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
 import type { MapActReport } from "./mapActions.js";
@@ -345,6 +349,7 @@ export async function offersFor(exec: Exec, ctx: ActingContext, season: number):
 // roll for renewal.
 
 export type BarracksDisband = { rowId: string; unitId: string; source: "trained" | "band"; count: number };
+export type BarracksTurnHome = { rowId: string; unitId: string; count: number; from: string; arrivesAt: string };
 export type BarracksMerge = { rowId: string; unitId: string; basedAt: string; from: string[]; count: number }; // rowId survives, `from` were deleted
 export type BarracksSettle = {
   days: number;
@@ -359,12 +364,13 @@ export type BarracksSettle = {
   departed: BarracksDisband[]; // band rows whose contract ended without renewal
   arrived: BarracksDisband[]; // rows whose relocation completed (now based at moving_to)
   merged: BarracksMerge[]; // same-unit trained rows folded into one at a base
+  turnedHome: BarracksTurnHome[]; // rows sent back to the Massalia region from a place they may not stand in (holdings prompt 3)
   tribute: TributeSettle; // what held towns and regions paid this settle
   holdings: HoldingsSettle; // holdings that reverted for want of a garrison
   shipsHome: { voyageId: string; ships: Record<string, number> }[]; // voyages whose hulls came back to stock this settle, by returns_at then id
 };
 
-const emptySettle = (): BarracksSettle => ({ days: 0, drachmaeDirect: 0, purchases: 0, cost: 0, owed: 0, drawn: {}, bought: {}, insolvent: [], renewed: [], departed: [], arrived: [], merged: [], holdings: { reverted: [] }, tribute: { paid: [] }, shipsHome: [] });
+const emptySettle = (): BarracksSettle => ({ days: 0, drachmaeDirect: 0, purchases: 0, cost: 0, owed: 0, drawn: {}, bought: {}, insolvent: [], renewed: [], departed: [], arrived: [], merged: [], turnedHome: [], holdings: { reverted: [] }, tribute: { paid: [] }, shipsHome: [] });
 
 // --- Hulls at sea (raids prompt 3) ------------------------------------------------
 // The ships that carry men leave their owner's stock when the party sets out
@@ -593,6 +599,36 @@ function nextInsolvencyVictim(live: UnitRow[], chargeable: (r: UnitRow) => boole
   return trained[0] ?? null;
 }
 
+// Holdings prompt 3, rule 4: men in a place their house may no longer stand in
+// turn for the Massalia region from there. They reach it after as long as a
+// move from that place takes (battle.json's move block: within the region, one
+// land step, or the seas between), and need no ships and no naval supplies.
+// `from` is where they are, `at` when they turn: a row on the road turns at its
+// arrival, a row standing at the settle. If they would already be home by
+// `now`, they stand in the Massalia region. One effect_log row each.
+function turnHomeMinutes(placeId: string): number {
+  const t = getTopology();
+  const move = getBattleContent().move;
+  const region = t.townRegion.get(placeId) ?? placeId;
+  if (region === t.massaliaRegion) return move.minutesWithinRegion;
+  const steps = stepsTo(t, distancesFrom(t, region), t.massaliaRegion);
+  if (steps.landSteps !== null) return Math.max(1, steps.landSteps) * move.minutesPerStep;
+  if (steps.seaSteps !== null) return steps.seaSteps * move.minutesPerStep;
+  return move.minutesPerStep;
+}
+async function turnHome(exec: Exec, characterId: string, r: UnitRow, from: string, at: Date, now: Date, out: BarracksSettle): Promise<void> {
+  const massalia = getTopology().massaliaRegion;
+  const home = new Date(at.getTime() + turnHomeMinutes(from) * 60_000);
+  if (home.getTime() <= now.getTime()) {
+    await exec.update(playerUnits).set({ basedAt: massalia, movingTo: null, arrivesAt: null, mission: null }).where(eq(playerUnits.id, r.id));
+  } else {
+    const mission: UnitMission = { kind: "move", regionId: massalia, departedAt: at.toISOString() };
+    await exec.update(playerUnits).set({ basedAt: from, movingTo: massalia, arrivesAt: home, mission }).where(eq(playerUnits.id, r.id));
+  }
+  await logEffect(exec, characterId, "barracks_turn_home", { unitId: r.unitId, count: r.count, from, to: massalia, arrivesAt: home.toISOString(), reason: "not_a_base", source: "barracks" }, at.getTime() <= now.getTime() ? now : at);
+  out.turnedHome.push({ rowId: r.id, unitId: r.unitId, count: r.count, from, arrivesAt: home.toISOString() });
+}
+
 export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date): Promise<BarracksSettle> {
   const unitsC = getUnitsContent();
   const bandsC = getBandsContent();
@@ -811,12 +847,33 @@ export async function settleBarracks(exec: Exec, ctx: ActingContext, now: Date):
   // arrival (resolveMarch), and one carrying a muster (the koinon's army on
   // its way out, raids prompt 5) by the army's arrival (resolveMuster), never
   // by the settle. A pledged row never gets here: it stands still.
+  // A row whose place is no longer one this house may stand in (a holding that
+  // reverted while it was on the road, its own or another house's) does not
+  // land there: it turns for the Massalia region from there (holdings prompt 3,
+  // rule 4).
+  const mayStand = new Set((await housePlaces(exec, ctx)).map((p) => p.id));
+  const massalia = getTopology().massaliaRegion;
   for (const r of rows) {
     if (r.movingTo === null || r.arrivesAt === null || r.arrivesAt.getTime() > now.getTime()) continue;
     if (r.mission?.marchId || r.mission?.musterId) continue;
+    if (!mayStand.has(r.movingTo)) {
+      await turnHome(exec, characterId, r, r.movingTo, r.arrivesAt, now, out);
+      continue;
+    }
     await exec.update(playerUnits).set({ basedAt: r.movingTo, movingTo: null, arrivesAt: null, mission: null }).where(eq(playerUnits.id, r.id));
     await logEffect(exec, characterId, "barracks_arrive", { unitId: r.unitId, count: r.count, from: r.basedAt, to: r.movingTo, source: "barracks" });
     out.arrived.push({ rowId: r.id, unitId: r.unitId, source: r.source, count: r.count });
+  }
+
+  // 6b''. Men standing in a place this house may no longer stand in (another
+  // house's holding that reverted, which its holder's settle saw first) turn
+  // for the Massalia region from now. Only this house's own rows: a settle
+  // never writes another player's. A row pledged to a muster stands where its
+  // muster gathers and is the muster's to release.
+  rows = await ownedUnitRows(exec, ctx);
+  for (const r of rows) {
+    if (r.movingTo !== null || isPledged(r) || r.basedAt === massalia || mayStand.has(r.basedAt)) continue;
+    await turnHome(exec, characterId, r, r.basedAt, now, now, out);
   }
 
   // 6b'. Merge. At each base every trained row of one unit that is ready and

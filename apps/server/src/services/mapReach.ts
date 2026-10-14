@@ -18,7 +18,7 @@ import {
 import { fleetInStock, getBandsContent, getBattleContent, getShipsContent, getUnitsContent, isActive, isPledged, type FleetStripView, type RosterView, type UnitRow } from "./barracks.js";
 export { fleetInStock };
 import type { ActingContext } from "./buildings.js";
-import { garrisonCount, holdingBaseId, listHoldings, tributeRateOf } from "./holdings.js";
+import { garrisonCount, holdingBaseId, listHoldings, listWorldHoldings, tributeRateOf } from "./holdings.js";
 import { isLeague, leagueBalance, leagueGateMap, leagueHomeTowns, leagueSightings, marketPrice, type LeagueContext, type LeagueSightings } from "./leagueOrders.js";
 import { getTopology } from "./mapGraph.js";
 import { loadMilitaryOwners } from "./mapMilitary.js";
@@ -46,8 +46,10 @@ export type Exec = DbTx | Db;
 // town holding or a home town); `regionId` is the region it stands in; `name`
 // the display name the client shows. A holding carries what it pays: the men
 // standing there against the minimum its tribute needs, the tribute a day,
-// and the levy it adds a year (regions only).
-export type BaseKind = "massalia" | "colony" | "conquest" | "home";
+// and the levy it adds a year (regions only). A "guest" base is another
+// house's holding where this house's men stand (holdings prompt 3): a base like
+// a home place, with nothing of the holding's (its holding is null).
+export type BaseKind = "massalia" | "colony" | "conquest" | "home" | "guest";
 export type HoldingView = { garrison: number; minGarrison: number; perDay: { drachmae: number; grain: number; timber: number }; levyPerYear: number };
 export type BaseView = { id: string; regionId: string; townId: string | null; kind: BaseKind; name: string; holding: HoldingView | null };
 export type CampaignView = { season: string; open: boolean; opensAt: string | null };
@@ -143,8 +145,33 @@ export async function basesOf(exec: Exec, ctx: ActingContext, now: Date, rows?: 
   }
   if (league) return out;
   const standing = new Set((rows ?? (await ownedRows(exec, ctx))).filter((r) => isActive(r, now) && r.movingTo === null).map((r) => r.basedAt));
+  // Another house's holding where this house's men stand (holdings prompt 3):
+  // a base, after its own holdings, and nothing of the holding's is shown.
+  for (const g of await guestPlaces(exec, ctx)) if (standing.has(g.id)) out.push({ ...g, kind: "guest", name: await placeName(g.id, g.townId), holding: null });
   for (const p of await homePlaces(topology)) if (standing.has(p.id)) out.push({ ...p, kind: "home", name: await placeName(p.id, p.townId), holding: null });
   return out;
+}
+
+// Every other house's holding (holdings prompt 3): a holding is Massalia's land,
+// and any house may stand in it. Never the League's (its holdings are its army's
+// alone), and never this house's own, which it holds.
+export async function guestPlaces(exec: Exec, ctx: ActingContext): Promise<{ id: string; regionId: string; townId: string | null }[]> {
+  return (await listWorldHoldings(exec, ctx.worldId))
+    .filter((h) => !h.league && h.playerId !== ctx.playerId)
+    .map((h) => ({ id: h.townId || h.regionId, regionId: h.regionId, townId: h.townId || null }));
+}
+
+// The places a house may move its men to, and so the places they may stand
+// in: the Massalia region, every home place, its own holdings and every other
+// house's. The settle turns home any of its men standing anywhere else, or
+// arriving there (holdings prompt 3, rule 4).
+export async function housePlaces(exec: Exec, ctx: ActingContext): Promise<{ id: string; regionId: string; townId: string | null; kind: BaseKind }[]> {
+  const topology = getTopology();
+  const places: { id: string; regionId: string; townId: string | null; kind: BaseKind }[] = [{ id: topology.massaliaRegion, regionId: topology.massaliaRegion, townId: null, kind: "massalia" }];
+  for (const p of await homePlaces(topology)) places.push({ ...p, kind: "home" });
+  for (const h of await listHoldings(exec, ctx)) places.push({ id: holdingBaseId(h), regionId: h.regionId, townId: h.townId || null, kind: h.kind });
+  for (const g of await guestPlaces(exec, ctx)) places.push({ ...g, kind: "guest" });
+  return places;
 }
 
 // The steps from every base to a place, keyed by base id (bases in one region
@@ -166,15 +193,14 @@ function stepsByBase(topology: Topology, bases: BaseView[], regionId: string): R
 // Every place the player may move men to (ruling 10): the Massalia region,
 // every home place, and every holding — each with its steps from every base.
 export async function moveTargetsOf(topology: Topology, bases: BaseView[], ctx: ActingContext, exec: Exec): Promise<MoveTargetView[]> {
-  // A house: the Massalia region and every home place. The League: its ten
-  // home towns. Both: their own holdings.
+  // A house: housePlaces (the Massalia region, every home place, its own
+  // holdings and every other house's, holdings prompt 3). The League: its ten
+  // home towns and its own holdings, never a house's.
   const places: { id: string; regionId: string; townId: string | null; kind: BaseKind }[] = [];
-  if (isLeague(ctx)) for (const p of await leagueHomePlaces(topology)) places.push({ ...p, kind: "home" });
-  else {
-    places.push({ id: topology.massaliaRegion, regionId: topology.massaliaRegion, townId: null, kind: "massalia" });
-    for (const p of await homePlaces(topology)) places.push({ ...p, kind: "home" });
-  }
-  for (const h of await listHoldings(exec, ctx)) places.push({ id: holdingBaseId(h), regionId: h.regionId, townId: h.townId || null, kind: h.kind });
+  if (isLeague(ctx)) {
+    for (const p of await leagueHomePlaces(topology)) places.push({ ...p, kind: "home" });
+    for (const h of await listHoldings(exec, ctx)) places.push({ id: holdingBaseId(h), regionId: h.regionId, townId: h.townId || null, kind: h.kind });
+  } else places.push(...(await housePlaces(exec, ctx)));
   const out: MoveTargetView[] = [];
   for (const p of places) out.push({ ...p, name: await placeName(p.id, p.townId), byBase: stepsByBase(topology, bases, p.regionId) });
   return out;
