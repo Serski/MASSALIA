@@ -42,7 +42,7 @@
       { "office": "archon", "sides": ["palaioi", "dynatoi"] },
       { "office": "ephor", "sides": ["palaioi", "dynatoi"] }
     ],
-    "strategoi": { "count": 2, "crossPartyBalance": true },
+    "strategoi": { "count": 2, "crossPartyBalance": true, "militiaAbove": 40 },
     "campaign": { "drachmaeCost": 10, "favorGain": 3 }
   },
   "treasury": {

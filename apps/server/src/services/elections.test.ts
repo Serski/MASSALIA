@@ -39,14 +39,14 @@ suite("Archon & Ephor elections (integration)", () => {
   let worldId: string;
   let seatCursor = 110;
 
-  async function createCharacter(name: string, opts: { party?: string; prestige?: number; seat?: boolean; wasHoplite?: boolean } = {}) {
+  async function createCharacter(name: string, opts: { party?: string; prestige?: number; seat?: boolean; wasHoplite?: boolean; classId?: string; militia?: number; contractId?: string } = {}) {
     const { users, players, playerCharacters } = m.dbPkg;
     const user = (await db.insert(users).values({ email: `${name}-${Math.random().toString(36).slice(2)}@t`, passwordHash: "x" }).returning())[0]!;
     const player = (await db.insert(players).values({ worldId, userId: user.id, name, color: "#123456", houseSlug: "test-house" }).returning())[0]!;
     const character = (
       await db
         .insert(playerCharacters)
-        .values({ playerId: player.id, worldId, houseSlug: "test-house", classId: "trader", party: opts.party ?? "none", prestige: opts.prestige ?? 0, startAge: 30, deathAge: 90, wasHoplite: opts.wasHoplite ?? false })
+        .values({ playerId: player.id, worldId, houseSlug: "test-house", classId: opts.classId ?? "trader", party: opts.party ?? "none", prestige: opts.prestige ?? 0, militia: opts.militia ?? 0, contractId: opts.contractId ?? null, startAge: 30, deathAge: 90, wasHoplite: opts.wasHoplite ?? false })
         .returning()
     )[0]!;
     if (opts.seat !== false) {
@@ -286,36 +286,96 @@ suite("Archon & Ephor elections (integration)", () => {
     expect(JSON.stringify(view)).not.toContain(voter.id);
   });
 
-  // --- Strategoi appointment (cross-party balance + veteran gate, Step 5) ----
+  // --- Strategoi appointment (cross-party balance) ---------------------------
   it("the sitting officials appoint Strategoi with cross-party balance", async () => {
     const archon = await seatHolderOffice("archon", "palaioi", "Stratarchos", "palaioi");
-    // Strategos appointees must be current or FORMER hoplites (the was-hoplite gate).
-    const palAppointee = await createCharacter("PalStrat", { party: "palaioi", wasHoplite: true });
-    const palTwo = await createCharacter("PalTwo", { party: "palaioi", wasHoplite: true });
-    const dynAppointee = await createCharacter("DynStrat", { party: "dynatoi", wasHoplite: true });
+    const palAppointee = await createCharacter("PalStrat", { party: "palaioi", militia: 41 });
+    const palTwo = await createCharacter("PalTwo", { party: "palaioi", militia: 60 });
+    const dynAppointee = await createCharacter("DynStrat", { party: "dynatoi", militia: 41 });
     const outsider = await createCharacter("Outsider", { party: "palaioi", seat: false });
 
     // A non-official cannot appoint.
     expect(await m.elections.appointStrategos(await fresh(outsider.id), palAppointee.id, resolveNow)).toMatchObject({ ok: false, code: 403 });
     // First Strategos: a Palaioi.
     expect((await m.elections.appointStrategos(await fresh(archon.id), palAppointee.id, resolveNow)).ok).toBe(true);
-    // Second must NOT be the same party (cross-party balance).
-    expect(await m.elections.appointStrategos(await fresh(archon.id), palTwo.id, resolveNow)).toMatchObject({ ok: false, code: 409 });
+    // Second must NOT be the same party (cross-party balance): refused, and not on the list.
+    expect(await m.elections.appointStrategos(await fresh(archon.id), palTwo.id, resolveNow)).toEqual({ ok: false, code: 409, error: "The Strategoi must balance the parties — the other seat already holds this party." });
+    expect((await m.elections.eligibleAppointees(null)).map((a) => a.characterId)).not.toContain(palTwo.id);
     // A Dynatoi balances it.
     expect((await m.elections.appointStrategos(await fresh(archon.id), dynAppointee.id, resolveNow)).ok).toBe(true);
     const strat = await db.select().from(m.dbPkg.offices).where(and(eq(m.dbPkg.offices.worldId, worldId), eq(m.dbPkg.offices.office, "strategos")));
     expect(strat.filter((s) => s.holderCharacterId).length).toBe(2);
   });
 
-  // Hoplite Step 5: the Strategos is restricted to current/former hoplites.
-  it("a never-hoplite cannot be Strategos; a former hoplite (veteran) can", async () => {
-    const archon = await seatHolderOffice("archon", "palaioi", "Polemarch", "palaioi");
-    // A career civilian (never a hoplite) holding a seat — barred from command.
-    const neverSoldier = await createCharacter("Merchant", { party: "dynatoi", wasHoplite: false });
-    expect(await m.elections.appointStrategos(await fresh(archon.id), neverSoldier.id, resolveNow)).toMatchObject({ ok: false, code: 409 });
-    // A re-classed veteran (was_hoplite, now a trader) remains appointable.
-    const veteran = await createCharacter("OldSpear", { party: "dynatoi", wasHoplite: true });
-    expect((await m.elections.appointStrategos(await fresh(archon.id), veteran.id, resolveNow)).ok).toBe(true);
+  // Strategoi prompt 1: any man with a sheet Militia above 40 may be Strategos,
+  // and the picker lists exactly the men the appointment accepts.
+  const listed = async (side: "palaioi" | "dynatoi" | null = null) => (await m.elections.eligibleAppointees(side)).map((a) => a.characterId);
+  it("a shipbuilder of no party with a seat and a sheet Militia of 41 is listed and appointed; at 40 he is neither", async () => {
+    const archon = await seatHolderOffice("archon", "palaioi", "Ajax", "palaioi");
+    const wright = await createCharacter("Spartakolous", { classId: "shipbuilder", party: "none", militia: 41 });
+    const short = await createCharacter("Shortwright", { classId: "shipbuilder", party: "none", militia: 40 });
+
+    const list = await m.elections.eligibleAppointees(null);
+    expect(list.find((a) => a.characterId === wright.id)).toEqual({ characterId: wright.id, name: "Spartakolous", houseName: "House Test", party: "none", militia: 41 });
+    expect(list.map((a) => a.characterId)).not.toContain(short.id);
+
+    expect(await m.elections.appointStrategos(await fresh(archon.id), short.id, resolveNow)).toEqual({ ok: false, code: 409, error: "A Strategos needs a Militia above 40." });
+    expect(await m.elections.appointStrategos(await fresh(archon.id), wright.id, resolveNow)).toEqual({ ok: true, office: "strategos", side: null });
+    const seat = (await db.select().from(m.dbPkg.offices).where(and(eq(m.dbPkg.offices.worldId, worldId), eq(m.dbPkg.offices.office, "strategos"))))[0]!;
+    expect(seat).toMatchObject({ holderCharacterId: wright.id, acquiredVia: "appointed", independentHolder: true });
+  });
+
+  it("the sheet's Militia counts: a trait that lifts him above 40 lets him in; a former hoplite at 30 is refused", async () => {
+    const archon = await seatHolderOffice("archon", "palaioi", "Ajax", "palaioi");
+    // Base 39 and the Levy upbringing (+2 Militia): his sheet shows 41.
+    const levy = await createCharacter("Levyman", { party: "none", militia: 39 });
+    await db.insert(m.dbPkg.characterTraits).values({ characterId: levy.id, traitId: "gymnasium-1" });
+    expect((await m.elections.eligibleAppointees(null)).find((a) => a.characterId === levy.id)).toMatchObject({ militia: 41 });
+    expect((await m.elections.appointStrategos(await fresh(archon.id), levy.id, resolveNow)).ok).toBe(true);
+
+    // A veteran of the phalanx is no longer enough: his Militia is what counts.
+    const veteran = await createCharacter("OldSpear", { party: "dynatoi", wasHoplite: true, militia: 30 });
+    expect(await listed()).not.toContain(veteran.id);
+    expect(await m.elections.appointStrategos(await fresh(archon.id), veteran.id, resolveNow)).toEqual({ ok: false, code: 409, error: "A Strategos needs a Militia above 40." });
+  });
+
+  it("a sitting Archon, Ephor or Strategos is neither listed nor appointed, and neither is a man abroad on contract", async () => {
+    const archon = await seatHolderOffice("archon", "palaioi", "Ajax", "palaioi");
+    await db.update(m.dbPkg.playerCharacters).set({ militia: 90 }).where(eq(m.dbPkg.playerCharacters.id, archon.id));
+    const ephor = await seatHolderOffice("ephor", "dynatoi", "Hector", "dynatoi");
+    await db.update(m.dbPkg.playerCharacters).set({ militia: 70 }).where(eq(m.dbPkg.playerCharacters.id, ephor.id));
+    const first = await createCharacter("Konrad", { party: "palaioi", militia: 94 });
+    expect((await m.elections.appointStrategos(await fresh(archon.id), first.id, resolveNow)).ok).toBe(true);
+    const abroad = await createCharacter("Sellsword", { party: "dynatoi", militia: 80, contractId: "syracuse" });
+
+    const list = await listed();
+    for (const c of [archon, ephor, first, abroad]) expect(list, c.id).not.toContain(c.id);
+    const holds = { ok: false, code: 409, error: "He already holds one of the city's offices." };
+    expect(await m.elections.appointStrategos(await fresh(archon.id), archon.id, resolveNow)).toEqual(holds);
+    expect(await m.elections.appointStrategos(await fresh(archon.id), ephor.id, resolveNow)).toEqual(holds);
+    expect(await m.elections.appointStrategos(await fresh(archon.id), first.id, resolveNow)).toEqual(holds);
+    expect(await m.elections.appointStrategos(await fresh(archon.id), abroad.id, resolveNow)).toEqual({ ok: false, code: 409, error: "He is abroad on a mercenary contract." });
+  });
+
+  it("a party leader is listed and appointed, as Strategos and as an Ephor of his side", async () => {
+    const archon = await seatHolderOffice("archon", "dynatoi", "Fortony", "dynatoi");
+    const leader = await createCharacter("Seskios", { classId: "trader", party: "dynatoi", militia: 41 });
+    await db.insert(m.dbPkg.offices).values({ worldId, office: "party_archon", side: "dynatoi", seatSlot: 0, holderCharacterId: leader.id, independentHolder: false, acquiredVia: "interim", termStartedYear: 0, termEndsYear: null });
+    const second = await createCharacter("Akhaikos", { party: "dynatoi" });
+    await db.insert(m.dbPkg.offices).values({ worldId, office: "party_ephor", side: "dynatoi", seatSlot: 0, holderCharacterId: second.id, independentHolder: false, acquiredVia: "interim", termStartedYear: 0, termEndsYear: null });
+
+    // An Ephor of his side: the party's second leader is on the list and seated.
+    expect(await listed("dynatoi")).toEqual(expect.arrayContaining([leader.id, second.id]));
+    expect(await m.elections.appointEphor(await fresh(archon.id), "dynatoi", second.id, resolveNow)).toEqual({ ok: true, office: "ephor", side: "dynatoi" });
+    // A Strategos: the party's first leader, Militia 41.
+    expect(await listed()).toContain(leader.id);
+    expect(await m.elections.appointStrategos(await fresh(archon.id), leader.id, resolveNow)).toEqual({ ok: true, office: "strategos", side: null });
+    // Both keep their party seats.
+    expect((await officeSeat("party_archon", "dynatoi")).holderCharacterId).toBe(leader.id);
+    expect((await officeSeat("party_ephor", "dynatoi")).holderCharacterId).toBe(second.id);
+    // Now they sit in League seats, they are off both lists.
+    expect(await listed("dynatoi")).not.toContain(second.id);
+    expect(await listed()).not.toContain(leader.id);
   });
 
   // --- Campaign routine gating ----------------------------------------------

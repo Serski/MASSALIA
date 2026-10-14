@@ -24,8 +24,11 @@ import {
 import {
   canDeclare,
   electionConfig,
+  ephorAppointRefusal,
   gameDate,
   holderForfeitsOffice,
+  strategosAppointRefusal,
+  type AppointCandidate,
   type ElectionConfig,
   type LeagueOffice,
   type OfficeSide,
@@ -35,6 +38,7 @@ import { getCalendarConfig } from "./festival.js";
 import { getPoliticsConfig } from "./oligarchy.js";
 import { seatOf } from "./oligarchy.js";
 import { regentMayHoldOffice } from "./succession.js";
+import { sheetStats } from "./traits.js";
 import { broadcastState } from "./worldState.js";
 
 const db = createDb();
@@ -428,15 +432,36 @@ export async function reconcileOffices(now: Date = new Date()): Promise<boolean>
 
 export type AppointResult = { ok: false; code: number; error: string } | { ok: true; office: string; side: OfficeSide | null };
 
-async function appointEligible(worldId: string, characterId: string, side: OfficeSide | null): Promise<{ ok: true; row: CharacterRow } | { ok: false; reason: string }> {
-  const rows = await db.select().from(playerCharacters).where(eq(playerCharacters.id, characterId)).limit(1);
-  const candidate = rows[0];
-  if (!candidate) return { ok: false, reason: "No such citizen." };
-  if (candidate.status !== "alive") return { ok: false, reason: "The dead cannot take office." };
-  if ((await seatOf(characterId)) === null) return { ok: false, reason: "The appointee must hold an oligarch seat." };
-  if (candidate.isRegent) return { ok: false, reason: "A regent may not hold elected office." };
-  if (side && candidate.party !== "none" && candidate.party !== side) return { ok: false, reason: "The appointee's party does not match the side." };
-  return { ok: true, row: candidate };
+// The facts the shared appointment rule decides on (Strategoi prompt 1): one
+// read for the appointment and for the picker's list. The sheet's Militia, trait
+// bonuses included (sheetStats); a League seat is an Archon's, an Ephor's or a
+// Strategos's (a party office is none); abroad is a sworn mercenary contract.
+const LEAGUE_OFFICES = new Set(["archon", "ephor", "strategos"]);
+async function appointFacts(row: CharacterRow, leagueHolders: Set<string>, seatHolders?: Set<string>): Promise<AppointCandidate> {
+  return {
+    status: row.status,
+    isSeatHolder: seatHolders ? seatHolders.has(row.id) : (await seatOf(row.id)) !== null,
+    isRegent: row.isRegent,
+    party: row.party,
+    sheetMilitia: (await sheetStats(row)).militia,
+    holdsLeagueSeat: leagueHolders.has(row.id),
+    abroad: row.contractId !== null,
+  };
+}
+async function leagueSeatHolders(worldId: string): Promise<Set<string>> {
+  return new Set((await officeRows(worldId)).filter((r) => r.holderCharacterId && LEAGUE_OFFICES.has(r.office)).map((r) => r.holderCharacterId!));
+}
+// The parties of the Strategoi sitting now, for the balance rule.
+async function sittingStrategoiParties(worldId: string): Promise<string[]> {
+  const parties: string[] = [];
+  for (const r of (await officeRows(worldId)).filter((o) => o.office === "strategos" && o.holderCharacterId)) {
+    const other = await holderInfo(r.holderCharacterId);
+    if (other) parties.push(other.party);
+  }
+  return parties;
+}
+async function candidateRow(characterId: string): Promise<CharacterRow | null> {
+  return (await db.select().from(playerCharacters).where(eq(playerCharacters.id, characterId)).limit(1))[0] ?? null;
 }
 
 // The sitting same-side Archon appoints a replacement Ephor of that side.
@@ -449,8 +474,11 @@ export async function appointEphor(actor: CharacterRow, side: OfficeSide, candid
   const ephorSeat = (await officeRows(world.id)).find((r) => r.office === "ephor" && r.side === side && r.seatSlot === 0);
   if (ephorSeat?.holderCharacterId) return { ok: false, code: 409, error: "That Ephor seat is not vacant." };
 
-  const eligible = await appointEligible(world.id, candidateCharacterId, side);
-  if (!eligible.ok) return { ok: false, code: 409, error: eligible.reason };
+  const candidate = await candidateRow(candidateCharacterId);
+  if (!candidate) return { ok: false, code: 409, error: "No such citizen." };
+  const refusal = ephorAppointRefusal(await appointFacts(candidate, await leagueSeatHolders(world.id)), side);
+  if (refusal) return { ok: false, code: 409, error: refusal };
+  const eligible = { row: candidate };
 
   const year = gameDate(now.getTime(), world.startedMs).yearInGame;
   const archonSeat = (await officeRows(world.id)).find((r) => r.office === "archon" && r.side === side && r.seatSlot === 0);
@@ -480,24 +508,14 @@ export async function appointStrategos(actor: CharacterRow, candidateCharacterId
   const filled = strategoiRows.filter((r) => r.holderCharacterId);
   if (filled.length >= politics.offices.strategoi.count) return { ok: false, code: 409, error: "Both Strategos seats are filled." };
 
-  const eligible = await appointEligible(world.id, candidateCharacterId, null);
-  if (!eligible.ok) return { ok: false, code: 409, error: eligible.reason };
-
-  // Hoplite Step 5: the Strategos commands soldiers — restricted to a current or
-  // FORMER hoplite (the was-hoplite signal, preserved through re-class). A
-  // never-soldier is not eligible. (The shared appointEligible — also used for Ephor
-  // appointments — is intentionally NOT gated on class; only the Strategos is.)
-  if (!eligible.row.wasHoplite) return { ok: false, code: 409, error: "The Strategos must be a soldier or a veteran of the phalanx." };
-
-  // Cross-party balance: the two Strategoi must not share a party.
-  if (politics.offices.strategoi.crossPartyBalance && eligible.row.party !== "none") {
-    for (const filledSeat of filled) {
-      const other = await holderInfo(filledSeat.holderCharacterId);
-      if (other && other.party === eligible.row.party) {
-        return { ok: false, code: 409, error: "The Strategoi must balance the parties — the other seat already holds this party." };
-      }
-    }
-  }
+  // Strategoi prompt 1: any man with a sheet Militia above militiaAbove, of any
+  // class and either party or none (the hoplite rule is gone), who holds no
+  // League seat and is not abroad; the Strategoi still balance the parties.
+  const candidate = await candidateRow(candidateCharacterId);
+  if (!candidate) return { ok: false, code: 409, error: "No such citizen." };
+  const refusal = strategosAppointRefusal(await appointFacts(candidate, await leagueSeatHolders(world.id)), politics.offices.strategoi, await sittingStrategoiParties(world.id));
+  if (refusal) return { ok: false, code: 409, error: refusal };
+  const eligible = { row: candidate };
 
   const takenSlots = new Set(strategoiRows.map((r) => r.seatSlot));
   let slot = 0;
@@ -515,23 +533,31 @@ export async function appointStrategos(actor: CharacterRow, candidateCharacterId
   return { ok: true, office: "strategos", side: null };
 }
 
-// Eligible appointees for a side (living seat-holders, side-compatible, not
-// regents, not already an office-holder) — for the appointment picker.
-export async function eligibleAppointees(side: OfficeSide | null): Promise<{ characterId: string; name: string; houseName: string; party: string }[]> {
+// The appointment picker's list (side null: a Strategos; a side: an Ephor of
+// it): every player seat-holder the appointment would accept now, by the same
+// shared rule (Strategoi prompt 1), with the Militia his sheet shows.
+export type AppointeeView = { characterId: string; name: string; houseName: string; party: string; militia: number };
+export async function eligibleAppointees(side: OfficeSide | null): Promise<AppointeeView[]> {
   const world = await activeWorld();
   if (!world) return [];
-  const seatHolders = await db
-    .select({ characterId: oligarchSeats.characterId, party: playerCharacters.party, status: playerCharacters.status, isRegent: playerCharacters.isRegent, name: players.name, houseName: houses.name })
+  const politics = getPoliticsConfig();
+  const seated = await db
+    .select({ character: playerCharacters, name: players.name, houseName: houses.name })
     .from(oligarchSeats)
     .innerJoin(playerCharacters, eq(playerCharacters.id, oligarchSeats.characterId))
     .innerJoin(players, eq(players.id, playerCharacters.playerId))
     .innerJoin(houses, eq(houses.slug, players.houseSlug))
     .where(and(eq(oligarchSeats.worldId, world.id), eq(oligarchSeats.holderType, "player")));
-  const officeHolders = new Set((await officeRows(world.id)).filter((r) => r.holderCharacterId).map((r) => r.holderCharacterId!));
-  return seatHolders
-    .filter((h) => h.characterId && h.status === "alive" && !h.isRegent && !officeHolders.has(h.characterId))
-    .filter((h) => !side || h.party === "none" || h.party === side)
-    .map((h) => ({ characterId: h.characterId!, name: h.name, houseName: h.houseName, party: h.party }));
+  const seatHolders = new Set(seated.map((s) => s.character.id));
+  const leagueHolders = await leagueSeatHolders(world.id);
+  const otherParties = side ? [] : await sittingStrategoiParties(world.id);
+  const out: AppointeeView[] = [];
+  for (const s of seated) {
+    const facts = await appointFacts(s.character, leagueHolders, seatHolders);
+    const refusal = side ? ephorAppointRefusal(facts, side) : strategosAppointRefusal(facts, politics.offices.strategoi, otherParties);
+    if (!refusal) out.push({ characterId: s.character.id, name: s.name, houseName: s.houseName, party: s.character.party, militia: facts.sheetMilitia });
+  }
+  return out;
 }
 
 // --- Campaign routine gate + favor grant ------------------------------------

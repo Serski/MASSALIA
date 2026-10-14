@@ -49,6 +49,8 @@ export const officesConfigSchema = z.object({
   strategoi: z.object({
     count: z.number().int().nonnegative(),
     crossPartyBalance: z.boolean(),
+    // A Strategos needs a sheet Militia above this (Strategoi prompt 1): 41 or more for 40.
+    militiaAbove: z.number().int().nonnegative(),
   }),
   campaign: z.object({
     drachmaeCost: z.number().int().nonnegative(),

@@ -226,3 +226,60 @@ export function holderForfeitsOffice(party: string, side: OfficeSide, independen
   if (independentHolder) return party !== "none" && party !== side;
   return party !== side;
 }
+
+// --- Appointments: who may be named Strategos or Ephor (Strategoi prompt 1) ---
+// One rule for the appointment and for the picker's list, so the list offers
+// exactly the men the server accepts. The facts are read by the caller; the
+// rule only decides. A party leader is no bar: he may stand for League office,
+// and so be appointed to it.
+
+export interface AppointCandidate {
+  status: string; // must be "alive"
+  isSeatHolder: boolean; // holds an oligarch seat
+  isRegent: boolean;
+  party: string; // 'none' | 'palaioi' | 'dynatoi'
+  sheetMilitia: number; // the Militia his sheet shows, trait bonuses included
+  holdsLeagueSeat: boolean; // sits as an Archon, an Ephor or a Strategos
+  abroad: boolean; // sworn to a mercenary contract
+}
+
+export const APPOINT_REFUSAL = {
+  dead: "The dead cannot take office.",
+  noSeat: "The appointee must hold an oligarch seat.",
+  regent: "A regent may not hold elected office.",
+  side: "The appointee's party does not match the side.",
+  holdsSeat: "He already holds one of the city's offices.",
+  abroad: "He is abroad on a mercenary contract.",
+  militia: (above: number) => `A Strategos needs a Militia above ${above}.`,
+  balance: "The Strategoi must balance the parties — the other seat already holds this party.",
+} as const;
+
+function commonRefusal(c: AppointCandidate): string | null {
+  if (c.status !== "alive") return APPOINT_REFUSAL.dead;
+  if (!c.isSeatHolder) return APPOINT_REFUSAL.noSeat;
+  if (c.isRegent) return APPOINT_REFUSAL.regent;
+  return null;
+}
+
+// A Strategos: any man of any class, of either party or none, with a sheet
+// Militia above militiaAbove, who holds no League seat and is not abroad. With
+// crossPartyBalance, never of the same party as a sitting Strategos (a man of
+// no party passes). `otherStrategoiParties`: the parties of those sitting now.
+export function strategosAppointRefusal(c: AppointCandidate, rule: { militiaAbove: number; crossPartyBalance: boolean }, otherStrategoiParties: readonly string[]): string | null {
+  const common = commonRefusal(c);
+  if (common) return common;
+  if (c.holdsLeagueSeat) return APPOINT_REFUSAL.holdsSeat;
+  if (c.abroad) return APPOINT_REFUSAL.abroad;
+  if (c.sheetMilitia <= rule.militiaAbove) return APPOINT_REFUSAL.militia(rule.militiaAbove);
+  if (rule.crossPartyBalance && c.party !== "none" && otherStrategoiParties.includes(c.party)) return APPOINT_REFUSAL.balance;
+  return null;
+}
+
+// An Ephor of a side: of that side's party or none, holding no League seat.
+export function ephorAppointRefusal(c: AppointCandidate, side: OfficeSide): string | null {
+  const common = commonRefusal(c);
+  if (common) return common;
+  if (c.party !== "none" && c.party !== side) return APPOINT_REFUSAL.side;
+  if (c.holdsLeagueSeat) return APPOINT_REFUSAL.holdsSeat;
+  return null;
+}

@@ -324,7 +324,8 @@ export const playerCharacters = pgTable("player_characters", {
   // from the death instant to heir resolution (becomeHeir → successions.note).
   pendingDeathNote: text("pending_death_note"),
   // Hoplite Step 5: true if the character is, or ever was, a hoplite. Set at
-  // creation-as-hoplite and PRESERVED through re-class — the veteran Strategos signal.
+  // creation-as-hoplite and PRESERVED through re-class. It no longer gates the
+  // Strategos (Strategoi prompt 1: a sheet Militia above 40 does); nothing reads it today.
   wasHoplite: boolean("was_hoplite").notNull().default(false),
   // Spymaster posture (Interaction Pipeline Prompt 4): 'guard' (flat defense on both
   // hidden channels) | 'hunt' (flat bonus to own hostile attempts). Meaningful only

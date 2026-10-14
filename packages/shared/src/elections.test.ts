@@ -3,7 +3,10 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  APPOINT_REFUSAL,
   canDeclare,
+  ephorAppointRefusal,
+  strategosAppointRefusal,
   currentElectionCycle,
   electionCalendar,
   electionConfig,
@@ -41,6 +44,8 @@ describe("config", () => {
     for (const office of politics.offices.elected) expect(office.sides.sort()).toEqual(["dynatoi", "palaioi"]);
     expect(politics.offices.strategoi.count).toBe(2);
     expect(politics.offices.strategoi.crossPartyBalance).toBe(true);
+    // Strategoi prompt 1: a Strategos needs a sheet Militia above 40.
+    expect(politics.offices.strategoi.militiaAbove).toBe(40);
   });
 });
 
@@ -220,5 +225,43 @@ describe("holderForfeitsOffice (defection)", () => {
     expect(holderForfeitsOffice("none", "palaioi", true)).toBe(false); // stays independent — keeps it
     expect(holderForfeitsOffice("palaioi", "palaioi", true)).toBe(false); // joined the matching party — fine
     expect(holderForfeitsOffice("dynatoi", "palaioi", true)).toBe(true); // joined the opposing party — forfeit
+  });
+});
+
+// Strategoi prompt 1: one rule for the appointment and the picker's list.
+describe("who may be appointed", () => {
+  const RULE = { militiaAbove: 40, crossPartyBalance: true };
+  const man = (over: Partial<Parameters<typeof strategosAppointRefusal>[0]> = {}) => ({ status: "alive", isSeatHolder: true, isRegent: false, party: "none", sheetMilitia: 41, holdsLeagueSeat: false, abroad: false, ...over });
+
+  it("a Strategos: any class, either party or none, with a sheet Militia above 40", () => {
+    expect(strategosAppointRefusal(man(), RULE, [])).toBeNull();
+    expect(strategosAppointRefusal(man({ party: "palaioi" }), RULE, [])).toBeNull();
+    expect(strategosAppointRefusal(man({ sheetMilitia: 40 }), RULE, [])).toBe("A Strategos needs a Militia above 40.");
+    expect(strategosAppointRefusal(man({ sheetMilitia: 100 }), RULE, [])).toBeNull();
+    expect(APPOINT_REFUSAL.militia(55)).toBe("A Strategos needs a Militia above 55.");
+  });
+
+  it("a Strategos: not one who holds a League seat, is abroad, is dead, holds no seat or is a regent", () => {
+    expect(strategosAppointRefusal(man({ holdsLeagueSeat: true }), RULE, [])).toBe("He already holds one of the city's offices.");
+    expect(strategosAppointRefusal(man({ abroad: true }), RULE, [])).toBe("He is abroad on a mercenary contract.");
+    expect(strategosAppointRefusal(man({ status: "dead" }), RULE, [])).toBe("The dead cannot take office.");
+    expect(strategosAppointRefusal(man({ isSeatHolder: false }), RULE, [])).toBe("The appointee must hold an oligarch seat.");
+    expect(strategosAppointRefusal(man({ isRegent: true }), RULE, [])).toBe("A regent may not hold elected office.");
+  });
+
+  it("a Strategos: the parties balance; a man of no party passes, and the rule can be turned off", () => {
+    expect(strategosAppointRefusal(man({ party: "palaioi" }), RULE, ["palaioi"])).toBe("The Strategoi must balance the parties — the other seat already holds this party.");
+    expect(strategosAppointRefusal(man({ party: "dynatoi" }), RULE, ["palaioi"])).toBeNull();
+    expect(strategosAppointRefusal(man({ party: "none" }), RULE, ["palaioi"])).toBeNull();
+    expect(strategosAppointRefusal(man({ party: "palaioi" }), { ...RULE, crossPartyBalance: false }, ["palaioi"])).toBeNull();
+  });
+
+  it("an Ephor of a side: of that party or none, holding no League seat, whatever his Militia", () => {
+    expect(ephorAppointRefusal(man({ party: "palaioi", sheetMilitia: 3 }), "palaioi")).toBeNull();
+    expect(ephorAppointRefusal(man({ party: "none" }), "dynatoi")).toBeNull();
+    expect(ephorAppointRefusal(man({ party: "dynatoi" }), "palaioi")).toBe("The appointee's party does not match the side.");
+    expect(ephorAppointRefusal(man({ party: "palaioi", holdsLeagueSeat: true }), "palaioi")).toBe("He already holds one of the city's offices.");
+    // Abroad is no bar to an Ephor's seat: the contract keeps his vote.
+    expect(ephorAppointRefusal(man({ party: "palaioi", abroad: true }), "palaioi")).toBeNull();
   });
 });
