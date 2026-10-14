@@ -855,7 +855,8 @@ export type GovernmentView =
       army?: GovernmentArmyView;
     };
 
-export type OfficeAppointee = { characterId: string; name: string; houseName: string; party: string };
+// The men the server would accept for the seat (Strategoi prompt 1), each with his sheet Militia.
+export type OfficeAppointee = { characterId: string; name: string; houseName: string; party: string; militia: number };
 
 // --- Player Standings (Atlas Phase 1) ---------------------------------------
 

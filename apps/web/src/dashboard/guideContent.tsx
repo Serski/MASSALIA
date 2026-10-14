@@ -111,7 +111,7 @@ export const GUIDE_SECTIONS: GuideSection[] = [
     id: "politics",
     title: "The City's Politics",
     paragraphs: [
-      "Two parties contest the city: the PALAIOI, keepers of the old ways, and the DYNATOI, men of the new. Join one and build favor. The Archons and Ephors are elected — declare, campaign, win the vote, take office; the Strategoi are appointed. The wealthy may buy a seat among the Three Hundred. A party's for-life leaders may stand for the city's offices too. The unfree have no voice until freedom.",
+      "Two parties contest the city: the PALAIOI, keepers of the old ways, and the DYNATOI, men of the new. Join one and build favor. The Archons and Ephors are elected — declare, campaign, win the vote, take office; the Strategoi are appointed by them, from any citizen with a seat and a Militia above 40, of either party or none, and serve until the term ends. The wealthy may buy a seat among the Three Hundred. A party's for-life leaders may stand for the city's offices too. The unfree have no voice until freedom.",
     ],
   },
   // A reference entry, plain on purpose. Every number in it comes from

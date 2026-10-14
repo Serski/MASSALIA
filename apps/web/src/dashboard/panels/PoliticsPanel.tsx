@@ -1,5 +1,5 @@
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { api, ApiError, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type OpenChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeSeatView, type OfficeSide, type AgendaView, type GovernmentView as GovernmentData } from "../../api.js";
+import { api, ApiError, type ChamberSeat, type ChamberView, type ChamberVotesView, type ChamberVoteView, type OpenChamberVoteView, type SeatParty, type ElectionsView, type ElectionOfficeView, type OfficesView, type OfficeAppointee, type OfficeSeatView, type OfficeSide, type AgendaView, type GovernmentView as GovernmentData } from "../../api.js";
 import { assetPath } from "../../data/league.js";
 import { AssetIcon, DashboardCard, DigestList, PanelBanner, type PanelProps, PanelRow, PersonRow, formatDuration, ideologyReadout, useCountdownSeconds } from "../shared.js";
 import { PublicProfile, type ProfileTarget } from "../PublicProfile.js";
@@ -441,11 +441,11 @@ export function titleCaseVia(via: string | null): string {
   return via.charAt(0).toUpperCase() + via.slice(1);
 }
 
-// One appointment picker (Ephor vacancy or Strategos), lazily loading eligible
-// same-side seat-holders when opened.
+// One appointment picker (Ephor vacancy or Strategos), lazily loading, when
+// opened, the seat-holders the server would accept, each with his party and Militia.
 function AppointPicker({ kind, side, onAppoint }: { kind: "ephor" | "strategos"; side: OfficeSide | null; onAppoint: (characterId: string) => void }) {
   const [open, setOpen] = useState(false);
-  const [appointees, setAppointees] = useState<{ characterId: string; name: string; houseName: string; party: string }[] | null>(null);
+  const [appointees, setAppointees] = useState<OfficeAppointee[] | null>(null);
   useEffect(() => {
     if (!open) return;
     api.officeAppointees(side ?? "").then((r) => setAppointees(r.appointees)).catch(() => setAppointees([]));
@@ -467,7 +467,10 @@ function AppointPicker({ kind, side, onAppoint }: { kind: "ephor" | "strategos";
         appointees.map((a) => (
           <button key={a.characterId} type="button" className="event-choice-button" onClick={() => onAppoint(a.characterId)}>
             <strong>{a.name} of House {a.houseName}</strong>
-            <span className="choice-costs"><span className={`cost-chip cost-neutral`}>{a.party === "none" ? "Independent" : SIDE_LABEL[a.party]}</span></span>
+            <span className="choice-costs">
+              <span className={`cost-chip cost-neutral`}>{a.party === "none" ? "Independent" : SIDE_LABEL[a.party]}</span>
+              <span className="cost-chip cost-neutral">Militia {a.militia}</span>
+            </span>
           </button>
         ))
       )}
