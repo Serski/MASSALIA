@@ -79,6 +79,17 @@ describe("military content files", () => {
     expect(Object.values(regionFile.regions).filter((r) => r.owner === UNCLAIMED_ID)).toHaveLength(10);
   });
 
+  // News from Campania (Summer 293 BC): Rome has taken Samnium. Its land and
+  // its town are the Roman Republic's; Daunia and Hirpini stay Samnite.
+  it("Samnium and Spoletium are Rome's; Daunia, Hirpini, Lucenia and Beneventum stay Samnite", () => {
+    expect(politics.owners.R076).toBe("roman_republic");
+    expect(townFile.towns.spoletium).toEqual({ owner: "roman_republic", garrison: 150, pentekonters: 0, triremes: 0 });
+    expect(politics.owners.R085).toBe("samnites");
+    expect(politics.owners.R087).toBe("samnites");
+    expect(townFile.towns.lucenia!.owner).toBe("samnites");
+    expect(townFile.towns.beneventum!.owner).toBe("samnites");
+  });
+
   it("spot-checks the canonical numbers", () => {
     expect(townFile.towns.massalia).toMatchObject({ owner: "massalia", garrison: 1000, pentekonters: 10, triremes: 30 });
     expect(townFile.towns.carthage).toMatchObject({ garrison: 25500, pentekonters: 10, triremes: 60 });
