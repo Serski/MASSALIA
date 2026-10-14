@@ -4,6 +4,11 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   APPOINT_REFUSAL,
+  nextOfficeChange,
+  officeChangeSeasonIndex,
+  strategosTermEnd,
+  strategosTermEndsYear,
+  strategosTermOver,
   canDeclare,
   ephorAppointRefusal,
   strategosAppointRefusal,
@@ -263,5 +268,36 @@ describe("who may be appointed", () => {
     expect(ephorAppointRefusal(man({ party: "palaioi", holdsLeagueSeat: true }), "palaioi")).toBe("He already holds one of the city's offices.");
     // Abroad is no bar to an Ephor's seat: the contract keeps his vote.
     expect(ephorAppointRefusal(man({ party: "palaioi", abroad: true }), "palaioi")).toBeNull();
+  });
+});
+
+// Strategoi prompt 1, ruling 2: a Strategos serves to the end of the officials' term.
+describe("the Strategoi's term", () => {
+  const ecfg = () => electionConfig(calendar);
+  it("the office changes fall at seasons 29, 53 and 77: the officials of years 7, 13 and 19", () => {
+    const cfg = ecfg();
+    expect(nextOfficeChange(0, cfg)).toMatchObject({ officeSeasonIndex: 29, officeYear: 7 });
+    expect(nextOfficeChange(29, cfg)).toMatchObject({ officeSeasonIndex: 53, officeYear: 13 });
+    expect(nextOfficeChange(52, cfg)).toMatchObject({ officeSeasonIndex: 53, officeYear: 13 });
+    expect(nextOfficeChange(53, cfg)).toMatchObject({ officeSeasonIndex: 77, officeYear: 19 });
+    expect(officeChangeSeasonIndex(13, cfg)).toBe(53);
+    expect(officeChangeSeasonIndex(19, cfg)).toBe(77);
+  });
+  it("one appointed in season 30 or 52 serves to year 13; one appointed in season 53 to year 19", () => {
+    const cfg = ecfg();
+    expect(strategosTermEndsYear(30, cfg)).toBe(13);
+    expect(strategosTermEndsYear(52, cfg)).toBe(13);
+    expect(strategosTermEndsYear(53, cfg)).toBe(19);
+    expect(strategosTermOver(52, 13, 7, cfg)).toBe(false);
+    expect(strategosTermOver(53, 13, 7, cfg)).toBe(true);
+  });
+  it("a sitting Strategos with no term end goes at the first change after the year he was appointed in", () => {
+    const cfg = ecfg();
+    expect(strategosTermEnd(null, 7, cfg)).toBe(13);
+    expect(strategosTermEnd(null, 12, cfg)).toBe(13);
+    expect(strategosTermEnd(13, 7, cfg)).toBe(13);
+    expect(strategosTermEnd(null, null, cfg)).toBe(7);
+    expect(strategosTermOver(52, null, 7, cfg)).toBe(false);
+    expect(strategosTermOver(53, null, 7, cfg)).toBe(true);
   });
 });

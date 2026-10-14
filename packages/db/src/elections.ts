@@ -6,6 +6,8 @@ import {
   gameDate,
   npcBlocVotes,
   resolveElection,
+  strategosTermEnd,
+  strategosTermOver,
   swayedVotes,
   REAL_MS_PER_SEASON,
   type BallotVote,
@@ -411,4 +413,57 @@ export async function officeHistoryRows(worldId: string): Promise<OfficeHistoryE
     endedYear: r.endedYear,
     acquiredVia: r.acquiredVia,
   }));
+}
+
+// --- The Strategoi's term (Strategoi prompt 1, ruling 2) ----------------------
+// A Strategos serves to the end of the Archons' and Ephors' term in which he was
+// appointed: at the office season of the next election cycle his seat falls
+// vacant, whether or not the election seated anyone, and the new officials
+// appoint. A seat with no term_ends_year (one appointed before this rule) ends at
+// the first change after the year he was appointed in (strategosTermEnd).
+// Claim-first and idempotent: a seat is vacated only if it still holds the same
+// man, and only his own open office_history row is ended, with his term's end
+// year. Returns how many seats fell vacant.
+export async function endStrategoiTerms(calendarCfg: CalendarConfig, now: Date = new Date()): Promise<number> {
+  const world = await activeWorld();
+  if (!world) return 0;
+  const ecfg = electionConfig(calendarCfg);
+  const seasonIndex = gameDate(now.getTime(), world.startedMs).seasonIndex;
+  const seated = await db.select().from(offices).where(and(eq(offices.worldId, world.id), eq(offices.office, "strategos")));
+  let ended = 0;
+  for (const seat of seated) {
+    const holder = seat.holderCharacterId;
+    if (!holder || !strategosTermOver(seasonIndex, seat.termEndsYear, seat.termStartedYear, ecfg)) continue;
+    const endYear = strategosTermEnd(seat.termEndsYear, seat.termStartedYear, ecfg);
+    const done = await db.transaction(async (tx) => {
+      const claimed = await tx
+        .update(offices)
+        .set({ holderCharacterId: null, independentHolder: false, acquiredVia: null, termStartedYear: null, termEndsYear: null })
+        .where(and(eq(offices.id, seat.id), eq(offices.holderCharacterId, holder)))
+        .returning({ id: offices.id });
+      if (claimed.length !== 1) return false;
+      await tx
+        .update(officeHistory)
+        .set({ endedYear: endYear })
+        .where(and(eq(officeHistory.worldId, world.id), eq(officeHistory.office, "strategos"), eq(officeHistory.characterId, holder), isNull(officeHistory.endedYear)));
+      return true;
+    });
+    if (done) ended++;
+  }
+  return ended;
+}
+
+// The worker's election sweep: open what is due, advance the elections, then
+// end the Strategoi's terms. The term's end never stops the elections: it runs
+// after them, and a failure in it is logged as "strategoi: failed <message>".
+export async function runElectionSweep(calendarCfg: CalendarConfig, politicsCfg: PoliticsConfig, now: Date = new Date()): Promise<{ opened: ElectionRow[]; advanced: AdvanceSummary; strategoiEnded: number }> {
+  const opened = await openElectionsIfDue(calendarCfg, now);
+  const advanced = await advanceElections(calendarCfg, politicsCfg, now);
+  let strategoiEnded = 0;
+  try {
+    strategoiEnded = await endStrategoiTerms(calendarCfg, now);
+  } catch (error) {
+    console.error(`strategoi: failed ${error instanceof Error ? error.message : String(error)}`);
+  }
+  return { opened, advanced, strategoiEnded };
 }

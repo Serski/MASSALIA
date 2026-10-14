@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Queue, Worker, type Job } from "bullmq";
 import { BACKUP_JOB_NAME, BACKUP_SCHEDULE, runBackup } from "./jobs/backup.js";
 import { completionDelayMs, parseAgeConfig, parseAgendaFile, parseCalendarConfig, parseContractsContent, parseFamilyConfig, parsePoliticsConfig, parseTraitsFile, MOTION_SCOPES, REAL_MS_PER_SEASON, type AgeConfig, type CalendarConfig, type ContractsContent, type FamilyConfig, type PoliticsConfig, type Trait } from "@massalia/shared";
-import { accrueLeagueCities, accrueTreasuries, advanceAgendaCycles, advanceElections, advanceOlympiads, characterInActiveWorld, closeDueChamberVotes, closeDueFestivals, collectLeagueRevenue, completeLeagueProjects, createDb, deleteExpiredSessions, deliverOlympicNominationToAll, drawFamilyCandidates, endDbPools, endLeagueWars, ensurePartyLeaders, fireFestivalsForAll, openAgendaCycleIfDue, openChamberVoteIfDue, openElectionsIfDue, resolveCensureIfExpired, rollChildrenDue, settleLeagueArmy, sweepMercenaryContracts, sweepSpouseDeaths, type AgendaPools, type MercContractCfgMap } from "@massalia/db";
+import { accrueLeagueCities, accrueTreasuries, advanceAgendaCycles, advanceOlympiads, characterInActiveWorld, closeDueChamberVotes, closeDueFestivals, collectLeagueRevenue, completeLeagueProjects, createDb, deleteExpiredSessions, deliverOlympicNominationToAll, drawFamilyCandidates, endDbPools, endLeagueWars, ensurePartyLeaders, fireFestivalsForAll, openAgendaCycleIfDue, openChamberVoteIfDue, resolveCensureIfExpired, rollChildrenDue, runElectionSweep, settleLeagueArmy, sweepMercenaryContracts, sweepSpouseDeaths, type AgendaPools, type MercContractCfgMap } from "@massalia/db";
 
 const redisUrl = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
 const connection = {
@@ -153,11 +153,13 @@ const SWEEPS: Sweep[] = [
     schedule: { every: ELECTION_SWEEP_MS },
     run: async () => {
       const { calendar, politics } = await bothConfigs();
-      const opened = await openElectionsIfDue(calendar);
-      const advanced = await advanceElections(calendar, politics);
+      // Open and advance the elections, then end the Strategoi's terms that are
+      // over (Strategoi prompt 1); a failure there is logged and the sweep goes on.
+      const { opened, advanced, strategoiEnded } = await runElectionSweep(calendar, politics);
       return (
         `Election sweep: opened ${opened.length} declaration(s), ${advanced.toVoting.length} to voting, resolved ${advanced.resolved.length}` +
-        (advanced.resolved.length ? ` (${advanced.resolved.map((r) => r.office).join(", ")})` : "")
+        (advanced.resolved.length ? ` (${advanced.resolved.map((r) => r.office).join(", ")})` : "") +
+        (strategoiEnded ? `, ${strategoiEnded} Strategos term(s) ended` : "")
       );
     },
   },

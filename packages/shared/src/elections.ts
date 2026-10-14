@@ -102,6 +102,50 @@ export function currentElectionCycle(seasonIndex: number, cfg: ElectionConfig): 
   return null;
 }
 
+// --- The Strategoi's term (Strategoi prompt 1, ruling 2) --------------------
+// A Strategos serves to the end of the Archons' and Ephors' term in which he
+// was appointed: when the newly elected officials take office, at the office
+// season of the next election cycle, his seat falls vacant. The office changes
+// are each election cycle's officeSeasonIndex (World 2: seasons 29, 53, 77 …;
+// the officials of years 7, 13, 19 …).
+
+// The first office change strictly after `seasonIndex`.
+export function nextOfficeChange(seasonIndex: number, cfg: ElectionConfig): ElectionCycle {
+  let dueYear = Math.max(cfg.cadenceYears, Math.floor(seasonIndex / SEASONS_PER_YEAR) - Math.ceil(cfg.officeSeasonOffset / SEASONS_PER_YEAR) - cfg.cadenceYears);
+  dueYear -= dueYear % cfg.cadenceYears;
+  for (;; dueYear += cfg.cadenceYears) {
+    if (!isElectionYear(dueYear, cfg)) continue;
+    const cycle = electionCycleFor(dueYear, cfg);
+    if (cycle.officeSeasonIndex > seasonIndex) return cycle;
+  }
+}
+
+// The season the officials of `officeYear` take office.
+export function officeChangeSeasonIndex(officeYear: number, cfg: ElectionConfig): number {
+  return electionCycleFor(officeYear - Math.floor(cfg.officeSeasonOffset / SEASONS_PER_YEAR), cfg).officeSeasonIndex;
+}
+
+// The year a Strategos appointed at `seasonIndex` serves to: the officials'
+// year at the next office change. Recorded as his term_ends_year.
+export function strategosTermEndsYear(seasonIndex: number, cfg: ElectionConfig): number {
+  return nextOfficeChange(seasonIndex, cfg).officeYear;
+}
+
+// The year a sitting Strategos's term ends. One appointed before this rule
+// carries no term_ends_year: his term ends at the first office change in a
+// year after the one he was appointed in (World 2's sitting Strategos, appointed
+// in year 7, goes at year 13). With no start year either, at the first change.
+export function strategosTermEnd(termEndsYear: number | null, termStartedYear: number | null, cfg: ElectionConfig): number {
+  if (termEndsYear !== null) return termEndsYear;
+  const lastSeasonOfStartYear = termStartedYear === null ? -1 : termStartedYear * SEASONS_PER_YEAR + SEASONS_PER_YEAR - 1;
+  return nextOfficeChange(lastSeasonOfStartYear, cfg).officeYear;
+}
+
+// Whether that term is over at `seasonIndex`: from the office season of its end year.
+export function strategosTermOver(seasonIndex: number, termEndsYear: number | null, termStartedYear: number | null, cfg: ElectionConfig): boolean {
+  return seasonIndex >= officeChangeSeasonIndex(strategosTermEnd(termEndsYear, termStartedYear, cfg), cfg);
+}
+
 // --- Candidacy eligibility (canDeclare) -------------------------------------
 
 export interface DeclareInput {

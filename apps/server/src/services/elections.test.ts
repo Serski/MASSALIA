@@ -378,6 +378,93 @@ suite("Archon & Ephor elections (integration)", () => {
     expect(await listed()).not.toContain(leader.id);
   });
 
+  // --- The Strategoi are replaced with the elections (Strategoi prompt 1) ----
+  // A Strategos serves to the end of the officials' term he was appointed in:
+  // at season 53 (year 13, Spring) the officials of year 13 take office and both
+  // seats fall vacant, whether or not the election seated anyone.
+  const at = (season: number) => new Date(T0 + season * SEASON + SEASON / 2);
+  const lastMomentOf = (season: number) => new Date(T0 + (season + 1) * SEASON - 1);
+  const strategosSeat = async (holder: string) => (await db.select().from(m.dbPkg.offices).where(and(eq(m.dbPkg.offices.worldId, worldId), eq(m.dbPkg.offices.office, "strategos"), eq(m.dbPkg.offices.holderCharacterId, holder))))[0];
+  const history = async (characterId: string) => (await db.select().from(m.dbPkg.officeHistory).where(and(eq(m.dbPkg.officeHistory.characterId, characterId), eq(m.dbPkg.officeHistory.office, "strategos"))));
+  const sweep = (when: Date) => m.dbPkg.runElectionSweep(m.festival.getCalendarConfig(), m.oligarchy.getPoliticsConfig(), when);
+
+  it("appointed in season 30 he serves to year 13: seated to the last moment of season 52, vacant after the first sync in season 53, his history ended with 13", async () => {
+    const archon = await seatHolderOffice("archon", "palaioi", "Ajax", "palaioi");
+    const strat = await createCharacter("Konrad", { party: "palaioi", militia: 84 });
+    expect((await m.elections.appointStrategos(await fresh(archon.id), strat.id, at(30))).ok).toBe(true);
+    expect(await strategosSeat(strat.id)).toMatchObject({ termStartedYear: 7, termEndsYear: 13 });
+
+    await m.elections.syncElections(lastMomentOf(52));
+    expect(await strategosSeat(strat.id)).toBeDefined();
+    expect((await history(strat.id))[0]!.endedYear).toBeNull();
+
+    await m.elections.syncElections(at(53));
+    expect(await strategosSeat(strat.id)).toBeUndefined();
+    const seats = await db.select().from(m.dbPkg.offices).where(and(eq(m.dbPkg.offices.worldId, worldId), eq(m.dbPkg.offices.office, "strategos")));
+    expect(seats.map((s) => [s.holderCharacterId, s.termEndsYear, s.acquiredVia])).toEqual([[null, null, null]]);
+    expect((await history(strat.id)).map((h) => [h.startedYear, h.endedYear])).toEqual([[7, 13]]);
+    // Again: nothing more happens.
+    await m.elections.syncElections(at(53));
+    expect((await history(strat.id)).map((h) => h.endedYear)).toEqual([13]);
+  });
+
+  it("the worker's sweep alone ends the term in season 53, once", async () => {
+    const archon = await seatHolderOffice("archon", "palaioi", "Ajax", "palaioi");
+    const strat = await createCharacter("Konrad", { party: "palaioi", militia: 84 });
+    expect((await m.elections.appointStrategos(await fresh(archon.id), strat.id, at(30))).ok).toBe(true);
+    expect((await sweep(lastMomentOf(52))).strategoiEnded).toBe(0);
+    expect(await strategosSeat(strat.id)).toBeDefined();
+    expect((await sweep(at(53))).strategoiEnded).toBe(1);
+    expect(await strategosSeat(strat.id)).toBeUndefined();
+    expect((await history(strat.id)).map((h) => h.endedYear)).toEqual([13]);
+    expect((await sweep(at(53))).strategoiEnded).toBe(0);
+  });
+
+  it("a Strategos with no term end, appointed before this rule, goes at the same change", async () => {
+    const strat = await createCharacter("Konrad", { party: "palaioi", militia: 84 });
+    await db.insert(m.dbPkg.offices).values({ worldId, office: "strategos", side: null, seatSlot: 0, holderCharacterId: strat.id, independentHolder: false, acquiredVia: "appointed", termStartedYear: 7, termEndsYear: null });
+    await db.insert(m.dbPkg.officeHistory).values({ worldId, characterId: strat.id, office: "strategos", side: null, startedYear: 7, acquiredVia: "appointed" });
+    await m.elections.syncElections(lastMomentOf(52));
+    expect(await strategosSeat(strat.id)).toMatchObject({ termEndsYear: null });
+    await m.elections.syncElections(at(53));
+    expect(await strategosSeat(strat.id)).toBeUndefined();
+    expect((await history(strat.id)).map((h) => h.endedYear)).toEqual([13]);
+  });
+
+  it("one appointed in season 52 by the outgoing officials goes at season 53; one appointed in season 53 stays to year 19", async () => {
+    const archon = await seatHolderOffice("archon", "palaioi", "Ajax", "palaioi");
+    const late = await createCharacter("Late", { party: "none", militia: 50 });
+    expect((await m.elections.appointStrategos(await fresh(archon.id), late.id, at(52))).ok).toBe(true);
+    expect(await strategosSeat(late.id)).toMatchObject({ termStartedYear: 13, termEndsYear: 13 });
+    await m.elections.syncElections(at(53));
+    expect(await strategosSeat(late.id)).toBeUndefined();
+    expect((await history(late.id)).map((h) => h.endedYear)).toEqual([13]);
+
+    const fresh53 = await createCharacter("Fresh", { party: "none", militia: 50 });
+    expect((await m.elections.appointStrategos(await fresh(archon.id), fresh53.id, at(53))).ok).toBe(true);
+    expect(await strategosSeat(fresh53.id)).toMatchObject({ termStartedYear: 13, termEndsYear: 19 });
+    await m.elections.syncElections(at(53));
+    await m.elections.syncElections(lastMomentOf(76));
+    expect(await strategosSeat(fresh53.id)).toBeDefined();
+    await m.elections.syncElections(at(77));
+    expect(await strategosSeat(fresh53.id)).toBeUndefined();
+    expect((await history(fresh53.id)).map((h) => h.endedYear)).toEqual([19]);
+  });
+
+  it("the death of one Strategos ends his own history row only", async () => {
+    const archon = await seatHolderOffice("archon", "palaioi", "Ajax", "palaioi");
+    const one = await createCharacter("One", { party: "palaioi", militia: 50 });
+    const two = await createCharacter("Two", { party: "dynatoi", militia: 50 });
+    expect((await m.elections.appointStrategos(await fresh(archon.id), one.id, at(30))).ok).toBe(true);
+    expect((await m.elections.appointStrategos(await fresh(archon.id), two.id, at(30))).ok).toBe(true);
+    await db.update(m.dbPkg.playerCharacters).set({ status: "deceased" }).where(eq(m.dbPkg.playerCharacters.id, one.id));
+    expect(await m.elections.reconcileOffices(at(31))).toBe(true);
+    expect(await strategosSeat(one.id)).toBeUndefined();
+    expect((await history(one.id)).map((h) => h.endedYear)).toEqual([7]);
+    expect(await strategosSeat(two.id)).toBeDefined();
+    expect((await history(two.id)).map((h) => h.endedYear)).toEqual([null]);
+  });
+
   // --- Campaign routine gating ----------------------------------------------
   it("the campaign routine is offered ONLY to a declared candidate, and grants party favor", async () => {
     const cand = await createCharacter("Kampaign", { party: "palaioi" });

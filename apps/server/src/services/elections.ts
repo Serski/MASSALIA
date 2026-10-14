@@ -6,6 +6,7 @@ import {
   declareCandidacy as dbDeclareCandidacy,
   electedTermCount,
   electionCandidateRows,
+  endStrategoiTerms,
   houses,
   isCandidate,
   officeHistoryRows,
@@ -28,6 +29,7 @@ import {
   gameDate,
   holderForfeitsOffice,
   strategosAppointRefusal,
+  strategosTermEndsYear,
   type AppointCandidate,
   type ElectionConfig,
   type LeagueOffice,
@@ -76,8 +78,17 @@ export async function syncElections(now: Date = new Date()): Promise<void> {
   const politics = getPoliticsConfig();
   const opened = await openElectionsIfDue(calendar, now);
   const advanced = await advanceElections(calendar, politics, now);
+  // The Strategoi are replaced with the elections (Strategoi prompt 1): their
+  // terms end at the office change. Never fails the sync: a failure is logged and
+  // the rest goes on; the next sync or the worker's sweep tries again.
+  let strategoiEnded = 0;
+  try {
+    strategoiEnded = await endStrategoiTerms(calendar, now);
+  } catch (error) {
+    console.error(`strategoi: failed ${error instanceof Error ? error.message : String(error)}`);
+  }
   const reconciled = await reconcileOffices(now);
-  if (opened.length || advanced.toVoting.length || advanced.resolved.length || reconciled) {
+  if (opened.length || advanced.toVoting.length || advanced.resolved.length || strategoiEnded || reconciled) {
     await broadcastState();
   }
 }
@@ -413,13 +424,14 @@ export async function reconcileOffices(now: Date = new Date()): Promise<boolean>
     changed = true;
   }
 
-  // Strategoi vacate on death only (title-only, no side to forfeit).
+  // A Strategos's seat falls vacant on his death (no side to forfeit); the end
+  // of his term is endStrategoiTerms's. Only his own office_history row ends.
   for (let slot = 0; slot < politics.offices.strategoi.count; slot++) {
     const current = (await officeRows(world.id)).find((r) => r.office === "strategos" && r.seatSlot === slot);
     if (!current?.holderCharacterId) continue;
     const holder = (await db.select({ status: playerCharacters.status }).from(playerCharacters).where(eq(playerCharacters.id, current.holderCharacterId)).limit(1))[0];
     if (holder && holder.status !== "alive") {
-      await endOpenHistory(world.id, "strategos", null, year);
+      await db.update(officeHistory).set({ endedYear: year }).where(and(eq(officeHistory.worldId, world.id), eq(officeHistory.office, "strategos"), eq(officeHistory.characterId, current.holderCharacterId), isNull(officeHistory.endedYear)));
       await vacateSeat(world.id, "strategos", null, slot);
       changed = true;
     }
@@ -520,13 +532,17 @@ export async function appointStrategos(actor: CharacterRow, candidateCharacterId
   const takenSlots = new Set(strategoiRows.map((r) => r.seatSlot));
   let slot = 0;
   while (takenSlots.has(slot) && strategoiRows.find((r) => r.seatSlot === slot)?.holderCharacterId) slot++;
-  const year = gameDate(now.getTime(), world.startedMs).yearInGame;
+  const date = gameDate(now.getTime(), world.startedMs);
+  const year = date.yearInGame;
+  // He serves to the end of the officials' term he was appointed in: the year
+  // of the next office change (Strategoi prompt 1).
+  const termEndsYear = strategosTermEndsYear(date.seasonIndex, electionConfig(getCalendarConfig()));
   await db
     .insert(offices)
-    .values({ worldId: world.id, office: "strategos", side: null, seatSlot: slot, holderCharacterId: candidateCharacterId, independentHolder: eligible.row.party === "none", acquiredVia: "appointed", termStartedYear: year, termEndsYear: null })
+    .values({ worldId: world.id, office: "strategos", side: null, seatSlot: slot, holderCharacterId: candidateCharacterId, independentHolder: eligible.row.party === "none", acquiredVia: "appointed", termStartedYear: year, termEndsYear })
     .onConflictDoUpdate({
       target: [offices.worldId, offices.office, offices.side, offices.seatSlot],
-      set: { holderCharacterId: candidateCharacterId, independentHolder: eligible.row.party === "none", acquiredVia: "appointed", termStartedYear: year, termEndsYear: null },
+      set: { holderCharacterId: candidateCharacterId, independentHolder: eligible.row.party === "none", acquiredVia: "appointed", termStartedYear: year, termEndsYear },
     });
   await db.insert(officeHistory).values({ worldId: world.id, characterId: candidateCharacterId, office: "strategos", side: null, startedYear: year, acquiredVia: "appointed" });
   await broadcastState();
