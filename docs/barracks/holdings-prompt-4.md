@@ -64,3 +64,13 @@ Not in the hour before the 00:00 UTC season rollover. git fetch; if origin/main 
 ## Scope fence
 
 Only the files the build names and their tests. Do not touch the holder's tribute, reversion or garrison rules, the muster's targets, its battle or its plunder, the League's war gate, its harvest ban or its no-mix rules, the conquest, raid, scout or battle rules, the intel rules or the Chronicle. No migration.
+
+## Rulings at STOP 1 (Argiris, 15 Oct 2026)
+
+Append these to docs/barracks/holdings-prompt-4.md as their own commit, then run the gate at the new HEAD.
+
+1. Your 1: the test change accepted. The League may stand in a sitting official's own house's holding; its men count for nothing to him, so there is no bar.
+2. Your 2 to 7 accepted, and every word as built. The new read in leagueDue runs inside settleLeagueQuietly, so a failure there logs "army: failed" and never fails GET /me/state.
+3. Your 8: yes, a browser check this time, on a throwaway database. As a sitting Archon in the League's mode, open a house's holding, use SEND MEN HERE, give the move on the League's order sheet, and show the men arrived and the place listed among the League's places. Then open a muster in the koinon form with a house's holding as the gathering place. Screenshots in the report, then drop that database. If anything in the check is off, STOP before the push.
+
+push, after the check. It must be out by 21:00 UTC today; if it is not, do not push tonight, and wait for my word in the morning. Report as the prompt lists.
