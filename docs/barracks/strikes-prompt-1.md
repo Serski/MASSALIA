@@ -134,3 +134,15 @@ Append these to docs/barracks/strikes-prompt-1.md in the first commit. Then buil
    War marches are unchanged. The tests follow: a raids march on R057's 11th fight brings 400 and, on today's numbers, picks Agathe (100) over Rhoda (120) and Emporion (250).
 6. Your 10: as designed. The Archons see the march 12 hours ahead and can garrison Agathe; if they outnumber the Volcae there, the march goes to the next target or stays home.
 7. Words: as proposed, with your changes, except the house's report line, which becomes "{m} of your men were among the defenders, and {l} of them fell."
+
+## Rulings at STOP 1 (Argiris, 15 Oct 2026, 21:50 UTC)
+
+Append these to docs/barracks/strikes-prompt-1.md as their own commit. Then make the one commit below, run the gate at the new HEAD, and push.
+
+1. Your 1 to 8 accepted, and every word as built.
+2. On your 2: a restart that weighs a season's war march again is acceptable for now. Keep it on the known gaps.
+3. The Guide has no entry on raids or war, so it gains one: `web: the Guide's entry on war and raids`. Title "War & Raids", placed after "The City's Politics". Its render test reads the numbers from content, as guide-intrigue.test.tsx does. The words:
+   - "Every town and land remembers its raiders. Raid one place more than 10 times in a game year and its people come back at full strength, against the Massalian town or holding beside it where they most outnumber the men standing there. The march is seen 12 hours before it strikes, and every man standing in that place fights it. A raid that gets through takes 2 drachmae for each raider still standing, from the treasury or from the house that holds the place, and a town loses some of its people."
+   - "When the chamber votes a war, raids on the enemy pay half as much again, and the League's army may raid and attack them. The enemy marches too: once a season, except in Winter, on the Massalian town or holding beside its land where it most outnumbers the men standing there. A holding it storms is lost."
+   - "Garrisons and warbands win back 30% of their full strength each season."
+4. push, tonight. git fetch first: if origin/main has moved since your gate, do not push tonight; STOP and wait for the morning. The push must be out by 22:30 UTC; if the gate at the new HEAD is not green by then, push nothing tonight. If CI goes red before Checkout, rerun it once; if Railway leaves the commit SKIPPED, deploy it as AGENTS.md says, the server first, then the worker. Start nothing after 22:45 UTC, and nothing at all between 23:00 and 00:00 UTC. Report as the prompt lists, as amended at STOP 0, and add, read only, worlds.strikes_from.
