@@ -676,6 +676,23 @@ describe("KoinonView · the muster", () => {
     expect(read).toHaveBeenCalledTimes(2);
   });
 
+  it("the gathering list shows the houses' holdings among Massalia's places, in the server's order, and a muster gathers in one", async () => {
+    // Holdings prompt 4: Massalia first, then the rest by name, a house's town (Reii) and land (Salyes) among them.
+    const gathers = [{ id: "R060", name: "Massalia" }, { id: "arelate", name: "Arelate" }, { id: "reii", name: "Reii" }, { id: "R046", name: "Salyes" }];
+    vi.spyOn(api, "koinonMusterTargets").mockImplementation(async (gatherId) => targetsFrom(gatherId ?? "R060", { gathers }));
+    const open = vi.spyOn(api, "koinonMusterOpen").mockResolvedValue({ ok: true, musterId: "m1", launchAt: inHours(1) });
+    const { card } = await show(inside("nikias"));
+    fireEvent.click(picker(card(), "gathering place"));
+    expect(optionTexts(card())).toEqual(["Massalia", "Arelate", "Reii", "Salyes"]);
+    fireEvent.click(picker(card(), "gathering place"));
+    await choose(card(), "gathering place", "Reii");
+    expect(api.koinonMusterTargets).toHaveBeenLastCalledWith("reii");
+    expect(picked(card(), "gathering place")).toBe("Reii");
+    fireEvent.click(button(card(), "Call the muster")!);
+    await tick(0);
+    expect(open).toHaveBeenCalledWith({ regionId: "R050", gatherId: "reii", leadMinutes: 30 });
+  });
+
   it("the targets are listed nearest first: land by steps, then sea by steps, then by name, and the form opens on the first", async () => {
     const target = (name: string, route: "land" | "sea", steps: number, townId: string | null = null) => ({ regionId: `R-${name}`, townId, name, kind: townId ? ("town" as const) : ("region" as const), route, steps });
     // As the server sends them: by name.

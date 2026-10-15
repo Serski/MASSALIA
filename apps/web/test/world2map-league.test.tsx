@@ -93,7 +93,8 @@ afterEach(() => {
 
 // `commander`: what GET /api/map/reach says of the seat (absent on an older
 // server). `leagueStatus`: what GET /api/map/league answers with.
-async function mountMap(opts: { commander?: boolean; military?: Record<string, unknown>; leagueStatus?: number; harvest?: { towns: Record<string, string>; regions: Record<string, string> } } = {}) {
+// `leagueView` and `houseReach` are laid over the fixtures' (holdings prompt 4).
+async function mountMap(opts: { commander?: boolean; military?: Record<string, unknown>; leagueStatus?: number; harvest?: { towns: Record<string, string>; regions: Record<string, string> }; leagueView?: Record<string, unknown>; houseReach?: Record<string, unknown> } = {}) {
   const posts: { url: string; body: unknown }[] = [];
   const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
@@ -107,8 +108,8 @@ async function mountMap(opts: { commander?: boolean; military?: Record<string, u
       if (url.includes("/api/map/league/act")) return jsonResponse({ report: SET_OUT, reach: { ...LEAGUE_VIEW, now: iso(Date.now()), treasury: { balance: 4972 } }, force: LEAGUE_VIEW.force, fleet: LEAGUE_VIEW.fleet, roster: LEAGUE_ROSTER });
       if (url.includes("/api/map/act")) return jsonResponse({ report: { ...SET_OUT, base: "R060" }, reach: { ...HOUSE_REACH, now: iso(Date.now()) }, force: HOUSE_REACH.force, fleet: HOUSE_REACH.fleet, roster: HOUSE_ROSTER });
     }
-    if (url.includes("/api/map/league")) return (opts.leagueStatus ?? 200) === 200 ? jsonResponse({ ...LEAGUE_VIEW, now: iso(Date.now()) }) : jsonResponse({ error: "Only a sitting Archon or Strategos commands the League's army." }, opts.leagueStatus);
-    if (url.includes("/api/map/reach")) return jsonResponse({ ...HOUSE_REACH, now: iso(Date.now()), ...(opts.commander === undefined ? {} : { commander: opts.commander }), ...(opts.harvest ? { harvest: opts.harvest } : {}) });
+    if (url.includes("/api/map/league")) return (opts.leagueStatus ?? 200) === 200 ? jsonResponse({ ...LEAGUE_VIEW, ...opts.leagueView, now: iso(Date.now()) }) : jsonResponse({ error: "Only a sitting Archon or Strategos commands the League's army." }, opts.leagueStatus);
+    if (url.includes("/api/map/reach")) return jsonResponse({ ...HOUSE_REACH, ...opts.houseReach, now: iso(Date.now()), ...(opts.commander === undefined ? {} : { commander: opts.commander }), ...(opts.harvest ? { harvest: opts.harvest } : {}) });
     if (url.includes("/api/barracks")) return jsonResponse({ roster: HOUSE_ROSTER });
     return jsonResponse({ error: "not found" }, 404);
   });
@@ -514,5 +515,73 @@ describe("holdingLine in the League's mode", () => {
   it("a house's lines are as they were", () => {
     expect(holdingLine(town)).toBe("Held by your house · tribute 120 dr a day");
     expect(holdingLine({ ...land, holding: { ...land.holding!, levyPerYear: 5 } })).toBe("Held by your house · 15 grain, 8 timber a day · +5 levy a year");
+  });
+});
+
+// Holdings prompt 4: the League's men may stand in a house's holding. In the
+// League's mode a house's town or land holding is among the League's move
+// targets (kind "guest"): SEND MEN HERE stands beside its actions, which keep
+// the holder's refusals, and opens the League's own order sheet for a move. In
+// the house's mode the same place opens the house's picker, as before.
+describe("a house's holding, for the League's men", () => {
+  const KONRAD = { playerId: "p-konrad", characterName: "Konrad Curze", houseName: "Leonidas" };
+  const AJAX = { playerId: "p-ajax", characterName: "Ajax Marius", houseName: "Kleitos" };
+  const HELD = { towns: {}, regions: {}, holdings: { towns: { reii: KONRAD }, regions: { R046: AJAX } } };
+  const guest = (base: string) => [
+    { id: "reii", regionId: "R047", townId: "reii", kind: "guest", name: "Reii", byBase: { [base]: { landSteps: 1, seaSteps: null } } },
+    { id: "R046", regionId: "R046", townId: null, kind: "guest", name: "Salyes", byBase: { [base]: { landSteps: 1, seaSteps: null } } },
+  ];
+  const labels = (card: Element) => [...card.querySelectorAll<HTMLButtonElement>(".w2map-action")].map((b) => [b.textContent, b.disabled, b.getAttribute("title")]);
+  const sheet = (m: Mounted) => m.q('.w2map-order[role="dialog"]');
+
+  it("in the League's mode a house's town holding shows SEND MEN HERE beside its actions, and it opens the League's order sheet for a move", async () => {
+    const m = await mountMap({ commander: true, military: HELD, leagueView: { moveTargets: [...LEAGUE_VIEW.moveTargets, ...guest("massalia")] } });
+    await m.toLeague();
+    const town = await openTown(m, "R047", "reii");
+    await vi.waitFor(() => expect(town.querySelectorAll(".w2map-action-move")).toHaveLength(1));
+    expect(town.querySelector(".w2map-held")!.textContent).toBe("Held by House Leonidas · Konrad Curze");
+    expect(labels(town)).toEqual([
+      ["Attack", true, "Another house holds this town."],
+      ["Raid", true, "Another house holds this town."],
+      ["Scout", false, null],
+      ["Colonise", true, "Colonies are founded in open country"],
+      ["Send men here", false, null],
+    ]);
+    await act(async () => {
+      fireEvent.click(town.querySelector<HTMLButtonElement>(".w2map-action-move")!);
+    });
+    await vi.waitFor(() => expect(sheet(m)).not.toBeNull());
+    expect(sheet(m)!.getAttribute("aria-label")).toBe("The League's order: Move to Reii");
+    expect(m.q(".w2map-modal:not(.w2map-order)")).toBeNull();
+  });
+
+  it("in the League's mode a house's land holding does the same", async () => {
+    const m = await mountMap({ commander: true, military: HELD, leagueView: { moveTargets: [...LEAGUE_VIEW.moveTargets, ...guest("massalia")] } });
+    await m.toLeague();
+    await act(async () => tap(m.svg, "R046"));
+    const card = m.q('[role="dialog"][data-region="R046"]')!;
+    await vi.waitFor(() => expect(card.querySelectorAll(".w2map-action-move")).toHaveLength(1));
+    expect(card.querySelector(".w2map-held")!.textContent).toBe("Held by House Kleitos · Ajax Marius");
+    expect(labels(card).map(([label]) => label)).toEqual(["Attack", "Raid", "Scout", "Colonise", "Send men here"]);
+    expect(labels(card).slice(0, 2)).toEqual([["Attack", true, "Another house holds this land."], ["Raid", true, "Another house holds this land."]]);
+    await act(async () => {
+      fireEvent.click(card.querySelector<HTMLButtonElement>(".w2map-action-move")!);
+    });
+    await vi.waitFor(() => expect(sheet(m)).not.toBeNull());
+    expect(sheet(m)!.getAttribute("aria-label")).toBe("The League's order: Move to Salyes");
+  });
+
+  it("in the house's mode nothing changes: the same holding opens the house's own picker, never the League's sheet", async () => {
+    const m = await mountMap({ commander: true, military: HELD, houseReach: { moveTargets: [...HOUSE_REACH.moveTargets, ...guest("R060")] }, leagueView: { moveTargets: [...LEAGUE_VIEW.moveTargets, ...guest("massalia")] } });
+    await vi.waitFor(() => expect(m.modeButtons()).toHaveLength(2));
+    const town = await openTown(m, "R047", "reii");
+    await vi.waitFor(() => expect(town.querySelectorAll(".w2map-action-move")).toHaveLength(1));
+    await act(async () => {
+      fireEvent.click(town.querySelector<HTMLButtonElement>(".w2map-action-move")!);
+    });
+    await vi.waitFor(() => expect(m.q('.w2map-modal[role="dialog"]')).not.toBeNull());
+    expect(m.q('.w2map-modal[role="dialog"]')!.getAttribute("aria-label")).toBe("Send men to Reii");
+    expect(sheet(m)).toBeNull();
+    expect(m.calls("/api/map/league")).toBe(0);
   });
 });
