@@ -48,6 +48,7 @@ import { regionDisplayName, townDisplayName } from "./mapNames.js";
 import { raidOpinion, raidWarMultiplier, type RaidOpinion } from "./factionOpinion.js";
 import { readRegionWarband, readTownFleet, readTownGarrison, regionContentOwner, townContentOwner, writeRegionWarband, writeTownGarrison } from "./mapPools.js";
 import { everyHousePlaces, forceRowOf, homeRegions } from "./mapReach.js";
+import { callDueStrikes, dueStrikes, resolveStrike } from "./strikes.js";
 import { townStats } from "./townStats.js";
 
 // ---------------------------------------------------------------------------
@@ -1194,10 +1195,17 @@ export type CampaignResolverDeps = {
   resolve?: (musterId: string, now: Date) => Promise<unknown>;
   resolveMarch?: (marchId: string, now: Date) => Promise<unknown>;
   onError?: (id: string, err: unknown) => void;
+  // The strikes (strikes prompt 1): calling, and a strike at its instant.
+  callStrikes?: (now: Date, opts: { raids?: boolean }) => Promise<void>;
+  resolveStrike?: (strikeId: string, now: Date) => Promise<unknown>;
 };
 
-type DueItem = { kind: "march" | "army" | "launch"; id: string; at: Date };
-const KIND_RANK: Record<DueItem["kind"], number> = { march: 0, army: 1, launch: 2 };
+type DueItem = { kind: "march" | "army" | "launch" | "strike"; id: string; at: Date };
+const KIND_RANK: Record<DueItem["kind"], number> = { march: 0, army: 1, launch: 2, strike: 3 };
+
+// The strikes never fail the request and never stop the campaigns (STOP 0
+// ruling 2 of strikes prompt 1): a failure is logged and the next pass tries again.
+const strikesFailed = (err: unknown) => console.error(`strikes: failed ${err instanceof Error ? err.message : String(err)}`);
 
 // Three indexed lists: open musters due at their launch, marching musters due
 // at their army's arrival, and marching parties due at their arrival. An item
@@ -1217,7 +1225,14 @@ async function dueCampaigns(now: Date): Promise<DueItem[]> {
   const launches = await db.select({ id: koinonMusters.id, at: koinonMusters.launchAt }).from(koinonMusters).where(and(eq(koinonMusters.status, "open"), lte(koinonMusters.launchAt, now)));
   const armies = await db.select({ id: koinonMusters.id, at: koinonMusters.arrivesAt }).from(koinonMusters).where(and(eq(koinonMusters.status, "marching"), lte(koinonMusters.arrivesAt, now)));
   const marches = await db.select({ id: playerMarches.id, at: playerMarches.arrivesAt }).from(playerMarches).where(and(eq(playerMarches.status, "marching"), lte(playerMarches.arrivesAt, now)));
+  let struck: { id: string; at: Date }[] = [];
+  try {
+    struck = await dueStrikes(now);
+  } catch (err) {
+    strikesFailed(err);
+  }
   const items: DueItem[] = [
+    ...struck.map((m) => ({ kind: "strike" as const, id: m.id, at: m.at })),
     ...marches.map((m) => ({ kind: "march" as const, id: m.id, at: m.at })),
     ...armies.flatMap((m) => (m.at ? [{ kind: "army" as const, id: m.id, at: m.at }] : [])),
     ...launches.map((m) => ({ kind: "launch" as const, id: m.id, at: m.at })),
@@ -1226,7 +1241,18 @@ async function dueCampaigns(now: Date): Promise<DueItem[]> {
 }
 export async function resolveDueCampaigns(now: Date, deps: CampaignResolverDeps = {}): Promise<void> {
   const taken = new Set<string>();
+  // The marches due are called first, and again after every fight resolved
+  // here (a fight may tip a place's raids count over): their strikes join the list.
+  let call: { raids: boolean } | null = { raids: false };
   for (;;) {
+    if (call) {
+      try {
+        await (deps.callStrikes ?? callDueStrikes)(now, call);
+      } catch (err) {
+        strikesFailed(err);
+      }
+      call = null;
+    }
     const next = (await dueCampaigns(now)).find((item) => {
       if (taken.has(`${item.kind}:${item.id}`)) return false;
       const failed = failedAt.get(item.id);
@@ -1235,12 +1261,16 @@ export async function resolveDueCampaigns(now: Date, deps: CampaignResolverDeps 
     if (!next) return;
     taken.add(`${next.kind}:${next.id}`);
     try {
-      const outcome = await (next.kind === "march" ? (deps.resolveMarch ?? resolveMarch) : (deps.resolve ?? resolveMuster))(next.id, now);
+      const outcome = await (next.kind === "strike" ? (deps.resolveStrike ?? resolveStrike) : next.kind === "march" ? (deps.resolveMarch ?? resolveMarch) : (deps.resolve ?? resolveMuster))(next.id, now);
       failedAt.delete(next.id);
+      // A fight may tip a raids count over; a strike clears its nation's road.
+      if (next.kind === "march" || next.kind === "army") call = { raids: true };
+      else if (next.kind === "strike") call = { raids: false };
       if ((outcome as { outcome?: string } | null | undefined)?.outcome === "busy") return;
     } catch (err) {
       failedAt.set(next.id, now.getTime());
-      (deps.onError ?? ((failedId, error) => console.error(`[campaign] resolve of ${failedId} failed`, error)))(next.id, err);
+      if (next.kind === "strike") strikesFailed(err);
+      else (deps.onError ?? ((failedId, error) => console.error(`[campaign] resolve of ${failedId} failed`, error)))(next.id, err);
     }
   }
 }

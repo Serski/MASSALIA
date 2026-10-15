@@ -39,3 +39,19 @@ export async function townDisplayName(townId: string): Promise<string> {
 export async function placeDisplayName(id: string, isTown: boolean): Promise<string> {
   return isTown ? townDisplayName(id) : regionDisplayName(id);
 }
+
+// The display name of a polity (the map's politics file, apps/web/public/map2/politics2.json):
+// a tribe the strikes name when no Diplomacy faction holds it (strikes prompt 1, call 16).
+const politicsFile = path.join(repoRoot, "apps/web/public/map2/politics2.json");
+let polityNames: Record<string, string> | null = null;
+export async function polityDisplayName(polityId: string): Promise<string> {
+  if (!polityNames) {
+    try {
+      const polities = (JSON.parse(await fs.readFile(politicsFile, "utf8")) as { polities?: Record<string, { name?: string }> }).polities ?? {};
+      polityNames = Object.fromEntries(Object.entries(polities).flatMap(([id, p]) => (typeof p.name === "string" ? [[id, p.name]] : [])));
+    } catch {
+      polityNames = {};
+    }
+  }
+  return polityNames[polityId] ?? polityId;
+}

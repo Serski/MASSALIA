@@ -83,6 +83,8 @@ export const leagueLedgerReason = {
   supplies: (orderId: string): string => `supplies:${orderId}`,
   plunder: (placeId: string, marchId: string): string => `plunder:${placeId}:${marchId}`,
   tribute: (placeId: string, day: number): string => `tribute:${placeId}:d${day}`,
+  // A raid by a nation that won on a home town or a League holding (strikes prompt 1).
+  strike: (nationId: string, placeId: string, strikeId: string): string => `strike:${nationId}:${placeId}:${strikeId}`,
 } as const;
 
 // The place a plunder or tribute row names (a town slug or a region id); null for any other reason.
