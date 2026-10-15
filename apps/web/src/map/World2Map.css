@@ -730,6 +730,10 @@ p.w2map-stat-asof {
 }
 
 .w2map-held { margin: 0 0 10px; color: var(--dash-gold-bright, var(--accent-bright)); font-size: 12px; }
+/* A nation's march on the place, or how it ended (strikes prompt 1). */
+.w2map-strike { margin: 0 0 10px; padding: 6px 8px; border-left: 2px solid var(--dash-bad, #c0533a); color: var(--dash-parchment, inherit); font-size: 12px; line-height: 1.4; }
+.w2map-strike-marching { background: rgba(192, 83, 58, 0.12); }
+.w2map-strike-date { color: var(--dash-stone-dim, var(--muted)); }
 
 .w2map-report-line { margin: 0 0 10px; font-family: "Spectral", serif; font-size: 14px; line-height: 1.4; }
 .w2map-report-table { width: 100%; margin: 0 0 10px; font-size: 12px; border-collapse: collapse; }

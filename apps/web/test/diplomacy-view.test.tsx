@@ -63,3 +63,24 @@ describe("the Diplomacy tab's War badge", () => {
     });
   });
 });
+
+// Strikes prompt 1: a nation's march under the nation.
+describe("a nation's strike on the Diplomacy page", () => {
+  const marching = { status: "marching" as const, place: "Agathe", line: "The Volcae march on Agathe with about 470 men. They strike at 12:00 UTC.", dateLabel: "Autumn, 291 BC" };
+  const ended = { status: "struck" as const, place: "Arelate", line: "The Cadurci struck at Arelate and were driven off. 30 of them fell, and 4 of the defenders.", dateLabel: "Summer, 291 BC" };
+  it("a march on the road shows a badge in the list and its line in the nation's panel; how one ended shows dated in the panel alone; none without", async () => {
+    const { container } = await mount([faction("volcae", "Volcae", { strike: marching }), faction("cadurci", "Cadurci", { strike: ended }), faction("ruteni", "Ruteni", { strike: null })]);
+    const rows = [...container.querySelectorAll<HTMLButtonElement>("button.atlas-row")];
+    const badge = (row: HTMLElement) => [...row.querySelectorAll("span")].find((x) => x.textContent?.startsWith("⚑"))?.textContent ?? null;
+    expect(rows.map((r) => badge(r))).toEqual(["⚑ Marching on Agathe", null, null]);
+    const open = async (i: number) => {
+      await act(async () => {
+        rows[i]!.click();
+      });
+      return container.querySelector<HTMLElement>(".diplomacy-strike");
+    };
+    expect((await open(0))!.textContent).toBe(marching.line);
+    expect((await open(1))!.textContent).toBe(`${ended.line} · Summer, 291 BC`);
+    expect(await open(2)).toBeNull();
+  });
+});

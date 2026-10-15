@@ -177,10 +177,11 @@ function StatChips({ stats }: { stats: Record<string, number> }) {
 // --- Reports (raids prompts 4 and 5) ------------------------------------------
 
 // The place a report is about: its town, else its region, else the id.
-const reportPlace = (r: BarracksReport) => r.report.townName ?? r.report.regionName ?? r.townId ?? r.regionId;
+const reportPlace = (r: BarracksReport) => (r.kind === "strike" ? (r.townId ?? r.regionId) : (r.report.townName ?? r.report.regionName ?? r.townId ?? r.regionId));
 
 // One title per report: how the party or the koinon's army fared at the place.
 export function reportTitle(r: BarracksReport): string {
+  if (r.kind === "strike") return r.title;
   const place = reportPlace(r);
   const outcome = r.kind === "muster" ? r.report.outcome : r.report.winner;
   if (outcome === "turned_back") return `Turned back from ${place}`;
@@ -204,7 +205,7 @@ function ReportsBox({ reports, onOpen }: { reports: BarracksReport[]; onOpen: (r
               <div className="barracks-row-name">{reportTitle(r)}</div>
               <span className="barracks-tags">
                 {r.seen ? null : <span className="barracks-tag barracks-tag-new">NEW</span>}
-                <span className="barracks-tag">{MISSION_TAG[r.kind]}</span>
+                <span className="barracks-tag">{r.kind === "strike" ? "STRIKE" : MISSION_TAG[r.kind]}</span>
               </span>
             </div>
           </button>
@@ -216,6 +217,26 @@ function ReportsBox({ reports, onOpen }: { reports: BarracksReport[]; onOpen: (r
 
 // A koinon muster's report card, built as the map's BattleReport card is: the
 // head, the game date and the koinon's name, then the report's body.
+// A nation's strike (strikes prompt 1): the server's result, then the player's own part.
+function StrikeReportCard({ report, onClose }: { report: Extract<BarracksReport, { kind: "strike" }>; onClose: () => void }) {
+  return (
+    <div className="w2map-modal" role="dialog" aria-label={report.title} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+      <div className="w2map-modal-card">
+        <button type="button" className="w2map-info-close" onClick={onClose} aria-label="Close">Close</button>
+        <div className="w2map-info-body">
+          <div className="w2map-info-label">{report.title}</div>
+          <p className="w2map-report-note" data-testid="report-date">{report.gameDate}</p>
+          <p className="w2map-report-line">{report.line}</p>
+          {report.yourPart ? <p className="w2map-report-line strike-your-part">{report.yourPart}</p> : null}
+          <div className="w2map-actions">
+            <button type="button" className="w2map-action" onClick={onClose}>Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MusterReportCard({ report, onClose }: { report: Extract<BarracksReport, { kind: "muster" }>; onClose: () => void }) {
   const place = reportPlace(report);
   return (
@@ -953,7 +974,7 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
             onOpen={(r) => {
               setOpenReport(r);
               // Opened for the first time: the highlight goes, and stays gone. A failed read leaves it.
-              if (!r.seen) api.barracksReportRead(r.kind === "muster" ? { musterId: r.id } : { marchId: r.id }).then(setView).catch(() => {});
+              if (!r.seen) api.barracksReportRead(r.kind === "muster" ? { musterId: r.id } : r.kind === "strike" ? { strikeId: r.id } : { marchId: r.id }).then(setView).catch(() => {});
             }}
           />
         </div>
@@ -1047,6 +1068,8 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
         <div className="w2map-modal-host">
           {openReport.kind === "muster" ? (
             <MusterReportCard report={openReport} onClose={() => setOpenReport(null)} />
+          ) : openReport.kind === "strike" ? (
+            <StrikeReportCard report={openReport} onClose={() => setOpenReport(null)} />
           ) : (
             <BattleReport report={openReport.report} gameDate={openReport.gameDate} onClose={() => setOpenReport(null)} />
           )}

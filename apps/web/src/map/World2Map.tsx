@@ -131,7 +131,20 @@ type TownStatsFile = { version: number; towns: Record<string, TownStats> };
 type MilitarySource = "home" | "intel";
 type TownMilitaryView = { garrison: number; pentekonters: number; triremes: number; source: MilitarySource; scoutedGameDate?: string };
 type RegionMilitaryView = { warband: number; source: MilitarySource; scoutedGameDate?: string };
-type MilitaryPayload = { towns: Record<string, TownMilitaryView>; regions: Record<string, RegionMilitaryView>; holdings?: PublicHoldings };
+// A nation's march on a place, or how it ended within the year (strikes prompt
+// 1): its words alone, for everyone. Optional: an older server sends none.
+export type MapStrike = { nation: string; status: "marching" | "struck" | "called_off"; mode: "raid" | "attack"; trigger: "war" | "raids"; about: number; strikesAt: string; line: string; dateLabel: string };
+type MilitaryPayload = { towns: Record<string, TownMilitaryView>; regions: Record<string, RegionMilitaryView>; holdings?: PublicHoldings; strikes?: { towns: Record<string, MapStrike>; regions: Record<string, MapStrike> } };
+// The strike line on a place's panel: the march on the road, or how it ended (dated).
+export function StrikeLine({ strike }: { strike: MapStrike | null | undefined }) {
+  if (!strike) return null;
+  return (
+    <p className={`w2map-strike w2map-strike-${strike.status}`} data-strike={strike.status}>
+      {strike.line}
+      {strike.status === "marching" ? null : <span className="w2map-strike-date"> · {strike.dateLabel}</span>}
+    </p>
+  );
+}
 
 type Rect = { x: number; y: number; w: number; h: number };
 type Box = { w: number; h: number };
@@ -462,7 +475,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
     fetch(MILITARY_SRC, { credentials: "include" })
       .then((response) => (response.ok ? (response.json() as Promise<MilitaryPayload>) : null))
       .then((payload) => {
-        if (payload) setMilitary({ towns: payload.towns ?? {}, regions: payload.regions ?? {}, holdings: payload.holdings ?? NO_HOLDINGS });
+        if (payload) setMilitary({ towns: payload.towns ?? {}, regions: payload.regions ?? {}, holdings: payload.holdings ?? NO_HOLDINGS, strikes: payload.strikes ?? { towns: {}, regions: {} } });
       })
       .catch(() => {});
   }, []);
@@ -1409,6 +1422,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
             {yourMenHere ? <p className="w2map-your-men">{yourMenHere}</p> : null}
             {selectedHeld ? <p className="w2map-held">{heldLine(heldRegions.get(selectedProvince.id) ?? null) ?? (league ? "Held by the League." : "Held by your house — a base for your forces.")}</p> : null}
             {!selectedHeld && regionHolderOther ? <p className="w2map-held">{holderLine(regionHolderOther)}</p> : null}
+            <StrikeLine strike={military.strikes?.regions[selectedProvince.id]} />
             {sendMenHere || selectedProvince.towns.length === 0 ? <div className="w2map-info-label">Actions</div> : null}
             {sendMenHere && !sendMenBeside ? sendMenHere : (selectedProvince.towns.length > 0 ? null : (
               <div className="w2map-actions">
@@ -1450,6 +1464,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
       held={selectedTownHeld}
       league={league}
       holder={townHolderOther}
+      strike={military.strikes?.towns[selectedTownObj.id]}
       yourMen={yourMenHere}
       actions={townActions!}
       canSendMen={sendMenHere !== null}
@@ -1668,6 +1683,7 @@ export function TownPanel({
   held,
   league = false,
   holder,
+  strike = null,
   yourMen,
   actions,
   canSendMen,
@@ -1691,6 +1707,8 @@ export function TownPanel({
   /** the League's mode: a held town is the League's holding */
   league?: boolean;
   holder: HoldingHolder | null;
+  /** a nation's march on the town, or how it ended (strikes prompt 1) */
+  strike?: MapStrike | null;
   yourMen: string | null;
   actions: { buttons: MapActionButton[]; caption: string | null };
   canSendMen: boolean;
@@ -1747,6 +1765,7 @@ export function TownPanel({
         {mil?.source === "intel" ? <p className="w2map-stat-asof">{asOf(mil.scoutedGameDate)}</p> : null}
         {yourMen ? <p className="w2map-your-men">{yourMen}</p> : null}
         {held ? <p className="w2map-held">{holdingLine(held, league)}</p> : holder ? <p className="w2map-held">{holderLine(holder)}</p> : null}
+        <StrikeLine strike={strike} />
         <div className="w2map-info-label">Actions</div>
         {canSendMen && !sendMenBeside ? (
           <div className="w2map-actions">

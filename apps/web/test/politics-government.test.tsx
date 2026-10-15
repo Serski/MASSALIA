@@ -286,6 +286,27 @@ describe("the Government tab", () => {
     expect(card.previousElementSibling!.className).toContain("government-projects");
   });
 
+  // Strikes prompt 1: the nations' marches on the Government tab.
+  it("a member sees the strikes: the march on the road, then the year's results dated; none, and no card, without", async () => {
+    const strikes = [
+      { id: "s-2", nation: "the Volcae", place: "Agathe", trigger: "war" as const, mode: "raid" as const, status: "marching" as const, about: 470, strikesAt: new Date().toISOString(), line: "The Volcae march on Agathe with about 470 men. They strike at 12:00 UTC.", dateLabel: "Autumn, 291 BC" },
+      { id: "s-1", nation: "the Sordones", place: "Rhoda", trigger: "raids" as const, mode: "raid" as const, status: "struck" as const, about: 400, strikesAt: new Date().toISOString(), line: "The Sordones broke into Rhoda. They carried off 700 drachmae from the treasury, and 50 of its people were lost.", dateLabel: "Summer, 291 BC" },
+    ];
+    const { container } = await mount({ ...member([{ office: "strategos", side: null }], scope("league", { phase: "voting" })), army: ARMY, strikes });
+    fireEvent.click(container.querySelectorAll<HTMLButtonElement>(".cs-tab")[1]!);
+    const card = container.querySelector(".government-strikes")!;
+    expect(text(card as HTMLElement, ".dashboard-label")).toBe("Strikes");
+    expect([...card.querySelectorAll("li")].map((li) => [li.getAttribute("data-strike"), li.textContent])).toEqual([
+      ["marching", strikes[0]!.line],
+      ["struck", `${strikes[1]!.line} · Summer, 291 BC`],
+    ]);
+    cleanup();
+    vi.restoreAllMocks();
+    const none = await mount({ ...member([{ office: "strategos", side: null }], scope("league", { phase: "voting" })), army: ARMY });
+    fireEvent.click(none.container.querySelectorAll<HTMLButtonElement>(".cs-tab")[1]!);
+    expect(none.container.querySelector(".government-strikes")).toBeNull();
+  });
+
   it("the card's words \"a quarter drachma a man\" hold only while league-army.json's upkeep is 0.25 a man a season", () => {
     // The phrase is written out on the card; the rate is content. If this fails,
     // the content moved: change the card's words with it.

@@ -75,6 +75,7 @@ export function GovernmentView({ view, onRefresh }: { view: MemberView; onRefres
   const orders = view.army?.orders ?? [];
   const reports = view.army?.reports ?? [];
   const sightings = view.army?.sightings ?? [];
+  const strikes = view.strikes ?? [];
   return (
     <div className="pol-page">
       <DashboardCard className="treasury-card government-seats">
@@ -210,6 +211,23 @@ export function GovernmentView({ view, onRefresh }: { view: MemberView; onRefres
                 </ul>
               </>
             ) : null}
+          </div>
+        </DashboardCard>
+      ) : null}
+
+      {/* The nations' marches on Massalia's towns and holdings (strikes prompt 1): on the road, and the year's results. */}
+      {strikes.length > 0 ? (
+        <DashboardCard className="treasury-card government-strikes">
+          <div className="event-body">
+            <span className="dashboard-label">Strikes</span>
+            <ul className="treasury-ledger government-strikes-list">
+              {strikes.map((x) => (
+                <li key={x.id} data-strike={x.status}>
+                  {x.line}
+                  {x.status === "marching" ? null : ` · ${x.dateLabel}`}
+                </li>
+              ))}
+            </ul>
           </div>
         </DashboardCard>
       ) : null}

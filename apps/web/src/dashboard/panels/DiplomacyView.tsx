@@ -123,6 +123,7 @@ function FactionStatusBadges({ faction }: { faction: FactionView }) {
       {faction.atWar ? <StatusBadge label={faction.warThroughLabel ? `⚔ War through ${faction.warThroughLabel}` : "⚔ War"} title="At war with Massalia" color="var(--dash-bad)" /> : null}
       {faction.allied ? <StatusBadge label="🤝 Allied" title="Allied with Massalia" color="var(--dash-good)" /> : null}
       {faction.vassal ? <StatusBadge label="⛓ Vassal" title="Vassal of Massalia" color="var(--dash-gold-bright)" /> : null}
+      {faction.strike?.status === "marching" ? <StatusBadge label={`⚑ Marching on ${faction.strike.place}`} title={faction.strike.line} color="var(--dash-bad)" /> : null}
     </>
   );
 }
@@ -214,6 +215,12 @@ function FactionDetail({ faction, onClose }: { faction: FactionView | null; onCl
           </div>
 
           <p style={{ color: "var(--dash-parchment)", lineHeight: 1.55, margin: "0 0 18px" }}>{faction.blurb}</p>
+          {faction.strike ? (
+            <p className="diplomacy-strike" data-strike={faction.strike.status} style={{ color: "var(--dash-parchment)", lineHeight: 1.5, margin: "0 0 18px", padding: "6px 10px", borderLeft: "2px solid var(--dash-bad)" }}>
+              {faction.strike.line}
+              {faction.strike.status === "marching" ? null : <span style={{ color: "var(--dash-stone-dim)" }}> · {faction.strike.dateLabel}</span>}
+            </p>
+          ) : null}
 
           <OpinionBar opinion={faction.opinion} color={color} height={14} />
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, color: "var(--dash-stone-dim)", fontSize: "0.72em", fontVariantNumeric: "tabular-nums" }}>

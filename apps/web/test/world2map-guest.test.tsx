@@ -173,3 +173,27 @@ describe("another house's holding on the map", () => {
     expect(view.container.querySelector(".w2map-pick-why")!.textContent).toBe("Men may only be sent to Massalia's own ground or to a house's holding.");
   });
 });
+
+// Strikes prompt 1: a nation's march, and how it ended, on the target's panel for everyone.
+describe("a nation's strike on the map", () => {
+  const march = { nation: "the Saluvii", status: "marching", mode: "attack", trigger: "war", about: 160, strikesAt: iso(Date.now() + 3_600_000), line: "The Saluvii march on Reii with about 160 men. They strike at 12:00 UTC.", dateLabel: "Autumn, 291 BC" };
+  const ended = { nation: "the Volcae", status: "struck", mode: "raid", trigger: "raids", about: 200, strikesAt: iso(Date.now() - 3_600_000), line: "The Volcae broke into Salyes and carried off 20 drachmae from House Kleitos.", dateLabel: "Summer, 291 BC" };
+  const withStrikes = { ...MILITARY, strikes: { towns: { reii: march }, regions: { R046: ended } } };
+  it("a town's panel shows the march on the road; a land's panel how one ended, dated; a place without, nothing", async () => {
+    const m = await mountMap({ military: withStrikes });
+    const card = await openReii(m);
+    expect(card.querySelector(".w2map-strike")!.textContent).toBe(march.line);
+    expect(card.querySelector(".w2map-strike")!.getAttribute("data-strike")).toBe("marching");
+    cleanup();
+    vi.restoreAllMocks();
+    const again = await mountMap({ military: withStrikes });
+    await act(async () => tap(again.svg, "R046"));
+    const land = again.q('[role="dialog"][data-region="R046"]')!;
+    expect(land.querySelector(".w2map-strike")!.textContent).toBe(`${ended.line} · Summer, 291 BC`);
+    cleanup();
+    vi.restoreAllMocks();
+    const plain = await mountMap();
+    const town = await openReii(plain);
+    expect(town.querySelector(".w2map-strike")).toBeNull();
+  });
+});

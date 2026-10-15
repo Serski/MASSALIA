@@ -303,6 +303,27 @@ describe("BarracksPanel", () => {
     expect(hookWarnings).toEqual([]);
   });
 
+  // Strikes prompt 1: a nation's strike where his men stood.
+  it("a strike's report: its title and the STRIKE tag, unread until opened; the card holds the result and his part; the read goes by strikeId", async () => {
+    const strike: BarracksReport = { id: "st-1", kind: "strike", regionId: "R050", townId: "agathe", arrivedAt: iso(NOW - H), gameDate: "Autumn, 277 BC", seen: false, title: "The Volcae at Agathe", line: "The Volcae struck at Agathe and were driven off. 120 of them fell, and 35 of the defenders.", yourPart: "60 of your men were among the defenders, and 12 of them fell." };
+    const read = vi.spyOn(api, "barracksReportRead").mockResolvedValueOnce(payload({ reports: [{ ...strike, seen: true }] }));
+    const { container } = await mount(payload({ reports: [strike] }));
+    const row = container.querySelector<HTMLButtonElement>('.barracks-report[data-report="st-1"]')!;
+    expect(row.querySelector(".barracks-row-name")!.textContent).toBe("The Volcae at Agathe");
+    expect([...row.querySelectorAll(".barracks-tag")].map((t) => t.textContent)).toEqual(["NEW", "STRIKE"]);
+    expect(row.textContent).not.toContain("driven off");
+    await act(async () => {
+      fireEvent.click(row);
+    });
+    const card = container.querySelector(".w2map-modal-host [role=\"dialog\"]")!;
+    expect(card.getAttribute("aria-label")).toBe("The Volcae at Agathe");
+    expect([...card.querySelectorAll(".w2map-report-line")].map((l) => l.textContent)).toEqual([strike.line, "60 of your men were among the defenders, and 12 of them fell."]);
+    expect(card.querySelector('[data-testid="report-date"]')!.textContent).toBe("Autumn, 277 BC");
+    expect(read).toHaveBeenCalledWith({ strikeId: "st-1" });
+    await act(async () => { await Promise.resolve(); });
+    expect(container.querySelector('.barracks-report[data-report="st-1"]')!.classList.contains("is-new")).toBe(false);
+  });
+
   it("a party that turns for home counts down again: one refetch at its arrival, none at the turn", async () => {
     const out = row({ id: "party", unitId: "hoplite", label: "Hoplite", plural: "Hoplites", count: 30, startCount: 30, movingTo: "R046", arrivesAt: iso(NOW - 1000), mission: { kind: "raid", regionId: "R046", departedAt: iso(NOW - 31 * 60_000), marchId: "m-1" } });
     const back = row({ ...out, movingTo: "R060", arrivesAt: iso(NOW + 30 * 60_000), mission: { kind: "raid", regionId: "R046", departedAt: iso(NOW - 31 * 60_000) } });

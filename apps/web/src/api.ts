@@ -662,7 +662,7 @@ export const api = {
   barracksCancel: (rowId: string) => apiFetch<BarracksView>("/api/barracks/cancel", { method: "POST", body: { rowId } }),
   // A battle report opened for the first time (raids prompt 4): the highlight goes. Answers the view.
   // A march's report by its marchId, a koinon muster's by its musterId (raids prompt 5).
-  barracksReportRead: (body: { marchId: string } | { musterId: string }) => apiFetch<BarracksView>("/api/barracks/report-read", { method: "POST", body }),
+  barracksReportRead: (body: { marchId: string } | { musterId: string } | { strikeId: string }) => apiFetch<BarracksView>("/api/barracks/report-read", { method: "POST", body }),
   // Map reach (military prompt 3a): which land provinces the player's force can
   // Attack, Raid or Colonise from its bases, with a one-line reason when not.
   mapReach: () => apiFetch<MapReachView>("/api/map/reach"),
@@ -823,7 +823,10 @@ export type LeagueUnitsView = { hoplite: number; peltast: number; ekdromos: numb
 export type LeagueOrderKind = "move" | "scout" | "raid" | "attack";
 export type GovernmentArmyParty = { kind: LeagueOrderKind; returning: boolean; from: string; to: string; units: LeagueUnitsView; men: number; arrivesAt: string };
 export type GovernmentArmyOrder = { id: string; kind: LeagueOrderKind; by: string; office: "archon" | "strategos"; side: string | null; from: string; to: string; units: LeagueUnitsView; men: number; suppliesCost: number; dateLabel: string; orderedAt: string };
-export type GovernmentArmyReport = { id: string; kind: LeagueOrderKind; to: string; line: string; dateLabel: string; arrivedAt: string };
+// kind "strike": a nation's march on a place of the League's (strikes prompt 1).
+export type GovernmentArmyReport = { id: string; kind: LeagueOrderKind | "strike"; to: string; line: string; dateLabel: string; arrivedAt: string };
+// A nation's march on the road, or how it ended within the year (strikes prompt 1): its words and its "about" alone.
+export type GovernmentStrikeView = { id: string; nation: string; place: string; trigger: "war" | "raids"; mode: "raid" | "attack"; status: "marching" | "struck" | "called_off"; about: number; strikesAt: string; line: string; dateLabel: string };
 export type GovernmentArmyView = {
   towns: { townId: string; name: string; units: LeagueUnitsView; men: number }[];
   holdings?: { id: string; name: string; units: LeagueUnitsView; men: number; minGarrison: number }[];
@@ -853,6 +856,8 @@ export type GovernmentView =
       war?: AgendaScopeView;
       // The League's army (government prompt 5a). Optional: an old server sends none.
       army?: GovernmentArmyView;
+      // The nations' marches and the year's results, newest first (strikes prompt 1). Optional: an old server sends none.
+      strikes?: GovernmentStrikeView[];
     };
 
 // The men the server would accept for the seat (Strategoi prompt 1), each with his sheet Militia.
@@ -957,6 +962,8 @@ export type FactionView = {
   atWar: boolean;
   // While the League is at war with it (government prompt 4): the game date of the war's last season. Optional: an old server sends none.
   warThroughLabel?: string | null;
+  // Its march on a Massalian place, or how its last one ended within the year (strikes prompt 1). Optional: an old server sends none.
+  strike?: { status: "marching" | "struck" | "called_off"; place: string; line: string; dateLabel: string } | null;
   allied: boolean;
   vassal: boolean;
   // Governance + people (Diplomacy D3). personal ⇒ ruler/heir (+ warChief or null);
@@ -1885,7 +1892,10 @@ export type BarracksOffer = {
 // (raids prompt 5; MusterReportView): the muster he took part in, with the koinon's name.
 export type BarracksReport =
   | { id: string; kind: MapActType; regionId: string; townId: string | null; arrivedAt: string; gameDate: string; seen: boolean; report: MapActReport }
-  | { id: string; kind: "muster"; regionId: string; townId: string | null; arrivedAt: string; gameDate: string; seen: boolean; koinonName: string; report: KoinonMusterReport };
+  | { id: string; kind: "muster"; regionId: string; townId: string | null; arrivedAt: string; gameDate: string; seen: boolean; koinonName: string; report: KoinonMusterReport }
+  // A nation's strike where the player's men stood, or on his holding (strikes prompt 1): the
+  // server's title and result, and his own part (null for a holder with no men there).
+  | { id: string; kind: "strike"; regionId: string; townId: string | null; arrivedAt: string; gameDate: string; seen: boolean; title: string; line: string; yourPart: string | null };
 // Hulls at sea (raids prompt 3): one entry per sailing, listed under Away · Returning.
 export type BarracksVoyage = { id: string; ships: { id: string; label: string; count: number }[]; kind: "scout" | "raid" | "attack" | "move"; musterId: string | null; regionId: string; townId: string | null; sailedAt: string; returnsAt: string };
 export type BarracksView = {
