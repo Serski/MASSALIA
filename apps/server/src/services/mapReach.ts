@@ -161,6 +161,16 @@ export async function guestPlaces(exec: Exec, ctx: ActingContext): Promise<{ id:
     .map((h) => ({ id: h.townId || h.regionId, regionId: h.regionId, townId: h.townId || null }));
 }
 
+// The places every house may stand in (holdings prompt 4): the Massalia
+// region, every home place and every house's holding, never the League's. A
+// koinon's muster gathers in one of them, since its members' men all stand there.
+export async function everyHousePlaces(exec: Exec, worldId: string): Promise<{ id: string; regionId: string; townId: string | null }[]> {
+  const topology = getTopology();
+  const places: { id: string; regionId: string; townId: string | null }[] = [{ id: topology.massaliaRegion, regionId: topology.massaliaRegion, townId: null }, ...(await homePlaces(topology))];
+  for (const h of await listWorldHoldings(exec, worldId)) if (!h.league) places.push({ id: h.townId || h.regionId, regionId: h.regionId, townId: h.townId || null });
+  return places;
+}
+
 // The places a house may move its men to, and so the places they may stand
 // in: the Massalia region, every home place, its own holdings and every other
 // house's. The settle turns home any of its men standing anywhere else, or

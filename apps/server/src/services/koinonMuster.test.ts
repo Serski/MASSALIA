@@ -38,7 +38,8 @@ async function loadModules() {
   const koinon = await import("./koinon.js");
   const muster = await import("./koinonMuster.js");
   const age = await import("./age.js");
-  return { dbPkg, buildings, barracks, mapGraph, mapActions, mapReach, koinon, muster, age };
+  const holdings = await import("./holdings.js");
+  return { dbPkg, buildings, barracks, mapGraph, mapActions, mapReach, koinon, muster, age, holdings };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -1150,6 +1151,200 @@ suite("Koinon muster (integration)", () => {
     expect(await unitRow(row)).toMatchObject({ count: 20, mission: null, movingTo: null, arrivesAt: null });
     expect((await logs(member, "koinon_muster")).length).toBe(0);
     expect(await db.select().from(m.dbPkg.townMilitary)).toEqual([]);
+  });
+
+  // --- a house's holding as the gathering place (holdings prompt 4) -----------------
+
+  // A conquest held since `since`, last garrisoned at `garrisonedAt`.
+  const holdingAt = (regionId: string, townId: string, owner: string, garrisonedAt = NOW, since = at(-DAY)) => ({ worldId, regionId, townId, ownerPlayerId: owner, kind: "conquest" as const, previousOwner: "unclaimed", since, lastGarrisonedAt: garrisonedAt, lastTributeAt: since });
+  const targetsFrom = async (playerId: string, gatherId: unknown) => {
+    const view = await m.muster.musterTargets(await ctx(playerId), gatherId, NOW);
+    if ("error" in view) throw new Error(view.error);
+    return view;
+  };
+  // A town one land step from the land holding (landRegion: every land beside it answers to its towns), as the target of an army gathered there.
+  const landTargetFrom = async (playerId: string) => {
+    const t = (await targetsFrom(playerId, landRegion)).targets.find((t) => t.kind === "town" && t.route === "land" && t.steps === 1)!;
+    return { regionId: t.regionId, townId: t.townId! };
+  };
+  // A row standing at the land holding, pledged to the muster.
+  const pledgedThere = (playerId: string, unitId: string, count: number, musterId: string, n: number, target: { regionId: string; townId: string }) =>
+    men(playerId, unitId, count, landRegion, { id: uid(n), mission: { kind: "muster", musterId, ...target, departedAt: NOW.toISOString() } });
+  const holdingsNow = () => db.select().from(m.dbPkg.playerHoldings).orderBy(asc(m.dbPkg.playerHoldings.regionId));
+
+  it("a muster gathers in a house's holding: a town and a land are on the gathering list among Massalia's places, a League holding is not; members move men there as holder or guest and pledge them; the targets are listed from there", async () => {
+    const [a, b, x] = [await freshPlayer("Kallias", 100_000, 1), await freshPlayer("Nikias", 100_000, 2), await freshPlayer("Xenos", 100_000, 9)];
+    await koinonOf("The Sacred Band", [a, b]);
+    const fromMassalia = await geography(a);
+    const town = fromMassalia.targets.find((t) => t.kind === "town" && t.route === "land" && t.steps === 1)!;
+    const leagueTown = fromMassalia.targets.find((t) => t.kind === "town" && t.townId !== town.townId)!;
+    const league = (await db.insert(m.dbPkg.players).values({ worldId, kind: "league", userId: null, name: "The League", color: "#000000" }).returning())[0]!.id;
+    // Kallias holds the town, Xenos (no member) the land, the League another town.
+    await db.insert(m.dbPkg.playerHoldings).values([holdingAt(town.regionId, town.townId!, a), holdingAt(landRegion, "", x), holdingAt(leagueTown.regionId, leagueTown.townId!, league)]);
+
+    // The list: Massalia first, then the rest by name, the two houses' holdings among them and never the League's.
+    const view = await targetsFrom(a, undefined);
+    expect(view.gathers[0]).toMatchObject({ id: massalia });
+    const ids = view.gathers.map((g) => g.id);
+    expect(ids).toEqual(expect.arrayContaining([town.townId, landRegion, otherHomePlace]));
+    expect(ids).not.toContain(leagueTown.townId);
+    const names = view.gathers.slice(1).map((g) => g.name);
+    expect(names).toEqual([...names].sort((p, q) => p.localeCompare(q)));
+    expect(await open(a, { gatherId: leagueTown.townId })).toEqual({ ok: false, code: 400, error: "Choose a gathering place on Massalia's own ground." });
+    expect(await m.muster.musterTargets(await ctx(a), leagueTown.townId, NOW)).toEqual({ ok: false, code: 400, error: "Choose a gathering place on Massalia's own ground." });
+
+    // The targets from the land holding: reachable from there, and no held place among them.
+    const fromLand = await targetsFrom(a, landRegion);
+    expect(fromLand.gatherId).toBe(landRegion);
+    const held = new Set([town.townId, landRegion, leagueTown.townId]);
+    expect(fromLand.targets.some((t) => held.has(t.townId ?? t.regionId))).toBe(false);
+    const target = fromLand.targets.find((t) => t.route === "land")!;
+    expect(target).toBeTruthy();
+
+    // Nikias opens at Kallias's town, at a target listed from there.
+    const fromTown = await targetsFrom(b, town.townId);
+    expect(fromTown.gatherId).toBe(town.townId);
+    expect(fromTown.targets.some((t) => held.has(t.townId ?? t.regionId))).toBe(false);
+    const aimAt = (t: { regionId: string; townId: string | null }) => (t.townId ? { regionId: undefined, townId: t.townId } : { regionId: t.regionId });
+    const near = fromTown.targets.find((t) => t.route === "land")!;
+    const musterId = await opened(b, { ...aimAt(near), gatherId: town.townId });
+    expect((await musters())[0]).toMatchObject({ gatherId: town.townId, gatherRegionId: town.regionId, regionId: near.regionId, townId: near.townId, status: "open" });
+
+    // Each moves men there with the ordinary Move: Kallias to his own holding, Nikias as a guest.
+    const aRow = await men(a, "hoplite", 30);
+    const bRow = await men(b, "peltast", 20);
+    for (const [p, row, n] of [[a, aRow, 30], [b, bRow, 20]] as const) {
+      expect(await m.mapActions.move(await ctx(p), { baseId: town.townId!, rows: [{ rowId: row, count: n }] }, at(MIN))).toMatchObject({ ok: true, report: { baseId: town.townId, route: "land" } });
+    }
+    const there = at(MIN + battle().move.minutesPerStep * MIN);
+    await settle(a, there);
+    await settle(b, there);
+    for (const row of [aRow, bRow]) expect(await unitRow(row)).toMatchObject({ basedAt: town.townId, movingTo: null });
+    // And pledges them there.
+    const mission = { kind: "muster", musterId, regionId: near.regionId, ...(near.townId ? { townId: near.townId } : {}), departedAt: there.toISOString() };
+    expect(await m.muster.pledge(await ctx(a), { rows: [{ rowId: aRow, count: 30 }] }, there)).toEqual({ ok: true });
+    expect(await m.muster.pledge(await ctx(b), { rows: [{ rowId: bRow, count: 20 }] }, there)).toEqual({ ok: true });
+    expect(await unitRow(aRow)).toMatchObject({ basedAt: town.townId, mission });
+    expect(await unitRow(bRow)).toMatchObject({ basedAt: town.townId, mission });
+
+    // A second koinon gathers in Xenos's land.
+    const c = await freshPlayer("Deon", 100_000, 3);
+    await koinonOf("The Iron Band", [c]);
+    expect(await open(c, { ...aimAt(target), gatherId: landRegion })).toMatchObject({ ok: true });
+    expect((await musters())[1]).toMatchObject({ gatherId: landRegion, gatherRegionId: landRegion, status: "open" });
+  });
+
+  it("an army gathered in another house's land holding launches and fights from there, and comes back to it; the holder's garrison, tribute and reversion count his own men alone", async () => {
+    const [a, b, x] = [await freshPlayer("Kallias", 100_000, 1), await freshPlayer("Nikias", 100_000, 2), await freshPlayer("Xenos", 100_000, 9)];
+    const k = await koinonOf("The Sacred Band", [a, b], uid(800));
+    // Xenos holds the land, garrisoned until now, its tribute a day due; his only men stand in Massalia.
+    await db.insert(m.dbPkg.playerHoldings).values(holdingAt(landRegion, "", x, NOW, at(-DAY)));
+    await men(x, "hoplite", 5);
+    const target = await landTargetFrom(a);
+    const musterId = await musterRow(k, a, { ...target, gatherId: landRegion, gatherRegionId: landRegion });
+    await setTown(target.townId, 10);
+    await pledgedThere(a, "hoplite", 60, musterId, 501, target);
+    await pledgedThere(b, "peltast", 40, musterId, 502, target);
+
+    // 100 guests stand in his land: to him it has no garrison, and the day's tribute is not paid.
+    const xc = await ctx(x);
+    expect(await m.holdings.garrisonCount(db, xc, landRegion, at(HOUR))).toBe(0);
+    await settle(x, at(HOUR));
+    expect((await holdingsNow()).map((h) => [h.regionId, h.ownerPlayerId, h.lastGarrisonedAt.getTime(), h.lastTributeAt.getTime()])).toEqual([[landRegion, x, NOW.getTime(), NOW.getTime()]]);
+    expect(await logs(x, "holding_tribute")).toEqual([]);
+    expect(await grain(x)).toBe(0);
+
+    // The launch sets out from his land, and the fight is fought.
+    const { at: arrived, outcome } = await launchAndFight(musterId, LAUNCH);
+    expect(outcome).toBe("resolved");
+    expect(arrived.getTime()).toBe(arrival(1).getTime());
+    const report = await reportOf();
+    expect(report).toMatchObject({ gatherId: landRegion, regionId: target.regionId, townId: target.townId, route: "land", steps: 1, men: 100 });
+    expect(report.killed).toBeGreaterThan(0);
+    // The survivors take the road back to the gathering place, and stand there once home.
+    for (const p of [a, b]) for (const r of await rowsOf(p)) expect(r).toMatchObject({ movingTo: landRegion, arrivesAt: homeAt(1) });
+    await settle(a, at(3 * HOUR + MIN));
+    await settle(b, at(3 * HOUR + MIN));
+    for (const p of [a, b]) for (const r of await rowsOf(p)) expect(r).toMatchObject({ basedAt: landRegion, movingTo: null });
+
+    // A day after his last garrison, with the guests standing there, his land reverts at his settle.
+    await settle(x, at(DAY + MIN));
+    expect(await holdingsNow()).toEqual([]);
+    expect((await logs(x, "holding_reverted")).length).toBe(1);
+    // And each guest's next settle turns his men home from there (holdings prompt 3, rule 4).
+    await settle(a, at(DAY + 2 * MIN));
+    for (const r of await rowsOf(a)) expect(r).toMatchObject({ basedAt: landRegion, movingTo: massalia, mission: { kind: "move", regionId: massalia } });
+    expect((await logs(a, "barracks_turn_home")).length).toBe((await rowsOf(a)).length);
+  });
+
+  it("a muster whose gathering holding reverted before the launch, or passed to the League, stands down with the reason; its pledges are free and each owner's next settle turns his men home", async () => {
+    const [a, b, x] = [await freshPlayer("Kallias", 100_000, 1), await freshPlayer("Nikias", 100_000, 2), await freshPlayer("Xenos", 100_000, 9)];
+    const k = await koinonOf("The Sacred Band", [a, b], uid(800));
+    // Xenos's land, two days without his own garrison: his next settle gives it back.
+    await db.insert(m.dbPkg.playerHoldings).values(holdingAt(landRegion, "", x, at(-2 * DAY)));
+    await men(x, "hoplite", 5);
+    const target = await landTargetFrom(a);
+    await setTown(target.townId, 10);
+    const musterId = await musterRow(k, a, { ...target, gatherId: landRegion, gatherRegionId: landRegion });
+    const aRow = await pledgedThere(a, "hoplite", 60, musterId, 501, target);
+    const bRow = await pledgedThere(b, "peltast", 40, musterId, 502, target);
+    await settle(x, at(HOUR));
+    expect(await holdingsNow()).toEqual([]);
+    // A pledged row stands where its muster gathers until the muster frees it.
+    await settle(a, at(HOUR + MIN));
+    expect(await unitRow(aRow)).toMatchObject({ basedAt: landRegion, movingTo: null, mission: { kind: "muster", musterId } });
+
+    expect(await m.muster.resolveMuster(musterId, LAUNCH)).toEqual({ outcome: "stood_down" });
+    expect(m.muster.GATHER_LOST).toBe("The gathering place is no longer Massalia's.");
+    expect((await musters())[0]).toMatchObject({ status: "stood_down", closedAt: LAUNCH, report: { outcome: "stood_down", reason: "The gathering place is no longer Massalia's.", gatherId: landRegion } });
+    for (const row of [aRow, bRow]) expect(await unitRow(row)).toMatchObject({ basedAt: landRegion, movingTo: null, mission: null });
+    expect(await garrisonOf(target.townId)).toBe(10);
+
+    // Each owner's next settle turns his men home, with a move's time from there and no ships.
+    const turned = at(2 * HOUR + MIN);
+    await settle(a, turned);
+    await settle(b, turned);
+    const home = new Date(turned.getTime() + battle().move.minutesPerStep * MIN);
+    for (const row of [aRow, bRow]) expect(await unitRow(row)).toMatchObject({ basedAt: landRegion, movingTo: massalia, arrivesAt: home, mission: { kind: "move", regionId: massalia } });
+    expect(await db.select().from(m.dbPkg.playerVoyages)).toEqual([]);
+
+    // A holding that passed to the League is no gathering place either.
+    const league = (await db.insert(m.dbPkg.players).values({ worldId, kind: "league", userId: null, name: "The League", color: "#000000" }).returning())[0]!.id;
+    await db.insert(m.dbPkg.playerHoldings).values(holdingAt(landRegion, "", x));
+    const second = await musterRow(k, a, { id: uid(901), ...target, gatherId: landRegion, gatherRegionId: landRegion, launchAt: at(DAY) });
+    await pledgedThere(a, "hoplite", 10, second, 503, target);
+    await db.update(m.dbPkg.playerHoldings).set({ ownerPlayerId: league });
+    expect(await m.muster.resolveMuster(second, at(DAY))).toEqual({ outcome: "stood_down" });
+    expect((await musterOf(second)).report).toMatchObject({ outcome: "stood_down", reason: "The gathering place is no longer Massalia's." });
+    expect(await unitRow(uid(503))).toMatchObject({ mission: null });
+  });
+
+  it("survivors on the road back to a gathering holding that reverted while they fought turn home when they arrive", async () => {
+    const [a, b, x] = [await freshPlayer("Kallias", 100_000, 1), await freshPlayer("Nikias", 100_000, 2), await freshPlayer("Xenos", 100_000, 9)];
+    const k = await koinonOf("The Sacred Band", [a, b], uid(800));
+    // Xenos's land falls a day after its last garrison: after the launch and the fight, before the army is home.
+    await db.insert(m.dbPkg.playerHoldings).values(holdingAt(landRegion, "", x, at(-DAY + 2 * HOUR + 45 * MIN)));
+    await men(x, "hoplite", 5);
+    const target = await landTargetFrom(a);
+    await setTown(target.townId, 10);
+    const musterId = await musterRow(k, a, { ...target, gatherId: landRegion, gatherRegionId: landRegion });
+    await pledgedThere(a, "hoplite", 60, musterId, 501, target);
+    await pledgedThere(b, "peltast", 40, musterId, 502, target);
+    expect((await launchAndFight(musterId, LAUNCH)).outcome).toBe("resolved");
+    await settle(x, at(2 * HOUR + 50 * MIN));
+    expect(await holdingsNow()).toEqual([]);
+
+    // Home at homeAt(1): the land is no longer theirs to stand in, so they turn for the Massalia region from there.
+    const later = new Date(homeAt(1).getTime() + MIN);
+    await settle(a, later);
+    await settle(b, later);
+    const massaliaAt = new Date(homeAt(1).getTime() + battle().move.minutesPerStep * MIN);
+    for (const p of [a, b]) {
+      const rows = await rowsOf(p);
+      expect(rows.length).toBeGreaterThan(0);
+      for (const r of rows) expect(r).toMatchObject({ basedAt: landRegion, movingTo: massalia, arrivesAt: massaliaAt, mission: { kind: "move", regionId: massalia } });
+      expect((await logs(p, "barracks_turn_home")).length).toBe(rows.length);
+    }
   });
 
   it("men gone before launch do not fight: a row disbanded for unpaid upkeep by the settle at the launch instant, and a member expelled before it", async () => {

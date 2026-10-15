@@ -47,7 +47,7 @@ import { getTopology } from "./mapGraph.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
 import { raidOpinion, raidWarMultiplier, type RaidOpinion } from "./factionOpinion.js";
 import { readRegionWarband, readTownFleet, readTownGarrison, regionContentOwner, townContentOwner, writeRegionWarband, writeTownGarrison } from "./mapPools.js";
-import { forceRowOf, homePlaces, homeRegions } from "./mapReach.js";
+import { everyHousePlaces, forceRowOf, homeRegions } from "./mapReach.js";
 import { townStats } from "./townStats.js";
 
 // ---------------------------------------------------------------------------
@@ -98,24 +98,25 @@ const fail = (code: number, error: string): KoinonError => ({ ok: false, code, e
 const NO_MUSTER = fail(409, "The koinon has no muster open.");
 const MARCHED = fail(409, "The muster has already marched.");
 const ON_THE_MARCH = fail(409, "The koinon's army is still on the march.");
+// A muster whose gathering place is no longer Massalia's at its launch (holdings prompt 4).
+export const GATHER_LOST = "The gathering place is no longer Massalia's.";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // --- Places ------------------------------------------------------------------
 
 export type MusterPlace = { id: string; regionId: string; townId: string | null };
 
-// A gathering place: the Massalia region or one of Massalia's own places, where
-// anyone's men may stand. null for anything else.
-export async function gatherPlace(gatherId: unknown): Promise<MusterPlace | null> {
+// A gathering place: a place every house may stand in (everyHousePlaces): the
+// Massalia region, one of Massalia's own places, or a house's holding, a town or
+// a land (holdings prompt 4), never the League's. null for anything else.
+export async function gatherPlace(exec: Exec, worldId: string, gatherId: unknown): Promise<MusterPlace | null> {
   if (typeof gatherId !== "string") return null;
-  const topology = getTopology();
-  if (gatherId === topology.massaliaRegion) return { id: gatherId, regionId: gatherId, townId: null };
-  return (await homePlaces(topology)).find((p) => p.id === gatherId) ?? null;
+  return (await everyHousePlaces(exec, worldId)).find((p) => p.id === gatherId) ?? null;
 }
 
-export async function gatherPlaces(): Promise<(MusterPlace & { name: string })[]> {
+export async function gatherPlaces(exec: Exec, worldId: string): Promise<(MusterPlace & { name: string })[]> {
   const topology = getTopology();
-  const places: MusterPlace[] = [{ id: topology.massaliaRegion, regionId: topology.massaliaRegion, townId: null }, ...(await homePlaces(topology))];
+  const places: MusterPlace[] = await everyHousePlaces(exec, worldId);
   const named = await Promise.all(places.map(async (p) => ({ ...p, name: await placeName(p.id, p.townId) })));
   // Massalia first, then the rest by name.
   return named.sort((a, b) => Number(b.id === topology.massaliaRegion) - Number(a.id === topology.massaliaRegion) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
@@ -208,7 +209,7 @@ export type OpenMusterResult = KoinonError | { ok: true; musterId: string; launc
 // koinon. The launch instant is the server's clock plus the chosen lead (P1).
 export async function openMuster(ctx: ActingContext, input: OpenMusterInput, now: Date): Promise<OpenMusterResult> {
   const c = getKoinonContent();
-  const gather = await gatherPlace(input.gatherId);
+  const gather = await gatherPlace(db, ctx.worldId, input.gatherId);
   if (!gather) return fail(400, "Choose a gathering place on Massalia's own ground.");
   const target = await musterTarget(input, ctx);
   if ("ok" in target) return target;
@@ -396,8 +397,8 @@ export type MusterTargetsView = { now: string; winter: { from: string; until: st
 // numbers: only where it is and how far.
 export async function musterTargets(ctx: ActingContext, gatherId: unknown, now: Date): Promise<KoinonError | MusterTargetsView> {
   if (!(await memberRow(db, ctx.playerId, ctx.worldId))) return fail(403, "You are not in a koinon.");
-  const gathers = await gatherPlaces();
-  const gather = gatherId === undefined ? gathers[0]! : await gatherPlace(gatherId);
+  const gathers = await gatherPlaces(db, ctx.worldId);
+  const gather = gatherId === undefined ? gathers[0]! : await gatherPlace(db, ctx.worldId, gatherId);
   if (!gather) return fail(400, "Choose a gathering place on Massalia's own ground.");
   const topology = getTopology();
   const home = await homeRegions(topology);
@@ -849,6 +850,12 @@ async function launchMuster(tx: DbTx, due: MusterRow, now: Date): Promise<Resolv
     await tx.update(koinonMusters).set({ status: "stood_down", closedAt: launchAt, report }).where(eq(koinonMusters.id, muster.id));
     return { outcome: "stood_down", at: launchAt, shrine };
   };
+
+  // 6b. The gathering place (holdings prompt 4): a house's holding that reverted
+  // since the muster opened, or passed to the League, is no longer a place every
+  // house may stand in. The muster stands down; its pledges are freed and each
+  // owner's next settle turns his men there home (holdings prompt 3, rule 4).
+  if (!(await everyHousePlaces(tx, muster.worldId)).some((p) => p.id === muster.gatherId)) return standDown(GATHER_LOST);
 
   // 7. No men.
   if (army.length === 0 || force.men === 0) return standDown(REACH_REASON.noMen);
