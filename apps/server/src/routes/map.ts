@@ -35,10 +35,14 @@ type MilitarySource = "home" | "intel";
 // holding of the League's army (government prompt 5b) carries `league: true`,
 // its name the League's and no house.
 type Holder = { playerId: string; characterName: string; houseName: string | null; league?: true };
+// A nation's march on a place, or how it ended within the year (strikes prompt
+// 1): its words and "about" alone, for everyone, never a pool's numbers.
+type MilitaryStrike = { nation: string; status: "marching" | "struck" | "called_off"; mode: "raid" | "attack"; trigger: "war" | "raids"; about: number; strikesAt: string; line: string; dateLabel: string };
 interface MilitaryPayload {
   towns: Record<string, { garrison: number; pentekonters: number; triremes: number; source: MilitarySource; scoutedGameDate?: string }>;
   regions: Record<string, { warband: number; source: MilitarySource; scoutedGameDate?: string }>;
   holdings: { towns: Record<string, Holder>; regions: Record<string, Holder> };
+  strikes: { towns: Record<string, MilitaryStrike>; regions: Record<string, MilitaryStrike> };
 }
 
 // Open /stream connections per user id. A user may hold at most MAX_STREAMS_PER_USER
@@ -265,7 +269,18 @@ export async function mapRoutes(app: FastifyInstance) {
       if (h.townId) holdings.towns[h.townId] = holder;
       else holdings.regions[h.regionId] = holder;
     }
-    return { towns, regions, holdings } satisfies MilitaryPayload;
+    // The strikes on the road and the year's results (strikes prompt 1); a
+    // failure is logged and the panel reads none.
+    let strikesShown: MilitaryPayload["strikes"] = { towns: {}, regions: {} };
+    try {
+      const { activeWorld } = await import("@massalia/db");
+      const { militaryStrikes } = await import("../services/strikes.js");
+      const world = await activeWorld();
+      if (world) strikesShown = await militaryStrikes(db, world, new Date());
+    } catch (error) {
+      console.error(`strikes: failed ${error instanceof Error ? error.message : String(error)}`);
+    }
+    return { towns, regions, holdings, strikes: strikesShown } satisfies MilitaryPayload;
   });
 
   // Reach (barracks prompt 3a): which land provinces the player's force can

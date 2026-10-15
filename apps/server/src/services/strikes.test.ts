@@ -327,6 +327,36 @@ suite("the strikes (integration)", () => {
     }
   });
 
+  // --- what everyone sees -------------------------------------------------------------
+
+  it("a house that fought finds the strike's report in its Barracks, its own part in it, unread until opened; a holder with no men there gets one too", async () => {
+    const house = await makePlayer();
+    await row(house.ctx.playerId, "hoplite", 60, "agathe");
+    const s = await march({ force: 120, about: 120, draws: [{ placeId: "nemausus", kind: "town", men: 10 }, { placeId: "tolosa", kind: "town", men: 110 }] });
+    await pass(plus(s.strikesAt, MIN));
+    const view = await m.barracks.barracksView(house.ctx, plus(s.strikesAt, 2 * MIN));
+    const lost = 60 - (await menAt(house.ctx.playerId, "agathe"));
+    const report = view.reports.find((r) => r.kind === "strike")!;
+    expect(report).toMatchObject({ id: s.id, kind: "strike", townId: "agathe", seen: false, title: "The Volcae at Agathe", yourPart: `60 of your men were among the defenders, and ${lost} of them fell.`, arrivedAt: s.strikesAt.toISOString() });
+    expect(report).toMatchObject({ line: ((await strikeOf(s.id)).report as { line: string }).line });
+    expect(JSON.stringify(report)).not.toContain("draws");
+    expect(await m.barracks.markStrikeReportRead(house.ctx, s.id, plus(s.strikesAt, 3 * MIN))).toEqual({ ok: true });
+    expect((await m.barracks.barracksView(house.ctx, plus(s.strikesAt, 4 * MIN))).reports.find((r) => r.kind === "strike")).toMatchObject({ seen: true });
+    expect(await m.barracks.markStrikeReportRead(house.ctx, s.id, plus(s.strikesAt, 5 * MIN))).toEqual({ ok: true });
+    // Another house has no such report.
+    const other = await makePlayer();
+    expect(await m.barracks.markStrikeReportRead(other.ctx, s.id, plus(s.strikesAt, 5 * MIN))).toEqual({ ok: false, code: 404, error: "No such report." });
+
+    // A holder whose men were all elsewhere: his report, with no part line.
+    await db.execute(sql`TRUNCATE TABLE strike_parts, strikes CASCADE`);
+    const holder = await makePlayer(30);
+    await db.insert(m.dbPkg.playerHoldings).values(holdingRow(holder.ctx.playerId, "R046", "", "unclaimed"));
+    await row(holder.ctx.playerId, "hoplite", 5, "R060");
+    const h = await march({ id: uid(901), regionId: "R046", townId: null, targetKind: "holding", holderPlayerId: holder.ctx.playerId, force: 50, about: 50 });
+    await pass(plus(h.strikesAt, MIN));
+    expect((await m.barracks.barracksView(holder.ctx, plus(h.strikesAt, 2 * MIN))).reports.find((r) => r.kind === "strike")).toMatchObject({ title: "The Volcae at Salyes", yourPart: null, line: "The Volcae broke into Salyes and carried off 30 drachmae from House House Test." });
+  });
+
   it("a failure in the strikes is logged and never stops the campaigns", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     await m.muster.resolveDueCampaigns(plus(at(9), MIN), {

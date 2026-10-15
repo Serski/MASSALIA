@@ -340,7 +340,7 @@ suite("Map actions (integration)", () => {
     ]);
     for (const r of reports) {
       expect(typeof r.gameDate).toBe("string");
-      expect(r.report).toMatchObject({ marchId: r.id, type: r.kind });
+      expect("report" in r ? r.report : null).toMatchObject({ marchId: r.id, type: r.kind });
     }
     // Opened once: the highlight goes and stays gone; a second opening changes nothing.
     expect(await m.barracks.markReportRead(ctx, raid.report.marchId, at(10))).toEqual({ ok: true });

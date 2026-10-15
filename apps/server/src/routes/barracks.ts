@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../services/auth.js";
 import { buildingContext, type ActingContext } from "../services/buildings.js";
-import { barracksView, cancelTraining, disbandRow, hireBand, markMusterReportRead, markReportRead, recruitUnits, sacrifice } from "../services/barracks.js";
+import { barracksView, cancelTraining, disbandRow, hireBand, markMusterReportRead, markReportRead, markStrikeReportRead, recruitUnits, sacrifice } from "../services/barracks.js";
 import { ensureCharacterRow, getActivePlayer, getActiveWorldId } from "../services/character.js";
 
 // The Barracks: the player's army (trained units from the levy, hired bands on
@@ -149,15 +149,16 @@ export async function barracksRoutes(app: FastifyInstance) {
       reply.code(ctx.code);
       return { error: ctx.error };
     }
-    const body = (request.body as { marchId?: unknown; musterId?: unknown } | undefined) ?? {};
+    const body = (request.body as { marchId?: unknown; musterId?: unknown; strikeId?: unknown } | undefined) ?? {};
     const marchId = typeof body.marchId === "string" && body.marchId ? body.marchId : null;
     const musterId = typeof body.musterId === "string" && body.musterId ? body.musterId : null;
-    if ((marchId === null) === (musterId === null)) {
+    const strikeId = typeof body.strikeId === "string" && body.strikeId ? body.strikeId : null;
+    if ([marchId, musterId, strikeId].filter((x) => x !== null).length !== 1) {
       reply.code(400);
-      return { error: "A marchId or a musterId is required." };
+      return { error: "A marchId, a musterId or a strikeId is required." };
     }
     const now = new Date();
-    const result = musterId !== null ? await markMusterReportRead(ctx, musterId, now) : await markReportRead(ctx, marchId!, now);
+    const result = strikeId !== null ? await markStrikeReportRead(ctx, strikeId, now) : musterId !== null ? await markMusterReportRead(ctx, musterId, now) : await markReportRead(ctx, marchId!, now);
     if (!result.ok) {
       reply.code(result.code);
       return { error: result.error };

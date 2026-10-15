@@ -119,6 +119,8 @@ export type FactionView = {
   warChief?: RulerView | null;
   rivals: FactionRefView[];
   allies: FactionRefView[];
+  // The nation's march on the road, or how its last one ended within the year (strikes prompt 1).
+  strike: { status: "marching" | "struck" | "called_off"; place: string; line: string; dateLabel: string } | null;
 };
 
 export async function leagueRoutes(app: FastifyInstance) {
@@ -264,6 +266,15 @@ export async function leagueRoutes(app: FastifyInstance) {
       intelligence: c.intelligence,
     });
 
+    // The strikes (strikes prompt 1), newest per nation; a failure is logged and the page reads none.
+    let strikeOf = new Map<string, { status: "marching" | "struck" | "called_off"; place: string; line: string; dateLabel: string }>();
+    try {
+      const { strikeViews, newestBy } = await import("../services/strikes.js");
+      const byNation = newestBy(await strikeViews(db, { id: worldId, startedMs }, new Date()), (v) => v.nationId);
+      strikeOf = new Map([...byNation].map(([id, v]) => [id, { status: v.status, place: v.place, line: v.line, dateLabel: v.dateLabel }]));
+    } catch (error) {
+      console.error(`strikes: failed ${error instanceof Error ? error.message : String(error)}`);
+    }
     const out: FactionView[] = content.factions.map((f) => {
       const row = byId.get(f.id);
       const opinion = row?.opinion ?? f.start.opinion;
@@ -292,6 +303,7 @@ export async function leagueRoutes(app: FastifyInstance) {
         warChief: f.governance === "personal" ? (f.warChief ? { ...charView(f.warChief), title: f.warChief.title } : null) : undefined,
         rivals: refs(f.rivals),
         allies: refs(f.allies),
+        strike: strikeOf.get(f.id) ?? null,
       };
     });
     return { factions: out };

@@ -111,6 +111,20 @@ suite("GET /api/map/military (integration)", () => {
     expect(Object.keys(body.regions)).toEqual([]);
   });
 
+  // Strikes prompt 1: a nation's march shows on its target's panel for everyone.
+  it("a nation's march on a home town is on its panel for everyone: its line and its about, no pool's numbers, no draws", async () => {
+    const { cookie: c } = await freshPlayer();
+    const strikesAt = new Date(Date.now() + 11 * 3_600_000);
+    await db.insert(m.dbPkg.strikes).values({ worldId, nationId: "volcae", trigger: "war", mode: "raid", seasonIndex: 30, regionId: "R050", townId: "agathe", targetKind: "home", force: 473, about: 470, draws: [{ placeId: "tolosa", kind: "town", men: 460 }, { placeId: "nemausus", kind: "town", men: 13 }], calledAt: new Date(Date.now() - 3_600_000), strikesAt });
+    const body = (await get(c)).json() as { strikes: { towns: Record<string, Record<string, unknown>>; regions: Record<string, unknown> } };
+    const time = `${strikesAt.toISOString().slice(11, 16)} UTC`;
+    expect(body.strikes.towns.agathe).toEqual({ nation: "the Volcae", status: "marching", mode: "raid", trigger: "war", about: 470, strikesAt: strikesAt.toISOString(), line: `The Volcae march on Agathe with about 470 men. They strike at ${time}.`, dateLabel: expect.any(String) });
+    expect(Object.keys(body.strikes.towns)).toEqual(["agathe"]);
+    expect(body.strikes.regions).toEqual({});
+    const text = JSON.stringify(body.strikes);
+    for (const secret of ["473", "tolosa", "nemausus", "draws", "force"]) expect(text).not.toContain(secret);
+  });
+
   it("a home town's garrison is the League's men alone: a player's own men standing there do not count, and it follows the army as it thins", async () => {
     const viewer = await freshPlayer();
     // The first read raises the army; the town_military rows are no longer read.

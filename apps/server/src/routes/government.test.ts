@@ -204,6 +204,27 @@ suite("GET /api/government and the public League scope (integration)", () => {
     expect(scope.treasury.ledger).toEqual([]);
   });
 
+  // Strikes prompt 1: the strikes on the Government tab, the League's strike
+  // reports where its march reports go, and the raid's ledger row in words.
+  it("a member sees the strikes, the League's strike report among the army's reports, and the raid's ledger row as 'Raid by the Volcae on Agathe'", async () => {
+    await firstWinter();
+    const archon = await citizen("archon");
+    await seat("archon", "palaioi", archon.characterId);
+    await government(archon.token); // the sync's opening rows first
+    const struckAt = new Date(Date.now() - 10 * 60_000);
+    const line = "The Volcae broke into Agathe. They carried off 900 drachmae from the treasury, and 80 of its people were lost.";
+    const struck = (await db.insert(m.dbPkg.strikes).values({ worldId, nationId: "volcae", trigger: "war", mode: "raid", seasonIndex: 0, regionId: "R050", townId: "agathe", targetKind: "home", force: 500, about: 500, draws: [], calledAt: new Date(struckAt.getTime() - 12 * HOUR), strikesAt: struckAt, status: "struck", resolvedAt: struckAt, report: { line } }).returning())[0]!;
+    await db.insert(m.dbPkg.strikes).values({ worldId, nationId: "saluvii", trigger: "raids", mode: "raid", seasonIndex: 0, triggerPlaceId: "reii", triggerAt: new Date(), regionId: "R060", townId: "massalia", targetKind: "home", force: 160, about: 160, draws: [], calledAt: new Date(), strikesAt: new Date(Date.now() + 12 * HOUR) });
+    await db.insert(m.dbPkg.treasuryLedger).values({ worldId, owner: "league", delta: -900, reason: `strike:volcae:agathe:${struck.id}`, createdAt: struckAt });
+    const view = (await government(archon.token)) as unknown as { member: true; strikes: { nation: string; place: string; status: string; line: string; about: number }[]; army: { reports: { kind: string; to: string; line: string }[] }; treasury: { ledger: { label: string; delta: number }[] } };
+    expect(view.strikes.map((x) => [x.nation, x.place, x.status, x.about])).toEqual([["the Saluvii", "Massalia", "marching", 160], ["the Volcae", "Agathe", "struck", 500]]);
+    expect(view.strikes[0]!.line).toMatch(/^Raided once too often, the Saluvii march on Massalia with about 160 men\. They strike at \d\d:\d\d UTC\.$/);
+    expect(view.strikes[1]!.line).toBe(line);
+    expect(view.army.reports).toContainEqual(expect.objectContaining({ kind: "strike", to: "Agathe", line }));
+    expect(view.treasury.ledger).toContainEqual(expect.objectContaining({ label: "Raid by the Volcae on Agathe", delta: -900 }));
+    expect(JSON.stringify(view.strikes)).not.toContain("draws");
+  });
+
   it("an Ephor may veto once a card is drafted, a Strategos has neither power, a party Archon is no member", async () => {
     await firstWinter();
     const archon = await citizen("archon");

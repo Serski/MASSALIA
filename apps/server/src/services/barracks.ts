@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, asc, desc, eq, gte, isNull, lte, or, sql, inArray } from "drizzle-orm";
-import { bandOffers, createDb, effectLog, koinonMembers, koinonMusterParts, koinonMusters, leagueMoraleAt, playerCharacters, playerLevy, playerMarches, playerUnits, players, playerVoyages, resources, type MarchKind, type UnitMission, type VoyageKind } from "@massalia/db";
+import { bandOffers, createDb, effectLog, koinonMembers, koinonMusterParts, koinonMusters, leagueMoraleAt, playerCharacters, playerLevy, playerMarches, playerUnits, players, playerVoyages, resources, strikeParts, strikes, type MarchKind, type UnitMission, type VoyageKind } from "@massalia/db";
 import {
   bandDef,
   distancesFrom,
@@ -17,6 +17,7 @@ import {
   seasonIndexAt,
   seededRoll,
   stepsTo,
+  strikeLines,
   unitDef,
   vendorUnitPrice,
   wholeDaysBetween,
@@ -35,6 +36,7 @@ import { heldGarrisonedRegions, settleHoldings, settleTribute, type HoldingsSett
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
 import type { MapActReport } from "./mapActions.js";
 import type { MusterMarch, MusterReport } from "./koinonMuster.js";
+import { nationById } from "./strikes.js";
 
 // ---------------------------------------------------------------------------
 // Barracks — the player's army: trained UNITS raised from the levy and hired
@@ -494,9 +496,56 @@ async function musterReports(exec: Exec, ctx: ActingContext): Promise<MusterRepo
   });
 }
 
-// Both lists merged by arrival, newest first, then id: the latest ten.
-async function allReports(exec: Exec, ctx: ActingContext): Promise<(MarchReportView | MusterReportView)[]> {
-  const both = [...(await marchReports(exec, ctx)), ...(await musterReports(exec, ctx))];
+// A nation's strike on a place where the player's men stood, or on his holding
+// (strikes prompt 1): its title and result, his own part, unread until opened.
+export type StrikeReportView = { id: string; kind: "strike"; regionId: string; townId: string | null; arrivedAt: string; gameDate: string; seen: boolean; title: string; line: string; yourPart: string | null };
+async function strikeReports(exec: Exec, ctx: ActingContext): Promise<StrikeReportView[]> {
+  const rows = await exec
+    .select({ strike: strikes, part: strikeParts })
+    .from(strikeParts)
+    .innerJoin(strikes, eq(strikes.id, strikeParts.strikeId))
+    .where(and(eq(strikeParts.playerId, ctx.playerId), eq(strikes.worldId, ctx.worldId), eq(strikes.status, "struck")))
+    .orderBy(desc(strikes.strikesAt), asc(strikes.id))
+    .limit(10);
+  const out: StrikeReportView[] = [];
+  for (const { strike, part } of rows) {
+    const nation = await nationById(strike.nationId);
+    const place = strike.townId ? await townDisplayName(strike.townId) : await regionDisplayName(strike.regionId);
+    out.push({
+      id: strike.id,
+      kind: "strike",
+      regionId: strike.regionId,
+      townId: strike.townId,
+      arrivedAt: strike.strikesAt.toISOString(),
+      gameDate: formatGameDate(gameDate(strike.strikesAt.getTime(), ctx.worldStartedMs)),
+      seen: part.seenAt !== null,
+      title: nation ? strikeLines.title(nation.words, place) : place,
+      line: (strike.report as { line?: string } | null)?.line ?? "",
+      yourPart: part.men > 0 ? strikeLines.yourPart(part.men, part.lost) : null,
+    });
+  }
+  return out;
+}
+
+// A strike's report opened: the player's part is stamped once, by the same rules as a march's.
+export async function markStrikeReportRead(ctx: ActingContext, strikeId: string, now: Date): Promise<{ ok: true } | Failure> {
+  if (!UUID_RE.test(strikeId)) return { ok: false, code: 404, error: "No such report." };
+  const mine = (
+    await db
+      .select({ seenAt: strikeParts.seenAt })
+      .from(strikeParts)
+      .innerJoin(strikes, eq(strikes.id, strikeParts.strikeId))
+      .where(and(eq(strikeParts.strikeId, strikeId), eq(strikeParts.playerId, ctx.playerId), eq(strikes.worldId, ctx.worldId), eq(strikes.status, "struck")))
+      .limit(1)
+  )[0];
+  if (!mine) return { ok: false, code: 404, error: "No such report." };
+  await db.update(strikeParts).set({ seenAt: now }).where(and(eq(strikeParts.strikeId, strikeId), eq(strikeParts.playerId, ctx.playerId), isNull(strikeParts.seenAt)));
+  return { ok: true };
+}
+
+// The lists merged by arrival, newest first, then id: the latest ten.
+async function allReports(exec: Exec, ctx: ActingContext): Promise<(MarchReportView | MusterReportView | StrikeReportView)[]> {
+  const both = [...(await marchReports(exec, ctx)), ...(await musterReports(exec, ctx)), ...(await strikeReports(exec, ctx))];
   return both.sort((a, b) => Date.parse(b.arrivedAt) - Date.parse(a.arrivedAt) || a.id.localeCompare(b.id)).slice(0, 10);
 }
 
@@ -1253,7 +1302,7 @@ export type BarracksView = {
   // The battle reports (raids prompts 4 and 5): the player's resolved marches
   // in this world, and the koinon musters he took part in, newest first, the
   // latest ten. A muster's report is listed for every member who took part.
-  reports: (MarchReportView | MusterReportView)[];
+  reports: (MarchReportView | MusterReportView | StrikeReportView)[];
   // The altar while lit at `now` (the good burned, its morale bonus, the
   // instant it goes cold), else null.
   altar: { good: string; mor: number; until: string } | null;

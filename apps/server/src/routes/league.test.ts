@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import cookie from "@fastify/cookie";
@@ -196,6 +196,18 @@ suite("GET /api/league/cities: the tax each polis pays a season (integration)", 
   ];
   const diplomacy = async () =>
     ((await app.inject({ method: "GET", url: "/api/league/diplomacy", headers: { cookie: `massalia_session=${app.signCookie(await session())}` } })).json() as { factions: { id: string; atWar: boolean; warThroughLabel: string | null }[] }).factions;
+
+  // Strikes prompt 1: a nation's march, and how it ended, under the nation.
+  it("the Diplomacy page shows a nation's march under it, then how it ended, and nothing under the others", async () => {
+    const strikesAt = new Date(Date.now() + 6 * HOUR);
+    const id = (await db.insert(m.dbPkg.strikes).values({ worldId, nationId: "volcae", trigger: "war", mode: "raid", seasonIndex: 1, regionId: "R050", townId: "agathe", targetKind: "home", force: 473, about: 470, draws: [], calledAt: new Date(Date.now() - 6 * HOUR), strikesAt }).returning())[0]!.id;
+    const strikeOf = async (factionId: string) =>
+      ((await app.inject({ method: "GET", url: "/api/league/diplomacy", headers: { cookie: `massalia_session=${app.signCookie(await session())}` } })).json() as { factions: { id: string; strike: unknown }[] }).factions.find((f) => f.id === factionId)!.strike;
+    expect(await strikeOf("volcae")).toEqual({ status: "marching", place: "Agathe", line: `The Volcae march on Agathe with about 470 men. They strike at ${strikesAt.toISOString().slice(11, 16)} UTC.`, dateLabel: expect.any(String) });
+    expect(await strikeOf("cadurci")).toBeNull();
+    await db.update(m.dbPkg.strikes).set({ status: "struck", strikesAt: new Date(Date.now() - HOUR), resolvedAt: new Date(Date.now() - HOUR), report: { line: "The Volcae struck at Agathe and were driven off. 12 of them fell, and 3 of the defenders." } }).where(eq(m.dbPkg.strikes.id, id));
+    expect(await strikeOf("volcae")).toMatchObject({ status: "struck", line: "The Volcae struck at Agathe and were driven off. 12 of them fell, and 3 of the defenders." });
+  });
 
   it("works.wars in the first Spring: the docket is open with the six nations below 0, each with its band, and no war under way", async () => {
     const w = await works();

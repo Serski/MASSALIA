@@ -1,11 +1,12 @@
 import { and, desc, eq, isNull, like } from "drizzle-orm";
-import { activeWorld, createDb, leagueCities, leagueFleet, leagueOrders, leaguePlayerId, leagueProjects, loadLeagueArmy, playerHoldings, playerMarches, playerUnits, playerVoyages, treasuryBalance, treasuryLedger, treasuryLedgerRows, type LeagueOrderKind } from "@massalia/db";
-import { armyUpkeep, formatGameDate, gameDate, governmentSeats, LEAGUE_UNIT_IDS, leagueLedgerPlace, leagueTax, nationName, parseDesertionReason, parseWarMotionId, projectMotion, projectMotionId, REAL_MS_PER_SEASON, treasuryReasonLabel, type GovernmentSeat, type LeagueUnitId, type LeagueUnits } from "@massalia/shared";
+import { activeWorld, createDb, leagueCities, leagueFleet, leagueOrders, leaguePlayerId, leagueProjects, loadLeagueArmy, playerHoldings, playerMarches, playerUnits, playerVoyages, strikeParts, strikes, treasuryBalance, treasuryLedger, treasuryLedgerRows, type LeagueOrderKind } from "@massalia/db";
+import { armyUpkeep, strikeLines, formatGameDate, gameDate, governmentSeats, LEAGUE_UNIT_IDS, leagueLedgerPlace, leagueTax, nationName, parseDesertionReason, parseWarMotionId, projectMotion, projectMotionId, REAL_MS_PER_SEASON, treasuryReasonLabel, type GovernmentSeat, type LeagueUnitId, type LeagueUnits } from "@massalia/shared";
 import { agendaScopeView, getLeagueBuildings, getLeagueCities, getWarFactions, heldOffices, leagueMeasureTitle, type AgendaScopeView } from "./agenda.js";
 import type { CharacterRow } from "./character.js";
 import { tributeRateOf } from "./holdings.js";
 import { leagueSightings } from "./leagueOrders.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
+import { nationById, strikeViews, type StrikeView } from "./strikes.js";
 import { getPoliticsConfig } from "./oligarchy.js";
 
 const db = createDb();
@@ -66,8 +67,8 @@ export interface GovernmentArmyOrder {
   orderedAt: string;
 }
 export interface GovernmentArmyReport {
-  id: string; // the march's
-  kind: LeagueOrderKind;
+  id: string; // the march's, or the strike's
+  kind: LeagueOrderKind | "strike"; // "strike": a nation's march on a place of the League's (strikes prompt 1)
   to: string;
   line: string; // the report's one sentence, as the server wrote it
   dateLabel: string; // the game date the party arrived
@@ -106,7 +107,11 @@ export type GovernmentView =
       festival: AgendaScopeView; // the festival motion (government prompt 3), unfiltered
       war: AgendaScopeView; // the war motion (government prompt 4), unfiltered
       army: GovernmentArmyView; // the League's army (government prompt 5a)
+      // The nations' marches on the road and the year's results, newest first (strikes prompt 1).
+      strikes: GovernmentStrikeView[];
     };
+
+export type GovernmentStrikeView = Pick<StrikeView, "id" | "nation" | "place" | "trigger" | "mode" | "status" | "about" | "strikesAt" | "line" | "dateLabel">;
 
 const LEDGER_LINES = 40;
 
@@ -114,7 +119,8 @@ const LEDGER_LINES = 40;
 // reads "Festival held: <title>"; a war's (government prompt 4) "War declared on
 // <nation>", the nation as nationName gives it; everything else as
 // treasuryReasonLabel says.
-function ledgerLabel(reason: string, delta: number, placeName?: (placeId: string) => string | undefined): string {
+function ledgerLabel(reason: string, delta: number, placeName?: (placeId: string) => string | undefined, strikeLabel?: (reason: string) => string | undefined): string {
+  if (reason.startsWith("strike:")) return strikeLabel?.(reason) ?? "Raid";
   if (reason.startsWith("agenda:festival:")) {
     const title = leagueMeasureTitle(reason.slice("agenda:".length));
     return title ? `Festival held: ${title}` : "Festival held";
@@ -140,7 +146,7 @@ export async function governmentView(actor: CharacterRow, now: Date = new Date()
   const festival = await agendaScopeView(actor, "festival", now);
   const war = await agendaScopeView(actor, "war", now);
   const world = await activeWorld();
-  if (!world) return { member: true, seats, treasury: { balance: 0, taxPerSeason: 0, ledger: [] }, projects: [], league, festival, war, army: NO_ARMY };
+  if (!world) return { member: true, seats, treasury: { balance: 0, taxPerSeason: 0, ledger: [] }, projects: [], league, festival, war, army: NO_ARMY, strikes: [] };
 
   const cfg = getPoliticsConfig();
   const poleis = await db.select({ population: leagueCities.population }).from(leagueCities).where(eq(leagueCities.worldId, world.id));
@@ -148,9 +154,17 @@ export async function governmentView(actor: CharacterRow, now: Date = new Date()
   const dateLabel = (ms: number) => formatGameDate(gameDate(ms, world.startedMs));
   // The places the army's plunder and tribute rows name, by their display names.
   const ledgerPlaces = new Map<string, string>();
+  // A raid's row (strikes prompt 1): "strike:<nation>:<place>:<strike>", read
+  // as "Raid by the {nation} on {place}".
+  const strikeLabels = new Map<string, string>();
   for (const r of rows) {
     const id = leagueLedgerPlace(r.reason);
     if (id && !ledgerPlaces.has(id)) ledgerPlaces.set(id, await placeName(id));
+    const raid = /^strike:([^:]+):([^:]+):/.exec(r.reason);
+    if (raid && !strikeLabels.has(r.reason)) {
+      const nation = await nationById(raid[1]!);
+      if (nation) strikeLabels.set(r.reason, strikeLines.ledger(nation.words, await placeName(raid[2]!)));
+    }
   }
   return {
     member: true,
@@ -160,7 +174,7 @@ export async function governmentView(actor: CharacterRow, now: Date = new Date()
       taxPerSeason: leagueTax(poleis.map((p) => p.population), cfg.treasury),
       ledger: rows.map((r) => ({
         delta: r.delta,
-        label: ledgerLabel(r.reason, r.delta, (id) => ledgerPlaces.get(id)),
+        label: ledgerLabel(r.reason, r.delta, (id) => ledgerPlaces.get(id), (reason) => strikeLabels.get(reason)),
         dateLabel: dateLabel(Date.parse(r.createdAt)),
         createdAt: r.createdAt,
       })),
@@ -170,7 +184,19 @@ export async function governmentView(actor: CharacterRow, now: Date = new Date()
     festival,
     war,
     army: await armyView(world, dateLabel),
+    strikes: await governmentStrikes(world, now),
   };
+}
+
+// The strikes the Government tab lists (strikes prompt 1): its words and the
+// "about" alone. A failure is logged and the tab reads none.
+async function governmentStrikes(world: { id: string; startedMs: number }, now: Date): Promise<GovernmentStrikeView[]> {
+  try {
+    return (await strikeViews(db, world, now, 20)).map((v) => ({ id: v.id, nation: v.nation, place: v.place, trigger: v.trigger, mode: v.mode, status: v.status, about: v.about, strikesAt: v.strikesAt, line: v.line, dateLabel: v.dateLabel }));
+  } catch (error) {
+    console.error(`strikes: failed ${error instanceof Error ? error.message : String(error)}`);
+    return [];
+  }
 }
 
 // The army as it stands now. The scope views above have synced, so a fresh
@@ -255,6 +281,22 @@ async function armyView(world: { id: string; startedMs: number }, dateLabel: (ms
     if (typeof line !== "string") continue;
     reports.push({ id: march.id, kind: march.kind, to: await placeName(march.townId ?? march.regionId), line, dateLabel: dateLabel(march.arrivesAt.getTime()), arrivedAt: march.arrivesAt.toISOString() });
   }
+  // A strike the League's men fought or its treasury paid for: its report goes
+  // where its march reports go (strikes prompt 1, call 21).
+  const struck = await db
+    .select({ id: strikes.id, regionId: strikes.regionId, townId: strikes.townId, targetKind: strikes.targetKind, report: strikes.report, at: strikes.strikesAt })
+    .from(strikes)
+    .where(and(eq(strikes.worldId, world.id), eq(strikes.status, "struck")))
+    .orderBy(desc(strikes.strikesAt), desc(strikes.id))
+    .limit(ARMY_LINES);
+  for (const s of struck) {
+    const line = (s.report as { line?: unknown } | null)?.line;
+    if (typeof line !== "string") continue;
+    const leagues = s.targetKind === "home" || (await db.select({ id: strikeParts.playerId }).from(strikeParts).where(and(eq(strikeParts.strikeId, s.id), eq(strikeParts.playerId, leagueId))).limit(1)).length > 0;
+    if (leagues) reports.push({ id: s.id, kind: "strike", to: await placeName(s.townId ?? s.regionId), line, dateLabel: dateLabel(s.at.getTime()), arrivedAt: s.at.toISOString() });
+  }
+  reports.sort((a, b) => b.arrivedAt.localeCompare(a.arrivedAt) || a.id.localeCompare(b.id));
+  reports.splice(ARMY_LINES);
 
   // What the League has seen, by the place's name.
   const seen = await leagueSightings(db, { playerId: leagueId, worldId: world.id });

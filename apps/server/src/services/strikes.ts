@@ -11,6 +11,8 @@ import {
   deadOffDraws,
   factionOfPolity,
   fightsAtPeace,
+  formatGameDate,
+  gameDate,
   HOME_POLITY_ID,
   landStepsBetween,
   leagueAtWarWith,
@@ -603,4 +605,75 @@ async function strikeTx(tx: DbTx, strikeId: string, now: Date): Promise<StrikeRe
   const report: StrikeReport = { outcome, mode: s.mode, line, place, rounds: result.rounds.length, defenders, theirDead, ourDead, survivors, paid, payer, peopleLost, holdingLost, deadOff, parts };
   await tx.update(strikes).set({ report }).where(eq(strikes.id, s.id));
   return { outcome: "struck", shrine, at };
+}
+
+// --- What everyone sees ------------------------------------------------------------------
+
+// A march as the map, the Diplomacy page and the Government tab show it (ruling
+// 11): its words and the "about" alone, never a pool's numbers, its draws or
+// its exact force (call 20). `line` is the march's while it is on the road, its
+// result's after.
+export type StrikeView = {
+  id: string;
+  nationId: string;
+  nation: string; // "the Volcae", "Carthage"
+  placeId: string;
+  regionId: string;
+  townId: string | null;
+  place: string;
+  trigger: "war" | "raids";
+  mode: "raid" | "attack";
+  status: "marching" | "struck" | "called_off";
+  about: number;
+  calledAt: string;
+  strikesAt: string;
+  line: string;
+  dateLabel: string; // the game date of the call (on the road) or of the strike
+};
+
+const utcTime = (ms: number) => `${new Date(ms).toISOString().slice(11, 16)} UTC`;
+
+// Every march on the road and every one that ended within the last game year,
+// newest first.
+export async function strikeViews(exec: Exec, world: { id: string; startedMs: number }, now: Date, limit = 40): Promise<StrikeView[]> {
+  const c = await getStrikesContent();
+  const since = new Date(now.getTime() - raidsWindowMs(c));
+  const rows = await exec
+    .select()
+    .from(strikes)
+    .where(and(eq(strikes.worldId, world.id), sql`(${strikes.status} = 'marching' OR ${strikes.resolvedAt} >= ${since.toISOString()}::timestamptz)`))
+    .orderBy(desc(strikes.calledAt), desc(strikes.id))
+    .limit(limit);
+  const out: StrikeView[] = [];
+  for (const s of rows) {
+    const nation = await nationById(s.nationId);
+    if (!nation) continue;
+    const place = await placeNameOf(s.townId, s.regionId);
+    const marching = s.status === "marching";
+    const line = marching
+      ? (s.trigger === "raids" ? strikeLines.raidsMarch : strikeLines.march)(nation.words, place, s.about, utcTime(s.strikesAt.getTime()))
+      : ((s.report as { line?: string } | null)?.line ?? "");
+    const datedMs = marching ? s.calledAt.getTime() : s.strikesAt.getTime();
+    out.push({ id: s.id, nationId: s.nationId, nation: nation.words.name, placeId: s.townId ?? s.regionId, regionId: s.regionId, townId: s.townId, place, trigger: s.trigger, mode: s.mode, status: s.status, about: s.about, calledAt: s.calledAt.toISOString(), strikesAt: s.strikesAt.toISOString(), line, dateLabel: formatGameDate(gameDate(datedMs, world.startedMs)) });
+  }
+  return out;
+}
+
+// The one each place, or each nation, shows: a march on the road first, else the newest.
+export function newestBy(views: StrikeView[], key: (v: StrikeView) => string): Map<string, StrikeView> {
+  const out = new Map<string, StrikeView>();
+  for (const v of [...views].sort((a, b) => Number(b.status === "marching") - Number(a.status === "marching"))) if (!out.has(key(v))) out.set(key(v), v);
+  return out;
+}
+
+// GET /military's strikes: the target's panel, for everyone, by town or region.
+export type MilitaryStrike = Pick<StrikeView, "nation" | "status" | "mode" | "trigger" | "about" | "strikesAt" | "line" | "dateLabel">;
+export async function militaryStrikes(exec: Exec, world: { id: string; startedMs: number }, now: Date): Promise<{ towns: Record<string, MilitaryStrike>; regions: Record<string, MilitaryStrike> }> {
+  const out: { towns: Record<string, MilitaryStrike>; regions: Record<string, MilitaryStrike> } = { towns: {}, regions: {} };
+  for (const v of newestBy(await strikeViews(exec, world, now), (x) => x.placeId).values()) {
+    const shown: MilitaryStrike = { nation: v.nation, status: v.status, mode: v.mode, trigger: v.trigger, about: v.about, strikesAt: v.strikesAt, line: v.line, dateLabel: v.dateLabel };
+    if (v.townId !== null) out.towns[v.townId] = shown;
+    else out.regions[v.regionId] = shown;
+  }
+  return out;
 }
