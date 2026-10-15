@@ -52,7 +52,7 @@ const BLADE_EXAMPLES = [
 
 describe("the Guide's Poison & Assassination entry", () => {
   it("is the Guide's last entry: one opening line, four headings, four tables", () => {
-    expect(GUIDE_SECTIONS.map((s) => s.id)).toEqual(["calendar", "holdings", "family", "politics", "intrigue"]);
+    expect(GUIDE_SECTIONS.map((s) => s.id)).toEqual(["calendar", "holdings", "family", "politics", "war", "intrigue"]);
     expect(entry().title).toBe("Poison & Assassination");
     expect(entry().paragraphs).toHaveLength(1);
     expect(blocks().flatMap((b) => (b.kind === "heading" ? [b.text] : []))).toEqual(["Who can strike, and at whom", "The chance of success", "Examples", "Afterwards"]);

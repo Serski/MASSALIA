@@ -114,6 +114,18 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       "Two parties contest the city: the PALAIOI, keepers of the old ways, and the DYNATOI, men of the new. Join one and build favor. The Archons and Ephors are elected — declare, campaign, win the vote, take office; the Strategoi are appointed by them, from any citizen with a seat and a Militia above 40, of either party or none, and serve until the term ends. The wealthy may buy a seat among the Three Hundred. A party's for-life leaders may stand for the city's offices too. The unfree have no voice until freedom.",
     ],
   },
+  // Strikes prompt 1 (ruled at STOP 1). Every number in it is content's:
+  // content/military/strikes.json, battle.json's regen and league-war.json's
+  // plunderMultiplier; apps/web/test/guide-war.test.tsx reads them back.
+  {
+    id: "war",
+    title: "War & Raids",
+    paragraphs: [
+      "Every town and land remembers its raiders. Raid one place more than 10 times in a game year and its people come back at full strength, against the Massalian town or holding beside it where they most outnumber the men standing there. The march is seen 12 hours before it strikes, and every man standing in that place fights it. A raid that gets through takes 2 drachmae for each raider still standing, from the treasury or from the house that holds the place, and a town loses some of its people.",
+      "When the chamber votes a war, raids on the enemy pay half as much again, and the League's army may raid and attack them. The enemy marches too: once a season, except in Winter, on the Massalian town or holding beside its land where it most outnumbers the men standing there. A holding it storms is lost.",
+      "Garrisons and warbands win back 30% of their full strength each season.",
+    ],
+  },
   // A reference entry, plain on purpose. Every number in it comes from
   // content/politics/interactions.json (and the poisoned trait); the examples
   // are worked from the same file. apps/web/test/guide-intrigue.test.tsx reads
