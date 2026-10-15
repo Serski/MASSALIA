@@ -38,7 +38,8 @@ async function loadModules() {
   const league = await import("./leagueOrders.js");
   const traits = await import("./traits.js");
   const age = await import("./age.js");
-  return { dbPkg, shared, buildings, barracks, mapGraph, mapPools, holdings, actions, muster, mapReach, league, traits, age };
+  const lock = await import("./lock.js");
+  return { dbPkg, shared, buildings, barracks, mapGraph, mapPools, holdings, actions, muster, mapReach, league, traits, age, lock };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -355,9 +356,9 @@ suite("the League's orders (integration)", () => {
     const own = await houseRow(house.ctx, "hoplite", 20);
     expect(await m.actions.move(house.ctx, { baseId: "arelate", rows: [{ rowId: own.id, count: 20 }] }, at(8))).toMatchObject({ ok: true });
 
-    // The League's men move only between its own places.
-    expect(await move("R060", at(9))).toEqual({ ok: false, code: 409, error: "The League's men move only between its towns and its holdings." });
-    expect(await move("reii", at(9))).toEqual({ ok: false, code: 409, error: "The League's men move only between its towns and its holdings." });
+    // The League's men move only between its own places and the houses' holdings (holdings prompt 4).
+    expect(await move("R060", at(9))).toEqual({ ok: false, code: 409, error: "The League's men move only between its towns and Massalia's holdings." });
+    expect(await move("reii", at(9))).toEqual({ ok: false, code: 409, error: "The League's men move only between its towns and Massalia's holdings." });
     expect(await move("massalia", at(9))).toEqual({ ok: false, code: 409, error: "The men already stand there." });
 
     const logsBefore = (await effectLogs()).length; // the house's own move
@@ -452,7 +453,7 @@ suite("the League's orders (integration)", () => {
 
   // Ruling at STOP 1: nothing of the army's reaches an official. Its men, its
   // hulls and its places are never mixed with a house's, in either direction.
-  it("no mix, both ways: a League order naming a house's row is refused, a house's order naming a League row is refused, a house cannot sail the League's hulls, and neither stands men in the other's holding", async () => {
+  it("no mix, both ways: a League order naming a house's row is refused, a house's order naming a League row is refused, a house cannot sail the League's hulls, and no house stands men in a League holding", async () => {
     const { lctx, ctx: own } = await archon();
     await war("saluvii", at(8), at(16));
     // The Archon's own men, at his house's base, and the League's, in Massalia.
@@ -483,13 +484,13 @@ suite("the League's orders (integration)", () => {
     expect(await fleet()).toEqual({ pentekonters: 29, triremes: 40 });
     expect(await voyages()).toEqual([]);
 
-    // Places: the League's men move only between the League's, and a house's
-    // men are not sent to a League holding (taken this instant, so no tribute is yet due).
+    // Places: a house's men are not sent to a League holding (taken this
+    // instant, so no tribute is yet due), and the League's go nowhere but its
+    // own places and the houses' holdings (holdings prompt 4).
     await m.holdings.insertTownConquest(db, lctx, "R047", "reii", "saluvii", at(9));
     await db.insert(m.dbPkg.playerUnits).values({ worldId, ownerPlayerId: leagueId, source: "trained", unitId: "hoplite", count: 30, startCount: 30, recruitedSeason: 0, readyAt: at(0), basedAt: "reii", createdAt: at(8) });
     expect(await m.actions.move(own, { baseId: "reii", rows: [{ rowId: mine.id, count: 40 }] }, at(9))).toEqual({ ok: false, code: 409, error: "Men may only be sent to Massalia's own ground or to a house's holding." });
-    await m.holdings.insertConquest(db, own, "R046", "unclaimed", at(8));
-    expect(await m.actions.move(lctx, { baseId: "R046", rows: [{ rowId: leagues.id, count: 40 }] }, at(9))).toEqual({ ok: false, code: 409, error: "The League's men move only between its towns and its holdings." });
+    expect(await m.actions.move(lctx, { baseId: "valentia", rows: [{ rowId: leagues.id, count: 40 }] }, at(9))).toEqual({ ok: false, code: 409, error: "The League's men move only between its towns and Massalia's holdings." });
 
     // Nothing moved and nothing was written: every row whole and standing, no march, no order, no ledger row.
     expect(await standing("massalia", "peltast")).toMatchObject([{ count: 250 }]);
@@ -636,5 +637,158 @@ suite("the League's orders (integration)", () => {
     await settleLeague(lctx, at(31));
     expect(await standing("arelate", "hoplite")).toMatchObject([{ count: 50 + 15 }]);
     expect(await standing("massalia", "hoplite")).toMatchObject([{ count: 500 - 15 }]);
+  });
+
+  // --- The League's men in a house's holding (holdings prompt 4) ------------------------
+
+  const houseAt = async (ctx: Ctx, unitId: string, count: number, basedAt: string) =>
+    (await db.insert(m.dbPkg.playerUnits).values({ worldId, ownerPlayerId: ctx.playerId, source: "trained", unitId, count, startCount: count, recruitedSeason: 5, readyAt: at(6), basedAt, createdAt: at(5) }).returning())[0]!;
+  const leagueAt = async (unitId: string, count: number, basedAt: string, road?: { to: string; regionId: string; townId?: string; arrivesAt: Date }) =>
+    (
+      await db
+        .insert(m.dbPkg.playerUnits)
+        .values({ worldId, ownerPlayerId: leagueId, source: "trained", unitId, count, startCount: count, recruitedSeason: 0, readyAt: at(0), basedAt, movingTo: road?.to ?? null, arrivesAt: road?.arrivesAt ?? null, mission: road ? ({ kind: "move", regionId: road.regionId, ...(road.townId ? { townId: road.townId } : {}), departedAt: at(9).toISOString() } as never) : null, createdAt: at(8) })
+        .returning()
+    )[0]!;
+  const rowOf = async (id: string) => (await db.select().from(m.dbPkg.playerUnits).where(eq(m.dbPkg.playerUnits.id, id)))[0]!;
+  const houseSettle = (ctx: Ctx, when: Date) =>
+    db.transaction(async (tx) => {
+      await m.lock.lockPlayer(tx, ctx.playerId);
+      return m.barracks.settleBarracks(tx, ctx, when);
+    });
+  const houseReach = (ctx: Ctx, when: Date) =>
+    db.transaction(async (tx) => {
+      await m.lock.lockPlayer(tx, ctx.playerId);
+      return m.mapReach.reachView(tx, ctx, when);
+    });
+  // A house holding Reii (a town, R047) and the Salyes' land (R046), with
+  // five riders in Massalia (a settle passes over a house with no row at all)
+  // and, if garrisoned, twenty hoplites of his own in each.
+  async function holder(garrisoned: boolean) {
+    const h = await makePlayer();
+    await m.holdings.insertTownConquest(db, h.ctx, "R047", "reii", "saluvii", at(8));
+    await m.holdings.insertConquest(db, h.ctx, "R046", "unclaimed", at(8));
+    await houseRow(h.ctx, "ekdromos", 5);
+    if (garrisoned) {
+      await houseAt(h.ctx, "hoplite", 20, "reii");
+      await houseAt(h.ctx, "hoplite", 20, "R046");
+    }
+    return h;
+  }
+
+  it("the League's men move into a house's town holding and its land holding, and stand there as a League base; a raid sets out from it at war, and at peace Raid and Attack from there are refused as anywhere; the holder's holdings and views are as they were", async () => {
+    const { lctx } = await archon();
+    const h = await holder(true);
+    const holdingsBefore = await m.holdings.listWorldHoldings(db, worldId);
+    const holderSees = async (when: Date) => {
+      const v = await houseReach(h.ctx, when);
+      return { bases: v.bases, moveTargets: v.moveTargets.map((t) => [t.id, t.kind]) };
+    };
+    const seenBefore = await holderSees(at(9));
+
+    // Both holdings are places the League may send men to, as a guest's.
+    const view = await m.mapReach.leagueMapView(db, lctx, at(9));
+    expect(view.moveTargets.filter((t) => t.kind === "guest").map((t) => [t.id, t.regionId, t.townId, t.name])).toEqual([
+      ["R046", "R046", null, view.moveTargets.find((t) => t.id === "R046")!.name],
+      ["reii", "R047", "reii", "Reii"],
+    ]);
+    const toReii = await m.actions.move(lctx, { baseId: "reii", rows: [{ rowId: (await leagueRow("massalia", "hoplite")).id, count: 60 }] }, at(9));
+    expect(toReii).toMatchObject({ ok: true, report: { baseId: "reii", townId: "reii", route: "land", minutes: 30, ships: {}, supplies: 0 } });
+    const toLand = await m.actions.move(lctx, { baseId: "R046", rows: [{ rowId: (await leagueRow("massalia", "peltast")).id, count: 40 }] }, at(9));
+    expect(toLand).toMatchObject({ ok: true, report: { baseId: "R046", townId: null, route: "land", minutes: 30 } });
+    expect((await orders()).map((o) => [o.kind, o.baseId, o.regionId, o.townId])).toEqual([
+      ["move", "massalia", "R047", "reii"],
+      ["move", "massalia", "R046", null],
+    ]);
+
+    // They arrive and stand there; each place is a League base with nothing of the holding's.
+    expect(await settleLeague(lctx, plus(at(9), 30))).toMatchObject({ arrived: 2, turnedHome: 0 });
+    expect(await standing("reii", "hoplite")).toMatchObject([{ count: 60 }]);
+    expect(await standing("R046", "peltast")).toMatchObject([{ count: 40 }]);
+    const after = await m.mapReach.leagueMapView(db, lctx, plus(at(9), 31));
+    expect(after.bases.filter((b) => b.kind === "guest").map((b) => [b.id, b.holding])).toEqual([["R046", null], ["reii", null]]);
+    expect(after.bases.filter((b) => b.kind === "home")).toHaveLength(10);
+    expect(after.reach.R034!.byBase.reii).toMatchObject({ landSteps: 1 });
+
+    // At peace: from Reii, Raid and Attack on Segusio are refused by the war gate, as anywhere.
+    const reiiRow = (await standing("reii", "hoplite"))[0]!;
+    const peace = "The League is not at war with the Vocontii.";
+    expect(after.gate.towns.segusio).toBe(peace);
+    for (const type of ["raid", "attack"] as const) {
+      expect(await m.actions.act(lctx, { type, townId: "segusio", rows: [{ rowId: reiiRow.id, count: 30 }] }, plus(at(9), 31))).toEqual({ ok: false, code: 409, error: peace });
+    }
+    // At war with the Vocontii, a raid sets out from Reii.
+    await war("vocontii", at(8), at(16));
+    const raid = await m.actions.act(lctx, { type: "raid", townId: "segusio", rows: [{ rowId: reiiRow.id, count: 30 }] }, plus(at(9), 32));
+    expect(raid).toMatchObject({ ok: true, report: { base: "reii", route: "land", steps: 1 } });
+
+    // The holder: the same holdings on every map, and his own view as it was (his garrison twenty in each).
+    expect(await m.holdings.listWorldHoldings(db, worldId)).toEqual(holdingsBefore);
+    const seenAfter = await holderSees(plus(at(9), 33));
+    expect(seenAfter).toEqual(seenBefore);
+    expect(seenAfter.bases.filter((b) => b.holding).map((b) => [b.id, b.holding!.garrison])).toEqual([["R046", 20], ["reii", 20]]);
+  });
+
+  it("the holder's garrison count, tribute and reversion count his own men alone: League men standing there change nothing", async () => {
+    await archon();
+    const h = await holder(false);
+    await leagueAt("hoplite", 100, "reii");
+    await leagueAt("peltast", 40, "R046");
+    expect(await m.holdings.garrisonCount(db, h.ctx, "reii", plus(at(8), 60))).toBe(0);
+    expect((await houseReach(h.ctx, plus(at(8), 60))).bases.filter((b) => b.holding).map((b) => [b.id, b.holding!.garrison])).toEqual([["R046", 0], ["reii", 0]]);
+    // A day on: no tribute for want of his own garrison, and both holdings revert.
+    const settled = await houseSettle(h.ctx, at(9));
+    expect(settled.tribute.paid).toEqual([]);
+    expect(settled.holdings.reverted.map((r) => [r.regionId, r.townId])).toEqual([["R046", ""], ["R047", "reii"]]);
+    expect(await holdingsOf(h.ctx.playerId)).toEqual([]);
+  });
+
+  it("when a house's holding reverts, the League's settle turns its men standing there for the town of Massalia with a move's time, no ships and no supplies; men on the road to it turn when they arrive", async () => {
+    const { lctx } = await archon();
+    const h = await holder(false);
+    const there = await leagueAt("hoplite", 100, "reii");
+    const onRoad = await leagueAt("peltast", 40, "massalia", { to: "R046", regionId: "R046", arrivesAt: plus(at(9), 20) });
+    await houseSettle(h.ctx, at(9));
+    expect(await holdingsOf(h.ctx.playerId)).toEqual([]);
+    const [balance0, fleet0, ledger0] = [await balance(), await fleet(), await ledger()];
+
+    // Something is due for the League: men standing where it may no longer stand.
+    expect(await m.league.leagueDue(db, lctx, plus(at(9), 5))).toBe(true);
+    const out = await settleLeague(lctx, plus(at(9), 5));
+    expect(out).toMatchObject({ turnedHome: 1, arrived: 0 });
+    // Reii to the town of Massalia: one land step, thirty minutes.
+    expect(await rowOf(there.id)).toMatchObject({ basedAt: "reii", movingTo: "massalia", arrivesAt: plus(at(9), 35), mission: { kind: "move", regionId: "R060", townId: "massalia", departedAt: plus(at(9), 5).toISOString() } });
+    expect(await m.league.leagueDue(db, lctx, plus(at(9), 6))).toBe(false);
+
+    // The row on the road reaches the reverted land and turns from there at its arrival.
+    expect(await settleLeague(lctx, plus(at(9), 25))).toMatchObject({ turnedHome: 1, arrived: 0 });
+    expect(await rowOf(onRoad.id)).toMatchObject({ basedAt: "R046", movingTo: "massalia", arrivesAt: plus(at(9), 50), mission: { kind: "move", regionId: "R060", townId: "massalia", departedAt: plus(at(9), 20).toISOString() } });
+
+    // No ships, no supplies, no treasury, no order and no effect_log row of the League's.
+    expect([await balance(), await fleet(), await ledger()]).toEqual([balance0, fleet0, ledger0]);
+    expect(await voyages()).toEqual([]);
+    expect(await orders()).toEqual([]);
+    expect((await effectLogs()).map((l) => l.kind)).toEqual(["holding_reverted", "holding_reverted"]);
+
+    // Home, they stand in Massalia with the men there.
+    expect(await settleLeague(lctx, plus(at(9), 50))).toMatchObject({ arrived: 2, turnedHome: 0 });
+    expect(await standing("massalia", "hoplite")).toMatchObject([{ count: 600 }]);
+    expect(await standing("massalia", "peltast")).toMatchObject([{ count: 290 }]);
+  });
+
+  it("the same for a League holding that reverts: its men on the road to it turn for the town of Massalia when they arrive", async () => {
+    const { lctx } = await archon();
+    await m.holdings.insertTownConquest(db, lctx, "R047", "reii", "saluvii", at(8));
+    const onRoad = await leagueAt("hoplite", 30, "massalia", { to: "reii", regionId: "R047", townId: "reii", arrivesAt: plus(at(9), 20) });
+    // Empty for a day: the League's own settle gives it back.
+    expect((await settleLeague(lctx, plus(at(9), 5))).holdings.reverted).toEqual([{ regionId: "R047", townId: "reii", kind: "conquest", previousOwner: "saluvii" }]);
+    expect(await holdingsOf()).toEqual([]);
+    expect(await settleLeague(lctx, plus(at(9), 25))).toMatchObject({ turnedHome: 1, arrived: 0 });
+    expect(await rowOf(onRoad.id)).toMatchObject({ basedAt: "reii", movingTo: "massalia", arrivesAt: plus(at(9), 50) });
+    // And no house may send men into a League holding (holdings prompt 3), now as before.
+    await m.holdings.insertTownConquest(db, lctx, "R047", "reii", "saluvii", at(9));
+    const house = await makePlayer();
+    const own = await houseRow(house.ctx, "hoplite", 20);
+    expect(await m.actions.move(house.ctx, { baseId: "reii", rows: [{ rowId: own.id, count: 20 }] }, at(9))).toEqual({ ok: false, code: 409, error: "Men may only be sent to Massalia's own ground or to a house's holding." });
   });
 });

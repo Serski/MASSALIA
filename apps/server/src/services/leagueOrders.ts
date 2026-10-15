@@ -1,9 +1,11 @@
 import { and, eq, gt, gte, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import { activeWorld, createDb, leagueOrders, leaguePlayerId, leagueWars, loadFactions, loadLeagueArmy, offices, playerCharacters, players, playerHoldings, playerMarches, playerUnits, playerVoyages, treasuries, treasuryLedger, type LeagueOrderForce, type LeagueOrderKind } from "@massalia/db";
 import { commandSeat, factionOfPolity, formatGameDate, gameDate, goodCategoryFor, harvestBanEndsMs, harvestRefusal, HOME_POLITY_ID, isLeagueFight, leagueAtWarWith, leagueLedgerReason, leagueWarRefusal, seasonAt, vendorUnitPrice, type FactionDef, type LeagueWarSpan, type VendorAction } from "@massalia/shared";
-import { isActive, type UnitRow } from "./barracks.js";
+import { isActive, turnHomeMinutes, type UnitRow } from "./barracks.js";
 import { creditResource, getBuildingsContent, getOrCreateResource, type ActingContext } from "./buildings.js";
-import { garrisonCount, holdingBaseId, listHoldings, settleHoldings, tributeRateOf, type HoldingsSettle } from "./holdings.js";
+import { garrisonCount, holdingBaseId, listHoldings, listWorldHoldings, settleHoldings, tributeRateOf, type HoldingsSettle } from "./holdings.js";
+import { getTopology } from "./mapGraph.js";
+import type { BaseKind } from "./mapReach.js";
 import { lockPlayer } from "./lock.js";
 import { loadMilitaryOwners } from "./mapMilitary.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
@@ -102,6 +104,7 @@ export async function debitLeagueTreasury(tx: DbTx, worldId: string, amount: num
 export type LeagueSettle = {
   shipsHome: number; // voyages whose hulls came back to stock
   arrived: number; // rows whose road ended
+  turnedHome: number; // rows turned for the town of Massalia from a place the League may no longer stand in
   merged: number; // rows folded into another
   holdings: HoldingsSettle;
   tribute: { placeId: string; days: number; amount: number }[];
@@ -111,21 +114,60 @@ async function leagueRows(exec: Exec, ctx: ActingContext): Promise<UnitRow[]> {
   return exec.select().from(playerUnits).where(and(eq(playerUnits.worldId, ctx.worldId), eq(playerUnits.ownerPlayerId, ctx.playerId)));
 }
 
+// The places the League's men may move to, and so stand in (holdings prompt 4):
+// its ten home towns, its own holdings, and every house's holding, where its
+// men stand as a guest's do, counting for nothing in the holding.
+export async function leaguePlaces(exec: Exec, ctx: ActingContext): Promise<{ id: string; regionId: string; townId: string | null; kind: BaseKind }[]> {
+  const topology = getTopology();
+  const out: { id: string; regionId: string; townId: string | null; kind: BaseKind }[] = [];
+  for (const town of await leagueHomeTowns()) {
+    const regionId = topology.townRegion.get(town);
+    if (regionId) out.push({ id: town, regionId, townId: town, kind: "home" });
+  }
+  for (const h of await listHoldings(exec, ctx)) out.push({ id: holdingBaseId(h), regionId: h.regionId, townId: h.townId || null, kind: h.kind });
+  for (const h of await listWorldHoldings(exec, ctx.worldId)) if (!h.league && h.playerId !== ctx.playerId) out.push({ id: h.townId || h.regionId, regionId: h.regionId, townId: h.townId || null, kind: "guest" });
+  return out;
+}
+
+// The town of Massalia, where the League's men turn for when they may no
+// longer stand where they are (holdings prompt 4).
+const MASSALIA_TOWN = "massalia";
+
+// League men turn for the town of Massalia from `from`, at `at` (a row on the
+// road at its arrival, a standing row at the settle): as long as a move from
+// there would take (turnHomeMinutes, the house's rule), no ships and no naval
+// supplies. Already home by `at`'s settle, they stand there. No effect_log row.
+async function turnLeagueHome(tx: DbTx, r: UnitRow, from: string, at: Date, now: Date): Promise<void> {
+  const home = new Date(at.getTime() + turnHomeMinutes(from) * 60_000);
+  if (home.getTime() <= now.getTime()) {
+    await tx.update(playerUnits).set({ basedAt: MASSALIA_TOWN, movingTo: null, arrivesAt: null, mission: null }).where(eq(playerUnits.id, r.id));
+  } else {
+    const mission = { kind: "move" as const, regionId: getTopology().massaliaRegion, townId: MASSALIA_TOWN, departedAt: at.toISOString() };
+    await tx.update(playerUnits).set({ basedAt: from, movingTo: MASSALIA_TOWN, arrivesAt: home, mission }).where(eq(playerUnits.id, r.id));
+  }
+}
+
 // Everything the League's men, ships and holdings owe the clock at `at`, under
 // lockLeagueWrite. In the barracks settle's order, without its upkeep:
 //  1. hulls home: each voyage whose returns_at has passed is claimed
 //     (returned_at stamped) and its ships credited back to the League's stock;
 //  2. arrivals: a row whose road has ended stands at its destination; a row
-//     still carrying a march is landed by its march's arrival, never here;
+//     still carrying a march is landed by its march's arrival, never here; a
+//     row whose destination is no longer one the League may stand in (a
+//     holding that reverted while it was on the road) turns for the town of
+//     Massalia from there (holdings prompt 4);
 //  3. the merge: at each place the ready, standing trained rows of one unit
 //     fold into one;
 //  4. holdings: a garrisoned holding keeps its marker current, one left empty
-//     for a full day reverts (settleHoldings, which needs no character);
+//     for a full day reverts (settleHoldings, which needs no character); then
+//     men standing where the League may no longer stand (a house's holding that
+//     reverted at its holder's settle, or one of its own that just reverted)
+//     turn for the town of Massalia from now;
 //  5. tribute: each holding still held pays the treasury for the whole days
 //     since its marker, its grain and timber sold at what the market pays, as
 //     one ledger row; the marker's advance is the claim.
 export async function settleLeague(tx: DbTx, ctx: LeagueContext, at: Date): Promise<LeagueSettle> {
-  const out: LeagueSettle = { shipsHome: 0, arrived: 0, merged: 0, holdings: { reverted: [] }, tribute: [] };
+  const out: LeagueSettle = { shipsHome: 0, arrived: 0, turnedHome: 0, merged: 0, holdings: { reverted: [] }, tribute: [] };
 
   const home = await tx
     .update(playerVoyages)
@@ -141,9 +183,15 @@ export async function settleLeague(tx: DbTx, ctx: LeagueContext, at: Date): Prom
   }
 
   let rows = await leagueRows(tx, ctx);
+  let mayStand = new Set((await leaguePlaces(tx, ctx)).map((p) => p.id));
   for (const r of rows) {
     if (r.movingTo === null || r.arrivesAt === null || r.arrivesAt.getTime() > at.getTime()) continue;
     if (r.mission?.marchId || r.mission?.musterId) continue;
+    if (!mayStand.has(r.movingTo)) {
+      await turnLeagueHome(tx, r, r.movingTo, r.arrivesAt, at);
+      out.turnedHome++;
+      continue;
+    }
     await tx.update(playerUnits).set({ basedAt: r.movingTo, movingTo: null, arrivesAt: null, mission: null }).where(eq(playerUnits.id, r.id));
     out.arrived++;
   }
@@ -166,6 +214,13 @@ export async function settleLeague(tx: DbTx, ctx: LeagueContext, at: Date): Prom
   }
 
   out.holdings = await settleHoldings(tx, ctx, at);
+
+  mayStand = new Set((await leaguePlaces(tx, ctx)).map((p) => p.id));
+  for (const r of await leagueRows(tx, ctx)) {
+    if (r.movingTo !== null || mayStand.has(r.basedAt)) continue;
+    await turnLeagueHome(tx, r, r.basedAt, at, at);
+    out.turnedHome++;
+  }
 
   for (const h of await listHoldings(tx, ctx)) {
     const days = Math.floor((at.getTime() - h.lastTributeAt.getTime()) / MS_PER_DAY);
@@ -190,8 +245,10 @@ export async function settleLeague(tx: DbTx, ctx: LeagueContext, at: Date): Prom
 }
 
 // Whether the League's settle has anything to do at `now`: a row whose road has
-// ended, a voyage back, or a holding a day past either of its markers (the
-// tribute's, or the empty-for-a-day one). Three small reads, no lock.
+// ended, a voyage back, a holding a day past either of its markers (the
+// tribute's, or the empty-for-a-day one), or men standing where the League may
+// no longer stand (a house's holding that reverted, holdings prompt 4). Small
+// reads, no lock.
 export async function leagueDue(exec: Exec, ctx: Pick<ActingContext, "playerId" | "worldId">, now: Date): Promise<boolean> {
   const landed = await exec
     .select({ id: playerUnits.id })
@@ -211,7 +268,11 @@ export async function leagueDue(exec: Exec, ctx: Pick<ActingContext, "playerId" 
     .from(playerHoldings)
     .where(and(eq(playerHoldings.worldId, ctx.worldId), eq(playerHoldings.ownerPlayerId, ctx.playerId), or(lte(playerHoldings.lastTributeAt, dayAgo), lte(playerHoldings.lastGarrisonedAt, dayAgo))))
     .limit(1);
-  return held.length > 0;
+  if (held.length > 0) return true;
+  const standing = await exec.selectDistinct({ basedAt: playerUnits.basedAt }).from(playerUnits).where(and(eq(playerUnits.ownerPlayerId, ctx.playerId), isNull(playerUnits.movingTo)));
+  if (standing.length === 0) return false;
+  const mayStand = new Set((await leaguePlaces(exec, { ...ctx, worldStartedMs: 0 })).map((p) => p.id)); // the places need no clock
+  return standing.some((s) => !mayStand.has(s.basedAt));
 }
 
 // The settle for a read (the sync, the town panels, the Government view, the

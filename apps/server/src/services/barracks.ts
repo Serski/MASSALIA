@@ -606,7 +606,7 @@ function nextInsolvencyVictim(live: UnitRow[], chargeable: (r: UnitRow) => boole
 // `from` is where they are, `at` when they turn: a row on the road turns at its
 // arrival, a row standing at the settle. If they would already be home by
 // `now`, they stand in the Massalia region. One effect_log row each.
-function turnHomeMinutes(placeId: string): number {
+export function turnHomeMinutes(placeId: string): number {
   const t = getTopology();
   const move = getBattleContent().move;
   const region = t.townRegion.get(placeId) ?? placeId;

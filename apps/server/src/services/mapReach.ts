@@ -19,7 +19,7 @@ import { fleetInStock, getBandsContent, getBattleContent, getShipsContent, getUn
 export { fleetInStock };
 import type { ActingContext } from "./buildings.js";
 import { garrisonCount, holdingBaseId, listHoldings, listWorldHoldings, tributeRateOf } from "./holdings.js";
-import { isLeague, leagueBalance, leagueGateMap, leagueHomeTowns, leagueSightings, marketPrice, type LeagueContext, type LeagueSightings } from "./leagueOrders.js";
+import { isLeague, leagueBalance, leagueGateMap, leagueHomeTowns, leaguePlaces, leagueSightings, marketPrice, type LeagueContext, type LeagueSightings } from "./leagueOrders.js";
 import { getTopology } from "./mapGraph.js";
 import { loadMilitaryOwners } from "./mapMilitary.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
@@ -143,18 +143,20 @@ export async function basesOf(exec: Exec, ctx: ActingContext, now: Date, rows?: 
     const holding: HoldingView = { garrison: await garrisonCount(exec, ctx, id, now), minGarrison: rate.minGarrison, perDay: { drachmae: rate.drachmae, grain: rate.grain, timber: rate.timber }, levyPerYear: h.townId ? 0 : levyPerYear };
     out.push({ id, regionId: h.regionId, townId: h.townId || null, kind: h.kind, name: await placeName(id, h.townId || null), holding });
   }
-  if (league) return out;
   const standing = new Set((rows ?? (await ownedRows(exec, ctx))).filter((r) => isActive(r, now) && r.movingTo === null).map((r) => r.basedAt));
-  // Another house's holding where this house's men stand (holdings prompt 3):
-  // a base, after its own holdings, and nothing of the holding's is shown.
+  // Another house's holding where this house's men stand (holdings prompt 3),
+  // or the League's (holdings prompt 4): a base, after its own holdings, and
+  // nothing of the holding's is shown.
   for (const g of await guestPlaces(exec, ctx)) if (standing.has(g.id)) out.push({ ...g, kind: "guest", name: await placeName(g.id, g.townId), holding: null });
+  if (league) return out;
   for (const p of await homePlaces(topology)) if (standing.has(p.id)) out.push({ ...p, kind: "home", name: await placeName(p.id, p.townId), holding: null });
   return out;
 }
 
 // Every other house's holding (holdings prompt 3): a holding is Massalia's land,
-// and any house may stand in it. Never the League's (its holdings are its army's
-// alone), and never this house's own, which it holds.
+// and any house may stand in it, and so may the League's army (holdings prompt
+// 4). Never the League's (its holdings are its army's alone), and never this
+// house's own, which it holds.
 export async function guestPlaces(exec: Exec, ctx: ActingContext): Promise<{ id: string; regionId: string; townId: string | null }[]> {
   return (await listWorldHoldings(exec, ctx.worldId))
     .filter((h) => !h.league && h.playerId !== ctx.playerId)
@@ -204,13 +206,10 @@ function stepsByBase(topology: Topology, bases: BaseView[], regionId: string): R
 // every home place, and every holding — each with its steps from every base.
 export async function moveTargetsOf(topology: Topology, bases: BaseView[], ctx: ActingContext, exec: Exec): Promise<MoveTargetView[]> {
   // A house: housePlaces (the Massalia region, every home place, its own
-  // holdings and every other house's, holdings prompt 3). The League: its ten
-  // home towns and its own holdings, never a house's.
-  const places: { id: string; regionId: string; townId: string | null; kind: BaseKind }[] = [];
-  if (isLeague(ctx)) {
-    for (const p of await leagueHomePlaces(topology)) places.push({ ...p, kind: "home" });
-    for (const h of await listHoldings(exec, ctx)) places.push({ id: holdingBaseId(h), regionId: h.regionId, townId: h.townId || null, kind: h.kind });
-  } else places.push(...(await housePlaces(exec, ctx)));
+  // holdings and every other house's, holdings prompt 3). The League:
+  // leaguePlaces (its ten home towns, its own holdings and every house's,
+  // holdings prompt 4).
+  const places = isLeague(ctx) ? await leaguePlaces(exec, ctx) : await housePlaces(exec, ctx);
   const out: MoveTargetView[] = [];
   for (const p of places) out.push({ ...p, name: await placeName(p.id, p.townId), byBase: stepsByBase(topology, bases, p.regionId) });
   return out;

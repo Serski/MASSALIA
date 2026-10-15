@@ -49,7 +49,7 @@ describe("the refusals, verbatim", () => {
   });
 
   it("a move off the League's own ground, and a voyage the treasury cannot pay for", () => {
-    expect(LEAGUE_MOVE_REFUSAL).toBe("The League's men move only between its towns and its holdings.");
+    expect(LEAGUE_MOVE_REFUSAL).toBe("The League's men move only between its towns and Massalia's holdings.");
     expect(leagueSuppliesRefusal(1568, 912)).toBe("The treasury cannot pay for the voyage: 1,568 drachmae of naval supplies, 912 in the treasury.");
   });
 });

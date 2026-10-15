@@ -45,8 +45,8 @@ export function holderRefusal(holder: "league" | "house", place: "town" | "land"
   return holder === "league" ? `The League holds this ${place}.` : `Another house holds this ${place}.`;
 }
 
-// The League's men move only between its own places.
-export const LEAGUE_MOVE_REFUSAL = "The League's men move only between its towns and its holdings.";
+// The League's men move only between its own places and the houses' holdings (holdings prompt 4).
+export const LEAGUE_MOVE_REFUSAL = "The League's men move only between its towns and Massalia's holdings.";
 
 // A voyage the treasury cannot pay for.
 export function leagueSuppliesRefusal(cost: number, balance: number): string {
