@@ -12,6 +12,8 @@ export const worlds = pgTable("worlds", {
   endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
   status: text("status").$type<WorldStatus>().notNull().default("active"),
   tagline: text("tagline"),
+  // Raids and seasons count toward the strikes from here (migration 0077); NULL: from started_at.
+  strikesFrom: timestamp("strikes_from", { withTimezone: true }),
 });
 
 export const users = pgTable("users", {
@@ -1516,6 +1518,61 @@ export const leagueOrders = pgTable("league_orders", {
   kindCheck: check("league_orders_kind_check", sql`${table.kind} IN ('move', 'scout', 'raid', 'attack')`),
   worldIdx: index("league_orders_world_idx").on(table.worldId, table.orderedAt),
   marchIdx: uniqueIndex("league_orders_march_idx").on(table.marchId).where(sql`march_id IS NOT NULL`),
+}));
+
+// --- The strikes (migration 0077, strikes prompt 1) ---------------------------
+// A nation's march on a Massalian place: in a war once a season, or once after
+// a place of its was raided more than 10 times in a game year. One row a march;
+// strike_parts holds each owner whose men fought and the target's holder.
+export type StrikeTrigger = "war" | "raids";
+export type StrikeMode = "raid" | "attack";
+export type StrikeStatus = "marching" | "struck" | "called_off";
+export type StrikeDraw = { placeId: string; kind: "town" | "region"; men: number };
+
+export const strikes = pgTable("strikes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  nationId: text("nation_id").notNull(), // the faction id, or the owner polity of a tribe with none
+  trigger: text("trigger").$type<StrikeTrigger>().notNull(),
+  mode: text("mode").$type<StrikeMode>().notNull(),
+  seasonIndex: integer("season_index").notNull(), // the season of the call
+  triggerPlaceId: text("trigger_place_id"), // raids: the place raided an 11th time
+  triggerAt: timestamp("trigger_at", { withTimezone: true }), // raids: that fight's instant
+  regionId: text("region_id").notNull(), // the target
+  townId: text("town_id"),
+  targetKind: text("target_kind").$type<"home" | "holding">().notNull(),
+  holderPlayerId: uuid("holder_player_id").references(() => players.id), // the holder at the call; null for a home town
+  takenFrom: boolean("taken_from").notNull().default(false),
+  force: integer("force").notNull(), // the men who march
+  about: integer("about").notNull(), // the shown number, to the nearest 10
+  draws: jsonb("draws").$type<StrikeDraw[]>().notNull().default(sql`'[]'::jsonb`),
+  calledAt: timestamp("called_at", { withTimezone: true }).notNull(),
+  strikesAt: timestamp("strikes_at", { withTimezone: true }).notNull(),
+  status: text("status").$type<StrikeStatus>().notNull().default("marching"),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  report: jsonb("report").$type<Record<string, unknown> | null>(),
+}, (table) => ({
+  triggerCheck: check("strikes_trigger_check", sql`${table.trigger} IN ('war', 'raids')`),
+  modeCheck: check("strikes_mode_check", sql`${table.mode} IN ('raid', 'attack')`),
+  targetKindCheck: check("strikes_target_kind_check", sql`${table.targetKind} IN ('home', 'holding')`),
+  statusCheck: check("strikes_status_check", sql`${table.status} IN ('marching', 'struck', 'called_off')`),
+  oneOnTheRoad: uniqueIndex("strikes_one_on_the_road").on(table.worldId, table.nationId).where(sql`status = 'marching'`),
+  oneWarMarchASeason: uniqueIndex("strikes_one_war_march_a_season").on(table.worldId, table.nationId, table.seasonIndex).where(sql`trigger = 'war'`),
+  onePerCount: uniqueIndex("strikes_one_per_count").on(table.worldId, table.triggerPlaceId, table.triggerAt).where(sql`trigger = 'raids'`),
+  dueIdx: index("strikes_due").on(table.strikesAt).where(sql`status = 'marching'`),
+}));
+
+export const strikeParts = pgTable("strike_parts", {
+  strikeId: uuid("strike_id").references(() => strikes.id).notNull(),
+  playerId: uuid("player_id").references(() => players.id).notNull(),
+  men: integer("men").notNull(),
+  lost: integer("lost").notNull(),
+  paid: integer("paid").notNull().default(0),
+  holder: boolean("holder").notNull().default(false),
+  seenAt: timestamp("seen_at", { withTimezone: true }),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.strikeId, table.playerId] }),
+  playerIdx: index("strike_parts_player_idx").on(table.playerId),
 }));
 
 // --- World 2 military pools (migration 0049) --------------------------------
