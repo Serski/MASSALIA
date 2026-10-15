@@ -1,12 +1,14 @@
 import { and, eq, sql } from "drizzle-orm";
 import { createDb, loadRegionMilitaryContent, loadTownMilitaryContent, regionMilitary, townMilitary } from "@massalia/db";
+import { regrownPool } from "@massalia/shared";
 import { getBattleContent } from "./barracks.js";
 
 // Region warband and town garrison pools (barracks prompts 3b, 3c; raids
 // prompt 3). A townless region's warband, or a town's garrison, is the live NPC
 // defender: it is reduced by battle casualties and regrows toward its content
-// value at regen.warbandPerDay / regen.garrisonPerDay per whole day on a steady
-// clock — closed-form on read, no tick. `updated_at` is the regrowth marker: a
+// value by regen.warbandShare / regen.garrisonShare of that value per whole
+// season (one a day), rounded up (strikes prompt 1), on a steady clock —
+// closed-form on read, no tick (regrownPool). `updated_at` is the regrowth marker: a
 // read that adds whole days moves it by exactly those days, so the part of a
 // day carries over; a write onto a pool below its content value leaves it where
 // it is (a fight below the full count leaves the clock running); a write onto a
@@ -40,8 +42,8 @@ export async function regionContentOwner(regionId: string): Promise<string | nul
 }
 
 // Read the region's warband with the regrowth applied and persisted:
-// min(base, stored + floor(days since updated_at) × warbandPerDay) when the
-// stored value is below base, the marker moved by exactly those whole days so
+// regrownPool(stored, base, whole seasons since updated_at, warbandShare) when
+// the stored value is below base, the marker moved by exactly those whole days so
 // the remainder carries over. A missing row (a world seeded before the region
 // was listed) reads as the content value and is inserted.
 export async function readRegionWarband(exec: Exec, worldId: string, regionId: string, now: Date): Promise<number> {
@@ -54,7 +56,7 @@ export async function readRegionWarband(exec: Exec, worldId: string, regionId: s
   if (row.warband >= base) return row.warband;
   const days = Math.floor(Math.max(0, now.getTime() - row.updatedAt.getTime()) / MS_PER_DAY);
   if (days <= 0) return row.warband;
-  const regenerated = Math.min(base, row.warband + days * getBattleContent().regen.warbandPerDay);
+  const regenerated = regrownPool(row.warband, base, days, getBattleContent().regen.warbandShare);
   await exec.update(regionMilitary).set({ warband: regenerated, updatedAt: new Date(row.updatedAt.getTime() + days * MS_PER_DAY) }).where(and(eq(regionMilitary.worldId, worldId), eq(regionMilitary.regionId, regionId)));
   return regenerated;
 }
@@ -108,15 +110,15 @@ async function townRow(exec: Exec, worldId: string, townId: string, now: Date) {
 }
 
 // Read the town's garrison with the regrowth applied and persisted, the
-// warband's way: min(base, stored + floor(days) × garrisonPerDay) below base,
-// the marker moved by those whole days.
+// warband's way: regrownPool(stored, base, whole seasons, garrisonShare) below
+// base, the marker moved by those whole seasons.
 export async function readTownGarrison(exec: Exec, worldId: string, townId: string, now: Date): Promise<number> {
   const base = await townBaseGarrison(townId);
   const row = await townRow(exec, worldId, townId, now);
   if (row.garrison >= base) return row.garrison;
   const days = Math.floor(Math.max(0, now.getTime() - row.updatedAt.getTime()) / MS_PER_DAY);
   if (days <= 0) return row.garrison;
-  const regenerated = Math.min(base, row.garrison + days * getBattleContent().regen.garrisonPerDay);
+  const regenerated = regrownPool(row.garrison, base, days, getBattleContent().regen.garrisonShare);
   await exec.update(townMilitary).set({ garrison: regenerated, updatedAt: new Date(row.updatedAt.getTime() + days * MS_PER_DAY) }).where(and(eq(townMilitary.worldId, worldId), eq(townMilitary.townId, townId)));
   return regenerated;
 }

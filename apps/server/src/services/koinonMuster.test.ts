@@ -1033,8 +1033,8 @@ suite("Koinon muster (integration)", () => {
     expect(await db.select().from(m.dbPkg.koinonMusterHulls)).toEqual([]);
 
     // By land no hull carries anyone: the ship owner has no part and no line.
-    // The warband of 10 has regenerated to 15 by the launch a day on; 4 (a
-    // fourth of 15, rounded) turn out and 20 peltasts win on every seed, slaying 2 to 4.
+    // The warband of 10 has regrown to 40 by the launch a season on (30 of its
+    // full 100, strikes prompt 1); 10 (a fourth of 40) turn out.
     await setWarband(landRegion, 10);
     const byLand = await musterRow(k, soldier, { id: uid(901), launchAt: at(DAY) });
     await db.delete(m.dbPkg.playerUnits);
@@ -1043,7 +1043,7 @@ suite("Koinon muster (integration)", () => {
     const before = await wallet(shipowner);
     expect((await launchAndFight(byLand, at(DAY))).outcome).toBe("resolved");
     const land = (await musters())[1]!.report as unknown as Report;
-    expect(land).toMatchObject({ outcome: "won", route: "land", fleet: null, defender: { start: 15, turnout: 4 } });
+    expect(land).toMatchObject({ outcome: "won", route: "land", fleet: null, defender: { start: 40, turnout: 10 } });
     expect([2, 3, 4]).toContain(land.killed);
     expect(land.parts.map((p) => [p.playerId, p.shares, p.drachmae])).toEqual([[soldier, 20, land.plunder!.drachmae]]);
     expect(await wallet(shipowner)).toBe(before);

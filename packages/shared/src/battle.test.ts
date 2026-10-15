@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { marchMinutes, parseBattleContent, parseUnitsContent, raidAngers, raidPlunder, raidTurnout, rateBounds, rollRate, type UnitStats } from "./barracks.js";
+import { marchMinutes, parseBattleContent, parseUnitsContent, raidAngers, raidPlunder, raidTurnout, rateBounds, regrownPool, rollRate, type UnitStats } from "./barracks.js";
 import { resolveBattle, SKIRMISH_MSL, type BattleConfig, type BattleRow } from "./battle.js";
 import { parseBuildingsContent } from "./buildings.js";
 
@@ -25,7 +25,7 @@ describe("battle content", () => {
     expect(battle.npc.warband.stats.spd).toBe(6);
     expect(battle.raid).toEqual({ rounds: 1, turnout: { floorOneIn: 50, capOneIn: 4 }, plunderPerKill: { min: 20, max: 30 }, grainPerKill: { min: 1, max: 3 }, spoilPerKill: { min: 1, max: 3 }, spoilGoods: ["oliveoil", "leather", "salt", "wool"], townPlunderMultiplier: 2, opinion: { chance: 0.33, loss: 1 } });
     // 3c: towns, tribute, region tribute and moves.
-    expect(battle.regen).toEqual({ warbandPerDay: 5, garrisonPerDay: 5 });
+    expect(battle.regen).toEqual({ warbandShare: 0.3, garrisonShare: 0.3 });
     expect(battle.town).toEqual({ wallsDefCap: 3 });
     expect(battle.tribute).toEqual({ perPopulation: 0.08, minGarrisonPerPopulation: 0.01 });
     expect(battle.regionTribute).toEqual({ grainPerWarband: 0.05, timberPerWarband: 0.025, minGrain: 15, minTimber: 8, levyPerYear: 5 });
@@ -52,6 +52,24 @@ describe("battle content", () => {
     // The grudge: a chance in [0, 1] and a whole, positive loss.
     expect(() => parseBattleContent({ ...read("content/military/battle.json"), raid: { ...raid, opinion: { chance: 1.5, loss: 1 } } }, goods)).toThrow();
     expect(() => parseBattleContent({ ...read("content/military/battle.json"), raid: { ...raid, opinion: { chance: 0.33, loss: 0 } } }, goods)).toThrow();
+  });
+});
+
+// Strikes prompt 1, ruling 1: a pool regrows 30% of its full strength a season, rounded up.
+describe("regrowth", () => {
+  const share = battle.regen.garrisonShare;
+  it("a 2,300 garrison at 0 reads 690 after a season, 1,380 after two, and 2,300 after four", () => {
+    expect([1, 2, 3, 4, 10].map((s) => regrownPool(0, 2300, s, share))).toEqual([690, 1380, 2070, 2300, 2300]);
+  });
+  it("a 25 warband regrows 8 a season (7.5 rounded up)", () => {
+    expect(regrownPool(0, 25, 1, battle.regen.warbandShare)).toBe(8);
+    expect(regrownPool(10, 25, 1, battle.regen.warbandShare)).toBe(18);
+    expect(regrownPool(10, 25, 2, battle.regen.warbandShare)).toBe(25);
+  });
+  it("never above full, a full pool as it is, and no whole season adds nothing", () => {
+    expect(regrownPool(2200, 2300, 1, share)).toBe(2300);
+    expect(regrownPool(2400, 2300, 3, share)).toBe(2400);
+    expect(regrownPool(100, 2300, 0, share)).toBe(100);
   });
 });
 

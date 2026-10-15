@@ -783,25 +783,26 @@ suite("Map actions (integration)", () => {
     expect(far.report.fleet).toMatchObject({ ships: { "trade-ship": 2 }, naval: 2 });
   });
 
-  it("regrowth: 5 a day on a steady clock; the part of a day carries over, a fight below the full count leaves the clock running, and a full pool's first loss starts it", async () => {
+  // Strikes prompt 1, ruling 1: 30% of full strength a season, rounded up (here 30 of 100).
+  it("regrowth: 30% of full a season on a steady clock; the part of a season carries over, a fight below the full count leaves the clock running, and a full pool's first loss starts it", async () => {
     const read = (when: Date) => m.mapPools.readRegionWarband(db, worldId, "R046", when);
-    await setWarband("R046", 50, at(9)); // content 100; a fresh row's clock starts at the write
-    expect(await read(at(9.5))).toBe(50);
-    expect(await read(at(11))).toBe(60);
-    // The marker moves by whole days only: the half day carries over.
-    expect(await read(at(12.5))).toBe(65);
-    expect(await marker("R046")).toEqual(at(12));
-    expect(await read(at(13))).toBe(70); // the old marker, 12.5, gave 65
+    await setWarband("R046", 0, at(9)); // content 100; a fresh row's clock starts at the write
+    expect(await read(at(9.5))).toBe(0); // part of a season adds nothing
+    expect(await read(at(10))).toBe(30);
+    // The marker moves by whole seasons only: the half season carries over.
+    expect(await read(at(11.5))).toBe(60);
+    expect(await marker("R046")).toEqual(at(11));
+    expect(await read(at(12))).toBe(90); // the old marker, 11.5, gave 60
     // A fight below the full count leaves the clock where it is.
-    await setWarband("R046", 60, at(13.5));
-    expect(await marker("R046")).toEqual(at(13));
-    expect(await read(at(14))).toBe(65); // the old rule restarted at 13.5 and gave 60
-    expect(await read(at(40))).toBe(100);
+    await setWarband("R046", 60, at(12.5));
+    expect(await marker("R046")).toEqual(at(12));
+    expect(await read(at(13))).toBe(90); // the old rule restarted at 12.5 and gave 60
+    expect(await read(at(40))).toBe(100); // never above full
     // A full pool's first loss starts the clock at the fight.
     await setWarband("R046", 90, at(40.5));
     expect(await marker("R046")).toEqual(at(40.5));
     expect(await read(at(41))).toBe(90);
-    expect(await read(at(41.5))).toBe(95);
+    expect(await read(at(41.5))).toBe(100);
   });
 
   it("an empty holding reverts after a full day and the warband comes back; a garrisoned one stays", async () => {
@@ -1030,6 +1031,10 @@ suite("Map actions (integration)", () => {
     // naval 2 + 25 against 24, and the landing holds. The crossing itself is
     // still the two transports.
     expect(await m.mapPools.readTownFleet(db, worldId, "aleria", at(10))).toEqual({ pentekonters: 4, triremes: 4 });
+    // The garrison would have regrown 30% of its full strength in the season
+    // between (strikes prompt 1): a garrison of 10 again, on a fresh clock.
+    await db.delete(m.dbPkg.townMilitary).where(and(eq(m.dbPkg.townMilitary.worldId, worldId), eq(m.dbPkg.townMilitary.townId, "aleria")));
+    await setGarrison("aleria", 10, at(10));
     await settle(ctx, at(10));
     await give(ctx, "galley", 5); // range 4 ≥ 2 seas
     const again = await actTown(ctx, "attack", "aleria", [peltasts.id], at(10));
@@ -1188,16 +1193,24 @@ suite("Map actions (integration)", () => {
     await recordChronicle(characterId);
   });
 
-  it("garrison regrowth: 5 a day on a steady clock; the part of a day carries over and a fight below the full count leaves the clock running", async () => {
+  it("garrison regrowth: 30% of full a season (48 of Reii's 160) on a steady clock; the part of a season carries over and a fight below the full count leaves the clock running", async () => {
     const read = (when: Date) => m.mapPools.readTownGarrison(db, worldId, "reii", when);
-    await setGarrison("reii", 100, at(9)); // content 160
-    expect(await read(at(9.5))).toBe(100);
-    expect(await read(at(11))).toBe(110);
-    expect(await read(at(12.5))).toBe(115);
-    expect(await read(at(13))).toBe(120);
-    await setGarrison("reii", 110, at(13.5));
-    expect(await read(at(14))).toBe(115);
+    await setGarrison("reii", 0, at(9)); // content 160
+    expect(await read(at(9.5))).toBe(0);
+    expect(await read(at(10))).toBe(48);
+    expect(await read(at(11.5))).toBe(96);
+    expect(await read(at(12))).toBe(144);
+    await setGarrison("reii", 100, at(12.5));
+    expect(await read(at(13))).toBe(148);
     expect(await read(at(40))).toBe(160);
+  });
+
+  it("Tolosa's 2,300 at 0 reads 690 after a season and 2,300 after four", async () => {
+    const read = (when: Date) => m.mapPools.readTownGarrison(db, worldId, "tolosa", when);
+    await setGarrison("tolosa", 0, at(9));
+    expect(await read(at(9.99))).toBe(0);
+    expect(await read(at(10))).toBe(690);
+    expect(await read(at(13))).toBe(2300);
   });
 
   // --- Move (3c) ---------------------------------------------------------------

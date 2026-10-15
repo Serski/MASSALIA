@@ -80,7 +80,8 @@ export type BattleContent = {
     townPlunderMultiplier: number;
     opinion: { chance: number; loss: number };
   };
-  regen: { warbandPerDay: number; garrisonPerDay: number };
+  // A pool regrows this share of its full strength (the content value) each whole season, rounded up (strikes prompt 1).
+  regen: { warbandShare: number; garrisonShare: number };
   // Towns (3c): walls add min(walls, wallsDefCap) to every defending row's def.
   town: { wallsDefCap: number };
   // A held town pays perPopulation × population drachmae a day while garrisoned
@@ -316,7 +317,7 @@ function battleContentSchema(goods: ReadonlySet<string>) {
         opinion: z.object({ chance: z.number().min(0).max(1), loss: z.number().int().positive() }).strict(),
       })
       .strict(),
-    regen: z.object({ warbandPerDay: z.number().int().nonnegative(), garrisonPerDay: z.number().int().nonnegative() }).strict(),
+    regen: z.object({ warbandShare: z.number().min(0).max(1), garrisonShare: z.number().min(0).max(1) }).strict(),
     town: z.object({ wallsDefCap: z.number().int().nonnegative() }).strict(),
     tribute: z.object({ perPopulation: z.number().nonnegative(), minGarrisonPerPopulation: z.number().nonnegative() }).strict(),
     regionTribute: z
@@ -488,4 +489,12 @@ export function raidPlunder(raid: BattleContent["raid"], kills: number, isTown: 
     grain: Math.round(kills * grainRate * mult),
     spoil: { good, amount: Math.round(kills * spoilRate * mult) },
   };
+}
+
+// A garrison's or a warband's pool after `seasons` whole seasons of regrowth
+// (strikes prompt 1, ruling 1): `share` of its full strength each season,
+// rounded up, never above full. A pool at or above full is left as it is.
+export function regrownPool(stored: number, full: number, seasons: number, share: number): number {
+  if (stored >= full || seasons <= 0) return stored;
+  return Math.min(full, stored + seasons * Math.ceil(share * full));
 }
