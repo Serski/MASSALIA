@@ -425,6 +425,25 @@ suite("Barracks (integration)", () => {
       expect(mine.army.perDay).toEqual({ grain: 30, oliveoil: 30, drachmae: 75, wine: 4, chicken: 34, herbal: 2 });
     });
 
+    it("one ready row and one in training: the strip and its row lines count the ready row only, as the settle charges; the training row reaches only the supply plan's training line", async () => {
+      const { ctx } = await makePlayer({ drachmae: 100_000 });
+      await giveAll(ctx, { grain: 10_000, oliveoil: 10_000 });
+      const ready = await insertRow(ctx, { source: "trained", unitId: "ekdromos", count: 20, recruitedSeason: 7, readyAt: 8, createdSeason: 7 });
+      await insertRow(ctx, { source: "trained", unitId: "peltast", count: 30, recruitedSeason: 9, readyAt: 12, createdSeason: 9 });
+      const view = await m.barracks.barracksView(ctx, at(9));
+      expect(view.upkeep.perDay).toEqual({ grain: 20, oliveoil: 20 });
+      expect(view.upkeep.rows).toEqual({ [ready.id]: { grain: 20, oliveoil: 20 } });
+      const mine = await m.buildings.mine("hoplite", ctx, at(9));
+      expect(mine.army.perDay).toEqual(view.upkeep.perDay);
+      expect(mine.supply?.army.map((l) => [l.good, l.need])).toEqual([["grain", 20], ["oliveoil", 20]]);
+      expect(mine.supply?.training?.men).toEqual([{ unitId: "peltast", label: "Peltast", plural: "Peltasts", count: 30 }]);
+      // A day later the settle charges the strip and nothing for the peltasts.
+      const s = await settle(ctx, 10);
+      expect(s.days).toBe(1);
+      expect(s.drawn).toEqual({ grain: 20, oliveoil: 20 });
+      expect(s.bought).toEqual({});
+    });
+
     it("a returning party merges into the same-unit rows at its base even when two already stand there, keeping the latest created_at; a lone row just lands; bands never merge", async () => {
       const { ctx, characterId } = await makePlayer({ drachmae: 10_000 });
       await giveAll(ctx, { grain: 10_000, oliveoil: 10_000, wine: 1000, chicken: 1000, herbal: 1000 });

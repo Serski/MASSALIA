@@ -157,7 +157,7 @@ function renewChance(bandId: string): number {
   return bandDef(getBandsContent(), bandId)?.renew ?? getBandsContent().contract.renewDefault;
 }
 
-async function ownedUnitRows(exec: Exec, ctx: ActingContext): Promise<UnitRow[]> {
+export async function ownedUnitRows(exec: Exec, ctx: ActingContext): Promise<UnitRow[]> {
   return exec
     .select()
     .from(playerUnits)
@@ -1331,19 +1331,18 @@ export function armyUpkeep(rows: UnitRow[], now: Date): { perDay: Record<string,
   return { perDay, rows: byRow };
 }
 
-// The army as the Economy view's supply plan reads it, straight from the
-// player's rows (no lock, no settle): the active rows' upkeep a day (the
-// totals above), the same for the rows still in training as if they stood
-// today, and the men in training by unit, in roster order.
+// The army as the Economy view's supply plan reads it, over the player's rows
+// (no lock, no settle): the active rows' upkeep a day (the totals above), the
+// same for the rows still in training as if they stood today, and the men in
+// training by unit, in roster order. Pure over the rows given.
 export type ArmyDemand = {
   active: Record<string, number>;
   training: Record<string, number>;
   trainingMen: { unitId: string; label: string; plural: string; count: number }[];
 };
-export async function armyDemand(exec: Exec, ctx: ActingContext, now: Date): Promise<ArmyDemand> {
+export function armyDemand(rows: UnitRow[], now: Date): ArmyDemand {
   const unitsC = getUnitsContent();
   const bandsC = getBandsContent();
-  const rows = await ownedUnitRows(exec, ctx);
   const training: Record<string, number> = {};
   const men = new Map<string, number>();
   for (const r of rows) {

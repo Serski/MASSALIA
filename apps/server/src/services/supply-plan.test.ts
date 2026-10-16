@@ -99,7 +99,8 @@ suite("Supply plan against the settle (integration)", () => {
   it("one whole day of settleAll draws the stock and spends the drachmae the plan said it would", async () => {
     const ctx = await seed(1000);
     const view = await m.buildings.mine("landowner", ctx, at(SPRING));
-    const plan = view.supply;
+    expect(view.supply).toBeDefined();
+    const plan = view.supply!;
 
     // The plan itself: the household's 4 wheat from the estate's 6; the army's
     // 10 wheat from the other 2, the store's 5 and 3 bought; chicken and herbs
@@ -159,8 +160,8 @@ suite("Supply plan against the settle (integration)", () => {
   it("calls the army's day short when tomorrow's purse, in the settle's order, cannot pay it", async () => {
     const ctx = await seed(0);
     const plan = (await m.buildings.mine("landowner", ctx, at(SPRING))).supply;
-    expect(plan.armyShort).toEqual({ cost: 68 });
+    expect(plan?.armyShort).toEqual({ cost: 68 });
     await db.update(m.dbPkg.playerCharacters).set({ drachmae: 1000 }).where(eq(m.dbPkg.playerCharacters.playerId, ctx.playerId));
-    expect((await m.buildings.mine("landowner", ctx, at(SPRING))).supply.armyShort).toBeNull();
+    expect((await m.buildings.mine("landowner", ctx, at(SPRING))).supply?.armyShort).toBeNull();
   });
 });
