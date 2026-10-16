@@ -124,6 +124,22 @@ describe("InventoryEconomy · the supply plan", () => {
     expect(c.querySelector(".econ-net")!.textContent).toContain("−295 dr");
   });
 
+  it("a line's shares add up to its total: rounded on the running sum, the last takes the remainder", () => {
+    const c = show(
+      plan({
+        household: [line("grain", 115, 7.5, 107.5, 0, 3)],
+        army: [line("grain", 4, 0.3, 3.7, 0, 3), line("oliveoil", 3, 1.5, 1.45, 0.05, 5)],
+        armyGoodsCost: 0.25,
+      }),
+    );
+    // 7.5 rounds to 8, so the store shows 107, not 108: 8 + 107 = 115.
+    expect(rowText(c, "Wheat · household")).toBe("Wheat · household · 115/day · 8 from your harvest · 107 from your store0 dr");
+    // Under 1 a share keeps its tenth, and the remainder keeps it too.
+    expect(rowText(c, "Army · wheat")).toBe("Army · wheat · 4/day · 0.3 from your harvest · 3.7 from your store0 dr");
+    // 1.5 rounds to 2, the running 2.95 to 3, and the 0.05 bought is left 0: not shown.
+    expect(rowText(c, "Army · olive oil")).toBe("Army · olive oil · 3/day · 2 from your harvest · 1 from your store0 dr");
+  });
+
   it("a household that buys its food carries the cost into the net", () => {
     const c = show(plan({ household: [line("grain", 16, 0, 0, 16, 3)], householdCost: 48 }));
     expect(rowText(c, "Wheat · household")).toBe("Wheat · household · 16/day · bought at 3 dr each−48 dr");
@@ -158,9 +174,16 @@ describe("InventoryEconomy · the supply plan", () => {
     ]);
   });
 
-  it("one man in training adds; with nothing to say there are no lines under the net", () => {
+  it("one man in training adds; men the store feeds eat from it; with nothing to say there are no lines under the net", () => {
     const one = show(plan({ training: { men: [{ unitId: "peltast", label: "Peltast", plural: "Peltasts", count: 1 }], addsPerDay: 8 } }));
     expect([...one.querySelectorAll(".econ-net ~ p")].map((p) => p.textContent)).toEqual(["When training ends: 1 peltast adds 8 dr a day at today's price."]);
+    cleanup();
+    cleanup();
+    const fed = show(plan({ training: { men: [{ unitId: "peltast", label: "Peltast", plural: "Peltasts", count: 30 }], addsPerDay: 0.4 } }));
+    expect([...fed.querySelectorAll(".econ-net ~ p")].map((p) => p.textContent)).toEqual(["When training ends: 30 peltasts eat from your store."]);
+    cleanup();
+    const fedOne = show(plan({ training: { men: [{ unitId: "peltast", label: "Peltast", plural: "Peltasts", count: 1 }], addsPerDay: 0 } }));
+    expect([...fedOne.querySelectorAll(".econ-net ~ p")].map((p) => p.textContent)).toEqual(["When training ends: 1 peltast eats from your store."]);
     cleanup();
     const quiet = show(plan({}));
     expect(quiet.querySelectorAll(".econ-net ~ p")).toHaveLength(0);

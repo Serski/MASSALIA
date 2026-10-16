@@ -467,19 +467,38 @@ export function InventoryUnits({
   );
 }
 
+// A share a day at the precision formatPerDay shows: whole units from 1 up,
+// tenths below; written without a trailing ".0".
+const roundShare = (n: number) => (n >= 1 ? Math.round(n) : Math.round(n * 10) / 10);
+const shareText = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+
 // A supply line's source, in the ruling's words (economy supply-plan prompt 1):
 // one source reads "99/day · from your store", several "99/day · 40 from your
 // store · 59 bought at 5 dr each". A share under 0.05 (a float's remainder) is
-// not a source.
+// not a source. The shares add up to the rounded total: each is rounded on the
+// running sum, so the first is its own rounding, the last takes the remainder
+// and none goes below zero; a share that rounds to 0 is not shown.
 function supplySub(l: SupplyLineView): string {
   const shows = (n: number) => n >= 0.05;
   const parts: [number, string][] = [];
   if (shows(l.fromHarvest)) parts.push([l.fromHarvest, "from your harvest"]);
   if (shows(l.fromStore)) parts.push([l.fromStore, "from your store"]);
   if (shows(l.bought)) parts.push([l.bought, `bought at ${l.price} dr each`]);
-  const head = `${formatPerDay(l.need)}/day`;
-  if (parts.length <= 1) return parts[0] ? `${head} · ${parts[0][1]}` : head;
-  return [head, ...parts.map(([n, text]) => `${formatPerDay(n)} ${text}`)].join(" · ");
+  const total = roundShare(l.need);
+  const head = `${shareText(total)}/day`;
+  let running = 0;
+  let before = 0;
+  const shares = parts
+    .map(([n, text], i) => {
+      running += n;
+      const upTo = i === parts.length - 1 ? total : roundShare(running);
+      const share = Math.round((upTo - before) * 10) / 10;
+      before = upTo;
+      return { share, text };
+    })
+    .filter((p) => p.share > 0);
+  if (shares.length <= 1) return shares[0] ? `${head} · ${shares[0].text}` : head;
+  return [head, ...shares.map((p) => `${shareText(p.share)} ${p.text}`)].join(" · ");
 }
 
 function supplyAmount(l: SupplyLineView): string {
@@ -506,7 +525,9 @@ function SupplyNotes({ supply, label }: { supply: SupplyPlanView; label: (good: 
       ) : null}
       {supply.training && menTotal > 0 ? (
         <p className="sheet-todo">
-          When training ends: {menList} {menTotal === 1 ? "adds" : "add"} {Math.round(supply.training.addsPerDay)} dr a day at today&apos;s price.
+          {Math.round(supply.training.addsPerDay) === 0
+            ? `When training ends: ${menList} ${menTotal === 1 ? "eats" : "eat"} from your store.`
+            : `When training ends: ${menList} ${menTotal === 1 ? "adds" : "add"} ${Math.round(supply.training.addsPerDay)} dr a day at today's price.`}
         </p>
       ) : null}
     </>
