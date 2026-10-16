@@ -5,6 +5,7 @@ import { OFFICE_LABEL, bcYear } from "../dashboard/panels/PoliticsPanel.js";
 import { navigateTo } from "../navigate.js";
 import { CALENDAR_ANNOUNCED, CALENDAR_ENDED, GUIDES_THUMB, NO_SEAT_PORTRAIT, heroFor } from "./art.js";
 import { LobbyFrame, LobbySectionHeading as SectionHeading } from "./LobbyFrame.js";
+import { DISCORD_INVITE_URL } from "./links.js";
 import { LobbyPortrait } from "./LobbyPortrait.js";
 import type { LobbyView } from "./routes.js";
 import "./lobby.css";
@@ -344,7 +345,7 @@ export function ReferralsBox({ referrals }: { referrals: LobbyReferrals | null }
   );
 }
 
-function RightColumn({ news, citizens, youCharacterId, referrals }: { news: NewsEntry[] | null; citizens: LobbyCitizen[]; youCharacterId: string | null; referrals: LobbyReferrals | null }) {
+export function RightColumn({ news, citizens, youCharacterId, referrals }: { news: NewsEntry[] | null; citizens: LobbyCitizen[]; youCharacterId: string | null; referrals: LobbyReferrals | null }) {
   const latest = news ? news.slice(0, 3) : [];
   return (
     <aside className="lobby-aside-right">
@@ -356,6 +357,14 @@ function RightColumn({ news, citizens, youCharacterId, referrals }: { news: News
           <h3>Guides</h3>
           <p>How the city, the market and the offices work, in one place.</p>
           <a className="lobby-guides-link" href="/guides" onClick={go("/guides")}>Open the guides →</a>
+        </div>
+      </section>
+
+      <section className="lobby-panel lobby-guides-box lobby-discord-box" aria-label="Discord">
+        <div className="lobby-guides-copy">
+          <h3>Discord</h3>
+          <p>Where the houses meet, bargain and plot between seasons.</p>
+          <a className="lobby-guides-link" href={DISCORD_INVITE_URL} target="_blank" rel="noopener noreferrer">Join the Discord →</a>
         </div>
       </section>
 
