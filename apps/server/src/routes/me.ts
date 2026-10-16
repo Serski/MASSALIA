@@ -13,6 +13,7 @@ import { availableStories } from "../services/story.js";
 import { olympiadStatus, syncOlympiadForCharacter } from "../services/olympiad.js";
 import { familyPendingCount, scandalHeadline } from "../services/family.js";
 import { koinonPendingCount } from "../services/koinon.js";
+import { NO_STRIKE_ALARMS, strikeAlarms as readStrikeAlarms, type StrikeAlarms } from "../services/strikes.js";
 import { manumissionStatus } from "../services/manumission.js";
 import { syncAgenda } from "../services/agenda.js";
 import { syncElections } from "../services/elections.js";
@@ -113,6 +114,15 @@ export async function meRoutes(app: FastifyInstance) {
     // Politics nav badge: a member's unread koinon posts, or a non-member's
     // unexpired invites. Two lean counts, as above.
     const koinonPending = await koinonPendingCount(state.player.id, world.id, new Date());
+    // The strike alarms (strikes prompt 2): the officials' count of marches on
+    // the road, and the marches on the viewer's own holdings. A failure is
+    // logged and reads none; it never fails /me/state.
+    let strikeAlarms: StrikeAlarms = NO_STRIKE_ALARMS;
+    try {
+      strikeAlarms = await readStrikeAlarms(db, { worldId: world.id, playerId: state.player.id, characterId: character.id });
+    } catch (error) {
+      console.error(`strikes: failed ${error instanceof Error ? error.message : String(error)}`);
+    }
 
     // Elections (Politics Prompt 2): open due declarations, advance phases, and
     // reconcile office vacancies (death cascade + defection forfeit) on the same
@@ -243,6 +253,9 @@ export async function meRoutes(app: FastifyInstance) {
       familyPending,
       // The Politics nav badge count (unread koinon posts, or standing invites).
       koinonPending,
+      // The strike alarms (strikes prompt 2): the Politics and Government count for
+      // a sitting official, and the INCOMING entries and Barracks count for a holder.
+      strikeAlarms,
       // Manumission: { eligible } when a slave holds the freedman trait — the
       // signal for the client's "Claim Your Freedom" panel.
       manumission,

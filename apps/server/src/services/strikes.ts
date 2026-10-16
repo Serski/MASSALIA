@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
-import { createDb, effectLog, ensureLeagueCities, houses, koinonMusters, leagueCities, leaguePlayerId, loadFactions, playerCharacters, playerHoldings, playerMarches, players, playerUnits, strikeParts, strikes, treasuries, worlds, type StrikeDraw } from "@massalia/db";
+import { createDb, effectLog, ensureLeagueCities, houses, koinonMusters, leagueCities, offices, leaguePlayerId, loadFactions, playerCharacters, playerHoldings, playerMarches, players, playerUnits, strikeParts, strikes, treasuries, worlds, type StrikeDraw } from "@massalia/db";
 import {
   aboutMen,
   bandDef,
@@ -13,6 +13,7 @@ import {
   fightsAtPeace,
   formatGameDate,
   gameDate,
+  GOVERNMENT_OFFICES,
   HOME_POLITY_ID,
   landStepsBetween,
   leagueAtWarWith,
@@ -632,6 +633,9 @@ export type StrikeView = {
 };
 
 const utcTime = (ms: number) => `${new Date(ms).toISOString().slice(11, 16)} UTC`;
+// A march's line while it is on the road, as Strikes 1 words it.
+const marchLine = (s: Pick<typeof strikes.$inferSelect, "trigger" | "about" | "strikesAt">, words: StrikeNation, place: string) =>
+  (s.trigger === "raids" ? strikeLines.raidsMarch : strikeLines.march)(words, place, s.about, utcTime(s.strikesAt.getTime()));
 
 // Every march on the road and every one that ended within the last game year,
 // newest first.
@@ -650,9 +654,7 @@ export async function strikeViews(exec: Exec, world: { id: string; startedMs: nu
     if (!nation) continue;
     const place = await placeNameOf(s.townId, s.regionId);
     const marching = s.status === "marching";
-    const line = marching
-      ? (s.trigger === "raids" ? strikeLines.raidsMarch : strikeLines.march)(nation.words, place, s.about, utcTime(s.strikesAt.getTime()))
-      : ((s.report as { line?: string } | null)?.line ?? "");
+    const line = marching ? marchLine(s, nation.words, place) : ((s.report as { line?: string } | null)?.line ?? "");
     const datedMs = marching ? s.calledAt.getTime() : s.strikesAt.getTime();
     out.push({ id: s.id, nationId: s.nationId, nation: nation.words.name, placeId: s.townId ?? s.regionId, regionId: s.regionId, townId: s.townId, place, trigger: s.trigger, mode: s.mode, status: s.status, about: s.about, calledAt: s.calledAt.toISOString(), strikesAt: s.strikesAt.toISOString(), line, dateLabel: formatGameDate(gameDate(datedMs, world.startedMs)) });
   }
@@ -676,4 +678,35 @@ export async function militaryStrikes(exec: Exec, world: { id: string; startedMs
     else out.regions[v.regionId] = shown;
   }
   return out;
+}
+
+// --- The alarms (strikes prompt 2) ---------------------------------------------------------
+
+// A march on the road against a holding of the viewer's: its words for the
+// Barracks' INCOMING entry, its target's ids for "Show on map", and the strike
+// instant for the countdown.
+export type StrikeAlarm = { id: string; nation: string; place: string; regionId: string; townId: string | null; about: number; strikesAt: string; line: string };
+export type StrikeAlarms = { government: number; incoming: StrikeAlarm[] };
+export const NO_STRIKE_ALARMS: StrikeAlarms = { government: 0, incoming: [] };
+
+// GET /me/state's alarms: `government`, the number of marches on the road for
+// a sitting Archon, Ephor or Strategos (else 0); `incoming`, those on the road
+// against the viewer's own holdings, as they are held now (a holding that
+// changed hands takes its march with it, STOP 0 ruling 4 of Strikes 1). With
+// nothing on the road, one read on the marching strikes' index.
+export async function strikeAlarms(exec: Exec, viewer: { worldId: string; playerId: string; characterId: string }): Promise<StrikeAlarms> {
+  const marching = await exec.select().from(strikes).where(and(eq(strikes.worldId, viewer.worldId), eq(strikes.status, "marching")));
+  if (marching.length === 0) return NO_STRIKE_ALARMS;
+  const seats = await exec.select({ office: offices.office }).from(offices).where(eq(offices.holderCharacterId, viewer.characterId));
+  const government = seats.some((x) => (GOVERNMENT_OFFICES as readonly string[]).includes(x.office)) ? marching.length : 0;
+  const mine = new Set((await exec.select({ regionId: playerHoldings.regionId, townId: playerHoldings.townId }).from(playerHoldings).where(and(eq(playerHoldings.worldId, viewer.worldId), eq(playerHoldings.ownerPlayerId, viewer.playerId)))).map(holdingPlace));
+  const incoming: StrikeAlarm[] = [];
+  for (const m of [...marching].sort((a, b) => a.strikesAt.getTime() - b.strikesAt.getTime() || a.id.localeCompare(b.id))) {
+    if (m.targetKind !== "holding" || !mine.has(m.townId ?? m.regionId)) continue;
+    const nation = await nationById(m.nationId);
+    if (!nation) continue;
+    const place = await placeNameOf(m.townId, m.regionId);
+    incoming.push({ id: m.id, nation: nation.words.name, place, regionId: m.regionId, townId: m.townId, about: m.about, strikesAt: m.strikesAt.toISOString(), line: marchLine(m, nation.words, place) });
+  }
+  return { government, incoming };
 }

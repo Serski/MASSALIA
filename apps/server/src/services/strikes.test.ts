@@ -357,6 +357,46 @@ suite("the strikes (integration)", () => {
     expect((await m.barracks.barracksView(holder.ctx, plus(h.strikesAt, 2 * MIN))).reports.find((r) => r.kind === "strike")).toMatchObject({ title: "The Volcae at Salyes", yourPart: null, line: "The Volcae broke into Salyes and carried off 30 drachmae from House House Test." });
   });
 
+  // --- the alarms (strikes prompt 2) ----------------------------------------------------
+
+  it("the alarms: a sitting official counts every march on the road, a player with no seat none; a holder sees the march on his holding and not one on another's, a guest with men there nothing; all clear when the march strikes or turns back", async () => {
+    const official = await makePlayer();
+    const holder = await makePlayer();
+    const other = await makePlayer();
+    const guest = await makePlayer();
+    const plain = await makePlayer();
+    await db.insert(m.dbPkg.offices).values({ worldId, office: "strategos", side: null, seatSlot: 0, holderCharacterId: official.characterId, acquiredVia: "appointed" });
+    await db.insert(m.dbPkg.playerHoldings).values([holdingRow(holder.ctx.playerId, "R046", "", "unclaimed"), holdingRow(other.ctx.playerId, "R047", "reii", "saluvii")]);
+    await row(holder.ctx.playerId, "hoplite", 5, "R046");
+    await row(guest.ctx.playerId, "hoplite", 30, "R046");
+    await row(other.ctx.playerId, "hoplite", 5, "reii");
+    const alarms = (p: { ctx: Ctx; characterId: string }) => m.strikes.strikeAlarms(db, { worldId, playerId: p.ctx.playerId, characterId: p.characterId });
+    // Nothing on the road: nothing for anyone.
+    for (const p of [official, holder, plain]) expect(await alarms(p)).toEqual({ government: 0, incoming: [] });
+
+    // A raids march on Agathe (a home town) and one on the holder's Salyes.
+    await march({ id: uid(950), nationId: "sordones", triggerPlaceId: "R057", strikesAt: plus(at(9), 12 * HOUR) });
+    const onSalyes = await march({ id: uid(951), nationId: "volcae", regionId: "R046", townId: null, targetKind: "holding", holderPlayerId: holder.ctx.playerId, force: 200, about: 200, strikesAt: plus(at(9), 13 * HOUR) });
+    expect(await alarms(official)).toEqual({ government: 2, incoming: [] });
+    expect(await alarms(plain)).toEqual({ government: 0, incoming: [] });
+    expect(await alarms(guest)).toEqual({ government: 0, incoming: [] });
+    expect(await alarms(other)).toEqual({ government: 0, incoming: [] });
+    expect(await alarms(holder)).toEqual({
+      government: 0,
+      incoming: [{ id: onSalyes.id, nation: "the Volcae", place: "Salyes", regionId: "R046", townId: null, about: 200, strikesAt: onSalyes.strikesAt.toISOString(), line: "Raided once too often, the Volcae march on Salyes with about 200 men. They strike at 13:00 UTC." }],
+    });
+
+    // The Agathe march strikes: the official's count falls to one; the holder's entry stays.
+    await pass(plus(at(9), 12 * HOUR + MIN));
+    expect((await alarms(official)).government).toBe(1);
+    expect((await alarms(holder)).incoming).toHaveLength(1);
+    // The march on Salyes turns back (the Volcae go to war): all clear.
+    await war("volcae", plus(at(9), 12 * HOUR + 30 * MIN), at(16));
+    await pass(plus(at(9), 13 * HOUR + MIN));
+    expect((await strikeOf(onSalyes.id)).status).toBe("called_off");
+    for (const p of [official, holder]) expect(await alarms(p)).toEqual({ government: 0, incoming: [] });
+  });
+
   it("a failure in the strikes is logged and never stops the campaigns", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     await m.muster.resolveDueCampaigns(plus(at(9), MIN), {
