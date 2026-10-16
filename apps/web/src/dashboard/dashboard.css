@@ -1144,6 +1144,7 @@
 .dashboard-shell .dashboard-nav button:focus-visible,
 .dashboard-shell .dashboard-mobile-tabs button:focus-visible,
 .dashboard-shell .mobile-more-sheet button:focus-visible,
+.dashboard-shell .mobile-more-sheet a:focus-visible,
 .dashboard-shell .dashboard-primary-button:focus-visible,
 .dashboard-shell .dashboard-ghost-button:focus-visible,
 .dashboard-shell .event-choice-button:focus-visible{
@@ -1603,7 +1604,8 @@
     backdrop-filter: blur(10px);
   }
 
-  .dashboard-shell .mobile-more-sheet button{
+  .dashboard-shell .mobile-more-sheet button,
+  .dashboard-shell .mobile-more-sheet a{
     position: relative;
     display: flex;
     gap: 10px;
@@ -4021,6 +4023,7 @@
   border: 0;
   border-top: 1px solid var(--dash-line);
   cursor: pointer;
+  text-decoration: none;
   transition: color 160ms ease;
 }
 

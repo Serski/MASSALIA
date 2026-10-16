@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type LazyExoticComponent } from "react";
 import { api, ApiError, apiErrorMessage, type PlayerState } from "../api.js";
 import { assetPath, nobleHouses, professions } from "../data/league.js";
+import { DISCORD_INVITE_URL } from "../lobby/links.js";
 import { DashboardCard, type DashboardSection, type IconName, type MapFocus, MoreIcon, type PanelProps, type PlayerDashboardState, type PlayerDashboardView, SvgIcon, playerFromState } from "./shared.js";
 import { AvatarImage, CharacterSheet, InventorySheet, type InventoryTab } from "./sheets.js";
 import { SuccessionScreen } from "./SuccessionScreen.js";
@@ -384,6 +385,9 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
           <button className="sidebar-guide sidebar-lobby" type="button" onClick={onExit}>
             Lobby
           </button>
+          <a className="sidebar-guide sidebar-discord" href={DISCORD_INVITE_URL} target="_blank" rel="noopener noreferrer">
+            Discord
+          </a>
         </aside>
 
         <section className="dashboard-content" aria-live="polite">
@@ -495,6 +499,9 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
             <button type="button" onClick={onExit}>
               <span>Lobby</span>
             </button>
+            <a href={DISCORD_INVITE_URL} target="_blank" rel="noopener noreferrer">
+              <span>Discord</span>
+            </a>
           </div>
         </div>
       ) : null}
