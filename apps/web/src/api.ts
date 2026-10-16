@@ -1681,6 +1681,24 @@ export type BuildingsMine = {
   // grant a day (a season is a day), the span's end and the game date it runs
   // through. Optional: an old server sends none.
   leagueGrants?: { title: string; perDay: number; until: string; throughLabel: string }[];
+  // The supply plan (economy supply-plan prompt 1): a day of the household's food
+  // and the army's upkeep in the settle's order, each good from the harvest, then
+  // the store, then bought at today's price; the stores running out within a week;
+  // whether tomorrow's purse covers the army's day; what the men in training add.
+  // Optional: an old server sends none.
+  supply?: SupplyPlanView;
+};
+
+export type SupplyLineView = { good: string; need: number; fromHarvest: number; fromStore: number; bought: number; price: number; cost: number };
+export type SupplyPlanView = {
+  household: SupplyLineView[];
+  army: SupplyLineView[];
+  armyPay: number;
+  householdCost: number;
+  armyGoodsCost: number;
+  warnings: { good: string; days: number; costPerDay: number }[];
+  armyShort: { cost: number } | null;
+  training: { men: { unitId: string; label: string; plural: string; count: number }[]; addsPerDay: number } | null;
 };
 
 // The retained spymaster's posture + remaining switch cooldown (Prompt 4). Additive

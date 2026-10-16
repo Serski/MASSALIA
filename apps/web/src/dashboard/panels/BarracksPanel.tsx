@@ -912,6 +912,7 @@ export default function BarracksPanel({ player, onRefresh, onShowOnMap }: PanelP
                   </span>
                 ))}
           </span>
+          {strip.length > 0 && view.upkeep.note ? <small className="barracks-upkeep-note" data-testid="upkeep-note">{view.upkeep.note}</small> : null}
         </div>
       </div>
 

@@ -113,6 +113,8 @@ describe("BarracksPanel", () => {
     expect(items.map((el) => el.textContent?.trim())).toEqual(["200", "114", "7", "7", "4", "🪙 130 dr"]);
     expect(items.slice(0, 5).every((el) => el.querySelector("img, [aria-hidden]") !== null)).toBe(true);
     expect(container.textContent).not.toContain("Your men eat");
+    // Under the strip, the settle's rule for what the store does not cover.
+    expect(container.querySelector('[data-testid="summary"] [data-testid="upkeep-note"]')!.textContent).toBe("Shortfalls are bought at the market's seasonal price.");
 
     // At home: the levy row and the band, with their counts and lines.
     const home = container.querySelector('[data-section="home"]')!;

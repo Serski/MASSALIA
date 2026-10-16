@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api, ApiError, type CharacterSheet as CharacterSheetData, type BuildingsCatalog, type BuildingsMine, type OwnedBuilding, type PeopleView } from "../api.js";
+import { api, ApiError, type CharacterSheet as CharacterSheetData, type BuildingsCatalog, type BuildingsMine, type OwnedBuilding, type PeopleView, type SupplyLineView, type SupplyPlanView } from "../api.js";
 import { AssetIcon, type FourStats, GoodGlyph, type PlayerDashboardView, PopGlyph, QtyStepper, STAT_PIP_ICON, BuildClock, formatPerDay, formatRate, ideologyReadout, idleReason } from "./shared.js";
 
 // Everyone starts at Tier 1; real tier tracking lands with profession progression.
@@ -467,6 +467,52 @@ export function InventoryUnits({
   );
 }
 
+// A supply line's source, in the ruling's words (economy supply-plan prompt 1):
+// one source reads "99/day · from your store", several "99/day · 40 from your
+// store · 59 bought at 5 dr each". A share under 0.05 (a float's remainder) is
+// not a source.
+function supplySub(l: SupplyLineView): string {
+  const shows = (n: number) => n >= 0.05;
+  const parts: [number, string][] = [];
+  if (shows(l.fromHarvest)) parts.push([l.fromHarvest, "from your harvest"]);
+  if (shows(l.fromStore)) parts.push([l.fromStore, "from your store"]);
+  if (shows(l.bought)) parts.push([l.bought, `bought at ${l.price} dr each`]);
+  const head = `${formatPerDay(l.need)}/day`;
+  if (parts.length <= 1) return parts[0] ? `${head} · ${parts[0][1]}` : head;
+  return [head, ...parts.map(([n, text]) => `${formatPerDay(n)} ${text}`)].join(" · ");
+}
+
+function supplyAmount(l: SupplyLineView): string {
+  const cost = Math.round(l.cost);
+  return cost > 0 ? `−${cost} dr` : "0 dr";
+}
+
+// The forward lines under Net / day: each store running out within a week, a
+// purse that cannot pay tomorrow's army, and what the men in training add.
+function SupplyNotes({ supply, label }: { supply: SupplyPlanView; label: (good: string) => string }) {
+  const men = supply.training?.men ?? [];
+  const menTotal = men.reduce((n, u) => n + u.count, 0);
+  const menText = men.map((u) => `${u.count} ${(u.count === 1 ? u.label : u.plural).toLowerCase()}`);
+  const menList = menText.length > 1 ? `${menText.slice(0, -1).join(", ")} and ${menText[menText.length - 1]}` : (menText[0] ?? "");
+  return (
+    <>
+      {supply.warnings.map((w) => (
+        <p key={`lasts-${w.good}`} className="sheet-gate">
+          Your {label(w.good).toLowerCase()} lasts {w.days} more {w.days === 1 ? "day" : "days"}. Then it costs {Math.round(w.costPerDay)} dr a day at today&apos;s price.
+        </p>
+      ))}
+      {supply.armyShort ? (
+        <p className="sheet-gate">Your purse won&apos;t cover tomorrow&apos;s army upkeep ({Math.round(supply.armyShort.cost)} dr). Units will leave until it can, mercenaries first.</p>
+      ) : null}
+      {supply.training && menTotal > 0 ? (
+        <p className="sheet-todo">
+          When training ends: {menList} {menTotal === 1 ? "adds" : "add"} {Math.round(supply.training.addsPerDay)} dr a day at today&apos;s price.
+        </p>
+      ) : null}
+    </>
+  );
+}
+
 // The per-day economy breakdown (panel A): what you EARN and SPEND each day at the
 // CURRENT buildings + staff + season, derived from the mine/catalog/people payloads
 // the modal already fetches — no persisted history, no invented numbers. INCOME is
@@ -553,10 +599,18 @@ export function InventoryEconomy({ data, goodLabels }: { data: { mine: Buildings
   // line per good drawn a day, and band pay in drachmae.
   const armyPerDay = mine.army?.perDay ?? {};
   const armyGoods = Object.entries(armyPerDay).filter(([good, q]) => good !== "drachmae" && q > 0);
-  const armyPay = armyPerDay.drachmae ?? 0;
+  // The supply plan (economy supply-plan prompt 1): the server's day of the
+  // household's food and the army's upkeep, in the settle's order, priced at
+  // today's season. An old server sends none; the lines then fall back to the
+  // figures above (food from the harvest only, the army's goods unpriced).
+  const supply = mine.supply ?? null;
+  const armyPay = supply ? supply.armyPay : (armyPerDay.drachmae ?? 0);
+  const boughtTotal = supply ? supply.householdCost + supply.armyGoodsCost : foodCost;
 
-  // Net is DRACHMAE income − drachmae expenses. Goods-at-floor are NOT folded in.
-  const net = incomeTotal + grantTotal - wagesTotal - foodCost - upkeepTotal - armyPay;
+  // Net is DRACHMAE income − drachmae expenses. Goods-at-floor are NOT folded in;
+  // goods that must be bought are.
+  const net = incomeTotal + grantTotal - wagesTotal - boughtTotal - upkeepTotal - armyPay;
+  const nothingSpent = wages.length === 0 && upkeepTotal === 0 && armyPay === 0 && (supply ? supply.household.length === 0 && supply.army.length === 0 : foodUnits === 0 && armyGoods.length === 0);
   const idledRows = active.filter((b) => b.idle).map((b) => ({ id: b.id, name: b.name, staffing: (tierDef(b)?.staffing ?? {}) as Record<string, number> }));
   const owed = Math.round(mine.upkeepOwed);
   const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
@@ -605,11 +659,16 @@ export function InventoryEconomy({ data, goodLabels }: { data: { mine: Buildings
       ) : null}
 
       <SheetLabel>Expenses</SheetLabel>
-      {wages.length === 0 && foodUnits === 0 && upkeepTotal === 0 && armyGoods.length === 0 && armyPay === 0 ? <p className="sheet-todo">No wages, food, or upkeep yet.</p> : null}
+      {nothingSpent ? <p className="sheet-todo">No wages, food, or upkeep yet.</p> : null}
       {wages.map((w) => (
         <ResRow key={`wage-${w.type}`} icon={<PopGlyph type={w.type} />} name={`${cap(w.type)} wages × ${w.count}`} amount={dr(-w.drCost)} />
       ))}
-      {foodUnits > 0 ? (
+      {supply
+        ? supply.household.map((l) => (
+            <ResRow key={`food-${l.good}`} icon={<GoodGlyph good={l.good} fallback="🌾" />} name={`${label(l.good)} · household`} sub={supplySub(l)} amount={supplyAmount(l)} />
+          ))
+        : null}
+      {!supply && foodUnits > 0 ? (
         <ResRow
           icon={<GoodGlyph good={foodGood} fallback="🌾" />}
           name={label(foodGood)}
@@ -618,15 +677,20 @@ export function InventoryEconomy({ data, goodLabels }: { data: { mine: Buildings
         />
       ) : null}
       {upkeepTotal > 0 ? <ResRow icon="🏛️" name="Building upkeep" amount={dr(-upkeepTotal)} /> : null}
-      {armyGoods.map(([good, q]) => (
-        <ResRow key={`army-${good}`} icon={<GoodGlyph good={good} fallback={goodIcon(good)} />} name={`Army · ${label(good).toLowerCase()}`} amount={`−${formatPerDay(q)}/day`} />
-      ))}
+      {supply
+        ? supply.army.map((l) => (
+            <ResRow key={`army-${l.good}`} icon={<GoodGlyph good={l.good} fallback={goodIcon(l.good)} />} name={`Army · ${label(l.good).toLowerCase()}`} sub={supplySub(l)} amount={supplyAmount(l)} />
+          ))
+        : armyGoods.map(([good, q]) => (
+            <ResRow key={`army-${good}`} icon={<GoodGlyph good={good} fallback={goodIcon(good)} />} name={`Army · ${label(good).toLowerCase()}`} amount={`−${formatPerDay(q)}/day`} />
+          ))}
       {armyPay > 0 ? <ResRow icon="🪙" name="Army pay" amount={dr(-armyPay)} /> : null}
 
       <div className={`econ-net ${net >= 0 ? "pos" : "neg"}`}>
         <span>Net / day</span>
         <strong>{dr(net)}</strong>
       </div>
+      {supply ? <SupplyNotes supply={supply} label={label} /> : null}
     </div>
   );
 }
