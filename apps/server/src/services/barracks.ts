@@ -1331,10 +1331,33 @@ export function armyUpkeep(rows: UnitRow[], now: Date): { perDay: Record<string,
   return { perDay, rows: byRow };
 }
 
-// The same totals read straight from the player's rows (no lock, no settle):
-// what the Economy view lists under Expenses.
-export async function armyUpkeepPerDay(exec: Exec, ctx: ActingContext, now: Date): Promise<Record<string, number>> {
-  return armyUpkeep(await ownedUnitRows(exec, ctx), now).perDay;
+// The army as the Economy view's supply plan reads it, straight from the
+// player's rows (no lock, no settle): the active rows' upkeep a day (the
+// totals above), the same for the rows still in training as if they stood
+// today, and the men in training by unit, in roster order.
+export type ArmyDemand = {
+  active: Record<string, number>;
+  training: Record<string, number>;
+  trainingMen: { unitId: string; label: string; plural: string; count: number }[];
+};
+export async function armyDemand(exec: Exec, ctx: ActingContext, now: Date): Promise<ArmyDemand> {
+  const unitsC = getUnitsContent();
+  const bandsC = getBandsContent();
+  const rows = await ownedUnitRows(exec, ctx);
+  const training: Record<string, number> = {};
+  const men = new Map<string, number>();
+  for (const r of rows) {
+    if (r.source !== "trained" || isActive(r, now)) continue;
+    const line = rowUpkeepPerDay(r, unitsC, bandsC);
+    if (!line) continue;
+    for (const [g, q] of Object.entries(line)) if (q > 0) training[g] = (training[g] ?? 0) + q;
+    men.set(r.unitId, (men.get(r.unitId) ?? 0) + r.count);
+  }
+  const trainingMen = [...men].map(([unitId, count]) => {
+    const def = unitDef(unitsC, unitId);
+    return { unitId, label: def?.label ?? unitId, plural: def?.plural ?? unitId, count };
+  });
+  return { active: armyUpkeep(rows, now).perDay, training, trainingMen };
 }
 
 export async function barracksView(ctx: ActingContext, now: Date): Promise<BarracksView> {

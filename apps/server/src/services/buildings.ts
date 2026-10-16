@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { and, eq, gte, lt, lte, sql } from "drizzle-orm";
 import { createDb, effectLog, leagueClassGrantsFor, leagueClassPayFor, playerBuildings, playerCharacters, playerPops, resources, worldTreasury, worlds } from "@massalia/db";
 import {
+  armyDayShort,
   buildingCost,
   buildingBuildDays,
   buildingUpkeep,
@@ -26,6 +27,7 @@ import {
   seasonAt,
   staffCountForTier,
   staffDailyCost,
+  supplyPlan,
   vendorUnitPrice,
   wholeDaysBetween,
   type BuildingCategory,
@@ -35,9 +37,10 @@ import {
   type PopsContent,
   type PopType,
   type SeasonName,
+  type SupplyPlan,
   type VendorAction,
 } from "@massalia/shared";
-import { armyUpkeepPerDay, settleBarracks, type BarracksSettle } from "./barracks.js";
+import { armyDemand, settleBarracks, type ArmyDemand, type BarracksSettle } from "./barracks.js";
 import { applyComposureDelta } from "./composure.js";
 import { lockPlayer } from "./lock.js";
 
@@ -952,6 +955,18 @@ export type MineView = {
   // 2b): a season is a real day, so perDay is the grant a season; `until` the
   // span's end (excluded); throughLabel the game date of the last season it pays.
   leagueGrants: { title: string; perDay: number; until: string; throughLabel: string }[];
+  supply: MineSupply;
+};
+
+// The supply plan for the Economy view (economy supply-plan prompt 1): a day
+// of the household's food and the army's upkeep at today's prices, plus two
+// forward lines. `armyShort` carries the army's day (pay plus bought goods)
+// when tomorrow's purse, in the settle's order, cannot cover it. `training`
+// lists the men still in training and what they add to Net / day once they
+// stand, run through the same plan as if they stood today.
+export type MineSupply = SupplyPlan & {
+  armyShort: { cost: number } | null;
+  training: { men: ArmyDemand["trainingMen"]; addsPerDay: number } | null;
 };
 
 const BASE_STORAGE_CAP = 100;
@@ -1048,6 +1063,50 @@ export async function mine(classId: string, ctx: ActingContext, now: Date): Prom
 
   const storageCap = BASE_STORAGE_CAP + rows.filter((r) => isActive(r, now)).reduce((s, r) => s + (resolveDef(r.buildingId)?.storageBonus ?? 0), 0);
 
+  const grants = await leagueClassGrantsFor(db, ctx.worldId, classId, now);
+  const army = await armyDemand(db, ctx, now);
+
+  // The supply plan (economy supply-plan prompt 1). The harvest is the buildings'
+  // live yields; the store is what is banked plus what they have made since (as
+  // wheatAvail reads it); every good is priced at today's season. The household
+  // eats the food good, the army its upkeep.
+  const harvest: Record<string, number> = {};
+  for (const b of buildings) for (const y of b.yields) harvest[y.good] = (harvest[y.good] ?? 0) + y.perDay;
+  const household: Record<string, number> = {};
+  const foodPerDay = popRows.reduce((s, r) => s + r.count * (popsC.pops[r.popType as PopType]?.foodPerDay ?? 0), 0);
+  if (foodPerDay > 0) household[popsC.foodGood] = foodPerDay;
+  const store: Record<string, number> = {};
+  const price: Record<string, number> = {};
+  for (const good of new Set([...Object.keys(household), ...Object.keys(army.active), ...Object.keys(army.training)])) {
+    if (good === "drachmae") continue;
+    store[good] = Number(byType.get(good)?.amount ?? 0) + (accrual.get(good)?.banked ?? 0);
+    const band = c.vendor[good];
+    price[good] = band ? vendorUnitPrice(band, "buy", c.seasonal, goodCategoryFor(c.seasonal, good), season) : 0;
+  }
+  const plan = supplyPlan({ household, army: army.active, harvest, store, price });
+  const dayCost = (p: SupplyPlan) => p.householdCost + p.armyPay + p.armyGoodsCost;
+
+  // Tomorrow's purse against the army's day, in the settle's order.
+  const armyCost = plan.armyPay + plan.armyGoodsCost;
+  const short = armyDayShort({
+    purse: wallet,
+    income: buildings.reduce((s, b) => s + b.income, 0),
+    buildingUpkeep: rows.filter((r) => isActive(r, now)).reduce((s, r) => s + (resolveDef(r.buildingId)?.upkeep(r.tier) ?? 0), 0),
+    grants: grants.reduce((s, g) => s + g.perSeason, 0),
+    wages: popRows.reduce((s, r) => s + r.count * (popsC.pops[r.popType as PopType]?.upkeepPerDay ?? 0), 0),
+    householdCost: plan.householdCost,
+    armyCost,
+  });
+
+  // The men in training, as if they stood today: what they add to Net / day.
+  let training: MineSupply["training"] = null;
+  if (army.trainingMen.length > 0) {
+    const both: Record<string, number> = { ...army.active };
+    for (const [good, q] of Object.entries(army.training)) both[good] = (both[good] ?? 0) + q;
+    const withTraining = supplyPlan({ household, army: both, harvest, store, price });
+    training = { men: army.trainingMen, addsPerDay: dayCost(withTraining) - dayCost(plan) };
+  }
+
   return {
     now: now.toISOString(),
     season,
@@ -1058,13 +1117,14 @@ export async function mine(classId: string, ctx: ActingContext, now: Date): Prom
     storageCap,
     classSection: { label: classSectionLabel(classId), comingSoon: classSectionLabel(classId) !== null, flavor: c.classBuildings[classId]?.flavor, entries: [] },
     pops: ownedPops,
-    army: { perDay: await armyUpkeepPerDay(db, ctx, now) },
-    leagueGrants: (await leagueClassGrantsFor(db, ctx.worldId, classId, now)).map((g) => ({
+    army: { perDay: army.active },
+    leagueGrants: grants.map((g) => ({
       title: g.title,
       perDay: g.perSeason,
       until: new Date(g.untilMs).toISOString(),
       throughLabel: formatGameDate(gameDate(g.untilMs - 1, ctx.worldStartedMs)),
     })),
+    supply: { ...plan, armyShort: short ? { cost: armyCost } : null, training },
   };
 }
 
