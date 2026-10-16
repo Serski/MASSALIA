@@ -1329,6 +1329,17 @@
   .lobby-header-actions .lobby-link {
     padding: 8px 10px;
   }
+
+  /* The gap before the buttons sits on the last link's right, not the first
+     button's left: beside the links they keep it, and a wrapped row starts
+     flush under Lobby. */
+  .lobby-header-actions .lobby-link:last-of-type {
+    margin-right: 14px;
+  }
+
+  .lobby-header-actions .lobby-link + .lobby-btn {
+    margin-left: 0;
+  }
 }
 
 @media (max-width: 480px) {

@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../src/api.js";
 import { GuidesPage } from "../src/lobby/GuidesPage.js";
@@ -58,5 +60,21 @@ describe("the Lobby's Discord invite", () => {
     const link = discord.querySelector("a")!;
     expect(link.textContent).toBe("Join the Discord →");
     expectNewTab(link);
+  });
+});
+
+// jsdom lays nothing out, so the phone header rule is read from the stylesheet
+// (Argiris, 16 Oct: with Discord in the nav the buttons wrap on a phone; the
+// wrapped row starts flush under Lobby, and beside the links they keep a gap).
+describe("the Lobby header on phones", () => {
+  const css = readFileSync(resolve(process.cwd(), "src/lobby/lobby.css"), "utf8");
+  const phone = css.slice(css.indexOf("/* Below 760px the header wraps"));
+  const block = phone.slice(0, phone.indexOf("\n}\n"));
+  const rule = (selector: string) => block.match(new RegExp(`^  ${selector.replace(/[.+:-]/g, (c) => `\\${c}`)} \\{([^}]*)\\}`, "m"))?.[1] ?? "";
+
+  it("moves the gap before the buttons onto the last link's right", () => {
+    expect(block).toContain("@media (max-width: 760px)");
+    expect(rule(".lobby-header-actions .lobby-link:last-of-type")).toMatch(/margin-right: 14px;/);
+    expect(rule(".lobby-header-actions .lobby-link + .lobby-btn")).toMatch(/margin-left: 0;/);
   });
 });
