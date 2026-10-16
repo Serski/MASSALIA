@@ -142,3 +142,48 @@ describe("koinon count on the Politics nav", () => {
     expect(container.querySelector(".dashboard-mobile-tabs .nav-badge.dot")).toBeNull();
   });
 });
+
+// The strike alarms (strikes prompt 2): a sitting official's count of marches on
+// the road on Politics, in Court's badge style, in place of the koinon count; a
+// holder's count of marches on his holdings on Barracks; both add to the More dot.
+describe("the strike alarms on the nav", () => {
+  const nav = (root: ParentNode, label: string) => [...root.querySelectorAll("button")].find((b) => b.textContent?.startsWith(label))!;
+  const alarm = { id: "s-1", nation: "the Volcae", place: "Salyes", regionId: "R046", townId: null, about: 200, strikesAt: new Date(Date.now() + 3_600_000).toISOString(), line: "The Volcae march on Salyes with about 200 men. They strike at 12:00 UTC." };
+
+  it("an official with two marches on the road: 2 on Politics in Court's style, not the koinon count; the More dot counts it", async () => {
+    state.mockImplementation(() => Promise.resolve({ ...payload(), koinonPending: 3, strikeAlarms: { government: 2, incoming: [] } }));
+    const { container } = mount();
+    await settle();
+    const badge = nav(container.querySelector(".dashboard-nav")!, "Politics").querySelector(".nav-badge")!;
+    expect(badge.textContent).toBe("2");
+    expect(badge.classList.contains("subtle")).toBe(false);
+    expect(nav(container.querySelector(".dashboard-nav")!, "Barracks").querySelector(".nav-badge")).toBeNull();
+    const more = container.querySelector<HTMLButtonElement>('.dashboard-mobile-tabs button[aria-controls="dashboard-mobile-more"]')!;
+    expect(more.querySelector(".nav-badge.dot")!.getAttribute("aria-label")).toBe("5 hidden updates");
+    fireEvent.click(more);
+    expect(nav(container.querySelector(".mobile-more-sheet")!, "Politics").querySelector(".nav-badge:not(.subtle)")!.textContent).toBe("2");
+  });
+
+  it("a holder with a march on his holding: 1 on Barracks in Court's style, and on the More dot and sheet", async () => {
+    state.mockImplementation(() => Promise.resolve({ ...payload(), strikeAlarms: { government: 0, incoming: [alarm] } }));
+    const { container } = mount();
+    await settle();
+    const badge = nav(container.querySelector(".dashboard-nav")!, "Barracks").querySelector(".nav-badge")!;
+    expect(badge.textContent).toBe("1");
+    expect(badge.classList.contains("subtle")).toBe(false);
+    expect(nav(container.querySelector(".dashboard-nav")!, "Politics").querySelector(".nav-badge")).toBeNull();
+    const more = container.querySelector<HTMLButtonElement>('.dashboard-mobile-tabs button[aria-controls="dashboard-mobile-more"]')!;
+    expect(more.querySelector(".nav-badge.dot")!.getAttribute("aria-label")).toBe("1 hidden updates");
+    fireEvent.click(more);
+    expect(nav(container.querySelector(".mobile-more-sheet")!, "Barracks").querySelector(".nav-badge")!.textContent).toBe("1");
+  });
+
+  it("no march: the koinon count on Politics as before, subtle; nothing for a player with no seat and no holding under march", async () => {
+    state.mockImplementation(() => Promise.resolve({ ...payload(), koinonPending: 2, strikeAlarms: { government: 0, incoming: [] } }));
+    const { container } = mount();
+    await settle();
+    const badge = nav(container.querySelector(".dashboard-nav")!, "Politics").querySelector(".nav-badge")!;
+    expect([badge.textContent, badge.classList.contains("subtle")]).toEqual(["2", true]);
+    expect(nav(container.querySelector(".dashboard-nav")!, "Barracks").querySelector(".nav-badge")).toBeNull();
+  });
+});

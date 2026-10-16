@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api, ApiError, type BarracksOffer, type BarracksRosterRow, type BarracksUnit, type BarracksView, type BarracksReport, type BarracksVoyage, type BaseView, type MapReachView } from "../../api.js";
+import { api, ApiError, type BarracksOffer, type BarracksRosterRow, type BarracksUnit, type BarracksView, type BarracksReport, type BarracksVoyage, type BaseView, type MapReachView, type StrikeAlarm } from "../../api.js";
 import { BattleReport, ForcePicker, type PickerReport } from "../../map/World2Map.js";
 import { AssetIcon, formatClock, formatDuration, GoodGlyph, onDeviceClock, type PanelProps, ProgressBar, REGION_NAMES_SRC, RESOURCE_WEBP, useCountdownSeconds } from "../shared.js";
 import { MusterReportBody } from "./KoinonView.js";
@@ -190,15 +190,45 @@ export function reportTitle(r: BarracksReport): string {
   return `${r.kind === "scout" ? "Scouted" : r.kind === "attack" ? "Attacked" : "Raided"} ${place}`;
 }
 
-// The Reports box: the title of each report, the NEW tag while unread and its
-// kind's tag; the line, the date and the rest wait in the card.
-function ReportsBox({ reports, onOpen }: { reports: BarracksReport[]; onOpen: (r: BarracksReport) => void }) {
+// A march on the road against one of his holdings (strikes prompt 2): at the
+// top of Reports, tagged INCOMING, with its march line, the countdown to the
+// strike (from the server's clock) and "Show on map". It goes when it strikes,
+// and his strike report takes its place.
+function IncomingRow({ alarm, offset, onShowOnMap }: { alarm: StrikeAlarm; offset: number; onShowOnMap?: (place: { regionId: string; townId: string | null }) => void }) {
+  const left = useCountdownSeconds(onDeviceClock(alarm.strikesAt, offset));
+  return (
+    <div className="barracks-row barracks-report barracks-incoming" data-incoming={alarm.id}>
+      <div className="barracks-row-grid two">
+        <div className="barracks-row-name">{alarm.line}</div>
+        <span className="barracks-tags">
+          <span className="barracks-tag barracks-tag-incoming">INCOMING</span>
+        </span>
+      </div>
+      <div className="barracks-incoming-foot">
+        <span className="barracks-incoming-clock">Strikes in {formatDuration(left)}</span>
+        {onShowOnMap ? (
+          <button type="button" className="barracks-incoming-map" onClick={() => onShowOnMap({ regionId: alarm.regionId, townId: alarm.townId })}>
+            Show on map
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+// The Reports box: the marches on his holdings first (INCOMING), then the title
+// of each report, the NEW tag while unread and its kind's tag; the line, the
+// date and the rest wait in the card.
+function ReportsBox({ reports, onOpen, incoming = [], offset = 0, onShowOnMap }: { reports: BarracksReport[]; onOpen: (r: BarracksReport) => void; incoming?: StrikeAlarm[]; offset?: number; onShowOnMap?: (place: { regionId: string; townId: string | null }) => void }) {
   const unread = reports.filter((r) => !r.seen).length;
   return (
     <section className="barracks-section" data-section="reports" aria-label="Reports">
       <SectionHead title="Reports" note={unread > 0 ? `${unread} new` : undefined} />
       <div className="barracks-list reports">
-        {reports.length === 0 ? <p className="barracks-empty">No reports yet.</p> : null}
+        {incoming.map((a) => (
+          <IncomingRow key={a.id} alarm={a} offset={offset} onShowOnMap={onShowOnMap} />
+        ))}
+        {reports.length === 0 && incoming.length === 0 ? <p className="barracks-empty">No reports yet.</p> : null}
         {reports.map((r) => (
           <button key={r.id} type="button" className={`barracks-row barracks-report${r.seen ? "" : " is-new"}`} data-report={r.id} onClick={() => onOpen(r)}>
             <div className="barracks-row-grid two">
@@ -680,7 +710,7 @@ export function AltarSection({
 
 // --- The panel ---------------------------------------------------------------
 
-export default function BarracksPanel({ player, onRefresh }: PanelProps) {
+export default function BarracksPanel({ player, onRefresh, onShowOnMap }: PanelProps) {
   const [view, setView] = useState<BarracksView | null>(null);
   const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -971,6 +1001,9 @@ export default function BarracksPanel({ player, onRefresh }: PanelProps) {
 
           <ReportsBox
             reports={view.reports ?? []}
+            incoming={player.strikeAlarms?.incoming ?? []}
+            offset={offset}
+            onShowOnMap={onShowOnMap}
             onOpen={(r) => {
               setOpenReport(r);
               // Opened for the first time: the highlight goes, and stays gone. A failed read leaves it.

@@ -422,7 +422,7 @@ function wallPips(level: number): string {
 // after the barracks changes without polling.
 // `onRefresh`: the dashboard's state refresh, called after an action's data
 // arrives so the header (drachmae) follows the report without polling.
-export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: boolean; refreshToken?: unknown; onRefresh?: () => void } = {}) {
+export function World2Map({ fill = false, refreshToken, onRefresh, focus = null }: { fill?: boolean; refreshToken?: unknown; onRefresh?: () => void; focus?: { regionId: string; townId: string | null; key: number } | null } = {}) {
   const [world, setWorld] = useState<World | null>(null);
   const [politics, setPolitics] = useState<Politics | null>(null);
   const [status, setStatus] = useState("");
@@ -433,6 +433,13 @@ export function World2Map({ fill = false, refreshToken, onRefresh }: { fill?: bo
   const [names, setNames] = useState<Record<string, string>>({});
   const [townStats, setTownStats] = useState<Record<string, TownStats>>({});
   const [military, setMilitary] = useState<MilitaryPayload>({ towns: {}, regions: {} });
+  // Opened on a place (strikes prompt 2: the Barracks' "Show on map"): once the
+  // world is loaded, its panel is open, the town's when it is a town.
+  useEffect(() => {
+    if (!focus || !world) return;
+    setSelected(focus.regionId);
+    setSelectedTown(focus.townId);
+  }, [focus, world]);
   // Reach per land region (null until fetched, or when not signed in): gates the
   // Attack / Raid / Colonise buttons beyond the legality matrix.
   const [reach, setReach] = useState<Record<string, ReachEntry> | null>(null);

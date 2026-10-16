@@ -64,7 +64,7 @@ afterEach(() => {
 
 // `then`: what the second /api/barracks read answers (the refetch a timer at zero asks for).
 // `bases`: what the reach names the places (Massalia, a home town and a holding of the player's, by default).
-async function mount(view: BarracksView, then?: BarracksView, bases?: BaseView[]) {
+async function mount(view: BarracksView, then?: BarracksView, bases?: BaseView[], extra: { player?: typeof player; onShowOnMap?: (place: { regionId: string; townId: string | null }) => void } = {}) {
   hookWarnings = [];
   // The names file the mission lines read (restoreAllMocks clears it after each test).
   vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ version: 1, names: { R060: "Massalia", R046: "Salyes" } }), { status: 200, headers: { "content-type": "application/json" } }));
@@ -82,7 +82,7 @@ async function mount(view: BarracksView, then?: BarracksView, bases?: BaseView[]
       { id: "R046", regionId: "R046", townId: null, kind: "conquest", name: "Salyes", holding: null },
     ],
   });
-  const utils = render(<BarracksPanel player={player} onRefresh={() => {}} />);
+  const utils = render(<BarracksPanel player={extra.player ?? player} onRefresh={() => {}} onShowOnMap={extra.onShowOnMap} />);
   await flush();
   return utils;
 }
@@ -322,6 +322,32 @@ describe("BarracksPanel", () => {
     expect(read).toHaveBeenCalledWith({ strikeId: "st-1" });
     await act(async () => { await Promise.resolve(); });
     expect(container.querySelector('.barracks-report[data-report="st-1"]')!.classList.contains("is-new")).toBe(false);
+  });
+
+  // Strikes prompt 2: a march on his holding, at the top of Reports.
+  it("a march on his holding: INCOMING at the top of Reports with its line, a countdown from the server's clock and Show on map; none without", async () => {
+    const strikesAt = iso(NOW + 2 * H + 5 * 60_000);
+    const alarm = { id: "st-9", nation: "the Volcae", place: "Salyes", regionId: "R046", townId: null, about: 200, strikesAt, line: "The Volcae march on Salyes with about 200 men. They strike at 12:05 UTC." };
+    const shown: { regionId: string; townId: string | null }[] = [];
+    const report: BarracksReport = { id: "st-1", kind: "strike", regionId: "R050", townId: "agathe", arrivedAt: iso(NOW - H), gameDate: "Autumn, 277 BC", seen: true, title: "The Volcae at Agathe", line: "The Volcae struck at Agathe and were driven off. 120 of them fell, and 35 of the defenders.", yourPart: null };
+    const holder = { ...player, strikeAlarms: { government: 0, incoming: [alarm] } };
+    const { container } = await mount(payload({ reports: [report] }), undefined, undefined, { player: holder, onShowOnMap: (p) => shown.push(p) });
+    const section = container.querySelector<HTMLElement>('[data-section="reports"]')!;
+    const rows = [...section.querySelectorAll<HTMLElement>(".barracks-report")];
+    expect(rows.map((r) => r.getAttribute("data-incoming") ?? r.getAttribute("data-report"))).toEqual(["st-9", "st-1"]);
+    const entry = rows[0]!;
+    expect(entry.querySelector(".barracks-row-name")!.textContent).toBe(alarm.line);
+    expect([...entry.querySelectorAll(".barracks-tag")].map((t) => t.textContent)).toEqual(["INCOMING"]);
+    // The server's clock is NOW, two hours and five minutes before the strike.
+    expect(entry.querySelector(".barracks-incoming-clock")!.textContent).toBe("Strikes in 2h 5m");
+    fireEvent.click(entry.querySelector<HTMLButtonElement>(".barracks-incoming-map")!);
+    expect(entry.querySelector(".barracks-incoming-map")!.textContent).toBe("Show on map");
+    expect(shown).toEqual([{ regionId: "R046", townId: null }]);
+    cleanup();
+    vi.restoreAllMocks();
+    const plain = await mount(payload({ reports: [] }), undefined, undefined, { player: { ...player, strikeAlarms: { government: 0, incoming: [] } } });
+    expect(plain.container.querySelector(".barracks-incoming")).toBeNull();
+    expect(plain.container.querySelector('[data-section="reports"] .barracks-empty')!.textContent).toBe("No reports yet.");
   });
 
   it("a party that turns for home counts down again: one refetch at its arrival, none at the turn", async () => {

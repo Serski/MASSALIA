@@ -190,6 +190,11 @@ export type CreationRequest = {
   name: string;
 };
 
+// A march on the road against one of the viewer's holdings (strikes prompt 2): the Barracks' INCOMING entry.
+export type StrikeAlarm = { id: string; nation: string; place: string; regionId: string; townId: string | null; about: number; strikesAt: string; line: string };
+// `government`: the marches on the road, for a sitting Archon, Ephor or Strategos (else 0).
+export type StrikeAlarms = { government: number; incoming: StrikeAlarm[] };
+
 export type PlayerState = {
   // Server clock at this read (ISO) and the instant the current season ends (the
   // next whole-day step from the world's start): the dashboard's rollover refetch
@@ -256,6 +261,9 @@ export type PlayerState = {
   // The Politics nav badge count: a member's unread koinon posts, or a
   // non-member's unexpired invites.
   koinonPending?: number;
+  // The strike alarms (strikes prompt 2): the officials' count of marches on the
+  // road, and the marches on the viewer's own holdings. Optional: an old server sends none.
+  strikeAlarms?: StrikeAlarms;
   // Manumission: { eligible } when a slave holds the freedman trait, else flag false.
   manumission: { eligible: boolean } | null;
   // Onboarding first-seen flags: the welcome intro overlay and the character-sheet

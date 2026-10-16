@@ -97,14 +97,14 @@ const DOCKET = [
   project("nikaia", "Nikaia", "port", "The Port of Nikaia", 2000, 8, ["Shipbuilders +20 dr a season for 4 seasons", "League treasury +50 dr a season"]),
 ];
 
-async function mount(government: GovernmentView, agenda: AgendaView = agendaView) {
+async function mount(government: GovernmentView, agenda: AgendaView = agendaView, who = player()) {
   vi.spyOn(api, "oligarchyChamber").mockImplementation(never);
   vi.spyOn(api, "chamberVotes").mockImplementation(never);
   vi.spyOn(api, "offices").mockImplementation(never);
   vi.spyOn(api, "elections").mockImplementation(never);
   vi.spyOn(api, "agenda").mockResolvedValue(agenda);
   const gov = vi.spyOn(api, "government").mockResolvedValue(government);
-  const utils = render(<PoliticsPanel player={player()} onRefresh={() => {}} />);
+  const utils = render(<PoliticsPanel player={who} onRefresh={() => {}} />);
   await flush();
   return { ...utils, gov };
 }
@@ -482,5 +482,20 @@ describe("the Government tab", () => {
     expect(container.querySelectorAll(".agenda-choice")).toHaveLength(3);
     expect(container.querySelector(".event-choice-button")).toBeNull();
     expect(container.querySelector(".agenda-veto-btn")).toBeNull();
+  });
+});
+
+// Strikes prompt 2: the Government tab carries the count of marches on the road.
+describe("the Government tab's count of marches", () => {
+  it("shows the official's count beside the tab's name, in Court's colours; none without a march", async () => {
+    const withAlarm = { ...player(), strikeAlarms: { government: 2, incoming: [] } } as unknown as ReturnType<typeof player>;
+    const { container } = await mount(member([{ office: "strategos", side: null }], scope("league", { phase: "voting" })), agendaView, withAlarm);
+    const tab = [...container.querySelectorAll<HTMLButtonElement>(".cs-tab")].find((t) => t.textContent!.startsWith("Government"))!;
+    expect(tab.querySelector(".government-tab-count")!.textContent).toBe("2");
+    cleanup();
+    vi.restoreAllMocks();
+    const quiet = await mount(member([{ office: "strategos", side: null }], scope("league", { phase: "voting" })), agendaView, { ...player(), strikeAlarms: { government: 0, incoming: [] } } as unknown as ReturnType<typeof player>);
+    const plain = [...quiet.container.querySelectorAll<HTMLButtonElement>(".cs-tab")].find((t) => t.textContent!.startsWith("Government"))!;
+    expect(plain.querySelector(".government-tab-count")).toBeNull();
   });
 });

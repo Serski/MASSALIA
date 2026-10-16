@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
-import { webAssetUrl, type PlayerState, type FestivalLive, type OlympiadStatus } from "../api.js";
+import { webAssetUrl, type PlayerState, type FestivalLive, type OlympiadStatus, type StrikeAlarms } from "../api.js";
 import { assetPath, nobleHouses, professions, type House, type Profession } from "../data/league.js";
 import { portraitPools, type PortraitClassSlug } from "../data/portraits.js";
 
@@ -62,6 +62,8 @@ export type PlayerDashboardState = {
   familyPending: number;
   // The Politics nav badge count: unread koinon posts, or standing invites.
   koinonPending: number;
+  // The strike alarms (strikes prompt 2): the Politics and Government count, and the Barracks' INCOMING entries.
+  strikeAlarms: StrikeAlarms;
   // Manumission: { eligible } when a slave holds the freedman trait, else null.
   manumission: { eligible: boolean } | null;
   // Onboarding first-seen flags: the welcome overlay shows while introSeen is false;
@@ -75,9 +77,16 @@ export type PlayerDashboardView = PlayerDashboardState & {
   house: House;
 };
 
+// No march on the road for this viewer (strikes prompt 2).
+export const NO_STRIKE_ALARMS: StrikeAlarms = { government: 0, incoming: [] };
+
+// A place the Atlas opens on (strikes prompt 2: the Barracks' "Show on map"); `key` makes a second click open it again.
+export type MapFocus = { regionId: string; townId: string | null; key: number };
+
 // Props shared by every panel. `onRefresh` re-pulls /me/state after a real
-// mutation (e.g. joining/leaving a party).
-export type PanelProps = { player: PlayerDashboardView; onRefresh: () => void };
+// mutation (e.g. joining/leaving a party). `onShowOnMap` opens the Atlas on a
+// place; `mapFocus` is that place, for the Atlas.
+export type PanelProps = { player: PlayerDashboardView; onRefresh: () => void; onShowOnMap?: (place: { regionId: string; townId: string | null }) => void; mapFocus?: MapFocus | null };
 
 export function normalizeParty(party: string): PlayerDashboardState["party"] {
   if (party.toLowerCase() === "palaioi") return "Palaioi";
@@ -128,6 +137,7 @@ export function playerFromState(state: PlayerState): PlayerDashboardView {
     scandal: state.scandal ?? null,
     familyPending: state.familyPending ?? 0,
     koinonPending: state.koinonPending ?? 0,
+    strikeAlarms: state.strikeAlarms ?? NO_STRIKE_ALARMS,
     manumission: state.manumission ?? null,
     introSeen: state.introSeen ?? true,
     sheetSeen: state.sheetSeen ?? true,

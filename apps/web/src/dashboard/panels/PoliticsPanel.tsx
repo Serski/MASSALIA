@@ -798,7 +798,7 @@ export default function PoliticsPanel({ player, onRefresh }: PanelProps) {
         </button>
         {isMember ? (
           <button type="button" role="tab" aria-selected={tab === "government"} className={`cs-tab${tab === "government" ? " on" : ""}`} onClick={() => setTab("government")}>
-            Government
+            Government{(player.strikeAlarms?.government ?? 0) > 0 ? <span className="government-tab-count">{player.strikeAlarms.government}</span> : null}
           </button>
         ) : null}
         <button type="button" role="tab" aria-selected={tab === "party"} className={`cs-tab${tab === "party" ? " on" : ""}`} onClick={() => setTab("party")}>

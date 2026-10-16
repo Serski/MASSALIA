@@ -4143,6 +4143,11 @@
 .dashboard-shell .barracks-report.is-new{ background: rgba(var(--accent-rgb), 0.08); box-shadow: inset 3px 0 0 var(--dash-gold-bright); }
 .dashboard-shell .barracks-tags{ display: inline-flex; gap: 8px; align-items: center; }
 .dashboard-shell .barracks-tag-new{ color: var(--dash-gold-bright); }
+/* A march on his holding (strikes prompt 2): INCOMING at the top of Reports, its clock and Show on map. */
+.dashboard-shell .barracks-incoming{ border-left: 2px solid var(--dash-bad); cursor: default; }
+.dashboard-shell .barracks-tag-incoming{ color: var(--dash-bad); }
+.dashboard-shell .barracks-incoming-foot{ display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; font-size: 12px; color: var(--dash-stone-dim); }
+.dashboard-shell .barracks-incoming-map{ padding: 2px 8px; color: var(--dash-gold-bright); font: inherit; letter-spacing: 0.04em; background: none; border: 1px solid var(--dash-line); cursor: pointer; }
 .dashboard-shell .barracks-small{ padding: 6px 10px; font-size: 9px; }
 .dashboard-shell .barracks-bar{ height: 3px; margin-top: 6px; background: rgba(34, 26, 20, 0.9); border-radius: 0; overflow: hidden; }
 .dashboard-shell .barracks-bar-fill{ height: 100%; background: linear-gradient(90deg, var(--dash-bronze), var(--dash-gold-bright)); }
@@ -4190,6 +4195,8 @@
    Cinzel and one thin rule. Square corners, flat buttons, cream and stone text.
    The Greek-key band is the top panel's alone; the Muster's border is warmer. */
 .dashboard-shell .koinon-tab-count{ display: inline-grid; min-width: 16px; height: 16px; margin-left: 2px; padding: 0 4px; place-items: center; color: var(--cream); font-family: var(--font-body); font-size: 10px; font-weight: 600; letter-spacing: 0; background: rgba(125, 135, 148, 0.36); border: 1px solid rgba(125, 135, 148, 0.58); }
+/* The Government tab's count of marches on the road (strikes prompt 2), in Court's badge colours. */
+.dashboard-shell .government-tab-count{ display: inline-grid; min-width: 16px; height: 16px; margin-left: 4px; padding: 0 4px; place-items: center; color: #1b110d; font-family: var(--font-body); font-size: 10px; font-weight: 600; letter-spacing: 0; background: var(--gold-bright); }
 .dashboard-shell .koinon-page{ display: grid; gap: 24px; }
 /* Under the hero: the actions on the left, the reference rail on the right. */
 .dashboard-shell .koinon-grid{ display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 24px; align-items: start; }

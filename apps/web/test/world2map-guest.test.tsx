@@ -64,7 +64,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function mountMap(opts: { bases?: BaseView[]; moveTargets?: MoveTargetView[]; roster?: BarracksRosterRow[]; military?: Record<string, unknown> } = {}) {
+async function mountMap(opts: { bases?: BaseView[]; moveTargets?: MoveTargetView[]; roster?: BarracksRosterRow[]; military?: Record<string, unknown>; focus?: { regionId: string; townId: string | null; key: number } } = {}) {
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = String(input);
     if (url.endsWith("/map2/world2.json")) return jsonResponse(WORLD);
@@ -80,7 +80,7 @@ async function mountMap(opts: { bases?: BaseView[]; moveTargets?: MoveTargetView
     return jsonResponse({ error: "not found" }, 404);
   });
   const { World2Map } = await import("../src/map/World2Map.js");
-  const view = render(<World2Map />);
+  const view = render(<World2Map focus={opts.focus ?? null} />);
   await vi.waitFor(() => expect(view.container.querySelector("svg.w2map-svg")).not.toBeNull());
   // The reach (and with it the move targets) has answered.
   await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
@@ -195,5 +195,18 @@ describe("a nation's strike on the map", () => {
     const plain = await mountMap();
     const town = await openReii(plain);
     expect(town.querySelector(".w2map-strike")).toBeNull();
+  });
+});
+
+// Strikes prompt 2: the Barracks' "Show on map" opens the Atlas on the place.
+describe("the Atlas opened on a place", () => {
+  it("a town opens on its own panel, a land on its region's", async () => {
+    const town = await mountMap({ focus: { regionId: "R047", townId: "reii", key: 1 } });
+    await vi.waitFor(() => expect(town.q('[role="dialog"][data-town-id="reii"]')).not.toBeNull());
+    cleanup();
+    vi.restoreAllMocks();
+    const land = await mountMap({ focus: { regionId: "R046", townId: null, key: 2 } });
+    await vi.waitFor(() => expect(land.q('[role="dialog"][data-region="R046"]')).not.toBeNull());
+    expect(land.q('[role="dialog"][data-town-id]')).toBeNull();
   });
 });

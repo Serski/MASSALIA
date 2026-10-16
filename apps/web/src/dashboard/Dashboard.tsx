@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type LazyExoticComponent } from "react";
 import { api, ApiError, apiErrorMessage, type PlayerState } from "../api.js";
 import { assetPath, nobleHouses, professions } from "../data/league.js";
-import { DashboardCard, type DashboardSection, type IconName, MoreIcon, type PanelProps, type PlayerDashboardState, type PlayerDashboardView, SvgIcon, playerFromState } from "./shared.js";
+import { DashboardCard, type DashboardSection, type IconName, type MapFocus, MoreIcon, type PanelProps, type PlayerDashboardState, type PlayerDashboardView, SvgIcon, playerFromState } from "./shared.js";
 import { AvatarImage, CharacterSheet, InventorySheet, type InventoryTab } from "./sheets.js";
 import { SuccessionScreen } from "./SuccessionScreen.js";
 import "./dashboard.css";
@@ -31,8 +31,8 @@ const dashboardNav: DashboardNavItem[] = [
   { id: "ledger", label: "Ledger", icon: "ledger" },
   { id: "market", label: "Market", icon: "market" },
   { id: "family", label: "Family", icon: "family" }, // badge is player.familyPending (dynamic)
-  { id: "barracks", label: "Barracks", icon: "barracks" },
-  { id: "politics", label: "Politics", icon: "politics" }, // badge is player.koinonPending (dynamic)
+  { id: "barracks", label: "Barracks", icon: "barracks" }, // badge is the marches on his holdings (strikes prompt 2)
+  { id: "politics", label: "Politics", icon: "politics" }, // badge is the Government's marches, else player.koinonPending (dynamic)
   { id: "atlas", label: "Atlas", icon: "atlas" },
   { id: "standings", label: "Standings", icon: "standings" },
 ];
@@ -81,6 +81,7 @@ const placeholderPlayerState: PlayerDashboardState = {
   scandal: null,
   familyPending: 0,
   koinonPending: 0,
+  strikeAlarms: { government: 0, incoming: [] },
   manumission: null,
   // The placeholder is "already onboarded" so neither the overlay nor the pulse
   // flashes before real /me/state loads and reports the true flags.
@@ -129,6 +130,12 @@ const panelComponents: Record<DashboardSection, LazyExoticComponent<ComponentTyp
 
 export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onExit: () => void; onRequireLogin: () => void; onRequireCharacter: () => void }) {
   const [activeSection, setActiveSection] = useState<DashboardSection>("court");
+  // The place the Atlas opens on (strikes prompt 2: the Barracks' "Show on map").
+  const [mapFocus, setMapFocus] = useState<MapFocus | null>(null);
+  const showOnMap = useCallback((place: { regionId: string; townId: string | null }) => {
+    setMapFocus({ ...place, key: Date.now() });
+    setActiveSection("atlas");
+  }, []);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [activeSheet, setActiveSheet] = useState<"inventory" | "character" | "guide" | null>(null);
   // Which Inventory tab to open on: the drachmae pill opens Economy, the inventory
@@ -184,9 +191,16 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
   }, [onRequireLogin]);
   const ActivePanel = panelComponents[activeSection];
   const courtBadgeCount = courtRemaining;
+  // The strike alarms (strikes prompt 2), in Court's badge style: the marches on
+  // the road for a sitting official on Politics (else the koinon count, as
+  // before), and the marches on his own holdings on Barracks.
+  const governmentAlarm = player.strikeAlarms?.government ?? 0;
+  const incomingAlarm = player.strikeAlarms?.incoming.length ?? 0;
+  const politicsBadge = governmentAlarm ? <strong className="nav-badge">{governmentAlarm}</strong> : player.koinonPending ? <strong className="nav-badge subtle">{player.koinonPending}</strong> : null;
+  const barracksBadge = incomingAlarm ? <strong className="nav-badge">{incomingAlarm}</strong> : null;
   const isMoreActive = mobileMoreNav.some((item) => item.id === activeSection);
-  // The More button's dot: Politics sits under More, so its koinon count shows here.
-  const hiddenBadgeCount = mobileMoreNav.reduce((total, item) => total + (item.badge ?? 0), 0) + player.koinonPending;
+  // The More button's dot: Politics and Barracks sit under More, so their counts show here.
+  const hiddenBadgeCount = mobileMoreNav.reduce((total, item) => total + (item.badge ?? 0), 0) + player.koinonPending + governmentAlarm + incomingAlarm;
 
   const selectMobileSection = (section: DashboardSection) => {
     setActiveSection(section);
@@ -357,7 +371,8 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
                 {item.label}
                 {item.id === "court" && courtBadgeCount ? <strong className="nav-badge">{courtBadgeCount}</strong> : null}
                 {item.id === "family" && player.familyPending ? <strong className="nav-badge subtle">{player.familyPending}</strong> : null}
-                {item.id === "politics" && player.koinonPending ? <strong className="nav-badge subtle">{player.koinonPending}</strong> : null}
+                {item.id === "barracks" ? barracksBadge : null}
+                {item.id === "politics" ? politicsBadge : null}
               </button>
             ))}
           </nav>
@@ -410,7 +425,7 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
             </section>
           ) : playerState ? (
             <Suspense fallback={<div className="dashboard-panel-loading" aria-busy="true" />}>
-              <ActivePanel player={player} onRefresh={refreshState} />
+              <ActivePanel player={player} onRefresh={refreshState} onShowOnMap={showOnMap} mapFocus={mapFocus} />
             </Suspense>
           ) : (
             <section className="dashboard-panel">
@@ -463,7 +478,8 @@ export function Dashboard({ onExit, onRequireLogin, onRequireCharacter }: { onEx
                 <SvgIcon icon={item.icon} />
                 <span>{item.label}</span>
                 {item.badge ? <strong className="nav-badge subtle">{item.badge}</strong> : null}
-                {item.id === "politics" && player.koinonPending ? <strong className="nav-badge subtle">{player.koinonPending}</strong> : null}
+                {item.id === "barracks" ? barracksBadge : null}
+                {item.id === "politics" ? politicsBadge : null}
               </button>
             ))}
             <button
