@@ -922,6 +922,21 @@ export const playerUnits = pgTable("player_units", {
   ownerIdx: index("player_units_owner_idx").on(table.worldId, table.ownerPlayerId),
 }));
 
+// The shipyard's slips (0078): one row per hull laid down, open (delivered_at
+// NULL) until the settle at or after ready_at claims it and credits the hull.
+export const shipBuilds = pgTable("ship_builds", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  worldId: uuid("world_id").references(() => worlds.id).notNull(),
+  playerId: uuid("player_id").references(() => players.id).notNull(),
+  good: text("good").notNull(), // a content.craft key: trade-ship / galley
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  readyAt: timestamp("ready_at", { withTimezone: true }).notNull(),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+}, (table) => ({
+  readyCheck: check("ship_builds_ready_at_check", sql`${table.readyAt} > ${table.startedAt}`),
+  openIdx: index("ship_builds_open").on(table.playerId, table.readyAt).where(sql`${table.deliveredAt} IS NULL`),
+}));
+
 // "muster" (0064): the row is pledged to a koinon's muster and stands at the
 // gathering place (moving_to NULL) until the muster marches or releases it.
 export const UNIT_MISSION_KINDS = ["scout", "raid", "attack", "move", "muster"] as const;
