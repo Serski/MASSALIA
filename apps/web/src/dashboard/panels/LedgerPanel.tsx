@@ -467,45 +467,74 @@ function ServiceSection({ label, onRefresh }: { label: string; onRefresh: () => 
   );
 }
 
-// The shipbuilder's craft bench (content.craft): each good shows its recipe + the
-// building-tier gate, with a Craft action. Gated/blocked when under-tier or short
-// on the recipe materials (the server is the source of truth — this mirrors it).
-function CraftPanel({
+// The shipbuilder's yard, in the class-section slot: the slips (content craftSlots
+// by the tier the yard works at — one at T3, two at T4), each empty or holding a
+// hull with its build bar, then the ships the yard can lay down. A keel takes a free
+// slip and pays its recipe at once; the hull is in the stores buildHours later. The
+// gates mirror the server's (tier, a free slip, the recipe); its refusal is shown
+// verbatim if anything slips by.
+function ShipyardSection({
+  label,
   catalog,
-  owned,
+  shipyard,
   balances,
   busy,
+  offset,
   onCraft,
 }: {
+  label: string;
   catalog: BuildingsCatalog;
-  owned?: OwnedBuilding;
+  shipyard: NonNullable<BuildingsMine["shipyard"]>;
   balances: Record<string, number>;
   busy: boolean;
+  offset: number;
   onCraft: (good: string) => void;
 }) {
   const recipes = Object.entries(catalog.craft);
-  if (recipes.length === 0) return null;
-  const label = (good: string) => catalog.goodLabels[good] ?? good[0]!.toUpperCase() + good.slice(1);
+  const name = (good: string) => catalog.goodLabels[good] ?? good[0]!.toUpperCase() + good.slice(1);
+  const tierName = (t: number) => catalog.classBuilding?.tiers[t - 1]?.name ?? `Tier ${t}`;
+  const free = shipyard.slots - shipyard.builds.length;
+  const firstTier = Math.min(...recipes.map(([, r]) => r.tier));
   return (
     <>
-      <div className="panel-label">Shipwright's Craft</div>
+      <div className="panel-label">{label}</div>
+      <div className="panel-grid2 shipyard-slips">
+        {shipyard.slots === 0 ? (
+          <PanelRow icon="⚓" title="No slip yet" sub={`Your yard lays its first keel at Tier ${firstTier} (${tierName(firstTier)}).`} dim />
+        ) : (
+          Array.from({ length: shipyard.slots }, (_, i) => {
+            const b = shipyard.builds[i];
+            return b ? (
+              <PanelRow
+                key={b.id}
+                icon={<GoodGlyph good={b.good} fallback="⛵" />}
+                title={name(b.good)}
+                sub={<BuildProgress label="On the slip" startedAt={b.startedAt} completesAt={b.readyAt} offset={offset} />}
+                tag="building"
+              />
+            ) : (
+              <PanelRow key={`free-${i}`} icon="⚓" title="Empty slip" sub="Lay a keel below." dim />
+            );
+          })
+        )}
+      </div>
       <div className="panel-grid2">
         {recipes.map(([good, recipe]) => {
-          const haveTier = owned && owned.id === recipe.building ? owned.tier : 0;
-          const tierOk = haveTier >= recipe.tier;
+          const tierOk = shipyard.tier >= recipe.tier;
           const shortfalls = Object.entries(recipe.recipe)
             .filter(([g, q]) => (balances[g] ?? 0) < q)
-            .map(([g, q]) => `${Math.ceil(q - (balances[g] ?? 0))} ${label(g)}`);
-          const blocked = !tierOk || shortfalls.length > 0;
-          const recipeStr = Object.entries(recipe.recipe).map(([g, q]) => `${q} ${label(g)}`).join(" · ");
+            .map(([g, q]) => `${Math.ceil(q - (balances[g] ?? 0))} ${name(g)}`);
+          const blocked = !tierOk || free <= 0 || shortfalls.length > 0;
+          const recipeStr = Object.entries(recipe.recipe).map(([g, q]) => `${q} ${name(g)}`).join(" · ");
           return (
             <PanelRow
               key={good}
               icon={<GoodGlyph good={good} fallback="⛵" />}
-              title={label(good)}
+              title={name(good)}
               sub={
-                `${recipeStr} · needs ${buildingDisplay(catalog, recipe.building)} T${recipe.tier}` +
-                (!tierOk ? ` (you have T${haveTier})` : "") +
+                `${recipeStr} · ${recipe.buildHours}h on the slip · needs Tier ${recipe.tier} (${tierName(recipe.tier)})` +
+                (!tierOk ? ` · yours works at Tier ${shipyard.tier}` : "") +
+                (tierOk && free <= 0 ? " · no free slip" : "") +
                 (shortfalls.length ? ` · short ${shortfalls.join(", ")}` : "")
               }
               dim={blocked}
@@ -520,10 +549,6 @@ function CraftPanel({
       </div>
     </>
   );
-}
-
-function buildingDisplay(catalog: BuildingsCatalog, id: string): string {
-  return catalog.classBuilding?.id === id ? catalog.classBuilding.name : catalog.commons.find((b) => b.id === id)?.name ?? id;
 }
 
 export default function LedgerPanel({ player, onRefresh }: PanelProps) {
@@ -572,6 +597,25 @@ export default function LedgerPanel({ player, onRefresh }: PanelProps) {
     return () => clearTimeout(t);
   }, [mine, offset, load]);
 
+  // A hull launches at the next settle after its day on the slip: one refetch when
+  // the soonest is ready — the dashboard's (which settles, so the ship reaches the
+  // stores) and the Ledger's (which frees the slip). No polling.
+  useEffect(() => {
+    const builds = mine?.shipyard?.builds ?? [];
+    if (builds.length === 0) return;
+    const delay = Math.min(...builds.map((b) => Date.parse(b.readyAt) - offset)) - Date.now();
+    const refetch = () => {
+      onRefresh();
+      load().catch(() => {});
+    };
+    if (delay <= 0) {
+      refetch();
+      return;
+    }
+    const t = setTimeout(refetch, delay + 500);
+    return () => clearTimeout(t);
+  }, [mine, offset, load, onRefresh]);
+
   // `id` scopes the loading state to the button that fired (default "action" for the
   // panel-wide singletons). On failure the REAL server message is surfaced verbatim.
   const act = async (fn: () => Promise<unknown>, ok?: string, id = "action") => {
@@ -615,8 +659,6 @@ export default function LedgerPanel({ player, onRefresh }: PanelProps) {
   const label = (good: string) => catalog.goodLabels[good] ?? good[0]!.toUpperCase() + good.slice(1);
   const buildingName = (id: string) =>
     catalog.classBuilding?.id === id ? catalog.classBuilding.name : catalog.commons.find((b) => b.id === id)?.name ?? id;
-  // Shipbuilder only: the class building is a craft building (data-derived).
-  const canCraft = Boolean(classBuilding && Object.values(catalog.craft).some((r) => r.building === classBuilding.id));
 
   // Collect, then surface the full economy receipt (income, goods, wages, food, idle).
   const doCollect = async () => {
@@ -787,10 +829,6 @@ export default function LedgerPanel({ player, onRefresh }: PanelProps) {
         </div>
       )}
 
-      {canCraft ? (
-        <CraftPanel catalog={catalog} owned={ownedClass} balances={player.balances} busy={busy} onCraft={(good) => act(() => api.craftGood(good), `Crafted a ${label(good)}.`)} />
-      ) : null}
-
       <div className="panel-label">Common Buildings</div>
       <div className="panel-grid2">
         {catalog.commons.map((entry) => {
@@ -804,6 +842,16 @@ export default function LedgerPanel({ player, onRefresh }: PanelProps) {
 
       {player.professionSlug === "hoplite" ? (
         <ServiceSection label={mine.classSection.label ?? "Service"} onRefresh={onRefresh} />
+      ) : mine.shipyard ? (
+        <ShipyardSection
+          label={mine.classSection.label ?? "Shipyard"}
+          catalog={catalog}
+          shipyard={mine.shipyard}
+          balances={player.balances}
+          busy={busy}
+          offset={offset}
+          onCraft={(good) => act(() => api.craftGood(good), `A ${label(good)} is on the slip — ready in ${catalog.craft[good]?.buildHours ?? 24}h.`)}
+        />
       ) : (
         <ClassActionsList section={mine.classSection} />
       )}

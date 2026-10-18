@@ -77,3 +77,92 @@ describe("the Ledger's build bar", () => {
     expect(hookWarnings).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// The shipbuilder's yard in the class-section slot: one slip per hull the yard
+// holds (two at T4), a hull on the slip with its build bar and clock, an empty
+// slip, and the ships with their gates (tier, a free slip, the recipe).
+// ---------------------------------------------------------------------------
+
+const yardTier = (n: number): CatalogTier => tier(n, { name: ["Boat Shed", "Slipway", "Small Shipyard", "Great Shipyard"][n - 1], yields: [{ good: "naval-supplies", perDay: n }], staffing: { freeman: 1 } });
+const yardCatalog = {
+  ...catalog,
+  classBuilding: { id: "slipway", kind: "class", name: "Boat Shed", category: "yearround", tiers: [yardTier(1), yardTier(2), yardTier(3), yardTier(4)] },
+  commons: [],
+  classSectionLabel: "Commissions",
+  goodLabels: { "naval-supplies": "Naval Supplies", timber: "Wood", leather: "Leather", iron: "Iron", "trade-ship": "Pentekonter", galley: "Trireme" },
+  craft: {
+    "trade-ship": { building: "slipway", tier: 3, buildHours: 24, recipe: { "naval-supplies": 2, timber: 5, leather: 1 } },
+    galley: { building: "slipway", tier: 4, buildHours: 24, recipe: { "naval-supplies": 3, timber: 8, iron: 3 } },
+  },
+} as unknown as BuildingsCatalog;
+const yardMine = (yard: NonNullable<BuildingsMine["shipyard"]>): BuildingsMine => ({
+  ...mine(),
+  buildings: [owned({ id: "slipway", kind: "class", name: "Great Shipyard", tier: yard.tier, status: "active", startedAt: null, completesAt: null })],
+  classSection: { label: "Commissions", comingSoon: true, entries: [] },
+  pops: { freeman: 3 },
+  shipyard: yard,
+});
+const shipbuilder = { profession: { name: "Shipbuilder", tiers: [] }, professionSlug: "shipbuilder", drachmae: 500, balances: { "naval-supplies": 6, timber: 20, leather: 2, iron: 1 } } as never;
+const craftButton = (row: Element | undefined) => row?.querySelector("button") as HTMLButtonElement | null;
+const shipRow = (container: HTMLElement, title: string) => [...container.querySelectorAll(".panel-row")].find((r) => r.querySelector(".pr-t")?.textContent === title && r.querySelector("button"));
+
+describe("the Ledger's shipyard", () => {
+  it("a T4 yard shows two slips — a hull with its clock and an empty one — and gates each ship on its recipe", async () => {
+    vi.spyOn(api, "buildingsCatalog").mockResolvedValue(yardCatalog);
+    const mineSpy = vi.spyOn(api, "buildingsMine").mockResolvedValue(yardMine({ tier: 4, slots: 2, builds: [{ id: "b1", good: "galley", startedAt: iso(-12 * H), readyAt: iso(12 * H) }] }));
+    const craft = vi.spyOn(api, "craftGood").mockResolvedValue({ ok: true, good: "trade-ship", consumed: {}, build: { id: "b2", good: "trade-ship", startedAt: iso(0), readyAt: iso(24 * H) } });
+
+    const { container } = render(<LedgerPanel player={shipbuilder} onRefresh={() => {}} />);
+    await waitFor(() => expect(container.querySelectorAll(".shipyard-slips .panel-row")).toHaveLength(2));
+
+    const labels = [...container.querySelectorAll(".panel-label")].map((l) => l.textContent);
+    expect(labels).toContain("Commissions");
+    expect(labels).not.toContain("Shipwright's Craft");
+    const [onSlip, empty] = [...container.querySelectorAll(".shipyard-slips .panel-row")];
+    expect(onSlip!.querySelector(".pr-t")?.textContent).toBe("Trireme");
+    expect(onSlip!.querySelector(".build-progress-head span")?.textContent).toBe("On the slip");
+    expect(onSlip!.querySelector(".build-clock")?.textContent).toMatch(/^(12:00:00|11:59:5\d)$/);
+    expect(onSlip!.querySelector(".barracks-bar-fill")?.getAttribute("style")).toContain("width: 50%");
+    expect(empty!.querySelector(".pr-t")?.textContent).toBe("Empty slip");
+
+    // The Pentekonter's recipe is in the stores; the Trireme is short of iron.
+    const pentekonter = shipRow(container, "Pentekonter");
+    const trireme = shipRow(container, "Trireme");
+    expect(pentekonter?.querySelector(".pr-s")?.textContent).toBe("2 Naval Supplies · 5 Wood · 1 Leather · 24h on the slip · needs Tier 3 (Small Shipyard)");
+    expect(trireme?.querySelector(".pr-s")?.textContent).toContain("short 2 Iron");
+    expect(craftButton(trireme)?.disabled).toBe(true);
+    expect(craftButton(pentekonter)?.disabled).toBe(false);
+    craftButton(pentekonter)!.click();
+    await waitFor(() => expect(craft).toHaveBeenCalledWith("trade-ship"));
+    await waitFor(() => expect(container.querySelector('[role="status"]')?.textContent).toBe("A Pentekonter is on the slip — ready in 24h."));
+    // Twelve hours out, the launch refetch has not fired: the one load and the one after the craft.
+    expect(mineSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("a T3 yard with its one slip taken lays no second keel, and the Trireme waits for Tier 4", async () => {
+    vi.spyOn(api, "buildingsCatalog").mockResolvedValue(yardCatalog);
+    vi.spyOn(api, "buildingsMine").mockResolvedValue(yardMine({ tier: 3, slots: 1, builds: [{ id: "b1", good: "trade-ship", startedAt: iso(-H), readyAt: iso(23 * H) }] }));
+
+    const { container } = render(<LedgerPanel player={shipbuilder} onRefresh={() => {}} />);
+    await waitFor(() => expect(container.querySelectorAll(".shipyard-slips .panel-row")).toHaveLength(1));
+
+    const pentekonter = shipRow(container, "Pentekonter");
+    const trireme = shipRow(container, "Trireme");
+    expect(pentekonter?.querySelector(".pr-s")?.textContent).toContain("· no free slip");
+    expect(trireme?.querySelector(".pr-s")?.textContent).toContain("· yours works at Tier 3");
+    expect(craftButton(pentekonter)?.disabled).toBe(true);
+    expect(craftButton(trireme)?.disabled).toBe(true);
+  });
+
+  it("a yard below Tier 3 has no slip yet", async () => {
+    vi.spyOn(api, "buildingsCatalog").mockResolvedValue(yardCatalog);
+    vi.spyOn(api, "buildingsMine").mockResolvedValue(yardMine({ tier: 2, slots: 0, builds: [] }));
+
+    const { container } = render(<LedgerPanel player={shipbuilder} onRefresh={() => {}} />);
+    await waitFor(() => expect(container.querySelectorAll(".shipyard-slips .panel-row")).toHaveLength(1));
+    const row = container.querySelector(".shipyard-slips .panel-row")!;
+    expect(row.querySelector(".pr-t")?.textContent).toBe("No slip yet");
+    expect(row.querySelector(".pr-s")?.textContent).toBe("Your yard lays its first keel at Tier 3 (Small Shipyard).");
+  });
+});

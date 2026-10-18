@@ -1427,7 +1427,7 @@ export type CatalogTier = {
 };
 
 export type PopType = "slave" | "freeman" | "citizen" | "physician" | "bodyguard" | "spymaster";
-export type CraftRecipe = { building: string; tier: number; recipe: Record<string, number> };
+export type CraftRecipe = { building: string; tier: number; buildHours: number; recipe: Record<string, number> };
 
 export type CatalogEntry = {
   id: string;
@@ -1681,6 +1681,11 @@ export type BuildingsMine = {
   // grant a day (a season is a day), the span's end and the game date it runs
   // through. Optional: an old server sends none.
   leagueGrants?: { title: string; perDay: number; until: string; throughLabel: string }[];
+  // The shipyard (Shipbuilders only; null for every other class): the tier the yard
+  // works at now (0 unbuilt or still going up; the prior tier mid-upgrade), the hulls
+  // it holds at once there, and the hulls on the slip (a hull whose time is up is not
+  // listed: it is in the stores at the next settle). Optional: an old server sends none.
+  shipyard?: { tier: number; slots: number; builds: ShipBuild[] } | null;
   // The supply plan (economy supply-plan prompt 1): a day of the household's food
   // and the army's upkeep in the settle's order, each good from the harvest, then
   // the store, then bought at today's price; the stores running out within a week;
@@ -1713,7 +1718,11 @@ export type PeopleView = {
 
 export type HireResult = { ok: true; popType: string; hired: number; unitCost: number; total: number; wallet: number; owned: number };
 export type DismissResult = { ok: true; popType: string; dismissed: number; owned: number };
-export type CraftResult = { ok: true; good: string; consumed: Record<string, number>; balance: number };
+// A hull on the yard's slip: laid at startedAt, it joins the stores at the first
+// settle at or after readyAt.
+export type ShipBuild = { id: string; good: string; startedAt: string; readyAt: string };
+
+export type CraftResult = { ok: true; good: string; consumed: Record<string, number>; build: ShipBuild };
 
 export type VendorResult = {
   ok: true;
