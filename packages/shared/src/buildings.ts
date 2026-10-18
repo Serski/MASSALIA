@@ -78,9 +78,10 @@ export type BuildingsContent = {
 };
 
 // A craftable shop good (trade-ship / galley): which building+tier unlocks it,
-// and the material recipe. By design the recipe's raw vendor-sell value sits
-// BELOW the good's own vendor sell price (crafting beats buying — see craftRawCost).
-export type CraftRecipe = { building: string; tier: number; recipe: Record<string, number> };
+// how many hours a hull takes on the slip, and the material recipe. By design the
+// recipe's raw vendor-sell value sits BELOW the good's own vendor sell price
+// (crafting beats buying — see craftRawCost).
+export type CraftRecipe = { building: string; tier: number; buildHours: number; recipe: Record<string, number> };
 
 // People market — pops you hire to staff buildings. Each carries a one-time hire
 // cost, a daily drachmae upkeep (the minus), and a daily food draw (foodGood).
@@ -101,6 +102,7 @@ export type ClassBuildingDef = {
   income?: number; // drachmae/day at tier 1 (scales with yield curve); 0/absent for goods lines
   buildCost?: { materials: Record<string, number> }; // T1 material bill (scales via materialCostForTier)
   staffing?: Partial<Record<PopType, number>>; // T1 pop requirement (scales via staffCountForTier)
+  craftSlots?: number[]; // hulls on the slip at once, by tier (index 0 = T1); absent = no craft
   flavor?: string;
 };
 
@@ -160,6 +162,7 @@ const classBuildingSchema = z
     income: z.number().optional(),
     buildCost: buildCostSchema.optional(),
     staffing: staffingSchema.optional(),
+    craftSlots: z.array(z.number().int().nonnegative()).length(MAX_TIER).optional(),
     flavor: z.string().optional(),
   })
   .strict();
@@ -198,7 +201,7 @@ export const buildingsContentSchema = z
     craft: z
       .record(
         z.string(),
-        z.object({ building: z.string(), tier: z.number().int().positive(), recipe: materialsSchema }).strict(),
+        z.object({ building: z.string(), tier: z.number().int().positive(), buildHours: z.number().positive(), recipe: materialsSchema }).strict(),
       )
       .optional(),
     goodLabels: z.record(z.string(), z.string()).optional(),
@@ -414,6 +417,13 @@ export function materialCostForTier(base: number, tier: number): number {
 
 export function staffCountForTier(base: number, tier: number): number {
   return base + (tier >= 3 ? 1 : 0) + (tier >= 4 ? 1 : 0);
+}
+
+// Hulls a craft building keeps on the slip at once at a tier (0 below the first
+// tier with a slip, and for a building with no craftSlots).
+export function craftSlotsAt(slots: number[] | undefined, tier: number): number {
+  if (!slots || tier < 1) return 0;
+  return slots[Math.min(slots.length, tier) - 1] ?? 0;
 }
 
 // Raw vendor-sell value of a craft recipe (what the materials would cost at the

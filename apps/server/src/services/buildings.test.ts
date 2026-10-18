@@ -977,7 +977,9 @@ suite("Ledger / building engine (integration)", () => {
     }
   });
 
-  it("(P4-C) craft is gated by building+tier, consumes the recipe atomically, credits the good; rolls back on a shortfall", async () => {
+  it("(P4-C) craft lays a keel: gated by building + working tier + a free slip, pays the recipe at once, launches the hull a day later", async () => {
+    const { shipBuilds } = m.dbPkg;
+    const H = DAY / 24;
     // A non-shipbuilder owns no slipway → 403.
     playerId = await freshPlayer(100, "landowner");
     let c = await ctx();
@@ -986,43 +988,92 @@ suite("Ledger / building engine (integration)", () => {
     if (!noYard.ok) expect(noYard.code).toBe(403);
 
     // A shipbuilder with only a tier-1 slipway is under tier (trade-ship needs T3) → 409,
-    // and nothing is consumed. Seed 2 freemen — the slipway's T3 staffing prerequisite.
-    playerId = await freshPlayer(2000, "shipbuilder", { freeman: 2 });
+    // and nothing is consumed. Seed 3 freemen — the slipway's T4 staffing prerequisite.
+    playerId = await freshPlayer(3000, "shipbuilder", { freeman: 3 });
     c = await ctx();
     await m.buildings.build("shipbuilder", c, "slipway", new Date(T0));
     await db.insert(m.dbPkg.resources).values({ scope: "player", scopeId: playerId, type: "naval-supplies", amount: "10", ratePerSecond: "0", lastUpdatedAt: new Date(T0) });
+    // Every craft settles first (the yard's own naval supplies bank), so each balance
+    // is read after a collect at the craft's own instant.
+    await m.buildings.collect(c, new Date(T0 + DAY));
     const navalBefore = await goodBalance("naval-supplies");
     const underTier = await m.buildings.craft(c, "trade-ship", new Date(T0 + DAY));
     expect(underTier.ok).toBe(false);
     if (!underTier.ok) expect(underTier.code).toBe(409);
     expect(await goodBalance("naval-supplies")).toBe(navalBefore); // nothing consumed
 
-    // Take the slipway to T3, then craft a trade-ship: consumes EXACTLY the recipe
-    // {naval-supplies:2, timber:5, leather:1} and credits one trade-ship.
+    // Mid-upgrade to T3 the yard still works at T2: no Pentekonter yet.
     await m.buildings.upgrade(c, "slipway", new Date(T0 + 2 * DAY)); // → T2 (completes T0+4)
     await m.buildings.upgrade(c, "slipway", new Date(T0 + 6 * DAY)); // → T3 (completes T0+10)
-    const timberBefore = await goodBalance("timber");
-    const leatherBefore = await goodBalance("leather");
-    const crafted = await m.buildings.craft(c, "trade-ship", new Date(T0 + 20 * DAY));
-    expect(crafted.ok).toBe(true);
-    if (crafted.ok) {
-      expect(crafted.consumed).toEqual({ "naval-supplies": 2, timber: 5, leather: 1 });
-      expect(crafted.balance).toBe(1);
-    }
-    expect(await goodBalance("trade-ship")).toBe(1);
-    expect(await goodBalance("naval-supplies")).toBe(navalBefore - 2);
-    expect(await goodBalance("timber")).toBe(timberBefore - 5);
-    expect(await goodBalance("leather")).toBe(leatherBefore - 1);
+    const midUpgrade = await m.buildings.craft(c, "trade-ship", new Date(T0 + 8 * DAY));
+    expect(midUpgrade.ok).toBe(false);
+    if (!midUpgrade.ok) expect(midUpgrade.code).toBe(409);
+    expect((await m.buildings.mine("shipbuilder", c, new Date(T0 + 8 * DAY))).shipyard).toEqual({ tier: 2, slots: 0, builds: [] });
 
-    // Rollback proof: drain naval-supplies, craft again → 402 and NOTHING consumed
-    // (validate-before-write — timber is untouched even though it was sufficient).
+    // At T3: lay a Pentekonter. The recipe {naval-supplies:2, timber:5, leather:1} is
+    // paid at once; no hull yet — it is ready 24 hours later.
+    const at = T0 + 20 * DAY;
+    await m.buildings.collect(c, new Date(at));
+    const naval = await goodBalance("naval-supplies");
+    const timber = await goodBalance("timber");
+    const leather = await goodBalance("leather");
+    const crafted = await m.buildings.craft(c, "trade-ship", new Date(at));
+    expect(crafted.ok).toBe(true);
+    if (!crafted.ok) return;
+    expect(crafted.consumed).toEqual({ "naval-supplies": 2, timber: 5, leather: 1 });
+    expect(crafted.build).toMatchObject({ good: "trade-ship", startedAt: new Date(at).toISOString(), readyAt: new Date(at + 24 * H).toISOString() });
+    expect(await goodBalance("trade-ship")).toBe(0);
+    expect(await goodBalance("naval-supplies")).toBe(naval - 2);
+    expect(await goodBalance("timber")).toBe(timber - 5);
+    expect(await goodBalance("leather")).toBe(leather - 1);
+
+    // T3 holds one hull: a second keel is refused and costs nothing.
+    const second = await m.buildings.craft(c, "trade-ship", new Date(at));
+    expect(second.ok).toBe(false);
+    if (!second.ok) expect(second.code).toBe(409);
+    expect(await goodBalance("timber")).toBe(timber - 5);
+
+    // The Ledger lists the hull on the slip until its time is up.
+    expect((await m.buildings.mine("shipbuilder", c, new Date(at + 12 * H))).shipyard).toEqual({ tier: 3, slots: 1, builds: [crafted.build] });
+    await m.buildings.collect(c, new Date(at + 24 * H - 1000));
+    expect(await goodBalance("trade-ship")).toBe(0); // a second short of the day
+
+    // A day on: the next settle launches it into the stores, once.
+    await m.buildings.collect(c, new Date(at + 24 * H));
+    await m.buildings.collect(c, new Date(at + 24 * H));
+    expect(await goodBalance("trade-ship")).toBe(1);
+    expect((await m.buildings.mine("shipbuilder", c, new Date(at + 24 * H))).shipyard).toEqual({ tier: 3, slots: 1, builds: [] });
+    const row = (await db.select().from(shipBuilds).where(eq(shipBuilds.id, crafted.build.id)))[0]!;
+    expect(row.deliveredAt?.toISOString()).toBe(crafted.build.readyAt);
+
+    // Rollback proof: drain naval-supplies, craft again → 402, NOTHING consumed and no
+    // keel laid (timber is untouched even though it was sufficient).
     await db.update(m.dbPkg.resources).set({ amount: "0" }).where(and(eq(m.dbPkg.resources.scope, "player"), eq(m.dbPkg.resources.scopeId, playerId), eq(m.dbPkg.resources.type, "naval-supplies")));
     const timberNow = await goodBalance("timber");
-    const short = await m.buildings.craft(c, "trade-ship", new Date(T0 + 21 * DAY));
+    const short = await m.buildings.craft(c, "trade-ship", new Date(at + 24 * H));
     expect(short.ok).toBe(false);
     if (!short.ok) expect(short.code).toBe(402);
-    expect(await goodBalance("timber")).toBe(timberNow); // not consumed on the failed craft
-    expect(await goodBalance("trade-ship")).toBe(1); // still just the one
+    expect(await goodBalance("timber")).toBe(timberNow);
+    expect(await db.select().from(shipBuilds).where(eq(shipBuilds.playerId, playerId))).toHaveLength(1);
+
+    // T4 holds two hulls at once, a Trireme among them; the third keel waits.
+    await m.buildings.upgrade(c, "slipway", new Date(T0 + 22 * DAY)); // → T4 (completes T0+29)
+    const t4 = T0 + 30 * DAY;
+    await db.update(m.dbPkg.resources).set({ amount: "20" }).where(and(eq(m.dbPkg.resources.scope, "player"), eq(m.dbPkg.resources.scopeId, playerId), eq(m.dbPkg.resources.type, "naval-supplies")));
+    const galley = await m.buildings.craft(c, "galley", new Date(t4));
+    const pentekonter = await m.buildings.craft(c, "trade-ship", new Date(t4 + H));
+    expect([galley.ok, pentekonter.ok]).toEqual([true, true]);
+    const third = await m.buildings.craft(c, "trade-ship", new Date(t4 + 2 * H));
+    expect(third.ok).toBe(false);
+    if (!third.ok) expect(third.code).toBe(409);
+    const yard = (await m.buildings.mine("shipbuilder", c, new Date(t4 + 2 * H))).shipyard!;
+    expect([yard.tier, yard.slots]).toEqual([4, 2]);
+    expect(yard.builds.map((b) => b.good)).toEqual(["galley", "trade-ship"]);
+    // The Trireme launches first and frees its slip while the Pentekonter still builds.
+    await m.buildings.collect(c, new Date(t4 + 24 * H));
+    expect([await goodBalance("galley"), await goodBalance("trade-ship")]).toEqual([1, 1]);
+    const refill = await m.buildings.craft(c, "trade-ship", new Date(t4 + 24 * H));
+    expect(refill.ok).toBe(true);
   });
 
   it("(P5) catalog + mine expose the additive Phase 5 fields from content + player_pops", async () => {
@@ -1041,7 +1092,7 @@ suite("Ledger / building engine (integration)", () => {
     expect(t2.materials).toEqual({ timber: 14, stone: 11 }); // 8×1.8→14, 6×1.8→11
 
     // Craft recipes from content.craft.
-    expect(cat.craft["trade-ship"]).toEqual({ building: "slipway", tier: 3, recipe: { "naval-supplies": 2, timber: 5, leather: 1 } });
+    expect(cat.craft["trade-ship"]).toEqual({ building: "slipway", tier: 3, buildHours: 24, recipe: { "naval-supplies": 2, timber: 5, leather: 1 } });
 
     // Owned pop counts on mine, from player_pops (the default seeds the estate's T1 staffing).
     const mineV = await m.buildings.mine("landowner", c, new Date(T0));

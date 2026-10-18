@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { and, eq, gte, lt, lte, sql } from "drizzle-orm";
-import { createDb, effectLog, leagueClassGrantsFor, leagueClassPayFor, playerBuildings, playerCharacters, playerPops, resources, worldTreasury, worlds } from "@massalia/db";
+import { and, asc, eq, gte, isNull, lt, lte, sql } from "drizzle-orm";
+import { createDb, effectLog, leagueClassGrantsFor, leagueClassPayFor, playerBuildings, playerCharacters, playerPops, resources, shipBuilds, worldTreasury, worlds } from "@massalia/db";
 import {
   armyDayShort,
   buildingCost,
@@ -13,6 +13,7 @@ import {
   canBuild,
   classSectionLabel,
   coeffFor,
+  craftSlotsAt,
   formatGameDate,
   gameDate,
   goodCategoryFor,
@@ -781,10 +782,11 @@ async function settleShrine(exec: Exec, ctx: ActingContext, rows: BuildingRow[],
 // pop counts so history banks at the staffing that actually prevailed and every
 // marker resets to `now`. Composure is returned (never applied here) — the caller
 // applies it AFTER the transaction, break-aware, exactly as collect does.
-type FullSettle = { rows: BuildingRow[]; idled: Set<string>; banked: Record<string, number>; wallet: WalletSettle; grants: number; staff: StaffSettle; barracks: BarracksSettle; composureDays: number };
+type FullSettle = { rows: BuildingRow[]; idled: Set<string>; banked: Record<string, number>; launched: Record<string, number>; wallet: WalletSettle; grants: number; staff: StaffSettle; barracks: BarracksSettle; composureDays: number };
 
 export async function settleAll(exec: Exec, ctx: ActingContext, now: Date): Promise<FullSettle> {
   const rows = await flipActivations(exec, await ownedRows(exec, ctx.playerId), now);
+  const launched = await launchShips(exec, ctx, now); // hulls whose day on the slip is done join the stores
   const idled = await staffingFor(exec, ctx, rows, now);
   const banked = await settleGoods(exec, ctx, rows, now, idled);
   const wallet = await settleWallet(exec, ctx, rows, now, idled);
@@ -792,7 +794,7 @@ export async function settleAll(exec: Exec, ctx: ActingContext, now: Date): Prom
   const staff = await settleStaffing(exec, ctx, rows, now); // owned-pop wages + food; after income is banked
   const barracks = await settleBarracks(exec, ctx, now); // unit + band upkeep, insolvency, contract ends; after household charges
   const composureDays = await settleShrine(exec, ctx, rows, idled, now);
-  return { rows, idled, banked, wallet, grants, staff, barracks, composureDays };
+  return { rows, idled, banked, launched, wallet, grants, staff, barracks, composureDays };
 }
 
 // --- Catalog (GET /api/buildings) -------------------------------------------
@@ -955,6 +957,11 @@ export type MineView = {
   // 2b): a season is a real day, so perDay is the grant a season; `until` the
   // span's end (excluded); throughLabel the game date of the last season it pays.
   leagueGrants: { title: string; perDay: number; until: string; throughLabel: string }[];
+  // The shipyard (Shipbuilders only; null for every other class): the tier the yard
+  // works at now (0 unbuilt or still going up; the prior tier mid-upgrade), the
+  // hulls it holds at once there, and the hulls on the slip. A hull whose time is up
+  // is not listed: it joins the stores at the next settle.
+  shipyard: { tier: number; slots: number; builds: ShipBuildView[] } | null;
   supply?: MineSupply; // absent when the plan failed (logged as "supply: failed …")
 };
 
@@ -1066,6 +1073,17 @@ export async function mine(classId: string, ctx: ActingContext, now: Date): Prom
   const grants = await leagueClassGrantsFor(db, ctx.worldId, classId, now);
   const unitRows = await ownedUnitRows(db, ctx);
 
+  const yardId = classBuildingIdFor(classId);
+  const yardRow = rows.find((r) => r.buildingId === yardId);
+  const shipyard: MineView["shipyard"] =
+    yardId && Object.values(c.craft ?? {}).some((r) => r.building === yardId)
+      ? {
+          tier: yardRow ? workingTier(yardRow, now) : 0,
+          slots: yardSlots(yardId, yardRow, now),
+          builds: (await openBuilds(db, ctx.playerId)).filter((b) => b.readyAt.getTime() > now.getTime()).map(buildView),
+        }
+      : null;
+
   // The supply plan (economy supply-plan prompt 1), in its own try (STOP 1
   // check a): a throw here logs and sends no plan, the Economy tab falls back to
   // its old lines, and the rest of the Ledger's payload answers as before. The
@@ -1136,6 +1154,7 @@ export async function mine(classId: string, ctx: ActingContext, now: Date): Prom
       until: new Date(g.untilMs).toISOString(),
       throughLabel: formatGameDate(gameDate(g.untilMs - 1, ctx.worldStartedMs)),
     })),
+    shipyard,
     supply,
   };
 }
@@ -1389,28 +1408,81 @@ export function listPops(): PeopleView {
 }
 
 // --- Craft (POST /api/buildings/craft) ---------------------------------------
-// Craft one of content.craft (trade-ship / galley): gate on the player owning the
-// recipe's building at tier >= the recipe tier, then consume the recipe materials
-// ATOMICALLY (guarded relative debits under the player lock — a shortfall rolls the
-// whole craft back, same as construction spend) and credit one crafted good to the
-// ledger. Recipes come from content.craft only.
+// Lay down one of content.craft (trade-ship / galley) on the yard's slip. Settles
+// first (a hull whose day is done launches and frees its slip; the yard's naval
+// supplies bank), then gates on the recipe's building at the tier it works at now
+// (an upgrade still building keeps the prior tier) and on a free slip — the yard
+// holds craftSlotsAt(tier) hulls at once. The recipe is paid at once (guarded
+// relative debits under the player lock; a shortfall rolls the whole craft back)
+// and the hull is ready recipe.buildHours later; launchShips credits it then.
+
+export type ShipBuildView = { id: string; good: string; startedAt: string; readyAt: string };
 
 export type CraftResult =
   | { ok: false; code: number; error: string }
-  | { ok: true; good: string; consumed: Record<string, number>; balance: number };
+  | { ok: true; good: string; consumed: Record<string, number>; build: ShipBuildView };
+
+type ShipBuildRow = typeof shipBuilds.$inferSelect;
+
+function buildView(b: ShipBuildRow): ShipBuildView {
+  return { id: b.id, good: b.good, startedAt: b.startedAt.toISOString(), readyAt: b.readyAt.toISOString() };
+}
+
+// The tier a building works at now: its row's tier once complete, the prior tier
+// while an upgrade is building, 0 for a fresh build still going up.
+function workingTier(row: BuildingRow, now: Date): number {
+  return isActive(row, now) ? row.tier : row.tier - 1;
+}
+
+// Hulls a player's yard holds at once now (content craftSlots at the working tier).
+function yardSlots(buildingId: string, row: BuildingRow | undefined, now: Date): number {
+  const def = Object.values(getBuildingsContent().classBuildings).find((b) => b.id === buildingId);
+  return row ? craftSlotsAt(def?.craftSlots, workingTier(row, now)) : 0;
+}
+
+// Every hull still on a player's slips (not launched), soonest first.
+async function openBuilds(exec: Exec, playerId: string): Promise<ShipBuildRow[]> {
+  return exec.select().from(shipBuilds).where(and(eq(shipBuilds.playerId, playerId), isNull(shipBuilds.deliveredAt))).orderBy(asc(shipBuilds.readyAt), asc(shipBuilds.id));
+}
+
+// Launch every hull ready by `now`, claim first: delivered_at is set only on rows
+// still open, and only the rows this claim returned are credited to the stores, in
+// the same transaction. A lost claim credits nothing.
+async function launchShips(exec: Exec, ctx: ActingContext, now: Date): Promise<Record<string, number>> {
+  const claimed = await exec
+    .update(shipBuilds)
+    .set({ deliveredAt: sql`${shipBuilds.readyAt}` })
+    .where(and(eq(shipBuilds.playerId, ctx.playerId), isNull(shipBuilds.deliveredAt), lte(shipBuilds.readyAt, now)))
+    .returning({ good: shipBuilds.good });
+  const launched: Record<string, number> = {};
+  for (const r of claimed) launched[r.good] = (launched[r.good] ?? 0) + 1;
+  for (const [good, n] of Object.entries(launched)) {
+    const row = await getOrCreateResource(exec, ctx.playerId, good, now);
+    await creditResource(exec, row.id, n);
+  }
+  return launched;
+}
 
 export async function craft(ctx: ActingContext, good: string, now: Date): Promise<CraftResult> {
   const c = getBuildingsContent();
   const recipe = c.craft?.[good];
   if (!recipe) return { ok: false, code: 404, error: "The yards craft no such thing." };
 
-  return spendTransaction(ctx.playerId, async (tx) => {
-    // Gate: own the recipe's building at a high enough tier.
-    const row = (await tx.select().from(playerBuildings).where(and(eq(playerBuildings.ownerPlayerId, ctx.playerId), eq(playerBuildings.buildingId, recipe.building))).limit(1))[0];
-    if (!row) return { ok: false as const, code: 403, error: `You need a ${recipe.building} to craft a ${good}.` };
-    if (row.tier < recipe.tier) return { ok: false as const, code: 409, error: `Crafting a ${good} needs your ${recipe.building} at tier ${recipe.tier} — yours is tier ${row.tier}.` };
+  const outcome = await spendTransaction(ctx.playerId, async (tx) => {
+    const settled = await settleAll(tx, ctx, now);
+    const refuse = (code: number, error: string) => ({ composureDays: settled.composureDays, result: { ok: false as const, code, error } });
+    // Gate: own the recipe's building, working at a high enough tier.
+    const row = settled.rows.find((r) => r.buildingId === recipe.building);
+    if (!row) return refuse(403, `You need a ${recipe.building} to craft a ${good}.`);
+    const tier = workingTier(row, now);
+    if (tier < recipe.tier) return refuse(409, `Crafting a ${good} needs your ${recipe.building} at tier ${recipe.tier} — yours is tier ${tier}.`);
+    // Gate: a free slip.
+    const slots = yardSlots(recipe.building, row, now);
+    if ((await openBuilds(tx, ctx.playerId)).length >= slots) {
+      return refuse(409, slots === 1 ? "Your slip is taken: the next keel waits for this hull to launch." : `All ${slots} of your slips are taken: the next keel waits for a launch.`);
+    }
 
-    // Consume the recipe with guarded debits: any short ingredient throws and the
+    // Pay the recipe with guarded debits: any short ingredient throws and the
     // transaction rolls back every ingredient already taken.
     for (const [g, qty] of Object.entries(recipe.recipe)) {
       const r = await getOrCreateResource(tx, ctx.playerId, g, now);
@@ -1420,11 +1492,15 @@ export async function craft(ctx: ActingContext, good: string, now: Date): Promis
         throw new SpendRejected({ ok: false, code: 402, error: `Crafting a ${good} needs ${qty} ${g} — you have ${Math.floor(have)} (short ${Math.ceil(qty - have)}).` });
       }
     }
-    // Credit one crafted good.
-    const out = await getOrCreateResource(tx, ctx.playerId, good, now);
-    const balance = await creditResource(tx, out.id, 1);
-    return { ok: true as const, good, consumed: recipe.recipe, balance };
+    // Lay the keel: the hull is ready buildHours from now.
+    const readyAt = new Date(now.getTime() + recipe.buildHours * 3_600_000);
+    const [build] = await tx.insert(shipBuilds).values({ worldId: ctx.worldId, playerId: ctx.playerId, good, startedAt: now, readyAt }).returning();
+    return { composureDays: settled.composureDays, result: { ok: true as const, good, consumed: recipe.recipe, build: buildView(build!) } };
   });
+  if (!("result" in outcome)) return outcome; // a shortfall: rolled back whole
+  // Apply banked shrine composure after the tx, break-aware — exactly as collect does.
+  if (outcome.composureDays > 0) await applyComposureDelta(await characterIdFor(ctx.playerId), outcome.composureDays, "building:shrine", now);
+  return outcome.result;
 }
 
 // --- Collect (POST /api/buildings/collect) ----------------------------------

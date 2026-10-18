@@ -255,7 +255,8 @@
       },
       "staffing": {
         "freeman": 1
-      }
+      },
+      "craftSlots": [0, 0, 1, 2]
     }
   },
   "commonBuildings": [
@@ -573,6 +574,7 @@
     "trade-ship": {
       "building": "slipway",
       "tier": 3,
+      "buildHours": 24,
       "recipe": {
         "naval-supplies": 2,
         "timber": 5,
@@ -582,6 +584,7 @@
     "galley": {
       "building": "slipway",
       "tier": 4,
+      "buildHours": 24,
       "recipe": {
         "naval-supplies": 3,
         "timber": 8,

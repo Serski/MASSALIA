@@ -19,6 +19,7 @@ import {
   campaignSeason,
   vendorUnitPrice,
   craftRawCost,
+  craftSlotsAt,
   materialCostForTier,
   staffCountForTier,
   staffDailyCost,
@@ -336,9 +337,21 @@ describe("Economy v2.1 — materials, staffing, craft & pops", () => {
     expect(content.craft!.galley!.tier).toBe(4);
   });
 
+  it("SLIPS — the yard holds one hull at T3 and two at T4, a day each, and every recipe's tier has a slip", () => {
+    const yard = content.classBuildings.shipbuilder!;
+    expect([1, 2, 3, 4].map((t) => craftSlotsAt(yard.craftSlots, t))).toEqual([0, 0, 1, 2]);
+    expect(craftSlotsAt(yard.craftSlots, 0)).toBe(0); // a fresh yard still building
+    expect(craftSlotsAt(undefined, 4)).toBe(0); // no craftSlots, no craft
+    for (const c of Object.values(content.craft!)) {
+      expect(c.buildHours).toBe(24);
+      const def = Object.values(content.classBuildings).find((d) => d.id === c.building);
+      expect(craftSlotsAt(def?.craftSlots, c.tier)).toBeGreaterThan(0);
+    }
+  });
+
   it("NO VENDOR LOOP — in no pair of seasons does the vendor's buy-back for a crafted ship beat his asking price for its recipe", () => {
-    // Crafting is instant and the vendor trades without limit, so a buy-back above the
-    // recipe's asking price would be free money for the yard: inside one season, or
+    // The vendor trades without limit, so a buy-back above the recipe's asking price
+    // would be free money for the yard, a day on the slip later: inside one season, or
     // with the materials bought in the cheap season and the hull sold in the dear one.
     // The tightest pair: a Trireme's recipe bought in Summer (90) against its Winter
     // buy-back (72 × 1.25 = 90).
