@@ -1411,8 +1411,8 @@ export function listPops(): PeopleView {
 // Lay down one of content.craft (trade-ship / galley) on the yard's slip. Settles
 // first (a hull whose day is done launches and frees its slip; the yard's naval
 // supplies bank), then gates on the recipe's building at the tier it works at now
-// (an upgrade still building keeps the prior tier) and on a free slip — the yard
-// holds craftSlotsAt(tier) hulls at once. The recipe is paid at once (guarded
+// (an upgrade still building keeps the prior tier), on a staffed yard (an idle one
+// lays no keel) and on a free slip — the yard holds craftSlotsAt(tier) hulls at once. The recipe is paid at once (guarded
 // relative debits under the player lock; a shortfall rolls the whole craft back)
 // and the hull is ready recipe.buildHours later; launchShips credits it then.
 
@@ -1476,6 +1476,9 @@ export async function craft(ctx: ActingContext, good: string, now: Date): Promis
     if (!row) return refuse(403, `You need a ${recipe.building} to craft a ${good}.`);
     const tier = workingTier(row, now);
     if (tier < recipe.tier) return refuse(409, `Crafting a ${good} needs your ${recipe.building} at tier ${recipe.tier} — yours is tier ${tier}.`);
+    // Gate: a staffed yard. An idle one lays no keel; the hulls already on its
+    // slips still launch on time (launchShips never looks at staffing).
+    if (settled.idled.has(row.id)) return refuse(409, "Your yard stands idle: staff it before you lay a keel.");
     // Gate: a free slip.
     const slots = yardSlots(recipe.building, row, now);
     if ((await openBuilds(tx, ctx.playerId)).length >= slots) {

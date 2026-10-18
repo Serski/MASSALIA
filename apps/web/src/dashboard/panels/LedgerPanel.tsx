@@ -471,12 +471,14 @@ function ServiceSection({ label, onRefresh }: { label: string; onRefresh: () => 
 // by the tier the yard works at — one at T3, two at T4), each empty or holding a
 // hull with its build bar, then the ships the yard can lay down. A keel takes a free
 // slip and pays its recipe at once; the hull is in the stores buildHours later. The
-// gates mirror the server's (tier, a free slip, the recipe); its refusal is shown
-// verbatim if anything slips by.
+// gates mirror the server's (tier, a staffed yard, a free slip, the recipe); its
+// refusal is shown verbatim if anything slips by. An idle yard lays no keel, but a
+// hull already on its slip still launches on time.
 function ShipyardSection({
   label,
   catalog,
   shipyard,
+  idle,
   balances,
   busy,
   offset,
@@ -485,6 +487,7 @@ function ShipyardSection({
   label: string;
   catalog: BuildingsCatalog;
   shipyard: NonNullable<BuildingsMine["shipyard"]>;
+  idle: boolean; // under-staffed: the yard lays no keel
   balances: Record<string, number>;
   busy: boolean;
   offset: number;
@@ -524,7 +527,7 @@ function ShipyardSection({
           const shortfalls = Object.entries(recipe.recipe)
             .filter(([g, q]) => (balances[g] ?? 0) < q)
             .map(([g, q]) => `${Math.ceil(q - (balances[g] ?? 0))} ${name(g)}`);
-          const blocked = !tierOk || free <= 0 || shortfalls.length > 0;
+          const blocked = !tierOk || idle || free <= 0 || shortfalls.length > 0;
           const recipeStr = Object.entries(recipe.recipe).map(([g, q]) => `${q} ${name(g)}`).join(" · ");
           return (
             <PanelRow
@@ -532,10 +535,13 @@ function ShipyardSection({
               icon={<GoodGlyph good={good} fallback="⛵" />}
               title={name(good)}
               sub={
-                `${recipeStr} · ${recipe.buildHours}h on the slip · needs Tier ${recipe.tier} (${tierName(recipe.tier)})` +
-                (!tierOk ? ` · yours works at Tier ${shipyard.tier}` : "") +
-                (tierOk && free <= 0 ? " · no free slip" : "") +
-                (shortfalls.length ? ` · short ${shortfalls.join(", ")}` : "")
+                <>
+                  {`${recipeStr} · ${recipe.buildHours}h on the slip · needs Tier ${recipe.tier} (${tierName(recipe.tier)})` +
+                    (!tierOk ? ` · yours works at Tier ${shipyard.tier}` : "") +
+                    (tierOk && free <= 0 ? " · no free slip" : "") +
+                    (shortfalls.length ? ` · short ${shortfalls.join(", ")}` : "")}
+                  {idle ? <><br />Your yard stands idle: staff it before you lay a keel.</> : null}
+                </>
               }
               dim={blocked}
               action={
@@ -847,6 +853,7 @@ export default function LedgerPanel({ player, onRefresh }: PanelProps) {
           label={mine.classSection.label ?? "Shipyard"}
           catalog={catalog}
           shipyard={mine.shipyard}
+          idle={ownedClass?.idle ?? false}
           balances={player.balances}
           busy={busy}
           offset={offset}

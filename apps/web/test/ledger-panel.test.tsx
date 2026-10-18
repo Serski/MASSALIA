@@ -96,9 +96,9 @@ const yardCatalog = {
     galley: { building: "slipway", tier: 4, buildHours: 24, recipe: { "naval-supplies": 3, timber: 8, iron: 3 } },
   },
 } as unknown as BuildingsCatalog;
-const yardMine = (yard: NonNullable<BuildingsMine["shipyard"]>): BuildingsMine => ({
+const yardMine = (yard: NonNullable<BuildingsMine["shipyard"]>, idle = false): BuildingsMine => ({
   ...mine(),
-  buildings: [owned({ id: "slipway", kind: "class", name: "Great Shipyard", tier: yard.tier, status: "active", startedAt: null, completesAt: null })],
+  buildings: [owned({ id: "slipway", kind: "class", name: "Great Shipyard", tier: yard.tier, status: "active", startedAt: null, completesAt: null, idle })],
   classSection: { label: "Commissions", comingSoon: true, entries: [] },
   pops: { freeman: 3 },
   shipyard: yard,
@@ -153,6 +153,22 @@ describe("the Ledger's shipyard", () => {
     expect(trireme?.querySelector(".pr-s")?.textContent).toContain("· yours works at Tier 3");
     expect(craftButton(pentekonter)?.disabled).toBe(true);
     expect(craftButton(trireme)?.disabled).toBe(true);
+  });
+
+  it("an idle yard greys out Craft and says why, while the hull on its slip keeps its clock", async () => {
+    vi.spyOn(api, "buildingsCatalog").mockResolvedValue(yardCatalog);
+    vi.spyOn(api, "buildingsMine").mockResolvedValue(yardMine({ tier: 4, slots: 2, builds: [{ id: "b1", good: "galley", startedAt: iso(-12 * H), readyAt: iso(12 * H) }] }, true));
+
+    const { container } = render(<LedgerPanel player={shipbuilder} onRefresh={() => {}} />);
+    await waitFor(() => expect(container.querySelectorAll(".shipyard-slips .panel-row")).toHaveLength(2));
+
+    // The Pentekonter has its recipe and a free slip: only the idle yard holds it back.
+    const pentekonter = shipRow(container, "Pentekonter");
+    expect(craftButton(pentekonter)?.disabled).toBe(true);
+    expect(pentekonter?.querySelector(".pr-s")?.textContent).toBe("2 Naval Supplies · 5 Wood · 1 Leather · 24h on the slip · needs Tier 3 (Small Shipyard)Your yard stands idle: staff it before you lay a keel.");
+    expect(craftButton(shipRow(container, "Trireme"))?.disabled).toBe(true);
+    const onSlip = container.querySelector(".shipyard-slips .panel-row")!;
+    expect(onSlip.querySelector(".build-clock")?.textContent).toMatch(/^(12:00:00|11:59:5\d)$/);
   });
 
   it("a yard below Tier 3 has no slip yet", async () => {

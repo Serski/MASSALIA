@@ -1076,6 +1076,43 @@ suite("Ledger / building engine (integration)", () => {
     expect(refill.ok).toBe(true);
   });
 
+  it("(P4-C2) an idle yard lays no keel and pays nothing; a hull already on its slip still launches on time", async () => {
+    const H = DAY / 24;
+    // A T3 slipway needs 2 freemen; with 1 it stands idle.
+    playerId = await freshPlayer(3000, "shipbuilder", { freeman: 2 });
+    const c = await ctx();
+    await m.buildings.build("shipbuilder", c, "slipway", new Date(T0));
+    await m.buildings.upgrade(c, "slipway", new Date(T0 + 2 * DAY)); // → T2 (completes T0+4)
+    await m.buildings.upgrade(c, "slipway", new Date(T0 + 6 * DAY)); // → T3 (completes T0+10)
+    await db.insert(m.dbPkg.resources).values({ scope: "player", scopeId: playerId, type: "naval-supplies", amount: "10", ratePerSecond: "0", lastUpdatedAt: new Date(T0) });
+    const freemen = (n: number) => db.update(m.dbPkg.playerPops).set({ count: n }).where(and(eq(m.dbPkg.playerPops.ownerPlayerId, playerId), eq(m.dbPkg.playerPops.popType, "freeman")));
+
+    // Staffed: lay a Pentekonter. Then a freeman goes and the yard idles.
+    const at = T0 + 20 * DAY;
+    const laid = await m.buildings.craft(c, "trade-ship", new Date(at));
+    expect(laid.ok).toBe(true);
+    await freemen(1);
+
+    // Idle is checked before the slip: refused as idle, nothing taken, no keel.
+    await m.buildings.collect(c, new Date(at + H));
+    const timber = await goodBalance("timber");
+    const naval = await goodBalance("naval-supplies");
+    const idle = await m.buildings.craft(c, "trade-ship", new Date(at + H));
+    expect(idle).toEqual({ ok: false, code: 409, error: "Your yard stands idle: staff it before you lay a keel." });
+    expect([await goodBalance("timber"), await goodBalance("naval-supplies")]).toEqual([timber, naval]);
+    expect(await db.select().from(m.dbPkg.shipBuilds).where(eq(m.dbPkg.shipBuilds.playerId, playerId))).toHaveLength(1);
+
+    // The hull laid before the yard idled launches at its 24 hours all the same.
+    await m.buildings.collect(c, new Date(at + 24 * H));
+    expect(await goodBalance("trade-ship")).toBe(1);
+    // Still idle, the free slip takes no keel; staffed again, it does.
+    const stillIdle = await m.buildings.craft(c, "trade-ship", new Date(at + 24 * H));
+    expect(stillIdle.ok).toBe(false);
+    await freemen(2);
+    const staffed = await m.buildings.craft(c, "trade-ship", new Date(at + 25 * H));
+    expect(staffed.ok).toBe(true);
+  });
+
   it("(P5) catalog + mine expose the additive Phase 5 fields from content + player_pops", async () => {
     const c = await ctx(); // default landowner, owns its estate T1 staffing (slave: 2)
     const cat = m.buildings.catalog("landowner", c, new Date(T0));
