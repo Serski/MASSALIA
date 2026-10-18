@@ -38,6 +38,7 @@ suite("Archon & Ephor elections (integration)", () => {
   let db: ReturnType<Mods["dbPkg"]["createDb"]>;
   let worldId: string;
   let seatCursor = 110;
+  let houseName: string;
 
   async function createCharacter(name: string, opts: { party?: string; prestige?: number; seat?: boolean; wasHoplite?: boolean; classId?: string; militia?: number; contractId?: string } = {}) {
     const { users, players, playerCharacters } = m.dbPkg;
@@ -77,6 +78,8 @@ suite("Archon & Ephor elections (integration)", () => {
       chamber_ballots, chamber_votes, oligarch_seats, party_favor, daily_routines, effect_log, character_traits,
       player_characters, dynasties, players, sessions, users, worlds CASCADE`);
     await db.insert(m.dbPkg.houses).values({ slug: "test-house", name: "House Test", initial: "T", alignment: "c", stance: "s", motto: "m", patron: "p", crest: "c" }).onConflictDoNothing();
+    // The houses row outlives every file with its first seeder's name: read it back.
+    houseName = (await db.select({ name: m.dbPkg.houses.name }).from(m.dbPkg.houses).where(eq(m.dbPkg.houses.slug, "test-house")))[0]!.name;
     const world = (await db.insert(m.dbPkg.worlds).values({ name: "Election Test", seed: "etest", startedAt: new Date(T0), endsAt: new Date(T0 + 182 * SEASON), status: "active" }).returning())[0]!;
     worldId = world.id;
     await m.dbPkg.ensureChamberSeats(worldId, m.oligarchy.getPoliticsConfig().chamber);
@@ -316,7 +319,7 @@ suite("Archon & Ephor elections (integration)", () => {
     const short = await createCharacter("Shortwright", { classId: "shipbuilder", party: "none", militia: 40 });
 
     const list = await m.elections.eligibleAppointees(null);
-    expect(list.find((a) => a.characterId === wright.id)).toEqual({ characterId: wright.id, name: "Spartakolous", houseName: "House Test", party: "none", militia: 41 });
+    expect(list.find((a) => a.characterId === wright.id)).toEqual({ characterId: wright.id, name: "Spartakolous", houseName, party: "none", militia: 41 });
     expect(list.map((a) => a.characterId)).not.toContain(short.id);
 
     expect(await m.elections.appointStrategos(await fresh(archon.id), short.id, resolveNow)).toEqual({ ok: false, code: 409, error: "A Strategos needs a Militia above 40." });

@@ -43,6 +43,7 @@ suite("the strikes (integration)", () => {
   let db: ReturnType<Mods["dbPkg"]["createDb"]>;
   let worldId: string;
   let leagueId: string;
+  let houseName: string;
   type Ctx = { playerId: string; worldId: string; worldStartedMs: number };
 
   // A house with a character, a wallet and stock for its upkeep.
@@ -100,6 +101,8 @@ suite("the strikes (integration)", () => {
   beforeEach(async () => {
     await db.execute(sql`TRUNCATE TABLE strike_parts, strikes, league_orders, league_wars, faction_relations, league_cities, player_marches, player_voyages, player_holdings, player_units, player_levy, region_military, town_military, koinon_musters, resources, treasury_ledger, treasuries, effect_log, player_characters, dynasties, players, sessions, users, worlds CASCADE`);
     await db.insert(m.dbPkg.houses).values({ slug: "test-house", name: "House Test", initial: "T", alignment: "c", stance: "s", motto: "m", patron: "p", crest: "c" }).onConflictDoNothing();
+    // The houses row outlives every file with its first seeder's name: read it back.
+    houseName = (await db.select({ name: m.dbPkg.houses.name }).from(m.dbPkg.houses).where(eq(m.dbPkg.houses.slug, "test-house")))[0]!.name;
     // A fixed id: a battle's seed is (world, strike, place, instant).
     worldId = (await db.insert(m.dbPkg.worlds).values({ id: uid(1), name: "Strikes", seed: "strikes", startedAt: new Date(T0), endsAt: new Date(T0 + 182 * DAY), status: "active" }).returning())[0]!.id;
     await db.insert(m.dbPkg.treasuries).values({ worldId, owner: "league", balance: 5000 });
@@ -240,7 +243,7 @@ suite("the strikes (integration)", () => {
     const report = (await strikeOf(s.id)).report as { outcome: string; paid: number; payer: string; line: string };
     expect(report).toMatchObject({ outcome: "won", paid: 30, payer: "holder" });
     expect(await wallet(holder.ctx.playerId)).toBe(0);
-    expect(report.line).toBe("The Volcae broke into Salyes and carried off 30 drachmae from House House Test.");
+    expect(report.line).toBe(`The Volcae broke into Salyes and carried off 30 drachmae from House ${houseName}.`);
     expect(await partsOf(s.id)).toMatchObject([{ playerId: holder.ctx.playerId, men: 5, holder: true, paid: 30 }]);
     // Still his: a raid takes nothing but plunder.
     expect(await db.select().from(m.dbPkg.playerHoldings)).toHaveLength(1);
@@ -260,7 +263,7 @@ suite("the strikes (integration)", () => {
     const s = await march({ nationId: "saluvii", trigger: "war", triggerPlaceId: null, triggerAt: null, mode: "attack", regionId: "R047", townId: "reii", targetKind: "holding", holderPlayerId: holder.ctx.playerId, force: 3000, about: 3000, draws: [] });
     await pass(plus(s.strikesAt, MIN));
     const report = (await strikeOf(s.id)).report as { outcome: string; holdingLost: boolean; line: string };
-    expect(report).toMatchObject({ outcome: "stormed", holdingLost: true, line: "The Saluvii stormed Reii. House House Test has lost it." });
+    expect(report).toMatchObject({ outcome: "stormed", holdingLost: true, line: `The Saluvii stormed Reii. House ${houseName} has lost it.` });
     expect(await db.select().from(m.dbPkg.playerHoldings)).toEqual([]);
     expect(await garrison("reii", s.strikesAt)).toBe(160);
     // The survivors fall back at their own settles (holdings prompt 3, rule 4).
@@ -354,7 +357,7 @@ suite("the strikes (integration)", () => {
     await row(holder.ctx.playerId, "hoplite", 5, "R060");
     const h = await march({ id: uid(901), regionId: "R046", townId: null, targetKind: "holding", holderPlayerId: holder.ctx.playerId, force: 50, about: 50 });
     await pass(plus(h.strikesAt, MIN));
-    expect((await m.barracks.barracksView(holder.ctx, plus(h.strikesAt, 2 * MIN))).reports.find((r) => r.kind === "strike")).toMatchObject({ title: "The Volcae at Salyes", yourPart: null, line: "The Volcae broke into Salyes and carried off 30 drachmae from House House Test." });
+    expect((await m.barracks.barracksView(holder.ctx, plus(h.strikesAt, 2 * MIN))).reports.find((r) => r.kind === "strike")).toMatchObject({ title: "The Volcae at Salyes", yourPart: null, line: `The Volcae broke into Salyes and carried off 30 drachmae from House ${houseName}.` });
   });
 
   // --- the alarms (strikes prompt 2) ----------------------------------------------------
