@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAP_ACTIONS, mapActionButtons, withReach } from "../src/map/mapActions.js";
+import { MAP_ACTIONS, mapActionButtons, withAlert, withCap, withReach } from "../src/map/mapActions.js";
 
 // The button row the town and region panels render, driven by the shared matrix.
 describe("mapActionButtons", () => {
@@ -58,5 +58,26 @@ describe("mapActionButtons", () => {
     expect(far.caption).toBe("Beyond the fleet's range (9 seas, fleet reaches 7).");
     const noMen = { ...entry, attack: { ok: false, reason: "No men under arms." }, raid: { ok: false, reason: "No men under arms." } };
     expect(withReach(buttons, noMen, fleet).buttons.find((b) => b.type === "raid")!.title).toBe("No men under arms.");
+  });
+});
+
+// Military 6a: a place on alert greys Raid, a house at its cap greys Attack, each with the server's line.
+describe("withAlert and withCap", () => {
+  const row = () => ({ buttons: mapActionButtons({ kind: "region", hasTown: false, ownerId: "unclaimed" }), caption: null });
+  const shape = (r: { buttons: { type: string; enabled: boolean; title?: string }[]; caption: string | null }) => ({ buttons: r.buttons.map((b) => [b.type, b.enabled, b.title ?? null]), caption: r.caption });
+  const ALERT = "Salyes is on alert, the herds are driven into the hills.";
+  const CAP = "Your house holds all it can: 2 places.";
+
+  it("grey Raid with the alert's line and Attack with the cap's, and the line is the caption when the row had none", () => {
+    expect(shape(withAlert(row(), ALERT))).toEqual({ buttons: [["attack", true, null], ["raid", false, ALERT], ["scout", true, null], ["colonise", true, null]], caption: ALERT });
+    expect(shape(withCap(row(), CAP))).toEqual({ buttons: [["attack", false, CAP], ["raid", true, null], ["scout", true, null], ["colonise", true, null]], caption: CAP });
+    expect(shape(withCap(withAlert(row(), ALERT), CAP))).toEqual({ buttons: [["attack", false, CAP], ["raid", false, ALERT], ["scout", true, null], ["colonise", true, null]], caption: ALERT });
+  });
+
+  it("leave a button already greyed with its own reason, and change nothing without a line", () => {
+    const greyed = { buttons: row().buttons.map((b) => (b.type === "raid" ? { ...b, enabled: false, title: "Another house holds this land." } : b)), caption: "Another house holds this land." };
+    expect(shape(withAlert(greyed, ALERT))).toEqual(shape(greyed));
+    expect(withAlert(row(), null)).toEqual(row());
+    expect(withCap(row(), undefined)).toEqual(row());
   });
 });

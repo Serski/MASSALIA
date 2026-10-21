@@ -53,6 +53,27 @@ export function withHolder(actions: { buttons: MapActionButton[]; caption: strin
   };
 }
 
+// A place on alert (Military 6a): the server refuses a raid there, so the map
+// greys Raid with the server's own line and leaves Scout and Attack to the
+// rest. A button already greyed keeps its own reason. The line is the caption
+// too when the row had none, so a touch screen reads why.
+export function withAlert(actions: { buttons: MapActionButton[]; caption: string | null }, line: string | null | undefined): { buttons: MapActionButton[]; caption: string | null } {
+  return greyWith(actions, "raid", line);
+}
+
+// A house that holds all it may (Military 6a): the server refuses its attack
+// anywhere, so the map greys Attack with the server's cap line.
+export function withCap(actions: { buttons: MapActionButton[]; caption: string | null }, line: string | null | undefined): { buttons: MapActionButton[]; caption: string | null } {
+  return greyWith(actions, "attack", line);
+}
+
+function greyWith(actions: { buttons: MapActionButton[]; caption: string | null }, type: MapActionType, line: string | null | undefined): { buttons: MapActionButton[]; caption: string | null } {
+  if (!line) return actions;
+  const buttons = actions.buttons.map((b) => (b.type === type && b.enabled ? { ...b, enabled: false, title: line } : b));
+  const greyed = buttons.some((b, i) => b !== actions.buttons[i]);
+  return { buttons, caption: actions.caption ?? (greyed ? line : null) };
+}
+
 export function withReach(buttons: MapActionButton[], entry: ReachEntry | undefined, fleet?: FleetView): { buttons: MapActionButton[]; caption: string | null } {
   if (!entry) return { buttons, caption: null };
   // With the fleet known, judge a one-man party; the server's own "no men"

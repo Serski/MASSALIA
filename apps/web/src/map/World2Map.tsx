@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { forceStats, holderRefusal, HOME_POLITY_ID, marchMinutes, moveVerdict, REACH_REASON, renderForce, renderPlunder, routeFor, verdictsFor, type CampaignForcePart, type MapActionType } from "@massalia/shared";
+import { alertLine, forceStats, holderRefusal, HOME_POLITY_ID, marchMinutes, moveVerdict, REACH_REASON, renderForce, renderPlunder, routeFor, verdictsFor, type CampaignForcePart, type MapActionType } from "@massalia/shared";
 import { api, apiBaseUrl, ApiError, type BarracksRosterRow, type BaseView, type LeagueMapView, type MapActReport, type MapActType, type MapMoveReport, type MapReachView, type MapSetOutReport, type MoveTargetView, type ReachEntry } from "../api.js";
 import { AssetIcon, ChoicePicker, CULTURE_WEBP, formatClock, formatDuration, marchLine, POLITY_CREST, titleCase, useCountdownSeconds } from "../dashboard/shared.js";
 import { LeagueOrderSheet } from "./LeagueOrderSheet.js";
-import { mapActionButtons, withHolder, withReach, type MapActionButton } from "./mapActions.js";
+import { mapActionButtons, withAlert, withCap, withHolder, withReach, type MapActionButton } from "./mapActions.js";
 import { FAST_SPD, MARCH_CLOCK, moveTravel, travelClock } from "./marchClock.js";
 
 // Attack, Raid and Scout are the actions that resolve (Colonise waits for 3d).
@@ -50,6 +50,8 @@ export function holdingLine(b: BaseView, league = false): string {
 export type HoldingHolder = { playerId: string; characterName: string; houseName: string | null; league?: boolean };
 export type PublicHoldings = { towns: Record<string, HoldingHolder>; regions: Record<string, HoldingHolder> };
 const NO_HOLDINGS: PublicHoldings = { towns: {}, regions: {} };
+const NO_ALERT: NonNullable<MilitaryPayload["alert"]> = { towns: {}, regions: {} };
+const NO_ALERT_LINES: NonNullable<MapReachView["alert"]> = { towns: {}, regions: {} };
 
 // The line another house's holding reads: "Held by House Leonidas · Konrad Curze".
 // The League's reads "Held by the League": mid-sentence the League takes a lower-case article.
@@ -134,7 +136,31 @@ type RegionMilitaryView = { warband: number; source: MilitarySource; scoutedGame
 // A nation's march on a place, or how it ended within the year (strikes prompt
 // 1): its words alone, for everyone. Optional: an older server sends none.
 export type MapStrike = { nation: string; status: "marching" | "struck" | "called_off"; mode: "raid" | "attack"; trigger: "war" | "raids"; about: number; strikesAt: string; line: string; dateLabel: string };
-type MilitaryPayload = { towns: Record<string, TownMilitaryView>; regions: Record<string, RegionMilitaryView>; holdings?: PublicHoldings; strikes?: { towns: Record<string, MapStrike>; regions: Record<string, MapStrike> } };
+// `alert`: the places on alert (Military 6a), a flag for everyone and never a
+// number. Optional: an older server sends none.
+type MilitaryPayload = { towns: Record<string, TownMilitaryView>; regions: Record<string, RegionMilitaryView>; holdings?: PublicHoldings; strikes?: { towns: Record<string, MapStrike>; regions: Record<string, MapStrike> }; alert?: { towns: Record<string, true>; regions: Record<string, true> } };
+// A place on alert (Military 6a): its line on its panel, for everyone.
+export function AlertLine({ line, kind }: { line: string; kind: "town" | "land" }) {
+  return (
+    <p className="w2map-alert" data-alert={kind}>
+      {line}
+    </p>
+  );
+}
+
+// The map's flag on a place on alert (Military 6a): a red pennant on a staff
+// whose foot is at (x, y), `size` tall in the map's units (sized from the
+// camera, so it keeps its size on screen as the town markers do). Inert.
+function AlertFlag({ x, y, size, place }: { x: number; y: number; size: number; place: string }) {
+  const w = size * 0.75;
+  return (
+    <g data-alert-flag={place} transform={`translate(${x} ${y})`}>
+      <line x1={0} y1={0} x2={0} y2={-size} stroke={ALERT_FLAG_STAFF} strokeWidth={size * 0.1} strokeLinecap="round" />
+      <path d={`M0 ${-size} L${w} ${-size * 0.78} L0 ${-size * 0.56} Z`} fill={ALERT_FLAG_RED} stroke={ALERT_FLAG_STAFF} strokeWidth={size * 0.06} strokeLinejoin="round" />
+    </g>
+  );
+}
+
 // The strike line on a place's panel: the march on the road, or how it ended (dated).
 export function StrikeLine({ strike }: { strike: MapStrike | null | undefined }) {
   if (!strike) return null;
@@ -188,6 +214,9 @@ const SELECT_GOLD = "#d6873f";
 const HOVER_WASH = "#d6873f";
 const SEA_LATTICE = "#4d82b8";
 const FOG_DARK = "#0b0a08";
+// The alert flag (Military 6a): a red pennant on a dark staff.
+const ALERT_FLAG_RED = "#b3261e";
+const ALERT_FLAG_STAFF = "#2a1d12";
 // CK2-style borders. The seam-seal stroke (world units) fattens each owned
 // region's fill outward so independently-smoothed neighbours meet with no
 // terrain crack; the border stroke is a constant one-screen-pixel dark warm line.
@@ -433,6 +462,10 @@ export function World2Map({ fill = false, refreshToken, onRefresh, focus = null 
   const [names, setNames] = useState<Record<string, string>>({});
   const [townStats, setTownStats] = useState<Record<string, TownStats>>({});
   const [military, setMilitary] = useState<MilitaryPayload>({ towns: {}, regions: {} });
+  // The reach's alert lines and the house's cap line (Military 6a): the server's
+  // sentences Raid and Attack are greyed with.
+  const [alertLines, setAlertLines] = useState<NonNullable<MapReachView["alert"]>>(NO_ALERT_LINES);
+  const [capLine, setCapLine] = useState<string | null>(null);
   // Opened on a place (strikes prompt 2: the Barracks' "Show on map"): once the
   // world is loaded, its panel is open, the town's when it is a town.
   useEffect(() => {
@@ -482,7 +515,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh, focus = null 
     fetch(MILITARY_SRC, { credentials: "include" })
       .then((response) => (response.ok ? (response.json() as Promise<MilitaryPayload>) : null))
       .then((payload) => {
-        if (payload) setMilitary({ towns: payload.towns ?? {}, regions: payload.regions ?? {}, holdings: payload.holdings ?? NO_HOLDINGS, strikes: payload.strikes ?? { towns: {}, regions: {} } });
+        if (payload) setMilitary({ towns: payload.towns ?? {}, regions: payload.regions ?? {}, holdings: payload.holdings ?? NO_HOLDINGS, strikes: payload.strikes ?? { towns: {}, regions: {} }, alert: payload.alert ?? NO_ALERT });
       })
       .catch(() => {});
   }, []);
@@ -556,6 +589,8 @@ export function World2Map({ fill = false, refreshToken, onRefresh, focus = null 
       setMoveTargets(view.moveTargets ?? []);
       setCampaign(view.campaign ?? null);
       setClockOffset(view.now ? Date.parse(view.now) - Date.now() : 0);
+      setAlertLines(view.alert ?? NO_ALERT_LINES);
+      setCapLine(view.cap ?? null);
     };
     if (mode === "league") {
       api
@@ -1269,10 +1304,18 @@ export function World2Map({ fill = false, refreshToken, onRefresh, focus = null 
     if (holder) return holderRefusal(holder.league && !league ? "league" : "house", place);
     return (league ? gate : fought) ?? null;
   };
+  // After those, as the server checks them: a place on alert greys Raid with
+  // its line, and a house at its cap greys Attack with the cap's (Military 6a).
   const regionActions = selectedProvince
-    ? withHolder(
-        withWinter(withReach(mapActionButtons({ kind: "region", hasTown: selectedProvince.towns.length > 0, ownerId: selectedOwnerId }), regionReach, reachFleet)),
-        refusalFor(otherRegionHolder(selectedProvince.id), "land", leagueView?.gate.regions[selectedProvince.id], harvest?.regions[selectedProvince.id]),
+    ? withCap(
+        withAlert(
+          withHolder(
+            withWinter(withReach(mapActionButtons({ kind: "region", hasTown: selectedProvince.towns.length > 0, ownerId: selectedOwnerId }), regionReach, reachFleet)),
+            refusalFor(otherRegionHolder(selectedProvince.id), "land", leagueView?.gate.regions[selectedProvince.id], harvest?.regions[selectedProvince.id]),
+          ),
+          alertLines.regions[selectedProvince.id],
+        ),
+        capLine,
       )
     : null;
   // "Your garrison: 30 hoplites · Your men: 20 peltasts returning in 02:14:07".
@@ -1352,7 +1395,13 @@ export function World2Map({ fill = false, refreshToken, onRefresh, focus = null 
   // with the server's sentence, the rest as the matrix and the reach say.
   const townHolderOther = selectedTown ? otherTownHolder(selectedTown) : null;
   const townActions = selectedTown
-    ? withHolder(withWinter(withReach(mapActionButtons({ kind: "town", hasTown: true, ownerId: townOwnerId }), townReach, reachFleet)), refusalFor(townHolderOther, "town", leagueView?.gate.towns[selectedTown], harvest?.towns[selectedTown]))
+    ? withCap(
+        withAlert(
+          withHolder(withWinter(withReach(mapActionButtons({ kind: "town", hasTown: true, ownerId: townOwnerId }), townReach, reachFleet)), refusalFor(townHolderOther, "town", leagueView?.gate.towns[selectedTown], harvest?.towns[selectedTown])),
+          alertLines.towns[selectedTown],
+        ),
+        capLine,
+      )
     : null;
   // "Your men here: 20 hoplites" on a place of ours, "Your garrison" on a held region.
   const menLabel = selectedTown || !selectedHeld ? `${whose} men here` : `${whose} garrison`;
@@ -1430,6 +1479,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh, focus = null 
             {selectedHeld ? <p className="w2map-held">{heldLine(heldRegions.get(selectedProvince.id) ?? null) ?? (league ? "Held by the League." : "Held by your house — a base for your forces.")}</p> : null}
             {!selectedHeld && regionHolderOther ? <p className="w2map-held">{holderLine(regionHolderOther)}</p> : null}
             <StrikeLine strike={military.strikes?.regions[selectedProvince.id]} />
+            {selectedProvince.towns.length === 0 && military.alert?.regions[selectedProvince.id] ? <AlertLine line={alertLine(regionName, "land")} kind="land" /> : null}
             {sendMenHere || selectedProvince.towns.length === 0 ? <div className="w2map-info-label">Actions</div> : null}
             {sendMenHere && !sendMenBeside ? sendMenHere : (selectedProvince.towns.length > 0 ? null : (
               <div className="w2map-actions">
@@ -1472,6 +1522,7 @@ export function World2Map({ fill = false, refreshToken, onRefresh, focus = null 
       league={league}
       holder={townHolderOther}
       strike={military.strikes?.towns[selectedTownObj.id]}
+      alert={military.alert?.towns[selectedTownObj.id] ? alertLine(selectedTownObj.name, "town") : null}
       yourMen={yourMenHere}
       actions={townActions!}
       canSendMen={sendMenHere !== null}
@@ -1582,8 +1633,18 @@ export function World2Map({ fill = false, refreshToken, onRefresh, focus = null 
                     ) : (
                       <circle cx={town.x} cy={town.y} r={isMassalia ? dotPx * 1.5 : dotPx} fill="#fff" stroke="#3c3c3c" strokeWidth={dotPx * 0.35} pointerEvents="visiblePainted" style={{ cursor: "pointer" }} />
                     )}
+                    {military.alert?.towns[town.id] ? <AlertFlag x={town.x + iconPx * 0.45} y={town.y} size={iconPx * 0.9} place={town.id} /> : null}
                   </g>
                 );
+              })}
+            </g>
+
+            {/* Townless lands on alert (Military 6a): the same pennant at the
+                land's centre, at every zoom. Inert. */}
+            <g className="w2map-alert-flags" pointerEvents="none">
+              {Object.keys(military.alert?.regions ?? {}).map((id) => {
+                const c = centroidById.get(id);
+                return c ? <AlertFlag key={id} x={c.x} y={c.y} size={iconPx * 0.9} place={id} /> : null;
               })}
             </g>
           </svg>
@@ -1691,6 +1752,7 @@ export function TownPanel({
   league = false,
   holder,
   strike = null,
+  alert = null,
   yourMen,
   actions,
   canSendMen,
@@ -1716,6 +1778,8 @@ export function TownPanel({
   holder: HoldingHolder | null;
   /** a nation's march on the town, or how it ended (strikes prompt 1) */
   strike?: MapStrike | null;
+  /** the town's alert line while it is on alert (Military 6a), for everyone */
+  alert?: string | null;
   yourMen: string | null;
   actions: { buttons: MapActionButton[]; caption: string | null };
   canSendMen: boolean;
@@ -1773,6 +1837,7 @@ export function TownPanel({
         {yourMen ? <p className="w2map-your-men">{yourMen}</p> : null}
         {held ? <p className="w2map-held">{holdingLine(held, league)}</p> : holder ? <p className="w2map-held">{holderLine(holder)}</p> : null}
         <StrikeLine strike={strike} />
+        {alert ? <AlertLine line={alert} kind="town" /> : null}
         <div className="w2map-info-label">Actions</div>
         {canSendMen && !sendMenBeside ? (
           <div className="w2map-actions">

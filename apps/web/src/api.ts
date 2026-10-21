@@ -2009,6 +2009,12 @@ export type MapReachView = {
   // the server's refusal for his own raid or attack there, by town and by
   // townless region (ruling 3 at STOP 1 of government prompt 5b).
   harvest?: { towns: Record<string, string>; regions: Record<string, string> };
+  // The places on alert (Military 6a), by town and by townless region, with the
+  // server's line a raid there is refused with. Optional: an older server sends none.
+  alert?: { towns: Record<string, string>; regions: Record<string, string> };
+  // The house's cap line while it holds all it may (Military 6a); null below the
+  // cap and for the League. Optional: an older server sends none.
+  cap?: string | null;
 };
 
 // GET /api/map/league (mirrors LeagueMapView in apps/server/src/services/mapReach.ts):
