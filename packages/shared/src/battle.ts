@@ -24,9 +24,11 @@ import { seededRoll, type BattleContent, type UnitStats } from "./barracks.js";
 //
 // Attack runs `rounds` rounds or until a side breaks; the side still standing
 // wins, both standing is "stand" (the attacker withdraws), both broken is a
-// defender win. Raid runs raid.rounds rounds; the attacker wins if unbroken
-// and its kills exceed its losses in absolute men, else the defender — never
-// "stand".
+// defender win. Skirmishers cannot hold ground (Military 6a, ruling 1): a stand
+// in which every defender row still on the field skirmished in the last round
+// is the attacker's. Raid runs raid.rounds rounds; the attacker wins if
+// unbroken and its kills exceed its losses in absolute men, else the defender —
+// never "stand".
 // ---------------------------------------------------------------------------
 
 export type BattleRow = { id: string; label: string; count: number; stats: UnitStats };
@@ -197,6 +199,12 @@ export function resolveBattle(input: BattleInput): BattleResult {
     else winner = !attacker.broke && defender.losses > attacker.losses ? "attacker" : "defender";
   } else if (defender.broke && !attacker.broke) winner = "attacker";
   else if (attacker.broke) winner = "defender"; // including both broken: the attack failed
-  else winner = "stand";
+  else {
+    // Neither broke. Skirmishers cannot hold ground: when every defender row
+    // still on the field skirmished in the last round, the place is the
+    // attacker's; one row that stood in the line keeps the stand.
+    const lastSkirmish = new Set(rounds[rounds.length - 1]?.skirmish.defender ?? []);
+    winner = participants(def).every((r) => lastSkirmish.has(r.id)) ? "attacker" : "stand";
+  }
   return { winner, rounds, attacker, defender };
 }

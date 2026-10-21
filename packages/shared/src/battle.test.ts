@@ -287,6 +287,67 @@ describe("resolveBattle", () => {
     expect(r.rounds[0]!.melee.attacker).toBe(0);
   });
 
+  // Military 6a, ruling 1: skirmishers cannot hold ground.
+  it("an attack that ends in a stand is the attacker's when every defender row on the field skirmished in the last round", () => {
+    const cfg: BattleConfig = { ...exact, rounds: 3 };
+    // A slow block that cannot hurt anyone, against 10 skirmishers that fire every round and never break.
+    const brute = row("brute", 300, { atk: 0, def: 1, msl: 0, mor: 10, spd: 1 });
+    const sk = row("sk", 10, { msl: SKIRMISH_MSL, spd: 5, def: 1, mor: 10 });
+    const alone = resolveBattle({ attacker: [brute], defender: [sk], seed: "hold", config: cfg, mode: "attack" });
+    expect(alone.rounds.map((x) => x.skirmish.defender)).toEqual([["sk"], ["sk"], ["sk"]]);
+    expect(alone.attacker.broke).toBe(false);
+    expect(alone.defender.broke).toBe(false);
+    expect(alone.defender.rows[0]).toMatchObject({ start: 10, end: 10, broke: false });
+    expect(alone.winner).toBe("attacker");
+    // One row standing in the line keeps the stand.
+    const line = row("line", 10, { atk: 0, def: 1, msl: 0, mor: 10, spd: 1 });
+    expect(resolveBattle({ attacker: [brute], defender: [sk, line], seed: "hold", config: cfg, mode: "attack" }).winner).toBe("stand");
+    // A line row that broke, or fell to the last man, is off the field and keeps nothing.
+    const hitter = row("brute", 300, { atk: 1, def: 1, msl: 0, mor: 10, spd: 1 });
+    const broken = resolveBattle({ attacker: [hitter], defender: [sk, row("line", 10, { atk: 0, def: 100, msl: 0, mor: 0, spd: 1 })], seed: "hold", config: cfg, mode: "attack" });
+    expect(broken.defender.rows.find((x) => x.id === "line")).toMatchObject({ broke: true });
+    expect(broken.defender.rows.find((x) => x.id === "line")!.end).toBeGreaterThan(0);
+    expect(broken.winner).toBe("attacker");
+    const fallen = resolveBattle({ attacker: [hitter], defender: [sk, row("line", 10, { atk: 0, def: 1, msl: 0, mor: 10, spd: 1 })], seed: "hold", config: cfg, mode: "attack" });
+    expect(fallen.defender.rows.find((x) => x.id === "line")).toMatchObject({ end: 0 });
+    expect(fallen.winner).toBe("attacker");
+  });
+
+  it("a defender row that skirmished only in earlier rounds keeps the stand, and an attacker's skirmishers win nothing by it", () => {
+    const cfg: BattleConfig = { ...exact, rounds: 3 };
+    // Round 1 the skirmishers outpace the attackers' weighted spd 3; the slow row breaks at its
+    // first loss and leaves, the fast row's spd 9 is left, and from round 2 they stand in the line.
+    const r = resolveBattle({
+      attacker: [row("slow", 30, { atk: 0, def: 1, msl: 0, mor: 0, spd: 1 }), row("fast", 10, { atk: 0, def: 1, msl: 0, mor: 20, spd: 9 })],
+      defender: [row("sk", 3, { msl: SKIRMISH_MSL, spd: 5, def: 1, mor: 20 })],
+      seed: "earlier",
+      config: cfg,
+      mode: "attack",
+    });
+    expect(r.rounds[0]!.skirmish.defender).toEqual(["sk"]);
+    expect(r.rounds[0]!.broke.attacker).toEqual(["slow"]);
+    expect(r.rounds[r.rounds.length - 1]!.skirmish.defender).toEqual([]);
+    expect(r.winner).toBe("stand");
+    // Calibration #4: 20 peltasts attacking 40 warband skirmish every round and still only stand.
+    for (const seed of ["calibration-a", "calibration-b"]) {
+      const att = resolveBattle({ attacker: [unit("peltast", 20)], defender: [warband(40)], seed, config: battle, mode: "attack" });
+      expect(att.rounds.every((x) => x.skirmish.attacker.includes("peltast"))).toBe(true);
+      expect(att.winner).toBe("stand");
+    }
+  });
+
+  it("with the shipped constants, a strike of 460 warband storms 113 peltasts behind walls 2, and 120 do not", () => {
+    const peltasts = (count: number): BattleRow => ({ ...unit("peltast", count), stats: { ...units.units.peltast!.stats, def: units.units.peltast!.stats.def + 2 } });
+    for (const seed of ["s1", "s2", "s3", "s4", "s5"]) {
+      const big = resolveBattle({ attacker: [warband(460)], defender: [peltasts(113)], seed, config: battle, mode: "attack" });
+      expect(big.defender.broke).toBe(false);
+      expect(big.winner).toBe("attacker");
+      expect(resolveBattle({ attacker: [warband(120)], defender: [peltasts(113)], seed, config: battle, mode: "attack" }).winner).toBe("defender");
+      // Raid mode is unchanged: the same fight as a raid is the defender's.
+      expect(resolveBattle({ attacker: [warband(460)], defender: [peltasts(113)], seed, config: battle, mode: "raid" }).winner).toBe("defender");
+    }
+  });
+
   it("raid: the attacker wins unbroken with more kills than losses in absolute men", () => {
     // 10 raiders kill 3 and lose 2 → win; kill 2 and lose 2 → defender.
     const cfg: BattleConfig = { ...exact, rounds: 1 };
