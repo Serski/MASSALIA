@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeAll, beforeEach } from "vitest";
 import { and, asc, eq, sql } from "drizzle-orm";
 import Fastify from "fastify";
-import { rateBounds, REACH_REASON, splitByShares } from "@massalia/shared";
+import { musterIsFight, rateBounds, REACH_REASON, splitByShares } from "@massalia/shared";
 
 // ---------------------------------------------------------------------------
 // The koinon's Raid muster (koinon prompt 3) — integration tests against a REAL
@@ -627,7 +627,7 @@ suite("Koinon muster (integration)", () => {
     const [a, b, c] = [await freshPlayer("Kallias", 100_000, 1), await freshPlayer("Nikias", 100_000, 2), await freshPlayer("Deon", 100_000, 3)];
     const k = await koinonOf("The Sacred Band", [a, b, c], uid(800));
     const musterId = await musterRow(k, a);
-    await setWarband(landRegion, 30);
+    await setWarband(landRegion, 60); // above half its full 100: not on alert (Military 6a)
     await pledgedMen(a, "hoplite", 40, musterId, 501);
     await pledgedMen(b, "peltast", 30, musterId, 502);
     await pledgedMen(c, "hoplite", 30, musterId, 503);
@@ -636,7 +636,7 @@ suite("Koinon muster (integration)", () => {
   }
 
   it("a land raid of three members: each owner's losses on his own rows, the pool down by the kills, the plunder split, every survivor bound for the gathering place", async () => {
-    // Against 30, 120 men meet 8 (a fourth of 30, rounded) and all 8 are slain on every seed; the army loses 0 to 4.
+    // Against 60, 120 men meet 15 (a fourth of 60) and all 15 are slain on every seed; the army loses 0 to 4.
     const { a, b, c, musterId } = await landRaid();
     const sent: Record<string, number> = { [a]: 40, [b]: 30, [c]: 50 };
     // Not due before its launch instant.
@@ -667,7 +667,7 @@ suite("Koinon muster (integration)", () => {
       expect((await logs(p, "battle_loss")).length).toBe(0);
       expect((await logs(p, "koinon_muster")).length).toBe(0);
     }
-    expect(await warbandOf(landRegion)).toBe(30);
+    expect(await warbandOf(landRegion)).toBe(60);
     // On the page a minute before the arrival: the army on the march, no muster open, no last muster; no second muster can be called.
     const onRoad = (await m.koinon.koinonView(await ctx(b), new Date(arrival(1).getTime() - MIN))).koinon!;
     expect(onRoad.muster).toBeNull();
@@ -722,9 +722,9 @@ suite("Koinon muster (integration)", () => {
     expect(report.lost).toBe(report.parts.reduce((n, p) => n + p.lost, 0));
 
     // The pool drops by the kills.
-    expect(report.defender).toEqual({ label: battle().npc.warband.label, start: 30, end: 30 - report.killed, turnout: 8 });
-    expect(report.killed).toBe(8);
-    expect(await warbandOf(landRegion)).toBe(30 - report.killed);
+    expect(report.defender).toEqual({ label: battle().npc.warband.label, start: 60, end: 60 - report.killed, turnout: 15 });
+    expect(report.killed).toBe(15);
+    expect(await warbandOf(landRegion)).toBe(60 - report.killed);
 
     // The plunder is act's total for those kills, the third good included, and the parts add up to it.
     const { good, label } = report.plunder!.spoil!;
@@ -777,19 +777,20 @@ suite("Koinon muster (integration)", () => {
     const { at, outcome } = await launchAndFight(musterId, LAUNCH);
     expect(outcome).toBe("resolved");
     const report = await reportOf();
-    expect(report.killed).toBe(8);
+    expect(report.killed).toBe(15);
     const intel = await db.select().from(regionIntel);
     expect(intel).toHaveLength(1);
-    expect(intel[0]).toMatchObject({ dynastyId: dynasty.id, regionId: landRegion, warband: 30 - report.killed, scoutedAt: at });
+    expect(intel[0]).toMatchObject({ dynastyId: dynasty.id, regionId: landRegion, warband: 60 - report.killed, scoutedAt: at });
   });
 
   it("the army meets the place as it stands when it arrives", async () => {
     const { musterId } = await landRaid();
     expect(await m.muster.resolveMuster(musterId, LAUNCH)).toEqual({ outcome: "marched" });
-    // The warband falls to 12 while the army is on the road (a pool regrows by whole days).
-    await setWarband(landRegion, 12);
+    // The warband is 75 when the army arrives, not the 60 it was at the launch
+    // (a pool regrows by whole days, and 75 is above half: not on alert).
+    await setWarband(landRegion, 75);
     expect(await m.muster.resolveMuster(musterId, arrival(1))).toEqual({ outcome: "resolved" });
-    expect((await reportOf()).defender).toMatchObject({ start: 12 });
+    expect((await reportOf()).defender).toMatchObject({ start: 75 });
   });
 
   // Holdings prompt 2: a muster is a raid, and a raid on a holding is refused.
@@ -825,7 +826,7 @@ suite("Koinon muster (integration)", () => {
     expect(await m.muster.resolveMuster(musterId, arrival(1))).toEqual({ outcome: "resolved" });
     const report = await reportOf();
     expect(report).toMatchObject({ outcome: "turned_back", heldBy: "another", line: `Found ${report.regionName} held by another house and turned back.`, men: 120, lost: 0, killed: 0, rounds: 0, defender: null, fleet: null, plunder: null, opinion: null, homeAt: homeAt(1).toISOString() });
-    expect(await warbandOf(landRegion)).toBe(30); // nothing was fought
+    expect(await warbandOf(landRegion)).toBe(60); // nothing was fought
     for (const p of [a, b, c]) {
       for (const r of await rowsOf(p)) expect(r).toMatchObject({ movingTo: massalia, arrivesAt: homeAt(1), mission: { kind: "raid", regionId: landRegion } });
     }
@@ -849,7 +850,7 @@ suite("Koinon muster (integration)", () => {
       expect((await logs(p, "koinon_muster")).length).toBe(0);
     }
     expect((await rowsOf(a))[0]!.count).toBe(40);
-    expect(await warbandOf(landRegion)).toBe(30);
+    expect(await warbandOf(landRegion)).toBe(60);
   });
 
   it("an army whose men all left on the road breaks up", async () => {
@@ -860,7 +861,7 @@ suite("Koinon muster (integration)", () => {
     expect(await m.muster.resolveMuster(musterId, arrival(1))).toEqual({ outcome: "resolved" });
     const report = await reportOf();
     expect(report).toMatchObject({ outcome: "dispersed", line: `The army sent to ${report.regionName} broke up on the road.`, men: 0, defender: null, plunder: null, homeAt: null, parts: [] });
-    expect(await warbandOf(landRegion)).toBe(30);
+    expect(await warbandOf(landRegion)).toBe(60);
     for (const p of [a, b, c]) {
       expect((await logs(p, "battle_loss")).length).toBe(0);
       expect((await logs(p, "koinon_muster")).length).toBe(0);
@@ -987,12 +988,13 @@ suite("Koinon muster (integration)", () => {
   });
 
   it("shares: 40 men carried on another member's two pentekonters are 40 shares each; by land the ship owner gets nothing", async () => {
-    // Against a garrison of 10, 3 (a fourth of 10, rounded) turn out at any
-    // walls, and 40 peltasts slay 2 or 3 of them on every seed.
+    // Against a garrison of 60, above half its full 100 (Military 6a), 15 (a
+    // fourth of 60) turn out behind walls 2, and 40 peltasts slay 4, 6 or 7 of
+    // them on every seed.
     const [soldier, shipowner] = [await freshPlayer("Kallias", 100_000, 1), await freshPlayer("Nikias", 100_000, 2)];
     const k = await koinonOf("The Sacred Band", [soldier, shipowner]);
     await geography(soldier);
-    await setTown(seaTown.townId, 10);
+    await setTown(seaTown.townId, 60);
     const bySea = await musterRow(k, soldier, { regionId: seaTown.regionId, townId: seaTown.townId });
     await pledgedMen(soldier, "peltast", 40, bySea, 501);
     await pledgedHulls(shipowner, bySea, "trade-ship", 2);
@@ -1000,8 +1002,8 @@ suite("Koinon muster (integration)", () => {
     expect((await launchAndFight(bySea, LAUNCH)).outcome).toBe("resolved");
     const report = await reportOf();
     expect(report).toMatchObject({ outcome: "won", route: "sea", steps: seaTown.steps, townId: seaTown.townId, arrivedAt: arrival(seaTown.steps).toISOString(), homeAt: homeAt(seaTown.steps).toISOString() });
-    expect(report.defender).toMatchObject({ start: 10, turnout: 3 });
-    expect([2, 3]).toContain(report.killed);
+    expect(report.defender).toMatchObject({ start: 60, turnout: 15 });
+    expect([4, 6, 7]).toContain(report.killed);
     expect(report.fleet).toEqual({ hulls: { "trade-ship": 2 }, naval: 2, space: 40, filled: 40, defender: null, held: true });
     const { good, label } = report.plunder!.spoil!;
     const mult = battle().raid.townPlunderMultiplier;
@@ -1030,13 +1032,14 @@ suite("Koinon muster (integration)", () => {
     // The launch took one naval supply per hull that sailed.
     expect(await stockOf(shipowner, "naval-supplies")).toBe(0);
     expect(((await musterOf(bySea)).march as { supplies: Record<string, number> }).supplies).toEqual({ [shipowner]: 2 });
-    expect(await garrisonOf(seaTown.townId)).toBe(10 - report.killed);
+    expect(await garrisonOf(seaTown.townId)).toBe(60 - report.killed);
     expect(await db.select().from(m.dbPkg.koinonMusterHulls)).toEqual([]);
 
     // By land no hull carries anyone: the ship owner has no part and no line.
-    // The warband of 10 has regrown to 40 by the launch a season on (30 of its
-    // full 100, strikes prompt 1); 10 (a fourth of 40) turn out.
-    await setWarband(landRegion, 10);
+    // The warband of 30 has regrown to 60 by the launch a season on (30 of its
+    // full 100, strikes prompt 1), above half; 10 to 15 (half to all of the 20
+    // sent, capped at a fourth of 60) turn out.
+    await setWarband(landRegion, 30);
     const byLand = await musterRow(k, soldier, { id: uid(901), launchAt: at(DAY) });
     await db.delete(m.dbPkg.playerUnits);
     await pledgedMen(soldier, "peltast", 20, byLand, 505);
@@ -1044,8 +1047,10 @@ suite("Koinon muster (integration)", () => {
     const before = await wallet(shipowner);
     expect((await launchAndFight(byLand, at(DAY))).outcome).toBe("resolved");
     const land = (await musters())[1]!.report as unknown as Report;
-    expect(land).toMatchObject({ outcome: "won", route: "land", fleet: null, defender: { start: 40, turnout: 10 } });
-    expect([3, 4, 5, 6]).toContain(land.killed);
+    expect(land).toMatchObject({ outcome: "won", route: "land", fleet: null, defender: { start: 60 } });
+    expect(land.defender!.turnout).toBeGreaterThanOrEqual(10);
+    expect(land.defender!.turnout).toBeLessThanOrEqual(15);
+    expect([3, 4, 5, 6, 7]).toContain(land.killed);
     expect(land.parts.map((p) => [p.playerId, p.shares, p.drachmae])).toEqual([[soldier, 20, land.plunder!.drachmae]]);
     expect(await wallet(shipowner)).toBe(before);
     expect((await logs(shipowner, "koinon_muster")).length).toBe(1);
@@ -1061,8 +1066,7 @@ suite("Koinon muster (integration)", () => {
     // A crossing longer than a trireme's range and within a pentekonter's.
     const far = view.targets.find((t) => t.route === "sea" && t.steps > 4)!;
     expect(far, "a sea target beyond a trireme's range").toBeTruthy();
-    if (far.townId) await setTown(far.townId, 2);
-    else await setWarband(far.regionId, 2);
+    // Its pool stays at its content strength: above half, not on alert (Military 6a).
     const musterId = await musterRow(k, soldier, { regionId: far.regionId, townId: far.townId });
     await pledgedMen(soldier, "hoplite", 20, musterId, 501);
     // The trireme was pledged first; three pentekonters are pledged, two since sold.
@@ -1088,7 +1092,7 @@ suite("Koinon muster (integration)", () => {
     const [soldier, shipowner] = [await freshPlayer("Kallias", 100_000, 1), await freshPlayer("Nikias", 100_000, 2)];
     const k = await koinonOf("The Sacred Band", [soldier, shipowner]);
     await geography(soldier);
-    await setTown(seaTown.townId, 50, 3, 2);
+    await setTown(seaTown.townId, 60, 3, 2); // above half its full 100
     const short = await musterRow(k, soldier, { regionId: seaTown.regionId, townId: seaTown.townId });
     const row = await pledgedMen(soldier, "hoplite", 30, short, 501);
     await pledgedHulls(shipowner, short, "trade-ship", 1);
@@ -1118,7 +1122,7 @@ suite("Koinon muster (integration)", () => {
     // No battle: the men are whole and bound home by the same road, the garrison untouched, nothing paid.
     const home = homeAt(seaTown.steps, at(4 * HOUR));
     expect(await unitRow(row)).toMatchObject({ count: 30, movingTo: massalia, arrivesAt: home, mission: { kind: "raid", townId: seaTown.townId } });
-    expect(await garrisonOf(seaTown.townId)).toBe(50);
+    expect(await garrisonOf(seaTown.townId)).toBe(60);
     expect([await wallet(soldier), await wallet(shipowner)]).toEqual(wallets);
     expect((await logs(soldier, "battle_loss")).length).toBe(0);
     expect((await logs(soldier, "koinon_muster"))[0]!.detail).toMatchObject({ chronicle: { winner: "repulsed", killed: 0, lost: 0, share: null, hulls: 0 } });
@@ -1243,7 +1247,7 @@ suite("Koinon muster (integration)", () => {
     await men(x, "hoplite", 5);
     const target = await landTargetFrom(a);
     const musterId = await musterRow(k, a, { ...target, gatherId: landRegion, gatherRegionId: landRegion });
-    await setTown(target.townId, 10);
+    await setTown(target.townId, 120); // above half its full 200 (Military 6a)
     await pledgedThere(a, "hoplite", 60, musterId, 501, target);
     await pledgedThere(b, "peltast", 40, musterId, 502, target);
 
@@ -1285,7 +1289,7 @@ suite("Koinon muster (integration)", () => {
     await db.insert(m.dbPkg.playerHoldings).values(holdingAt(landRegion, "", x, at(-2 * DAY)));
     await men(x, "hoplite", 5);
     const target = await landTargetFrom(a);
-    await setTown(target.townId, 10);
+    await setTown(target.townId, 120); // above half its full 200 (Military 6a)
     const musterId = await musterRow(k, a, { ...target, gatherId: landRegion, gatherRegionId: landRegion });
     const aRow = await pledgedThere(a, "hoplite", 60, musterId, 501, target);
     const bRow = await pledgedThere(b, "peltast", 40, musterId, 502, target);
@@ -1299,7 +1303,7 @@ suite("Koinon muster (integration)", () => {
     expect(m.muster.GATHER_LOST).toBe("The gathering place is no longer Massalia's.");
     expect((await musters())[0]).toMatchObject({ status: "stood_down", closedAt: LAUNCH, report: { outcome: "stood_down", reason: "The gathering place is no longer Massalia's.", gatherId: landRegion } });
     for (const row of [aRow, bRow]) expect(await unitRow(row)).toMatchObject({ basedAt: landRegion, movingTo: null, mission: null });
-    expect(await garrisonOf(target.townId)).toBe(10);
+    expect(await garrisonOf(target.townId)).toBe(120);
 
     // Each owner's next settle turns his men home, with a move's time from there and no ships.
     const turned = at(2 * HOUR + MIN);
@@ -1327,7 +1331,7 @@ suite("Koinon muster (integration)", () => {
     await db.insert(m.dbPkg.playerHoldings).values(holdingAt(landRegion, "", x, at(-DAY + 2 * HOUR + 45 * MIN)));
     await men(x, "hoplite", 5);
     const target = await landTargetFrom(a);
-    await setTown(target.townId, 10);
+    await setTown(target.townId, 120); // above half its full 200 (Military 6a)
     const musterId = await musterRow(k, a, { ...target, gatherId: landRegion, gatherRegionId: landRegion });
     await pledgedThere(a, "hoplite", 60, musterId, 501, target);
     await pledgedThere(b, "peltast", 40, musterId, 502, target);
@@ -1352,7 +1356,7 @@ suite("Koinon muster (integration)", () => {
     const [leader, broke, expelled] = [await freshPlayer("Kallias", 100_000, 1), await freshPlayer("Nikias", 0, 2), await freshPlayer("Deon", 100_000, 3)];
     const k = await koinonOf("The Sacred Band", [leader, broke, expelled]);
     const musterId = await musterRow(k, leader);
-    await setWarband(landRegion, 5);
+    await setWarband(landRegion, 60);
     await pledgedMen(leader, "hoplite", 40, musterId, 501);
     // Raised 23 hours before the pledge: a whole day of upkeep falls due by the launch, and he cannot pay it.
     const unpaid = await pledgedMen(broke, "hoplite", 20, musterId, 502, { createdAt: at(-23 * HOUR) });
@@ -1428,7 +1432,7 @@ suite("Koinon muster (integration)", () => {
     for (let run = 0; run < 10; run++) {
       const [a, b] = [await freshPlayer(`A${run}`), await freshPlayer(`B${run}`)];
       const k = await koinonOf(`Band ${run}`, [a, b]);
-      await setWarband(landRegion, 4);
+      await setWarband(landRegion, 60);
       const musterId = await musterRow(k, a, { id: uid(950 + run) });
       await pledgedMen(a, "hoplite", 30, musterId, 600 + run * 2);
       await pledgedMen(b, "hoplite", 30, musterId, 601 + run * 2);
@@ -1448,7 +1452,7 @@ suite("Koinon muster (integration)", () => {
         expect(await grain(p.playerId)).toBe(p.grain);
         expect((await logs(p.playerId, "koinon_muster")).length).toBe(1);
       }
-      expect(await warbandOf(landRegion)).toBe(4 - report.killed);
+      expect(await warbandOf(landRegion)).toBe(60 - report.killed);
     }
   });
 
@@ -1550,7 +1554,7 @@ suite("Koinon muster (integration)", () => {
   it("the hook with its own resolver: /api and /me each resolve a due muster before the handler", async () => {
     const [leader, member] = [await freshPlayer("Kallias"), await freshPlayer("Nikias")];
     const k = await koinonOf("The Sacred Band", [leader, member]);
-    await setWarband(landRegion, 3);
+    await setWarband(landRegion, 60);
     const app = Fastify();
     let clock = at(3 * HOUR);
     m.muster.registerCampaignResolver(app, { now: () => clock });
@@ -1630,5 +1634,59 @@ suite("Koinon muster (integration)", () => {
     };
     await m.muster.resolveDueCampaigns(LAUNCH, { resolve: record, resolveMarch: record });
     expect(calls).toEqual([marching, arriving, launching]);
+  });
+
+  // --- the alert (Military 6a, ruling 2): a place on alert takes no raid, a koinon's as a house's ---
+
+  it("a place on alert is no muster target: the open is refused with its line and the targets list leaves it out; one man above half it is listed and opened", async () => {
+    const a = await freshPlayer("Kallias", 100_000, 1);
+    await koinonOf("The Sacred Band", [a]);
+    const listed = async () => (await targetsFrom(a, massalia)).targets.some((t) => t.regionId === landRegion && t.townId === null);
+    const name = (await targetsFrom(a, massalia)).targets.find((t) => t.regionId === landRegion && t.townId === null)!.name;
+    await setWarband(landRegion, 50); // half its full 100
+    expect(await open(a)).toEqual({ ok: false, code: 409, error: `${name} is on alert, the herds are driven into the hills.` });
+    expect(await listed()).toBe(false);
+    expect(await musters()).toEqual([]);
+    await setWarband(landRegion, 51);
+    expect(await listed()).toBe(true);
+    expect(await open(a)).toMatchObject({ ok: true });
+  });
+
+  it("a muster that launches into an alert stands down with the alert's line: its rows are free at once, nothing sails and no supplies are spent", async () => {
+    const [soldier, shipowner] = [await freshPlayer("Kallias", 100_000, 1), await freshPlayer("Nikias", 100_000, 2)];
+    const k = await koinonOf("The Sacred Band", [soldier, shipowner]);
+    const view = await geography(soldier);
+    const name = view.targets.find((t) => t.townId === seaTown.townId)!.name;
+    await setTown(seaTown.townId, 60); // above half its full 100 when it is opened
+    const musterId = await musterRow(k, soldier, { regionId: seaTown.regionId, townId: seaTown.townId });
+    const row = await pledgedMen(soldier, "peltast", 40, musterId, 501);
+    await pledgedHulls(shipowner, musterId, "trade-ship", 2);
+    const supplyGood = m.barracks.getShipsContent().supplyGood;
+    const supplies = await stockOf(shipowner, supplyGood);
+    // Raided down to half before the launch.
+    await db.update(m.dbPkg.townMilitary).set({ garrison: 50 }).where(and(eq(m.dbPkg.townMilitary.worldId, worldId), eq(m.dbPkg.townMilitary.townId, seaTown.townId)));
+    expect(await m.muster.resolveMuster(musterId, LAUNCH)).toEqual({ outcome: "stood_down" });
+    expect((await musters())[0]).toMatchObject({ status: "stood_down", closedAt: LAUNCH, report: { outcome: "stood_down", reason: `${name} is on alert, gates are shut.`, line: null } });
+    expect(await unitRow(row)).toMatchObject({ count: 40, mission: null, movingTo: null, arrivesAt: null });
+    expect(await db.select().from(m.dbPkg.koinonMusterHulls)).toEqual([]);
+    expect(await stockOf(shipowner, "trade-ship")).toBe(2);
+    expect(await stockOf(shipowner, supplyGood)).toBe(supplies);
+    expect(await voyagesOf(shipowner)).toEqual([]);
+    expect(await garrisonOf(seaTown.townId)).toBe(50);
+  });
+
+  it("an army on the march when the alert falls turns back at arrival with the alert's line, fights nothing, and is no fight for the strikes' count", async () => {
+    const { a, b, c, musterId } = await landRaid(); // 60 of 100 at the launch
+    expect(await m.muster.resolveMuster(musterId, LAUNCH)).toEqual({ outcome: "marched" });
+    await setWarband(landRegion, 50); // raided to half while the army is on the road
+    expect(await m.muster.resolveMuster(musterId, arrival(1))).toEqual({ outcome: "resolved" });
+    const report = await reportOf();
+    expect(report).toMatchObject({ outcome: "turned_back", alert: true, men: 120, lost: 0, killed: 0, rounds: 0, defender: null, fleet: null, plunder: null, opinion: null, homeAt: homeAt(1).toISOString() });
+    expect(report.line).toBe(`${report.regionName} is on alert, the herds are driven into the hills.`);
+    expect("heldBy" in report).toBe(false);
+    expect(await warbandOf(landRegion)).toBe(50);
+    for (const p of [a, b, c]) for (const r of await rowsOf(p)) expect(r).toMatchObject({ movingTo: massalia, arrivesAt: homeAt(1) });
+    for (const p of [a, b, c]) expect(await logs(p, "koinon_muster")).toEqual([]);
+    expect(musterIsFight(report.outcome)).toBe(false);
   });
 });

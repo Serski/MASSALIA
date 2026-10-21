@@ -1,3 +1,4 @@
+import { alertLine } from "./alert.js";
 import { campaignSeason, seasonIndexAt } from "./buildings.js";
 import { renderForce, renderPlunder, type CampaignForcePart, type PlunderPayload } from "./chronicle.js";
 import type { KoinonContent } from "./koinon.js";
@@ -144,10 +145,12 @@ export function renderMusterLine(p: MusterChronicle): string {
 // "turned_back": the army found the place held when it arrived, by one of its
 // own houses (`heldBy` "ours", the default an old report reads) or by another
 // house (holdings prompt 2); "dispersed": its men all left the roster on the
-// road (raids prompt 5).
-export type MusterReportLine = { regionId: string; regionName?: string; townId?: string | null; townName?: string | null; outcome: "won" | "driven_off" | "repulsed" | "turned_back" | "dispersed"; heldBy?: "ours" | "another"; men: number; killed: number; lost: number; plunder: PlunderPayload | null };
+// road (raids prompt 5). An army that found the place on alert (`alert`,
+// Military 6a) turns back with the alert's own line.
+export type MusterReportLine = { regionId: string; regionName?: string; townId?: string | null; townName?: string | null; outcome: "won" | "driven_off" | "repulsed" | "turned_back" | "dispersed"; heldBy?: "ours" | "another"; alert?: boolean; men: number; killed: number; lost: number; plunder: PlunderPayload | null };
 export function renderMusterReportLine(p: MusterReportLine): string {
   const place = p.townName ?? p.regionName ?? p.regionId;
+  if (p.outcome === "turned_back" && p.alert) return alertLine(place, p.townId !== undefined && p.townId !== null ? "town" : "land");
   if (p.outcome === "turned_back") return p.heldBy === "another" ? `Found ${place} held by another house and turned back.` : `Found ${place} held by one of our own and turned back.`;
   if (p.outcome === "dispersed") return `The army sent to ${place} broke up on the road.`;
   if (p.outcome === "repulsed") return `Sailed against ${place} and were driven off by its fleet before landing.`;

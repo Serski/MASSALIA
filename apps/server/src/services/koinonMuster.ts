@@ -43,6 +43,7 @@ import { creditDrachmae, creditGood, holderOf, listHoldings, listWorldHoldings }
 import { getKoinonContent, inOwnKoinon, lockKoinon, memberRow, type KoinonError, type KoinonRole, type KoinonRow } from "./koinon.js";
 import { lockPlayer } from "./lock.js";
 import { describeForce, resolveMarch, selectForce, spoilLabel, splitRows, writeIntel } from "./mapActions.js";
+import { placeAlertLine, placeOnAlert, placesOnAlert } from "./mapAlert.js";
 import { getTopology } from "./mapGraph.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
 import { raidOpinion, raidWarMultiplier, type RaidOpinion } from "./factionOpinion.js";
@@ -214,6 +215,8 @@ export async function openMuster(ctx: ActingContext, input: OpenMusterInput, now
   if (!gather) return fail(400, "Choose a gathering place on Massalia's own ground.");
   const target = await musterTarget(input, ctx);
   if ("ok" in target) return target;
+  // A place on alert takes no raid, a koinon's as a house's (Military 6a, ruling 2).
+  if (await placeOnAlert(db, ctx.worldId, target, now)) return fail(409, await placeAlertLine(target));
   const launch = musterLaunch(now.getTime(), input.leadMinutes, ctx.worldStartedMs, c);
   if (!launch.ok) {
     return launch.reason === "winter"
@@ -404,11 +407,14 @@ export async function musterTargets(ctx: ActingContext, gatherId: unknown, now: 
   const topology = getTopology();
   const home = await homeRegions(topology);
   const from = distancesFrom(topology, gather.regionId);
-  // A place any house holds is no target (holdings prompt 2): the call would refuse it.
+  // A place any house holds is no target (holdings prompt 2), nor one on alert
+  // (Military 6a, ruling 2): the call would refuse it.
   const heldPlaces = new Set((await listWorldHoldings(db, ctx.worldId)).map((h) => h.townId || h.regionId));
+  const alerted = await placesOnAlert(db, ctx.worldId, now);
+  const onAlertPlaces = new Set([...alerted.towns, ...alerted.regions]);
   const targets: MusterTargetView[] = [];
   const consider = async (regionId: string, townId: string | null) => {
-    if (heldPlaces.has(townId ?? regionId)) return;
+    if (heldPlaces.has(townId ?? regionId) || onAlertPlaces.has(townId ?? regionId)) return;
     const steps = stepsTo(topology, from, regionId);
     if (!reachableInPrinciple(steps)) return;
     const route = routeFor("raid", steps);
@@ -661,6 +667,8 @@ export type MusterReport = {
   // roster on the road (raids prompt 5).
   outcome: "won" | "driven_off" | "repulsed" | "stood_down" | "turned_back" | "dispersed";
   heldBy?: "ours" | "another";
+  // Set when the army turned back because the place was on alert at its arrival (Military 6a).
+  alert?: true;
   reason: string | null;
   line: string | null;
   regionId: string;
@@ -858,6 +866,13 @@ async function launchMuster(tx: DbTx, due: MusterRow, now: Date): Promise<Resolv
   // owner's next settle turns his men there home (holdings prompt 3, rule 4).
   if (!(await everyHousePlaces(tx, muster.worldId)).some((p) => p.id === muster.gatherId)) return standDown(GATHER_LOST);
 
+  // 6c. A target on alert at the launch (Military 6a, ruling 2) takes no raid:
+  // the muster stands down with the alert's line, nothing sails and no
+  // supplies are spent. A held target is left to the arrival, which turns the
+  // army back for being held.
+  const target = { regionId: muster.regionId, townId: muster.townId };
+  if ((await holderOf(tx, muster.worldId, muster.regionId, muster.townId ?? "")) === null && (await placeOnAlert(tx, muster.worldId, target, launchAt))) return standDown(await placeAlertLine(target));
+
   // 7. No men.
   if (army.length === 0 || force.men === 0) return standDown(REACH_REASON.noMen);
 
@@ -1003,6 +1018,7 @@ async function arriveMuster(tx: DbTx, due: MusterRow, now: Date): Promise<Resolv
   let spoilOf: Record<string, number> = {};
   let outcome: MusterReport["outcome"];
   let heldBy: MusterReport["heldBy"];
+  let alerted = false;
   let killed = 0;
   let rounds = 0;
   let defender: MusterReport["defender"] = null;
@@ -1025,6 +1041,11 @@ async function arriveMuster(tx: DbTx, due: MusterRow, now: Date): Promise<Resolv
     // holding is refused.
     outcome = "turned_back";
     heldBy = participantIds.includes(holder) ? "ours" : "another";
+  } else if (await placeOnAlert(tx, muster.worldId, { regionId: muster.regionId, townId: muster.townId }, at)) {
+    // 6b. The place is on alert at the arrival (Military 6a, ruling 2): the army
+    // turns back whole with the alert's line, and nothing is fought.
+    outcome = "turned_back";
+    alerted = true;
   } else {
     // 7. By sea against a town: the pooled naval power must match its fleet as
     // it stands at the arrival (ruling 3); with less, the landing is repulsed.
@@ -1153,8 +1174,9 @@ async function arriveMuster(tx: DbTx, due: MusterRow, now: Date): Promise<Resolv
     ...blank,
     outcome,
     ...(heldBy ? { heldBy } : {}),
+    ...(alerted ? { alert: true as const } : {}),
     reason: null,
-    line: renderMusterReportLine({ ...place, outcome, heldBy, men: force.men, killed, lost, plunder }),
+    line: renderMusterReportLine({ ...place, outcome, heldBy, alert: alerted, men: force.men, killed, lost, plunder }),
     homeAt: home.length > 0 ? homeAt.toISOString() : null,
     rounds,
     men: force.men,
