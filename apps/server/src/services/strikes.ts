@@ -225,7 +225,7 @@ async function callMarch(input: CallInput): Promise<string | null> {
     if (trigger === "war") {
       const land = await nationLand(tx, world, nation, held, at);
       const regions = land.map((p) => p.regionId);
-      options = warTargets(topology, homes, holdings, land).map((t) => ({ ...t, ...warForce(topology, t, land, c.forceShare), steps: landStepsBetween(topology, regions, t.regionId) }));
+      options = warTargets(topology, homes, holdings, land).map((t) => ({ ...t, ...warForce(topology, t, land, c.forceShare, getBattleContent().alert.share), steps: landStepsBetween(topology, regions, t.regionId) }));
     } else {
       const raided = input.raided!;
       const sent = raidsForce(raided);

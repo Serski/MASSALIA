@@ -140,6 +140,15 @@ suite("the strikes (integration)", () => {
     expect((await strikeRows()).map((r) => [r.seasonIndex, r.calledAt.getTime() === at(r.seasonIndex).getTime(), r.status])).toEqual([[9, true, "struck"], [11, true, "struck"]]);
   });
 
+  // Military 6a, ruling 3: a war march leaves a place on alert out of its draws.
+  it("a war march draws nobody from a place of the nation's on alert: Nemausus at 80 of 200 stays home, and Tolosa sends a fifth of its men", async () => {
+    await war("volcae", at(8), at(16));
+    await m.mapPools.writeTownGarrison(db, worldId, "nemausus", 80, at(9));
+    await pass(plus(at(9), MIN));
+    const [s] = await strikeRows();
+    expect(s).toMatchObject({ nationId: "volcae", trigger: "war", townId: "agathe", force: 460, about: 460, draws: [{ placeId: "tolosa", kind: "town", men: 460 }] });
+  });
+
   it("one march per nation at a time: a war march held up by a raids march is called when the road clears, within the season", async () => {
     // A war begins at a season's start (the vote closes then) with a raids march on the road.
     await war("volcae", at(10), at(16));

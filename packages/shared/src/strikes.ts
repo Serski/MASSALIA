@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { onAlert } from "./alert.js";
 import { seasonAt, seasonIndexAt } from "./buildings.js";
 import { REAL_MS_PER_SEASON } from "./calendar.js";
 import type { FactionDef } from "./league.js";
@@ -117,10 +118,12 @@ export function apportion(total: number, weights: readonly number[]): number[] {
 // A war march's force on a target (ruling 6): a fifth of the men in its towns
 // and lands next to the target, drawn from each in proportion; against a place
 // taken from it, at least that place's full strength (the men beyond the
-// draws come from no pool, and their dead come off none).
-export function warForce(t: Topology, target: Pick<StrikeTarget, "regionId" | "takenFrom" | "full">, land: readonly NationPlace[], share: number): { force: number; draws: StrikeDrawView[] } {
+// draws come from no pool, and their dead come off none). Each place counts
+// no more than its full strength, and a place on alert at `alertShare` sends
+// nobody (Military 6a, ruling 3).
+export function warForce(t: Topology, target: Pick<StrikeTarget, "regionId" | "takenFrom" | "full">, land: readonly NationPlace[], share: number, alertShare: number): { force: number; draws: StrikeDrawView[] } {
   const near = nearRegions(t, target.regionId);
-  const from = land.filter((p) => near.has(p.regionId) && p.men > 0);
+  const from = land.map((p) => ({ ...p, men: Math.min(p.men, p.full) })).filter((p) => near.has(p.regionId) && p.men > 0 && !onAlert(p.men, p.full, alertShare));
   const total = from.reduce((n, p) => n + p.men, 0);
   const drawn = Math.floor(total * share);
   const split = apportion(drawn, from.map((p) => p.men));

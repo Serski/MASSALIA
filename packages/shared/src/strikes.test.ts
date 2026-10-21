@@ -44,6 +44,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const read = (rel: string) => JSON.parse(readFileSync(resolve(root, rel), "utf8"));
 const t = buildTopology(parseMapGraph(read("content/map/graph.json")), parseCoastLinks(read("content/map/coast-links.json")));
 const c = parseStrikesContent(read("content/military/strikes.json"));
+const ALERT = (read("content/military/battle.json") as { alert: { share: number } }).alert.share;
 const towns = read("content/map/town-military.json").towns as Record<string, { owner: string; garrison: number }>;
 const regions = read("content/map/region-military.json").regions as Record<string, { owner: string; warband: number }>;
 const LEAGUE_TOWNS = (read("content/military/league-army.json").towns as { townId: string }[]).map((x) => x.townId);
@@ -99,15 +100,25 @@ describe("the targets", () => {
 describe("the force", () => {
   it("a war march: a fifth of the men in its towns and lands next to the target, drawn in proportion", () => {
     const volcae = landOf("volcae");
-    expect(warForce(t, home("agathe", 100), volcae, c.forceShare)).toEqual({ force: 500, draws: [{ placeId: "nemausus", kind: "town", men: 40 }, { placeId: "tolosa", kind: "town", men: 460 }] });
-    expect(warForce(t, home("arelate", 100), volcae, c.forceShare)).toEqual({ force: 40, draws: [{ placeId: "nemausus", kind: "town", men: 40 }] });
-    // As they stand: Nemausus at 67.
-    expect(warForce(t, home("agathe", 100), landOf("volcae", { nemausus: 67 }), c.forceShare).force).toBe(473);
+    expect(warForce(t, home("agathe", 100), volcae, c.forceShare, ALERT)).toEqual({ force: 500, draws: [{ placeId: "nemausus", kind: "town", men: 40 }, { placeId: "tolosa", kind: "town", men: 460 }] });
+    expect(warForce(t, home("arelate", 100), volcae, c.forceShare, ALERT)).toEqual({ force: 40, draws: [{ placeId: "nemausus", kind: "town", men: 40 }] });
+    // As they stand: Nemausus at 101 of 200, above half.
+    expect(warForce(t, home("agathe", 100), landOf("volcae", { nemausus: 101 }), c.forceShare, ALERT).force).toBe(480);
+  });
+  it("a war march draws nobody from a place on alert, and no more than full from any (Military 6a, ruling 3)", () => {
+    // Nemausus at 67 of 200 is on alert: Tolosa alone sends a fifth of its 2,300.
+    expect(warForce(t, home("agathe", 100), landOf("volcae", { nemausus: 67 }), c.forceShare, ALERT)).toEqual({ force: 460, draws: [{ placeId: "tolosa", kind: "town", men: 460 }] });
+    expect(warForce(t, home("agathe", 100), landOf("volcae", { nemausus: 100 }), c.forceShare, ALERT).draws.map((d) => d.placeId)).toEqual(["tolosa"]);
+    // Tolosa above its full strength counts as full.
+    expect(warForce(t, home("agathe", 100), landOf("volcae", { tolosa: 9000 }), c.forceShare, ALERT)).toEqual({ force: 500, draws: [{ placeId: "nemausus", kind: "town", men: 40 }, { placeId: "tolosa", kind: "town", men: 460 }] });
+    // Every place next to the target on alert: no men; against a place taken from it, its full strength as before, from no pool.
+    expect(warForce(t, home("agathe", 100), landOf("volcae", { nemausus: 10, tolosa: 1000 }), c.forceShare, ALERT)).toEqual({ force: 0, draws: [] });
+    expect(warForce(t, { regionId: "R050", takenFrom: true, full: 100 }, landOf("volcae", { nemausus: 10, tolosa: 1000 }), c.forceShare, ALERT)).toEqual({ force: 100, draws: [] });
   });
   it("against a place taken from it, at least that place's full strength", () => {
-    expect(warForce(t, holding("aleria", 5, true), landOf("volcae"), c.forceShare)).toMatchObject({ force: towns.aleria!.garrison, draws: [] });
+    expect(warForce(t, holding("aleria", 5, true), landOf("volcae"), c.forceShare, ALERT)).toMatchObject({ force: towns.aleria!.garrison, draws: [] });
     // Taken from them and next to their land: the larger of the two.
-    expect(warForce(t, { regionId: "R050", takenFrom: true, full: 10 }, landOf("volcae"), c.forceShare).force).toBe(500);
+    expect(warForce(t, { regionId: "R050", takenFrom: true, full: 10 }, landOf("volcae"), c.forceShare, ALERT).force).toBe(500);
   });
   it("a raids march: what the raided place has at the call, never more than its full strength, all drawn from it (Military 6a, ruling 3)", () => {
     const r057 = landOf("sordones").find((p) => p.placeId === "R057")!;
