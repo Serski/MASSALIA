@@ -917,13 +917,14 @@ suite("Koinon muster (integration)", () => {
   });
 
   it("the altar: a member's bull lit before the arrival steadies his own rows and nobody else's; a blessing cold at the arrival or lit after it counts for nothing", async () => {
-    // Two members, 60 hoplites each, against a warband of 33000, of which the
-    // floor (660, one in fifty) turns out: on every seed the cold owner loses
-    // 27 to 30 men and the blessed one 24 to 26.
+    // Two members, 60 hoplites each, against a warband of 17000, of which the
+    // floor (340, one in fifty) turns out: on every seed the cold owner loses
+    // 25 to 29 men and the blessed one 22 to 24 (two rounds, Military 6a,
+    // checked on 2000 seeds).
     const [a, b] = [await freshPlayer("Kallias", 100_000, 1), await freshPlayer("Nikias", 100_000, 2)];
     const k = await koinonOf("The Sacred Band", [a, b], uid(800));
     const musterId = await musterRow(k, a);
-    await setWarband(landRegion, 33000);
+    await setWarband(landRegion, 17000);
     await pledgedMen(a, "hoplite", 60, musterId, 501);
     await pledgedMen(b, "hoplite", 60, musterId, 502);
     // Kallias burns a bull an hour before the launch: lit until two days on, through the arrival.
@@ -936,8 +937,8 @@ suite("Koinon muster (integration)", () => {
     const part = (id: string) => report.parts.find((p) => p.playerId === id)!;
     expect(part(a).men).toBe(60);
     expect(part(b).men).toBe(60);
-    expect(part(b).lost).toBeGreaterThanOrEqual(27);
-    expect(part(a).lost).toBeLessThanOrEqual(26);
+    expect(part(b).lost).toBeGreaterThanOrEqual(25);
+    expect(part(a).lost).toBeLessThanOrEqual(24);
     expect(part(a).lost).toBeGreaterThan(0);
 
     // Through altarBonusFor at the arrival instant: Kallias's bull counts; a bull
@@ -1044,7 +1045,7 @@ suite("Koinon muster (integration)", () => {
     expect((await launchAndFight(byLand, at(DAY))).outcome).toBe("resolved");
     const land = (await musters())[1]!.report as unknown as Report;
     expect(land).toMatchObject({ outcome: "won", route: "land", fleet: null, defender: { start: 40, turnout: 10 } });
-    expect([2, 3, 4]).toContain(land.killed);
+    expect([3, 4, 5, 6]).toContain(land.killed);
     expect(land.parts.map((p) => [p.playerId, p.shares, p.drachmae])).toEqual([[soldier, 20, land.plunder!.drachmae]]);
     expect(await wallet(shipowner)).toBe(before);
     expect((await logs(shipowner, "koinon_muster")).length).toBe(1);

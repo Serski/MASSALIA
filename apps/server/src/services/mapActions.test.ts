@@ -415,7 +415,8 @@ suite("Map actions (integration)", () => {
   // The raids prompts: a raid meets half to all of the men it sends, between
   // one in fifty and one in four of the pool, so a small party can win against
   // a full warband, and sending too few still costs men. Each count below holds
-  // on every seed (checked on 3000 random seeds).
+  // on every seed (checked on 3000 random seeds; at two rounds, Military 6a, on
+  // 4000).
   it("a small party raids a full warband: 20 peltasts meet 10 to 20 of 100 and win", async () => {
     const { ctx, characterId } = await makePlayer({ drachmae: 100 });
     await setWarband("R046", 100, at(9));
@@ -428,7 +429,7 @@ suite("Map actions (integration)", () => {
     expect(r.report.defender!.turnout).toBeGreaterThanOrEqual(10);
     expect(r.report.defender!.turnout).toBeLessThanOrEqual(20);
     const killed = r.report.defender!.losses;
-    expect([2, 3, 4, 5]).toContain(killed);
+    expect([3, 4, 5, 6, 7, 8]).toContain(killed);
     expect([0, 1]).toContain(r.report.attacker.losses);
     expect(await warband("R046")).toBe(100 - killed);
     expectRolledPlunder(r.report.plunder!, killed, 1);
@@ -447,8 +448,9 @@ suite("Map actions (integration)", () => {
     expect(r.report.defender).toMatchObject({ start: 100 });
     expect(r.report.defender!.turnout).toBeGreaterThanOrEqual(15);
     expect(r.report.defender!.turnout).toBeLessThanOrEqual(25); // half to all of 30, capped at a fourth of 100
-    expect([4, 5]).toContain(r.report.defender!.losses);
-    expect([0, 1, 2, 3]).toContain(r.report.attacker.losses);
+    // 4 or 5 when the turnout breaks in the first round, 8 to 10 when it stands into the second.
+    expect([4, 5, 8, 9, 10]).toContain(r.report.defender!.losses);
+    expect([0, 1, 2, 3, 4, 5]).toContain(r.report.attacker.losses);
     await recordChronicle(characterId);
   });
 
@@ -466,27 +468,30 @@ suite("Map actions (integration)", () => {
     expect(r).toMatchObject({ ok: true });
     if (!r.ok) return;
     const killed = r.report.defender!.losses;
-    expect([4, 5]).toContain(killed);
+    expect([4, 5, 8, 9, 10]).toContain(killed);
     expect(r.report.intel).toMatchObject({ warband: 100 - killed });
     expect(await regionIntelOf(a.dynastyId, "R046")).toMatchObject({ warband: 100 - killed, scoutedAt: fought(at(9.5), 30) });
     expect(await regionIntelOf(b.dynastyId, "R046")).toMatchObject({ warband: 100, scoutedAt: fought(at(9), 30) });
   });
 
-  it("too few for the tribe: 20 peltasts meet the 120 of 6000 the floor sends, are driven off and take nothing", async () => {
+  it("too few for the tribe: 20 peltasts meet the 200 of 10000 the floor sends, are driven off and take nothing", async () => {
     const { ctx, characterId } = await makePlayer({ drachmae: 100 });
-    await setWarband("R046", 6000, at(9)); // above the content 100: read back as written; one in fifty is 120
+    // Above the content 100: read back as written; one in fifty is 200. Their
+    // first-round volley costs the peltasts 5 of 20 and they break, so the
+    // second round never comes.
+    await setWarband("R046", 10000, at(9));
     const peltasts = await insertRow(ctx, { unitId: "peltast", count: 20 });
     const r = await act(ctx, "raid", "R046", [peltasts.id]);
     expect(r).toMatchObject({ ok: true });
     if (!r.ok) return;
     expect(r.report.winner).toBe("defender");
-    expect(r.report.defender).toMatchObject({ start: 6000, turnout: 120 });
+    expect(r.report.defender).toMatchObject({ start: 10000, turnout: 200 });
     const killed = r.report.defender!.losses;
     expect([2, 3]).toContain(killed);
-    expect(r.report.attacker.losses).toBe(3);
+    expect(r.report.attacker.losses).toBe(5);
     expect(r.report.plunder).toBeNull();
     expect(await wallet(ctx)).toBe(100);
-    expect(await warband("R046")).toBe(6000 - killed);
+    expect(await warband("R046")).toBe(10000 - killed);
     expect(r.report.line).toMatch(/^Raided Salyes with 20 peltasts and were driven off: /);
     await recordChronicle(characterId);
   });

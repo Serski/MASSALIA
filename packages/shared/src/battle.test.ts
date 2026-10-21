@@ -23,7 +23,7 @@ describe("battle content", () => {
   it("parses the real file and rejects an unknown key", () => {
     expect(battle.rounds).toBe(3);
     expect(battle.npc.warband.stats.spd).toBe(6);
-    expect(battle.raid).toEqual({ rounds: 1, turnout: { floorOneIn: 50, capOneIn: 4 }, plunderPerKill: { min: 20, max: 30 }, grainPerKill: { min: 1, max: 3 }, spoilPerKill: { min: 1, max: 3 }, spoilGoods: ["oliveoil", "leather", "salt", "wool"], townPlunderMultiplier: 2, opinion: { chance: 0.33, loss: 1 } });
+    expect(battle.raid).toEqual({ rounds: 2, turnout: { floorOneIn: 50, capOneIn: 4 }, plunderPerKill: { min: 20, max: 30 }, grainPerKill: { min: 1, max: 3 }, spoilPerKill: { min: 1, max: 3 }, spoilGoods: ["oliveoil", "leather", "salt", "wool"], townPlunderMultiplier: 2, opinion: { chance: 0.33, loss: 1 } });
     // 3c: towns, tribute, region tribute and moves.
     expect(battle.regen).toEqual({ warbandShare: 0.3, garrisonShare: 0.3 });
     expect(battle.town).toEqual({ wallsDefCap: 3 });

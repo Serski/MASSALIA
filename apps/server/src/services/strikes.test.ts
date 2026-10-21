@@ -204,6 +204,27 @@ suite("the strikes (integration)", () => {
     expect((await db.select().from(m.dbPkg.effectLog).where(and(eq(m.dbPkg.effectLog.characterId, house.characterId), eq(m.dbPkg.effectLog.kind, "strike")))).map((l) => (l.detail as { men: number }).men)).toEqual([60]);
   });
 
+  // Military 6a, ruling 6: the players' raids fight two rounds, a strike fought as a raid the strikes' one.
+  it("a raids strike is fought in one round, where the players' raids now fight two", async () => {
+    const { resolveBattle } = await import("@massalia/shared");
+    const battle = m.barracks.getBattleContent();
+    expect(battle.raid.rounds).toBe(2);
+    expect((await m.strikes.getStrikesContent()).raidRounds).toBe(1);
+    const s = await march({ force: 100, about: 100, draws: [{ placeId: "tolosa", kind: "town", men: 100 }] });
+    // The League's 100 in Agathe behind its walls: at the players' two rounds the same fight goes on into a second, on every seed.
+    await m.dbPkg.ensureLeagueCities(db, worldId);
+    const walls = Math.min((await city("agathe"))!.fortifications, battle.town.wallsDefCap);
+    const defenders = (await rowsAt(leagueId, "agathe")).map((r) => {
+      const def = m.barracks.getUnitsContent().units[r.unitId]!;
+      return { id: r.id, label: def.label, count: r.count, stats: { ...def.stats, def: def.stats.def + walls } };
+    });
+    expect(defenders.reduce((n, d) => n + d.count, 0)).toBe(100);
+    const raiders = [{ id: "raiders", label: battle.npc.warband.label, count: 100, stats: battle.npc.warband.stats }];
+    for (let i = 0; i < 50; i++) expect(resolveBattle({ attacker: raiders, defender: defenders, seed: `two-${i}`, config: battle, mode: "raid" }).rounds).toHaveLength(2);
+    await pass(plus(s.strikesAt, MIN));
+    expect((await strikeOf(s.id)).report).toMatchObject({ outcome: "driven_off", mode: "raid", rounds: 1 });
+  });
+
   it("a raid that wins on Agathe: the treasury pays 2 a raider standing, with its ledger row, and Agathe loses 2% of its people and 1 stability", async () => {
     await db.update(m.dbPkg.treasuries).set({ balance: 100_000 }).where(eq(m.dbPkg.treasuries.worldId, worldId));
     const s = await march({ force: 3000, about: 3000 });
