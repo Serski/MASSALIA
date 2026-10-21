@@ -1407,4 +1407,77 @@ suite("Map actions (integration)", () => {
     expect(m.shared.marchIsFight("raid", reportA.winner)).toBe(true);
     expect(m.shared.marchIsFight("raid", reportB.winner)).toBe(false);
   });
+
+  // Military 6a, ruling 5: a house holds at most two places, towns and lands together.
+  const CAP_LINE = "Your house holds all it can: 2 places.";
+  // A town of R049 held since 8, garrisoned at 9, with five ekdromoi standing in it so the settle keeps it.
+  const holdTown = async (ctx: Ctx, town: "genoa" | "album") => {
+    await m.holdings.insertTownConquest(db, ctx, "R049", town, town, at(8), at(9));
+    return insertRow(ctx, { unitId: "ekdromos", count: 5, basedAt: town });
+  };
+
+  it("a house at the cap of two places is refused an attack with the cap's line, and the reach carries it; a raid is not refused, and below the cap nothing is greyed", async () => {
+    const { ctx } = await makePlayer();
+    await holdTown(ctx, "genoa");
+    const hoplites = await insertRow(ctx, { unitId: "hoplite", count: 60 });
+    const peltasts = await insertRow(ctx, { unitId: "peltast", count: 40 });
+    await setWarband("R046", 60, at(9));
+    expect((await reach(ctx, at(9))).cap).toBeNull();
+    await holdTown(ctx, "album");
+    expect((await reach(ctx, at(9))).cap).toBe(CAP_LINE);
+    expect(await launch(ctx, "attack", "R046", [hoplites.id])).toEqual({ ok: false, code: 409, error: CAP_LINE });
+    expect(await launchTown(ctx, "attack", "reii", [hoplites.id])).toEqual({ ok: false, code: 409, error: CAP_LINE });
+    expect((await rows(ctx)).find((r) => r.id === hoplites.id)).toMatchObject({ movingTo: null, count: 60 });
+    // A raid takes no place.
+    expect(await launch(ctx, "raid", "R046", [peltasts.id])).toMatchObject({ ok: true });
+  });
+
+  it("an attack on the road when its house fills its cap turns back at arrival: no fight, nothing gained or lost, and the supplies it sailed on stay spent", async () => {
+    const { ctx } = await makePlayer();
+    await holdTown(ctx, "genoa");
+    await give(ctx, "trade-ship", 2);
+    await setGarrison("reii", 10, at(9)); // 60 hoplites take it on every seed
+    await setWarband("R078", 10, at(9)); // two seas out
+    const takers = await insertRow(ctx, { unitId: "hoplite", count: 60 });
+    const sailors = await insertRow(ctx, { unitId: "peltast", count: 40 });
+    // Both set out while the house holds one place; Reii's party arrives first and takes the second.
+    const first = await launchTown(ctx, "attack", "reii", [takers.id], at(9));
+    const second = await launch(ctx, "attack", "R078", [sailors.id], fought(at(9), 10));
+    expect([first.ok, second.ok]).toEqual([true, true]);
+    if (!first.ok || !second.ok) return;
+    expect(second.report).toMatchObject({ route: "sea", ships: { "trade-ship": 2 }, supplies: 2 });
+    for (const sent of [first, second]) expect(await m.actions.resolveMarch(sent.report.marchId, new Date(sent.report.arrivesAt))).toEqual({ outcome: "resolved" });
+    expect((await marchRow(first.report.marchId)).report).toMatchObject({ winner: "attacker", conquest: { townId: "reii" } });
+    const report = (await marchRow(second.report.marchId)).report as unknown as MapActReport;
+    expect(report).toMatchObject({ winner: "turned_back", rounds: 0, attacker: { losses: 0 }, defender: null, conquest: null, intel: null, homeAt: home(fought(at(9), 10), 60).toISOString() });
+    expect(report.line).toBe(`Turned back from ${report.regionName}. ${CAP_LINE}`);
+    expect((await holdingsOf(ctx)).map((h) => h.townId || h.regionId).sort()).toEqual(["genoa", "reii"]);
+    expect(await warband("R078")).toBe(10);
+    expect((await rows(ctx)).find((x) => x.id === sailors.id)).toMatchObject({ count: 40, movingTo: "R060" });
+    expect(await stock(ctx, "naval-supplies")).toBe(98);
+  });
+
+  it("a house above the cap keeps what it holds, and takes no new place until it is below the cap", async () => {
+    const { ctx } = await makePlayer();
+    await holdTown(ctx, "genoa");
+    const album = await holdTown(ctx, "album");
+    await m.holdings.insertConquest(db, ctx, "R046", "unclaimed", at(8), at(9));
+    const salyes = await insertRow(ctx, { unitId: "ekdromos", count: 5, basedAt: "R046" });
+    const hoplites = await insertRow(ctx, { unitId: "hoplite", count: 60 });
+    const held = async () => (await holdingsOf(ctx)).map((h) => h.townId || h.regionId).sort();
+    // Three held and garrisoned: the settle keeps all three, and an attack is refused.
+    await settle(ctx, at(9.1));
+    expect(await held()).toEqual(["R046", "album", "genoa"]);
+    expect(await launchTown(ctx, "attack", "reii", [hoplites.id], at(9.1))).toEqual({ ok: false, code: 409, error: CAP_LINE });
+    // Given up the existing way, its men withdrawn: it reverts after a full day. Two is still the cap.
+    await db.delete(m.dbPkg.playerUnits).where(eq(m.dbPkg.playerUnits.id, salyes.id));
+    await settle(ctx, at(10.2));
+    expect(await held()).toEqual(["album", "genoa"]);
+    expect(await launchTown(ctx, "attack", "reii", [hoplites.id], at(10.2))).toEqual({ ok: false, code: 409, error: CAP_LINE });
+    // One more given up: below the cap, the attack sets out.
+    await db.delete(m.dbPkg.playerUnits).where(eq(m.dbPkg.playerUnits.id, album.id));
+    await settle(ctx, at(11.3));
+    expect(await held()).toEqual(["genoa"]);
+    expect(await launchTown(ctx, "attack", "reii", [hoplites.id], at(11.3))).toMatchObject({ ok: true });
+  });
 });

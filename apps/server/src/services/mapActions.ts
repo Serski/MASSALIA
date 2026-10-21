@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { and, eq, inArray, lte, sql } from "drizzle-orm";
 import { createDb, effectLog, leaguePlayerId, loadLeagueWar, playerCharacters, playerMarches, playerUnits, regionIntel, townIntel, worlds, type UnitMission } from "@massalia/db";
 import {
+  atHoldingsCap,
   bandDef,
   campaignSeason,
   fleetStats,
@@ -9,6 +10,8 @@ import {
   gameDate,
   heldByLeagueLine,
   holderRefusal,
+  holdingsCapLine,
+  holdingsCapTurnedBackLine,
   HOME_POLITY_ID,
   LEAGUE_MOVE_REFUSAL,
   leagueLedgerReason,
@@ -411,6 +414,12 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
     // the League's. Scout and Attack still are.
     if (input.type === "raid" && (await placeOnAlert(tx, ctx.worldId, { regionId, townId }, now))) return fail(409, await placeAlertLine({ regionId, townId }));
 
+    // 1d. A house holds at most holdings.maxPerHouse places (Military 6a,
+    // ruling 5): at the cap its attack is refused. The League has no cap; a
+    // house above it keeps what it holds and takes nothing new.
+    const maxHeld = battleC.holdings.maxPerHouse;
+    if (!league && input.type === "attack" && atHoldingsCap(holdings.length, maxHeld)) return fail(409, holdingsCapLine(maxHeld));
+
     // 2. Rows: ours, active, not moving, one base, at least one; a scout needs speed.
     const selected = await selectForce(tx, ctx, input.rows, now);
     if (!selected.ok) return fail(selected.code, selected.error);
@@ -577,7 +586,8 @@ export type MarchResolved = { outcome: "busy" | "not_due" | "resolved" };
 // due. Resolved a minute or three days after it arrives, the result is the
 // same. In order: a party with no rows left broke up on the road; a place its
 // own house now holds turns any party back, one another house holds turns an
-// attack back; a raid that finds the place on alert turns back; a scout scouts; a sea assault on a town meets its fleet; the
+// attack back; a raid that finds the place on alert turns back, and so does a
+// house's attack once the house holds all it may; a scout scouts; a sea assault on a town meets its fleet; the
 // rest fight. The survivors take the same road home, or stand on a conquest
 // from this instant. The report is stored on the march and in a map_report
 // effect_log row.
@@ -680,6 +690,11 @@ export async function resolveMarch(marchId: string, now: Date): Promise<MarchRes
       // ruling 2) turns back whole with the alert's line: no fight, nothing
       // taken, no fight for the strikes' count; the supplies it sailed on are spent.
       report = { type: kind, ...common, homeAt: homeAt.toISOString(), town: null, fleet: null, destination, winner: "turned_back", rounds: 0, attacker: { rows: attackerRows(), losses: 0 }, defender: null, plunder: null, conquest: null, intel: null, opinion: null, line: await placeAlertLine({ regionId, townId }) };
+    } else if (kind === "attack" && !league && atHoldingsCap((await listHoldings(tx, ctx)).length, battleC.holdings.maxPerHouse)) {
+      // 5e. An attack whose house filled its cap while it was on the road
+      // (Military 6a, ruling 5) turns back whole: no fight, nothing gained or
+      // lost; the supplies it sailed on are spent.
+      report = { type: kind, ...common, homeAt: homeAt.toISOString(), town: null, fleet: null, destination, winner: "turned_back", rounds: 0, attacker: { rows: attackerRows(), losses: 0 }, defender: null, plunder: null, conquest: null, intel: null, opinion: null, line: holdingsCapTurnedBackLine(placeName, battleC.holdings.maxPerHouse) };
     } else {
       // 6. Defender: the region's warband, or the town's garrison behind its
       // walls, as it stands at the arrival. A town's fleet is read for the sea rule.

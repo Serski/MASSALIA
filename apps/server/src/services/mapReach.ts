@@ -1,12 +1,14 @@
 import { and, eq } from "drizzle-orm";
 import { createDb, playerUnits } from "@massalia/db";
 import {
+  atHoldingsCap,
   bandDef,
   campaignSeason,
   computeReach,
   distancesFrom,
   fleetStats,
   forceStats,
+  holdingsCapLine,
   HOME_POLITY_ID,
   stepsTo,
   unitDef,
@@ -72,6 +74,9 @@ export type ReachView = {
   // region, with the line a raid there is refused with: the map greys Raid
   // with it. Its own field, never a reach verdict: Scout reads the raid verdict.
   alert: { towns: Record<string, string>; regions: Record<string, string> };
+  // The house's cap line when it holds all it may (Military 6a, ruling 5): the
+  // map greys Attack with it everywhere. Null below the cap, and for the League.
+  cap: string | null;
 };
 
 // Regions Massalia owns per the military content: townless regions by owner and
@@ -258,7 +263,9 @@ export async function reachView(exec: Exec, ctx: ActingContext, now: Date, opts:
   const moveTargets = await moveTargetsOf(topology, allBases, ctx, exec);
   const labels = Object.fromEntries(Object.entries(getShipsContent().ships).map(([id, d]) => [id, d.label]));
   const alert = await alertLinesAt(exec, ctx.worldId, now);
-  return { now: now.toISOString(), campaign, bases, force: forceStats(force), fleet: { ships: counts, labels, ...fleetStats(fleet), hulls: strip.ships, supplies }, reach, moveTargets, alert };
+  const maxHeld = getBattleContent().holdings.maxPerHouse;
+  const cap = !isLeague(ctx) && atHoldingsCap((await listHoldings(exec, ctx)).length, maxHeld) ? holdingsCapLine(maxHeld) : null;
+  return { now: now.toISOString(), campaign, bases, force: forceStats(force), fleet: { ships: counts, labels, ...fleetStats(fleet), hulls: strip.ships, supplies }, reach, moveTargets, alert, cap };
 }
 
 // --- The League's map view (government prompt 5b) -----------------------------

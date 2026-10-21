@@ -287,6 +287,21 @@ suite("the League's orders (integration)", () => {
     expect(await garrison("reii")).toBe(80);
   });
 
+  // Military 6a, ruling 5: the League has no cap on what it holds.
+  it("the League has no cap: holding three places it still attacks and takes a fourth, and its map greys nothing for it", async () => {
+    const { lctx } = await archon();
+    await war("saluvii", at(8), at(16));
+    for (const [regionId, townId] of [["R049", "genoa"], ["R049", "album"], ["R046", ""]] as const) {
+      await db.insert(m.dbPkg.playerHoldings).values({ worldId, regionId, townId, ownerPlayerId: leagueId, kind: "conquest", previousOwner: "unclaimed", since: at(9), lastGarrisonedAt: at(9), lastTributeAt: at(9) });
+    }
+    await setGarrison("reii", 10, at(9));
+    expect((await m.mapReach.leagueMapView(db, lctx, at(9))).cap).toBeNull();
+    const hoplites = await leagueRow("massalia", "hoplite");
+    const sent = await m.actions.act(lctx, { type: "attack", townId: "reii", rows: [{ rowId: hoplites.id, count: 60 }] }, at(9));
+    if (!sent.ok) throw new Error(sent.error);
+    expect(await arrive(sent.report.marchId, plus(at(9), 30))).toMatchObject({ winner: "attacker", conquest: { townId: "reii" } });
+  });
+
   it("a party that arrives after the peace turns back whole, with the peace's line, and takes nothing", async () => {
     const { lctx } = await archon();
     await war("saluvii", at(8), plus(at(9), 10)); // peace ten minutes after the order, twenty before the arrival
