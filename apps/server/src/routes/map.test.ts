@@ -122,7 +122,7 @@ suite("/api/map/reach (integration)", () => {
   it("POST /act: a raid happy path returns the set-out card, fresh reach and the roster, and the battle when the party arrives; a region with towns is 409", async () => {
     const p = await freshPlayer();
     const { writeRegionWarband } = await import("../services/mapPools.js");
-    await writeRegionWarband(db, worldId, "R046", 20, now);
+    await writeRegionWarband(db, worldId, "R046", 60, now);
     const recruitedAt = new Date(now.getTime() - 2 * DAY);
     await db.insert(m.dbPkg.playerUnits).values({ worldId, ownerPlayerId: p.playerId, source: "trained", unitId: "peltast", count: 40, startCount: 40, recruitedSeason: 7, readyAt: new Date(recruitedAt.getTime() + DAY), createdAt: recruitedAt });
     const rowId = (await db.select({ id: m.dbPkg.playerUnits.id }).from(m.dbPkg.playerUnits).where(eq(m.dbPkg.playerUnits.ownerPlayerId, p.playerId)))[0]!.id;

@@ -201,7 +201,9 @@ suite("the League's orders (integration)", () => {
     const { lctx, ctx: own, characterId, dynastyId, orderer } = await archon();
     expect(orderer.name).toMatch(/^Kleon-/);
     await war("saluvii", at(8), at(16));
-    await setGarrison("reii", 10, at(9)); // 3 meet the raid behind walls 1: 2 or 3 are slain on every seed
+    // 100 of its full 160, above half (Military 6a): 20 to 25 meet the raid behind
+    // walls 1, and 4 to 6 are slain on every seed.
+    await setGarrison("reii", 100, at(9));
     const peltasts = await leagueRow("massalia", "peltast");
     const res = await m.actions.act(lctx, { type: "raid", townId: "reii", rows: [{ rowId: peltasts.id, count: 40 }] }, at(9));
     if (!res.ok) throw new Error(res.error);
@@ -222,9 +224,11 @@ suite("the League's orders (integration)", () => {
     expect((await units()).find((r) => r.mission?.marchId === marchId)).toMatchObject({ count: 40, movingTo: "reii" });
 
     const report = await arrive(marchId, plus(at(9), 45));
-    expect(report).toMatchObject({ type: "raid", townId: "reii", winner: "attacker", opinion: null, conquest: null, defender: { label: "Town garrison", start: 10, turnout: 3 } });
+    expect(report).toMatchObject({ type: "raid", townId: "reii", winner: "attacker", opinion: null, conquest: null, defender: { label: "Town garrison", start: 100 } });
+    expect(report.defender!.turnout).toBeGreaterThanOrEqual(20);
+    expect(report.defender!.turnout).toBeLessThanOrEqual(25);
     const killed = report.defender!.losses;
-    expect([2, 3]).toContain(killed);
+    expect([4, 5, 6]).toContain(killed);
     const plunder = report.plunder!;
     const spoil = plunder.spoil!;
     // The war's plunder: the town's double times the war's 1.5, from the same gate.
@@ -245,10 +249,10 @@ suite("the League's orders (integration)", () => {
     // Sold, not stocked; no grudge row; the garrison is thinned.
     expect(await db.select().from(m.dbPkg.resources).where(and(eq(m.dbPkg.resources.scopeId, leagueId), sql`type NOT IN ('trade-ship', 'galley')`))).toEqual([]);
     expect(await db.select().from(m.dbPkg.factionRelations)).toEqual([]);
-    expect(await garrison("reii")).toBe(10 - killed);
+    expect(await garrison("reii")).toBe(100 - killed);
     // What the men saw is the League's, on the report and in its sightings; the orderer's house learns nothing.
-    expect(report.intel).toMatchObject({ warband: 10 - killed, pentekonters: 0, triremes: 0 });
-    expect((await m.league.leagueSightings(db, lctx)).towns.reii).toEqual({ garrison: 10 - killed, pentekonters: 0, triremes: 0, scoutedGameDate: report.intel!.scoutedGameDate });
+    expect(report.intel).toMatchObject({ warband: 100 - killed, pentekonters: 0, triremes: 0 });
+    expect((await m.league.leagueSightings(db, lctx)).towns.reii).toEqual({ garrison: 100 - killed, pentekonters: 0, triremes: 0, scoutedGameDate: report.intel!.scoutedGameDate });
     expect(await townIntelOf(dynastyId, "reii")).toBeUndefined();
     expect(await db.select().from(m.dbPkg.townIntel)).toEqual([]);
     // The League has no character: not one effect_log row, for the split, the losses or the report.
@@ -260,6 +264,27 @@ suite("the League's orders (integration)", () => {
     expect(await standing("massalia", "peltast")).toHaveLength(1);
     expect((await leagueRow("massalia", "peltast")).count).toBe(250 - lost);
     captures.raidAtWar = { order: { ...order, id: "<order id>", orderedByCharacterId: "<the Archon>", worldId: "<world>", marchId: "<march id>" }, report: { ...report, marchId: "<march id>" }, ledger: (await ledger()).map(([reason, delta]) => [String(reason).replace(marchId, "<march id>"), delta]), balance: await balance() };
+  });
+
+  // Military 6a, ruling 2: the League's raid meets the alert as a house's does.
+  it("a place on alert takes no raid of the League's, with the alert's line, and nothing is written; one on the road when the place goes on alert turns back and takes nothing", async () => {
+    const { lctx } = await archon();
+    await war("saluvii", at(8), at(16));
+    await setGarrison("reii", 80, at(9)); // half its full 160
+    const peltasts = await leagueRow("massalia", "peltast");
+    expect(await m.actions.act(lctx, { type: "raid", townId: "reii", rows: [{ rowId: peltasts.id, count: 40 }] }, at(9))).toEqual({ ok: false, code: 409, error: "Reii is on alert, gates are shut." });
+    expect(await orders()).toEqual([]);
+    expect((await leagueRow("massalia", "peltast")).count).toBe(250);
+    // Above half the raid sets out; the place falls to half while it is on the road.
+    await setGarrison("reii", 100, at(9));
+    const sent = await m.actions.act(lctx, { type: "raid", townId: "reii", rows: [{ rowId: peltasts.id, count: 40 }] }, at(9));
+    if (!sent.ok) throw new Error(sent.error);
+    await setGarrison("reii", 80, plus(at(9), 10));
+    const report = await arrive(sent.report.marchId, plus(at(9), 30));
+    expect(report).toMatchObject({ type: "raid", winner: "turned_back", rounds: 0, attacker: { losses: 0 }, defender: null, plunder: null, intel: null, line: "Reii is on alert, gates are shut." });
+    expect(await ledger()).toEqual([]);
+    expect(await balance()).toBe(5000);
+    expect(await garrison("reii")).toBe(80);
   });
 
   it("a party that arrives after the peace turns back whole, with the peace's line, and takes nothing", async () => {
@@ -504,7 +529,7 @@ suite("the League's orders (integration)", () => {
   it("no harvest: for a year after the League's army fights at a place, the house of a sitting Archon or Strategos may not raid or attack it; a scout may, and so may an Ephor's house and a citizen's", async () => {
     const a = await archon();
     await war("saluvii", at(8), at(20));
-    await setGarrison("reii", 10, at(9));
+    await setGarrison("reii", 100, at(9));
     const sent = await m.actions.act(a.lctx, { type: "raid", townId: "reii", rows: [{ rowId: (await leagueRow("massalia", "peltast")).id, count: 40 }] }, at(9));
     if (!sent.ok) throw new Error(sent.error);
     const fought = plus(at(9), 30);
@@ -550,7 +575,7 @@ suite("the League's orders (integration)", () => {
     const a = await archon();
     // A raid that fights at Reii; then the Archon leaves his seat.
     await war("saluvii", at(8), plus(at(9), 60));
-    await setGarrison("reii", 10, at(9));
+    await setGarrison("reii", 100, at(9));
     const sent = await m.actions.act(a.lctx, { type: "raid", townId: "reii", rows: [{ rowId: (await leagueRow("massalia", "peltast")).id, count: 40 }] }, at(9));
     if (!sent.ok) throw new Error(sent.error);
     expect((await arrive(sent.report.marchId, plus(at(9), 30))).winner).toBe("attacker");

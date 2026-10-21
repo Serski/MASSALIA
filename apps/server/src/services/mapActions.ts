@@ -39,6 +39,7 @@ import { raidOpinion, raidWarMultiplier, type RaidOpinion } from "./factionOpini
 import { creditDrachmae, creditGood, holderOf, insertConquest, insertTownConquest, listHoldings } from "./holdings.js";
 import { creditLeagueTreasury, debitLeagueTreasury, harvestRefusalFor, isLeague, leagueBalance, leagueWarGate, lockLeagueWrite, marketPrice, recordLeagueOrder, settleLeague, type LeagueContext } from "./leagueOrders.js";
 import { lockPlayer } from "./lock.js";
+import { placeAlertLine, placeOnAlert } from "./mapAlert.js";
 import { getTopology } from "./mapGraph.js";
 import { basesOf, fleetInStock, forceRowOf, homeRegions, leagueMapView, reachView, type ReachView } from "./mapReach.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
@@ -405,6 +406,11 @@ export async function act(ctx: ActingContext, input: MapActInput, now: Date): Pr
       if (!gate.ok) return fail(409, gate.reason);
     }
 
+    // 1c. A place on alert (Military 6a, ruling 2): at or below half its full
+    // strength its gates are shut, and no raid is ordered there, a house's or
+    // the League's. Scout and Attack still are.
+    if (input.type === "raid" && (await placeOnAlert(tx, ctx.worldId, { regionId, townId }, now))) return fail(409, await placeAlertLine({ regionId, townId }));
+
     // 2. Rows: ours, active, not moving, one base, at least one; a scout needs speed.
     const selected = await selectForce(tx, ctx, input.rows, now);
     if (!selected.ok) return fail(selected.code, selected.error);
@@ -571,7 +577,7 @@ export type MarchResolved = { outcome: "busy" | "not_due" | "resolved" };
 // due. Resolved a minute or three days after it arrives, the result is the
 // same. In order: a party with no rows left broke up on the road; a place its
 // own house now holds turns any party back, one another house holds turns an
-// attack back; a scout scouts; a sea assault on a town meets its fleet; the
+// attack back; a raid that finds the place on alert turns back; a scout scouts; a sea assault on a town meets its fleet; the
 // rest fight. The survivors take the same road home, or stand on a conquest
 // from this instant. The report is stored on the march and in a map_report
 // effect_log row.
@@ -669,6 +675,11 @@ export async function resolveMarch(marchId: string, now: Date): Promise<MarchRes
       // arrive, it turns back with the holder's line.)
       const line = arrivalGate.nation ? leaguePeaceLine(forceText, placeName, arrivalGate.nation) : renderMarchLine({ stage: "taken", action: kind, force: forceText, place: placeName });
       report = { type: kind, ...common, homeAt: homeAt.toISOString(), town: null, fleet: null, destination, winner: "turned_back", rounds: 0, attacker: { rows: attackerRows(), losses: 0 }, defender: null, plunder: null, conquest: null, intel: null, opinion: null, line };
+    } else if (kind === "raid" && (await placeOnAlert(tx, ctx.worldId, { regionId, townId }, at))) {
+      // 5d. A raid that finds the place on alert at its arrival (Military 6a,
+      // ruling 2) turns back whole with the alert's line: no fight, nothing
+      // taken, no fight for the strikes' count; the supplies it sailed on are spent.
+      report = { type: kind, ...common, homeAt: homeAt.toISOString(), town: null, fleet: null, destination, winner: "turned_back", rounds: 0, attacker: { rows: attackerRows(), losses: 0 }, defender: null, plunder: null, conquest: null, intel: null, opinion: null, line: await placeAlertLine({ regionId, townId }) };
     } else {
       // 6. Defender: the region's warband, or the town's garrison behind its
       // walls, as it stands at the arrival. A town's fleet is read for the sea rule.
