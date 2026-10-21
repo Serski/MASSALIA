@@ -388,6 +388,32 @@ suite("the strikes (integration)", () => {
     }
   });
 
+  // Military 6a, ruling 1: skirmishers cannot hold ground.
+  it("a war strike storms a holding held by skirmishers alone: 120 Volcae are driven off from 113 peltasts in Nemausus, 460 storm it, and the survivors fall back at their settle", async () => {
+    const holder = await makePlayer();
+    await db.insert(m.dbPkg.playerHoldings).values(holdingRow(holder.ctx.playerId, "R045", "nemausus", "volcae"));
+    await m.mapPools.writeTownGarrison(db, worldId, "nemausus", 0, at(8));
+    await row(holder.ctx.playerId, "peltast", 113, "nemausus");
+    await war("volcae", at(8), at(16));
+    const strike = (n: number, force: number, day: number) =>
+      march({ id: uid(n), nationId: "volcae", trigger: "war", triggerPlaceId: null, triggerAt: null, mode: "attack", seasonIndex: day, regionId: "R045", townId: "nemausus", targetKind: "holding", holderPlayerId: holder.ctx.playerId, takenFrom: true, force, about: force, draws: [], calledAt: at(day), strikesAt: plus(at(day), 12 * HOUR) });
+    // Behind walls 2 the peltasts outpace the warband and fire every round: 120 break against them on every seed.
+    const small = await strike(901, 120, 9);
+    await pass(plus(small.strikesAt, MIN));
+    expect((await strikeOf(small.id)).report).toMatchObject({ outcome: "driven_off", holdingLost: false });
+    // 460 do not break in three rounds, and the peltasts hold the field without holding the ground: stormed.
+    const big = await strike(902, 460, 10);
+    await pass(plus(big.strikesAt, MIN));
+    expect((await strikeOf(big.id)).report).toMatchObject({ outcome: "stormed", holdingLost: true, rounds: 3, line: `The Volcae stormed Nemausus. House ${houseName} has lost it.` });
+    expect(await db.select().from(m.dbPkg.playerHoldings)).toEqual([]);
+    expect(await garrison("nemausus", big.strikesAt)).toBe(200);
+    // Most of them are left, and they fall back at the holder's own settle.
+    const left = await rowsAt(holder.ctx.playerId, "nemausus");
+    expect(left.reduce((n, r) => n + r.count, 0)).toBeGreaterThan(90);
+    await settle(holder.ctx, plus(big.strikesAt, 5 * MIN));
+    for (const r of left) expect((await db.select().from(m.dbPkg.playerUnits).where(eq(m.dbPkg.playerUnits.id, r.id)))[0]).toMatchObject({ basedAt: "nemausus", movingTo: "R060" });
+  });
+
   it("the same for a League holding: stormed, the League's line, and its men turn for the town of Massalia at its settle", async () => {
     const lctx = (await m.strikes.nationById("saluvii")) && { playerId: leagueId, worldId, worldStartedMs: T0 };
     await db.insert(m.dbPkg.playerHoldings).values(holdingRow(leagueId, "R047", "reii", "saluvii"));
