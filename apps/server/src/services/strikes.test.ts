@@ -236,6 +236,18 @@ suite("the strikes (integration)", () => {
     expect(s!.calledAt).toEqual(at(13));
   });
 
+  // Military 6a, ruling 4: the call counts men whose move has arrived, as the strike's owners do.
+  it("a march's call counts the men whose move to a place has arrived though their owner is not settled: 250 arrived in Agathe send the Sordones to Rhoda", async () => {
+    const house = await makePlayer();
+    const eleventh = await r057Fights(9);
+    // Arrived at Agathe an hour before the 11th fight, his settle not yet run; a party on a march's mission does not count.
+    await row(house.ctx.playerId, "hoplite", 250, "R060", { movingTo: "agathe", arrivesAt: plus(eleventh, -HOUR), mission: { kind: "move", regionId: "R050", townId: "agathe", departedAt: plus(eleventh, -2 * HOUR).toISOString() } });
+    await row(house.ctx.playerId, "peltast", 500, "R060", { movingTo: "rhoda", arrivesAt: plus(eleventh, -HOUR), mission: { kind: "raid", regionId: "R065", townId: "rhoda", departedAt: plus(eleventh, -2 * HOUR).toISOString(), marchId: uid(950) } });
+    await m.strikes.callDueStrikes(plus(eleventh, MIN), { raids: true });
+    // Agathe's 100 and the 250: 350; Rhoda's 120 alone: the 400 most outnumber Rhoda's men.
+    expect(await strikeRows()).toMatchObject([{ trigger: "raids", triggerPlaceId: "R057", townId: "rhoda", force: 400 }]);
+  });
+
   // --- the battle ------------------------------------------------------------------
 
   it("a raid on Agathe is driven off by the League's men and a house's together, each owner losing his own; the enemy's dead come off Tolosa and Nemausus in proportion", async () => {

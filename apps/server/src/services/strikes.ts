@@ -141,7 +141,19 @@ async function standingAt(exec: Exec, worldId: string, placeIds: string[], at: D
   const rows = await exec.select().from(playerUnits).where(and(eq(playerUnits.worldId, worldId), inArray(playerUnits.basedAt, placeIds), isNull(playerUnits.movingTo)));
   return rows.filter((r) => isActive(r, at) && r.count > 0);
 }
-const menAt = (rows: UnitRow[], placeId: string) => rows.filter((r) => r.basedAt === placeId).reduce((n, r) => n + r.count, 0);
+
+// The men a march's call weighs at each of `placeIds` at `at` (Military 6a,
+// ruling 4): those standing there, and those whose move there has arrived by
+// then though their owner's settle has not landed them yet, as ownersAt counts
+// them: moving to the place, arrived, on no march's or muster's mission.
+async function presentAt(exec: Exec, worldId: string, placeIds: string[], at: Date): Promise<Map<string, number>> {
+  const men = new Map<string, number>();
+  if (placeIds.length === 0) return men;
+  for (const r of await standingAt(exec, worldId, placeIds, at)) men.set(r.basedAt, (men.get(r.basedAt) ?? 0) + r.count);
+  const arrived = await exec.select().from(playerUnits).where(and(eq(playerUnits.worldId, worldId), inArray(playerUnits.movingTo, placeIds), lte(playerUnits.arrivesAt, at)));
+  for (const r of arrived) if (!r.mission?.marchId && !r.mission?.musterId && r.count > 0) men.set(r.movingTo!, (men.get(r.movingTo!) ?? 0) + r.count);
+  return men;
+}
 
 type HoldingRow = typeof playerHoldings.$inferSelect;
 const holdingPlace = (h: Pick<HoldingRow, "townId" | "regionId">) => h.townId || h.regionId;
@@ -152,12 +164,12 @@ async function targetsAt(exec: Exec, world: WorldRow, polities: readonly string[
   const homeTowns = await leagueHomeTowns();
   const heldRows = await exec.select().from(playerHoldings).where(eq(playerHoldings.worldId, world.id));
   const held = new Set(heldRows.map(holdingPlace));
-  const standing = await standingAt(exec, world.id, [...homeTowns, ...held], at);
+  const present = await presentAt(exec, world.id, [...homeTowns, ...held], at);
   const homes: StrikeTarget[] = [];
   for (const town of homeTowns) {
     const regionId = topology.townRegion.get(town);
     if (!regionId) continue;
-    homes.push({ placeId: town, regionId, townId: town, kind: "home", holderPlayerId: null, takenFrom: false, name: await townDisplayName(town), full: await townBaseGarrison(town), defenders: menAt(standing, town) });
+    homes.push({ placeId: town, regionId, townId: town, kind: "home", holderPlayerId: null, takenFrom: false, name: await townDisplayName(town), full: await townBaseGarrison(town), defenders: present.get(town) ?? 0 });
   }
   const holdings: StrikeTarget[] = [];
   for (const h of heldRows) {
@@ -172,7 +184,7 @@ async function targetsAt(exec: Exec, world: WorldRow, polities: readonly string[
       takenFrom: h.previousOwner !== null && polities.includes(h.previousOwner),
       name: await placeNameOf(townId, h.regionId),
       full: townId ? await townBaseGarrison(townId) : await regionBaseWarband(h.regionId),
-      defenders: menAt(standing, placeId),
+      defenders: present.get(placeId) ?? 0,
     });
   }
   return { homes, holdings, held };
