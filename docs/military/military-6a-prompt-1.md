@@ -80,3 +80,12 @@ Questions:
 Your defaults are all accepted: "alert": { "share": 0.5 } and "holdings": { "maxPerHouse": 2 } in battle.json; a held place, the League's included, is never on alert; on alert only Raid is greyed; the raids-strike wait is recomputed each pass from the pool's clock and not stored.
 
 Go on to Phase 1 and stop at STOP 1.
+
+## Rulings at STOP 1 (Argiris, 21 Oct 2026)
+
+1. The mixed garrison falling once its line breaks: accepted. Ruling 1 stands as written: a line that breaks loses the walls.
+2. The re-pins and the new strikes test: accepted.
+3. Alert wording for a townless land: "{Place} is on alert, the herds are driven into the hills."
+4. Calibration through the server's tsx, no lockfile change: accepted.
+
+Go on through Phases 2 to 5 and stop at STOP 2. In the STOP 2 report, include a browser check of a town and a land on alert (the map flag, Raid greyed with each line), Attack greyed with the cap line for a house at 2 places, and a raid turned back at arrival.
