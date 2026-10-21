@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { onAlert } from "./alert.js";
+import { alertFloor, onAlert } from "./alert.js";
 import { seasonAt, seasonIndexAt } from "./buildings.js";
 import { REAL_MS_PER_SEASON } from "./calendar.js";
 import type { FactionDef } from "./league.js";
@@ -141,11 +141,18 @@ export function raidsForce(raided: Pick<NationPlace, "placeId" | "kind" | "full"
 }
 
 // The enemy's dead off the pools it drew from, in proportion to what each sent
-// (ruling 10), never more than a pool sent.
-export function deadOffDraws(dead: number, draws: readonly StrikeDrawView[]): StrikeDrawView[] {
+// (ruling 10), never more than a pool sent, and never more than `rooms[i]`,
+// what the pool of draws[i] may still lose (Military 6a, ruling 3: deadRoom).
+// The dead beyond a pool's room come off no pool, and are not moved onto
+// another.
+export function deadOffDraws(dead: number, draws: readonly StrikeDrawView[], rooms: readonly number[]): StrikeDrawView[] {
   const split = apportion(dead, draws.map((d) => d.men));
-  return draws.map((d, i) => ({ ...d, men: split[i]! }));
+  return draws.map((d, i) => ({ ...d, men: Math.min(split[i]!, Math.max(0, rooms[i] ?? 0)) }));
 }
+// What a pool of `pool` men, `full` at full strength, may lose to a strike's
+// dead: down to half its full strength, rounded up, and no further; a pool
+// already below that loses none.
+export const deadRoom = (pool: number, full: number, share: number): number => Math.max(0, Math.floor(pool) - alertFloor(full, share));
 
 // --- The choice ----------------------------------------------------------------
 

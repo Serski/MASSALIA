@@ -10,6 +10,7 @@ import {
   bandDef,
   chooseTarget,
   deadOffDraws,
+  deadRoom,
   factionOfPolity,
   fightsAtPeace,
   formatGameDate,
@@ -546,13 +547,19 @@ async function strikeTx(tx: DbTx, strikeId: string, now: Date): Promise<StrikeRe
     else if (lost > 0) await tx.update(playerUnits).set({ count: side.end }).where(eq(playerUnits.id, r.id));
   }
 
-  // The enemy's dead off the pools it drew from, in proportion (ruling 10).
+  // The enemy's dead off the pools it drew from, in proportion (ruling 10),
+  // never taking a pool below half its full strength (Military 6a, ruling 3).
   const theirDead = result.attacker.losses;
-  const deadOff = deadOffDraws(theirDead, s.draws);
-  for (const d of deadOff) {
+  const pools: { pool: number; full: number }[] = [];
+  for (const d of s.draws) {
+    if (d.kind === "town") pools.push({ pool: await readTownGarrison(tx, s.worldId, d.placeId, at), full: await townBaseGarrison(d.placeId) });
+    else pools.push({ pool: await readRegionWarband(tx, s.worldId, d.placeId, at), full: await regionBaseWarband(d.placeId) });
+  }
+  const deadOff = deadOffDraws(theirDead, s.draws, pools.map((p) => deadRoom(p.pool, p.full, battleC.alert.share)));
+  for (const [i, d] of deadOff.entries()) {
     if (d.men <= 0) continue;
-    if (d.kind === "town") await writeTownGarrison(tx, s.worldId, d.placeId, (await readTownGarrison(tx, s.worldId, d.placeId, at)) - d.men, at);
-    else await writeRegionWarband(tx, s.worldId, d.placeId, (await readRegionWarband(tx, s.worldId, d.placeId, at)) - d.men, at);
+    if (d.kind === "town") await writeTownGarrison(tx, s.worldId, d.placeId, pools[i]!.pool - d.men, at);
+    else await writeRegionWarband(tx, s.worldId, d.placeId, pools[i]!.pool - d.men, at);
   }
   const survivors = Math.max(0, s.force - theirDead);
   const ourDead = [...lostOf.values()].reduce((n, x) => n + x, 0);

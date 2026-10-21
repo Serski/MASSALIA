@@ -288,6 +288,23 @@ suite("the strikes (integration)", () => {
     expect((await strikeOf(s.id)).report).toMatchObject({ outcome: "driven_off", mode: "raid", rounds: 1 });
   });
 
+  // Military 6a, ruling 3: a strike's dead never empty the places it drew from.
+  it("a strike's dead never take a pool it drew from below half: Nemausus at 105 loses 5 and stands at 100, on alert; Tolosa below half loses none", async () => {
+    const house = await makePlayer();
+    await row(house.ctx.playerId, "hoplite", 60, "agathe");
+    await m.mapPools.writeTownGarrison(db, worldId, "nemausus", 105, at(9)); // may lose 5, to 100 of 200
+    await m.mapPools.writeTownGarrison(db, worldId, "tolosa", 1000, at(9)); // under 1,150, half of 2,300
+    const s = await march({ force: 120, about: 120, draws: [{ placeId: "nemausus", kind: "town", men: 60 }, { placeId: "tolosa", kind: "town", men: 60 }] });
+    await pass(plus(s.strikesAt, MIN));
+    const report = (await strikeOf(s.id)).report as { outcome: string; theirDead: number; survivors: number; deadOff: { placeId: string; men: number }[] };
+    // 21 to 24 of the 120 fall on every seed, half of them Nemausus's: more than its room.
+    expect(report.theirDead).toBeGreaterThanOrEqual(21);
+    expect(report.survivors).toBe(120 - report.theirDead);
+    expect(report.deadOff).toEqual([{ placeId: "nemausus", kind: "town", men: 5 }, { placeId: "tolosa", kind: "town", men: 0 }]);
+    expect(await garrison("nemausus", s.strikesAt)).toBe(100);
+    expect(await garrison("tolosa", s.strikesAt)).toBe(1000);
+  });
+
   it("a raid that wins on Agathe: the treasury pays 2 a raider standing, with its ledger row, and Agathe loses 2% of its people and 1 stability", async () => {
     await db.update(m.dbPkg.treasuries).set({ balance: 100_000 }).where(eq(m.dbPkg.treasuries.worldId, worldId));
     const s = await march({ force: 3000, about: 3000 });

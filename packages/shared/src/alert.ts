@@ -21,6 +21,13 @@ export function onAlert(pool: number, full: number, share: number): boolean {
   return full > 0 && pool <= full * share + HAIR;
 }
 
+// The least a strike's dead may leave in a pool it drew from (Military 6a,
+// ruling 3): half its full strength, rounded up (alert.share of it, within a
+// hair). A pool may land exactly on the alert: 50 of 100 is at half.
+export function alertFloor(full: number, share: number): number {
+  return Math.max(0, Math.ceil(full * share - HAIR));
+}
+
 // The line a raid meets at a place on alert, refused or turned back, and the
 // one the map shows: a town shuts its gates, a land drives its herds away.
 export function alertLine(place: string, kind: "town" | "land"): string {

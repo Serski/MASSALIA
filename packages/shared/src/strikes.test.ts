@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { alertFloor, onAlert } from "./alert.js";
 import { seasonAt } from "./buildings.js";
 import { buildTopology, parseCoastLinks, parseMapGraph } from "./mapGraph.js";
 import {
@@ -9,6 +10,7 @@ import {
   apportion,
   chooseTarget,
   deadOffDraws,
+  deadRoom,
   fightsAtPeace,
   landStepsBetween,
   marchIsFight,
@@ -130,10 +132,24 @@ describe("the force", () => {
     expect(raidsForce(asItStands(0))).toEqual({ force: 0, draws: [] });
   });
   it("the dead come off the draws in proportion, never more than a draw sent", () => {
-    expect(deadOffDraws(100, [{ placeId: "nemausus", kind: "town", men: 40 }, { placeId: "tolosa", kind: "town", men: 460 }])).toEqual([{ placeId: "nemausus", kind: "town", men: 8 }, { placeId: "tolosa", kind: "town", men: 92 }]);
-    expect(deadOffDraws(900, [{ placeId: "nemausus", kind: "town", men: 40 }]).map((d) => d.men)).toEqual([40]);
+    const roomy = [1000, 1000];
+    expect(deadOffDraws(100, [{ placeId: "nemausus", kind: "town", men: 40 }, { placeId: "tolosa", kind: "town", men: 460 }], roomy)).toEqual([{ placeId: "nemausus", kind: "town", men: 8 }, { placeId: "tolosa", kind: "town", men: 92 }]);
+    expect(deadOffDraws(900, [{ placeId: "nemausus", kind: "town", men: 40 }], roomy).map((d) => d.men)).toEqual([40]);
     expect(apportion(5, [2, 2, 2])).toEqual([2, 2, 1]);
     expect(apportion(5, [1, 1, 1])).toEqual([1, 1, 1]); // never above a weight
+  });
+  it("the dead never take a pool below half its full strength; the rest come off no pool (Military 6a, ruling 3)", () => {
+    // Nemausus at 105 of 200 may lose 5, down to its floor of 100; Tolosa at 1,000 of 2,300, below its floor of 1,150, loses none.
+    expect(deadRoom(105, 200, ALERT)).toBe(5);
+    expect(deadRoom(1000, 2300, ALERT)).toBe(0);
+    expect(deadOffDraws(24, [{ placeId: "nemausus", kind: "town", men: 60 }, { placeId: "tolosa", kind: "town", men: 60 }], [5, 0])).toEqual([{ placeId: "nemausus", kind: "town", men: 5 }, { placeId: "tolosa", kind: "town", men: 0 }]);
+    // Half rounded up: 74 of 147, so 73 is never left; 50 of 100, which is at half and on alert.
+    expect(alertFloor(147, ALERT)).toBe(74);
+    expect(alertFloor(100, ALERT)).toBe(50);
+    expect(onAlert(alertFloor(100, ALERT), 100, ALERT)).toBe(true);
+    expect(onAlert(alertFloor(147, ALERT), 147, ALERT)).toBe(false);
+    expect(alertFloor(10, 0.3)).toBe(3); // 0.3 × 10 is 3.0000000000000004 in floating point
+    expect(alertFloor(0, ALERT)).toBe(0);
   });
   it("the shown number is to the nearest 10", () => {
     expect([473, 475, 4, 500].map(aboutMen)).toEqual([470, 480, 0, 500]);
