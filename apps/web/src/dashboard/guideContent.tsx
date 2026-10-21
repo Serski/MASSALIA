@@ -114,15 +114,20 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       "Two parties contest the city: the PALAIOI, keepers of the old ways, and the DYNATOI, men of the new. Join one and build favor. The Archons and Ephors are elected — declare, campaign, win the vote, take office; the Strategoi are appointed by them, from any citizen with a seat and a Militia above 40, of either party or none, and serve until the term ends. The wealthy may buy a seat among the Three Hundred. A party's for-life leaders may stand for the city's offices too. The unfree have no voice until freedom.",
     ],
   },
-  // Strikes prompt 1 (ruled at STOP 1). Every number in it is content's:
-  // content/military/strikes.json, battle.json's regen and league-war.json's
-  // plunderMultiplier; apps/web/test/guide-war.test.tsx reads them back.
+  // Strikes prompt 1 (ruled at STOP 1), and Military 6a (ruled at STOP 2).
+  // Every number in it is content's: content/military/strikes.json, battle.json's
+  // alert.share, raid.rounds, rounds, holdings.maxPerHouse and regen, and
+  // league-war.json's plunderMultiplier; apps/web/test/guide-war.test.tsx reads
+  // them back.
   {
     id: "war",
     title: "War & Raids",
     paragraphs: [
-      "Every town and land remembers its raiders. Raid one place more than 10 times in a game year and its people come back at full strength, against the Massalian town or holding beside it where they most outnumber the men standing there. The march is seen 12 hours before it strikes, and every man standing in that place fights it. A raid that gets through takes 2 drachmae for each raider still standing, from the treasury or from the house that holds the place, and a town loses some of its people.",
+      "Every town and land remembers its raiders. Raid one place more than 10 times in a game year and its people come back with the men they have, against the Massalian town or holding beside it where they most outnumber the men standing there. The march is seen 12 hours before it strikes, and every man standing in that place fights it. A raid that gets through takes 2 drachmae for each raider still standing, from the treasury or from the house that holds the place, and a town loses some of its people.",
       "When the chamber votes a war, raids on the enemy pay half as much again, and the League's army may raid and attack them. The enemy marches too: once a season, except in Winter, on the Massalian town or holding beside its land where it most outnumbers the men standing there. A holding it storms is lost.",
+      "A town or land down to 50% of its full strength is on alert, and the map shows it. No raid can be made there until it regrows above 50%, and a raid already on the road turns back at its gates. Scouts and attacks still go, and a place on alert sends no march until it recovers.",
+      "A raid is fought over 2 rounds, an attack over 3. When an attack ends with only skirmishers left defending, they fall back and the place is taken.",
+      "A house holds 2 places at most.",
       "Garrisons and warbands win back 30% of their full strength each season.",
     ],
   },
