@@ -4,6 +4,7 @@
   "forceShare": 0.2,
   "warningHours": 12,
   "plunderPerRaider": 2,
+  "raidRounds": 1,
   "polis": { "peopleLoss": 0.02, "stabilityLoss": 1 },
   "raids": { "moreThan": 10, "windowHours": 96 }
 }

@@ -70,10 +70,15 @@ const option = (target: StrikeTarget, force: number, steps = 1): StrikeOption =>
 
 describe("the strikes' content", () => {
   it("reads the numbers from content", () => {
-    expect(c).toMatchObject({ forceShare: 0.2, warningHours: 12, plunderPerRaider: 2, polis: { peopleLoss: 0.02, stabilityLoss: 1 }, raids: { moreThan: 10, windowHours: 96 } });
+    expect(c).toMatchObject({ forceShare: 0.2, warningHours: 12, plunderPerRaider: 2, raidRounds: 1, polis: { peopleLoss: 0.02, stabilityLoss: 1 }, raids: { moreThan: 10, windowHours: 96 } });
     expect(strikeWarningMs(c)).toBe(12 * HOUR);
     expect(raidsWindowMs(c)).toBe(96 * HOUR);
     expect(() => parseStrikesContent({ ...read("content/military/strikes.json"), extra: 1 })).toThrow();
+    // A strike fought as a raid fights a whole, positive number of rounds.
+    expect(() => parseStrikesContent({ ...read("content/military/strikes.json"), raidRounds: 0 })).toThrow();
+    expect(() => parseStrikesContent({ ...read("content/military/strikes.json"), raidRounds: 1.5 })).toThrow();
+    const { raidRounds: _dropped, ...withoutRounds } = read("content/military/strikes.json");
+    expect(() => parseStrikesContent(withoutRounds)).toThrow();
   });
 });
 

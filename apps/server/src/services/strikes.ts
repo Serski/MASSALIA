@@ -484,7 +484,8 @@ async function strikeTx(tx: DbTx, strikeId: string, now: Date): Promise<StrikeRe
   const holderId = holding?.ownerPlayerId ?? null;
 
   // The battle (call 17): every man standing there, at his owner's morale, a
-  // town's walls with them; the enemy as a tribal warband, no turnout.
+  // town's walls with them; the enemy as a tribal warband, no turnout. Fought
+  // as a raid, it lasts the strikes' own raidRounds (Military 6a, ruling 6).
   const rows = await standingAt(tx, s.worldId, [placeId], at);
   const unitsC = getUnitsContent();
   const bandsC = getBandsContent();
@@ -505,7 +506,7 @@ async function strikeTx(tx: DbTx, strikeId: string, now: Date): Promise<StrikeRe
   });
   const enemy = battleC.npc.warband;
   const seed = crypto.createHash("sha256").update([s.worldId, s.id, placeId, at.toISOString()].join("|")).digest("hex");
-  const result = resolveBattle({ attacker: [{ id: "raiders", label: enemy.label, count: s.force, stats: enemy.stats }], defender, seed, config: battleC, mode: s.mode });
+  const result = resolveBattle({ attacker: [{ id: "raiders", label: enemy.label, count: s.force, stats: enemy.stats }], defender, seed, config: { ...battleC, raid: { ...battleC.raid, rounds: c.raidRounds } }, mode: s.mode });
 
   // Each owner's losses on his own rows.
   const characterOf = new Map<string, string>();

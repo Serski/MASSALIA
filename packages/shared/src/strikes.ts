@@ -19,6 +19,10 @@ import { distancesFrom } from "./reach.js";
 // `raids.windowHours` calls a march at the fight that tips it over; its force
 // is the raided place's full strength, its targets are next to the raided
 // place (STOP 0 ruling 5). No march is called, and none strikes, in Winter.
+// A strike fought as a raid (a raids march, or any march on a home town)
+// fights `raidRounds` rounds, not the players' raid.rounds (Military 6a,
+// ruling 6): its defenders choose nothing, and more rounds would only add to
+// their dead.
 // ---------------------------------------------------------------------------
 
 const strikesSchema = z
@@ -28,6 +32,7 @@ const strikesSchema = z
     forceShare: z.number().gt(0).max(1),
     warningHours: z.number().positive(),
     plunderPerRaider: z.number().int().nonnegative(),
+    raidRounds: z.number().int().positive(),
     polis: z.object({ peopleLoss: z.number().min(0).max(1), stabilityLoss: z.number().int().nonnegative() }).strict(),
     raids: z.object({ moreThan: z.number().int().positive(), windowHours: z.number().positive() }).strict(),
   })
