@@ -23,6 +23,17 @@ export type Exec = DbTx | Db;
 
 const MS_PER_DAY = 86_400_000;
 
+// A pool as a read at `at` finds it: below its content value it regrows by
+// regrownPool over the whole days since its marker, and `days` is how far the
+// marker moves. Every read of a pool goes through here, the persisting reads
+// below and the map's peek alike, so they agree at any instant (Military 6a).
+function regrownAt(stored: number, markerMs: number, base: number, at: Date, share: number): { value: number; days: number } {
+  if (stored >= base) return { value: stored, days: 0 };
+  const days = Math.floor(Math.max(0, at.getTime() - markerMs) / MS_PER_DAY);
+  if (days <= 0) return { value: stored, days: 0 };
+  return { value: regrownPool(stored, base, days, share), days };
+}
+
 let baseCache: Record<string, number> | null = null;
 
 // The content warband of a townless region (region-military.json); 0 for an id
@@ -53,10 +64,8 @@ export async function readRegionWarband(exec: Exec, worldId: string, regionId: s
     await exec.insert(regionMilitary).values({ worldId, regionId, warband: base, updatedAt: now }).onConflictDoNothing();
     return base;
   }
-  if (row.warband >= base) return row.warband;
-  const days = Math.floor(Math.max(0, now.getTime() - row.updatedAt.getTime()) / MS_PER_DAY);
-  if (days <= 0) return row.warband;
-  const regenerated = regrownPool(row.warband, base, days, getBattleContent().regen.warbandShare);
+  const { value: regenerated, days } = regrownAt(row.warband, row.updatedAt.getTime(), base, now, getBattleContent().regen.warbandShare);
+  if (days <= 0) return regenerated;
   await exec.update(regionMilitary).set({ warband: regenerated, updatedAt: new Date(row.updatedAt.getTime() + days * MS_PER_DAY) }).where(and(eq(regionMilitary.worldId, worldId), eq(regionMilitary.regionId, regionId)));
   return regenerated;
 }
@@ -115,10 +124,8 @@ async function townRow(exec: Exec, worldId: string, townId: string, now: Date) {
 export async function readTownGarrison(exec: Exec, worldId: string, townId: string, now: Date): Promise<number> {
   const base = await townBaseGarrison(townId);
   const row = await townRow(exec, worldId, townId, now);
-  if (row.garrison >= base) return row.garrison;
-  const days = Math.floor(Math.max(0, now.getTime() - row.updatedAt.getTime()) / MS_PER_DAY);
-  if (days <= 0) return row.garrison;
-  const regenerated = regrownPool(row.garrison, base, days, getBattleContent().regen.garrisonShare);
+  const { value: regenerated, days } = regrownAt(row.garrison, row.updatedAt.getTime(), base, now, getBattleContent().regen.garrisonShare);
+  if (days <= 0) return regenerated;
   await exec.update(townMilitary).set({ garrison: regenerated, updatedAt: new Date(row.updatedAt.getTime() + days * MS_PER_DAY) }).where(and(eq(townMilitary.worldId, worldId), eq(townMilitary.townId, townId)));
   return regenerated;
 }
@@ -140,4 +147,23 @@ export async function writeTownGarrison(exec: Exec, worldId: string, townId: str
 export async function readTownFleet(exec: Exec, worldId: string, townId: string, now: Date): Promise<{ pentekonters: number; triremes: number }> {
   const row = await townRow(exec, worldId, townId, now);
   return { pentekonters: row.pentekonters, triremes: row.triremes };
+}
+
+// Every pool row of the world as a read at `at` would find it, with its full
+// strength, writing nothing (the map's alert, Military 6a): towns by town id,
+// townless regions by region id. A place with no row is at its content value.
+export type PeekedPool = { pool: number; full: number };
+export async function peekPools(exec: Exec, worldId: string, at: Date): Promise<{ towns: Map<string, PeekedPool>; regions: Map<string, PeekedPool> }> {
+  const regen = getBattleContent().regen;
+  const towns = new Map<string, PeekedPool>();
+  for (const row of await exec.select().from(townMilitary).where(eq(townMilitary.worldId, worldId))) {
+    const full = await townBaseGarrison(row.townId);
+    towns.set(row.townId, { pool: regrownAt(row.garrison, row.updatedAt.getTime(), full, at, regen.garrisonShare).value, full });
+  }
+  const regions = new Map<string, PeekedPool>();
+  for (const row of await exec.select().from(regionMilitary).where(eq(regionMilitary.worldId, worldId))) {
+    const full = await regionBaseWarband(row.regionId);
+    regions.set(row.regionId, { pool: regrownAt(row.warband, row.updatedAt.getTime(), full, at, regen.warbandShare).value, full });
+  }
+  return { towns, regions };
 }

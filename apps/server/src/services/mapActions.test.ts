@@ -37,9 +37,10 @@ async function loadModules() {
   const muster = await import("./koinonMuster.js");
   const lock = await import("./lock.js");
   const mapReach = await import("./mapReach.js");
+  const mapAlert = await import("./mapAlert.js");
   const traits = await import("./traits.js");
   const age = await import("./age.js");
-  return { dbPkg, shared, buildings, barracks, mapGraph, mapPools, holdings, actions, muster, lock, mapReach, traits, age };
+  return { dbPkg, shared, buildings, barracks, mapGraph, mapPools, holdings, actions, muster, lock, mapReach, mapAlert, traits, age };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -1355,12 +1356,20 @@ suite("Map actions (integration)", () => {
     expect(await launch(ctx, "attack", "R046", [hoplites.id])).toMatchObject({ ok: true });
   });
 
-  it("the alert lifts when regrowth takes the place above half: refused before the day turns, sent after it", async () => {
+  it("the alert lifts when regrowth takes the place above half, and the map's flag, the reach's line and the refusal agree on either side of the day it crosses", async () => {
     const { ctx } = await makePlayer();
     const peltasts = await insertRow(ctx, { unitId: "peltast", count: 40 });
-    await setWarband("R046", 30, at(9)); // a full pool's first loss starts its clock at 9
-    expect(await launch(ctx, "raid", "R046", [peltasts.id], at(9.99))).toEqual({ ok: false, code: 409, error: "Salyes is on alert, the herds are driven into the hills." });
-    // A day on, 30 of 100 has won back 30: 60, above half.
+    await setWarband("R046", 30, at(9)); // a full pool's first loss starts its clock at 9: a day on it reads 60
+    await setGarrison("reii", 50, at(9)); // a day on: 50 + 48 = 98 of 160
+    const line = "Salyes is on alert, the herds are driven into the hills.";
+    // A millisecond before the day turns, both are on alert, to the map and to an order alike.
+    const before = new Date(at(10).getTime() - 1);
+    expect(await m.mapAlert.placesOnAlert(db, worldId, before)).toEqual({ towns: ["reii"], regions: ["R046"] });
+    expect((await reach(ctx, before)).alert).toEqual({ towns: { reii: "Reii is on alert, gates are shut." }, regions: { R046: line } });
+    expect(await launch(ctx, "raid", "R046", [peltasts.id], before)).toEqual({ ok: false, code: 409, error: line });
+    // At the turn of the day, 30 of 100 has won back 30 and 50 of 160 has won back 48: neither is on alert.
+    expect(await m.mapAlert.placesOnAlert(db, worldId, at(10))).toEqual({ towns: [], regions: [] });
+    expect((await reach(ctx, at(10))).alert).toEqual({ towns: {}, regions: {} });
     expect(await launch(ctx, "raid", "R046", [peltasts.id], at(10))).toMatchObject({ ok: true });
   });
 

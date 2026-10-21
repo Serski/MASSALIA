@@ -22,7 +22,11 @@ async function loadModules() {
   const dbPkg = await import("@massalia/db");
   const map = await import("./map.js");
   const { errorHandler } = await import("../errorHandler.js");
-  return { dbPkg, map, errorHandler };
+  const buildings = await import("../services/buildings.js");
+  const barracks = await import("../services/barracks.js");
+  const mapGraph = await import("../services/mapGraph.js");
+  const mapPools = await import("../services/mapPools.js");
+  return { dbPkg, map, errorHandler, buildings, barracks, mapGraph, mapPools };
 }
 type Mods = Awaited<ReturnType<typeof loadModules>>;
 
@@ -35,6 +39,10 @@ suite("GET /api/map/military (integration)", () => {
   beforeAll(async () => {
     m = await loadModules();
     db = m.dbPkg.createDb();
+    // The alert reads the battle content and the map's towns (Military 6a).
+    await m.buildings.loadBuildingsContent();
+    await m.barracks.loadBarracksContent();
+    await m.mapGraph.loadMapGraph();
     app = Fastify();
     app.setErrorHandler(m.errorHandler);
     await app.register(cookie, { secret: "test-session-secret-at-least-32-chars-long" });
@@ -123,6 +131,24 @@ suite("GET /api/map/military (integration)", () => {
     expect(body.strikes.regions).toEqual({});
     const text = JSON.stringify(body.strikes);
     for (const secret of ["473", "tolosa", "nemausus", "draws", "force"]) expect(text).not.toContain(secret);
+  });
+
+  // Military 6a, ruling 2: the places on alert are shown to everyone on the map.
+  it("the places on alert are flagged for every player, a flag and no number; one above half, a holding and Massalia's own never are", async () => {
+    const viewer = await freshPlayer();
+    const holder = await freshPlayer();
+    const now = new Date();
+    await m.mapPools.writeTownGarrison(db, worldId, "reii", 80, now); // half its full 160
+    await m.mapPools.writeRegionWarband(db, worldId, "R046", 37, now); // under half its full 100
+    await m.mapPools.writeRegionWarband(db, worldId, "R078", 51, now); // above half
+    await m.mapPools.writeRegionWarband(db, worldId, "R057", 100, now); // a quarter of its 400, but held
+    await db.insert(m.dbPkg.playerHoldings).values({ worldId, regionId: "R057", townId: "", ownerPlayerId: holder.playerId, kind: "conquest", previousOwner: "sordones", since: now, lastGarrisonedAt: now, lastTributeAt: now });
+    await m.mapPools.writeTownGarrison(db, worldId, "agathe", 10, now); // Massalia's own
+    const body = (await get(viewer.cookie)).json() as { alert: unknown };
+    expect(body.alert).toEqual({ towns: { reii: true }, regions: { R046: true } });
+    // The same for any player: it is the place's, not the viewer's intel.
+    expect(((await get(holder.cookie)).json() as { alert: unknown }).alert).toEqual(body.alert);
+    expect(JSON.stringify(body.alert)).not.toMatch(/80|37|160|100/);
   });
 
   it("a home town's garrison is the League's men alone: a player's own men standing there do not count, and it follows the army as it thins", async () => {

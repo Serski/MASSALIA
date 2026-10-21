@@ -43,6 +43,8 @@ interface MilitaryPayload {
   regions: Record<string, { warband: number; source: MilitarySource; scoutedGameDate?: string }>;
   holdings: { towns: Record<string, Holder>; regions: Record<string, Holder> };
   strikes: { towns: Record<string, MilitaryStrike>; regions: Record<string, MilitaryStrike> };
+  // The places on alert (Military 6a, ruling 2), for everyone: a flag, never a pool's number.
+  alert: { towns: Record<string, true>; regions: Record<string, true> };
 }
 
 // Open /stream connections per user id. A user may hold at most MAX_STREAMS_PER_USER
@@ -280,7 +282,18 @@ export async function mapRoutes(app: FastifyInstance) {
     } catch (error) {
       console.error(`strikes: failed ${error instanceof Error ? error.message : String(error)}`);
     }
-    return { towns, regions, holdings, strikes: strikesShown } satisfies MilitaryPayload;
+    // The places on alert (Military 6a), read as a raid's pool would be at this
+    // instant and written nowhere: a flag for everyone, never a number. A
+    // failure is logged and the map reads none, as for the strikes.
+    let alert: MilitaryPayload["alert"] = { towns: {}, regions: {} };
+    try {
+      const { placesOnAlert } = await import("../services/mapAlert.js");
+      const onAlert = await placesOnAlert(db, worldId, new Date());
+      alert = { towns: Object.fromEntries(onAlert.towns.map((id) => [id, true as const])), regions: Object.fromEntries(onAlert.regions.map((id) => [id, true as const])) };
+    } catch (error) {
+      console.error(`alert: failed ${error instanceof Error ? error.message : String(error)}`);
+    }
+    return { towns, regions, holdings, strikes: strikesShown, alert } satisfies MilitaryPayload;
   });
 
   // Reach (barracks prompt 3a): which land provinces the player's force can

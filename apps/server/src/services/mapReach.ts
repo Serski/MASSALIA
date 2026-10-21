@@ -20,6 +20,7 @@ export { fleetInStock };
 import type { ActingContext } from "./buildings.js";
 import { garrisonCount, holdingBaseId, listHoldings, listWorldHoldings, tributeRateOf } from "./holdings.js";
 import { isLeague, leagueBalance, leagueGateMap, leagueHomeTowns, leaguePlaces, leagueSightings, marketPrice, type LeagueContext, type LeagueSightings } from "./leagueOrders.js";
+import { alertLinesAt } from "./mapAlert.js";
 import { getTopology } from "./mapGraph.js";
 import { loadMilitaryOwners } from "./mapMilitary.js";
 import { regionDisplayName, townDisplayName } from "./mapNames.js";
@@ -67,6 +68,10 @@ export type ReachView = {
   fleet: { ships: Record<string, number>; labels: Record<string, string>; range: number; space: number; tiers?: { range: number; space: number }[]; hulls: FleetStripView["ships"]; supplies: number };
   reach: Record<string, ReachEntry>;
   moveTargets: MoveTargetView[];
+  // The places on alert (Military 6a, ruling 2), by town and by townless
+  // region, with the line a raid there is refused with: the map greys Raid
+  // with it. Its own field, never a reach verdict: Scout reads the raid verdict.
+  alert: { towns: Record<string, string>; regions: Record<string, string> };
 };
 
 // Regions Massalia owns per the military content: townless regions by owner and
@@ -252,7 +257,8 @@ export async function reachView(exec: Exec, ctx: ActingContext, now: Date, opts:
   const campaign: CampaignView = { season: cs.season, open: cs.open, opensAt: cs.opensAtMs === null ? null : new Date(cs.opensAtMs).toISOString() };
   const moveTargets = await moveTargetsOf(topology, allBases, ctx, exec);
   const labels = Object.fromEntries(Object.entries(getShipsContent().ships).map(([id, d]) => [id, d.label]));
-  return { now: now.toISOString(), campaign, bases, force: forceStats(force), fleet: { ships: counts, labels, ...fleetStats(fleet), hulls: strip.ships, supplies }, reach, moveTargets };
+  const alert = await alertLinesAt(exec, ctx.worldId, now);
+  return { now: now.toISOString(), campaign, bases, force: forceStats(force), fleet: { ships: counts, labels, ...fleetStats(fleet), hulls: strip.ships, supplies }, reach, moveTargets, alert };
 }
 
 // --- The League's map view (government prompt 5b) -----------------------------
