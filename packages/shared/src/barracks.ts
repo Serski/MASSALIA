@@ -80,6 +80,9 @@ export type BattleContent = {
     townPlunderMultiplier: number;
     opinion: { chance: number; loss: number };
   };
+  // A place no house holds is on alert at or below `share` of its full
+  // strength (Military 6a, ruling 2; alert.ts): no raid is ordered there.
+  alert: { share: number };
   // A pool regrows this share of its full strength (the content value) each whole season, rounded up (strikes prompt 1).
   regen: { warbandShare: number; garrisonShare: number };
   // Towns (3c): walls add min(walls, wallsDefCap) to every defending row's def.
@@ -317,6 +320,7 @@ function battleContentSchema(goods: ReadonlySet<string>) {
         opinion: z.object({ chance: z.number().min(0).max(1), loss: z.number().int().positive() }).strict(),
       })
       .strict(),
+    alert: z.object({ share: z.number().gt(0).lt(1) }).strict(),
     regen: z.object({ warbandShare: z.number().min(0).max(1), garrisonShare: z.number().min(0).max(1) }).strict(),
     town: z.object({ wallsDefCap: z.number().int().nonnegative() }).strict(),
     tribute: z.object({ perPopulation: z.number().nonnegative(), minGarrisonPerPopulation: z.number().nonnegative() }).strict(),

@@ -36,6 +36,7 @@ export * from "./mapActions.js";
 export * from "./mapGraph.js";
 export * from "./reach.js";
 export * from "./battle.js";
+export * from "./alert.js";
 export * from "./names.js";
 export * from "./news.js";
 export * from "./market.js";
