@@ -29,6 +29,7 @@ describe("battle content", () => {
     expect(battle.regen).toEqual({ warbandShare: 0.3, garrisonShare: 0.3 });
     expect(battle.town).toEqual({ wallsDefCap: 3 });
     expect(battle.tribute).toEqual({ perPopulation: 0.08, minGarrisonPerPopulation: 0.01 });
+    expect(battle.holdings).toEqual({ maxPerHouse: 2 });
     expect(battle.regionTribute).toEqual({ grainPerWarband: 0.05, timberPerWarband: 0.025, minGrain: 15, minTimber: 8, levyPerYear: 5 });
     expect(battle.move).toEqual({ minutesPerStep: 30, minutesWithinRegion: 10 });
     // The road (raids prompt 4): whole minutes each way.

@@ -90,6 +90,9 @@ export type BattleContent = {
   // A held town pays perPopulation × population drachmae a day while garrisoned
   // by at least minGarrisonPerPopulation × population men.
   tribute: { perPopulation: number; minGarrisonPerPopulation: number };
+  // A house holds at most maxPerHouse places, towns and lands together
+  // (Military 6a, ruling 5; mapActions.ts). The League has no cap.
+  holdings: { maxPerHouse: number };
   // A held townless region pays goods a day from its content warband, and adds
   // levyPerYear men to the levy's growth at each year boundary while garrisoned.
   regionTribute: { grainPerWarband: number; timberPerWarband: number; minGrain: number; minTimber: number; levyPerYear: number };
@@ -324,6 +327,7 @@ function battleContentSchema(goods: ReadonlySet<string>) {
     regen: z.object({ warbandShare: z.number().min(0).max(1), garrisonShare: z.number().min(0).max(1) }).strict(),
     town: z.object({ wallsDefCap: z.number().int().nonnegative() }).strict(),
     tribute: z.object({ perPopulation: z.number().nonnegative(), minGarrisonPerPopulation: z.number().nonnegative() }).strict(),
+    holdings: z.object({ maxPerHouse: z.number().int().positive() }).strict(),
     regionTribute: z
       .object({
         grainPerWarband: z.number().nonnegative(),

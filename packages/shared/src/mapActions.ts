@@ -31,3 +31,12 @@ export function allowedMapActions(input: AllowedMapActionsInput): MapActionType[
   if (input.kind === "region" && !input.hasTown) actions.push("colonise");
   return actions;
 }
+
+// A house holds at most `max` places, towns and lands together (Military 6a,
+// ruling 5; battle.json holdings.maxPerHouse). At the cap its attack is
+// refused, and Attack is greyed on the map, with the cap's line; an attack that
+// reaches its place after the house filled up turns back with it. A house
+// already above the cap keeps what it holds. The League has no cap.
+export const atHoldingsCap = (held: number, max: number): boolean => held >= max;
+export const holdingsCapLine = (max: number): string => `Your house holds all it can: ${max} ${max === 1 ? "place" : "places"}.`;
+export const holdingsCapTurnedBackLine = (place: string, max: number): string => `Turned back from ${place}. ${holdingsCapLine(max)}`;
