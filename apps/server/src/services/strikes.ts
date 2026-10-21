@@ -6,6 +6,7 @@ import { and, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { createDb, effectLog, ensureLeagueCities, houses, koinonMusters, leagueCities, offices, leaguePlayerId, loadFactions, playerCharacters, playerHoldings, playerMarches, players, playerUnits, strikeParts, strikes, treasuries, worlds, type StrikeDraw } from "@massalia/db";
 import {
   aboutMen,
+  aboveAlertAt,
   bandDef,
   chooseTarget,
   deadOffDraws,
@@ -20,6 +21,7 @@ import {
   leagueLedgerReason,
   marchIsFight,
   musterIsFight,
+  onAlert,
   parseStrikesContent,
   polisPeopleLost,
   raidsCallAt,
@@ -56,7 +58,7 @@ import { lockPlayer } from "./lock.js";
 import { getTopology } from "./mapGraph.js";
 import { loadMilitaryOwners } from "./mapMilitary.js";
 import { polityDisplayName, regionDisplayName, townDisplayName } from "./mapNames.js";
-import { readRegionWarband, readTownGarrison, regionBaseWarband, townBaseGarrison, writeRegionWarband, writeTownGarrison } from "./mapPools.js";
+import { peekPool, readRegionWarband, readTownGarrison, regionBaseWarband, townBaseGarrison, writeRegionWarband, writeTownGarrison } from "./mapPools.js";
 import { townStats } from "./townStats.js";
 
 // ---------------------------------------------------------------------------
@@ -209,7 +211,7 @@ async function roadOf(exec: Exec, worldId: string, nationId: string): Promise<{ 
 // again at the place's next fight.
 const stayedHome = new Set<string>();
 
-type CallInput = { world: WorldRow; nation: Nation; trigger: "war" | "raids"; callMs: number; raided?: { placeId: string; kind: "town" | "region"; regionId: string; full: number; atMs: number } };
+type CallInput = { world: WorldRow; nation: Nation; trigger: "war" | "raids"; callMs: number; raided?: { placeId: string; kind: "town" | "region"; regionId: string; full: number; men: number; atMs: number } };
 
 // Weigh the targets as they stand at the call and send the march, or stay home.
 async function callMarch(input: CallInput): Promise<string | null> {
@@ -318,6 +320,7 @@ async function fightsSince(world: WorldRow, sinceMs: number): Promise<Map<string
 // or at Spring's start).
 async function callRaidsMarches(world: WorldRow, wars: LeagueWarSpan[], now: Date): Promise<void> {
   const c = await getStrikesContent();
+  const alertShare = getBattleContent().alert.share;
   const windowMs = raidsWindowMs(c);
   const topology = getTopology();
   const owners = await loadMilitaryOwners();
@@ -332,13 +335,27 @@ async function callRaidsMarches(world: WorldRow, wars: LeagueWarSpan[], now: Dat
     if (fireMs === null) continue;
     const road = await roadOf(db, world.id, nation.id);
     if (road.marching) continue;
-    const callMs = raidsCallAt(Math.max(fireMs, road.clearMs ?? fireMs), strikeWarningMs(c), world.startedMs);
+    let callMs = raidsCallAt(Math.max(fireMs, road.clearMs ?? fireMs), strikeWarningMs(c), world.startedMs);
     if (callMs > now.getTime()) continue;
     if (nation.factionId !== null && leagueAtWarWith(wars, nation.factionId, callMs)) continue;
     const kind = f.townId !== null ? ("town" as const) : ("region" as const);
-    const full = f.townId !== null ? await townBaseGarrison(f.townId) : await regionBaseWarband(f.regionId);
     const regionId = f.townId !== null ? (topology.townRegion.get(f.townId) ?? f.regionId) : f.regionId;
-    await callMarch({ world, nation, trigger: "raids", callMs, raided: { placeId, kind, regionId, full, atMs: fireMs } });
+    // What the raided place has at the call (Military 6a, ruling 3). On alert it
+    // does not march: the call moves to the first whole day of its pool's own
+    // regrowth clock that takes it above half, then the Winter rule. Weighed
+    // again at every pass, nothing stored: a later fight there moves it again.
+    const place = { regionId: f.regionId, townId: f.townId };
+    let pool = await peekPool(db, world.id, place, new Date(callMs));
+    if (onAlert(pool.pool, pool.full, alertShare)) {
+      const above = pool.markerMs === null ? null : aboveAlertAt(pool.stored, pool.full, pool.markerMs, pool.regenShare, alertShare);
+      if (above === null) continue;
+      callMs = raidsCallAt(Math.max(above, callMs), strikeWarningMs(c), world.startedMs);
+      if (callMs > now.getTime()) continue;
+      if (nation.factionId !== null && leagueAtWarWith(wars, nation.factionId, callMs)) continue;
+      pool = await peekPool(db, world.id, place, new Date(callMs));
+      if (onAlert(pool.pool, pool.full, alertShare)) continue;
+    }
+    await callMarch({ world, nation, trigger: "raids", callMs, raided: { placeId, kind, regionId, full: pool.full, men: pool.pool, atMs: fireMs } });
   }
 }
 

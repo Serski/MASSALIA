@@ -109,11 +109,14 @@ describe("the force", () => {
     // Taken from them and next to their land: the larger of the two.
     expect(warForce(t, { regionId: "R050", takenFrom: true, full: 10 }, landOf("volcae"), c.forceShare).force).toBe(500);
   });
-  it("a raids march: the raided place's full strength, all drawn from it (STOP 0 ruling 5)", () => {
+  it("a raids march: what the raided place has at the call, never more than its full strength, all drawn from it (Military 6a, ruling 3)", () => {
     const r057 = landOf("sordones").find((p) => p.placeId === "R057")!;
-    // As it stands it may be nearly empty: the march brings its full strength all the same.
-    const asItStands: NationPlace = { ...r057, men: 3 };
-    expect(raidsForce(asItStands)).toEqual({ force: 400, draws: [{ placeId: "R057", kind: "region", men: 400 }] });
+    const asItStands = (men: number): NationPlace => ({ ...r057, men });
+    expect(raidsForce(asItStands(400))).toEqual({ force: 400, draws: [{ placeId: "R057", kind: "region", men: 400 }] });
+    expect(raidsForce(asItStands(260))).toEqual({ force: 260, draws: [{ placeId: "R057", kind: "region", men: 260 }] });
+    // A pool above its full strength sends no more than full; an empty one sends nobody.
+    expect(raidsForce(asItStands(500))).toEqual({ force: 400, draws: [{ placeId: "R057", kind: "region", men: 400 }] });
+    expect(raidsForce(asItStands(0))).toEqual({ force: 0, draws: [] });
   });
   it("the dead come off the draws in proportion, never more than a draw sent", () => {
     expect(deadOffDraws(100, [{ placeId: "nemausus", kind: "town", men: 40 }, { placeId: "tolosa", kind: "town", men: 460 }])).toEqual([{ placeId: "nemausus", kind: "town", men: 8 }, { placeId: "tolosa", kind: "town", men: 92 }]);

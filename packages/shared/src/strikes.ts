@@ -17,8 +17,9 @@ import { distancesFrom } from "./reach.js";
 // is a fifth of the men in its towns and lands next to the target. Raids: a
 // town or land fought more than `raids.moreThan` times within
 // `raids.windowHours` calls a march at the fight that tips it over; its force
-// is the raided place's full strength, its targets are next to the raided
-// place (STOP 0 ruling 5). No march is called, and none strikes, in Winter.
+// is what the raided place has, never more than full (Military 6a, ruling 3),
+// its targets are next to the raided place (STOP 0 ruling 5). No march is
+// called, and none strikes, in Winter.
 // A strike fought as a raid (a raids march, or any march on a home town)
 // fights `raidRounds` rounds, not the players' raid.rounds (Military 6a,
 // ruling 6): its defenders choose nothing, and more rounds would only add to
@@ -127,10 +128,13 @@ export function warForce(t: Topology, target: Pick<StrikeTarget, "regionId" | "t
   return { force: target.takenFrom ? Math.max(drawn, target.full) : drawn, draws };
 }
 
-// A raids march's force (STOP 0 ruling 5): the raided place's full strength,
-// all of it drawn from that place.
-export function raidsForce(raided: Pick<NationPlace, "placeId" | "kind" | "full">): { force: number; draws: StrikeDrawView[] } {
-  return { force: raided.full, draws: raided.full > 0 ? [{ placeId: raided.placeId, kind: raided.kind, men: raided.full }] : [] };
+// A raids march's force (STOP 0 ruling 5; Military 6a, ruling 3): what the
+// raided place has at the call, never more than its full strength, all of it
+// drawn from that place. A place on alert does not march at all (the call
+// waits for aboveAlertAt).
+export function raidsForce(raided: Pick<NationPlace, "placeId" | "kind" | "full" | "men">): { force: number; draws: StrikeDrawView[] } {
+  const men = Math.max(0, Math.min(Math.floor(raided.men), raided.full));
+  return { force: men, draws: men > 0 ? [{ placeId: raided.placeId, kind: raided.kind, men }] : [] };
 }
 
 // The enemy's dead off the pools it drew from, in proportion to what each sent

@@ -169,16 +169,21 @@ export async function peekPools(exec: Exec, worldId: string, at: Date): Promise<
 }
 
 // One place's pool as a read at `at` would find it, with its full strength,
-// writing nothing: the alert's test of a single place (Military 6a). A place
-// with no row is at its content value.
-export async function peekPool(exec: Exec, worldId: string, place: { regionId: string; townId: string | null }, at: Date): Promise<PeekedPool> {
+// writing nothing: the alert's test of a single place (Military 6a). Beside it
+// the pool's own clock as stored (its value, its marker, its regrowth share),
+// which a raids march waiting out an alert counts from. A place with no row is
+// at its content value, its clock not started (markerMs null).
+export type PeekedClock = PeekedPool & { stored: number; markerMs: number | null; regenShare: number };
+export async function peekPool(exec: Exec, worldId: string, place: { regionId: string; townId: string | null }, at: Date): Promise<PeekedClock> {
   const regen = getBattleContent().regen;
   if (place.townId !== null) {
     const full = await townBaseGarrison(place.townId);
     const row = (await exec.select().from(townMilitary).where(and(eq(townMilitary.worldId, worldId), eq(townMilitary.townId, place.townId))).limit(1))[0];
-    return { pool: row ? regrownAt(row.garrison, row.updatedAt.getTime(), full, at, regen.garrisonShare).value : full, full };
+    if (!row) return { pool: full, full, stored: full, markerMs: null, regenShare: regen.garrisonShare };
+    return { pool: regrownAt(row.garrison, row.updatedAt.getTime(), full, at, regen.garrisonShare).value, full, stored: row.garrison, markerMs: row.updatedAt.getTime(), regenShare: regen.garrisonShare };
   }
   const full = await regionBaseWarband(place.regionId);
   const row = (await exec.select().from(regionMilitary).where(and(eq(regionMilitary.worldId, worldId), eq(regionMilitary.regionId, place.regionId))).limit(1))[0];
-  return { pool: row ? regrownAt(row.warband, row.updatedAt.getTime(), full, at, regen.warbandShare).value : full, full };
+  if (!row) return { pool: full, full, stored: full, markerMs: null, regenShare: regen.warbandShare };
+  return { pool: regrownAt(row.warband, row.updatedAt.getTime(), full, at, regen.warbandShare).value, full, stored: row.warband, markerMs: row.updatedAt.getTime(), regenShare: regen.warbandShare };
 }

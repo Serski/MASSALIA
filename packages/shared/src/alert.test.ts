@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { alertLine, onAlert } from "./alert.js";
+import { aboveAlertAt, alertLine, onAlert } from "./alert.js";
 import { parseBattleContent } from "./barracks.js";
 import { parseBuildingsContent } from "./buildings.js";
 
@@ -40,6 +40,22 @@ describe("the alert", () => {
     // 0.29 × 100 is 28.999999999999996 in floating point: 29 is still at the share.
     expect(onAlert(29, 100, 0.29)).toBe(true);
     expect(onAlert(30, 100, 0.29)).toBe(false);
+  });
+
+  it("a pool on alert comes off it at the first whole day of its own clock whose regrowth takes it above half", () => {
+    const DAY = 86_400_000;
+    const marker = Date.UTC(2000, 0, 10, 10, 30);
+    const regen = battle.regen.warbandShare; // 30 of 100 a day
+    // 20 reads 50 a day on (still at half) and 80 two days on.
+    expect(aboveAlertAt(20, 100, marker, regen, share)).toBe(marker + 2 * DAY);
+    expect(aboveAlertAt(50, 100, marker, regen, share)).toBe(marker + DAY);
+    expect(aboveAlertAt(0, 100, marker, regen, share)).toBe(marker + 2 * DAY);
+    // 150 of 400 regrows 120 a day: 270 a day on.
+    expect(aboveAlertAt(150, 400, marker, regen, share)).toBe(marker + DAY);
+    // Not on alert, a place with no full strength included: its marker. No regrowth: never.
+    expect(aboveAlertAt(51, 100, marker, regen, share)).toBe(marker);
+    expect(aboveAlertAt(20, 100, marker, 0, share)).toBeNull();
+    expect(aboveAlertAt(0, 0, marker, regen, share)).toBe(marker);
   });
 
   it("the lines: a town shuts its gates, a land drives its herds into the hills", () => {

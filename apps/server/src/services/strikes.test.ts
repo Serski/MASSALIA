@@ -173,6 +173,60 @@ suite("the strikes (integration)", () => {
     expect(await strikeRows()).toHaveLength(1);
   });
 
+  // Military 6a, ruling 3: a raids march sends what its place has, and none marches from a place on alert.
+  // A house raids R057 eleven times on `day`, an hour apart; the 11th, at 10:30, tips the count over.
+  async function r057Fights(day: number): Promise<Date> {
+    const house = await makePlayer();
+    for (let i = 0; i < 11; i++) {
+      await db.insert(m.dbPkg.playerMarches).values({ worldId, ownerPlayerId: house.ctx.playerId, kind: "raid", regionId: "R057", townId: null, baseId: "R060", route: "land", steps: 1, minutes: 30, departedAt: plus(at(day), i * HOUR), arrivesAt: plus(at(day), i * HOUR + 30 * MIN), status: "resolved", resolvedAt: plus(at(day), i * HOUR + 30 * MIN), report: { winner: "attacker" } });
+    }
+    return plus(at(day), 10 * HOUR + 30 * MIN);
+  }
+  const setR057 = (warband: number, when: Date) => m.mapPools.writeRegionWarband(db, worldId, "R057", warband, when);
+
+  it("a raids march sends what the raided place has at the call, never more than its full strength", async () => {
+    const eleventh = await r057Fights(9);
+    await setR057(260, at(9)); // above half its full 400
+    await m.strikes.callDueStrikes(plus(eleventh, MIN), { raids: true });
+    expect(await strikeRows()).toMatchObject([{ trigger: "raids", triggerPlaceId: "R057", townId: "agathe", force: 260, about: 260, draws: [{ placeId: "R057", kind: "region", men: 260 }] }]);
+  });
+
+  it("a raids march from a pool above its full strength sends no more than full", async () => {
+    const eleventh = await r057Fights(9);
+    await setR057(500, at(9));
+    await m.strikes.callDueStrikes(plus(eleventh, MIN), { raids: true });
+    expect(await strikeRows()).toMatchObject([{ force: 400, draws: [{ placeId: "R057", kind: "region", men: 400 }] }]);
+  });
+
+  it("a raids march called while its place is on alert waits for the first whole day of the pool's regrowth above half, and sends what the place has then", async () => {
+    const eleventh = await r057Fights(9);
+    await setR057(150, eleventh); // under half its full 400; its clock starts at the 11th fight
+    await m.strikes.callDueStrikes(plus(eleventh, MIN), { raids: true });
+    await m.strikes.callDueStrikes(plus(eleventh, DAY - MIN), { raids: true });
+    expect(await strikeRows()).toEqual([]);
+    // A day on, 150 has won back 120 (30% of 400): 270, above half. The march is called at that instant.
+    await m.strikes.callDueStrikes(plus(eleventh, DAY + MIN), { raids: true });
+    const [s, ...rest] = await strikeRows();
+    expect(rest).toEqual([]);
+    expect(s).toMatchObject({ nationId: "sordones", trigger: "raids", triggerPlaceId: "R057", townId: "agathe", force: 270, about: 270, draws: [{ placeId: "R057", kind: "region", men: 270 }] });
+    expect(s!.triggerAt).toEqual(eleventh);
+    expect(s!.calledAt).toEqual(plus(eleventh, DAY));
+    expect(s!.strikesAt).toEqual(plus(eleventh, DAY + 12 * HOUR));
+  });
+
+  it("a raids march whose wait ends in Winter is called at the next Spring's start", async () => {
+    // The 11th fight is in Autumn (day 11); a day of regrowth lands in Winter (day 12): the call waits for Spring (day 13).
+    const eleventh = await r057Fights(11);
+    await setR057(150, eleventh);
+    await m.strikes.callDueStrikes(plus(eleventh, DAY + MIN), { raids: true });
+    expect(await strikeRows()).toEqual([]);
+    await m.strikes.callDueStrikes(plus(at(13), MIN), { raids: true });
+    const [s] = await strikeRows();
+    // Spring starts 37½ hours after the 11th fight: one whole day of the pool's clock, 150 + 120 = 270.
+    expect(s).toMatchObject({ trigger: "raids", triggerPlaceId: "R057", force: 270 });
+    expect(s!.calledAt).toEqual(at(13));
+  });
+
   // --- the battle ------------------------------------------------------------------
 
   it("a raid on Agathe is driven off by the League's men and a house's together, each owner losing his own; the enemy's dead come off Tolosa and Nemausus in proportion", async () => {
