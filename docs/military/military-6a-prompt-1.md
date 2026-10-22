@@ -89,3 +89,30 @@ Go on to Phase 1 and stop at STOP 1.
 4. Calibration through the server's tsx, no lockfile change: accepted.
 
 Go on through Phases 2 to 5 and stop at STOP 2. In the STOP 2 report, include a browser check of a town and a land on alert (the map flag, Raid greyed with each line), Attack greyed with the cap line for a house at 2 places, and a raid turned back at arrival.
+
+## Rulings at STOP 2 (Argiris, 21 Oct 2026)
+
+1. Calibration through the server's tsx: accepted; tsx for shared is a later tooling commit.
+4. A war march weighed at the call, its dead floored at half if its place falls on alert during the warning: accepted.
+5. Town flags fading with the town markers: accepted.
+6. "alert: failed" with no flags on the map: accepted (act still refuses on its own reading).
+7. The new payload fields: accepted.
+
+Two commits before the push:
+
+A. web: the Guide's War & Raids entry (apps/web/src/dashboard/guideContent.tsx), in Argiris's words. Every number is read from content like the existing ones (strikes.json, battle.json's alert.share, raid.rounds, rounds, holdings.maxPerHouse and regen), and the entry's render test reads each one back:
+   1. "Every town and land remembers its raiders. Raid one place more than 10 times in a game year and its people come back with the men they have, against the Massalian town or holding beside it where they most outnumber the men standing there. The march is seen 12 hours before it strikes, and every man standing in that place fights it. A raid that gets through takes 2 drachmae for each raider still standing, from the treasury or from the house that holds the place, and a town loses some of its people."
+   2. The war paragraph, unchanged.
+   3. "A town or land down to 50% of its full strength is on alert, and the map shows it. No raid can be made there until it regrows above 50%, and a raid already on the road turns back at its gates. Scouts and attacks still go, and a place on alert sends no march until it recovers."
+   4. "A raid is fought over 2 rounds, an attack over 3. When an attack ends with only skirmishers left defending, they fall back and the place is taken."
+   5. "A house holds 2 places at most."
+   6. The regrowth paragraph, unchanged.
+
+B. docs: one line in AGENTS.md under Server and data, after the strikes line: "The alert (battle.json alert.share): a place no house holds at or below that share of its full strength takes no raid from a house, a koinon or the League. act, openMuster, the reach and GET /military read the one shared check through regrownPool, so the map and the refusal agree. A house holds at most holdings.maxPerHouse places; the League has no cap. A strike fought as a raid reads strikes.json raidRounds, not battle.json raid.rounds."
+
+Then the push:
+- Gate on massalia_6a_test at the new HEAD, ending "GATE GREEN: HEAD <sha>, tree clean", and pnpm audit --audit-level=high.
+- git fetch right before the push. If origin/main is no longer 874af75, rebase onto it, re-gate and report before pushing.
+- git push origin HEAD:main, fast-forward only. Never between 23:00 and 00:00 UTC.
+- Report: CI and its Gate step, Pages, Railway server and worker on the new head, no new migration in __massalia_migrations, health 200, GET /api/map/military 200 with its alert field, GET /api/map/reach 200, no "alert: failed" or "strikes: failed" in the new server's log, and (read-only) how many places are on alert right after the deploy.
+- Then remove your worktree, drop massalia_6a_test, and delete the military-6a branch once its head is on origin/main.
